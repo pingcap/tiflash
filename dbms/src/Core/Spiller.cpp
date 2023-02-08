@@ -124,9 +124,7 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
             details.merge(file->getSpillDetails());
             std::vector<SpilledFileInfo> file_infos;
             file_infos.emplace_back(file->path());
-            if (!release_spilled_file_on_restore)
-                /// if there is no need to repeated restore, move the SpilledFile to SpilledFilesInputStream so it can be delete once
-                /// all the data in this file is restored
+            if (release_spilled_file_on_restore)
                 file_infos.back().file = std::move(file);
             ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos), input_schema, config.file_provider, spill_version));
         }
@@ -142,9 +140,7 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
             RUNTIME_CHECK_MSG(file->exists(), "Spill file {} does not exists", file->path());
             details.merge(file->getSpillDetails());
             file_infos[i % return_stream_num].push_back(file->path());
-            if (!release_spilled_file_on_restore)
-                /// if there is no need to repeated restore, move the SpilledFile to SpilledFilesInputStream so it can be delete once
-                /// all the data in this file is restored
+            if (release_spilled_file_on_restore)
                 file_infos[i % return_stream_num].back().file = std::move(file);
         }
         for (size_t i = 0; i < return_stream_num; ++i)
@@ -153,8 +149,11 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
                 ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos[i]), input_schema, config.file_provider, spill_version));
         }
     }
-    if (!release_spilled_file_on_restore)
+    if (release_spilled_file_on_restore)
+    {
+        /// clear the spilled_files so we can safely assume that the element in spilled_files is always not nullptr
         spilled_files[partition_id]->spilled_files.clear();
+    }
     LOG_DEBUG(logger, "Will restore {} rows from file of size {:.3f} MiB compressed, {:.3f} MiB uncompressed.", details.rows, (details.data_bytes_compressed / 1048576.0), (details.data_bytes_uncompressed / 1048576.0));
     if (ret.empty())
         ret.push_back(std::make_shared<NullBlockInputStream>(input_schema));
