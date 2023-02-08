@@ -30,8 +30,7 @@ public:
         Context & context,
         const String & name,
         PSDiskDelegatorPtr delegator,
-        const PageStorageConfig & config,
-        const FileProviderPtr & file_provider);
+        const PageStorageConfig & config);
 
     void restore();
     bool gc();

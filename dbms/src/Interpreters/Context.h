@@ -429,7 +429,7 @@ public:
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 
-    void initializeWriteNodePageStorageIfNeed(const PathPool & path_pool, const FileProviderPtr & file_provider);
+    void initializeWriteNodePageStorageIfNeed(const PathPool & path_pool);
     UniversalPageStoragePtr getWriteNodePageStorage() const;
 
     /// Call after initialization before using system logs. Call for global context.

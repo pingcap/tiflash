@@ -59,7 +59,10 @@ int main(int argc, char ** argv)
     install_fault_signal_handlers({SIGSEGV, SIGILL, SIGFPE, SIGABRT, SIGTERM});
 
     DB::tests::TiFlashTestEnv::setupLogger();
-    DB::tests::TiFlashTestEnv::initializeGlobalContext();
+    // TODO: uncomment it before submit
+    //    DB::tests::TiFlashTestEnv::initializeGlobalContext();
+    DB::tests::TiFlashTestEnv::initializeGlobalContext(/*testdata_path*/ {}, DB::PageStorageRunMode::UNI_PS);
+
     DB::ServerInfo server_info;
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DB::DM::DMFileReaderPool::instance();

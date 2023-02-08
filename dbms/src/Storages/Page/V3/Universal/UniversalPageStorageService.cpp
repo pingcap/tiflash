@@ -21,11 +21,10 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     Context & context,
     const String & name,
     PSDiskDelegatorPtr delegator,
-    const PageStorageConfig & config,
-    const FileProviderPtr & file_provider)
+    const PageStorageConfig & config)
 {
     auto service = UniversalPageStorageServicePtr(new UniversalPageStorageService(context));
-    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, file_provider);
+    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider());
     return service;
 }
 
