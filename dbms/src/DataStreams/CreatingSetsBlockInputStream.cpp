@@ -285,9 +285,10 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     {
         std::unique_lock lock(exception_mutex);
         exception_from_workers.push_back(std::current_exception());
+        auto error_message = getCurrentExceptionMessage(false, true);
         if (subquery.join)
-            subquery.join->meetError();
-        LOG_ERROR(log, "{} throw exception: {} In {} sec. ", gen_log_msg(), getCurrentExceptionMessage(false, true), watch.elapsedSeconds());
+            subquery.join->meetError(error_message);
+        LOG_ERROR(log, "{} throw exception: {} In {} sec. ", gen_log_msg(), error_message, watch.elapsedSeconds());
     }
 }
 

@@ -17,28 +17,27 @@
 
 namespace DB::DM::tests
 {
-
-SegmentPtr createSegment(PageId seg_id)
+SegmentPtr createSegment(PageIdU64 seg_id)
 {
     return std::make_shared<Segment>(Logger::get(), 0, RowKeyRange{}, seg_id, seg_id + 1, nullptr, nullptr);
 }
 
-SegmentReadTaskPtr createSegmentReadTask(PageId seg_id)
+SegmentReadTaskPtr createSegmentReadTask(PageIdU64 seg_id)
 {
     return std::make_shared<SegmentReadTask>(createSegment(seg_id), nullptr, RowKeyRanges{});
 }
 
-SegmentReadTasks createSegmentReadTasks(const std::vector<PageId> & seg_ids)
+SegmentReadTasks createSegmentReadTasks(const std::vector<PageIdU64> & seg_ids)
 {
     SegmentReadTasks tasks;
-    for (PageId seg_id : seg_ids)
+    for (PageIdU64 seg_id : seg_ids)
     {
         tasks.push_back(createSegmentReadTask(seg_id));
     }
     return tasks;
 }
 
-static const std::vector<PageId> test_seg_ids{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+static const std::vector<PageIdU64> test_seg_ids{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
 
 TEST(SegmentReadTasksWrapperTest, Unordered)
 {
@@ -61,9 +60,9 @@ TEST(SegmentReadTasksWrapperTest, Unordered)
 
     std::random_device rd;
     std::mt19937 g(rd());
-    std::vector<PageId> v = test_seg_ids;
+    std::vector<PageIdU64> v = test_seg_ids;
     std::shuffle(v.begin(), v.end(), g);
-    for (PageId seg_id : v)
+    for (PageIdU64 seg_id : v)
     {
         auto task = tasks_wrapper.getTask(seg_id);
         ASSERT_EQ(task->segment->segmentId(), seg_id);
@@ -90,7 +89,7 @@ TEST(SegmentReadTasksWrapperTest, Ordered)
 
     ASSERT_FALSE(tasks_wrapper.empty());
 
-    for (PageId seg_id : test_seg_ids)
+    for (PageIdU64 seg_id : test_seg_ids)
     {
         auto task = tasks_wrapper.nextTask();
         ASSERT_EQ(task->segment->segmentId(), seg_id);
