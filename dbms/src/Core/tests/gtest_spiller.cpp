@@ -269,7 +269,7 @@ try
     if (spiller_dir.exists())
         spiller_dir.remove(true);
     spiller_dir.createDirectories();
-    spillers.push_back(std::make_unique<Spiller>(new_spill_config, false, 1, spiller_test_header, logger, 1, true));
+    spillers.push_back(std::make_unique<Spiller>(new_spill_config, false, 1, spiller_test_header, logger));
 
     Blocks blocks = generateBlocks(50);
     for (auto & spiller : spillers)
@@ -277,7 +277,7 @@ try
         spiller->spillBlocks(blocks, 0);
         spiller->finishSpill();
         verifyRestoreBlocks(*spiller, 0, 0, 0, blocks);
-        if (spiller->releaseSpilledFileOnRestore())
+        if (!spiller->releaseSpilledFileOnRestore())
             verifyRestoreBlocks(*spiller, 0, 0, 0, blocks);
         else
         {
