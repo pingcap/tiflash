@@ -25,8 +25,11 @@ class PhysicalGetResultSink;
 class GetResultSinkOp : public SinkOp
 {
 public:
-    explicit GetResultSinkOp(PhysicalGetResultSink & physical_sink_)
-        : physical_sink(physical_sink_)
+    GetResultSinkOp(
+        PipelineExecutorStatus & exec_status_,
+        PhysicalGetResultSink & physical_sink_)
+        : SinkOp(exec_status_)
+        , physical_sink(physical_sink_)
     {
     }
 

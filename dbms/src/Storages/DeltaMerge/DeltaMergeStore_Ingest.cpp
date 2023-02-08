@@ -47,8 +47,7 @@ extern const char force_ingest_via_replace[];
 
 namespace DM
 {
-
-std::tuple<String, PageId> DeltaMergeStore::preAllocateIngestFile()
+std::tuple<String, PageIdU64> DeltaMergeStore::preAllocateIngestFile()
 {
     if (shutdown_called.load(std::memory_order_relaxed))
         return {};
@@ -59,7 +58,7 @@ std::tuple<String, PageId> DeltaMergeStore::preAllocateIngestFile()
     return {parent_path, new_id};
 }
 
-void DeltaMergeStore::preIngestFile(const String & parent_path, const PageId file_id, size_t file_size)
+void DeltaMergeStore::preIngestFile(const String & parent_path, const PageIdU64 file_id, size_t file_size)
 {
     if (shutdown_called.load(std::memory_order_relaxed))
         return;
@@ -538,18 +537,17 @@ void DeltaMergeStore::ingestFiles(
         }
 
         // Check whether all external files are contained by the range.
-        // Currently this check is disabled, see https://github.com/pingcap/tiflash/pull/6519
-        // for (const auto & ext_file : external_files)
-        // {
-        //     RUNTIME_CHECK(
-        //         compare(range.getStart(), ext_file.range.getStart()) <= 0,
-        //         range.toDebugString(),
-        //         ext_file.range.toDebugString());
-        //     RUNTIME_CHECK(
-        //         compare(range.getEnd(), ext_file.range.getEnd()) >= 0,
-        //         range.toDebugString(),
-        //         ext_file.range.toDebugString());
-        // }
+        for (const auto & ext_file : external_files)
+        {
+            RUNTIME_CHECK(
+                compare(range.getStart(), ext_file.range.getStart()) <= 0,
+                range.toDebugString(),
+                ext_file.range.toDebugString());
+            RUNTIME_CHECK(
+                compare(range.getEnd(), ext_file.range.getEnd()) >= 0,
+                range.toDebugString(),
+                ext_file.range.toDebugString());
+        }
     }
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);

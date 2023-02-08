@@ -26,13 +26,14 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <grpcpp/support/status.h>
 #include <gtest/gtest.h>
 
-#include <Flash/Coprocessor/ExecutionSummaryCollector.cpp>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
-#include <memory>
+#include <utility>
+
 
 namespace DB
 {
@@ -87,8 +88,11 @@ struct MockWriter
 
     void broadcastOrPassThroughWrite(Blocks & blocks)
     {
-        auto packet = MPPTunnelSetHelper::toPacket(blocks, result_field_types);
+        auto && packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
         ++total_packets;
+        if (!packet)
+            return;
+
         if (!packet->packet.chunks().empty())
             total_bytes += packet->packet.ByteSizeLong();
         queue->push(std::move(packet));
@@ -120,6 +124,10 @@ struct MockWriter
         write(tmp);
     }
     uint16_t getPartitionNum() const { return 1; }
+    bool isLocal(size_t index) const
+    {
+        return index == 0;
+    }
 
     std::vector<tipb::FieldType> result_field_types;
 
@@ -241,7 +249,18 @@ struct MockReceiverContext
         grpc::CompletionQueue *,
         UnaryCallback<bool> *) const {}
 
-    void establishMPPConnectionLocal(const MockReceiverContext::Request &, size_t, LocalRequestHandler &, bool) {}
+    std::shared_ptr<Reader> makeReader(const Request &)
+    {
+        return std::make_shared<Reader>(queue);
+    }
+
+    static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(const ::mpp::EstablishMPPConnectionRequest *, const std::shared_ptr<MPPTaskManager> &)
+    {
+        // Useless, just for compilation
+        return std::make_pair(MPPTunnelPtr(), grpc::Status::CANCELLED);
+    }
+
+    void establishMPPConnectionLocalV2(const Request &, size_t, LocalRequestHandler &, bool) {}
 
     PacketQueuePtr queue;
     std::vector<tipb::FieldType> field_types{};
@@ -434,7 +453,8 @@ public:
             1,
             "mock_req_id",
             "mock_exchange_receiver_id",
-            0);
+            0,
+            2);
         auto receiver_stream = std::make_shared<MockExchangeReceiverInputStream>(
             receiver,
             "mock_req_id",

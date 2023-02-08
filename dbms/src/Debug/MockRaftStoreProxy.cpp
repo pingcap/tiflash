@@ -623,11 +623,6 @@ void MockRaftStoreProxy::snapshot(
     // The new entry is committed on Proxy's side.
     region->updateCommitIndex(index);
 
-    auto ori_snapshot_apply_method = kvs.snapshot_apply_method;
-    kvs.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
-    SCOPE_EXIT({
-        kvs.snapshot_apply_method = ori_snapshot_apply_method;
-    });
     std::vector<SSTView> ssts;
     for (auto & cf : cfs)
     {

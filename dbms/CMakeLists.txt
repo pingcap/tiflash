@@ -76,6 +76,7 @@ add_headers_and_sources(dbms src/Interpreters/ClusterProxy)
 add_headers_and_sources(dbms src/Columns)
 add_headers_and_sources(dbms src/Storages)
 add_headers_and_sources(dbms src/Storages/DeltaMerge)
+add_headers_and_sources(dbms src/Storages/DeltaMerge/BitmapFilter)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/Index)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/Filter)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/FilterParser)
@@ -100,15 +101,20 @@ add_headers_and_sources(dbms src/Storages/Page/V3/WAL)
 add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
 add_headers_and_sources(dbms src/Storages/Page/V3/PageDirectory)
 add_headers_and_sources(dbms src/Storages/Page/V3/Blob)
+add_headers_and_sources(dbms src/Storages/Page/V3/Universal)
 add_headers_and_sources(dbms src/Storages/Page/)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Flash/Coprocessor)
 add_headers_only(dbms src/Server)
 
-add_sources_compile_flag_avx2 (
+check_then_add_sources_compile_flag (
+    TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT
+    "${TIFLASH_COMPILER_ARCH_HASWELL_FLAG}"
     src/Columns/ColumnString.cpp
     src/Columns/ColumnsCommon.cpp
+    src/Columns/ColumnVector.cpp
+    src/DataTypes/DataTypeString.cpp
 )
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
@@ -202,6 +208,7 @@ target_link_libraries (clickhouse_common_io
     magic_enum
     libsymbolization
 )
+
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 target_compile_definitions(clickhouse_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
 target_link_libraries (dbms

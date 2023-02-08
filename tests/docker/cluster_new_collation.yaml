@@ -17,6 +17,8 @@ version: '2.3'
 services:
   pd0:
     image: hub.pingcap.net/qa/pd:${PD_BRANCH:-master}
+    security_opt:
+      - seccomp:unconfined
     volumes:
       - ./config/pd.toml:/pd.toml:ro
       - ./data/pd0:/data
@@ -34,6 +36,8 @@ services:
     restart: on-failure
   tikv0:
     image: hub.pingcap.net/qa/tikv:${TIKV_BRANCH:-master}
+    security_opt:
+      - seccomp:unconfined
     volumes:
       - ./config/tikv.toml:/tikv.toml:ro
       - ./data/tikv0:/data
@@ -50,6 +54,8 @@ services:
     restart: on-failure
   tidb0:
     image: hub.pingcap.net/qa/tidb:${TIDB_BRANCH:-master}
+    security_opt:
+      - seccomp:unconfined
     volumes:
       - ./config/tidb_new_collation.toml:/tidb.toml:ro
       - ./log/tidb0:/log

@@ -308,7 +308,7 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
     {
         std::unique_lock lock(read_write_mutex);
         auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-        std::stack<PageId> segment_ids;
+        std::stack<PageIdU64> segment_ids;
         while (segment_id != 0)
         {
             segment_ids.push(segment_id);
@@ -561,8 +561,15 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             // The [offset, rows - offset] can be exceeding the Segment's rowkey_range. Cut the range
             // to fit the segment.
             auto [cur_offset, cur_limit] = rowkey_range.getPosRange(handle_column, offset, rows - offset);
-            if (unlikely(cur_offset != offset))
-                throw Exception(fmt::format("cur_offset does not equal to offset. is_common_handle {} start_key {} cur_offset {} cur_limit {} rows {} offset {} rowkey_range {}", is_common_handle, start_key.toRowKeyValue().toString(), cur_offset, cur_limit, rows, offset, rowkey_range.toDebugString()), ErrorCodes::LOGICAL_ERROR);
+            RUNTIME_CHECK_MSG(cur_offset == offset && cur_limit != 0,
+                              "invalid cur_offset or cur_limit. is_common_handle={} start_key={} cur_offset={} cur_limit={} rows={} offset={} rowkey_range={}",
+                              is_common_handle,
+                              start_key.toRowKeyValue().toString(),
+                              cur_offset,
+                              cur_limit,
+                              rows,
+                              offset,
+                              rowkey_range.toDebugString());
 
             limit = cur_limit;
             auto alloc_bytes = block.bytes(offset, limit);
@@ -954,6 +961,19 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     return res;
 }
 
+static inline ReadMode getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order)
+{
+    if (is_fast_scan)
+    {
+        return ReadMode::Fast;
+    }
+    if (db_context.getSettingsRef().dt_enable_bitmap_filter && !keep_order)
+    {
+        return ReadMode::Bitmap;
+    }
+    return ReadMode::Normal;
+}
+
 BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const DB::Settings & db_settings,
                                         const ColumnDefines & columns_to_read,
@@ -1000,7 +1020,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         filter,
         max_version,
         expected_block_size,
-        /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
+        getReadMode(db_context, is_fast_scan, keep_order),
         std::move(tasks),
         after_segment_read,
         log_tracing_id,

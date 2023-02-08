@@ -67,6 +67,7 @@
 #include <Server/StorageConfigParser.h>
 #include <Server/TCPHandlerFactory.h>
 #include <Server/UserConfigParser.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
@@ -248,6 +249,13 @@ struct TiFlashProxyConfig
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
+        auto disaggregated_mode = getDisaggregatedMode(config);
+
+        // tiflash_compute doesn't need proxy.
+        // todo: remove after AutoScaler is stable.
+        if (disaggregated_mode == DisaggregatedMode::Compute && useAutoScaler(config))
+            return;
+
         if (!config.has(config_prefix))
             return;
 
@@ -268,7 +276,6 @@ struct TiFlashProxyConfig
             else
                 args_map[engine_store_advertise_address] = args_map[engine_store_address];
 
-            auto disaggregated_mode = getDisaggregatedMode(config);
             args_map[engine_label] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
 
             for (auto && [k, v] : args_map)
@@ -843,10 +850,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
 
-    proxy_runner.run();
-
     if (proxy_conf.is_proxy_runnable)
     {
+        proxy_runner.run();
+
         LOG_INFO(log, "wait for tiflash proxy initializing");
         while (!tiflash_instance_wrap.proxy_helper)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -906,6 +913,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
+    global_context->setUseAutoScaler(useAutoScaler(config()));
 
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)
@@ -1193,6 +1201,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     DM::SegmentReaderPoolManager::instance().init(server_info);
     DM::SegmentReadTaskScheduler::instance();
 
+    global_context->initializeSharedBlockSchemas();
+
     {
         // Note that this must do before initialize schema sync service.
         do
@@ -1356,6 +1366,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
+            // If a TiFlash starts before any TiKV starts, then the very first Region will be created in TiFlash's proxy and it must be the peer as a leader role.
+            // This conflicts with the assumption that tiflash does not contain any Region leader peer and leads to unexpected errors
+            LOG_INFO(log, "Waiting for TiKV cluster to be bootstrapped");
+            while (!tmt_context.getPDClient()->isClusterBootstrapped())
+            {
+                const int wait_seconds = 3;
+                LOG_ERROR(
+                    log,
+                    "Waiting for cluster to be bootstrapped, we will sleep for {} seconds and try again.",
+                    wait_seconds);
+                ::sleep(wait_seconds);
+            }
+
             tiflash_instance_wrap.tmt = &tmt_context;
             LOG_INFO(log, "Let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
@@ -1377,6 +1400,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
             WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
         }
         SCOPE_EXIT({
+            if (!proxy_conf.is_proxy_runnable)
+            {
+                tmt_context.setStatusTerminated();
+                return;
+            }
             if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
             {
                 LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");

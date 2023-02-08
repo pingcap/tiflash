@@ -26,7 +26,6 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     , join(join_)
     , probe_index(probe_index_)
     , probe_process_info(max_block_size)
-    , squashing_transform(max_block_size)
 {
     children.push_back(input);
 
@@ -70,9 +69,28 @@ Block HashJoinProbeBlockInputStream::getHeader() const
     return join->joinBlock(header_probe_process_info);
 }
 
+void HashJoinProbeBlockInputStream::finishOneProbe()
+{
+    bool expect = false;
+    if likely (probe_finished.compare_exchange_strong(expect, true))
+        join->finishOneProbe();
+}
+
 void HashJoinProbeBlockInputStream::cancel(bool kill)
 {
     IProfilingBlockInputStream::cancel(kill);
+    /// When the probe stream quits probe by cancelling instead of normal finish, the Join operator might still produce meaningless blocks
+    /// and expects these meaningless blocks won't be used to produce meaningful result.
+    try
+    {
+        finishOneProbe();
+    }
+    catch (...)
+    {
+        auto error_message = getCurrentExceptionMessage(false, true);
+        LOG_WARNING(log, error_message);
+        join->meetError(error_message);
+    }
     if (non_joined_stream != nullptr)
     {
         auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get());
@@ -83,19 +101,17 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
-    // if join finished, return {} directly.
-    if (squashing_transform.isJoinFinished())
+    try
     {
-        return Block{};
+        Block ret = getOutputBlock();
+        return ret;
     }
-
-    while (squashing_transform.needAppendBlock())
+    catch (...)
     {
-        Block result_block = getOutputBlock();
-        squashing_transform.appendBlock(result_block);
+        auto error_message = getCurrentExceptionMessage(false, true);
+        join->meetError(error_message);
+        throw Exception(error_message);
     }
-    auto ret = squashing_transform.getFinalOutputBlock();
-    return ret;
 }
 
 void HashJoinProbeBlockInputStream::readSuffixImpl()
@@ -116,7 +132,7 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
                 Block block = children.back()->read();
                 if (!block)
                 {
-                    join->finishOneProbe();
+                    finishOneProbe();
                     if (join->needReturnNonJoinedData())
                         status = ProbeStatus::WAIT_FOR_READ_NON_JOINED_DATA;
                     else

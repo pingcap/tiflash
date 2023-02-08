@@ -97,6 +97,7 @@ public:
         const String & req_id,
         const String & executor_id,
         uint64_t fine_grained_shuffle_stream_count,
+        Int32 local_tunnel_version_,
         const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
 
     ~ExchangeReceiverBase();
@@ -161,10 +162,10 @@ private:
 private:
     void prepareMsgChannels();
     void addLocalConnectionNum();
-    void addSyncConnectionNum();
-    void addAsyncConnectionNum(Int32 conn_num);
-
     void connectionLocalDone();
+    void handleConnectionAfterException();
+
+    void setUpConnectionWithReadLoop(Request && req);
 
     bool isReceiverForTiFlashStorage()
     {
@@ -180,6 +181,7 @@ private:
     const bool enable_fine_grained_shuffle_flag;
     const size_t output_stream_count;
     const size_t max_buffer_size;
+    Int32 connection_uncreated_num;
 
     std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
@@ -189,8 +191,8 @@ private:
     std::mutex mu;
     std::condition_variable cv;
     /// should lock `mu` when visit these members
-    Int32 live_connections;
     Int32 live_local_connections;
+    Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
 
@@ -198,6 +200,7 @@ private:
 
     bool collected = false;
     int thread_count = 0;
+    Int32 local_tunnel_version;
 
     std::atomic<Int64> data_size_in_queue;
 
