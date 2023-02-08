@@ -32,6 +32,7 @@ void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_
     Columns read_cols;
 
     std::scoped_lock lock(cache->mutex);
+    const auto & colid_to_offset = schema->getColIdToOffset();
     for (size_t i = col_start; i < col_end; ++i)
     {
         const auto & cd = col_defs[i];
@@ -61,7 +62,7 @@ ColumnFileInMemory::getReader(const DMContext & /*context*/, const StorageSnapsh
     return std::make_shared<ColumnFileInMemoryReader>(*this, col_defs);
 }
 
-bool ColumnFileInMemory::append(DMContext & context, const Block & data, size_t offset, size_t limit, size_t data_bytes)
+bool ColumnFileInMemory::append(const DMContext & context, const Block & data, size_t offset, size_t limit, size_t data_bytes)
 {
     if (disable_append)
         return false;

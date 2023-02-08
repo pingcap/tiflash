@@ -20,8 +20,8 @@
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/Config.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/Snapshot.h>
+#include <Storages/Page/V2/PageDefines.h>
 #include <Storages/Page/V2/PageEntries.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesBuilder.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesEdit.h>

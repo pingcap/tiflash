@@ -39,7 +39,6 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     ChildStream child_,
     StorageDeltaMergePtr storage_,
     DecodingStorageSchemaSnapshotConstPtr schema_snap_,
-    TiDB::SnapshotApplyMethod method_,
     FileConvertJobType job_type_,
     UInt64 split_after_rows_,
     UInt64 split_after_size_,
@@ -47,7 +46,6 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     : child(std::move(child_))
     , storage(std::move(storage_))
     , schema_snap(std::move(schema_snap_))
-    , method(method_)
     , job_type(job_type_)
     , split_after_rows(split_after_rows_)
     , split_after_size(split_after_size_)
@@ -124,21 +122,8 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::newDTFileStream()
         return false;
     }
 
-    DMFileBlockOutputStream::Flags flags{};
-    switch (method)
-    {
-    case TiDB::SnapshotApplyMethod::DTFile_Directory:
-        flags.setSingleFile(false);
-        break;
-    case TiDB::SnapshotApplyMethod::DTFile_Single:
-        flags.setSingleFile(true);
-        break;
-    default:
-        break;
-    }
-
-    auto dt_file = DMFile::create(file_id, parent_path, flags.isSingleFile(), storage->createChecksumConfig(flags.isSingleFile()));
-    dt_stream = std::make_unique<DMFileBlockOutputStream>(context, dt_file, *(schema_snap->column_defines), flags);
+    auto dt_file = DMFile::create(file_id, parent_path, storage->createChecksumConfig());
+    dt_stream = std::make_unique<DMFileBlockOutputStream>(context, dt_file, *(schema_snap->column_defines));
     dt_stream->writePrefix();
     ingest_files.emplace_back(dt_file);
     ingest_files_range.emplace_back(std::nullopt);

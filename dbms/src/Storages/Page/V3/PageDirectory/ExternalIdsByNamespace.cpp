@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
 
 #include <mutex>
@@ -20,22 +20,25 @@
 
 namespace DB::PS::V3
 {
-void ExternalIdsByNamespace::addExternalIdUnlock(const std::shared_ptr<PageIdV3Internal> & external_id)
+template <typename Trait>
+void ExternalIdsByNamespace<Trait>::addExternalIdUnlock(const std::shared_ptr<PageId> & external_id)
 {
-    const NamespaceId & ns_id = external_id->high;
+    const Prefix & ns_id = Trait::getPrefix(*external_id);
     // create a new ExternalIds if the ns_id is not exists, else return
     // the existing one.
     auto [ns_iter, new_inserted] = ids_by_ns.try_emplace(ns_id, ExternalIds{});
-    ns_iter->second.emplace_back(std::weak_ptr<PageIdV3Internal>(external_id));
+    ns_iter->second.emplace_back(std::weak_ptr<PageId>(external_id));
 }
 
-void ExternalIdsByNamespace::addExternalId(const std::shared_ptr<PageIdV3Internal> & external_id)
+template <typename Trait>
+void ExternalIdsByNamespace<Trait>::addExternalId(const std::shared_ptr<PageId> & external_id)
 {
     std::unique_lock map_guard(mu);
     addExternalIdUnlock(external_id);
 }
 
-std::optional<std::set<PageId>> ExternalIdsByNamespace::getAliveIds(NamespaceId ns_id) const
+template <typename Trait>
+std::optional<std::set<PageIdU64>> ExternalIdsByNamespace<Trait>::getAliveIds(const Prefix & ns_id) const
 {
     // Now we assume a lock among all NamespaceIds is good enough.
     std::unique_lock map_guard(mu);
@@ -45,7 +48,7 @@ std::optional<std::set<PageId>> ExternalIdsByNamespace::getAliveIds(NamespaceId 
         return std::nullopt;
 
     // Only scan the given `ns_id`
-    std::set<PageId> valid_external_ids;
+    std::set<PageIdU64> valid_external_ids;
     auto & external_ids = ns_iter->second;
     for (auto iter = external_ids.begin(); iter != external_ids.end(); /*empty*/)
     {
@@ -58,7 +61,7 @@ std::optional<std::set<PageId>> ExternalIdsByNamespace::getAliveIds(NamespaceId 
         }
         else
         {
-            valid_external_ids.emplace(holder->low);
+            valid_external_ids.emplace(Trait::getU64ID(*holder));
             ++iter;
         }
     }
@@ -67,10 +70,14 @@ std::optional<std::set<PageId>> ExternalIdsByNamespace::getAliveIds(NamespaceId 
     return valid_external_ids;
 }
 
-void ExternalIdsByNamespace::unregisterNamespace(NamespaceId ns_id)
+template <typename Trait>
+void ExternalIdsByNamespace<Trait>::unregisterNamespace(const Prefix & ns_id)
 {
     std::unique_lock map_guard(mu);
     // free all weak_ptrs of this namespace
     ids_by_ns.erase(ns_id);
 }
+
+template class ExternalIdsByNamespace<u128::PageIdTrait>;
+template class ExternalIdsByNamespace<universal::PageIdTrait>;
 } // namespace DB::PS::V3

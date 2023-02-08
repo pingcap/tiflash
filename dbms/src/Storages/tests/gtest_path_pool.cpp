@@ -14,7 +14,7 @@
 
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/ProxyFFI.h>

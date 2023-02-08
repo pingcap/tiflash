@@ -40,8 +40,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
+                                    const String & parent_path);
 
 namespace tests
 {
@@ -65,7 +64,7 @@ void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
     segments[DELTA_MERGE_FIRST_SEGMENT_ID] = root_segment;
 }
 
-size_t SegmentTestBasic::getSegmentRowNumWithoutMVCC(PageId segment_id)
+size_t SegmentTestBasic::getSegmentRowNumWithoutMVCC(PageIdU64 segment_id)
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
@@ -73,7 +72,7 @@ size_t SegmentTestBasic::getSegmentRowNumWithoutMVCC(PageId segment_id)
     return getInputStreamNRows(in);
 }
 
-size_t SegmentTestBasic::getSegmentRowNum(PageId segment_id)
+size_t SegmentTestBasic::getSegmentRowNum(PageIdU64 segment_id)
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
@@ -81,7 +80,7 @@ size_t SegmentTestBasic::getSegmentRowNum(PageId segment_id)
     return getInputStreamNRows(in);
 }
 
-bool SegmentTestBasic::isSegmentDefinitelyEmpty(PageId segment_id)
+bool SegmentTestBasic::isSegmentDefinitelyEmpty(PageIdU64 segment_id)
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
@@ -90,7 +89,7 @@ bool SegmentTestBasic::isSegmentDefinitelyEmpty(PageId segment_id)
     return segment->isDefinitelyEmpty(*dm_context, snapshot);
 }
 
-std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id, Segment::SplitMode split_mode, bool check_rows)
+std::optional<PageIdU64> SegmentTestBasic::splitSegment(PageIdU64 segment_id, Segment::SplitMode split_mode, bool check_rows)
 {
     LOG_INFO(logger_op, "splitSegment, segment_id={} split_mode={}", segment_id, magic_enum::enum_name(split_mode));
 
@@ -124,7 +123,7 @@ std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id, Segment:
     return right->segmentId();
 }
 
-std::optional<PageId> SegmentTestBasic::splitSegmentAt(PageId segment_id, Int64 split_at, Segment::SplitMode split_mode, bool check_rows)
+std::optional<PageIdU64> SegmentTestBasic::splitSegmentAt(PageIdU64 segment_id, Int64 split_at, Segment::SplitMode split_mode, bool check_rows)
 {
     LOG_INFO(logger_op, "splitSegmentAt, segment_id={} split_at={} split_mode={}", segment_id, split_at, magic_enum::enum_name(split_mode));
 
@@ -171,7 +170,7 @@ std::optional<PageId> SegmentTestBasic::splitSegmentAt(PageId segment_id, Int64 
     return right->segmentId();
 }
 
-void SegmentTestBasic::mergeSegment(const std::vector<PageId> & segments_id, bool check_rows)
+void SegmentTestBasic::mergeSegment(const PageIdU64s & segments_id, bool check_rows)
 {
     LOG_INFO(logger_op, "mergeSegment, segments=[{}]", fmt::join(segments_id, ","));
 
@@ -216,7 +215,7 @@ void SegmentTestBasic::mergeSegment(const std::vector<PageId> & segments_id, boo
         operation_statistics["mergeTwo"]++;
 }
 
-void SegmentTestBasic::mergeSegmentDelta(PageId segment_id, bool check_rows)
+void SegmentTestBasic::mergeSegmentDelta(PageIdU64 segment_id, bool check_rows)
 {
     LOG_INFO(logger_op, "mergeSegmentDelta, segment_id={}", segment_id);
 
@@ -232,7 +231,7 @@ void SegmentTestBasic::mergeSegmentDelta(PageId segment_id, bool check_rows)
     operation_statistics["mergeDelta"]++;
 }
 
-void SegmentTestBasic::flushSegmentCache(PageId segment_id)
+void SegmentTestBasic::flushSegmentCache(PageIdU64 segment_id)
 {
     LOG_INFO(logger_op, "flushSegmentCache, segment_id={}", segment_id);
 
@@ -244,7 +243,7 @@ void SegmentTestBasic::flushSegmentCache(PageId segment_id)
     operation_statistics["flush"]++;
 }
 
-std::pair<Int64, Int64> SegmentTestBasic::getSegmentKeyRange(PageId segment_id) const
+std::pair<Int64, Int64> SegmentTestBasic::getSegmentKeyRange(PageIdU64 segment_id) const
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     const auto & segment = segments.find(segment_id)->second;
@@ -313,7 +312,7 @@ Block sortMergeBlocks(std::vector<Block> && blocks)
     return accumulated_block;
 }
 
-Block SegmentTestBasic::prepareWriteBlockInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key, bool is_deleted)
+Block SegmentTestBasic::prepareWriteBlockInSegmentRange(PageIdU64 segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key, bool is_deleted)
 {
     RUNTIME_CHECK(total_write_rows < std::numeric_limits<Int64>::max());
 
@@ -379,7 +378,7 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(PageId segment_id, UInt6
     return sortMergeBlocks(std::move(blocks));
 }
 
-void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
+void SegmentTestBasic::writeSegment(PageIdU64 segment_id, UInt64 write_rows, std::optional<Int64> start_at)
 {
     LOG_INFO(logger_op, "writeSegment, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -399,7 +398,7 @@ void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows, std::o
     operation_statistics["write"]++;
 }
 
-void SegmentTestBasic::ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at, bool clear)
+void SegmentTestBasic::ingestDTFileIntoDelta(PageIdU64 segment_id, UInt64 write_rows, std::optional<Int64> start_at, bool clear)
 {
     LOG_INFO(logger_op, "ingestDTFileIntoDelta, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -420,8 +419,8 @@ void SegmentTestBasic::ingestDTFileIntoDelta(PageId segment_id, UInt64 write_row
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
-        DMFileBlockOutputStream::Flags flags;
-        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, flags);
+
+        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path);
         ingest_wbs.data.putExternal(file_id, /* tag */ 0);
         ingest_wbs.writeLogAndData();
         delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
@@ -440,7 +439,7 @@ void SegmentTestBasic::ingestDTFileIntoDelta(PageId segment_id, UInt64 write_row
     operation_statistics["ingest"]++;
 }
 
-void SegmentTestBasic::ingestDTFileByReplace(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at, bool clear)
+void SegmentTestBasic::ingestDTFileByReplace(PageIdU64 segment_id, UInt64 write_rows, std::optional<Int64> start_at, bool clear)
 {
     LOG_INFO(logger_op, "ingestDTFileByReplace, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -461,8 +460,7 @@ void SegmentTestBasic::ingestDTFileByReplace(PageId segment_id, UInt64 write_row
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
-        DMFileBlockOutputStream::Flags flags;
-        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, flags);
+        auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path);
         ingest_wbs.data.putExternal(file_id, /* tag */ 0);
         ingest_wbs.writeLogAndData();
         delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
@@ -499,7 +497,7 @@ void SegmentTestBasic::ingestDTFileByReplace(PageId segment_id, UInt64 write_row
         EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
 }
 
-void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
+void SegmentTestBasic::writeSegmentWithDeletedPack(PageIdU64 segment_id, UInt64 write_rows, std::optional<Int64> start_at)
 {
     LOG_INFO(logger_op, "writeSegmentWithDeletedPack, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -519,7 +517,7 @@ void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id, UInt64 wri
     operation_statistics["writeDelete"]++;
 }
 
-void SegmentTestBasic::deleteRangeSegment(PageId segment_id)
+void SegmentTestBasic::deleteRangeSegment(PageIdU64 segment_id)
 {
     LOG_INFO(logger_op, "deleteRangeSegment, segment_id={}", segment_id);
 
@@ -529,7 +527,7 @@ void SegmentTestBasic::deleteRangeSegment(PageId segment_id)
     EXPECT_EQ(getSegmentRowNum(segment_id), 0);
 }
 
-void SegmentTestBasic::replaceSegmentData(PageId segment_id, const Block & block, SegmentSnapshotPtr snapshot)
+void SegmentTestBasic::replaceSegmentData(PageIdU64 segment_id, const Block & block, SegmentSnapshotPtr snapshot)
 {
     // This function always create a new DTFile for the block.
 
@@ -543,7 +541,7 @@ void SegmentTestBasic::replaceSegmentData(PageId segment_id, const Block & block
 
     auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
-    auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path, {});
+    auto dm_file = writeIntoNewDMFile(*dm_context, table_columns, input_stream, file_id, parent_path);
 
     ingest_wbs.data.putExternal(file_id, /* tag */ 0);
     ingest_wbs.writeLogAndData();
@@ -555,7 +553,7 @@ void SegmentTestBasic::replaceSegmentData(PageId segment_id, const Block & block
     dm_file->enableGC();
 }
 
-void SegmentTestBasic::replaceSegmentData(PageId segment_id, const DMFilePtr & file, SegmentSnapshotPtr snapshot)
+void SegmentTestBasic::replaceSegmentData(PageIdU64 segment_id, const DMFilePtr & file, SegmentSnapshotPtr snapshot)
 {
     LOG_INFO(logger_op, "replaceSegmentData, segment_id={} file_rows={} file=dmf_{}", segment_id, file->getRows(), file->fileId());
 
@@ -574,7 +572,7 @@ void SegmentTestBasic::replaceSegmentData(PageId segment_id, const DMFilePtr & f
         operation_statistics["replaceData"]++;
 }
 
-bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageId> & segments_id) const
+bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageIdU64> & segments_id) const
 {
     RUNTIME_CHECK(segments_id.size() >= 2);
     for (auto segment_id : segments_id)
@@ -589,7 +587,7 @@ bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageId> & segm
     return true;
 }
 
-PageId SegmentTestBasic::getRandomSegmentId() // Complexity is O(n)
+PageIdU64 SegmentTestBasic::getRandomSegmentId() // Complexity is O(n)
 {
     RUNTIME_CHECK(!segments.empty());
     auto dist = std::uniform_int_distribution<size_t>{0, segments.size() - 1};

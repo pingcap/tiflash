@@ -219,7 +219,6 @@ struct Settings
     M(SettingBool, dt_enable_relevant_place, false, "Enable relevant place or not in DeltaTree Engine.")                                                                                                                                \
     M(SettingBool, dt_enable_skippable_place, true, "Enable skippable place or not in DeltaTree Engine.")                                                                                                                               \
     M(SettingBool, dt_enable_stable_column_cache, true, "Enable column cache for StorageDeltaMerge.")                                                                                                                                   \
-    M(SettingBool, dt_enable_single_file_mode_dmfile, false, "Enable write DMFile in single file mode.")                                                                                                                                \
     M(SettingUInt64, dt_open_file_max_idle_seconds, 15, "Max idle time of opening files, 0 means infinite.")                                                                                                                            \
     M(SettingUInt64, dt_page_num_max_expect_legacy_files, 100, "Max number of legacy file expected")                                                                                                                                    \
     M(SettingFloat, dt_page_num_max_gc_valid_rate, 1.0, "Max valid rate of deciding a page file can be compact when exising legacy files are more over than "                                                                           \
@@ -302,7 +301,8 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
     M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
-    M(SettingUInt64, pipeline_task_thread_pool_size, 0, "The size of task thread pool. 0 means using number_of_logical_cpu_cores.")
+    M(SettingUInt64, pipeline_task_thread_pool_size, 0, "The size of task thread pool. 0 means using number_of_logical_cpu_cores.") \
+    M(SettingUInt64, local_tunnel_version, 1, "1: not refined, 2: refined")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 

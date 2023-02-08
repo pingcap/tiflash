@@ -57,7 +57,7 @@ namespace tests
 class DeltaMergeStoreTest;
 }
 
-inline static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
+inline static const PageIdU64 DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct SegmentStats
 {
@@ -168,7 +168,7 @@ public:
     static Settings EMPTY_SETTINGS;
 
     using SegmentSortedMap = std::map<RowKeyValueRef, SegmentPtr, std::less<>>;
-    using SegmentMap = std::unordered_map<PageId, SegmentPtr>;
+    using SegmentMap = std::unordered_map<PageIdU64, SegmentPtr>;
 
     enum ThreadType
     {
@@ -269,9 +269,9 @@ public:
 
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 
-    std::tuple<String, PageId> preAllocateIngestFile();
+    std::tuple<String, PageIdU64> preAllocateIngestFile();
 
-    void preIngestFile(const String & parent_path, PageId file_id, size_t file_size);
+    void preIngestFile(const String & parent_path, PageIdU64 file_id, size_t file_size);
 
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
