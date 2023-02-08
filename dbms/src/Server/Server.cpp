@@ -1162,10 +1162,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setUseL0Opt(use_l0_opt);
 
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
-    size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
-    mark_cache_size = 0;
-    if (mark_cache_size)
-        global_context->setMarkCache(mark_cache_size);
+    // size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
+    // mark_cache_size = 0;
+    // if (mark_cache_size)
+    global_context->setMarkCache(0);
 
     /// Size of cache for minmax index, used by DeltaMerge engine.
     size_t minmax_index_cache_size = config().getUInt64("minmax_index_cache_size", mark_cache_size);
