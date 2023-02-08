@@ -215,21 +215,18 @@ public:
         const auto * col_input = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
         const ColumnUInt64::Container & vec_input = col_input->getData();
 
-        Field res_field;
         auto col_res = ColumnUInt8::create();
         col_res->reserve(size);
         ColumnUInt8::Container & vec_res = col_res->getData();
 
         for (size_t i = 0; i < size; ++i)
         {
-            const char * input_address = static_cast<const char *>(vec_input[i]);
+            const char * input_address = static_cast<const char *>(&(vec_input[i]));
             vec_res[i] = static_cast<UInt8>(isIPv4(input_address));
         }
 
         block.getByPosition(result).column = std::move(col_res);
     }
-
-private:
 };
 
 class FunctionIsIPv6 : public IFunction
@@ -258,20 +255,17 @@ public:
         const auto * col_input = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
         const ColumnUInt64::Container & vec_input = col_input->getData();
 
-        Field res_field;
         auto col_res = ColumnUInt8::create();
         col_res->reserve(size);
         ColumnUInt8::Container & vec_res = col_res->getData();
 
         for (size_t i = 0; i < size; ++i)
         {
-            const char * input_address = static_cast<const char *>(vec_input[i]);
+            const char * input_address = static_cast<const char *>(&(vec_input[i]));
             vec_res[i] = static_cast<UInt8>(isIPv6(input_address));
         }
 
         block.getByPosition(result).column = std::move(col_res);
     }
-
-private:
 };
 } // namespace DB
