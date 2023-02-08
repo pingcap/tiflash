@@ -38,6 +38,8 @@
 #include <type_traits>
 #include <utility>
 
+#include <magic_enum.hpp>
+
 
 #ifdef FIU_ENABLE
 #include <thread>
@@ -442,7 +444,7 @@ VersionedPageEntries<Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, Pag
     }
     else
     {
-        LOG_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't resolve the EditRecordType {}", static_cast<Int32>(type));
+        LOG_WARNING(Logger::get(), "Can't resolve the EditRecordType {}", magic_enum::enum_name(type));
     }
 
     return {ResolveResult::FAIL, Trait::PageIdTrait::getInvalidID(), PageVersion(0)};
