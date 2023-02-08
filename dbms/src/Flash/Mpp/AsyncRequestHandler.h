@@ -78,18 +78,23 @@ public:
         switch (stage)
         {
         case AsyncRequestStage::WAIT_RETRY:
+            LOG_INFO(log, "Profiling: enter WAIT_RETRY");
             start();
             break;
         case AsyncRequestStage::WAIT_MAKE_READER:
+            LOG_INFO(log, "Profiling: enter WAIT_MAKE_READER");
             processWaitMakeReader(ok);
             break;
         case AsyncRequestStage::WAIT_READ:
+            LOG_INFO(log, "Profiling: enter WAIT_READ");
             processWaitRead(ok);
             break;
         case AsyncRequestStage::WAIT_REWRITE:
+            LOG_INFO(log, "Profiling: enter WAIT_REWRITE");
             processWaitReWrite();
             break;
         case AsyncRequestStage::WAIT_FINISH:
+            LOG_INFO(log, "Profiling: enter WAIT_FINISH");
             processWaitFinish();
             break;
         default:
@@ -142,6 +147,7 @@ private:
 
         if (unlikely(isChannelFull(send_res)))
         {
+            LOG_INFO(log, "Profiling: channel full...");
             stage = AsyncRequestStage::WAIT_REWRITE;
             return;
         }
@@ -160,8 +166,12 @@ private:
         }
 
         if (unlikely(isChannelFull(res)))
+        {
+            LOG_INFO(log, "Profiling: rewrite full again");
             return;
+        }
 
+        LOG_INFO(log, "Profiling: rewrite successfully");
         stage = AsyncRequestStage::WAIT_READ;
         startAsyncRead();
     }

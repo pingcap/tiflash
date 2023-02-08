@@ -223,7 +223,7 @@ private:
                 continue;
             else
             {
-                callKickFunc(&(iter.second));
+                callKickFunc(&(iter.second)); // TODO may be bug
                 if (!is_all)
                     break;
             }
