@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+#include <Common/Logger.h>
 #include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/ReadThread/CPU.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
@@ -29,7 +31,7 @@ public:
     SegmentReader(WorkQueue<MergedTaskPtr> & task_queue_, const std::vector<int> & cpus_)
         : task_queue(task_queue_)
         , stop(false)
-        , log(&Poco::Logger::get(name))
+        , log(Logger::get(name))
         , cpus(cpus_)
     {
         t = std::thread(&SegmentReader::run, this);
@@ -155,7 +157,7 @@ private:
 
     WorkQueue<MergedTaskPtr> & task_queue;
     std::atomic<bool> stop;
-    Poco::Logger * log;
+    LoggerPtr log;
     std::thread t;
     std::vector<int> cpus;
 };
@@ -171,7 +173,7 @@ void SegmentReaderPool::addTask(MergedTaskPtr && task)
 }
 
 SegmentReaderPool::SegmentReaderPool(int thread_count, const std::vector<int> & cpus)
-    : log(&Poco::Logger::get("SegmentReaderPool"))
+    : log(Logger::get())
 {
     LOG_INFO(log, "Create start, thread_count={} cpus={}", thread_count, cpus);
     for (int i = 0; i < thread_count; i++)
@@ -203,7 +205,7 @@ std::vector<std::thread::id> SegmentReaderPool::getReaderIds() const
 // ===== SegmentReaderPoolManager ===== //
 
 SegmentReaderPoolManager::SegmentReaderPoolManager()
-    : log(&Poco::Logger::get("SegmentReaderPoolManager"))
+    : log(Logger::get())
 {}
 
 SegmentReaderPoolManager::~SegmentReaderPoolManager() = default;

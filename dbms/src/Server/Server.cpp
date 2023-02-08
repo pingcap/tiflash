@@ -975,7 +975,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
-    std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
+    std::string default_database = config().getString("default_database", "system");
     Strings all_normal_path = storage_config.getAllNormalPaths();
     const std::string path = all_normal_path[0];
     global_context->setPath(path);
