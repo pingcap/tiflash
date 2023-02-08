@@ -86,6 +86,7 @@ public:
         : writes(std::move(rhs.writes))
         , sequence(rhs.sequence)
         , namespace_id(rhs.namespace_id)
+        , total_data_size(rhs.total_data_size)
     {}
 
     void putPage(PageIdU64 page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
