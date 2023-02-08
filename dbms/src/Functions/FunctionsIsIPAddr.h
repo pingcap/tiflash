@@ -36,24 +36,146 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
   *
   */
 
-static inline UInt8 isIPv4(String input_address)
+/* Description：
+ * This function is used to determine whether the input string is an IPv4 address, 
+ * and the code comes from the inet_pton4 function of "arpa/inet.h".
+ * References: http://svn.apache.org/repos/asf/apr/apr/trunk/network_io/unix/inet_pton.c
+ */
+static inline UInt8 isIPv4(const char * src)
 {
-    if (input_address.empty())
+    if (NULL == src)
         return 0;
-    char str[INET_ADDRSTRLEN];
-    if (inet_pton(AF_INET, input_address.c_str(), str) == 1)
-        return 1;
-    return 0;
+
+    static const char digits[] = "0123456789";
+    int saw_digit, octets, ch;
+    unsigned char tmp[4], *tp;
+
+    saw_digit = 0;
+    octets = 0;
+    *(tp = tmp) = 0;
+    while ((ch = *src++) != '\0')
+    {
+        const char * pch;
+
+        if ((pch = strchr(digits, ch)) != NULL)
+        {
+            unsigned int new = *tp * 10 + (unsigned int)(pch - digits);
+
+            if (new > 255)
+                return 0;
+            *tp = new;
+            if (!saw_digit)
+            {
+                if (++octets > 4)
+                    return 0;
+                saw_digit = 1;
+            }
+        }
+        else if (ch == '.' && saw_digit)
+        {
+            if (octets == 4)
+                return 0;
+            *++tp = 0;
+            saw_digit = 0;
+        }
+        else
+            return 0;
+    }
+    if (octets < 4)
+        return 0;
+
+    return 1;
 }
 
-static inline UInt8 isIPv6(String input_address)
+/* Description：
+ * This function is used to determine whether the input string is an IPv6 address, 
+ * and the code comes from the inet_pton6 function of "arpa/inet.h".
+ * References: http://svn.apache.org/repos/asf/apr/apr/trunk/network_io/unix/inet_pton.c
+ */
+static inline UInt8 isIPv6(const char * src)
 {
-    if (input_address.empty())
+    if (NULL == src)
         return 0;
-    char str[INET6_ADDRSTRLEN];
-    if (inet_pton(AF_INET6, input_address.c_str(), str) == 1)
-        return 1;
-    return 0;
+    static const char xdigits_l[] = "0123456789abcdef",
+                      xdigits_u[] = "0123456789ABCDEF";
+    static const int IN6ADDRSZ = 16;
+    unsigned char tmp[16], *tp, *endp, *colonp;
+    const char *xdigits, *curtok;
+    int ch, saw_xdigit;
+    unsigned int val;
+
+    memset((tp = tmp), '\0', IN6ADDRSZ);
+    endp = tp + IN6ADDRSZ;
+    colonp = NULL;
+    if (*src == ':')
+        if (*++src != ':')
+            return 0;
+    curtok = src;
+    saw_xdigit = 0;
+    val = 0;
+    while ((ch = *src++) != '\0')
+    {
+        const char * pch;
+
+        if ((pch = strchr((xdigits = xdigits_l), ch)) == NULL)
+            pch = strchr((xdigits = xdigits_u), ch);
+        if (pch != NULL)
+        {
+            val <<= 4;
+            val |= (pch - xdigits);
+            if (val > 0xffff)
+                return 0;
+            saw_xdigit = 1;
+            continue;
+        }
+        if (ch == ':')
+        {
+            curtok = src;
+            if (!saw_xdigit)
+            {
+                if (colonp)
+                    return 0;
+                colonp = tp;
+                continue;
+            }
+            if (tp + INT16SZ > endp)
+                return 0;
+            *tp++ = (unsigned char)(val >> 8) & 0xff;
+            *tp++ = (unsigned char)val & 0xff;
+            saw_xdigit = 0;
+            val = 0;
+            continue;
+        }
+        if (ch == '.' && ((tp + INADDRSZ) <= endp) && isIPv4(curtok) > 0)
+        {
+            tp += INADDRSZ;
+            saw_xdigit = 0;
+            break; /* '\0' was seen by isIPv4(). */
+        }
+        return 0;
+    }
+    if (saw_xdigit)
+    {
+        if (tp + INT16SZ > endp)
+            return 0;
+        *tp++ = (unsigned char)(val >> 8) & 0xff;
+        *tp++ = (unsigned char)val & 0xff;
+    }
+    if (colonp != NULL)
+    {
+        const size_t n = tp - colonp;
+        size_t i;
+
+        for (i = 1; i <= n; i++)
+        {
+            endp[-i] = colonp[n - i];
+            colonp[n - i] = 0;
+        }
+        tp = endp;
+    }
+    if (tp != endp)
+        return 0;
+    return 1;
 }
 
 class FunctionIsIPv4 : public IFunction
@@ -78,18 +200,19 @@ public:
     }
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
+        const IColumn * col_input = block.getByPosition(arguments[0]).column.get();
+        const ColumnUInt64::Container & vec_input = col_input->getData();
 
         Field res_field;
-        int val_num = c0_col->size();
+        int val_num = col_input->size();
         auto col_res = ColumnUInt8::create();
         col_res->reserve(val_num);
+        ColumnUInt8::Container & vec_res = col_res->getData();
 
         for (int i = 0; i < val_num; ++i)
         {
-            c0_col->get(i, res_field);
-            String handled_str = res_field.get<String>();
-            col_res->insert(static_cast<UInt8>(isIPv4(handled_str)));
+            const char * input_address = static_cast<const char *>(vec_input[i]);
+            vec_res[i] = static_cast<UInt8>(isIPv4(input_address));
         }
 
         block.getByPosition(result).column = std::move(col_res);
@@ -120,18 +243,19 @@ public:
     }
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
+        const IColumn * col_input = block.getByPosition(arguments[0]).column.get();
+        const ColumnUInt64::Container & vec_input = col_input->getData();
 
         Field res_field;
-        int val_num = c0_col->size();
+        int val_num = col_input->size();
         auto col_res = ColumnUInt8::create();
         col_res->reserve(val_num);
+        ColumnUInt8::Container & vec_res = col_res->getData();
 
         for (int i = 0; i < val_num; ++i)
         {
-            c0_col->get(i, res_field);
-            String handled_str = res_field.get<String>();
-            col_res->insert(static_cast<UInt8>(isIPv6(handled_str)));
+            const char * input_address = static_cast<const char *>(vec_input[i]);
+            vec_res[i] = static_cast<UInt8>(isIPv6(input_address));
         }
 
         block.getByPosition(result).column = std::move(col_res);

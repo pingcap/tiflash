@@ -18,7 +18,6 @@
 namespace DB
 {
 
-
 void registerFunctionsIsIPAddr(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionIsIPv4>();
