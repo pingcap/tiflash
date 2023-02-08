@@ -36,7 +36,6 @@
 #include <common/types.h>
 #include <fmt/core.h>
 
-#include <cstddef>
 #include <type_traits>
 
 namespace DB
@@ -152,7 +151,7 @@ struct LeastGreatestStringImpl
             else if (res == 0)
             {
                 size_t size = std::min(a_size, b_size);
-                memcpy(&c_data[pre_offset], &b_data[0], a_size);
+                memcpy(&c_data[pre_offset], &b_data[0], size);
                 c_offsets[i] = pre_offset + size + 1;
             }
             else
@@ -209,46 +208,35 @@ struct LeastGreatestStringImpl
         {
             if (res < 0)
             {
-                StringRef s_ref(&a_data[0], a_size);
-                res_ref[i] = s_ref;
+                res_ref[i] = StringRef(&a_data[0], a_size);
             }
             else if (res == 0)
             {
                 size_t size = std::min(a_size, b_size);
-                StringRef s_ref(&b_data[0], size);
-                res_ref[i] = s_ref;
+                res_ref[i] = StringRef(&b_data[0], size);
             }
             else
             {
-                StringRef s_ref(&b_data[0], b_size);
-                res_ref[i] = s_ref;
+                res_ref[i] = StringRef(&b_data[0], b_size);
             }
         }
         else
         {
             if (res < 0)
             {
-                StringRef s_ref(&b_data[0], b_size);
-                res_ref[i] = s_ref;
+                res_ref[i] = StringRef(&b_data[0], b_size);
             }
             else if (res == 0)
             {
                 size_t size = std::max(a_size, b_size);
                 if (a_size > b_size)
-                {
-                    StringRef s_ref(&a_data[0], size);
-                    res_ref[i] = s_ref;
-                }
+                    res_ref[i] = StringRef(&a_data[0], size);
                 else
-                {
-                    StringRef s_ref(&b_data[0], size);
-                    res_ref[i] = s_ref;
-                }
+                    res_ref[i] = StringRef(&b_data[0], size);
             }
             else
             {
-                StringRef s_ref(&a_data[0], a_size);
-                res_ref[i] = s_ref;
+                res_ref[i] = StringRef(&a_data[0], a_size);
             }
         }
     }
@@ -277,9 +265,9 @@ struct LeastGreatestStringImpl
         size_t i)
     {
         size_t a_size = res_ref[i].size;
-        const auto * b_data = reinterpret_cast<const unsigned char *>(b.data());
         ColumnString::Offset b_size = b.size();
         const auto * a_data = reinterpret_cast<const unsigned char *>(res_ref[i].data);
+        const auto * b_data = reinterpret_cast<const unsigned char *>(b.data());
         mergeImpl(collator, a_size, b_size, &a_data[0], &b_data[0], c_data, c_offsets, i);
     }
 
@@ -332,7 +320,7 @@ struct LeastGreatestStringImpl
     // constant_constant
     static void process(
         const TiDB::TiDBCollatorPtr & collator,
-        std::string & a,
+        String & a,
         const StringRef & b)
     {
         int res = 0;
@@ -343,13 +331,13 @@ struct LeastGreatestStringImpl
 
         if constexpr (least)
         {
-            if (res == 0)
+            if (res > 0)
+                a = b.toString();
+            else if (res == 0)
             {
                 size_t size = std::min(a.size(), b.size);
                 a = b.toString().substr(0, size);
             }
-            else if (res > 0)
-                a = b.toString();
         }
         else
         {
@@ -368,11 +356,11 @@ template <bool least, bool use_collator>
 struct StringOperationImpl
 {
     static void NO_INLINE stringVectorStringVector(
+        const TiDB::TiDBCollatorPtr & collator,
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
-        const TiDB::TiDBCollatorPtr & collator,
         std::vector<StringRef> & res_ref)
     {
         size_t size = a_offsets.size();
@@ -381,10 +369,10 @@ struct StringOperationImpl
     }
 
     static void NO_INLINE stringRefVectorStringVector(
+        const TiDB::TiDBCollatorPtr & collator,
         std::vector<StringRef> & res_ref,
         const ColumnString::Chars_t & b_data,
-        const ColumnString::Offsets & b_offsets,
-        const TiDB::TiDBCollatorPtr & collator)
+        const ColumnString::Offsets & b_offsets)
     {
         size_t size = b_offsets.size();
         for (size_t i = 0; i < size; ++i)
@@ -392,11 +380,11 @@ struct StringOperationImpl
     }
 
     static void NO_INLINE stringRefVectorConstant(
+        const TiDB::TiDBCollatorPtr & collator,
         std::vector<StringRef> & res_ref,
         String & b,
         ColumnString::Chars_t & c_data,
-        ColumnString::Offsets & c_offsets,
-        const TiDB::TiDBCollatorPtr & collator)
+        ColumnString::Offsets & c_offsets)
     {
         size_t size = res_ref.size();
         size_t res_ref_size = 0;
@@ -409,12 +397,12 @@ struct StringOperationImpl
     }
 
     static void NO_INLINE stringVectorConstant(
+        const TiDB::TiDBCollatorPtr & collator,
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
-        const std::string & b,
+        const String & b,
         ColumnString::Chars_t & c_data,
-        ColumnString::Offsets & c_offsets,
-        const TiDB::TiDBCollatorPtr & collator)
+        ColumnString::Offsets & c_offsets)
     {
         size_t size = a_offsets.size();
         c_data.resize(std::max(a_data.size(), b.size() * size));
@@ -424,9 +412,9 @@ struct StringOperationImpl
     }
 
     static void constantConstant(
-        std::string & a,
-        StringRef & b,
-        const TiDB::TiDBCollatorPtr & collator)
+        const TiDB::TiDBCollatorPtr & collator,
+        String & a,
+        StringRef & b)
     {
         LeastGreatestStringImpl<least, use_collator>::process(collator, a, b);
     }
@@ -516,7 +504,10 @@ public:
             for (size_t i = 1; i < const_columns.size(); ++i)
             {
                 StringRef b = const_columns[i]->getDataAt(0);
-                impl::constantConstant(res, b, collator);
+                impl::constantConstant(
+                    collator,
+                    res,
+                    b);
             }
             if (string_columns.empty()) // fill result column
             {
@@ -532,13 +523,11 @@ public:
         // 2. calcualte result column for string columns
         auto string_columns_size = string_columns.size();
 
-        // std::vector<ColumnString::MutablePtr> results;
         std::vector<StringRef> result_string_refs;
         result_string_refs.resize(string_columns[0]->size());
         ColumnString::MutablePtr result_col;
-
         if (string_columns_size == 1)
-            result_col = ColumnString::create(*string_columns[0]); // ywq todo bug...
+            result_col = ColumnString::create(*string_columns[0]);
         else if (string_columns_size >= 2)
         {
             for (size_t i = 1; i < string_columns.size(); ++i)
@@ -550,23 +539,27 @@ public:
                     c0_string = checkAndGetColumn<ColumnString>(string_columns[0]);
 
                     impl::stringVectorStringVector(
+                        collator,
                         c0_string->getChars(),
                         c0_string->getOffsets(),
                         c1_string->getChars(),
                         c1_string->getOffsets(),
-                        collator,
                         result_string_refs);
                 }
                 else
                 {
-                    impl::stringRefVectorStringVector(result_string_refs, c1_string->getChars(), c1_string->getOffsets(), collator);
+                    impl::stringRefVectorStringVector(
+                        collator,
+                        result_string_refs,
+                        c1_string->getChars(),
+                        c1_string->getOffsets());
                 }
             }
             if (const_columns.empty()) // no const columns, use string columns result
             {
                 // materialize
                 auto res_column = ColumnString::create();
-                for (auto ref : result_string_refs)
+                for (auto & ref : result_string_refs)
                 {
                     res_column->insert(Field(ref.toString().substr(0, ref.size)));
                 }
@@ -587,14 +580,25 @@ public:
         if (string_columns.size() > 1 && !const_columns.empty())
         {
             auto col_str = ColumnString::create();
-            impl::stringRefVectorConstant(result_string_refs, const_res, col_str->getChars(), col_str->getOffsets(), collator);
+            impl::stringRefVectorConstant(
+                collator,
+                result_string_refs,
+                const_res,
+                col_str->getChars(),
+                col_str->getOffsets());
             block.getByPosition(result).column = std::move(col_str);
             return;
         }
         else if (string_columns.size() == 1 && !const_columns.empty())
         {
             auto col_str = ColumnString::create();
-            impl::stringVectorConstant(result_col->getChars(), result_col->getOffsets(), const_res, col_str->getChars(), col_str->getOffsets(), collator);
+            impl::stringVectorConstant(
+                collator,
+                result_col->getChars(),
+                result_col->getOffsets(),
+                const_res,
+                col_str->getChars(),
+                col_str->getOffsets());
             block.getByPosition(result).column = std::move(col_str);
             return;
         }
