@@ -342,13 +342,8 @@ struct LeastGreatestStringImpl
         }
         else
         {
-            if (res < 0)
-                a = b;
-            else if (res == 0)
-            {
-                if (a.size <= b.size)
-                    a = b;
-            }
+           if (res <0 || (res == 0 && a.size < b.size))
+               a = b;
         }
     }
 };
