@@ -63,7 +63,7 @@ public:
         return buff.releaseStr();
     }
 
-    static inline String toStorageSubPrefix(StorageType type)
+    static inline String toSubPrefix(StorageType type)
     {
         switch (type)
         {
@@ -83,7 +83,7 @@ public:
     static inline String toFullPrefix(StorageType type, NamespaceId ns_id)
     {
         WriteBufferFromOwnString buff;
-        writeString(toStorageSubPrefix(type), buff);
+        writeString(toSubPrefix(type), buff);
         if (type != StorageType::KVStore)
         {
             UniversalPageIdFormat::encodeUInt64(ns_id, buff);
@@ -112,9 +112,9 @@ public:
     static std::vector<String> getAllPrefixesWithMaxId()
     {
         static const std::vector<String> res = {
-            toStorageSubPrefix(StorageType::Log),
-            toStorageSubPrefix(StorageType::Data),
-            toStorageSubPrefix(StorageType::Meta),
+            toSubPrefix(StorageType::Log),
+            toSubPrefix(StorageType::Data),
+            toSubPrefix(StorageType::Meta),
         };
         return res;
     }
