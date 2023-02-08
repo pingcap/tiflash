@@ -48,9 +48,9 @@ static inline UInt8 isIPv4(String input_address)
 
 static inline UInt8 isIPv6(String input_address)
 {
-    char str[INET6_ADDRSTRLEN];
     if (input_address.empty())
         return 0;
+    char str[INET6_ADDRSTRLEN];
     if (inet_pton(AF_INET6, input_address.c_str(), str) == 1)
         return 1;
     return 0;
