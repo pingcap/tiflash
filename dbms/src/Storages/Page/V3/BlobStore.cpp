@@ -607,7 +607,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
                 to_read.begin(),
                 to_read.end(),
                 [](const FieldReadInfo & info, FmtBuffer & fb) {
-                    fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, toDebugString(info.entry));
+                    fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, info.entry->toDebugString());
                 },
                 ",");
 #ifndef NDEBUG
@@ -697,7 +697,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
             to_read.begin(),
             to_read.end(),
             [](const FieldReadInfo & info, FmtBuffer & fb) {
-                fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, toDebugString(info.entry));
+                fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, info.entry->toDebugString());
             },
             ",");
         throw Exception(fmt::format("unexpected read size, end_pos={} current_pos={} read_info=[{}]",
@@ -798,7 +798,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
             entries.begin(),
             entries.end(),
             [](const PageIDAndEntryV3 & id_entry, FmtBuffer & fb) {
-                fb.fmtAppend("{{page_id: {}, entry: {}}}", id_entry.first, toDebugString(id_entry.second));
+                fb.fmtAppend("{{page_id: {}, entry: {}}}", id_entry.first, id_entry.second->toDebugString());
             },
             ",");
         throw Exception(fmt::format("unexpected read size, end_pos={} current_pos={} read_info=[{}]",
