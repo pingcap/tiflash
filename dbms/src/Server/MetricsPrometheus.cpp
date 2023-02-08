@@ -126,8 +126,7 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     Poco::Net::SecureServerSocket socket(context);
 
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
-    Poco::Net::SocketAddress addr;
-    addr = Poco::Net::SocketAddress(address);
+    Poco::Net::SocketAddress addr = Poco::Net::SocketAddress(address);
     socket.bind(addr, true);
     socket.listen();
     auto server = std::make_shared<Poco::Net::HTTPServer>(new MetricHandlerFactory(collectable), socket, http_params);
