@@ -48,7 +48,6 @@
 #include <IO/ReadHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
-#include <Interpreters/IDAsPathUpgrader.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/loadMetadata.h>
 #include <Poco/DirectoryIterator.h>
@@ -1202,27 +1201,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     global_context->initializeSharedBlockSchemas();
 
-    {
-        // Note that this must do before initialize schema sync service.
-        do
-        {
-            // Check whether we need to upgrade directories hierarchy
-            // If some database can not find in TiDB, they will be dropped
-            // if theirs name is not in reserved_databases.
-            // Besides, database engine in reserved_databases just keep as
-            // what they are.
-            IDAsPathUpgrader upgrader(
-                *global_context,
-                /*is_mock=*/raft_config.pd_addrs.empty(),
-                /*reserved_databases=*/raft_config.ignore_databases);
-            if (!upgrader.needUpgrade())
-                break;
-            upgrader.doUpgrade();
-        } while (false);
-
-        /// Then, load remaining databases
-        loadMetadata(*global_context);
-    }
+    // Load remaining databases
+    loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
 
     if (!global_context->isDisaggregatedComputeMode())
