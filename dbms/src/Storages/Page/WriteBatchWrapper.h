@@ -38,40 +38,6 @@ enum class PageStorageRunMode : UInt8
     UNI_PS = 4,
 };
 
-enum class StorageType
-{
-    Log = 1,
-    Data = 2,
-    Meta = 3,
-    KVStore = 4,
-};
-
-static inline String combine(const String & prefix, NamespaceId ns_id)
-{
-    WriteBufferFromOwnString buff;
-    writeString(prefix, buff);
-    UniversalPageIdFormat::encodeUInt64(ns_id, buff);
-    return buff.releaseStr();
-}
-
-static inline String getTableStoragePrefix(StorageType tag, NamespaceId ns_id)
-{
-    switch (tag)
-    {
-    // TODO: remove hardcode prefix here
-    case StorageType::Log:
-        return combine("tl", ns_id);
-    case StorageType::Data:
-        return combine("td", ns_id);
-    case StorageType::Meta:
-        return combine("tm", ns_id);
-    case StorageType::KVStore:
-        return "kvs";
-    default:
-        throw Exception(fmt::format("Unknown storage tag {}", static_cast<UInt8>(tag)), ErrorCodes::LOGICAL_ERROR);
-    }
-}
-
 class WriteBatchWrapper : private boost::noncopyable
 {
 public:
@@ -80,7 +46,7 @@ public:
         switch (mode)
         {
         case PageStorageRunMode::UNI_PS:
-            uwb = std::make_unique<UniversalWriteBatchAdaptor>(getTableStoragePrefix(tag, ns_id));
+            uwb = std::make_unique<UniversalWriteBatchAdaptor>(UniversalPageIdFormat::toFullPrefix(tag, ns_id));
             wb = nullptr;
             break;
         default:

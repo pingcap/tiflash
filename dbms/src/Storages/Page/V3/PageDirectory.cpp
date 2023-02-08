@@ -859,6 +859,14 @@ PageDirectory<Trait>::PageDirectory(String storage_name, WALStorePtr && wal_, UI
     , max_persisted_log_files(max_persisted_log_files_)
     , log(Logger::get(storage_name))
 {
+    if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+    {
+        const auto & prefixes = UniversalPageIdFormat::getAllPrefixesWithMaxId();
+        for (const auto & prefix : prefixes)
+        {
+            max_page_id_by_prefix[prefix] = 0;
+        }
+    }
 }
 
 template <typename Trait>
@@ -1152,6 +1160,20 @@ UInt64 PageDirectory<Trait>::getMaxId() const
 }
 
 template <typename Trait>
+UInt64 PageDirectory<Trait>::getMaxIdWithPrefix(const String & prefix) const
+{
+    if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+    {
+        std::shared_lock read_lock(table_rw_mutex);
+        return max_page_id_by_prefix.at(prefix);
+    }
+    else
+    {
+        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+    }
+}
+
+template <typename Trait>
 typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIds()
 {
     std::set<PageId> page_ids;
@@ -1179,7 +1201,7 @@ typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIdsWith
              iter != mvcc_table_directory.end();
              ++iter)
         {
-            if (!iter->first.isPrefix(prefix))
+            if (!iter->first.hasPrefix(prefix))
                 break;
             // Only return the page_id that is visible
             if (iter->second->isVisible(seq))
@@ -1340,6 +1362,18 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
         {
             // Protected in write_lock
             max_page_id = std::max(max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
+            if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+            {
+                // TODO: the value is just used at restart, if it slows down the performance, we can avoid calculating it at run time.
+                for (auto iter = max_page_id_by_prefix.begin(); iter != max_page_id_by_prefix.end(); ++iter)
+                {
+                    if (r.page_id.hasPrefix(iter->first))
+                    {
+                        iter->second = std::max(iter->second, Trait::PageIdTrait::getU64ID(r.page_id));
+                        break;
+                    }
+                }
+            }
 
             auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
             if (created)

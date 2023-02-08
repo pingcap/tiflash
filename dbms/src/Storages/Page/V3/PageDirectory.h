@@ -339,6 +339,8 @@ public:
 
     UInt64 getMaxId() const;
 
+    UInt64 getMaxIdWithPrefix(const String & prefix) const;
+
     PageIdSet getAllPageIds();
 
     PageIdSet getAllPageIdsWithPrefix(const String & prefix, const DB::PageStorageSnapshotPtr & snap_);
@@ -423,6 +425,7 @@ private:
 
 private:
     UInt64 max_page_id;
+    std::map<String, UInt64> max_page_id_by_prefix;
     std::atomic<UInt64> sequence;
 
     // Used for avoid concurrently apply edits to wal and mvcc_table_directory.

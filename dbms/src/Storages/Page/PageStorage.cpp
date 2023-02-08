@@ -350,7 +350,7 @@ public:
     /// Not snapshot read.
     explicit PageReaderImplUniversal(StorageType tag_, NamespaceId ns_id_, UniversalPageStoragePtr storage_, ReadLimiterPtr read_limiter_)
         : storage(storage_)
-        , prefix(getTableStoragePrefix(tag_, ns_id_))
+        , prefix(UniversalPageIdFormat::toFullPrefix(tag_, ns_id_))
         , read_limiter(read_limiter_)
     {
     }
@@ -358,7 +358,7 @@ public:
     /// Snapshot read.
     PageReaderImplUniversal(StorageType tag_, NamespaceId ns_id_, UniversalPageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
         : storage(storage_)
-        , prefix(getTableStoragePrefix(tag_, ns_id_))
+        , prefix(UniversalPageIdFormat::toFullPrefix(tag_, ns_id_))
         , snap(snap_)
         , read_limiter(read_limiter_)
     {
@@ -366,7 +366,7 @@ public:
 
     DB::Page read(PageIdU64 page_id) const override
     {
-        return storage->read(UniversalPageId::toFullPageId(prefix, page_id), read_limiter, snap);
+        return storage->read(UniversalPageIdFormat::toFullPageId(prefix, page_id), read_limiter, snap);
     }
 
     static inline PageMapU64 toPageMap(UniversalPageMap && us_page_map)
@@ -384,7 +384,7 @@ public:
         UniversalPageIds us_page_ids;
         for (const auto & page_id : page_ids)
         {
-            us_page_ids.emplace_back(UniversalPageId::toFullPageId(prefix, page_id));
+            us_page_ids.emplace_back(UniversalPageIdFormat::toFullPageId(prefix, page_id));
         }
         return PageReaderImplUniversal::toPageMap(storage->read(us_page_ids, read_limiter, snap));
     }
@@ -395,19 +395,19 @@ public:
         std::vector<UniversalPageStorage::PageReadFields> us_page_fields;
         for (const auto & f : page_fields)
         {
-            us_page_fields.emplace_back(UniversalPageId::toFullPageId(prefix, f.first), f.second);
+            us_page_fields.emplace_back(UniversalPageIdFormat::toFullPageId(prefix, f.first), f.second);
         }
         return PageReaderImplUniversal::toPageMap(storage->read(us_page_fields, read_limiter, snap));
     }
 
     PageIdU64 getNormalPageId(PageIdU64 page_id) const override
     {
-        return PS::V3::universal::PageIdTrait::getU64ID(storage->getNormalPageId(UniversalPageId::toFullPageId(prefix, page_id), snap));
+        return PS::V3::universal::PageIdTrait::getU64ID(storage->getNormalPageId(UniversalPageIdFormat::toFullPageId(prefix, page_id), snap));
     }
 
     PageEntry getPageEntry(PageIdU64 page_id) const override
     {
-        return storage->getEntry(UniversalPageId::toFullPageId(prefix, page_id), snap);
+        return storage->getEntry(UniversalPageIdFormat::toFullPageId(prefix, page_id), snap);
     }
 
     PageStorageSnapshotPtr getSnapshot(const String & tracing_id) const override

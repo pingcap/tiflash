@@ -182,9 +182,9 @@ DB::PageEntry UniversalPageStorage::getEntry(const UniversalPageId & page_id, Sn
     }
 }
 
-PageIdU64 UniversalPageStorage::getMaxId() const
+PageIdU64 UniversalPageStorage::getMaxId(const String & prefix) const
 {
-    return page_directory->getMaxId();
+    return page_directory->getMaxIdWithPrefix(prefix);
 }
 
 bool UniversalPageStorage::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)

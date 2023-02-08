@@ -16,6 +16,7 @@
 
 #include <IO/Endian.h>
 #include <IO/WriteBuffer.h>
+#include <Storages/Page/V3/Universal/UniversalPageId.h>
 
 namespace DB
 {
@@ -43,8 +44,79 @@ namespace DB
 //  Data
 //      Prefix = [optional prefix] + "td" + NamespaceId
 
+enum class StorageType
+{
+    Log = 1,
+    Data = 2,
+    Meta = 3,
+    KVStore = 4,
+};
+
 struct UniversalPageIdFormat
 {
+public:
+    static inline UniversalPageId toFullPageId(const String & prefix, PageIdU64 page_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeString(prefix, buff);
+        UniversalPageIdFormat::encodeUInt64(page_id, buff);
+        return buff.releaseStr();
+    }
+
+    static inline String toStorageSubPrefix(StorageType type)
+    {
+        switch (type)
+        {
+        case StorageType::Log:
+            return "tl";
+        case StorageType::Data:
+            return "td";
+        case StorageType::Meta:
+            return "tm";
+        case StorageType::KVStore:
+            return "kvs";
+        default:
+            throw Exception(fmt::format("Unknown storage type {}", static_cast<UInt8>(type)), ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
+    static inline String toFullPrefix(StorageType type, NamespaceId ns_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeString(toStorageSubPrefix(type), buff);
+        UniversalPageIdFormat::encodeUInt64(ns_id, buff);
+        return buff.releaseStr();
+    }
+
+    static inline PageIdU64 getU64ID(const UniversalPageId & page_id)
+    {
+        if (page_id.size() >= sizeof(UInt64))
+            return decodeUInt64(page_id.data() + page_id.size() - sizeof(UInt64));
+        else
+            return INVALID_PAGE_U64_ID;
+    }
+
+    static inline String getFullPrefix(const UniversalPageId & page_id)
+    {
+        if (page_id.size() >= sizeof(UInt64))
+            return page_id.substr(0, page_id.size() - sizeof(UInt64)).toStr();
+        else
+            return "";
+    }
+
+    // These prefixes can be passed as argument to UniversalPageStorage::getMaxId(const String & prefix).
+    // If you need to get the max id of a new prefix, just add it here is enough.
+    static std::vector<String> getAllPrefixesWithMaxId()
+    {
+        static const std::vector<String> res = {
+            toStorageSubPrefix(StorageType::Log),
+            toStorageSubPrefix(StorageType::Data),
+            toStorageSubPrefix(StorageType::Meta),
+        };
+        return res;
+    }
+
+private:
     static inline void encodeUInt64(const UInt64 x, WriteBuffer & ss)
     {
         auto u = toBigEndian(x);

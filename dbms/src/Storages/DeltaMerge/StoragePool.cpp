@@ -531,9 +531,9 @@ PageStorageRunMode StoragePool::restore()
     }
     case PageStorageRunMode::UNI_PS:
     {
-        max_log_page_id = uni_ps->getMaxId();
-        max_data_page_id = uni_ps->getMaxId();
-        max_meta_page_id = uni_ps->getMaxId();
+        max_log_page_id = uni_ps->getMaxId(UniversalPageIdFormat::toStorageSubPrefix(StorageType::Log));
+        max_data_page_id = uni_ps->getMaxId(UniversalPageIdFormat::toStorageSubPrefix(StorageType::Data));
+        max_meta_page_id = uni_ps->getMaxId(UniversalPageIdFormat::toStorageSubPrefix(StorageType::Meta));
         break;
     }
     default:
@@ -581,6 +581,15 @@ void StoragePool::startup(ExternalPageCallbacks && callbacks)
         gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
         break;
     }
+    case PageStorageRunMode::UNI_PS:
+    {
+        UniversalExternalPageCallbacks us_callbacks;
+        us_callbacks.remover = callbacks.remover;
+        us_callbacks.scanner = callbacks.scanner;
+        us_callbacks.prefix = UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id);
+        uni_ps->registerUniversalExternalPagesCallbacks(us_callbacks);
+        break;
+    }
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
@@ -618,6 +627,11 @@ void StoragePool::shutdown()
         // We have transformed all external pages from V2 to V3 in `restore`, so
         // only need to unregister callbacks for V3.
         data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
+        break;
+    }
+    case PageStorageRunMode::UNI_PS:
+    {
+        uni_ps->unregisterUniversalExternalPagesCallbacks(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id));
         break;
     }
     default:
