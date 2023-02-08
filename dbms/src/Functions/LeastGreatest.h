@@ -508,9 +508,22 @@ public:
 
         // 2. calculate result column for string columns
         auto string_columns_size = string_columns.size();
-        ColumnString * result_col = nullptr;
         if (string_columns_size == 1)
+        {
+            // 3A. merge result columns of const columns and result_col
+            ColumnString * result_col = nullptr;
             result_col = const_cast<ColumnString *>(string_columns[0]);
+            auto col_str = ColumnString::create();
+            impl::stringVectorConstant(
+                collator,
+                result_col->getChars(),
+                result_col->getOffsets(),
+                const_res,
+                col_str->getChars(),
+                col_str->getOffsets());
+            block.getByPosition(result).column = std::move(col_str);
+            return;
+        }
         else if (string_columns_size >= 2)
         {
             std::vector<StringRef> result_string_refs;
@@ -551,7 +564,7 @@ public:
             }
             else
             {
-                // 3A. merge result columns of const columns and vector columns
+                // 3B. merge result columns of const columns and vector columns
                 auto col_str = ColumnString::create();
                 impl::stringRefVectorConstant(
                     collator,
@@ -562,22 +575,7 @@ public:
                 block.getByPosition(result).column = std::move(col_str);
                 return;
             }
-        }
-
-        // 3B. merge result columns of const columns and result_col
-        if (string_columns_size == 1 && !const_columns.empty())
-        {
-            auto col_str = ColumnString::create();
-            impl::stringVectorConstant(
-                collator,
-                result_col->getChars(),
-                result_col->getOffsets(),
-                const_res,
-                col_str->getChars(),
-                col_str->getOffsets());
-            block.getByPosition(result).column = std::move(col_str);
-            return;
-        }
+        }  
     }
 
 private:
