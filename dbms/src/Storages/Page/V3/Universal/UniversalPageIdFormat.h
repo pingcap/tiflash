@@ -84,7 +84,10 @@ public:
     {
         WriteBufferFromOwnString buff;
         writeString(toStorageSubPrefix(type), buff);
-        UniversalPageIdFormat::encodeUInt64(ns_id, buff);
+        if (type != StorageType::KVStore)
+        {
+            UniversalPageIdFormat::encodeUInt64(ns_id, buff);
+        }
         return buff.releaseStr();
     }
 
