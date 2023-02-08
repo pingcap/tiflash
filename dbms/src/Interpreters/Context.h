@@ -206,7 +206,6 @@ public:
     void setPathPool(const Strings & main_data_paths,
                      const Strings & latest_data_paths,
                      const Strings & kvstore_paths,
-                     bool enable_raft_compatible_mode,
                      PathCapacityMetricsPtr global_capacity_,
                      FileProviderPtr file_provider);
 

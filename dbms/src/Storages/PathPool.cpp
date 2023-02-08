@@ -64,12 +64,10 @@ PathPool::PathPool(
     const Strings & latest_data_paths_,
     const Strings & kvstore_paths_, //
     PathCapacityMetricsPtr global_capacity_,
-    FileProviderPtr file_provider_,
-    bool enable_raft_compatible_mode_)
+    FileProviderPtr file_provider_)
     : main_data_paths(main_data_paths_)
     , latest_data_paths(latest_data_paths_)
     , kvstore_paths(kvstore_paths_)
-    , enable_raft_compatible_mode(enable_raft_compatible_mode_)
     , global_capacity(global_capacity_)
     , file_provider(file_provider_)
     , log(Logger::get("PathPool"))
