@@ -19,6 +19,7 @@ namespace DB
 namespace tests
 {
 TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
+try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -153,8 +154,10 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
         }
     }
 }
+CATCH
 
 TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
+try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -188,8 +191,10 @@ TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
         }
     }
 }
+CATCH
 
 TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
+try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -244,8 +249,10 @@ TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(response), 1999, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
     }
 }
+CATCH
 
 TEST_F(RegionKVStoreTest, KVStoreSnapshot)
+try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -403,6 +410,7 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
         }
     }
 }
+CATCH
 
 } // namespace tests
 } // namespace DB
