@@ -43,7 +43,6 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
-// #include <memory>
 #include <numeric>
 
 namespace ProfileEvents

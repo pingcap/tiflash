@@ -19,8 +19,6 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
-#include "Columns/ColumnsCommon.h"
-
 
 namespace DB
 {
