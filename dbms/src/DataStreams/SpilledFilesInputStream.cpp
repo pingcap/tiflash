@@ -16,8 +16,8 @@
 
 namespace DB
 {
-SpilledFilesInputStream::SpilledFilesInputStream(std::vector<SpilledFileInfo> && spilled_files_infos_, const Block & header_, const FileProviderPtr & file_provider_, Int64 max_supported_spill_version_)
-    : spilled_file_infos(std::move(spilled_files_infos_))
+SpilledFilesInputStream::SpilledFilesInputStream(std::vector<SpilledFileInfo> && spilled_file_infos_, const Block & header_, const FileProviderPtr & file_provider_, Int64 max_supported_spill_version_)
+    : spilled_file_infos(std::move(spilled_file_infos_))
     , header(header_)
     , file_provider(file_provider_)
     , max_supported_spill_version(max_supported_spill_version_)
