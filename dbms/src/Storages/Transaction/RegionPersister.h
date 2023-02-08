@@ -78,8 +78,6 @@ private:
     PageWriterPtr page_writer;
     PageReaderPtr page_reader;
 
-    std::shared_ptr<PS::V1::PageStorage> stable_page_storage;
-
     NamespaceId ns_id = KVSTORE_NAMESPACE_ID;
     const RegionManager & region_manager;
     std::mutex mutex;
