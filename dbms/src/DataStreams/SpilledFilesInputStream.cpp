@@ -16,15 +16,15 @@
 
 namespace DB
 {
-SpilledFilesInputStream::SpilledFilesInputStream(const std::vector<String> & spilled_files_, const Block & header_, const FileProviderPtr & file_provider_, Int64 max_supported_spill_version_)
-    : spilled_files(spilled_files_)
+SpilledFilesInputStream::SpilledFilesInputStream(std::vector<SpilledFileInfo> && spilled_files_infos_, const Block & header_, const FileProviderPtr & file_provider_, Int64 max_supported_spill_version_)
+    : spilled_file_infos(std::move(spilled_files_infos_))
     , header(header_)
     , file_provider(file_provider_)
     , max_supported_spill_version(max_supported_spill_version_)
 {
-    RUNTIME_CHECK_MSG(!spilled_files.empty(), "Spilled files must not be empty");
+    RUNTIME_CHECK_MSG(!spilled_file_infos.empty(), "Spilled files must not be empty");
     current_reading_file_index = 0;
-    current_file_stream = std::make_unique<SpilledFileStream>(spilled_files[0], header, file_provider, max_supported_spill_version);
+    current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[0]), header, file_provider, max_supported_spill_version);
 }
 
 Block SpilledFilesInputStream::readImpl()
@@ -35,9 +35,12 @@ Block SpilledFilesInputStream::readImpl()
     if (ret)
         return ret;
 
-    for (++current_reading_file_index; current_reading_file_index < spilled_files.size(); ++current_reading_file_index)
+    for (++current_reading_file_index; current_reading_file_index < spilled_file_infos.size(); ++current_reading_file_index)
     {
-        current_file_stream = std::make_unique<SpilledFileStream>(spilled_files[current_reading_file_index], header, file_provider, max_supported_spill_version);
+        current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[current_reading_file_index]),
+                                                                  header,
+                                                                  file_provider,
+                                                                  max_supported_spill_version);
         ret = current_file_stream->block_in->read();
         if (ret)
             return ret;

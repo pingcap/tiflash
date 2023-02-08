@@ -78,7 +78,7 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
         }
         double cost = watch.elapsedSeconds();
         time_cost += cost;
-        LOG_INFO(spiller->logger, "Finish Spilling data into temporary file {}, spilled data size: {}, time cost: {:.3f} sec.", current_spill_file_name, spilled_data_size, cost);
+        LOG_INFO(spiller->logger, "Spilled blocks into temporary file, data size: {:.3f} MB, time cost: {:.3f} sec.", spilled_data_size / (1048576.0), cost);
         RUNTIME_CHECK_MSG(current_spilled_file_index >= 0, "{}: spill after the spill handler is finished.", spiller->config.spill_id);
         RUNTIME_CHECK_MSG(spiller->spill_finished == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
         return;
@@ -104,7 +104,7 @@ void SpillHandler::finish()
             SpillDetails details{0, 0, 0};
             for (Int64 i = 0; i <= current_spilled_file_index; i++)
                 details.merge(spilled_files[i]->getSpillDetails());
-            return fmt::format("Spill {} rows in {:.3f} sec,"
+            return fmt::format("Commit spilled data, spill details: {} rows in {:.3f} sec,"
                                " {:.3f} MiB uncompressed, {:.3f} MiB compressed, {:.3f} uncompressed bytes per row, {:.3f} compressed bytes per row, "
                                "compression rate: {:.3f} ({:.3f} rows/sec., {:.3f} MiB/sec. uncompressed, {:.3f} MiB/sec. compressed)",
                                details.rows,
@@ -125,6 +125,7 @@ void SpillHandler::finish()
         spilled_files.clear();
         spiller->has_spilled_data = true;
         current_spilled_file_index = -1;
+        RUNTIME_CHECK_MSG(spiller->spill_finished == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
     }
 }
 
