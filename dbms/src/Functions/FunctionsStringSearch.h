@@ -27,6 +27,7 @@
 
 #include <cstring>
 #include <string_view>
+#include "Columns/IColumn.h"
 #include "Common/typeid_cast.h"
 
 namespace DB
@@ -34,7 +35,7 @@ namespace DB
 using Chars_t = ColumnString::Chars_t;
 using Offsets = ColumnString::Offsets;
 
-void copyColumnStringDataImpl(ColumnString * dst_col, const ColumnString * src_col)
+inline void copyColumnStringDataImpl(ColumnString * dst_col, const ColumnString * src_col)
 {
     auto & dst_data = dst_col->getChars();
     auto & dst_offsets = dst_col->getOffsets();
@@ -49,14 +50,22 @@ void copyColumnStringDataImpl(ColumnString * dst_col, const ColumnString * src_c
     memcpy(&dst_offsets[0], &src_offsets[0], src_offsets.size());
 }
 
-void copyColumnStringData(MutableColumnPtr & dst_col, const ColumnPtr & src_col, const ColumnConst * src_col_const)
+inline void copyColumnStringData(MutableColumnPtr & dst_col, const ColumnPtr & src_col, const ColumnConst * src_col_const)
 {
     if (src_col_const != nullptr)
     {
-        // TODO
+        // dst_col = ColumnConst::create(ColumnString::create(), src_col_const->size());
+        // auto * dst_const_col = typeid_cast<ColumnConst *>(&*dst_col);
+        // auto * dst_str_col = typeid_cast<ColumnString *>(&dst_const_col->getDataColumn());
+        auto dst_str_col = ColumnString::create();
+        copyColumnStringDataImpl(&*dst_str_col, typeid_cast<const ColumnString *>(&src_col_const->getDataColumn()));
+        dst_col = ColumnConst::create(ColumnPtr(std::move(dst_str_col)), src_col_const->size());
     }
     else
+    {
+        dst_col = ColumnString::create();
         copyColumnStringDataImpl(typeid_cast<ColumnString *>(&*dst_col), typeid_cast<const ColumnString *>(&*src_col));
+    }
 }
 
 inline void lowerOneString(Chars_t & str_container, size_t pos, size_t size)
@@ -235,8 +244,6 @@ public:
 
         if constexpr (name == std::string_view(NameIlike3Args::name))
         {
-            ilike_col0_copy_ptr = ColumnString::create();
-            ilike_col1_copy_ptr = ColumnString::create();
             copyColumnStringData(ilike_col0_copy_ptr, column_haystack, col_haystack_const);
             copyColumnStringData(ilike_col1_copy_ptr, column_needle, col_needle_const);
 
