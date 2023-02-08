@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2022 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,32 +14,11 @@
 
 #pragma once
 
-#include <Flash/Executor/QueryExecutor.h>
+#include <common/types.h>
 
 namespace DB
 {
-class IBlockInputStream;
-using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
-
-struct BlockIO;
-
-class DataStreamExecutor : public QueryExecutor
-{
-public:
-    explicit DataStreamExecutor(const BlockIO & block_io);
-
-    String toString() const override;
-
-    void cancel() override;
-
-    int estimateNewThreadCount() override;
-
-    RU collectRequestUnit() override;
-
-protected:
-    ExecutionResult execute(ResultHandler result_handler) override;
-
-protected:
-    BlockInputStreamPtr data_stream;
-};
+using RU = UInt64;
+// Convert cpu time nanoseconds to Request Unit.
+RU toRU(UInt64 cpu_time_ns);
 } // namespace DB
