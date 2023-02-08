@@ -15,7 +15,8 @@
 #pragma once
 
 #include <Common/nocopyable.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/PageDefines.h>
+#include <Storages/Page/V3/PageDirectory/PageIdTrait.h>
 
 #include <list>
 #include <memory>
@@ -28,31 +29,36 @@ namespace DB::PS::V3
 
 // A thread-safe class to manage external ids.
 // Manage all external ids by NamespaceId.
+template <typename Trait>
 class ExternalIdsByNamespace
 {
+private:
+    using PageId = typename Trait::PageId;
+    using Prefix = typename Trait::Prefix;
+
 public:
     ExternalIdsByNamespace() = default;
 
     // Add a external ids
-    void addExternalId(const std::shared_ptr<PageIdV3Internal> & external_id);
+    void addExternalId(const std::shared_ptr<PageId> & external_id);
     // non thread-safe version, only for restore
-    void addExternalIdUnlock(const std::shared_ptr<PageIdV3Internal> & external_id);
+    void addExternalIdUnlock(const std::shared_ptr<PageId> & external_id);
 
     // Get all alive external ids of given `ns_id`
     // Will also cleanup the invalid external ids.
     // If the ns_id is invalid, std::nullopt will be returned.
-    std::optional<std::set<PageId>> getAliveIds(NamespaceId ns_id) const;
+    std::optional<std::set<PageIdU64>> getAliveIds(const Prefix & ns_id) const;
 
     // After table dropped, the `getAliveIds` with specified
     // `ns_id` will not be cleaned. We need this method to
     // cleanup all external id ptrs.
-    void unregisterNamespace(NamespaceId ns_id);
+    void unregisterNamespace(const Prefix & ns_id);
 
     // Check whether `ns_id` exist. Expose for testing.
     // Note that the result is meaningless unless `getAliveIds`
     // or `unregisterNamespace` is called to cleanup invalid
     // external ids.
-    bool existNamespace(NamespaceId ns_id) const
+    bool existNamespace(const Prefix & ns_id) const
     {
         std::lock_guard map_guard(mu);
         return ids_by_ns.count(ns_id) > 0;
@@ -64,8 +70,8 @@ private:
     mutable std::mutex mu;
     // Only store weak_ptrs. The weak_ptrs will be invalid after the external id
     // in PageDirectory get removed.
-    using ExternalIds = std::list<std::weak_ptr<PageIdV3Internal>>;
-    using NamespaceMap = std::unordered_map<NamespaceId, ExternalIds>;
+    using ExternalIds = std::list<std::weak_ptr<PageId>>;
+    using NamespaceMap = std::unordered_map<Prefix, ExternalIds>;
     mutable NamespaceMap ids_by_ns;
 };
 } // namespace DB::PS::V3

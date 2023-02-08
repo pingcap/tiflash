@@ -162,9 +162,9 @@ public:
     // StoragePool will assign the max_log_page_id/max_meta_page_id/max_data_page_id by the global max id
     // regardless of ns_id while being restored. This causes the ids in a table to not be continuously incremented.
 
-    PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
-    PageId newLogPageId() { return ++max_log_page_id; }
-    PageId newMetaPageId() { return ++max_meta_page_id; }
+    PageIdU64 newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
+    PageIdU64 newLogPageId() { return ++max_log_page_id; }
+    PageIdU64 newMetaPageId() { return ++max_meta_page_id; }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -208,9 +208,9 @@ private:
 
     Context & global_context;
 
-    std::atomic<PageId> max_log_page_id = 0;
-    std::atomic<PageId> max_data_page_id = 0;
-    std::atomic<PageId> max_meta_page_id = 0;
+    std::atomic<PageIdU64> max_log_page_id = 0;
+    std::atomic<PageIdU64> max_data_page_id = 0;
+    std::atomic<PageIdU64> max_meta_page_id = 0;
 
     BackgroundProcessingPool::TaskHandle gc_handle = nullptr;
 

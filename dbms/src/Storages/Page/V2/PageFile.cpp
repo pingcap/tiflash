@@ -918,8 +918,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read, const ReadLimiterPtr 
             }
         }
 
-        Page page;
-        page.page_id = page_id;
+        Page page(page_id);
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
 
@@ -1008,8 +1007,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const
             write_offset += size_to_read;
         }
 
-        Page page;
-        page.page_id = page_id;
+        Page page(page_id);
         page.data = ByteBuffer(pos, write_offset);
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
@@ -1043,7 +1041,6 @@ Page PageFile::Reader::read(FieldReadInfo & to_read, const ReadLimiterPtr & read
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
-    Page page_rc;
     std::set<FieldOffsetInsidePage> fields_offset_in_page;
 
     size_t read_size_this_entry = 0;
@@ -1080,8 +1077,7 @@ Page PageFile::Reader::read(FieldReadInfo & to_read, const ReadLimiterPtr & read
         }
     }
 
-    Page page;
-    page.page_id = to_read.page_id;
+    Page page(to_read.page_id);
     page.data = ByteBuffer(data_buf, write_offset);
     page.mem_holder = mem_holder;
     page.field_offsets.swap(fields_offset_in_page);

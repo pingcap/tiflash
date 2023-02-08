@@ -378,7 +378,7 @@ void StoragePool::forceTransformDataV2toV3()
     WriteBatch write_batch_transform{ns_id};
     WriteBatch write_batch_del_v2{ns_id};
 
-    std::set<PageId> created_dt_file_id;
+    PageIdU64Set created_dt_file_id;
     for (const auto page_id : all_page_ids)
     {
         // resolve the page_id into dtfile id
@@ -663,12 +663,12 @@ void StoragePool::drop()
     }
 }
 
-PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
+PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
 {
     // In case that there is a DTFile created on disk but TiFlash crashes without persisting the ID.
     // After TiFlash process restored, the ID will be inserted into the stable delegator, but we may
     // get a duplicated ID from the `storage_pool.data`. (tics#2756)
-    PageId dtfile_id;
+    PageIdU64 dtfile_id;
     do
     {
         dtfile_id = ++max_data_page_id;

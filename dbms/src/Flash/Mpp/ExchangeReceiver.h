@@ -97,6 +97,7 @@ public:
         const String & req_id,
         const String & executor_id,
         uint64_t fine_grained_shuffle_stream_count,
+        Int32 local_tunnel_version_,
         const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
 
     ~ExchangeReceiverBase();
@@ -164,6 +165,8 @@ private:
     void connectionLocalDone();
     void handleConnectionAfterException();
 
+    void setUpConnectionWithReadLoop(Request && req);
+
     bool isReceiverForTiFlashStorage()
     {
         // If not empty, need to send MPPTask to tiflash_storage.
@@ -197,6 +200,7 @@ private:
 
     bool collected = false;
     int thread_count = 0;
+    Int32 local_tunnel_version;
 
     std::atomic<Int64> data_size_in_queue;
 

@@ -1,2 +1,3 @@
 race:dbms/src/Common/TiFlashMetrics.h
 race:DB::Context::setCancelTest
+race:DB::getCurrentExceptionMessage
