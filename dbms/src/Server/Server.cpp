@@ -15,6 +15,7 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/CPUAffinityManager.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/ComputeLabelHolder.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DynamicThreadPool.h>
@@ -1074,6 +1075,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
+
+    /// Initialize the labels of tiflash compute node.
+    ComputeLabelHolder::instance().init(config());
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
