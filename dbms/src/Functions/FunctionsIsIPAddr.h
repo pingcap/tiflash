@@ -217,7 +217,7 @@ public:
         const typename ColumnString::Offsets & offsets = col_input->getOffsets();
 
         auto col_res = ColumnUInt8::create();
-        col_res->reserve(size);
+        col_res->resize(size);
         ColumnUInt8::Container & vec_res = col_res->getData();
 
         for (size_t i = 0; i < size; ++i)
@@ -257,7 +257,7 @@ public:
         const typename ColumnString::Offsets & offsets = col_input->getOffsets();
 
         auto col_res = ColumnUInt8::create();
-        col_res->reserve(size);
+        col_res->resize(size);
         ColumnUInt8::Container & vec_res = col_res->getData();
 
         for (size_t i = 0; i < size; ++i)
