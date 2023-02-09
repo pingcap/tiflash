@@ -618,7 +618,7 @@ try
                        .scan("test_db", "empty_table")
                        .aggregation({Max(col("s1"))}, {col("s2")})
                        .build(context);
-    executeAndAssertColumnsEqual(request, {{toNullableVec<String>({})}});
+    executeAndAssertColumnsEqual(request, {});
 }
 CATCH
 
