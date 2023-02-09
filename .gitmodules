@@ -92,6 +92,3 @@
 [submodule "contrib/GmSSL"]
 	path = contrib/GmSSL
 	url = https://github.com/guanzhi/GmSSL
-[submodule "contrib/robin-hood-hashing"]
-	path = contrib/robin-hood-hashing
-	url = https://github.com/martinus/robin-hood-hashing
