@@ -64,7 +64,7 @@ std::string getInstanceValue(const Poco::Util::AbstractConfiguration & conf)
             // ivp4
             "0.0.0.0",
             "127.",
-            "locallhost",
+            "localhost",
             // ipv6
             "0:0:0:0:0:0:0",
             "[0:0:0:0:0:0:0",
