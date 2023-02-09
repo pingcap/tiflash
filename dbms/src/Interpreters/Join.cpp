@@ -2136,6 +2136,7 @@ bool Join::needReturnNonJoinedData() const
 
 void Join::joinTotals(Block & block) const
 {
+    std::shared_lock lock(rwlock);
     Block totals_without_keys = totals;
 
     if (totals_without_keys)
