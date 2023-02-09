@@ -136,6 +136,19 @@ Page UniversalPageStorage::read(const PageReadFields & page_field, const ReadLim
     throw Exception("Not support read single filed on Universal", ErrorCodes::NOT_IMPLEMENTED);
 }
 
+void UniversalPageStorage::traverseEntries(const std::function<void(UniversalPageId page_id, DB::PageEntry entry)> & acceptor, SnapshotPtr snapshot)
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot("");
+    }
+
+    // TODO: This could hold the read lock of `page_directory` for a long time
+    const auto & page_ids = page_directory->getAllPageIds();
+    for (const auto & valid_page : page_ids)
+        acceptor(valid_page, getEntry(valid_page, snapshot));
+}
+
 UniversalPageId UniversalPageStorage::getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
