@@ -1698,6 +1698,10 @@ void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)
         shared->ps_write->restore();
         LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
     }
+    else
+    {
+        shared->ps_write = nullptr;
+    }
 }
 
 UniversalPageStoragePtr Context::getWriteNodePageStorage() const

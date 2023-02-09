@@ -95,6 +95,8 @@ public:
         return u;
     }
 
+    size_t getNumberOfPages(const String & prefix) const;
+
     void write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) const;
 
     Page read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;

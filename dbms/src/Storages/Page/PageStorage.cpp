@@ -782,6 +782,7 @@ void PageWriter::reloadSettings(const PageStorageConfig & new_config) const
     }
     case PageStorageRunMode::UNI_PS:
     {
+        // Uni PS will reload config in its gc thread
         break;
     }
     default:

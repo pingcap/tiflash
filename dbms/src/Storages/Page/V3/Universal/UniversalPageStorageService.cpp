@@ -47,6 +47,7 @@ bool UniversalPageStorageService::gc()
         return false;
 
     last_try_gc_time = now;
+    // TODO: reload config
     return this->uni_page_storage->gc();
 }
 

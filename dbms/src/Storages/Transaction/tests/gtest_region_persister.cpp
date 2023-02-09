@@ -196,13 +196,15 @@ try
 }
 CATCH
 
-
-class RegionPersisterTest : public ::testing::Test
+class RegionPersisterTest
+    : public ::testing::Test
+    , public testing::WithParamInterface<PageStorageRunMode>
 {
 public:
     RegionPersisterTest()
         : dir_path(TiFlashTestEnv::getTemporaryPath("/region_persister_test"))
     {
+        test_run_mode = GetParam();
     }
 
     static void SetUpTestCase() {}
@@ -210,11 +212,12 @@ public:
     void SetUp() override
     {
         TiFlashTestEnv::tryRemovePath(dir_path);
+        auto & global_ctx = DB::tests::TiFlashTestEnv::getGlobalContext();
+        old_run_mode = global_ctx.getPageStorageRunMode();
+        global_ctx.setPageStorageRunMode(test_run_mode);
 
-        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
         auto path_capacity = global_ctx.getPathCapacity();
         auto provider = global_ctx.getFileProvider();
-
         Strings main_data_paths{dir_path};
         mocked_path_pool = std::make_unique<PathPool>(
             main_data_paths,
@@ -222,15 +225,30 @@ public:
             /*kvstore_paths=*/Strings{},
             path_capacity,
             provider);
+        global_ctx.initializeWriteNodePageStorageIfNeed(*mocked_path_pool);
+    }
+
+    void reload()
+    {
+        auto & global_ctx = DB::tests::TiFlashTestEnv::getGlobalContext();
+        global_ctx.initializeWriteNodePageStorageIfNeed(*mocked_path_pool);
+    }
+
+    void TearDown() override
+    {
+        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+        global_ctx.setPageStorageRunMode(old_run_mode);
     }
 
 protected:
+    PageStorageRunMode test_run_mode;
     String dir_path;
+    PageStorageRunMode old_run_mode;
 
     std::unique_ptr<PathPool> mocked_path_pool;
 };
 
-TEST_F(RegionPersisterTest, persister)
+TEST_P(RegionPersisterTest, persister)
 try
 {
     RegionManager region_manager;
@@ -265,12 +283,25 @@ try
 
     {
         // Truncate the last byte of the meta to mock that the last region persist is not completed
-        auto meta_path = dir_path + "/page/kvstore/wal/log_1_0"; // First page
+        String meta_path;
+        switch (test_run_mode)
+        {
+        case PageStorageRunMode::ONLY_V3:
+            meta_path = dir_path + "/page/kvstore/wal/log_1_0"; // First page
+            break;
+        case PageStorageRunMode::UNI_PS:
+            meta_path = dir_path + "/page/write/wal/log_1_0"; // First page
+            break;
+        default:
+            throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+        }
         Poco::File meta_file(meta_path);
         size_t size = meta_file.getSize();
         int ret = ::truncate(meta_path.c_str(), size - 1); // Remove last one byte
         ASSERT_EQ(ret, 0);
     }
+
+    reload();
 
     RegionMap new_regions;
     {
@@ -299,5 +330,9 @@ try
 }
 CATCH
 
+INSTANTIATE_TEST_CASE_P(
+    TestMode,
+    RegionPersisterTest,
+    testing::Values(PageStorageRunMode::ONLY_V3, PageStorageRunMode::UNI_PS));
 } // namespace tests
 } // namespace DB

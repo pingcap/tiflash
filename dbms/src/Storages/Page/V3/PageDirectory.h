@@ -384,6 +384,8 @@ public:
         std::shared_lock read_lock(table_rw_mutex);
         return mvcc_table_directory.size();
     }
+    // Only used in test
+    size_t numPagesWithPrefix(const String & prefix) const;
 
     FileUsageStatistics getFileUsageStatistics() const
     {

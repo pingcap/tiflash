@@ -47,6 +47,11 @@ void UniversalPageStorage::restore()
                          .create(storage_name, file_provider, delegator, PS::V3::WALConfig::from(config));
 }
 
+size_t UniversalPageStorage::getNumberOfPages(const String & prefix) const
+{
+    return page_directory->numPagesWithPrefix(prefix);
+}
+
 void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter) const
 {
     if (unlikely(write_batch.empty()))

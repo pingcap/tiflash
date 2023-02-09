@@ -1538,15 +1538,18 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
         const auto & version_entries = page_iter->second;
         // the latest entry with version.seq <= ref_id.create_ver.seq
         auto entry = version_entries->getLastEntry(ver.sequence);
-        RUNTIME_CHECK(entry.has_value(), ref_id, ori_id, ver);
-        // If the being-ref entry lays on the full gc candidate blobfiles, then we
-        // need to rewrite the ref-id to a normal page.
-        if (blob_id_set.count(entry->file_id) > 0)
+        // entry.has_value() can only be true if `ori_id` is VAR_ENTRY
+        if (entry.has_value())
         {
-            blob_versioned_entries[entry->file_id].emplace_back(ref_id, ver, *entry);
-            total_page_size += entry->size;
-            total_page_nums += 1;
-            num_ref_id_rewrite += 1;
+            // If the being-ref entry lays on the full gc candidate blobfiles, then we
+            // need to rewrite the ref-id to a normal page.
+            if (blob_id_set.count(entry->file_id) > 0)
+            {
+                blob_versioned_entries[entry->file_id].emplace_back(ref_id, ver, *entry);
+                total_page_size += entry->size;
+                total_page_nums += 1;
+                num_ref_id_rewrite += 1;
+            }
         }
     }
 
@@ -1768,6 +1771,29 @@ typename PageDirectory<Trait>::PageEntriesEdit PageDirectory<Trait>::dumpSnapsho
 
     LOG_INFO(log, "Dumped snapshot to edits.[sequence={}]", snap->sequence);
     return edit;
+}
+
+template <typename Trait>
+size_t PageDirectory<Trait>::numPagesWithPrefix(const String & prefix) const
+{
+    if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+    {
+        std::shared_lock read_lock(table_rw_mutex);
+        size_t num = 0;
+        for (auto iter = mvcc_table_directory.lower_bound(prefix);
+             iter != mvcc_table_directory.end();
+             ++iter)
+        {
+            if (!iter->first.hasPrefix(prefix))
+                break;
+            num++;
+        }
+        return num;
+    }
+    else
+    {
+        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+    }
 }
 
 template class VersionedPageEntries<u128::PageDirectoryTrait>;
