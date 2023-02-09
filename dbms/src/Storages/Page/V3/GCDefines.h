@@ -21,6 +21,8 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 
+#include "Poco/Message.h"
+
 namespace DB::PS::V3
 {
 enum class GCStageType
@@ -34,6 +36,10 @@ struct GCTimeStatistics
 {
     GCStageType stage = GCStageType::Unknown;
     bool executeNextImmediately() const { return stage == GCStageType::FullGC; };
+
+    bool compact_wal_happen = false;
+
+    Poco::Message::Priority getLoggingLevel() const;
 
     UInt64 total_cost_ms = 0;
 

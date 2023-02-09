@@ -118,8 +118,7 @@ std::shared_ptr<SharedHandleTable> createHandleTable(WorkloadOptions & opts)
 
 void run(WorkloadOptions & opts)
 {
-    auto * log = &Poco::Logger::get("DTWorkload_main");
-    LOG_INFO(log, "{}", opts.toString());
+    LOG_INFO(DB::Logger::get(), "{}", opts.toString());
     std::vector<Statistics> stats;
     try
     {
