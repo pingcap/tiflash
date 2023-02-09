@@ -11,18 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #pragma once
 
-#include <vector>
+#include <common/types.h>
 
 namespace DB
 {
-class Logger;
-using LoggerPtr = std::shared_ptr<Logger>;
+using RU = UInt64;
+// Convert cpu time nanoseconds to Request Unit.
+RU toRU(UInt64 cpu_time_ns);
 } // namespace DB
-
-namespace DB::DM
-{
-// `getNumaNodes` returns cpus of each Numa node.
-std::vector<std::vector<int>> getNumaNodes(const LoggerPtr & log);
-} // namespace DB::DM

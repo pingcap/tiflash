@@ -12,34 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include <Flash/Executor/toRU.h>
+#include <gtest/gtest.h>
 
-#include <Flash/Executor/QueryExecutor.h>
-
-namespace DB
+namespace DB::tests
 {
-class IBlockInputStream;
-using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
-
-struct BlockIO;
-
-class DataStreamExecutor : public QueryExecutor
+class TestToRU : public ::testing::Test
 {
-public:
-    explicit DataStreamExecutor(const BlockIO & block_io);
-
-    String toString() const override;
-
-    void cancel() override;
-
-    int estimateNewThreadCount() override;
-
-    RU collectRequestUnit() override;
-
-protected:
-    ExecutionResult execute(ResultHandler result_handler) override;
-
-protected:
-    BlockInputStreamPtr data_stream;
 };
-} // namespace DB
+
+TEST_F(TestToRU, base)
+{
+    ASSERT_EQ(0, toRU(0));
+
+    auto base_ru = toRU(1);
+    ASSERT_TRUE(base_ru > 0);
+
+    for (size_t i = 1; i < 10; ++i)
+    {
+        auto ru = toRU(i);
+        ASSERT_TRUE(ru >= base_ru);
+        base_ru = ru;
+    }
+
+    constexpr auto ten_ms = 10'000'000;
+    for (size_t i = 1; i < 20; ++i)
+    {
+        auto ru = toRU(i * ten_ms);
+        ASSERT_TRUE(ru > base_ru);
+        base_ru = ru;
+    }
+}
+} // namespace DB::tests
