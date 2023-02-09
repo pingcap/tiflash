@@ -458,7 +458,6 @@ try
     auto nullable_haystack = createColumn<Nullable<String>>(nullable_haystack_raw, "haystack");
     auto nullable_needle = createColumn<Nullable<String>>(nullable_needle_raw, "needle");
     auto nullable_expected = createColumn<Nullable<UInt8>>(nullable_result_raw, "result");
-
     for (const auto * collator : collators)
     {
         auto nullable_result = executeFunction(func_ilike_name, {nullable_haystack, nullable_needle, escape}, collator);
@@ -673,29 +672,55 @@ TEST_F(StringMatch, IlikeConstWithConst)
     }
 }
 
-TEST_F(StringMatch, ilike)
+// ilike function will modify the column's content in-place, in order to
+// ensure the column's content is not modified after function finishes the work,
+// we need to replace the modified columns with other columns which clone the
+// original columns at the beginning.
+TEST_F(StringMatch, CheckInvariance)
 {
-    String s;
-    // using ColStringType = typename TypeTraits<String>::FieldType;
-    // using ColUInt8Type = typename TypeTraits<UInt8>::FieldType;
     ColumnWithTypeAndName escape = createConstColumn<Int32>(1, static_cast<Int32>('\\'));
-    ColumnsWithTypeAndName data1{
-        toVec(std::vector<std::optional<String>>(5, "aaa")),
-        toVec(std::vector<std::optional<String>>(5, "aaa")),
-        escape};
-    // ColumnsWithTypeAndName data1{
-    //     toVec<String>("col0", std::vector<ColStringType>(5, "aaaaaaaaaaaaaaaaa")),
-    //     toVec<String>("col1", std::vector<ColStringType>(5, "aaaaaaaaaaaaaaaaa")),
-    //     escape};
     FunctionIlike3Args function_ilike;
     TiDB::TiDBCollatorPtr collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
     function_ilike.setCollator(collator);
-    std::vector<Block> blocks{Block(data1)};
+
+    std::vector<std::optional<String>> vec_vec_vec_col0{"aAa", "", "123", "a嗯A"};
+    std::vector<std::optional<String>> vec_vec_vec_col1{"aAa", "123", "", "嗯嗯a嗯"};
+    String const_const_col0("aSd");
+    String const_const_col1("a嗯A嗯");
+
+    ColumnsWithTypeAndName vec_vec_vec{
+        toVec(vec_vec_vec_col0),
+        toVec(vec_vec_vec_col1),
+        escape};
+    ColumnsWithTypeAndName const_const_vec{
+        toConst(const_const_col0),
+        toConst(const_const_col1),
+        escape};
+
+    ColumnsWithTypeAndName vec_vec_vec_expect{
+        toVec(vec_vec_vec_col0),
+        toVec(vec_vec_vec_col1),
+        escape};
+    ColumnsWithTypeAndName const_const_vec_expect{
+        toConst(const_const_col0),
+        toConst(const_const_col1),
+        escape};
+
+    ColumnNumbers arguments{0, 1, 2};
+    std::vector<Block> expect_blocks{Block(vec_vec_vec), Block(const_const_vec)};
+    std::vector<Block> blocks{Block(vec_vec_vec_expect), Block(const_const_vec_expect)};
     for (auto & block : blocks)
         block.insert({nullptr, std::make_shared<DataTypeNumber<UInt8>>(), "res"});
-    ColumnNumbers arguments{0, 1, 2};
-    for (auto & block : blocks)
-        function_ilike.executeImpl(block, arguments, 3);
+
+    for (size_t i = 0; i < 3; ++i)
+    {
+        for (size_t i = 0; i < blocks.size(); ++i)
+        {
+            function_ilike.executeImpl(blocks[i], arguments, 3);
+            ASSERT_COLUMN_EQ(expect_blocks[i].getByPosition(0), blocks[i].getByPosition(0));
+            ASSERT_COLUMN_EQ(expect_blocks[i].getByPosition(1), blocks[i].getByPosition(1));
+        }
+    }
 }
 
 } // namespace tests

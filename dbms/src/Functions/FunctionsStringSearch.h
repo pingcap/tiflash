@@ -47,7 +47,7 @@ inline void copyColumnStringDataImpl(ColumnString * dst_col, const ColumnString 
     dst_offsets.resize(src_offsets.size());
 
     memcpy(&dst_data[0], &src_data[0], src_data.size());
-    memcpy(&dst_offsets[0], &src_offsets[0], src_offsets.size() * sizeof(ColumnString::Offsets));
+    memcpy(&dst_offsets[0], &src_offsets[0], src_offsets.size() * sizeof(ColumnString::Offset));
 }
 
 inline void copyColumnStringData(MutableColumnPtr & dst_col, const ColumnPtr & src_col, const ColumnConst * src_col_const)

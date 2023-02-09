@@ -26,7 +26,7 @@ namespace DB
 namespace tests
 {
 
-constexpr size_t data_num = 5000000;
+constexpr size_t data_num = 500000;
 
 class IlikeBench : public benchmark::Fixture
 {
@@ -147,7 +147,7 @@ try
         Block(lower_data42),
         Block(lower_data52)};
     std::vector<Block> like_blocks{Block(like_data1), Block(like_data2), Block(like_data3), Block(like_data4), Block(like_data5)};
-    
+
     for (auto & block : lower_blocks)
         block.insert({nullptr, std::make_shared<DataTypeString>(), "res"});
     for (auto & block : like_blocks)
