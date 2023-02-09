@@ -374,6 +374,7 @@ void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(Block
         auto eq_column = exec_block.getByName(null_aware_eq_column).column;
         if (eq_column->isColumnConst())
             eq_column = eq_column->convertToFullColumnIfConst();
+
         RUNTIME_CHECK_MSG(eq_column->isColumnNullable(), "The equal column of null-aware semi join should be nullable, otherwise Anti/LeftAnti/LeftSemi should be used instead");
 
         const auto * nullable_eq_column = static_cast<const ColumnNullable *>(eq_column.get());

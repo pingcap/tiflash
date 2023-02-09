@@ -869,5 +869,19 @@ try
 }
 CATCH
 
+TEST_F(JoinExecutorTestRunner, NullAwareSemiJoin)
+try
+{
+    context.addMockTable("null_aware", "t", {{"a", TiDB::TP::TypeLong}}, {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addMockTable("null_aware", "s", {{"a", TiDB::TP::TypeLong}}, {toNullableVec<Int32>("a", {1, {}, 3})});
+
+    auto request = context.scan("null_aware", "t")
+                       .join(context.scan("null_aware", "s"), tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {}, {}, 0, {col("a")})
+                       .build(context);
+
+    executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3}), toNullableVec<Int8>({0, {}, 0})});
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

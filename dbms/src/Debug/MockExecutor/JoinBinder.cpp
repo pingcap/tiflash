@@ -154,6 +154,12 @@ bool JoinBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
         fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
     }
 
+    for (const auto & key : null_aware_join_cols)
+    {
+        fillJoinKeyAndFieldType(key, children[0]->output_schema, join->add_left_null_aware_join_keys(), join->add_probe_types(), collator_id);
+        fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_null_aware_join_keys(), join->add_build_types(), collator_id);
+    }
+
     for (const auto & expr : left_conds)
     {
         tipb::Expr * cond = join->add_left_conditions();
@@ -290,14 +296,15 @@ ExecutorBinderPtr compileJoin(size_t & executor_index,
                               const ASTs & right_conds,
                               const ASTs & other_conds,
                               const ASTs & other_eq_conds_from_in,
-                              uint64_t fine_grained_shuffle_stream_count)
+                              uint64_t fine_grained_shuffle_stream_count,
+                              const ASTs & null_aware_join_cols)
 {
     DAGSchema output_schema;
 
     buildLeftSideJoinSchema(output_schema, left->output_schema, tp);
     buildRightSideJoinSchema(output_schema, right->output_schema, tp);
 
-    auto join = std::make_shared<mock::JoinBinder>(executor_index, output_schema, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count);
+    auto join = std::make_shared<mock::JoinBinder>(executor_index, output_schema, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count, null_aware_join_cols);
     join->children.push_back(left);
     join->children.push_back(right);
 

@@ -2031,9 +2031,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const Sizes & key_sizes,
     const ConstNullMapPtr & null_map,
     const ConstNullMapPtr & filter_null_map,
-    const TiDB::TiDBCollators & collators,
-    bool enable_fine_grained_shuffle,
-    size_t fine_grained_shuffle_count)
+    const TiDB::TiDBCollators & collators)
 {
     static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                   || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
@@ -2043,23 +2041,9 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     KeyGetter key_getter(key_columns, key_sizes, collators);
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(key_columns.size());
-    Arena pool;
-    WeakHash32 shuffle_hash(0); /// reproduce hash values in FinedGrainedShuffleWriter
-    if (enable_fine_grained_shuffle && rows > 0)
-    {
-        /// TODO: consider adding a virtual column in Sender side to avoid computing cost and potential inconsistency by heterogeneous envs(AMD64, ARM64)
-        /// Note: 1. Not sure, if inconsistency will do happen in heterogeneous envs
-        ///       2. Virtual column would take up a little more network bandwidth, might lead to poor performance if network was bottleneck
-        /// Currently, the computation cost is tolerable, since it's a very simple crc32 hash algorithm, and heterogeneous envs support is not considered
-        HashBaseWriterHelper::computeHash(rows,
-                                          key_columns,
-                                          collators,
-                                          sort_key_containers,
-                                          shuffle_hash);
-    }
 
+    Arena pool;
     size_t segment_size = map.getSegmentSize();
-    const auto & shuffle_hash_data = shuffle_hash.getData();
 
     std::vector<NullAwareSemiJoinResult> res;
     res.reserve(rows);
@@ -2100,27 +2084,9 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         }
 
         size_t segment_index = 0;
-        if (enable_fine_grained_shuffle)
+        if (segment_size > 0 && !zero_flag)
         {
-            RUNTIME_CHECK(segment_size > 0);
-            /// Need to calculate the correct segment_index so that rows with same key will map to the same segment_index both in Build and Prob
-            /// The "reproduce" of segment_index generated in Build phase relies on the facts that:
-            /// Possible pipelines(FineGrainedShuffleWriter => ExchangeReceiver => HashBuild)
-            /// 1. In FineGrainedShuffleWriter, selector value finally maps to packet_stream_id by '% fine_grained_shuffle_count'
-            /// 2. In ExchangeReceiver, build_stream_id = packet_stream_id % build_stream_count;
-            /// 3. In HashBuild, build_concurrency decides map's segment size, and build_steam_id decides the segment index
-            auto packet_stream_id = shuffle_hash_data[i] % fine_grained_shuffle_count;
-            if likely (fine_grained_shuffle_count == segment_size)
-                segment_index = packet_stream_id;
-            else
-                segment_index = packet_stream_id % segment_size;
-        }
-        else
-        {
-            if (segment_size > 0 && !zero_flag)
-            {
-                segment_index = hash_value % segment_size;
-            }
+            segment_index = hash_value % segment_size;
         }
 
         auto & internal_map = map.getSegmentTable(segment_index);
@@ -2242,9 +2208,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const Sizes & key_sizes,
     ConstNullMapPtr null_map,
     ConstNullMapPtr filter_null_map,
-    const TiDB::TiDBCollators & collators,
-    bool enable_fine_grained_shuffle,
-    size_t fine_grained_shuffle_count)
+    const TiDB::TiDBCollators & collators)
 {
 #define impl(has_null_map, has_filter_null_map)                                                          \
     joinBlockImplNullAwareInternal<KIND, STRICTNESS, KeyGetter, Map, has_null_map, has_filter_null_map>( \
@@ -2262,9 +2226,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
         key_sizes,                                                                                       \
         null_map,                                                                                        \
         filter_null_map,                                                                                 \
-        collators,                                                                                       \
-        enable_fine_grained_shuffle,                                                                     \
-        fine_grained_shuffle_count);
+        collators);
 
     if (null_map)
     {
@@ -2350,9 +2312,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             key_sizes,                                                                                                                                  \
             null_map,                                                                                                                                   \
             filter_null_map,                                                                                                                            \
-            collators,                                                                                                                                  \
-            enable_fine_grained_shuffle,                                                                                                                \
-            fine_grained_shuffle_count);                                                                                                                \
+            collators);                                                                                                                                 \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
