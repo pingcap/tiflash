@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/ThresholdUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
@@ -407,6 +408,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         context,
         before_agg_header,
         pipeline.streams.size(),
+        enable_fine_grained_shuffle ? pipeline.streams.size() : 1,
         key_names,
         collators,
         aggregate_descriptions,
