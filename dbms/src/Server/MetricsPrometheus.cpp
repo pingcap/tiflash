@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FunctionTimerTask.h>
 #include <Common/ProfileEvents.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/TiFlashSecurity.h>
 #include <Common/setThreadName.h>
@@ -29,6 +30,7 @@
 #include <Poco/Net/SecureServerSocket.h>
 #include <Server/CertificateReloader.h>
 #include <Server/MetricsPrometheus.h>
+#include <common/logger_useful.h>
 #include <daemon/BaseDaemon.h>
 #include <fmt/core.h>
 #include <prometheus/collectable.h>
@@ -38,6 +40,41 @@
 
 namespace DB
 {
+namespace
+{
+std::string getHostName()
+{
+    char hostname[1024];
+    if (::gethostname(hostname, sizeof(hostname)))
+    {
+        return {};
+    }
+    return hostname;
+}
+
+std::string getInstanceValue(const Poco::Util::AbstractConfiguration & conf)
+{
+    if (conf.has("flash.service_addr"))
+    {
+        auto service_addr = conf.getString("flash.service_addr");
+        if (service_addr.empty())
+            return getHostName();
+        // "0.0.0.0", "127.x.x.x", "locallhost", "0:0:0:0:0:0:0:0", "0:0:0:0:0:0:0:1", "::", "::1", ":${port}"
+        static const std::vector<std::string> blacklist{"0.0.0.0", "127.", "locallhost", "0:0:0:0:0:0:0", ":"};
+        for (const auto & prefix : blacklist)
+        {
+            if (startsWith(service_addr, prefix))
+                return getHostName();
+        }
+        return service_addr;
+    }
+    else
+    {
+        return getHostName();
+    }
+}
+} // namespace
+
 class MetricHandler : public Poco::Net::HTTPRequestHandler
 {
 public:
@@ -152,7 +189,7 @@ MetricsPrometheus::MetricsPrometheus(
     const AsynchronousMetrics & async_metrics_)
     : timer("Prometheus")
     , async_metrics(async_metrics_)
-    , log(&Poco::Logger::get("Prometheus"))
+    , log(Logger::get("Prometheus"))
 {
     auto & tiflash_metrics = TiFlashMetrics::instance();
     auto & conf = context.getConfigRef();
@@ -191,19 +228,12 @@ MetricsPrometheus::MetricsPrometheus(
             auto host = metrics_addr.substr(0, pos);
             auto port = metrics_addr.substr(pos + 1, metrics_addr.size());
 
-            auto service_addr = conf.getString("flash.service_addr");
-            std::string job_name = service_addr;
-            std::replace(job_name.begin(), job_name.end(), ':', '_');
-            std::replace(job_name.begin(), job_name.end(), '.', '_');
-            job_name = "tiflash_" + job_name;
-
-            char hostname[1024];
-            ::gethostname(hostname, sizeof(hostname));
-
-            gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, prometheus::Gateway::GetInstanceLabel(hostname));
+            const String & job_name = "tiflash";
+            const auto & labels = prometheus::Gateway::GetInstanceLabel(getInstanceValue(conf));
+            gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, labels);
             gateway->RegisterCollectable(tiflash_metrics.registry);
 
-            LOG_INFO(log, "Enable prometheus push mode; interval ={}; addr = {}", metrics_interval, metrics_addr);
+            LOG_INFO(log, "Enable prometheus push mode; interval = {}; addr = {}", metrics_interval, metrics_addr);
         }
     }
 
