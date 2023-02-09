@@ -146,11 +146,6 @@ public:
 
     const Names & getLeftJoinKeys() const { return key_names_left; }
 
-    void setInitActiveBuildConcurrency()
-    {
-        std::unique_lock lock(build_probe_mutex);
-        active_build_concurrency = getBuildConcurrencyInternal();
-    }
     void finishOneBuild();
     void waitUntilAllBuildFinished() const;
 

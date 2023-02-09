@@ -114,14 +114,6 @@ void CreatingSetsBlockInputStream::createAll()
 {
     if (!created)
     {
-        for (auto & subqueries_for_sets : subqueries_for_sets_list)
-        {
-            for (auto & elem : subqueries_for_sets)
-            {
-                if (elem.second.join)
-                    elem.second.join->setInitActiveBuildConcurrency();
-            }
-        }
         Stopwatch watch;
         auto thread_manager = newThreadManager();
         try

@@ -127,6 +127,7 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
         {
         case ProbeStatus::PROBE:
         {
+            join->waitUntilAllBuildFinished();
             if (probe_process_info.all_rows_joined_finish)
             {
                 Block block = children.back()->read();

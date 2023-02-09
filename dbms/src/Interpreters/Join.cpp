@@ -471,9 +471,8 @@ void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
 {
     if (unlikely(build_concurrency > 0))
         throw Exception("Logical error: `setBuildConcurrencyAndInitPool` shouldn't be called more than once", ErrorCodes::LOGICAL_ERROR);
-    /// do not set active_build_concurrency because in compile stage, `joinBlock` will be called to get generate header, if active_build_concurrency
-    /// is set here, `joinBlock` will hang when used to get header
     build_concurrency = std::max(1, build_concurrency_);
+    active_build_concurrency = build_concurrency;
 
     for (size_t i = 0; i < getBuildConcurrencyInternal(); ++i)
         pools.emplace_back(std::make_shared<Arena>());
@@ -2043,8 +2042,6 @@ void Join::waitUntilAllBuildFinished() const
 
 Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
 {
-    waitUntilAllBuildFinished();
-
     std::shared_lock lock(rwlock);
 
     probe_process_info.updateStartRow();
