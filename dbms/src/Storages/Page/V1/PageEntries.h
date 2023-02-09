@@ -16,7 +16,7 @@
 
 #include <Common/nocopyable.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V1/Page.h>
 #include <Storages/Page/V1/mvcc/VersionSet.h>
 #include <Storages/Page/V1/mvcc/VersionSetWithDelta.h>

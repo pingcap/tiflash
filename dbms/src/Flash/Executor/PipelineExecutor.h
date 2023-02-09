@@ -59,6 +59,8 @@ public:
 
     int estimateNewThreadCount() override;
 
+    RU collectRequestUnit() override;
+
 protected:
     ExecutionResult execute(ResultHandler result_handler) override;
 

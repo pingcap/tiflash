@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/PageStorage.h>
 #include <fmt/format.h>
 

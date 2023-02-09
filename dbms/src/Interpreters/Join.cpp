@@ -167,12 +167,13 @@ Join::Join(
     LOG_INFO(log, "FineGrainedShuffle flag {}, stream count {}", enable_fine_grained_shuffle, fine_grained_shuffle_count);
 }
 
-void Join::meetError()
+void Join::meetError(const String & error_message_)
 {
     std::lock_guard lk(build_probe_mutex);
     if (meet_error)
         return;
     meet_error = true;
+    error_message = error_message_.empty() ? "Join meet error" : error_message_;
     build_cv.notify_all();
     probe_cv.notify_all();
 }
@@ -2027,7 +2028,7 @@ void Join::waitUntilAllProbeFinished() const
         return meet_error || active_probe_concurrency == 0;
     });
     if (meet_error)
-        throw Exception("Join meet error before all probe finished!");
+        throw Exception(error_message);
 }
 
 void Join::waitUntilAllBuildFinished() const
@@ -2037,7 +2038,7 @@ void Join::waitUntilAllBuildFinished() const
         return meet_error || active_build_concurrency == 0;
     });
     if (meet_error)
-        throw Exception("Build failed before join probe!");
+        throw Exception(error_message);
 }
 
 Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
@@ -2135,6 +2136,7 @@ bool Join::needReturnNonJoinedData() const
 
 void Join::joinTotals(Block & block) const
 {
+    std::shared_lock lock(rwlock);
     Block totals_without_keys = totals;
 
     if (totals_without_keys)

@@ -280,7 +280,7 @@ bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request) cons
     return enable_async_grpc && !request.is_local;
 }
 
-void GRPCReceiverContext::establishMPPConnectionLocal(
+void GRPCReceiverContext::establishMPPConnectionLocalV2(
     const ExchangeRecvRequest & request,
     size_t source_index,
     LocalRequestHandler & local_request_handler,
@@ -290,7 +290,99 @@ void GRPCReceiverContext::establishMPPConnectionLocal(
 
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request.req.get(), std::chrono::seconds(10));
     checkLocalTunnel(tunnel, err_msg);
-    tunnel->connectLocal(source_index, local_request_handler, is_fine_grained);
+    tunnel->connectLocalV2(source_index, local_request_handler, is_fine_grained);
+}
+
+// TODO remove it in the future
+std::tuple<MPPTunnelPtr, grpc::Status> GRPCReceiverContext::establishMPPConnectionLocalV1(
+    const ::mpp::EstablishMPPConnectionRequest * request,
+    const std::shared_ptr<MPPTaskManager> & task_manager)
+{
+    std::chrono::seconds timeout(10);
+    auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
+    if (tunnel == nullptr)
+    {
+        return std::make_tuple(tunnel, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
+    }
+    if (!tunnel->isLocal())
+    {
+        return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
+    }
+    tunnel->connectLocalV1(nullptr);
+    return std::make_tuple(tunnel, grpc::Status::OK);
+}
+
+// TODO remove it in the future
+struct LocalExchangePacketReader : public ExchangePacketReader
+{
+    LocalTunnelSenderV1Ptr local_tunnel_sender;
+
+    explicit LocalExchangePacketReader(const LocalTunnelSenderV1Ptr & local_tunnel_sender_)
+        : local_tunnel_sender(local_tunnel_sender_)
+    {}
+
+    /// put the implementation of dtor in .cpp so we don't need to put the specialization of
+    /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
+    ~LocalExchangePacketReader() override
+    {
+        if (local_tunnel_sender)
+        {
+            // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
+            local_tunnel_sender->consumerFinish("Receiver exists");
+            local_tunnel_sender.reset();
+        }
+    }
+
+    bool read(TrackedMppDataPacketPtr & packet) override
+    {
+        TrackedMppDataPacketPtr tmp_packet = local_tunnel_sender->readForLocal();
+        bool success = tmp_packet != nullptr;
+        if (success)
+            packet = tmp_packet;
+        return success;
+    }
+
+    void cancel(const String & reason) override
+    {
+        if (local_tunnel_sender)
+        {
+            local_tunnel_sender->consumerFinish(fmt::format("Receiver cancelled, reason: {}", reason));
+            local_tunnel_sender.reset();
+        }
+    }
+
+    grpc::Status finish() override
+    {
+        if (local_tunnel_sender)
+        {
+            local_tunnel_sender->consumerFinish("Receiver finished!");
+            local_tunnel_sender.reset();
+        }
+        return ::grpc::Status::OK;
+    }
+};
+
+// TODO remove it in the future
+ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request) const
+{
+    if (request.is_local)
+    {
+        auto [tunnel, status] = establishMPPConnectionLocalV1(request.req.get(), task_manager);
+        if (!status.ok())
+        {
+            throw Exception("Exchange receiver meet error : " + status.error_message());
+        }
+        return std::make_shared<LocalExchangePacketReader>(tunnel->getLocalTunnelSenderV1());
+    }
+    else
+    {
+        auto reader = std::make_shared<GrpcExchangePacketReader>(request);
+        reader->reader = cluster->rpc_client->sendStreamRequest(
+            request.req->sender_meta().address(),
+            &reader->client_context,
+            *reader->call);
+        return reader;
+    }
 }
 
 ExchangePacketReaderPtr GRPCReceiverContext::makeSyncReader(const ExchangeRecvRequest & request) const
