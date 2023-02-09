@@ -66,4 +66,5 @@ private:
     std::atomic<Int32> current_bucket_num = -1;
     static constexpr Int32 NUM_BUCKETS = 256;
 };
+using MergingBucketsPtr = std::shared_ptr<MergingBuckets>;
 } // namespace DB

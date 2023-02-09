@@ -27,12 +27,14 @@
 #include <DataStreams/MergingAndConvertingBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <Interpreters/Aggregator.h>
+#include <Interpreters/MergingBuckets.h>
 #include <Storages/Transaction/CollatorUtils.h>
 #include <common/demangle.h>
 
@@ -1977,7 +1979,20 @@ std::unique_ptr<IBlockInputStream> Aggregator::mergeAndConvertToBlocks(
                                        non_empty_data[i]->aggregates_pools.end());
     }
 
-    return std::make_unique<MergingAndConvertingBlockInputStream>(*this, non_empty_data, final, max_threads);
+    const String & req_id = log ? log->identifier() : "";
+    if (has_at_least_one_two_level)
+    {
+        MergingBucketsPtr merging_buckets = std::make_shared<MergingBuckets>(*this, non_empty_data, final, max_threads);
+        BlockInputStreams merging_streams;
+        for (size_t i = 0; i < max_threads; ++i)
+            merging_streams.push_back(std::make_shared<MergingAndConvertingBlockInputStream>(merging_buckets, i, req_id));
+        return std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, req_id);
+    }
+    else
+    {
+        MergingBucketsPtr merging_buckets = std::make_shared<MergingBuckets>(*this, non_empty_data, final, 1);
+        return std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, req_id);
+    }
 }
 
 template <typename Method, typename Table>

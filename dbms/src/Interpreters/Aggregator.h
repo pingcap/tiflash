@@ -862,6 +862,8 @@ struct AggregatedDataVariants : private boost::noncopyable
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
 using ManyAggregatedDataVariants = std::vector<AggregatedDataVariantsPtr>;
 
+class MergingBuckets;
+
 /** How are "total" values calculated with WITH TOTALS?
   * (For more details, see TotalsHavingBlockInputStream.)
   *
@@ -1027,7 +1029,6 @@ public:
 protected:
     friend struct AggregatedDataVariants;
     friend class MergingBuckets;
-    friend class MergingAndConvertingBlockInputStream;
 
     Params params;
 
