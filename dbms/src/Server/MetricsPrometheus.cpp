@@ -59,8 +59,17 @@ std::string getInstanceValue(const Poco::Util::AbstractConfiguration & conf)
         auto service_addr = conf.getString("flash.service_addr");
         if (service_addr.empty())
             return getHostName();
-        // "0.0.0.0", "127.x.x.x", "locallhost", "0:0:0:0:0:0:0:0", "0:0:0:0:0:0:0:1", "::", "::1", ":${port}"
-        static const std::vector<std::string> blacklist{"0.0.0.0", "127.", "locallhost", "0:0:0:0:0:0:0", ":"};
+        // "0.0.0.0", "127.x.x.x", "localhost", "0:0:0:0:0:0:0:0", "0:0:0:0:0:0:0:1", "::", "::1", ":${port}"
+        static const std::vector<std::string> blacklist{
+            // ivp4
+            "0.0.0.0",
+            "127.",
+            "localhost",
+            // ipv6
+            "0:0:0:0:0:0:0",
+            "[0:0:0:0:0:0:0",
+            ":",
+            "[:"};
         for (const auto & prefix : blacklist)
         {
             if (startsWith(service_addr, prefix))
