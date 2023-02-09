@@ -42,7 +42,7 @@ void NullAwareSemiJoinResult::fillRightColumns(MutableColumns & added_columns, s
     {
         static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
 
-        auto iter = static_cast<const Mapped *>(map_it);
+        const auto * iter = static_cast<const Mapped *>(map_it);
         for (size_t i = 0; i < max_pace && iter != nullptr; ++i)
         {
             for (size_t j = 0; j < right_columns; ++j)
