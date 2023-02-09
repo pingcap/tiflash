@@ -16,19 +16,19 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
+#include <Columns/IColumn.h>
+#include <Common/Exception.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Common/UTF8Helpers.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <Common/Exception.h>
-#include <Common/StringUtils/StringUtils.h>
 #include <Functions/StringUtil.h>
-#include <Common/UTF8Helpers.h>
 
 #include <cstring>
 #include <string_view>
-#include "Columns/IColumn.h"
-#include "Common/typeid_cast.h"
 
 namespace DB
 {

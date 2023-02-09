@@ -13,10 +13,11 @@
 // limitations under the License.
 
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsStringSearch.cpp>
-#include "Storages/Transaction/Collator.h"
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <Storages/Transaction/Collator.h>
+
+#include <Functions/FunctionsStringSearch.cpp>
 
 namespace DB
 {
@@ -36,14 +37,13 @@ protected:
 
     const String long_pattern = "abcdefghijklmnopqrstuvwxyz_bcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz%abcdefghijklmnopqrstuvwxyz";
 
-    std::vector<TiDB::TiDBCollatorPtr> collators {
+    std::vector<TiDB::TiDBCollatorPtr> collators{
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_GENERAL_CI),
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI),
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_UNICODE_CI),
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI),
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN),
-        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN)
-    };
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN)};
 
     ColumnWithTypeAndName escape = createConstColumn<Int32>(1, static_cast<Int32>('\\'));
 

@@ -18,8 +18,8 @@
 #include <benchmark/benchmark.h>
 
 /// this is a hack, include the cpp file so we can test MatchImpl directly
-#include <Functions/FunctionsStringSearch.cpp> // NOLINT
 #include <Functions/FunctionsString.cpp>
+#include <Functions/FunctionsStringSearch.cpp> // NOLINT
 
 namespace DB
 {
