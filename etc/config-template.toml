@@ -122,7 +122,7 @@
 # advertise-status-addr = "tiflash0:20292"
 # engine-addr = "tiflash0:3930"
 
-[cluster]
+# [cluster]
 # Used to specify which cluster the tiflash compute node belongs to.
 # cluster_id = "${cluster_id}"
 
