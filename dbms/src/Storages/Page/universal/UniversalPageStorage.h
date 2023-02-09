@@ -160,6 +160,8 @@ public:
 
     Page read(const PageReadFields & page_field, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true);
 
+    void traverseEntries(const std::function<void(UniversalPageId page_id, DB::PageEntry entry)> & acceptor, SnapshotPtr snapshot = {});
+
     UniversalPageId getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true);
 
     DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot);

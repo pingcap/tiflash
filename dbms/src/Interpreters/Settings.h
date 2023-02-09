@@ -349,7 +349,7 @@ struct Settings
                                                              "unlimited.")                                                                                                                                                              \
     M(SettingUInt64, task_scheduler_thread_soft_limit, 5000, "The soft limit of threads for min_tso task scheduler.")                                                                                                                   \
     M(SettingUInt64, task_scheduler_thread_hard_limit, 10000, "The hard limit of threads for min_tso task scheduler.")                                                                                                                  \
-    M(SettingUInt64, task_scheduler_active_set_soft_limit, 0, "The soft limit of count of active query set for min_tso task scheduler.")                                                                                                                   \
+    M(SettingUInt64, task_scheduler_active_set_soft_limit, 0, "The soft limit of count of active query set for min_tso task scheduler.")                                                                                                \
     M(SettingUInt64, max_grpc_pollers, 200, "The maximum number of grpc thread pool's non-temporary threads, better tune it up to avoid frequent creation/destruction of threads.")                                                     \
     M(SettingBool, enable_elastic_threadpool, true, "Enable elastic thread pool for thread create usages.")                                                                                                                             \
     M(SettingUInt64, elastic_threadpool_init_cap, 400, "The size of elastic thread pool.")                                                                                                                                              \
@@ -365,6 +365,8 @@ struct Settings
     M(SettingUInt64, manual_compact_pool_size, 1, "The number of worker threads to handle manual compact requests.")                                                                                                                    \
     M(SettingUInt64, manual_compact_max_concurrency, 10, "Max concurrent tasks. It should be larger than pool size.")                                                                                                                   \
     M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
+                                                                                                                                                                                                                                        \
+    M(SettingUInt64, local_page_cache_max_size, 0, "Max size of local page cache, 0 means no limit")                                                                                                                                    \
                                                                                                                                                                                                                                         \
     M(SettingBool, dis_prepare, false, "!!! REMOVE this !!!") \
     M(SettingBool, enable_planner, true, "Enable planner")

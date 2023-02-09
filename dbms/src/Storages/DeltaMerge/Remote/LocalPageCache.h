@@ -42,14 +42,7 @@ class LocalPageCache : private boost::noncopyable
 public:
     explicit LocalPageCache(const Context & global_context_);
 
-#if 0
-    /**
-     * Blocks until all remote pages are available locally.
-     */
-    void ensurePagesReady(const std::vector<PageOID> & pages);
-#endif
-
-    std::vector<PageOID> getPendingIds(const std::vector<PageOID> & pages);
+    std::vector<PageOID> getMissingIds(const std::vector<PageOID> & pages);
 
     void write(
         const PageOID & oid,
@@ -58,6 +51,34 @@ public:
         PageFieldSizes && field_sizes);
 
     Page getPage(const PageOID & oid, const PageStorage::FieldIndices & indices);
+
+private:
+    using LRUQueue = std::list<UniversalPageId>;
+    using LRUQueueItr = typename LRUQueue::iterator;
+
+    struct LRUElement
+    {
+        size_t size;
+        LRUQueueItr iter;
+    };
+
+    const size_t lru_max_size; // 0 means LRU is disabled
+
+    std::mutex lru_mu;
+    LRUQueue lru_queue;
+    std::unordered_map<UniversalPageId, LRUElement> lru_index; // TODO: Use ShardedLRU if necessary.
+    size_t lru_current_size = 0;
+
+    void lruPut(const UniversalPageId & key, size_t size);
+
+    void lruRefresh(const UniversalPageId & key);
+
+    std::vector<UniversalPageId> lruEvict();
+
+    bool lruIsEnabled()
+    {
+        return lru_max_size > 0;
+    }
 
 private:
     LoggerPtr log;

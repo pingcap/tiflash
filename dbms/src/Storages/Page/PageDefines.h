@@ -245,3 +245,17 @@ struct fmt::formatter<DB::UniversalPageId>
         return format_to(ctx.out(), "{}", Redact::keyToHexString(value.data(), value.size()));
     }
 };
+
+namespace std
+{
+
+template <>
+struct hash<DB::UniversalPageId>
+{
+    std::size_t operator()(const DB::UniversalPageId & k) const
+    {
+        return hash<std::string>()(k.asStr());
+    }
+};
+
+} // namespace std

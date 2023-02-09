@@ -174,7 +174,7 @@ std::shared_ptr<ColumnFileTiny> ColumnFileTiny::deserializeFromRemoteProtocol(
 {
     RUNTIME_CHECK(oid.page_id == proto.page_id());
 
-    // LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileTiny from remote, page_oid={} rows={}", oid.info(), proto.rows());
+    // LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileTiny from remote, page_oid={} rows={}", oid, proto.rows());
 
     // page_cache->ensurePagesReady({oid});
 
