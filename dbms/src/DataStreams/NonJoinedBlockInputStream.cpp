@@ -56,6 +56,7 @@ struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
             current = reinterpret_cast<const typename Mapped::Base_t *>(next_element_in_row_list);
         for (; rows_added < max_row_added && current != nullptr; current = current->next)
         {
+            /// handle left columns later to utilize insertManyDefaults
             for (size_t j = 0; j < num_columns_right; ++j)
                 columns_right[j]->insertFrom(*current->block->getByPosition(key_num + j).column.get(), current->row_num);
             ++rows_added;
@@ -217,6 +218,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
     while (current_not_mapped_row != nullptr)
     {
         ++rows_added;
+        /// handle left columns later to utilize insertManyDefaults
         for (size_t j = 0; j < num_columns_right; ++j)
             mutable_columns_right[j]->insertFrom(*current_not_mapped_row->block->getByPosition(key_num + j).column.get(),
                                                  current_not_mapped_row->row_num);
