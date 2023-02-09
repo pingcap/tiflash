@@ -44,7 +44,6 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int UNKNOWN_AGGREGATED_DATA_VARIANT;
-extern const int TOO_MANY_ROWS;
 extern const int EMPTY_DATA_PASSED;
 extern const int CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS;
 extern const int LOGICAL_ERROR;
@@ -1919,7 +1918,7 @@ MergingBucketsPtr Aggregator::mergeAndConvertToBlocks(
     bool final,
     size_t max_threads) const
 {
-    if (data_variants.empty())
+    if (unlikely(data_variants.empty()))
         throw Exception("Empty data passed to Aggregator::mergeAndConvertToBlocks.", ErrorCodes::EMPTY_DATA_PASSED);
 
     LOG_TRACE(log, "Merging aggregated data");
@@ -1963,7 +1962,7 @@ MergingBucketsPtr Aggregator::mergeAndConvertToBlocks(
 
     for (size_t i = 1, size = non_empty_data.size(); i < size; ++i)
     {
-        if (first->type != non_empty_data[i]->type)
+        if (unlikely(first->type != non_empty_data[i]->type))
             throw Exception("Cannot merge different aggregated data variants.", ErrorCodes::CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS);
 
         /** Elements from the remaining sets can be moved to the first data set.
@@ -1974,7 +1973,9 @@ MergingBucketsPtr Aggregator::mergeAndConvertToBlocks(
                                        non_empty_data[i]->aggregates_pools.end());
     }
 
-    return std::make_shared<MergingBuckets>(*this, non_empty_data, final, has_at_least_one_two_level ? max_threads : 1);
+    // for single level merge, concurrency must be 1.
+    size_t merge_concurrency = has_at_least_one_two_level ? std::max(max_threads, 1) : 1;
+    return std::make_shared<MergingBuckets>(*this, non_empty_data, final, merge_concurrency);
 }
 
 template <typename Method, typename Table>
@@ -2694,7 +2695,8 @@ Block MergingBuckets::getDataForTwoLevel(size_t concurrency_index)
     while (true)
     {
         auto local_current_bucket_num = current_bucket_num.fetch_add(1);
-        // -1 only makes sense for single level, when current_bucket_num is equal to -1, two level merge is skipped directly
+        // -1 only makes sense for single level(to handle without_key type),
+        // when current_bucket_num is equal to -1, two level merge is skipped directly
         if (unlikely(local_current_bucket_num == -1))
         {
             local_current_bucket_num = current_bucket_num.fetch_add(1);
