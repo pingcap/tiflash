@@ -44,12 +44,36 @@ private:
     using Writes = std::vector<Write>;
 
 public:
-    UniversalWriteBatch() = default;
+    explicit UniversalWriteBatch(String prefix_ = "")
+        : prefix(std::move(prefix_))
+    {}
 
     UniversalWriteBatch(UniversalWriteBatch && rhs)
-        : writes(std::move(rhs.writes))
+        : prefix(std::move(rhs.prefix))
+        , writes(std::move(rhs.writes))
         , total_data_size(rhs.total_data_size)
     {}
+
+    void putPage(PageIdU64 page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
+    {
+        putPage(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag, read_buffer, size, data_sizes);
+    }
+
+    void putExternal(PageIdU64 page_id, UInt64 tag)
+    {
+        putExternal(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag);
+    }
+
+    // Add RefPage{ref_id} -> Page{page_id}
+    void putRefPage(PageIdU64 ref_id, PageIdU64 page_id)
+    {
+        putRefPage(UniversalPageIdFormat::toFullPageId(prefix, ref_id), UniversalPageIdFormat::toFullPageId(prefix, page_id));
+    }
+
+    void delPage(PageIdU64 page_id)
+    {
+        delPage(UniversalPageIdFormat::toFullPageId(prefix, page_id));
+    }
 
     void putPage(const UniversalPageId & page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
@@ -184,6 +208,7 @@ public:
     }
 
 private:
+    String prefix;
     Writes writes;
     size_t total_data_size = 0;
 };

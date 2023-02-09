@@ -17,6 +17,7 @@
 #include <IO/Endian.h>
 #include <IO/WriteBuffer.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
+#include <fmt/format.h>
 
 namespace DB
 {
@@ -133,3 +134,23 @@ private:
     }
 };
 } // namespace DB
+
+template <>
+struct fmt::formatter<DB::UniversalPageId>
+{
+    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    {
+        const auto * it = ctx.begin();
+        const auto * end = ctx.end();
+        /// Only support {}.
+        if (it != end && *it != '}')
+            throw format_error("invalid format");
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::UniversalPageId & value, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return format_to(ctx.out(), "{}.{} {}", DB::UniversalPageIdFormat::getFullPrefix(value), DB::UniversalPageIdFormat::getU64ID(value), Redact::keyToHexString(value.data(), value.size()));
+    }
+};

@@ -80,23 +80,3 @@ inline bool operator==(const String & lhs, const UniversalPageId & rhs)
     return lhs == rhs.id;
 }
 } // namespace DB
-
-template <>
-struct fmt::formatter<DB::UniversalPageId>
-{
-    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
-    {
-        const auto * it = ctx.begin();
-        const auto * end = ctx.end();
-        /// Only support {}.
-        if (it != end && *it != '}')
-            throw format_error("invalid format");
-        return it;
-    }
-
-    template <typename FormatContext>
-    auto format(const DB::UniversalPageId & value, FormatContext & ctx) const -> decltype(ctx.out())
-    {
-        return format_to(ctx.out(), "{}", Redact::keyToHexString(value.data(), value.size()));
-    }
-};

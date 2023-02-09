@@ -17,7 +17,8 @@
 #include <IO/ReadBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
-#include <Storages/Page/V3/Universal/UniversalWriteBatchAdaptor.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormat.h>
+#include <Storages/Page/V3/Universal/UniversalWriteBatch.h>
 #include <Storages/Page/WriteBatch.h>
 #include <fmt/format.h>
 
@@ -38,7 +39,7 @@ enum class PageStorageRunMode : UInt8
     UNI_PS = 4,
 };
 
-// It contains either an UniversalWriteBatchAdaptor or a WriteBatch.
+// It contains either an UniversalWriteBatch or a WriteBatch.
 class WriteBatchWrapper : private boost::noncopyable
 {
 public:
@@ -47,7 +48,7 @@ public:
         switch (mode)
         {
         case PageStorageRunMode::UNI_PS:
-            uwb = std::make_unique<UniversalWriteBatchAdaptor>(UniversalPageIdFormat::toFullPrefix(tag, ns_id));
+            uwb = std::make_unique<UniversalWriteBatch>(UniversalPageIdFormat::toFullPrefix(tag, ns_id));
             wb = nullptr;
             break;
         default:
@@ -62,7 +63,7 @@ public:
         switch (mode)
         {
         case PageStorageRunMode::UNI_PS:
-            uwb = std::make_unique<UniversalWriteBatchAdaptor>(std::move(std::get<String>(prefix)));
+            uwb = std::make_unique<UniversalWriteBatch>(std::move(std::get<String>(prefix)));
             wb = nullptr;
             break;
         default:
@@ -140,7 +141,7 @@ public:
 
     const UniversalWriteBatch & getUniversalWriteBatch() const
     {
-        return uwb->getUniversalWriteBatch();
+        return *uwb;
     }
 
     WriteBatch && releaseWriteBatch()
@@ -150,11 +151,11 @@ public:
 
     UniversalWriteBatch && releaseUniversalWriteBatch()
     {
-        return uwb->releaseUniversalWriteBatch();
+        return std::move(*uwb);
     }
 
 private:
     std::unique_ptr<WriteBatch> wb;
-    std::unique_ptr<UniversalWriteBatchAdaptor> uwb;
+    std::unique_ptr<UniversalWriteBatch> uwb;
 };
 } // namespace DB
