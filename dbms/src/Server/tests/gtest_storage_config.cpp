@@ -716,5 +716,88 @@ background_read_weight=2
     }
 }
 CATCH
+
+String getEnv(std::string_view key)
+{
+    const auto * id = std::getenv(key.data());
+    if (id != nullptr)
+    {
+        return id;
+    }
+    return {};
+}
+
+void setEnv(std::string_view key, std::string_view value)
+{
+    ASSERT_EQ(::setenv(key.data(), value.data(), true), 0) << strerror(errno);
+}
+
+std::pair<String, String> getS3Env()
+{
+    return {std::getenv("AWS_ACCESS_KEY_ID"), std::getenv("AWS_SECRET_ACCESS_KEY")};
+}
+
+void setS3Env(std::string_view id, std::string_view key)
+{
+    setEnv("AWS_ACCESS_KEY_ID", id.data());
+    setEnv("AWS_SECRET_ACCESS_KEY", key.data());
+}
+
+TEST_F(StorageConfigTest, S3Config)
+try
+{
+    Strings tests = {
+        R"(
+[storage]
+[storage.main]
+dir = ["123"]
+[storage.s3]
+        )",
+        R"(
+[storage]
+[storage.main]
+dir = ["123"]
+[storage.s3]
+endpoint = "127.0.0.1:8080"
+bucket = "s3_bucket"
+        )",
+    };
+
+    auto id_key = getS3Env();
+    SCOPE_EXIT({
+        setS3Env(id_key.first, id_key.second);
+    });
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        const String test_id{"abcdefgh"};
+        const String test_key{"1234567890"};
+        setS3Env(test_id, test_key);
+        auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+        const auto & s3_config = storage.s3_config;
+        ASSERT_EQ(s3_config.access_key_id, test_id);
+        ASSERT_EQ(s3_config.secret_access_key, test_key);
+        if (i == 0)
+        {
+            ASSERT_TRUE(s3_config.endpoint.empty());
+            ASSERT_TRUE(s3_config.bucket.empty());
+            ASSERT_FALSE(s3_config.isS3Enabled());
+        }
+        else if (i == 1)
+        {
+            ASSERT_EQ(s3_config.endpoint, "127.0.0.1:8080");
+            ASSERT_EQ(s3_config.bucket, "s3_bucket");
+            ASSERT_TRUE(s3_config.isS3Enabled());
+        }
+        else
+        {
+            throw Exception("Not support");
+        }
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
