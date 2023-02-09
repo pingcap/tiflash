@@ -54,9 +54,6 @@ inline void copyColumnStringData(MutableColumnPtr & dst_col, const ColumnPtr & s
 {
     if (src_col_const != nullptr)
     {
-        // dst_col = ColumnConst::create(ColumnString::create(), src_col_const->size());
-        // auto * dst_const_col = typeid_cast<ColumnConst *>(&*dst_col);
-        // auto * dst_str_col = typeid_cast<ColumnString *>(&dst_const_col->getDataColumn());
         auto dst_str_col = ColumnString::create();
         copyColumnStringDataImpl(&*dst_str_col, typeid_cast<const ColumnString *>(&src_col_const->getDataColumn()));
         dst_col = ColumnConst::create(ColumnPtr(std::move(dst_str_col)), src_col_const->size());
@@ -342,7 +339,7 @@ public:
     }
 
 private:
-    // We lower the character in place for ilike function, and we should restore them with cloned data.
+    // We lower the character in-place for ilike function, and we should restore them with cloned data.
     void restoreData(Block & block, const ColumnNumbers & arguments, ColumnPtr && col0, ColumnPtr && col1) const
     {
         block.getByPosition(arguments[0]).column = std::move(col0);
