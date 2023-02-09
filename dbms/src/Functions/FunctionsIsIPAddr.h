@@ -222,19 +222,12 @@ public:
             ColumnUInt8::Container & vec_res = col_res->getData();
             vec_res.resize(size);
 
-<<<<<<< HEAD
             size_t prev_offset = 0;
             for (size_t i = 0; i < size; ++i)
             {
                 vec_res[i] = static_cast<UInt8>(isIPv4(reinterpret_cast<const char *>(&data[prev_offset])));
                 prev_offset = offsets[i];
             }
-=======
-            for (size_t i = 0; i < size; ++i)
-            {
-                vec_res[i] = static_cast<UInt8>(isIPv4(reinterpret_cast<const char *>(&data[i == 0 ? 0 : offsets[i - 1]])));
-            }
->>>>>>> cea864a529d2840edca01fdbfdb3775ca009d427
 
             block.getByPosition(result).column = std::move(col_res);
         }
@@ -277,19 +270,12 @@ public:
             ColumnUInt8::Container & vec_res = col_res->getData();
             vec_res.resize(size);
 
-<<<<<<< HEAD
             size_t prev_offset = 0;
             for (size_t i = 0; i < size; ++i)
             {
                 vec_res[i] = static_cast<UInt8>(isIPv6(reinterpret_cast<const char *>(&data[prev_offset])));
                 prev_offset = offsets[i];
             }
-=======
-            for (size_t i = 0; i < size; ++i)
-            {
-                vec_res[i] = static_cast<UInt8>(isIPv6(reinterpret_cast<const char *>(&data[i == 0 ? 0 : offsets[i - 1]])));
-            }
->>>>>>> cea864a529d2840edca01fdbfdb3775ca009d427
 
             block.getByPosition(result).column = std::move(col_res);
         }
