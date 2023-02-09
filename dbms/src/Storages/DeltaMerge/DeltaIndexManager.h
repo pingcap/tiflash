@@ -52,7 +52,7 @@ private:
     size_t current_size = 0;
     const size_t max_size;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::mutex mutex;
 
@@ -62,7 +62,7 @@ private:
 public:
     explicit DeltaIndexManager(size_t max_size_)
         : max_size(max_size_)
-        , log(&Poco::Logger::get("DeltaIndexManager"))
+        , log(Logger::get())
     {}
 
     /// Note that if isLimit() is false, than this method always return 0.

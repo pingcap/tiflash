@@ -62,9 +62,8 @@ void computeAndSetNumberOfPhysicalCPUCores(UInt16 number_of_logical_cpu_cores_, 
     auto hardware_logical_cpu_cores = std::thread::hardware_concurrency();
     UInt16 physical_cpu_cores = number_of_logical_cpu_cores_ / (hardware_logical_cpu_cores / number_of_hardware_physical_cores);
     CPUCores::number_of_physical_cpu_cores = physical_cpu_cores > 0 ? physical_cpu_cores : 1;
-    auto log = DB::Logger::get("CPUCores");
     LOG_INFO(
-        log,
+        DB::Logger::get(),
         "logical cpu cores: {}, hardware logical cpu cores: {}, hardware physical cpu cores: {}, physical cpu cores: {}, number_of_physical_cpu_cores: {}",
         number_of_logical_cpu_cores_,
         hardware_logical_cpu_cores,

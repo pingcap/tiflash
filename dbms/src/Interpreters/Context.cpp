@@ -554,7 +554,6 @@ void Context::setPathPool(
     const Strings & main_data_paths,
     const Strings & latest_data_paths,
     const Strings & kvstore_paths,
-    bool enable_raft_compatible_mode,
     PathCapacityMetricsPtr global_capacity_,
     FileProviderPtr file_provider_)
 {
@@ -564,8 +563,7 @@ void Context::setPathPool(
         latest_data_paths,
         kvstore_paths,
         global_capacity_,
-        file_provider_,
-        enable_raft_compatible_mode);
+        file_provider_);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)

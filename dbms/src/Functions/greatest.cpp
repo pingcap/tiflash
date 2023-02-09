@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@ struct BinaryGreatestBaseImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        const Result tmp_a = static_cast<Result>(a); // NOLINT(bugprone-signed-char-misuse)
-        const Result tmp_b = static_cast<Result>(b); // NOLINT(bugprone-signed-char-misuse)
+        const auto tmp_a = static_cast<Result>(a); // NOLINT(bugprone-signed-char-misuse)
+        const auto tmp_b = static_cast<Result>(b); // NOLINT(bugprone-signed-char-misuse)
         return accurate::greaterOp(tmp_a, tmp_b) ? tmp_a : tmp_b;
     }
     template <typename Result = ResultType>
@@ -46,8 +46,8 @@ struct BinaryGreatestBaseImpl<A, B, true>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        const Result tmp_a = static_cast<Result>(a); // NOLINT(bugprone-signed-char-misuse)
-        const Result tmp_b = static_cast<Result>(b); // NOLINT(bugprone-signed-char-misuse)
+        const auto tmp_a = static_cast<Result>(a); // NOLINT(bugprone-signed-char-misuse)
+        const auto tmp_b = static_cast<Result>(b); // NOLINT(bugprone-signed-char-misuse)
         return tmp_a > tmp_b ? tmp_a : tmp_b;
     }
     template <typename Result = ResultType>
@@ -71,6 +71,7 @@ using FunctionTiDBGreatest = FunctionVectorizedLeastGreatest<GreatestImpl, Funct
 void registerFunctionGreatest(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTiDBGreatest>();
+    factory.registerFunction<FunctionLeastGreatestString<false>>();
 }
 
 } // namespace DB

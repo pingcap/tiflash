@@ -31,6 +31,7 @@
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -442,7 +443,7 @@ VersionedPageEntries<Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, Pag
     }
     else
     {
-        LOG_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't resolve the EditRecordType {}", static_cast<Int32>(type));
+        LOG_WARNING(Logger::get(), "Can't resolve the EditRecordType {}", magic_enum::enum_name(type));
     }
 
     return {ResolveResult::FAIL, Trait::PageIdTrait::getInvalidID(), PageVersion(0)};

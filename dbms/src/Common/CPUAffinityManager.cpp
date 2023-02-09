@@ -24,9 +24,9 @@
 
 #include <Common/CPUAffinityManager.h>
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Common/setThreadName.h>
 #include <Poco/DirectoryIterator.h>
-#include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <boost_wrapper/string.h>
 #include <common/logger_useful.h>
@@ -75,7 +75,7 @@ CPUAffinityManager & CPUAffinityManager::getInstance()
 CPUAffinityManager::CPUAffinityManager()
     : query_cpu_percent(0)
     , cpu_cores(0)
-    , log(&Poco::Logger::get("CPUAffinityManager"))
+    , log(Logger::get())
 {}
 
 #ifdef __linux__

@@ -43,7 +43,7 @@ public:
 
         auto & global_context = TiFlashTestEnv::getGlobalContext();
 
-        storage_path_pool_v3 = std::make_unique<PathPool>(Strings{path}, Strings{path}, Strings{}, std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps), global_context.getFileProvider(), true);
+        storage_path_pool_v3 = std::make_unique<PathPool>(Strings{path}, Strings{path}, Strings{}, std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps), global_context.getFileProvider());
 
         global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
     }

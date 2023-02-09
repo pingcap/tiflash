@@ -168,7 +168,7 @@ typename BlobStore<Trait>::PageEntriesEdit
 BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
     PageEntriesEdit edit;
-    for (auto & write : wb.getWrites())
+    for (auto & write : wb.getMutWrites())
     {
         switch (write.type)
         {
@@ -315,7 +315,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
 
     size_t offset_in_allocated = 0;
 
-    for (auto & write : wb.getWrites())
+    for (auto & write : wb.getMutWrites())
     {
         switch (write.type)
         {

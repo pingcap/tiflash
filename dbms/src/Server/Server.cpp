@@ -15,6 +15,7 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/CPUAffinityManager.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/ComputeLabelHolder.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DynamicThreadPool.h>
@@ -48,7 +49,6 @@
 #include <IO/ReadHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
-#include <Interpreters/IDAsPathUpgrader.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/loadMetadata.h>
 #include <Poco/DirectoryIterator.h>
@@ -967,7 +967,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.main_data_paths, //
         storage_config.latest_data_paths, //
         storage_config.kvstore_data_path, //
-        raft_config.enable_compatible_mode, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
@@ -976,8 +975,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
 
     // Use pd address to define which default_database we use by default.
-    // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
-    std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
+    // For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
+    std::string default_database = config().getString("default_database", "system");
     Strings all_normal_path = storage_config.getAllNormalPaths();
     const std::string path = all_normal_path[0];
     global_context->setPath(path);
@@ -1076,6 +1075,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
+
+    /// Initialize the labels of tiflash compute node.
+    ComputeLabelHolder::instance().init(config());
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
@@ -1203,27 +1205,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     global_context->initializeSharedBlockSchemas();
 
-    {
-        // Note that this must do before initialize schema sync service.
-        do
-        {
-            // Check whether we need to upgrade directories hierarchy
-            // If some database can not find in TiDB, they will be dropped
-            // if theirs name is not in reserved_databases.
-            // Besides, database engine in reserved_databases just keep as
-            // what they are.
-            IDAsPathUpgrader upgrader(
-                *global_context,
-                /*is_mock=*/raft_config.pd_addrs.empty(),
-                /*reserved_databases=*/raft_config.ignore_databases);
-            if (!upgrader.needUpgrade())
-                break;
-            upgrader.doUpgrade();
-        } while (false);
-
-        /// Then, load remaining databases
-        loadMetadata(*global_context);
-    }
+    // Load remaining databases
+    loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
 
     if (!global_context->isDisaggregatedComputeMode())
@@ -1366,6 +1349,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
+            // If a TiFlash starts before any TiKV starts, then the very first Region will be created in TiFlash's proxy and it must be the peer as a leader role.
+            // This conflicts with the assumption that tiflash does not contain any Region leader peer and leads to unexpected errors
+            LOG_INFO(log, "Waiting for TiKV cluster to be bootstrapped");
+            while (!tmt_context.getPDClient()->isClusterBootstrapped())
+            {
+                const int wait_seconds = 3;
+                LOG_ERROR(
+                    log,
+                    "Waiting for cluster to be bootstrapped, we will sleep for {} seconds and try again.",
+                    wait_seconds);
+                ::sleep(wait_seconds);
+            }
+
             tiflash_instance_wrap.tmt = &tmt_context;
             LOG_INFO(log, "Let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;

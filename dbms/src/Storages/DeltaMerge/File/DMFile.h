@@ -287,14 +287,13 @@ private:
            UInt64 page_id_,
            String parent_path_,
            Status status_,
-           Poco::Logger * log_,
            DMConfigurationOpt configuration_ = std::nullopt)
         : file_id(file_id_)
         , page_id(page_id_)
         , parent_path(std::move(parent_path_))
         , status(status_)
         , configuration(std::move(configuration_))
-        , log(log_)
+        , log(Logger::get())
     {
     }
 
@@ -389,7 +388,7 @@ private:
 
     SubFileStats sub_file_stats;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     friend class DMFileWriter;
     friend class DMFileReader;

@@ -113,6 +113,9 @@ protected:
     }
     void initStorages()
     {
+        bool v = false;
+        if (!has_init.compare_exchange_strong(v, true))
+            return;
         try
         {
             registerStorages();
@@ -123,9 +126,9 @@ protected:
         }
         String path = TiFlashTestEnv::getContext().getPath();
         auto p = path + "/metadata/";
-        TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
+        TiFlashTestEnv::tryCreatePath(p);
         p = path + "/data/";
-        TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
+        TiFlashTestEnv::tryCreatePath(p);
     }
 
 protected:
@@ -150,6 +153,7 @@ protected:
         return std::make_unique<PathPool>(main_data_paths, main_data_paths, Strings{}, path_capacity, provider);
     }
 
+    std::atomic_bool has_init{false};
     std::string test_path;
 
     std::unique_ptr<PathPool> path_pool;
