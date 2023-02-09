@@ -67,7 +67,6 @@ public:
         return row_num;
     }
 
-private:
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Map, NullAwareSemiJoinStep STEP>
     void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists, size_t & current_offset, size_t max_pace);
 
@@ -98,6 +97,7 @@ private:
     std::pair<bool, bool> result;
 };
 
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
 class NullAwareSemiJoinHelper
 {
 public:
@@ -113,17 +113,15 @@ public:
         const String & null_aware_eq_column,
         const ExpressionActionsPtr & null_aware_eq_ptr);
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Map>
     void joinResult(std::list<NullAwareSemiJoinResult *> & res_list);
 
 private:
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Map, NullAwareSemiJoinStep STEP>
+    template <NullAwareSemiJoinStep STEP>
     void runStep(std::list<NullAwareSemiJoinResult *> & res_list, std::list<NullAwareSemiJoinResult *> & next_res_list);
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
     void runStepAllBlocks(std::list<NullAwareSemiJoinResult *> & res_list);
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, NullAwareSemiJoinStep STEP>
+    template <NullAwareSemiJoinStep STEP>
     void checkAllExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<NullAwareSemiJoinResult *> & res_list, std::list<NullAwareSemiJoinResult *> & next_res_list);
 
 private:

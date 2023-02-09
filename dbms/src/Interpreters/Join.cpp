@@ -2156,7 +2156,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 
     if (!res_list.empty())
     {
-        NullAwareSemiJoinHelper helper(
+        NullAwareSemiJoinHelper<KIND, STRICTNESS, typename Map::mapped_type::Base_t> helper(
             block,
             left_columns,
             right_columns,
@@ -2168,7 +2168,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             null_aware_eq_column,
             null_aware_eq_ptr);
 
-        helper.joinResult<KIND, STRICTNESS, Map>(res_list);
+        helper.joinResult(res_list);
 
         RUNTIME_CHECK_MSG(res_list.empty(), "NullAwareSemiJoinResult list must be empty after calculating join result");
     }

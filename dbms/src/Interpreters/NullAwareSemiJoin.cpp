@@ -28,7 +28,7 @@ NullAwareSemiJoinResult::NullAwareSemiJoinResult(size_t row_num, bool has_null_j
     , map_it(map_it)
 {}
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Map, NullAwareSemiJoinStep STEP>
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped, NullAwareSemiJoinStep STEP>
 void NullAwareSemiJoinResult::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists, size_t & current_offset, size_t max_pace)
 {
     static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
@@ -42,7 +42,7 @@ void NullAwareSemiJoinResult::fillRightColumns(MutableColumns & added_columns, s
     {
         static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
 
-        auto iter = static_cast<const typename Map::mapped_type::Base_t *>(map_it);
+        auto iter = static_cast<const Mapped *>(map_it);
         for (size_t i = 0; i < max_pace && iter != nullptr; ++i)
         {
             for (size_t j = 0; j < right_columns; ++j)
@@ -138,7 +138,6 @@ void NullAwareSemiJoinResult::checkExprResult(ConstNullMapPtr eq_null_map, const
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, NullAwareSemiJoinStep STEP>
 void NullAwareSemiJoinResult::checkStepEnd()
 {
-    static_assert(STEP != NullAwareSemiJoinStep::DONE);
     if (!step_end)
         return;
 
@@ -177,7 +176,8 @@ void NullAwareSemiJoinResult::checkStepEnd()
     }
 }
 
-NullAwareSemiJoinHelper::NullAwareSemiJoinHelper(
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
+NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::NullAwareSemiJoinHelper(
     Block & block,
     size_t left_columns,
     size_t right_columns,
@@ -199,26 +199,26 @@ NullAwareSemiJoinHelper::NullAwareSemiJoinHelper(
     , null_aware_eq_column(null_aware_eq_column)
     , null_aware_eq_ptr(null_aware_eq_ptr)
 {
-    RUNTIME_CHECK(block.columns() == left_columns + right_columns);
-}
-
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Map>
-void NullAwareSemiJoinHelper::joinResult(std::list<NullAwareSemiJoinResult *> & res_list)
-{
     static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                   || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
     static_assert(STRICTNESS == ASTTableJoin::Strictness::Any || STRICTNESS == ASTTableJoin::Strictness::All);
+
+    RUNTIME_CHECK(block.columns() == left_columns + right_columns);
 
     if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftAnti || KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
     {
         /// The last column is `match_helper`.
         right_columns -= 1;
     }
+}
 
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
+void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NullAwareSemiJoinResult *> & res_list)
+{
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
     {
         std::list<NullAwareSemiJoinResult *> next_step_res_list;
-        runStep<KIND, STRICTNESS, Map, NullAwareSemiJoinStep::CHECK_OTHER_COND>(res_list, next_step_res_list);
+        runStep<NullAwareSemiJoinStep::CHECK_OTHER_COND>(res_list, next_step_res_list);
         res_list.swap(next_step_res_list);
     }
 
@@ -226,17 +226,18 @@ void NullAwareSemiJoinHelper::joinResult(std::list<NullAwareSemiJoinResult *> & 
         return;
 
     std::list<NullAwareSemiJoinResult *> next_step_res_list;
-    runStep<KIND, STRICTNESS, Map, NullAwareSemiJoinStep::CHECK_NULL_LIST>(res_list, next_step_res_list);
+    runStep<NullAwareSemiJoinStep::CHECK_NULL_LIST>(res_list, next_step_res_list);
     res_list.swap(next_step_res_list);
 
     if (res_list.empty())
         return;
 
-    runStepAllBlocks<KIND, STRICTNESS>(res_list);
+    runStepAllBlocks(res_list);
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Map, NullAwareSemiJoinStep STEP>
-void NullAwareSemiJoinHelper::runStep(std::list<NullAwareSemiJoinResult *> & res_list, std::list<NullAwareSemiJoinResult *> & next_res_list)
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
+template <NullAwareSemiJoinStep STEP>
+void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NullAwareSemiJoinResult *> & res_list, std::list<NullAwareSemiJoinResult *> & next_res_list)
 {
     static_assert(STEP == NullAwareSemiJoinStep::CHECK_OTHER_COND || STEP == NullAwareSemiJoinStep::CHECK_NULL_LIST);
 
@@ -278,7 +279,7 @@ void NullAwareSemiJoinHelper::runStep(std::list<NullAwareSemiJoinResult *> & res
         for (auto & res : res_list)
         {
             size_t prev_offset = current_offset;
-            res->fillRightColumns<KIND, STRICTNESS, Map, STEP>(columns, left_columns, right_columns, null_lists, current_offset, max_pace);
+            res->fillRightColumns<KIND, STRICTNESS, Mapped, STEP>(columns, left_columns, right_columns, null_lists, current_offset, max_pace);
             // TODO: optimize performance.
             for (size_t i = 0; i < left_columns; ++i)
             {
@@ -297,7 +298,7 @@ void NullAwareSemiJoinHelper::runStep(std::list<NullAwareSemiJoinResult *> & res
         // from equal and other condition expressions.
         exec_block = block.cloneWithColumns(std::move(columns));
 
-        checkAllExprResult<KIND, STRICTNESS, STEP>(
+        checkAllExprResult<STEP>(
             exec_block,
             offsets,
             res_list,
@@ -305,8 +306,8 @@ void NullAwareSemiJoinHelper::runStep(std::list<NullAwareSemiJoinResult *> & res
     }
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
-void NullAwareSemiJoinHelper::runStepAllBlocks(std::list<NullAwareSemiJoinResult *> & res_list)
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
+void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::runStepAllBlocks(std::list<NullAwareSemiJoinResult *> & res_list)
 {
     // Should always empty, just for sanity check.
     std::list<NullAwareSemiJoinResult *> next_res_list;
@@ -316,6 +317,9 @@ void NullAwareSemiJoinHelper::runStepAllBlocks(std::list<NullAwareSemiJoinResult
         NullAwareSemiJoinResult * res = *res_list.begin();
         for (const auto & right_block : right_blocks)
         {
+            if (res->getStep() == NullAwareSemiJoinStep::DONE)
+                break;
+
             size_t num = right_block.rows();
             if (num == 0)
                 continue;
@@ -327,19 +331,16 @@ void NullAwareSemiJoinHelper::runStepAllBlocks(std::list<NullAwareSemiJoinResult
             {
                 MutableColumnPtr column = exec_block.getByPosition(i).column->assumeMutable();
                 column->insertFrom(*block.getByPosition(i).column.get(), res->getRowNum());
-                exec_block.getByPosition(i).column = ColumnConst::create(column, num);
+                exec_block.getByPosition(i).column = ColumnConst::create(std::move(column), num);
             }
             for (size_t i = 0; i < right_columns; ++i)
                 exec_block.getByPosition(i + left_columns).column = right_block.getByPosition(i).column;
 
-            checkAllExprResult<KIND, STRICTNESS, NullAwareSemiJoinStep::CHECK_ALL_BLOCKS>(
+            checkAllExprResult<NullAwareSemiJoinStep::CHECK_ALL_BLOCKS>(
                 exec_block,
                 offsets,
                 res_list,
                 next_res_list);
-
-            if (res->getStep() == NullAwareSemiJoinStep::DONE)
-                break;
         }
         if (res->getStep() != NullAwareSemiJoinStep::DONE)
         {
@@ -356,8 +357,9 @@ void NullAwareSemiJoinHelper::runStepAllBlocks(std::list<NullAwareSemiJoinResult
     RUNTIME_CHECK_MSG(next_res_list.empty(), "next_res_list should be empty");
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, NullAwareSemiJoinStep STEP>
-void NullAwareSemiJoinHelper::checkAllExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<NullAwareSemiJoinResult *> & res_list, std::list<NullAwareSemiJoinResult *> & next_res_list)
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
+template <NullAwareSemiJoinStep STEP>
+void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<NullAwareSemiJoinResult *> & res_list, std::list<NullAwareSemiJoinResult *> & next_res_list)
 {
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
     {
@@ -443,5 +445,14 @@ void NullAwareSemiJoinHelper::checkAllExprResult(Block & exec_block, const std::
         }
     }
 }
+
+template class NullAwareSemiJoinHelper<ASTTableJoin::Kind::NullAware_Anti, ASTTableJoin::Strictness::Any, Join::RowRef>;
+template class NullAwareSemiJoinHelper<ASTTableJoin::Kind::NullAware_Anti, ASTTableJoin::Strictness::All, Join::RowRefList>;
+
+template class NullAwareSemiJoinHelper<ASTTableJoin::Kind::NullAware_LeftSemi, ASTTableJoin::Strictness::Any, Join::RowRef>;
+template class NullAwareSemiJoinHelper<ASTTableJoin::Kind::NullAware_LeftSemi, ASTTableJoin::Strictness::All, Join::RowRefList>;
+
+template class NullAwareSemiJoinHelper<ASTTableJoin::Kind::NullAware_LeftAnti, ASTTableJoin::Strictness::Any, Join::RowRef>;
+template class NullAwareSemiJoinHelper<ASTTableJoin::Kind::NullAware_LeftAnti, ASTTableJoin::Strictness::All, Join::RowRefList>;
 
 } // namespace DB
