@@ -212,8 +212,9 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
-        const auto * col_input = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
-        const ColumnUInt64::Container & vec_input = col_input->getData();
+        const auto * col_input = checkAndGetColumn<ColumnString>(block.getByPosition(arguments[0]).column.get());
+        const typename ColumnString::Chars_t & data = col_input->getChars();
+        const typename ColumnString::Offsets & offsets = col_input->getOffsets();
 
         auto col_res = ColumnUInt8::create();
         col_res->reserve(size);
@@ -221,8 +222,7 @@ public:
 
         for (size_t i = 0; i < size; ++i)
         {
-            const char * input_address = reinterpret_cast<const char *>(&(vec_input[i]));
-            vec_res[i] = static_cast<UInt8>(isIPv4(input_address));
+            vec_res[i] = static_cast<UInt8>(isIPv4(reinterpret_cast<const char *>(&data[i == 0 ? 0 : offsets[i - 1]])));
         }
 
         block.getByPosition(result).column = std::move(col_res);
@@ -252,8 +252,9 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
-        const auto * col_input = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
-        const ColumnUInt64::Container & vec_input = col_input->getData();
+        const auto * col_input = checkAndGetColumn<ColumnString>(block.getByPosition(arguments[0]).column.get());
+        const typename ColumnString::Chars_t & data = col_input->getChars();
+        const typename ColumnString::Offsets & offsets = col_input->getOffsets();
 
         auto col_res = ColumnUInt8::create();
         col_res->reserve(size);
@@ -261,8 +262,7 @@ public:
 
         for (size_t i = 0; i < size; ++i)
         {
-            const char * input_address = reinterpret_cast<const char *>(&(vec_input[i]));
-            vec_res[i] = static_cast<UInt8>(isIPv6(input_address));
+            vec_res[i] = static_cast<UInt8>(isIPv6(reinterpret_cast<const char *>(&data[i == 0 ? 0 : offsets[i - 1]])));
         }
 
         block.getByPosition(result).column = std::move(col_res);
