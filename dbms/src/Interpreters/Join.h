@@ -122,8 +122,16 @@ public:
 
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
-    void setTotals(const Block & block) { totals = block; }
-    bool hasTotals() const { return static_cast<bool>(totals); };
+    void setTotals(const Block & block)
+    {
+        std::unique_lock lock(rwlock);
+        totals = block;
+    }
+    bool hasTotals() const
+    {
+        std::shared_lock lock(rwlock);
+        return static_cast<bool>(totals);
+    };
 
     void joinTotals(Block & block) const;
 
