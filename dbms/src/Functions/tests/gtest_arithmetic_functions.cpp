@@ -129,7 +129,7 @@ void doTiDBDivideDecimalRoundInternalTest()
         // ±max as divisor
         {0, max, 0}, {max/2-1, max, 0}, {max/2, max, 0}, {max/2+1, max, 1}, {max-1, max, 1}, {max, max, 1},
         {-1, max, 0}, {-max/2+1, max, 0},  {-max/2, max, 0}, {-max/2-1, max, -1}, {-max+1, max, -1}, {-max, max, -1}, {min, max, -1},
-        {0, -max, 0}, {max/2-1, -max, 0}, {max/2, -max, -1}, {max/2+1, -max, -1}, {max-1, -max, -1}, {max, -max, -1},
+        {0, -max, 0}, {max/2-1, -max, 0}, {max/2, -max, 0}, {max/2+1, -max, -1}, {max-1, -max, -1}, {max, -max, -1},
         {-1, -max, 0}, {-max/2+1, -max, 0},  {-max/2, -max, 0}, {-max/2-1, -max, 1}, {-max+1, -max, 1}, {-max, -max, 1}, {min, -max, 1},
 
         // ±max as dividend
