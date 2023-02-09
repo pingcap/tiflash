@@ -74,6 +74,16 @@ void FlashService::init(Context & context_)
         context->getGlobalContext(),
         context->getGlobalContext().getSettingsRef());
 
+    // hack
+    Aws::Client::ClientConfiguration client_config;
+    client_config.endpointOverride = "172.16.5.85:9000";
+    client_config.scheme = Aws::Http::Scheme::HTTP;
+    client_config.verifySSL = false;
+    credentials.SetAWSAccessKeyId("minioadmin");
+    credentials.SetAWSSecretKey("minioadmin");
+
+    s3_lock_service = std::make_unique<Management::S3LockService>(context->getGlobalContext(), bucket_name, client_config, credentials);
+
     auto settings = context->getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
@@ -547,6 +557,26 @@ grpc::Status FlashService::Compact(grpc::ServerContext * grpc_context, const kvr
         return check_result;
 
     return manual_compact_manager->handleRequest(request, response);
+}
+
+grpc::Status FlashService::tryAddLock(grpc::ServerContext * grpc_context, const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    return s3_lock_service->tryAddLock(request, response);
+}
+
+grpc::Status FlashService::tryMarkDelete(grpc::ServerContext * grpc_context, const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    return s3_lock_service->tryMarkDelete(request, response);
 }
 
 void FlashService::setMockStorage(MockStorage * mock_storage_)

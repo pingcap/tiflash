@@ -80,6 +80,11 @@ public:
 
     grpc::Status Compact(grpc::ServerContext * grpc_context, const kvrpcpb::CompactRequest * request, kvrpcpb::CompactResponse * response) override;
 
+
+    // For S3 Lock Service
+    grpc::Status tryAddLock(grpc::ServerContext * /*context*/, const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response) override;
+    grpc::Status tryMarkDelete(grpc::ServerContext * /*context*/, const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response) override;
+
     void setMockStorage(MockStorage * mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
     Context * getContext() { return context; }
@@ -96,6 +101,11 @@ protected:
     bool enable_async_grpc_client = false;
 
     std::unique_ptr<Management::ManualCompactManager> manual_compact_manager;
+    // TODO: make them configurable
+    const String bucket_name = "qiuyang";
+    Aws::Client::ClientConfiguration client_config;
+    Aws::Auth::AWSCredentials credentials;
+    std::unique_ptr<Management::S3LockService> s3_lock_service;
 
     /// for mpp unit test.
     MockStorage * mock_storage = nullptr;
