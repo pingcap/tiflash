@@ -205,7 +205,7 @@ struct ConvertToDecimalImpl
         }
         else
         {
-            if (const ColumnVector<FromFieldType> * col_from
+            if (const auto * col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
             {
                 auto col_to = ColumnDecimal<ToFieldType>::create(0, scale);
@@ -245,7 +245,7 @@ struct ConvertToDecimalImpl<DataTypeString, Name, ToDataType>
 
         const IDataType & data_type_to = *block.getByPosition(result).type;
 
-        if (const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(&col_from))
+        if (const auto * col_from_string = checkAndGetColumn<ColumnString>(&col_from))
         {
             auto res = data_type_to.createColumn();
 
@@ -758,8 +758,8 @@ struct ConvertThroughParsing
         }
 
         const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-        const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
-        const ColumnFixedString * col_from_fixed_string = checkAndGetColumn<ColumnFixedString>(col_from);
+        const auto * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+        const auto * col_from_fixed_string = checkAndGetColumn<ColumnFixedString>(col_from);
 
         if (std::is_same_v<FromDataType, DataTypeString> && !col_from_string)
             throw Exception("Illegal column " + col_from->getName()
@@ -880,7 +880,7 @@ struct ConvertImplGenericFromString
 
         const IDataType & data_type_to = *block.getByPosition(result).type;
 
-        if (const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(&col_from))
+        if (const auto * col_from_string = checkAndGetColumn<ColumnString>(&col_from))
         {
             auto res = data_type_to.createColumn();
 
@@ -947,7 +947,7 @@ struct ConvertImpl<DataTypeFixedString, DataTypeString, Name>
 {
     static void execute(Block & block, const ColumnNumbers & arguments, size_t result)
     {
-        if (const ColumnFixedString * col_from = checkAndGetColumn<ColumnFixedString>(block.getByPosition(arguments[0]).column.get()))
+        if (const auto * col_from = checkAndGetColumn<ColumnFixedString>(block.getByPosition(arguments[0]).column.get()))
         {
             auto col_to = ColumnString::create();
 
@@ -1754,7 +1754,7 @@ public:
 class FunctionGetFormat : public IFunction
 {
 private:
-    static String get_format(const StringRef & time_type, const StringRef & location)
+    static String getFormat(const StringRef & time_type, const StringRef & location)
     {
         if (time_type == "DATE")
         {
@@ -1850,7 +1850,7 @@ public:
             for (size_t i = 0; i < size; ++i)
             {
                 const auto & location = location_col->getDataAt(i);
-                const auto & result = get_format(StringRef(time_type), location);
+                const auto & result = getFormat(StringRef(time_type), location);
                 write_buffer.write(result.c_str(), result.size());
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
@@ -2615,7 +2615,7 @@ private:
                    const size_t result) {
             const auto & array_arg = block.getByPosition(arguments.front());
 
-            if (const ColumnArray * col_array = checkAndGetColumn<ColumnArray>(array_arg.column.get()))
+            if (const auto * col_array = checkAndGetColumn<ColumnArray>(array_arg.column.get()))
             {
                 /// create block for converting nested column containing original and result columns
                 Block nested_block{

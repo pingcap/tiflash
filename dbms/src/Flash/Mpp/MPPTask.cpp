@@ -412,6 +412,9 @@ void MPPTask::runImpl()
         {
             err_msg = result.err_msg;
         }
+        auto ru = query_executor_holder->collectRequestUnit();
+        LOG_INFO(log, "mpp finish with request unit: {}", ru);
+        GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(ru);
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
         LOG_DEBUG(
