@@ -56,17 +56,17 @@ struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
             current = reinterpret_cast<const typename Mapped::Base_t *>(next_element_in_row_list);
         for (; rows_added < max_row_added && current != nullptr; current = current->next)
         {
-            for (size_t j = 0; j < num_columns_left; ++j)
-                /// should fill the key column with key columns from right block
-                /// but we don't care about the key column now so just insert a default value is ok.
-                /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
-                /// for detailed explanation
-                columns_left[j]->insertDefault();
-
             for (size_t j = 0; j < num_columns_right; ++j)
                 columns_right[j]->insertFrom(*current->block->getByPosition(key_num + j).column.get(), current->row_num);
             ++rows_added;
         }
+        for (size_t j = 0; j < num_columns_left; ++j)
+            /// should fill the key column with key columns from right block
+            /// but we don't care about the key column now so just insert a default value is ok.
+            /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+            /// for detailed explanation
+            columns_left[j]->insertManyDefaults(rows_added);
+
         next_element_in_row_list = current;
         return rows_added;
     }
@@ -217,13 +217,6 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
     while (current_not_mapped_row != nullptr)
     {
         ++rows_added;
-        for (size_t j = 0; j < num_columns_left; ++j)
-            /// should fill the key column with key columns from right block
-            /// but we don't care about the key column now so just insert a default value is ok.
-            /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
-            /// for detailed explanation
-            mutable_columns_left[j]->insertDefault();
-
         for (size_t j = 0; j < num_columns_right; ++j)
             mutable_columns_right[j]->insertFrom(*current_not_mapped_row->block->getByPosition(key_num + j).column.get(),
                                                  current_not_mapped_row->row_num);
@@ -232,9 +225,19 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
         setNextCurrentNotMappedRow();
         if (rows_added == max_block_size)
         {
+            /// Fill left columns with defaults
+            for (size_t j = 0; j < num_columns_left; ++j)
+                mutable_columns_left[j]->insertManyDefaults(rows_added);
             return rows_added;
         }
     }
+    /// Fill left columns with defaults
+    for (size_t j = 0; j < num_columns_left; ++j)
+        /// should fill the key column with key columns from right block
+        /// but we don't care about the key column now so just insert a default value is ok.
+        /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+        /// for detailed explanation
+        mutable_columns_left[j]->insertManyDefaults(rows_added);
 
     /// then add rows that in hash table, but not joined
     if (!position)
