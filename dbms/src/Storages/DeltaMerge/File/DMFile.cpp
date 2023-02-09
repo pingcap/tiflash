@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
 #include <boost_wrapper/string_split.h>
+#include <common/logger_useful.h>
 #include <fmt/format.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -102,13 +103,11 @@ String DMFile::ngcPath() const
 
 DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration)
 {
-    Poco::Logger * log = &Poco::Logger::get("DMFile");
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(new DMFile(file_id,
                                     file_id,
                                     parent_path,
                                     Status::WRITABLE,
-                                    log,
                                     std::move(configuration)));
 
     auto path = new_dmfile->path();
@@ -116,7 +115,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigura
     if (file.exists())
     {
         file.remove(true);
-        LOG_WARNING(log, "Existing dmfile, removed: {}", path);
+        LOG_WARNING(Logger::get(), "Existing dmfile, removed: {}", path);
     }
 
     file.createDirectories();
@@ -146,8 +145,7 @@ DMFilePtr DMFile::restore(
         file_id,
         page_id,
         parent_path,
-        Status::READABLE,
-        &Poco::Logger::get("DMFile")));
+        Status::READABLE));
     if (!read_meta_mode.isNone())
     {
         dmfile->readConfiguration(file_provider);
@@ -395,7 +393,7 @@ void DMFile::readColumnStat(const FileProviderPtr & file_provider, const MetaPac
         }
         else
         {
-            log->warning(fmt::format("checksum for {} not found", name));
+            LOG_WARNING(log, "checksum for {} not found", name);
         }
     }
 
@@ -486,7 +484,7 @@ void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaP
         }
         else
         {
-            log->warning(fmt::format("checksum for {} not found", name));
+            LOG_WARNING(log, "checksum for {} not found", name);
         }
     }
 }
@@ -533,7 +531,7 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
 {
     if (STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2 && !configuration)
     {
-        log->warning("checksum disabled due to lack of configuration");
+        LOG_WARNING(log, "checksum disabled due to lack of configuration");
     }
     writeMetadata(file_provider, write_limiter);
     if (unlikely(status != Status::WRITING))
@@ -569,7 +567,6 @@ std::set<UInt64> DMFile::listAllInPath(
     std::vector<std::string> file_names;
     folder.list(file_names);
     std::set<UInt64> file_ids;
-    Poco::Logger * log = &Poco::Logger::get("DMFile");
 
     auto try_parse_file_id = [](const String & name) -> std::optional<UInt64> {
         std::vector<std::string> ss;
@@ -597,7 +594,7 @@ std::set<UInt64> DMFile::listAllInPath(
                 auto res = try_parse_file_id(name);
                 if (!res)
                 {
-                    LOG_INFO(log, "Unrecognized temporary or dropped dmfile, ignored: {}", name);
+                    LOG_INFO(Logger::get(), "Unrecognized temporary or dropped dmfile, ignored: {}", name);
                     continue;
                 }
                 UInt64 file_id = *res;
@@ -606,7 +603,7 @@ std::set<UInt64> DMFile::listAllInPath(
                 const auto full_path = parent_path + "/" + name;
                 if (Poco::File file(full_path); file.exists())
                     file.remove(true);
-                LOG_WARNING(log, "Existing temporary or dropped dmfile, removed: {}", full_path);
+                LOG_WARNING(Logger::get(), "Existing temporary or dropped dmfile, removed: {}", full_path);
                 continue;
             }
         }
@@ -619,7 +616,7 @@ std::set<UInt64> DMFile::listAllInPath(
         auto res = try_parse_file_id(name);
         if (!res)
         {
-            LOG_INFO(log, "Unrecognized DM file, ignored: {}", name);
+            LOG_INFO(Logger::get(), "Unrecognized DM file, ignored: {}", name);
             continue;
         }
         UInt64 file_id = *res;

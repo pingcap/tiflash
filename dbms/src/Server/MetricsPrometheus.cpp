@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FunctionTimerTask.h>
 #include <Common/ProfileEvents.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/TiFlashSecurity.h>
 #include <Common/setThreadName.h>
@@ -29,6 +30,7 @@
 #include <Poco/Net/SecureServerSocket.h>
 #include <Server/CertificateReloader.h>
 #include <Server/MetricsPrometheus.h>
+#include <common/logger_useful.h>
 #include <daemon/BaseDaemon.h>
 #include <fmt/core.h>
 #include <prometheus/collectable.h>
@@ -38,6 +40,41 @@
 
 namespace DB
 {
+namespace
+{
+std::string getHostName()
+{
+    char hostname[1024];
+    if (::gethostname(hostname, sizeof(hostname)))
+    {
+        return {};
+    }
+    return hostname;
+}
+
+std::string getInstanceValue(const Poco::Util::AbstractConfiguration & conf)
+{
+    if (conf.has("flash.service_addr"))
+    {
+        auto service_addr = conf.getString("flash.service_addr");
+        if (service_addr.empty())
+            return getHostName();
+        // "0.0.0.0", "127.x.x.x", "locallhost", "0:0:0:0:0:0:0:0", "0:0:0:0:0:0:0:1", "::", "::1", ":${port}"
+        static const std::vector<std::string> blacklist{"0.0.0.0", "127.", "locallhost", "0:0:0:0:0:0:0", ":"};
+        for (const auto & prefix : blacklist)
+        {
+            if (startsWith(service_addr, prefix))
+                return getHostName();
+        }
+        return service_addr;
+    }
+    else
+    {
+        return getHostName();
+    }
+}
+} // namespace
+
 class MetricHandler : public Poco::Net::HTTPRequestHandler
 {
 public:
@@ -104,7 +141,7 @@ private:
 std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     Context & global_context,
     const std::weak_ptr<prometheus::Collectable> & collectable,
-    const String & metrics_port)
+    const String & address)
 {
     auto security_config = global_context.getSecurityConfig();
     auto [ca_path, cert_path, key_path] = security_config->getPaths();
@@ -126,8 +163,7 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     Poco::Net::SecureServerSocket socket(context);
 
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
-
-    Poco::Net::SocketAddress addr("0.0.0.0", std::stoi(metrics_port));
+    Poco::Net::SocketAddress addr = Poco::Net::SocketAddress(address);
     socket.bind(addr, true);
     socket.listen();
     auto server = std::make_shared<Poco::Net::HTTPServer>(new MetricHandlerFactory(collectable), socket, http_params);
@@ -137,12 +173,23 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
 constexpr Int64 MILLISECOND = 1000;
 constexpr Int64 INIT_DELAY = 5;
 
+namespace
+{
+inline bool isIPv6(const String & input_address)
+{
+    if (input_address.empty())
+        return false;
+    char str[INET6_ADDRSTRLEN];
+    return inet_pton(AF_INET6, input_address.c_str(), str) == 1;
+}
+} // namespace
+
 MetricsPrometheus::MetricsPrometheus(
     Context & context,
     const AsynchronousMetrics & async_metrics_)
     : timer("Prometheus")
     , async_metrics(async_metrics_)
-    , log(&Poco::Logger::get("Prometheus"))
+    , log(Logger::get("Prometheus"))
 {
     auto & tiflash_metrics = TiFlashMetrics::instance();
     auto & conf = context.getConfigRef();
@@ -181,19 +228,12 @@ MetricsPrometheus::MetricsPrometheus(
             auto host = metrics_addr.substr(0, pos);
             auto port = metrics_addr.substr(pos + 1, metrics_addr.size());
 
-            auto service_addr = conf.getString("flash.service_addr");
-            std::string job_name = service_addr;
-            std::replace(job_name.begin(), job_name.end(), ':', '_');
-            std::replace(job_name.begin(), job_name.end(), '.', '_');
-            job_name = "tiflash_" + job_name;
-
-            char hostname[1024];
-            ::gethostname(hostname, sizeof(hostname));
-
-            gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, prometheus::Gateway::GetInstanceLabel(hostname));
+            const String & job_name = "tiflash";
+            const auto & labels = prometheus::Gateway::GetInstanceLabel(getInstanceValue(conf));
+            gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, labels);
             gateway->RegisterCollectable(tiflash_metrics.registry);
 
-            LOG_INFO(log, "Enable prometheus push mode; interval ={}; addr = {}", metrics_interval, metrics_addr);
+            LOG_INFO(log, "Enable prometheus push mode; interval = {}; addr = {}", metrics_interval, metrics_addr);
         }
     }
 
@@ -202,18 +242,23 @@ MetricsPrometheus::MetricsPrometheus(
     if (conf.hasOption(status_metrics_port) || !conf.hasOption(status_metrics_addr))
     {
         auto metrics_port = conf.getString(status_metrics_port, DB::toString(DEFAULT_METRICS_PORT));
-
+        auto listen_host = conf.getString("listen_host", "0.0.0.0");
+        String addr;
+        if (isIPv6(listen_host))
+            addr = "[" + listen_host + "]:" + metrics_port;
+        else
+            addr = listen_host + ":" + metrics_port;
         if (context.getSecurityConfig()->hasTlsConfig())
         {
-            server = getHTTPServer(context, tiflash_metrics.registry, metrics_port);
+            server = getHTTPServer(context, tiflash_metrics.registry, addr);
             server->start();
-            LOG_INFO(log, "Enable prometheus secure pull mode; Metrics Port = {}", metrics_port);
+            LOG_INFO(log, "Enable prometheus secure pull mode; Listen Host = {}, Metrics Port = {}", listen_host, metrics_port);
         }
         else
         {
-            exposer = std::make_shared<prometheus::Exposer>(metrics_port);
+            exposer = std::make_shared<prometheus::Exposer>(addr);
             exposer->RegisterCollectable(tiflash_metrics.registry);
-            LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = {}", metrics_port);
+            LOG_INFO(log, "Enable prometheus pull mode; Listen Host = {}, Metrics Port = {}", listen_host, metrics_port);
         }
     }
     else

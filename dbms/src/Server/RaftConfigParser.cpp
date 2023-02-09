@@ -82,12 +82,6 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::AbstractConfigura
             res.engine = DEFAULT_ENGINE;
     }
 
-    // just for test
-    if (config.has("raft.enable_compatible_mode"))
-    {
-        res.enable_compatible_mode = config.getBool("raft.enable_compatible_mode");
-    }
-
     LOG_INFO(log, "Default storage engine [type={}]", static_cast<Int64>(res.engine));
 
     return res;
