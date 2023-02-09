@@ -212,21 +212,15 @@ MetricsPrometheus::MetricsPrometheus(
     if (conf.hasOption(status_metrics_port) || !conf.hasOption(status_metrics_addr))
     {
         auto metrics_port = conf.getString(status_metrics_port, DB::toString(DEFAULT_METRICS_PORT));
-<<<<<<< HEAD
-        if (security_config.has_tls_config)
-        {
-            server = getHTTPServer(security_config, tiflash_metrics.registry, metrics_port);
-=======
         auto listen_host = conf.getString("listen_host", "0.0.0.0");
         String addr;
         if (isIPv6(listen_host))
             addr = "[" + listen_host + "]:" + metrics_port;
         else
             addr = listen_host + ":" + metrics_port;
-        if (context.getSecurityConfig()->hasTlsConfig())
+        if (security_config.has_tls_config)
         {
             server = getHTTPServer(context, tiflash_metrics.registry, addr);
->>>>>>> 50e025a3f1 (fix tls ipv6 metric (#6736))
             server->start();
             LOG_INFO(log, "Enable prometheus secure pull mode; Listen Host = {}, Metrics Port = {}", listen_host, metrics_port);
         }
