@@ -207,7 +207,9 @@ void MPPTask::initExchangeReceivers()
                 context->getMaxStreams(),
                 log->identifier(),
                 executor_id,
-                executor.fine_grained_shuffle_stream_count());
+                executor.fine_grained_shuffle_stream_count(),
+                context->getSettings().local_tunnel_version);
+
             if (status != RUNNING)
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
 
@@ -410,6 +412,9 @@ void MPPTask::runImpl()
         {
             err_msg = result.err_msg;
         }
+        auto ru = query_executor_holder->collectRequestUnit();
+        LOG_INFO(log, "mpp finish with request unit: {}", ru);
+        GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(ru);
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
         LOG_DEBUG(

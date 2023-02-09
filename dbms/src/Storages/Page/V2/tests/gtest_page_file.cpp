@@ -86,7 +86,7 @@ TEST(Page_test, GetField)
     for (size_t i = 0; i < buf_sz; ++i)
         c_buff[i] = i % 0xff;
 
-    Page page;
+    Page page{1};
     page.data = ByteBuffer(c_buff, c_buff + buf_sz);
     std::set<FieldOffsetInsidePage> fields{// {field_index, data_offset}
                                            {2, 0},

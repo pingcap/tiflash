@@ -67,7 +67,7 @@ public:
 
     auto getFile() const { return file; }
 
-    PageId getDataPageId() { return file->pageId(); }
+    PageIdU64 getDataPageId() { return file->pageId(); }
 
     size_t getRows() const override { return valid_rows; }
     size_t getBytes() const override { return valid_bytes; };

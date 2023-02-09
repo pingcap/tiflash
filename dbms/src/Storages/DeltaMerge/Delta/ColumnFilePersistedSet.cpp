@@ -28,7 +28,7 @@ namespace DB
 {
 namespace DM
 {
-inline void serializeColumnFilePersisteds(WriteBatches & wbs, PageId id, const ColumnFilePersisteds & persisted_files)
+inline void serializeColumnFilePersisteds(WriteBatches & wbs, PageIdU64 id, const ColumnFilePersisteds & persisted_files)
 {
     MemoryWriteBuffer buf(0, COLUMN_FILE_SERIALIZE_BUFFER_SIZE);
     serializeSavedColumnFiles(buf, persisted_files);
@@ -76,7 +76,7 @@ void ColumnFilePersistedSet::checkColumnFiles(const ColumnFilePersisteds & new_c
 }
 
 ColumnFilePersistedSet::ColumnFilePersistedSet( //
-    PageId metadata_id_,
+    PageIdU64 metadata_id_,
     const ColumnFilePersisteds & persisted_column_files)
     : metadata_id(metadata_id_)
     , persisted_files(persisted_column_files)
@@ -88,7 +88,7 @@ ColumnFilePersistedSet::ColumnFilePersistedSet( //
 ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
     DMContext & context,
     const RowKeyRange & segment_range,
-    PageId id)
+    PageIdU64 id)
 {
     Page page = context.storage_pool.metaReader()->read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());

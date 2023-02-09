@@ -32,8 +32,9 @@ Block HashJoinBuildBlockInputStream::readImpl()
     }
     catch (...)
     {
-        join->meetError();
-        throw;
+        auto error_message = getCurrentExceptionMessage(false, true);
+        join->meetError(error_message);
+        throw Exception(error_message);
     }
 }
 

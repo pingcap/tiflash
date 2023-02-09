@@ -29,8 +29,8 @@ struct WriteBatches : private boost::noncopyable
     WriteBatch data;
     WriteBatch meta;
 
-    PageIds written_log;
-    PageIds written_data;
+    PageIdU64s written_log;
+    PageIdU64s written_data;
 
     WriteBatch removed_log;
     WriteBatch removed_data;
@@ -86,7 +86,7 @@ struct WriteBatches : private boost::noncopyable
 
     void writeLogAndData()
     {
-        PageIds log_write_pages, data_write_pages;
+        PageIdU64s log_write_pages, data_write_pages;
 
         if constexpr (DM_RUN_CHECK)
         {

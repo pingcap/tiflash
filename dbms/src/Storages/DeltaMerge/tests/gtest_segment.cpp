@@ -243,7 +243,7 @@ try
 
         // Start a segment merge and suspend it before applyMerge
         auto sp_seg_split_apply = SyncPointCtl::enableInScope("before_Segment::applySplit");
-        PageId new_seg_id;
+        PageIdU64 new_seg_id;
         auto th_seg_split = std::async([&]() {
             auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Auto, /* check_rows */ false);
             ASSERT_TRUE(new_seg_id_opt.has_value());

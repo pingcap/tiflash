@@ -124,7 +124,7 @@ protected:
     DeltaValueSpacePtr delta;
 
     static constexpr TableID table_id = 100;
-    static constexpr PageId delta_id = 1;
+    static constexpr PageIdU64 delta_id = 1;
     static constexpr size_t num_rows_write_per_batch = 100;
 };
 
