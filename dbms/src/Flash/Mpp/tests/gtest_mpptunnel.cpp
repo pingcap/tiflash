@@ -39,7 +39,7 @@ namespace
 {
 TrackedMppDataPacketPtr newDataPacket(const String & data)
 {
-    auto data_packet_ptr = std::make_shared<TrackedMppDataPacket>();
+    auto data_packet_ptr = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
     data_packet_ptr->getPacket().set_data(data);
     return data_packet_ptr;
 }
@@ -199,7 +199,7 @@ public:
                 },
                 []() {},
                 ReceiverChannelWriter(&msg_channels, "", log, &data_size_in_queue, ReceiverMode::Local));
-            tunnel->connectLocal(0, local_request_handler, false);
+            tunnel->connectLocalV2(0, local_request_handler, false);
         }
     }
 
@@ -281,10 +281,10 @@ public:
     static void setTunnelFinished(MPPTunnelPtr tunnel)
     {
         tunnel->status = MPPTunnel::TunnelStatus::Finished;
-        if (tunnel->local_tunnel_sender)
-            tunnel->local_tunnel_sender->is_done.store(true);
-        else if (tunnel->local_tunnel_fine_grained_sender)
-            tunnel->local_tunnel_fine_grained_sender->is_done.store(true);
+        if (tunnel->local_tunnel_sender_v2)
+            tunnel->local_tunnel_sender_v2->is_done.store(true);
+        else if (tunnel->local_tunnel_fine_grained_sender_v2)
+            tunnel->local_tunnel_fine_grained_sender_v2->is_done.store(true);
     }
 
     static bool getTunnelConnectedFlag(MPPTunnelPtr tunnel)
@@ -377,7 +377,7 @@ TEST_F(TestMPPTunnel, SyncWriteAfterUnconnectFinished)
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "Check tunnel_sender != nullptr failed: write to tunnel which is already closed.");
+        GTEST_ASSERT_EQ(e.message(), "Check tunnel_sender != nullptr failed: write to tunnel 0000_0001 which is already closed.");
     }
 }
 
@@ -392,7 +392,7 @@ TEST_F(TestMPPTunnel, SyncWriteDoneAfterUnconnectFinished)
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed.");
+        GTEST_ASSERT_EQ(e.message(), "write to tunnel 0000_0001 which is already closed.");
     }
 }
 
@@ -460,7 +460,7 @@ TEST_F(TestMPPTunnel, SyncWriteError)
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "Consumer exits unexpected, 0000_0001 meet error: grpc writes failed.");
+        GTEST_ASSERT_EQ(e.message(), "0000_0001: consumer exits unexpected, error message: 0000_0001 meet error: grpc writes failed. ");
     }
 }
 
@@ -481,7 +481,7 @@ TEST_F(TestMPPTunnel, SyncWriteAfterFinished)
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed,");
+        GTEST_ASSERT_EQ(e.message(), "write to tunnel 0000_0001 which is already closed, ");
     }
     if (mpp_tunnel_ptr != nullptr)
         mpp_tunnel_ptr->waitForFinish();
@@ -573,7 +573,7 @@ TEST_F(TestMPPTunnel, AsyncWriteError)
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "Consumer exits unexpected, 0000_0001 meet error: grpc writes failed.");
+        GTEST_ASSERT_EQ(e.message(), "0000_0001: consumer exits unexpected, error message: 0000_0001 meet error: grpc writes failed. ");
     }
 }
 
@@ -655,12 +655,12 @@ try
         []() {},
         []() {},
         ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
-    tunnels[0]->connectLocal(0, local_req_handler, false);
+    tunnels[0]->connectLocalV2(0, local_req_handler, false);
     GTEST_FAIL();
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "Check status == TunnelStatus::Unconnected failed: MPPTunnel has connected or finished: Finished");
+    GTEST_ASSERT_EQ(e.message(), "Check status == TunnelStatus::Unconnected failed: MPPTunnel 0000_0001 has connected or finished: Finished");
 }
 
 TEST_F(TestMPPTunnel, LocalConnectWhenConnected)
@@ -674,12 +674,12 @@ try
         []() {},
         []() {},
         ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
-    tunnels[0]->connectLocal(0, local_req_handler, false);
+    tunnels[0]->connectLocalV2(0, local_req_handler, false);
     GTEST_FAIL();
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "Check status == TunnelStatus::Unconnected failed: MPPTunnel has connected or finished: Connected");
+    GTEST_ASSERT_EQ(e.message(), "Check status == TunnelStatus::Unconnected failed: MPPTunnel 0000_0001 has connected or finished: Connected");
 }
 
 TEST_F(TestMPPTunnel, LocalCloseBeforeConnect)
@@ -713,7 +713,7 @@ try
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "Check tunnel_sender != nullptr failed: write to tunnel which is already closed.");
+    GTEST_ASSERT_EQ(e.message(), "Check tunnel_sender != nullptr failed: write to tunnel 0000_0001 which is already closed.");
 }
 
 TEST_F(TestMPPTunnel, LocalWriteDoneAfterUnconnectFinished)
@@ -726,7 +726,7 @@ try
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed.");
+    GTEST_ASSERT_EQ(e.message(), "write to tunnel 0000_0001 which is already closed.");
 }
 
 TEST_F(TestMPPTunnel, LocalWriteError)
@@ -756,7 +756,7 @@ try
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "Consumer exits unexpected, err");
+    GTEST_ASSERT_EQ(e.message(), "0000_0001: consumer exits unexpected, error message: err ");
 }
 
 TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
@@ -775,7 +775,7 @@ TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed,");
+        GTEST_ASSERT_EQ(e.message(), "write to tunnel 0000_0001 which is already closed, ");
     }
     if (tunnel != nullptr)
         tunnel->waitForFinish();

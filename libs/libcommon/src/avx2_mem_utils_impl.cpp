@@ -44,6 +44,11 @@ const char * avx2_memchr(const char * src, size_t n, char target)
     return details::avx2_memchr(src, n, target);
 }
 
+uint64_t avx2_byte_count(const char * src, size_t size, char target)
+{
+    return details::avx2_byte_count(src, size, target);
+}
+
 } // namespace mem_utils
 
 #endif

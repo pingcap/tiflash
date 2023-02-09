@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,11 +13,19 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Executor/DataStreamExecutor.h>
 
 namespace DB
 {
+DataStreamExecutor::DataStreamExecutor(const BlockIO & block_io)
+    : QueryExecutor(block_io.process_list_entry)
+    , data_stream(block_io.in)
+{
+    assert(data_stream);
+}
+
 ExecutionResult DataStreamExecutor::execute(ResultHandler result_handler)
 {
     try
@@ -48,7 +56,7 @@ void DataStreamExecutor::cancel()
         p_stream->cancel(/*kill=*/false);
 }
 
-String DataStreamExecutor::dump() const
+String DataStreamExecutor::toString() const
 {
     FmtBuffer fb;
     data_stream->dumpTree(fb);
@@ -58,5 +66,10 @@ String DataStreamExecutor::dump() const
 int DataStreamExecutor::estimateNewThreadCount()
 {
     return data_stream->estimateNewThreadCount();
+}
+
+RU DataStreamExecutor::collectRequestUnit()
+{
+    return toRU(data_stream->estimateCPUTimeNs());
 }
 } // namespace DB

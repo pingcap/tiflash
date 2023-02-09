@@ -143,10 +143,10 @@ void StressWorkload::initPageStorage(DB::PageStorageConfig & config, String path
     runtime_stat = std::make_unique<GlobalStat>();
 }
 
-void StressWorkload::initPages(const DB::PageId & max_page_id)
+void StressWorkload::initPages(const DB::PageIdU64 & max_page_id)
 {
     auto writer = std::make_shared<PSWriter>(ps, 0, runtime_stat);
-    for (DB::PageId page_id = 0; page_id <= max_page_id; ++page_id)
+    for (DB::PageIdU64 page_id = 0; page_id <= max_page_id; ++page_id)
     {
         RandomPageId r(page_id);
         writer->write(r);

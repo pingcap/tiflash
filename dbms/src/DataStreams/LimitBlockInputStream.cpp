@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,10 +22,11 @@ namespace DB
 LimitBlockInputStream::LimitBlockInputStream(
     const BlockInputStreamPtr & input,
     size_t limit_,
+    size_t offset_,
     const String & req_id)
     : log(Logger::get(req_id))
-    , limit_transform_action(input->getHeader(), limit_)
-
+    , limit(limit_)
+    , offset(offset_)
 {
     children.push_back(input);
 }
@@ -33,20 +34,46 @@ LimitBlockInputStream::LimitBlockInputStream(
 
 Block LimitBlockInputStream::readImpl()
 {
-    Block res = children.back()->read();
+    Block res;
+    size_t rows = 0;
 
-    if (limit_transform_action.transform(res))
+    if (pos >= offset + limit)
     {
         return res;
     }
-    else
+
+    do
     {
-        return {};
-    }
+        res = children.back()->read();
+        if (!res)
+            return res;
+        rows = res.rows();
+        pos += rows;
+    } while (pos <= offset);
+
+    /// give away the whole block
+    if (pos >= offset + rows && pos <= offset + limit)
+        return res;
+
+    /// give away a piece of the block
+    UInt64 start = std::max(
+        static_cast<Int64>(0),
+        static_cast<Int64>(offset) - static_cast<Int64>(pos) + static_cast<Int64>(rows));
+
+    UInt64 length = std::min(
+        static_cast<Int64>(limit),
+        std::min(
+            static_cast<Int64>(pos) - static_cast<Int64>(offset),
+            static_cast<Int64>(limit) + static_cast<Int64>(offset) - static_cast<Int64>(pos) + static_cast<Int64>(rows)));
+
+    for (size_t i = 0; i < res.columns(); ++i)
+        res.safeGetByPosition(i).column = res.safeGetByPosition(i).column->cut(start, length);
+
+    return res;
 }
 
 void LimitBlockInputStream::appendInfo(FmtBuffer & buffer) const
 {
-    buffer.fmtAppend(", limit = {}", limit_transform_action.getLimit());
+    buffer.fmtAppend(", limit = {}", limit);
 }
 } // namespace DB

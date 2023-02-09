@@ -50,19 +50,17 @@ public:
                const LoggerPtr & log,
                const ReadLimiterPtr & read_limiter);
 
-        const bool single_file_mode;
         double avg_size_hint;
         MarksInCompressedFilePtr marks;
-        MarkWithSizesInCompressedFilePtr mark_with_sizes;
 
         size_t getOffsetInFile(size_t i) const
         {
-            return single_file_mode ? (*mark_with_sizes)[i].mark.offset_in_compressed_file : (*marks)[i].offset_in_compressed_file;
+            return (*marks)[i].offset_in_compressed_file;
         }
 
         size_t getOffsetInDecompressedBlock(size_t i) const
         {
-            return single_file_mode ? (*mark_with_sizes)[i].mark.offset_in_decompressed_block : (*marks)[i].offset_in_decompressed_block;
+            return (*marks)[i].offset_in_decompressed_block;
         }
 
         std::unique_ptr<CompressedSeekableReaderBuffer> buf;
@@ -127,8 +125,7 @@ private:
                     size_t start_pack_id,
                     size_t pack_count,
                     size_t read_rows,
-                    size_t skip_packs,
-                    bool force_seek);
+                    size_t skip_packs);
     bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
 
 private:
@@ -140,8 +137,6 @@ private:
 
     // read_one_pack_every_time is used to create info for every pack
     const bool read_one_pack_every_time;
-
-    const bool single_file_mode{};
 
     /// Clean read optimize
     // In normal mode, if there is no delta for some packs in stable, we can try to do clean read (enable_handle_clean_read is true).
@@ -168,6 +163,7 @@ private:
     const size_t rows_threshold_per_read;
 
     size_t next_pack_id = 0;
+    size_t next_row_offset = 0;
 
     FileProviderPtr file_provider;
 

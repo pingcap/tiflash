@@ -19,6 +19,8 @@ services:
   # (engine DeltaTree)
   tiflash0:
     image: hub.pingcap.net/tiflash/tiflash-ci-base
+    security_opt:
+      - seccomp:unconfined
     volumes:
       - ./config/tiflash_dt.toml:/config.toml:ro
       - ./data/tiflash:/tmp/tiflash/data

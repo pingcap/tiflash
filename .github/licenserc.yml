@@ -34,6 +34,7 @@ header:
     - '**/NOTICE'
     - 'dbms/src/IO/tests/limit_read_buffer.reference'
     - 'dbms/src/IO/tests/DevicePixelRatio'
+    - 'dbms/src/Flash/tests/gtest_*.out'
     - 'Cargo.lock'
     - 'Cargo.toml'
     - 'rust-toolchain'

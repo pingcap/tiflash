@@ -35,10 +35,10 @@ class DAGBlockOutputStream : public IBlockOutputStream
 public:
     DAGBlockOutputStream(Block && header_, std::unique_ptr<DAGResponseWriter> response_writer_);
 
-    Block getHeader() const { return header; }
-    void write(const Block & block);
-    void writePrefix();
-    void writeSuffix();
+    Block getHeader() const override { return header; }
+    void write(const Block & block) override;
+    void writePrefix() override;
+    void writeSuffix() override;
 
 private:
     Block header;

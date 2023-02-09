@@ -16,15 +16,59 @@
 => DBGInvoke __init_fail_point()
 
 mysql> drop table if exists test.t
+mysql> drop table if exists test.t1
 mysql> create table test.t (id int, value varchar(64))
 mysql> insert into test.t values(1,'a'),(2,'b'),(3,'c')
+mysql> create table test.t1 (id int, value varchar(64))
+mysql> insert into test.t1 values(4,'d')
 mysql> alter table test.t set tiflash replica 1
+mysql> alter table test.t1 set tiflash replica 1
 
 func> wait_table test t
+func> wait_table test t1
 mysql> analyze table test.t
+mysql> analyze table test.t1
 
 
 # Data.
+## make sure the there is no active threads before mpp_fail.test run
+=> DBGInvoke get_active_threads_in_dynamic_thread_pool()
+┌─get_active_threads_in_dynamic_thread_pool()─┐
+│ 0                                           │
+└─────────────────────────────────────────────┘
+## exception during mpp hash probe
+## mysql> desc format='brief' select * from t1 left join t t2 on t1.id = t2.id;
+## +-----------------------------------+---------+--------------+---------------+----------------------------------------------------------------------------------------------+
+## | id                                | estRows | task         | access object | operator info                                                                                |
+## +-----------------------------------+---------+--------------+---------------+----------------------------------------------------------------------------------------------+
+## | TableReader                       | 1.00    | root         |               | data:ExchangeSender                                                                          |
+## | └─ExchangeSender                  | 1.00    | mpp[tiflash] |               | ExchangeType: PassThrough                                                                    |
+## |   └─HashJoin                      | 1.00    | mpp[tiflash] |               | left outer join, equal:[eq(test.t1.id, test.t.id)], stream_count: 8                          |
+## |     ├─ExchangeReceiver(Build)     | 1.00    | mpp[tiflash] |               | stream_count: 8                                                                              |
+## |     │ └─ExchangeSender            | 1.00    | mpp[tiflash] |               | ExchangeType: HashPartition, Hash Cols: [name: test.t1.id, collate: binary], stream_count: 8 |
+## |     │   └─TableFullScan           | 1.00    | mpp[tiflash] | table:t1      | keep order:false                                                                             |
+## |     └─ExchangeReceiver(Probe)     | 5.99    | mpp[tiflash] |               |                                                                                              |
+## |       └─ExchangeSender            | 5.99    | mpp[tiflash] |               | ExchangeType: HashPartition, Hash Cols: [name: test.t.id, collate: binary]                   |
+## |         └─Selection               | 5.99    | mpp[tiflash] |               | not(isnull(test.t.id))                                                                       |
+## |           └─TableFullScan         | 6.00    | mpp[tiflash] | table:t2      | keep order:false, stats:pseudo                                                               |
+## +-----------------------------------+---------+--------------+---------------+----------------------------------------------------------------------------------------------+
+=> DBGInvoke __enable_fail_point(exception_mpp_hash_probe)
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_mpp=1; set @@tidb_broadcast_join_threshold_count=0; set @@tidb_broadcast_join_threshold_size=0; select * from t1 left join t t2 on t1.id = t2.id;
+{#REGEXP}.*Fail point FailPoints::exception_mpp_hash_probe is triggered.*
+=> DBGInvoke __disable_fail_point(exception_mpp_hash_probe)
+## sleep 2 seconds to make sure all the running compute threads are finished
+mysql> select sleep(2)
++----------+
+| sleep(2) |
++----------+
+|        0 |
++----------+
+## note 1. this test only works if dynamic thread pool is enabled, the result may be false negative if dynamic thread pool is not enabled, it works now because dynamic thread pool is enabled by default
+##      2. currently, there are no long live threads that use the dynamic thread pool, so the expected value is 0, need to update the reference if someday some long live threads are using dynamic thread pool
+=> DBGInvoke get_active_threads_in_dynamic_thread_pool()
+┌─get_active_threads_in_dynamic_thread_pool()─┐
+│ 0                                           │
+└─────────────────────────────────────────────┘
 
 ## exception before mpp register non root mpp task
 => DBGInvoke __enable_fail_point(exception_before_mpp_register_non_root_mpp_task)
@@ -113,4 +157,5 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_m
 => DBGInvoke __disable_fail_point(exception_mpp_hash_build)
 
 # Clean up.
-mysql> drop table if exists test.t
+# mysql> drop table if exists test.t
+# mysql> drop table if exists test.t1

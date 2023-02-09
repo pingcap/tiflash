@@ -17,7 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <Core/Types.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 
 #include <mutex>
 #include <unordered_map>
@@ -56,14 +56,10 @@ public:
         const Strings & latest_data_paths,
         const Strings & kvstore_paths,
         PathCapacityMetricsPtr global_capacity_,
-        FileProviderPtr file_provider_,
-        bool enable_raft_compatible_mode_ = false);
+        FileProviderPtr file_provider_);
 
     // Constructor to create PathPool for one Storage
     StoragePathPool withTable(const String & database_, const String & table_, bool path_need_database_name_) const;
-
-    // TODO: remove this outdated code
-    bool isRaftCompatibleModeEnabled() const { return enable_raft_compatible_mode; }
 
     // Generate a delegator for managing the paths of `RegionPersister`.
     // Those paths are generated from `kvstore_paths`.
@@ -132,8 +128,6 @@ private:
     Strings latest_data_paths;
     Strings kvstore_paths;
     Strings global_page_paths;
-
-    bool enable_raft_compatible_mode;
 
     PathCapacityMetricsPtr global_capacity;
 

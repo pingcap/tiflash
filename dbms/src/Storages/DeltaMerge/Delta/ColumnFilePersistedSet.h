@@ -33,9 +33,8 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <fmt/format.h>
-
 
 namespace DB
 {
@@ -50,7 +49,7 @@ class ColumnFilePersistedSet : public std::enable_shared_from_this<ColumnFilePer
     , private boost::noncopyable
 {
 private:
-    PageId metadata_id;
+    PageIdU64 metadata_id;
     ColumnFilePersisteds persisted_files;
     // TODO: check the proper memory_order when use this atomic variable
     std::atomic<size_t> persisted_files_count = 0;
@@ -71,11 +70,11 @@ private:
     void checkColumnFiles(const ColumnFilePersisteds & new_column_files);
 
 public:
-    explicit ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files = {});
+    explicit ColumnFilePersistedSet(PageIdU64 metadata_id_, const ColumnFilePersisteds & persisted_column_files = {});
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
-    static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
+    static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageIdU64 id);
 
     /**
      * Resets the logger by using the one from the segment.
@@ -108,8 +107,6 @@ public:
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;
 
-    BlockPtr getLastSchema();
-
     /**
      * Return newly appended column files compared to `previous_column_files`.
      * If `previous_column_files` is not the prefix of the current column files, exceptions will be thrown.
@@ -126,7 +123,7 @@ public:
     ColumnFilePersisteds diffColumnFiles(const ColumnFiles & previous_column_files) const;
 
     /// Thread safe part start
-    PageId getId() const { return metadata_id; }
+    PageIdU64 getId() const { return metadata_id; }
 
     size_t getColumnFileCount() const { return persisted_files_count.load(); }
     size_t getRows() const { return rows.load(); }

@@ -16,13 +16,13 @@
 
 namespace DB::PhysicalPlanHelper
 {
-ExpressionActionsPtr newActions(const Block & input_block, const Context & context)
+ExpressionActionsPtr newActions(const Block & input_block)
 {
     const ColumnsWithTypeAndName & actions_input_columns = input_block.getColumnsWithTypeAndName();
-    return std::make_shared<ExpressionActions>(actions_input_columns, context.getSettingsRef());
+    return std::make_shared<ExpressionActions>(actions_input_columns);
 }
 
-ExpressionActionsPtr newActions(const NamesAndTypes & input_columns, const Context & context)
+ExpressionActionsPtr newActions(const NamesAndTypes & input_columns)
 {
     NamesAndTypesList actions_input_column;
     std::unordered_set<String> column_name_set;
@@ -34,7 +34,7 @@ ExpressionActionsPtr newActions(const NamesAndTypes & input_columns, const Conte
             column_name_set.emplace(col.name);
         }
     }
-    return std::make_shared<ExpressionActions>(actions_input_column, context.getSettingsRef());
+    return std::make_shared<ExpressionActions>(actions_input_column);
 }
 
 NamesAndTypes addSchemaProjectAction(

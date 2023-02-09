@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
+#include <Flash/Executor/toRU.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
@@ -56,7 +57,7 @@ DAGDriver<false>::DAGDriver(
     , dag_response(dag_response_)
     , writer(nullptr)
     , internal(internal_)
-    , log(&Poco::Logger::get("DAGDriver"))
+    , log(Logger::get("DAGDriver"))
 {
     context.setSetting("read_tso", start_ts);
     if (schema_ver)
@@ -76,7 +77,7 @@ DAGDriver<true>::DAGDriver(
     , dag_response(nullptr)
     , writer(writer_)
     , internal(internal_)
-    , log(&Poco::Logger::get("DAGDriver"))
+    , log(Logger::get("DAGDriver"))
 {
     context.setSetting("read_tso", start_ts);
     if (schema_ver)
@@ -92,7 +93,8 @@ try
     auto start_time = Clock::now();
     DAGContext & dag_context = *context.getDAGContext();
 
-    BlockIO streams = executeQuery(context, internal);
+    // TODO use query executor for cop/batch cop.
+    BlockIO streams = executeAsBlockIO(context, internal);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw TiFlashException("DAG is not query.", Errors::Coprocessor::Internal);
@@ -148,6 +150,18 @@ try
             auto execution_summary_response = summary_collector.genExecutionSummaryResponse();
             streaming_writer->write(execution_summary_response);
         }
+    }
+
+    auto ru = toRU(streams.in->estimateCPUTimeNs());
+    if constexpr (!batch)
+    {
+        LOG_INFO(log, "cop finish with request unit: {}", ru);
+        GET_METRIC(tiflash_compute_request_unit, type_cop).Increment(ru);
+    }
+    else
+    {
+        LOG_INFO(log, "batch cop finish with request unit: {}", ru);
+        GET_METRIC(tiflash_compute_request_unit, type_batch).Increment(ru);
     }
 
     if (auto throughput = dag_context.getTableScanThroughput(); throughput.first)

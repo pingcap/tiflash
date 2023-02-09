@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ public:
     LimitBlockInputStream(
         const BlockInputStreamPtr & input,
         size_t limit_,
+        size_t offset_,
         const String & req_id);
 
     String getName() const override { return NAME; }
@@ -46,7 +47,10 @@ protected:
 
 private:
     LoggerPtr log;
-    LimitTransformAction limit_transform_action;
+    size_t limit;
+    size_t offset;
+    /// how many lines were read, including the last read block
+    size_t pos = 0;
 };
 
 } // namespace DB

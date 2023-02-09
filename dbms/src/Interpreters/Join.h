@@ -82,10 +82,7 @@ struct ProbeProcessInfo;
   *
   * Default values for outer joins (LEFT, RIGHT, FULL):
   *
-  * Behaviour is controlled by 'join_use_nulls' settings.
-  * If it is false, we substitute (global) default value for the data type, for non-joined rows
-  *  (zero, empty string, etc. and NULL for Nullable data types).
-  * If it is true, we always generate Nullable column and substitute NULLs for non-joined rows,
+  * Always generate Nullable column and substitute NULLs for non-joined rows,
   *  as in standard SQL.
   */
 class Join
@@ -93,7 +90,6 @@ class Join
 public:
     Join(const Names & key_names_left_,
          const Names & key_names_right_,
-         bool use_nulls_,
          ASTTableJoin::Kind kind_,
          ASTTableJoin::Strictness strictness_,
          const String & req_id,
@@ -126,8 +122,16 @@ public:
 
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
-    void setTotals(const Block & block) { totals = block; }
-    bool hasTotals() const { return static_cast<bool>(totals); };
+    void setTotals(const Block & block)
+    {
+        std::unique_lock lock(rwlock);
+        totals = block;
+    }
+    bool hasTotals() const
+    {
+        std::shared_lock lock(rwlock);
+        return static_cast<bool>(totals);
+    };
 
     void joinTotals(Block & block) const;
 
@@ -136,7 +140,6 @@ public:
     /** For RIGHT and FULL JOINs.
       * A stream that will contain default values from left table, joined with rows from right table, that was not joined before.
       * Use only after all calls to joinBlock was done.
-      * left_sample_block is passed without account of 'use_nulls' setting (columns will be converted to Nullable inside).
       */
     BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
 
@@ -149,34 +152,29 @@ public:
 
     ASTTableJoin::Kind getKind() const { return kind; }
 
-    bool useNulls() const { return use_nulls; }
     const Names & getLeftJoinKeys() const { return key_names_left; }
+
+    void setInitActiveBuildConcurrency()
+    {
+        std::unique_lock lock(build_probe_mutex);
+        active_build_concurrency = getBuildConcurrencyInternal();
+    }
+    void finishOneBuild();
+    void waitUntilAllBuildFinished() const;
 
     size_t getProbeConcurrency() const
     {
-        std::unique_lock lock(probe_mutex);
+        std::unique_lock lock(build_probe_mutex);
         return probe_concurrency;
     }
     void setProbeConcurrency(size_t concurrency)
     {
-        std::unique_lock lock(probe_mutex);
+        std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
         active_probe_concurrency = probe_concurrency;
     }
-    void finishOneProbe()
-    {
-        std::unique_lock lock(probe_mutex);
-        active_probe_concurrency--;
-        if (active_probe_concurrency == 0)
-            probe_cv.notify_all();
-    }
-    void waitUntilAllProbeFinished()
-    {
-        std::unique_lock lock(probe_mutex);
-        probe_cv.wait(lock, [&]() {
-            return active_probe_concurrency == 0;
-        });
-    }
+    void finishOneProbe();
+    void waitUntilAllProbeFinished() const;
 
     size_t getBuildConcurrency() const
     {
@@ -184,13 +182,7 @@ public:
         return getBuildConcurrencyInternal();
     }
 
-    enum BuildTableState
-    {
-        WAITING,
-        FAILED,
-        SUCCEED
-    };
-    void setBuildTableState(BuildTableState state_);
+    void meetError(const String & error_message);
 
     /// Reference to the row in block.
     struct RowRef
@@ -282,7 +274,7 @@ public:
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_fixed_string;
         std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>> keys128;
         std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>> keys256;
-        std::unique_ptr<ConcurrentHashMap<StringRef, Mapped>> serialized;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> serialized;
         // TODO: add more cases like Aggregator
     };
 
@@ -309,15 +301,18 @@ private:
     /// Names of key columns (columns for equi-JOIN) in "right" table (in the order they appear in USING clause).
     const Names key_names_right;
 
-    /// Substitute NULLs for non-JOINed rows.
-    bool use_nulls;
+    mutable std::mutex build_probe_mutex;
 
+    mutable std::condition_variable build_cv;
     size_t build_concurrency;
+    size_t active_build_concurrency;
 
-    mutable std::mutex probe_mutex;
-    std::condition_variable probe_cv;
+    mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
     size_t active_probe_concurrency;
+
+    bool meet_error = false;
+    String error_message;
 
 private:
     /// collators for the join key
@@ -363,10 +358,6 @@ private:
     Block sample_block_with_columns_to_add;
     /// Block with key columns in the same order they appear in the right-side table.
     Block sample_block_with_keys;
-
-    mutable std::mutex build_table_mutex;
-    mutable std::condition_variable build_table_cv;
-    BuildTableState build_table_state;
 
     const LoggerPtr log;
 

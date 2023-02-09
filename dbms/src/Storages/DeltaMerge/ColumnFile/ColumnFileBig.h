@@ -67,7 +67,7 @@ public:
 
     auto getFile() const { return file; }
 
-    PageId getDataPageId() { return file->pageId(); }
+    PageIdU64 getDataPageId() { return file->pageId(); }
 
     size_t getRows() const override { return valid_rows; }
     size_t getBytes() const override { return valid_bytes; };
@@ -85,7 +85,7 @@ public:
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    static ColumnFilePersistedPtr deserializeMetadata(DMContext & context, //
+    static ColumnFilePersistedPtr deserializeMetadata(const DMContext & context, //
                                                       const RowKeyRange & segment_range,
                                                       ReadBuffer & buf);
 
@@ -133,8 +133,8 @@ private:
 
 private:
     void initStream();
-    size_t readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
-    size_t readRowsOnce(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
+    std::pair<size_t, size_t> readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
+    std::pair<size_t, size_t> readRowsOnce(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
 
 public:
     ColumnFileBigReader(const DMContext & context_, const ColumnFileBig & column_file_, const ColumnDefinesPtr & col_defs_)
@@ -162,7 +162,7 @@ public:
         }
     }
 
-    size_t readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
+    std::pair<size_t, size_t> readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
 
     Block readNextBlock() override;
 
