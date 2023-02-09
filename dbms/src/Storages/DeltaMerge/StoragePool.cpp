@@ -661,7 +661,7 @@ bool StoragePool::doV2Gc(const Settings & settings)
 
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
-    if (run_mode == PageStorageRunMode::ONLY_V3)
+    if (run_mode == PageStorageRunMode::ONLY_V3 || run_mode == PageStorageRunMode::UNI_PS)
         return false;
 
     {

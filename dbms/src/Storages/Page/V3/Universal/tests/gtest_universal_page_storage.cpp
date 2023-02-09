@@ -42,6 +42,11 @@ public:
         log = Logger::get("PageStorageTest");
     }
 
+    void reload()
+    {
+        page_storage = reopenWithConfig(config);
+    }
+
     std::shared_ptr<UniversalPageStorage> reopenWithConfig(const PageStorageConfig & config_)
     {
         auto path = getTemporaryPath();
@@ -227,6 +232,40 @@ TEST_F(UniPageStorageTest, TraverseWithSnap)
         page_storage->traverse(prefix1, checker, snap);
         ASSERT_EQ(read_count, write_count);
     }
+}
+
+TEST_F(UniPageStorageTest, GetMaxIdWithPrefix)
+{
+    const String prefix1 = UniversalPageIdFormat::toSubPrefix(StorageType::Log);
+    const String prefix2 = UniversalPageIdFormat::toSubPrefix(StorageType::Data);
+    const String prefix3 = UniversalPageIdFormat::toSubPrefix(StorageType::Data);
+    const String prefix4 = "aaa";
+    const String prefix5 = "bbb";
+    const UInt64 tag = 0;
+    const size_t write_count = 100;
+    {
+        UniversalWriteBatch wb;
+        for (size_t i = 0; i < write_count; i++)
+        {
+            c_buff[0] = 10;
+            c_buff[1] = i;
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix2, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix3, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix4, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix5, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        }
+        page_storage->write(std::move(wb));
+    }
+
+    ASSERT_EQ(page_storage->getMaxId(prefix1), write_count - 1);
+    ASSERT_EQ(page_storage->getMaxId(prefix2), write_count - 1);
+    ASSERT_EQ(page_storage->getMaxId(prefix3), write_count - 1);
+
+    reload();
+    ASSERT_EQ(page_storage->getMaxId(prefix1), write_count - 1);
+    ASSERT_EQ(page_storage->getMaxId(prefix2), write_count - 1);
+    ASSERT_EQ(page_storage->getMaxId(prefix3), write_count - 1);
 }
 
 TEST(UniPageStorageIdTest, UniversalPageId)

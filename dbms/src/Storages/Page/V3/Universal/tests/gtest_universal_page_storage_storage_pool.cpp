@@ -12,236 +12,356 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Poco/Logger.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
-#include <Storages/Page/V3/Universal/UniversalWriteBatch.h>
+#include <Storages/PathCapacityMetrics.h>
+#include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
-#include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
+#include <fmt/ranges.h>
+#include <gtest/gtest.h>
 
 namespace DB
 {
-namespace PS::universal::tests
+using namespace tests;
+namespace PS::V3::tests
 {
-class UniPageStorageTest : public DB::base::TiFlashStorageTestBasic
+class UniPageStorageStoragePoolTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     void SetUp() override
     {
+        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
+        old_run_mode = global_context.getPageStorageRunMode();
+        global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
         TiFlashStorageTestBasic::SetUp();
-        auto path = getTemporaryPath();
-        createIfNotExist(path);
-        file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
-        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        page_storage = UniversalPageStorage::create("test.t", delegator, config, file_provider);
-        page_storage->restore();
 
-        for (size_t i = 0; i < buf_sz; ++i)
-        {
-            c_buff[i] = i % 0xff;
-        }
-
-        log = Logger::get("PageStorageTest");
+        reload();
     }
 
-    std::shared_ptr<UniversalPageStorage> reopenWithConfig(const PageStorageConfig & config_)
+    void reload()
     {
-        auto path = getTemporaryPath();
-        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        auto storage = UniversalPageStorage::create("test.t", delegator, config_, file_provider);
-        storage->restore();
-        return storage;
+        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
+        auto path = TiFlashTestEnv::getTemporaryPath("UniPageStorageStoragePoolTest");
+        std::vector<size_t> caps = {};
+        Strings paths = {path};
+        PathCapacityMetricsPtr cap_metrics = std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps);
+        storage_path_pool_v2 = std::make_unique<StoragePathPool>(Strings{path}, Strings{path}, "test", "t1", true, cap_metrics, global_context.getFileProvider());
+        path_pool = std::make_unique<PathPool>(
+            Strings{path},
+            Strings{path},
+            Strings{},
+            cap_metrics,
+            global_context.getFileProvider());
+        storage_pool = std::make_unique<DM::StoragePool>(
+            global_context,
+            TEST_NAMESPACE_ID,
+            *storage_path_pool_v2,
+            "test.t1");
     }
+
+    void TearDown() override
+    {
+        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
+        global_context.setPageStorageRunMode(old_run_mode);
+    }
+
+private:
+    PageStorageRunMode old_run_mode;
+    std::unique_ptr<StoragePathPool> storage_path_pool_v2;
+    std::unique_ptr<PathPool> path_pool;
 
 protected:
-    FileProviderPtr file_provider;
-    PSDiskDelegatorPtr delegator;
-    PageStorageConfig config;
-    std::shared_ptr<UniversalPageStorage> page_storage;
-
-    LoggerPtr log;
-
-    static constexpr size_t buf_sz = 1024;
-    char c_buff[buf_sz] = {};
+    std::unique_ptr<DM::StoragePool> storage_pool;
 };
 
-TEST_F(UniPageStorageTest, WriteRead)
+
+inline ::testing::AssertionResult getPageCompare(
+    const char * /*buff_cmp_expr*/,
+    const char * buf_size_expr,
+    const char * /*page_cmp_expr*/,
+    const char * page_id_expr,
+    char * buff_cmp,
+    const size_t buf_size,
+    const Page & page_cmp,
+    const PageIdU64 & page_id)
+{
+    if (page_cmp.data.size() != buf_size)
+    {
+        return testing::internal::EqFailure(
+            DB::toString(buf_size).c_str(),
+            DB::toString(page_cmp.data.size()).c_str(),
+            buf_size_expr,
+            "page.data.size()",
+            false);
+    }
+
+    if (page_cmp.page_id != page_id)
+    {
+        return testing::internal::EqFailure(
+            DB::toString(page_id).c_str(),
+            DB::toString(page_cmp.page_id).c_str(),
+            page_id_expr,
+            "page.page_id",
+            false);
+    }
+
+    if (strncmp(page_cmp.data.begin(), buff_cmp, buf_size) != 0)
+    {
+        return ::testing::AssertionFailure( //
+            ::testing::Message(
+                "Page data not match the buffer"));
+    }
+
+    return ::testing::AssertionSuccess();
+}
+
+#define ASSERT_PAGE_EQ(buff_cmp, buf_size, page_cmp, page_id) \
+    ASSERT_PRED_FORMAT4(getPageCompare, buff_cmp, buf_size, page_cmp, page_id)
+#define EXPECT_PAGE_EQ(buff_cmp, buf_size, page_cmp, page_id) \
+    EXPECT_PRED_FORMAT4(getPageCompare, buff_cmp, buf_size, page_cmp, page_id)
+
+TEST_F(UniPageStorageStoragePoolTest, WriteRead)
 try
 {
-    const String prefix = "aaa";
-    const UInt64 tag = 0;
+    UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
     for (size_t i = 0; i < buf_sz; ++i)
     {
         c_buff[i] = i % 0xff;
     }
 
     {
-        UniversalWriteBatch wb;
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 0), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 21), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 200), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        page_storage->write(std::move(wb));
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(2, tag, buff, buf_sz);
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
     }
 
-    DB::Page page0 = page_storage->read(UniversalPageIdFormat::toFullPageId(prefix, 0));
-    ASSERT_TRUE(page0.isValid());
-    ASSERT_EQ(page0.data.size(), buf_sz);
-    ASSERT_EQ(page0.page_id, 0UL);
-    for (size_t i = 0; i < buf_sz; ++i)
     {
-        EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
+        const auto & page1 = storage_pool->logReader()->read(1);
+        const auto & page2 = storage_pool->logReader()->read(2);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 2);
     }
-    DB::Page page1 = page_storage->read(UniversalPageIdFormat::toFullPageId(prefix, 21));
-    ASSERT_TRUE(page1.isValid());
-    ASSERT_EQ(page1.data.size(), buf_sz);
-    ASSERT_EQ(page1.page_id, 21UL);
-    for (size_t i = 0; i < buf_sz; ++i)
+
     {
-        EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        const size_t buf_sz2 = 2048;
+        char c_buff2[buf_sz2] = {0};
+
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, sizeof(c_buff2));
+        batch.putPage(3, tag, buff2, buf_sz2);
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
+
+        const auto & page3 = storage_pool->logReader()->read(3);
+        ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
     }
-    DB::Page page2 = page_storage->read(UniversalPageIdFormat::toFullPageId(prefix, 500), nullptr, {}, false);
-    ASSERT_TRUE(!page2.isValid());
+
+    {
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        batch.delPage(3);
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
+        ASSERT_ANY_THROW(storage_pool->logReader()->read(3));
+    }
 }
 CATCH
 
-TEST_F(UniPageStorageTest, Traverse)
+TEST_F(UniPageStorageStoragePoolTest, ReadWithSnapshot)
+try
 {
-    const String prefix1 = "aaa";
-    const String prefix2 = "bbbb";
-    const String prefix3 = "zzzzzzzzz";
-    const UInt64 tag = 0;
-    const size_t write_count = 100;
+    UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
     {
-        UniversalWriteBatch wb;
-        for (size_t i = 0; i < write_count; i++)
-        {
-            c_buff[0] = 10;
-            c_buff[1] = i;
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        }
-        page_storage->write(std::move(wb));
+        c_buff[i] = i % 0xff;
     }
 
     {
-        UniversalWriteBatch wb;
-        for (size_t i = 0; i < write_count; i++)
-        {
-            c_buff[0] = 10;
-            c_buff[1] = i;
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix2, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        }
-        page_storage->write(std::move(wb));
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(2, tag, buff, buf_sz, {20, 120, 400, 200, 15, 75, 170, 24});
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
+    }
+    const size_t buf_sz2 = 2048;
+    char c_buff2[buf_sz2] = {0};
+    {
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, sizeof(c_buff2));
+        batch.putPage(3, tag, buff2, buf_sz2);
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
+    }
+
+    auto snapshot = storage_pool->logReader()->getSnapshot("ReadWithSnapshotTest");
+    {
+        auto page_reader_with_snap = storage_pool->newLogReader(nullptr, snapshot);
+
+        const auto & page1 = page_reader_with_snap.read(1);
+        const auto & page2 = page_reader_with_snap.read(2);
+        const auto & page3 = page_reader_with_snap.read(3);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 2);
+        ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
     }
 
     {
-        size_t read_count = 0;
-        auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
-            ASSERT_TRUE(page_id.hasPrefix(prefix1));
-            ASSERT_TRUE(page.isValid());
-            read_count += 1;
-        };
-        page_storage->traverse(prefix1, checker, {});
-        ASSERT_EQ(read_count, write_count);
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        batch.delPage(3);
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, sizeof(c_buff2));
+        batch.putPage(4, tag, buff2, buf_sz2);
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
     }
-
     {
-        size_t read_count = 0;
-        auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
-            ASSERT_TRUE(page_id.hasPrefix(prefix2));
-            ASSERT_TRUE(page.isValid());
-            read_count += 1;
-        };
-        page_storage->traverse(prefix2, checker, {});
-        ASSERT_EQ(read_count, write_count);
-    }
-
-    {
-        size_t read_count = 0;
-        auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
-            ASSERT_TRUE(page_id.hasPrefix(prefix3));
-            ASSERT_TRUE(page.isValid());
-            read_count += 1;
-        };
-        page_storage->traverse(prefix3, checker, {});
-        ASSERT_EQ(read_count, 0);
+        auto page_reader_with_snap = storage_pool->newLogReader(nullptr, snapshot);
+        const auto & page3 = page_reader_with_snap.read(3);
+        ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
+        ASSERT_THROW(page_reader_with_snap.read(4), DB::Exception);
     }
 }
+CATCH
 
-TEST_F(UniPageStorageTest, TraverseWithSnap)
-{
-    const String prefix1 = "aaa";
-    const UInt64 tag = 0;
-    const size_t write_count = 100;
-    {
-        UniversalWriteBatch wb;
-        for (size_t i = 0; i < write_count; i++)
-        {
-            c_buff[0] = 10;
-            c_buff[1] = i;
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        }
-        page_storage->write(std::move(wb));
-    }
 
-    auto snap = page_storage->getSnapshot("UniPageStorageTest");
-    // write more after create snap
-    {
-        UniversalWriteBatch wb;
-        for (size_t i = write_count; i < 2 * write_count; i++)
-        {
-            c_buff[0] = 10;
-            c_buff[1] = i;
-            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        }
-        page_storage->write(std::move(wb));
-    }
-
-    {
-        size_t read_count = 0;
-        auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
-            ASSERT_TRUE(page_id.hasPrefix(prefix1));
-            ASSERT_TRUE(page.isValid());
-            read_count += 1;
-        };
-        page_storage->traverse(prefix1, checker, snap);
-        ASSERT_EQ(read_count, write_count);
-    }
-
-    // delete some pages
-    {
-        UniversalWriteBatch wb;
-        for (size_t i = 0; i < write_count; i++)
-        {
-            c_buff[0] = 10;
-            c_buff[1] = i;
-            wb.delPage(UniversalPageIdFormat::toFullPageId(prefix1, i));
-        }
-        page_storage->write(std::move(wb));
-    }
-
-    {
-        size_t read_count = 0;
-        auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
-            ASSERT_TRUE(page_id.hasPrefix(prefix1));
-            ASSERT_TRUE(page.isValid());
-            read_count += 1;
-        };
-        page_storage->traverse(prefix1, checker, snap);
-        ASSERT_EQ(read_count, write_count);
-    }
-}
-
-TEST(UniPageStorageIdTest, UniversalPageId)
+TEST_F(UniPageStorageStoragePoolTest, PutExt)
+try
 {
     {
-        auto u_id = UniversalPageIdFormat::toFullPageId("aaa", 100);
-        ASSERT_EQ(UniversalPageIdFormat::getU64ID(u_id), 100);
-        ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(u_id), "aaa");
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        batch.putExternal(1, 0);
+        batch.putExternal(2, 0);
+        batch.putExternal(3, 0);
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
+    }
+
+    auto uni_ps = storage_pool->global_context.getWriteNodePageStorage();
+    auto external_ids = uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID));
+    ASSERT_EQ((*external_ids).size(), 3);
+    ASSERT_TRUE((*external_ids).find(1) != (*external_ids).end());
+    ASSERT_TRUE((*external_ids).find(2) != (*external_ids).end());
+    ASSERT_TRUE((*external_ids).find(3) != (*external_ids).end());
+}
+CATCH
+
+TEST_F(UniPageStorageStoragePoolTest, Ref)
+try
+{
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz] = {0};
+
+    {
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(7, 0, buff, buf_sz);
+        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(8, 0, buff, buf_sz, {20, 120, 400, 200, 15, 75, 170, 24});
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
     }
 
     {
-        auto u_id = "z";
-        ASSERT_EQ(UniversalPageIdFormat::getU64ID(u_id), 0);
-        ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(u_id), "");
+        const auto & entry = storage_pool->logReader()->getPageEntry(8);
+        ASSERT_EQ(entry.field_offsets.size(), 8);
+    }
+
+    {
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        batch.putRefPage(9, 7);
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
+        ASSERT_EQ(storage_pool->logReader()->getNormalPageId(9), 7);
+        const auto & page = storage_pool->logReader()->read(9);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page, 9);
+    }
+
+    {
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        batch.delPage(7);
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
+        ASSERT_EQ(storage_pool->logReader()->getNormalPageId(9), 7);
+        const auto & page = storage_pool->logReader()->read(9);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page, 9);
+    }
+
+    {
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        batch.putRefPage(10, 8);
+
+        ASSERT_NO_THROW(storage_pool->logWriter()->write(std::move(batch), nullptr));
+        ASSERT_EQ(storage_pool->logReader()->getNormalPageId(10), 8);
+
+        std::vector<PageStorage::PageReadFields> read_fields;
+        read_fields.emplace_back(std::pair<PageIdU64, PageStorage::FieldIndices>(10, {0, 1, 2, 6}));
+
+        PageMapU64 page_maps = storage_pool->logReader()->read(read_fields);
+        ASSERT_EQ(page_maps.size(), 1);
+        ASSERT_EQ(page_maps.at(10).page_id, 10);
+        ASSERT_EQ(page_maps.at(10).field_offsets.size(), 4);
+        ASSERT_EQ(page_maps.at(10).data.size(), 710);
+
+        auto field_offset = page_maps.at(10).field_offsets;
+        auto it = field_offset.begin();
+        ASSERT_EQ(it->offset, 0);
+        ++it;
+        ASSERT_EQ(it->offset, 20);
+        ++it;
+        ASSERT_EQ(it->offset, 140);
+        ++it;
+        ASSERT_EQ(it->offset, 540);
     }
 }
-} // namespace PS::universal::tests
+CATCH
+
+TEST_F(UniPageStorageStoragePoolTest, RefWithSnapshot)
+try
+{
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz] = {0};
+
+    {
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(7, 0, buff, buf_sz);
+        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(8, 0, buff, buf_sz, {20, 120, 400, 200, 15, 75, 170, 24});
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
+    }
+
+    {
+        const auto & entry = storage_pool->logReader()->getPageEntry(8);
+        ASSERT_EQ(entry.field_offsets.size(), 8);
+    }
+
+    {
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        batch.putRefPage(9, 7);
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
+        ASSERT_EQ(storage_pool->logReader()->getNormalPageId(9), 7);
+        const auto & page = storage_pool->logReader()->read(9);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page, 9);
+    }
+
+    auto snapshot = storage_pool->logReader()->getSnapshot("ReadWithSnapshotTest");
+
+    {
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        batch.delPage(7);
+        batch.delPage(9);
+        storage_pool->logWriter()->write(std::move(batch), nullptr);
+    }
+
+    {
+        auto page_reader_with_snap = storage_pool->newLogReader(nullptr, snapshot);
+        ASSERT_EQ(page_reader_with_snap.getNormalPageId(9), 7);
+        const auto & page = page_reader_with_snap.read(9);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page, 9);
+    }
+}
+CATCH
+
+} // namespace PS::V3::tests
 } // namespace DB

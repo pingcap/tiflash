@@ -165,6 +165,17 @@ void PageDirectoryFactory<Trait>::applyRecord(
     }
 
     dir->max_page_id = std::max(dir->max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
+    if constexpr (std::is_same_v<Trait, universal::FactoryTrait>)
+    {
+        for (auto & item : dir->max_page_id_by_prefix)
+        {
+            if (r.page_id.hasPrefix(item.first))
+            {
+                item.second = std::max(item.second, Trait::PageIdTrait::getU64ID(r.page_id));
+                break;
+            }
+        }
+    }
 
     const auto & version_list = iter->second;
     const auto & restored_version = r.version;
