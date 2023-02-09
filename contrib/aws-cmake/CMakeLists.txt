@@ -16,6 +16,8 @@ set(AWS_PUBLIC_COMPILE_DEFS)
 set(AWS_PRIVATE_COMPILE_DEFS)
 set(AWS_PRIVATE_LIBS)
 
+list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DENABLE_CURL_CLIENT")
+
 if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DDEBUG_BUILD")
 endif()
@@ -67,6 +69,7 @@ file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/external/tinyxml2/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/http/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/http/standard/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/http/curl/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/internal/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/monitoring/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/*.cpp"
