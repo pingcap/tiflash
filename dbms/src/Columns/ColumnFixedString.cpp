@@ -80,6 +80,32 @@ void ColumnFixedString::insertFrom(const IColumn & src_, size_t index)
     memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[n * index], n);
 }
 
+void ColumnFixedString::insertManyFrom(const IColumn & src_, size_t position, size_t length)
+{
+    const auto & src = static_cast<const ColumnFixedString &>(src_);
+    if (n != src.getN())
+        throw Exception("Size of FixedString doesn't match", ErrorCodes::SIZE_OF_FIXED_STRING_DOESNT_MATCH);
+    size_t old_size = chars.size();
+    size_t new_size = old_size + n * length;
+    chars.resize(new_size);
+    auto * src_char_ptr = &src.chars[n * position];
+    for (size_t i = old_size; i < new_size; i += n)
+        memcpySmallAllowReadWriteOverflow15(&chars[i], src_char_ptr, n);
+}
+
+void ColumnFixedString::insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec)
+{
+    const auto & src = static_cast<const ColumnFixedString &>(src_);
+    if (n != src.getN())
+        throw Exception("Size of FixedString doesn't match", ErrorCodes::SIZE_OF_FIXED_STRING_DOESNT_MATCH);
+    size_t old_size = chars.size();
+    size_t new_size = old_size + position_vec.size() * n;
+    chars.resize(new_size);
+    auto & src_chars = src.chars;
+    for (size_t i = old_size, j = 0; i < new_size; i += n, ++j)
+        memcpySmallAllowReadWriteOverflow15(&chars[i], &src_chars[position_vec[j] * n], n);
+}
+
 void ColumnFixedString::insertData(const char * pos, size_t length)
 {
     if (length > n)
