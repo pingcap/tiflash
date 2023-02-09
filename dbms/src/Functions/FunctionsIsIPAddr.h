@@ -211,21 +211,27 @@ public:
     }
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        size_t size = block.getByPosition(arguments[0]).column->size();
-        const auto * col_input = checkAndGetColumn<ColumnString>(block.getByPosition(arguments[0]).column.get());
-        const typename ColumnString::Chars_t & data = col_input->getChars();
-        const typename ColumnString::Offsets & offsets = col_input->getOffsets();
-
-        auto col_res = ColumnUInt8::create();
-        ColumnUInt8::Container & vec_res = col_res->getData();
-        vec_res.resize(szie);
-
-        for (size_t i = 0; i < size; ++i)
+        if (const auto * col_input = checkAndGetColumn<ColumnString>(block.getByPosition(arguments[0]).column.get()))
         {
-            vec_res[i] = static_cast<UInt8>(isIPv4(reinterpret_cast<const char *>(&data[i == 0 ? 0 : offsets[i - 1]])));
-        }
+            size_t size = block.getByPosition(arguments[0]).column->size();
+            const typename ColumnString::Chars_t & data = col_input->getChars();
+            const typename ColumnString::Offsets & offsets = col_input->getOffsets();
 
-        block.getByPosition(result).column = std::move(col_res);
+            auto col_res = ColumnUInt8::create();
+            ColumnUInt8::Container & vec_res = col_res->getData();
+            vec_res.resize(size);
+
+            for (size_t i = 0; i < size; ++i)
+            {
+                vec_res[i] = static_cast<UInt8>(isIPv4(reinterpret_cast<const char *>(&data[i == 0 ? 0 : offsets[i - 1]])));
+            }
+
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -251,21 +257,27 @@ public:
     }
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        size_t size = block.getByPosition(arguments[0]).column->size();
-        const auto * col_input = checkAndGetColumn<ColumnString>(block.getByPosition(arguments[0]).column.get());
-        const typename ColumnString::Chars_t & data = col_input->getChars();
-        const typename ColumnString::Offsets & offsets = col_input->getOffsets();
-
-        auto col_res = ColumnUInt8::create();
-        ColumnUInt8::Container & vec_res = col_res->getData();
-        vec_res.resize(szie);
-
-        for (size_t i = 0; i < size; ++i)
+        if (const auto * col_input = checkAndGetColumn<ColumnString>(block.getByPosition(arguments[0]).column.get()))
         {
-            vec_res[i] = static_cast<UInt8>(isIPv6(reinterpret_cast<const char *>(&data[i == 0 ? 0 : offsets[i - 1]])));
-        }
+            size_t size = block.getByPosition(arguments[0]).column->size();
+            const typename ColumnString::Chars_t & data = col_input->getChars();
+            const typename ColumnString::Offsets & offsets = col_input->getOffsets();
 
-        block.getByPosition(result).column = std::move(col_res);
+            auto col_res = ColumnUInt8::create();
+            ColumnUInt8::Container & vec_res = col_res->getData();
+            vec_res.resize(size);
+
+            for (size_t i = 0; i < size; ++i)
+            {
+                vec_res[i] = static_cast<UInt8>(isIPv6(reinterpret_cast<const char *>(&data[i == 0 ? 0 : offsets[i - 1]])));
+            }
+
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 } // namespace DB
