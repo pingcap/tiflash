@@ -671,7 +671,7 @@ void HashedDictionary::setAttributeValue(Attribute & attribute, const Key id, co
     {
         auto & map = *std::get<CollectionPtrType<StringRef>>(attribute.maps);
         const auto & string = value.get<String>();
-        const auto *const string_in_arena = attribute.string_arena->insert(string.data(), string.size());
+        const auto * const string_in_arena = attribute.string_arena->insert(string.data(), string.size());
         map.insert({id, StringRef{string_in_arena, string.size()}});
         break;
     }

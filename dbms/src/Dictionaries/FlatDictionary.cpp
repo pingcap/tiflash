@@ -537,7 +537,7 @@ void FlatDictionary::createAttributeImpl<String>(Attribute & attribute, const Fi
     attribute.string_arena = std::make_unique<Arena>();
     auto & null_value_ref = std::get<StringRef>(attribute.null_values);
     const auto & string = null_value.get<typename NearestFieldType<String>::Type>();
-    const auto *const string_in_arena = attribute.string_arena->insert(string.data(), string.size());
+    const auto * const string_in_arena = attribute.string_arena->insert(string.data(), string.size());
     null_value_ref = StringRef{string_in_arena, string.size()};
     std::get<ContainerPtrType<StringRef>>(attribute.arrays) = std::make_unique<ContainerType<StringRef>>(initial_array_size, null_value_ref);
 }
@@ -667,7 +667,7 @@ template <>
 void FlatDictionary::setAttributeValueImpl<String>(Attribute & attribute, const Key id, const String & value)
 {
     resize<StringRef>(attribute, id);
-    const auto *const string_in_arena = attribute.string_arena->insert(value.data(), value.size());
+    const auto * const string_in_arena = attribute.string_arena->insert(value.data(), value.size());
     auto & array = *std::get<ContainerPtrType<StringRef>>(attribute.arrays);
     array[id] = StringRef{string_in_arena, value.size()};
     loaded_ids[id] = true;

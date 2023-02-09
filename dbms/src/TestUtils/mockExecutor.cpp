@@ -59,7 +59,7 @@ ASTPtr buildOrderByItemVec(MockOrderByItemVec order_by_items)
 {
     std::vector<ASTPtr> vec(order_by_items.size());
     size_t i = 0;
-    for (const auto& item : order_by_items)
+    for (const auto & item : order_by_items)
     {
         int direction = item.second ? -1 : 1;
         ASTPtr locale_node;

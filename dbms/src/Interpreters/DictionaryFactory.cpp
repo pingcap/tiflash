@@ -37,7 +37,7 @@ extern const int BAD_ARGUMENTS;
 } // namespace ErrorCodes
 
 
-DictionaryPtr DictionaryFactory::create(const std::string & name, const Poco::Util::AbstractConfiguration & config, const std::string & config_prefix, Context & context) 
+DictionaryPtr DictionaryFactory::create(const std::string & name, const Poco::Util::AbstractConfiguration & config, const std::string & config_prefix, Context & context)
 {
     Poco::Util::AbstractConfiguration::Keys keys;
     const auto & layout_prefix = config_prefix + ".layout";

@@ -40,7 +40,7 @@ struct CompactStringRef
         const char * data_mixed = nullptr;
         struct
         {
-            char dummy[6]{}{};
+            char dummy[6]{} {};
             UInt16 size{};
         };
     };

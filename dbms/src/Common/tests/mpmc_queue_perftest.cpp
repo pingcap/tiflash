@@ -137,12 +137,12 @@ void test(int capacity [[maybe_unused]], int reader_cnt [[maybe_unused]], int wr
 
     std::vector<std::thread> readers;
     readers.reserve(reader_cnt);
-for (int i = 0; i < reader_cnt; ++i)
+    for (int i = 0; i < reader_cnt; ++i)
         readers.emplace_back(read_func);
 
     std::vector<std::thread> writers;
     writers.reserve(writer_cnt);
-for (int i = 0; i < writer_cnt; ++i)
+    for (int i = 0; i < writer_cnt; ++i)
         writers.emplace_back(write_func);
 
     auto start = std::chrono::high_resolution_clock::now();
