@@ -128,8 +128,6 @@ private:
     // Template argument enable_fine_grained_shuffle will be setup properly in setUpConnection().
     template <bool enable_fine_grained_shuffle>
     void readLoop(const Request & req);
-    template <bool enable_fine_grained_shuffle>
-    void reactor(const std::vector<Request> & async_requests);
 
     void setUpConnection();
     bool setEndState(ExchangeReceiverState new_state);

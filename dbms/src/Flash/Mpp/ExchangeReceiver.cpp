@@ -314,48 +314,6 @@ void ExchangeReceiverBase<RPCContext>::setUpConnectionWithReadLoop(Request && re
 
 template <typename RPCContext>
 template <bool enable_fine_grained_shuffle>
-void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & async_requests)
-{
-    using AsyncHandler = AsyncRequestHandler<RPCContext, enable_fine_grained_shuffle>;
-
-    GET_METRIC(tiflash_thread_count, type_threads_of_receiver_reactor).Increment();
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_thread_count, type_threads_of_receiver_reactor).Decrement();
-    });
-
-    CPUAffinityManager::getInstance().bindSelfQueryThread();
-
-    size_t alive_async_connections = async_requests.size();
-    MPMCQueue<AsyncHandler *> ready_requests(alive_async_connections * 2);
-
-    std::vector<std::unique_ptr<AsyncHandler>> handlers;
-    handlers.reserve(alive_async_connections);
-    for (const auto & req : async_requests)
-        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &msg_channels, rpc_context, req, exc_log->identifier(), &data_size_in_queue));
-
-    while (alive_async_connections > 0)
-    {
-        AsyncHandler * handler = nullptr;
-        ready_requests.pop(handler);
-
-        if (likely(handler != nullptr))
-        {
-            handler->handle();
-            if (handler->finished())
-            {
-                --alive_async_connections;
-                connectionDone(handler->meetError(), handler->getErrMsg(), handler->getLog());
-            }
-        }
-        else
-        {
-            throw Exception("get a null pointer in reactor");
-        }
-    }
-}
-
-template <typename RPCContext>
-template <bool enable_fine_grained_shuffle>
 void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
 {
     GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Increment();
