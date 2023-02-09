@@ -26,7 +26,6 @@ extern const int S3_ERROR;
 
 namespace
 {
-
 const char * S3_LOGGER_TAG_NAMES[][2] = {
     {"AWSClient", "AWSClient"},
     {"AWSAuthV4Signer", "AWSClient (AWSAuthV4Signer)"},
@@ -105,8 +104,6 @@ private:
 
 namespace DB
 {
-
-
 namespace S3
 {
 void ClientFactory::init(bool enable_s3_log)
@@ -221,7 +218,12 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
-        throw Exception(ErrorCodes::S3_ERROR, "S3 PutObject failed, local_fname={}, remote_fname={}, exception={}, message={}", local_fname, remote_fname, result.GetError().GetExceptionName(), result.GetError().GetMessage());
+        throw Exception(ErrorCodes::S3_ERROR,
+                        "S3 PutObject failed, local_fname={}, remote_fname={}, exception={}, message={}",
+                        local_fname,
+                        remote_fname,
+                        result.GetError().GetExceptionName(),
+                        result.GetError().GetMessage());
     }
     static auto * log = &Poco::Logger::get("S3UploadFile");
     LOG_DEBUG(log, "local_fname={}, remote_fname={}, cost={}ms", local_fname, remote_fname, sw.elapsedMilliseconds());
@@ -236,7 +238,12 @@ void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const
     auto result = client.GetObject(req);
     if (!result.IsSuccess())
     {
-        throw Exception(ErrorCodes::S3_ERROR, "S3 GetObject failed, local_fname={}, remote_fname={}, exception={}, message={}", local_fname, remote_fname, result.GetError().GetExceptionName(), result.GetError().GetMessage());
+        throw Exception(ErrorCodes::S3_ERROR,
+                        "S3 GetObject failed, local_fname={}, remote_fname={}, exception={}, message={}",
+                        local_fname,
+                        remote_fname,
+                        result.GetError().GetExceptionName(),
+                        result.GetError().GetMessage());
     }
     Aws::OFStream ostr(local_fname, std::ios_base::out | std::ios_base::binary);
     ostr << result.GetResult().GetBody().rdbuf();
@@ -253,7 +260,11 @@ std::unordered_map<String, size_t> listPrefix(const Aws::S3::S3Client & client, 
     auto result = client.ListObjects(req);
     if (!result.IsSuccess())
     {
-        throw Exception(ErrorCodes::S3_ERROR, "S3 ListObjects failed, prefix={}, exception={}, message={}", prefix, result.GetError().GetExceptionName(), result.GetError().GetMessage());
+        throw Exception(ErrorCodes::S3_ERROR,
+                        "S3 ListObjects failed, prefix={}, exception={}, message={}",
+                        prefix,
+                        result.GetError().GetExceptionName(),
+                        result.GetError().GetMessage());
     }
     const auto & objects = result.GetResult().GetContents();
     std::unordered_map<String, size_t> keys_with_size;
