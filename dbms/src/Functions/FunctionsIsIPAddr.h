@@ -19,7 +19,6 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <arpa/inet.h>
 
 #ifndef IN6ADDRSZ
 #define IN6ADDRSZ 16
@@ -56,11 +55,12 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
  */
 static inline UInt8 isIPv4(const char * src)
 {
-    if (NULL == src)
+    if (nullptr == src)
         return 0;
 
     static const char digits[] = "0123456789";
-    int saw_digit, octets, ch;
+    int saw_digit, octets;
+    char ch;
     unsigned char tmp[INADDRSZ], *tp;
 
     saw_digit = 0;
@@ -70,9 +70,9 @@ static inline UInt8 isIPv4(const char * src)
     {
         const char * pch;
 
-        if ((pch = strchr(digits, ch)) != NULL)
+        if ((pch = strchr(digits, ch)) != nullptr)
         {
-            unsigned int num = *tp * 10 + (unsigned int)(pch - digits);
+            unsigned int num = *tp * 10 + static_cast<unsigned int>(pch - digits);
 
             if (num > 255)
                 return 0;
@@ -107,7 +107,7 @@ static inline UInt8 isIPv4(const char * src)
  */
 static inline UInt8 isIPv6(const char * src)
 {
-    if (NULL == src)
+    if (nullptr == src)
         return 0;
     static const char xdigits_l[] = "0123456789abcdef",
                       xdigits_u[] = "0123456789ABCDEF";
@@ -118,7 +118,7 @@ static inline UInt8 isIPv6(const char * src)
 
     memset((tp = tmp), '\0', IN6ADDRSZ);
     endp = tp + IN6ADDRSZ;
-    colonp = NULL;
+    colonp = nullptr;
     if (*src == ':')
         if (*++src != ':')
             return 0;
@@ -129,9 +129,9 @@ static inline UInt8 isIPv6(const char * src)
     {
         const char * pch;
 
-        if ((pch = strchr((xdigits = xdigits_l), ch)) == NULL)
+        if ((pch = strchr((xdigits = xdigits_l), ch)) == nullptr)
             pch = strchr((xdigits = xdigits_u), ch);
-        if (pch != NULL)
+        if (pch != nullptr)
         {
             val <<= 4;
             val |= (pch - xdigits);
@@ -173,7 +173,7 @@ static inline UInt8 isIPv6(const char * src)
         *tp++ = (unsigned char)(val >> 8) & 0xff;
         *tp++ = (unsigned char)val & 0xff;
     }
-    if (colonp != NULL)
+    if (colonp != nullptr)
     {
         const size_t n = tp - colonp;
         size_t i;
@@ -222,10 +222,19 @@ public:
             ColumnUInt8::Container & vec_res = col_res->getData();
             vec_res.resize(size);
 
+<<<<<<< HEAD
+            size_t prev_offset = 0;
+            for (size_t i = 0; i < size; ++i)
+            {
+                vec_res[i] = static_cast<UInt8>(isIPv4(reinterpret_cast<const char *>(&data[prev_offset])));
+                prev_offset = offsets[i];
+            }
+=======
             for (size_t i = 0; i < size; ++i)
             {
                 vec_res[i] = static_cast<UInt8>(isIPv4(reinterpret_cast<const char *>(&data[i == 0 ? 0 : offsets[i - 1]])));
             }
+>>>>>>> cea864a529d2840edca01fdbfdb3775ca009d427
 
             block.getByPosition(result).column = std::move(col_res);
         }
@@ -268,10 +277,19 @@ public:
             ColumnUInt8::Container & vec_res = col_res->getData();
             vec_res.resize(size);
 
+<<<<<<< HEAD
+            size_t prev_offset = 0;
+            for (size_t i = 0; i < size; ++i)
+            {
+                vec_res[i] = static_cast<UInt8>(isIPv6(reinterpret_cast<const char *>(&data[prev_offset])));
+                prev_offset = offsets[i];
+            }
+=======
             for (size_t i = 0; i < size; ++i)
             {
                 vec_res[i] = static_cast<UInt8>(isIPv6(reinterpret_cast<const char *>(&data[i == 0 ? 0 : offsets[i - 1]])));
             }
+>>>>>>> cea864a529d2840edca01fdbfdb3775ca009d427
 
             block.getByPosition(result).column = std::move(col_res);
         }
