@@ -34,6 +34,8 @@ class TiFlashTestEnv
 public:
     static String getTemporaryPath(const std::string_view test_case = "", bool get_abs = true);
 
+    static void tryCreatePath(const std::string & path);
+
     static void tryRemovePath(const std::string & path, bool recreate = false);
 
     static std::pair<Strings, Strings> getPathPool(const Strings & testdata_path = {})

@@ -234,4 +234,15 @@ void ParallelAggregatingBlockInputStream::appendInfo(FmtBuffer & buffer) const
     buffer.fmtAppend(", max_threads: {}, final: {}", max_threads, final ? "true" : "false");
 }
 
+uint64_t ParallelAggregatingBlockInputStream::collectCPUTimeNsImpl(bool is_thread_runner)
+{
+    uint64_t cpu_time_ns = impl ? impl->collectCPUTimeNs(is_thread_runner) : 0;
+    // Each of ParallelAggregatingBlockInputStream's children is a thread-runner.
+    forEachChild([&](IBlockInputStream & child) {
+        cpu_time_ns += child.collectCPUTimeNs(true);
+        return false;
+    });
+    return cpu_time_ns;
+}
+
 } // namespace DB

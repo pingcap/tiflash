@@ -61,17 +61,14 @@ public:
             offsets.emplace_back(off, 0);
             off += data_sz;
         }
-        if (unlikely(!data_sizes.empty() && off != size))
-        {
-            throw Exception(fmt::format(
-                                "Try to put Page with fields, but page size and fields total size not match "
-                                "[page_id={}] [num_fields={}] [page_size={}] [all_fields_size={}]",
-                                page_id,
-                                data_sizes.size(),
-                                size,
-                                off),
-                            ErrorCodes::LOGICAL_ERROR);
-        }
+
+        RUNTIME_CHECK_MSG(data_sizes.empty() || off == size,
+                          "Try to put Page with fields, but page size and fields total size not match "
+                          "[page_id={}] [num_fields={}] [page_size={}] [all_fields_size={}]",
+                          page_id,
+                          data_sizes.size(),
+                          size,
+                          off);
 
         Write w{WriteBatchWriteType::PUT, page_id, tag, read_buffer, size, "", std::move(offsets)};
         total_data_size += size;
@@ -113,7 +110,7 @@ public:
     {
         return writes;
     }
-    Writes & getWrites()
+    Writes & getMutWrites()
     {
         return writes;
     }
