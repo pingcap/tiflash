@@ -606,5 +606,21 @@ try
 }
 CATCH
 
+TEST_F(AggExecutorTestRunner, Empty)
+try
+{
+    context.addMockTable({"test_db", "empty_table"},
+                         {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
+                         {toVec<Int64>("s1", {}),
+                          toVec<Int64>("s2", {})});
+
+    auto request = context
+                       .scan("test_db", "empty_table")
+                       .aggregation({Max(col("s1"))}, {col("s2")})
+                       .build(context);
+    executeAndAssertColumnsEqual(request, {{toNullableVec<String>({})}});
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
