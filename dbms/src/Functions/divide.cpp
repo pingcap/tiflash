@@ -71,7 +71,7 @@ struct TiDBDivideFloatingImpl<A, B, false>
             Result quotient = x / d;
             Result mod = x % d;
             /// 2. get the half of divisor, which is threshold to decide whether to round up or down.
-            /// note: don't directly use bit operation here, because it may cause unexpected result.
+            /// note: don't directly use bit operation here, it may cause unexpected result.
             Result half = (d / 2) + (d % 2);
 
             /// 3. compare the abstract values of mod and half, if mod >= half, then round up.
