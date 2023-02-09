@@ -1026,6 +1026,7 @@ public:
 
 protected:
     friend struct AggregatedDataVariants;
+    friend class MergingBuckets;
     friend class MergingAndConvertingBlockInputStream;
 
     Params params;
