@@ -426,6 +426,8 @@ extern const int PTHREAD_ERROR = 10014;
 extern const int PS_ENTRY_NOT_EXISTS = 10015;
 extern const int PS_ENTRY_NO_VALID_VERSION = 10016;
 extern const int PS_DIR_APPLY_INVALID_STATUS = 10017;
+
+extern const int S3_ERROR = 11000;
 } // namespace ErrorCodes
 
 } // namespace DB

@@ -74,6 +74,7 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
@@ -908,6 +909,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
 
+    S3::ClientFactory::instance().init(/*enable_s3_log*/ true);
+
     GlobalThreadPool::initialize(
         10000,
         1000,
@@ -1274,6 +1277,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // `Context::shutdown()` will destroy `DeltaIndexManager`.
         // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
         DB::DM::SegmentReaderPoolManager::instance().stop();
+        S3::ClientFactory::instance().shutdown();
         global_context->shutdown();
         LOG_DEBUG(log, "Shutted down storages.");
     });
