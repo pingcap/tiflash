@@ -42,6 +42,8 @@ public:
 
     Block getData(size_t concurrency_index);
 
+    size_t getConcurrency() const { return concurrency; }
+
 private:
     Block getDataForSingleLevel();
 

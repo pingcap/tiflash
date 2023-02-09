@@ -23,11 +23,6 @@
 #include <Common/ThreadManager.h>
 #include <Common/typeid_cast.h>
 #include <Common/wrapInvocable.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/MergingAndConvertingBlockInputStream.h>
-#include <DataStreams/NativeBlockOutputStream.h>
-#include <DataStreams/NullBlockInputStream.h>
-#include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -1919,7 +1914,7 @@ void NO_INLINE Aggregator::mergeBucketImpl(
 }
 
 
-std::unique_ptr<IBlockInputStream> Aggregator::mergeAndConvertToBlocks(
+MergingBucketsPtr Aggregator::mergeAndConvertToBlocks(
     ManyAggregatedDataVariants & data_variants,
     bool final,
     size_t max_threads) const
@@ -1936,7 +1931,7 @@ std::unique_ptr<IBlockInputStream> Aggregator::mergeAndConvertToBlocks(
             non_empty_data.push_back(data);
 
     if (non_empty_data.empty())
-        return std::make_unique<NullBlockInputStream>(getHeader(final));
+        return nullptr;
 
     if (non_empty_data.size() > 1)
     {
@@ -1979,20 +1974,7 @@ std::unique_ptr<IBlockInputStream> Aggregator::mergeAndConvertToBlocks(
                                        non_empty_data[i]->aggregates_pools.end());
     }
 
-    const String & req_id = log ? log->identifier() : "";
-    if (has_at_least_one_two_level)
-    {
-        MergingBucketsPtr merging_buckets = std::make_shared<MergingBuckets>(*this, non_empty_data, final, max_threads);
-        BlockInputStreams merging_streams;
-        for (size_t i = 0; i < max_threads; ++i)
-            merging_streams.push_back(std::make_shared<MergingAndConvertingBlockInputStream>(merging_buckets, i, req_id));
-        return std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, req_id);
-    }
-    else
-    {
-        MergingBucketsPtr merging_buckets = std::make_shared<MergingBuckets>(*this, non_empty_data, final, 1);
-        return std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, req_id);
-    }
+    return std::make_shared<MergingBuckets>(*this, non_empty_data, final, has_at_least_one_two_level ? max_threads : 1);
 }
 
 template <typename Method, typename Table>

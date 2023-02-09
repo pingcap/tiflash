@@ -16,7 +16,10 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
+#include <DataStreams/MergingAndConvertingBlockInputStream.h>
+#include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
 
 namespace DB
 {
@@ -81,7 +84,26 @@ Block ParallelAggregatingBlockInputStream::readImpl()
         {
             /** If all partially-aggregated data is in RAM, then merge them in parallel, also in RAM.
                 */
-            impl = aggregator.mergeAndConvertToBlocks(many_data, final, max_threads);
+            auto merging_buckets = aggregator.mergeAndConvertToBlocks(many_data, final, max_threads);
+            if (!merging_buckets)
+            {
+                impl = std::make_unique<NullBlockInputStream>(aggregator.getHeader(final));
+            }
+            else
+            {
+                RUNTIME_CHECK(merging_buckets->getConcurrency() > 0);
+                if (merging_buckets->getConcurrency() > 1)
+                {
+                    BlockInputStreams merging_streams;
+                    for (size_t i = 0; i < merging_buckets->getConcurrency(); ++i)
+                        merging_streams.push_back(std::make_shared<MergingAndConvertingBlockInputStream>(merging_buckets, i, log->identifier()));
+                    impl = std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, log->identifier());
+                }
+                else
+                {
+                    impl = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
+                }
+            }
         }
         else
         {
