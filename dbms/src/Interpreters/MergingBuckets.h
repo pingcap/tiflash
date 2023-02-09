@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Core/Block.h>
 #include <Common/Logger.h>
+#include <Core/Block.h>
 
 #include <atomic>
 #include <memory>
