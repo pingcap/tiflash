@@ -17,7 +17,12 @@
 #include <Server/ServerInfo.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <common/logger_useful.h>
+
+namespace DB
+{
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
+} // namespace DB
 
 namespace DB::DM
 {
@@ -43,7 +48,7 @@ private:
 
     WorkQueue<MergedTaskPtr> task_queue;
     std::vector<SegmentReaderUPtr> readers;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 // SegmentReaderPoolManager is a NUMA-aware singleton that manages several SegmentReaderPool objects.
@@ -74,7 +79,7 @@ private:
     SegmentReaderPoolManager();
     std::vector<std::unique_ptr<SegmentReaderPool>> reader_pools;
     std::unordered_set<std::thread::id> reader_ids;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 } // namespace DB::DM

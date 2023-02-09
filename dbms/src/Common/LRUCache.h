@@ -315,7 +315,7 @@ private:
             {
                 // If queue.insert() throws exception, cells and queue will be in inconsistent.
                 cells.erase(it);
-                tryLogCurrentException(Logger::get("LRUCache"), "queue.insert throw exception");
+                tryLogCurrentException(Logger::get(), "queue.insert throw exception");
                 throw;
             }
         }
