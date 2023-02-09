@@ -88,7 +88,7 @@ void ColumnFixedString::insertManyFrom(const IColumn & src_, size_t position, si
     size_t old_size = chars.size();
     size_t new_size = old_size + n * length;
     chars.resize(new_size);
-    auto * src_char_ptr = &src.chars[n * position];
+    const auto * src_char_ptr = &src.chars[n * position];
     for (size_t i = old_size; i < new_size; i += n)
         memcpySmallAllowReadWriteOverflow15(&chars[i], src_char_ptr, n);
 }
@@ -101,7 +101,7 @@ void ColumnFixedString::insertDisjunctFrom(const IColumn & src_, const std::vect
     size_t old_size = chars.size();
     size_t new_size = old_size + position_vec.size() * n;
     chars.resize(new_size);
-    auto & src_chars = src.chars;
+    const auto & src_chars = src.chars;
     for (size_t i = old_size, j = 0; i < new_size; i += n, ++j)
         memcpySmallAllowReadWriteOverflow15(&chars[i], &src_chars[position_vec[j] * n], n);
 }

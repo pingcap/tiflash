@@ -252,7 +252,7 @@ void ColumnNullable::insertDisjunctFrom(const IColumn & src, const std::vector<s
     const auto & src_concrete = static_cast<const ColumnNullable &>(src);
     getNestedColumn().insertDisjunctFrom(src_concrete.getNestedColumn(), position_vec);
     auto & map = getNullMapData();
-    auto & src_map = src_concrete.getNullMapData();
+    const auto & src_map = src_concrete.getNullMapData();
     size_t old_size = map.size();
     size_t to_add_size = position_vec.size();
     map.resize(old_size + to_add_size);
