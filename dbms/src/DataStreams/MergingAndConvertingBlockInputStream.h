@@ -15,7 +15,7 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Interpreters/MergingBuckets.h>
+#include <Interpreters/Aggregator.h>
 
 namespace DB
 {

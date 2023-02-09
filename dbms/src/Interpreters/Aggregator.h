@@ -35,7 +35,6 @@
 #include <Encryption/FileProvider.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
-#include <Interpreters/MergingBuckets.h>
 #include <Poco/TemporaryFile.h>
 #include <Storages/Transaction/Collator.h>
 #include <common/StringRef.h>
@@ -863,6 +862,47 @@ struct AggregatedDataVariants : private boost::noncopyable
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
 using ManyAggregatedDataVariants = std::vector<AggregatedDataVariantsPtr>;
 
+/// Combines aggregation states together, turns them into blocks, and outputs.
+class MergingBuckets
+{
+public:
+    /** The input is a set of non-empty sets of partially aggregated data,
+      *  which are all either single-level, or are two-level.
+      */
+    MergingBuckets(const Aggregator & aggregator_, const ManyAggregatedDataVariants & data_, bool final_, size_t concurrency_);
+
+    Block getHeader() const;
+
+    Block getData(size_t concurrency_index);
+
+    size_t getConcurrency() const { return concurrency; }
+
+private:
+    Block getDataForSingleLevel();
+
+    Block getDataForTwoLevel(size_t concurrency_index);
+
+    void doLevelMerge(Int32 bucket_num, size_t concurrency_index);
+
+private:
+    const LoggerPtr log;
+    const Aggregator & aggregator;
+    ManyAggregatedDataVariants data;
+    bool final;
+    size_t concurrency;
+
+    bool is_two_level = false;
+
+    BlocksList single_level_blocks;
+
+    // use unique_ptr to avoid false sharing.
+    std::vector<std::unique_ptr<BlocksList>> two_level_parallel_merge_data;
+
+    std::atomic<Int32> current_bucket_num = -1;
+    static constexpr Int32 NUM_BUCKETS = 256;
+};
+using MergingBucketsPtr = std::shared_ptr<MergingBuckets>;
+
 /** How are "total" values calculated with WITH TOTALS?
   * (For more details, see TotalsHavingBlockInputStream.)
   *
@@ -871,6 +911,8 @@ using ManyAggregatedDataVariants = std::vector<AggregatedDataVariantsPtr>;
   *
   */
 
+class MergingBuckets;
+using MergingBucketsPtr = std::shared_ptr<MergingBuckets>;
 
 /** Aggregates the source of the blocks.
   */
