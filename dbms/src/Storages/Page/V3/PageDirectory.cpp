@@ -31,14 +31,13 @@
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <type_traits>
 #include <utility>
-
-#include <magic_enum.hpp>
 
 
 #ifdef FIU_ENABLE
