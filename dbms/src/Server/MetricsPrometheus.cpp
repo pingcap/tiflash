@@ -220,7 +220,7 @@ MetricsPrometheus::MetricsPrometheus(
             addr = listen_host + ":" + metrics_port;
         if (security_config.has_tls_config)
         {
-            server = getHTTPServer(context, tiflash_metrics.registry, addr);
+            server = getHTTPServer(security_config, tiflash_metrics.registry, addr);
             server->start();
             LOG_INFO(log, "Enable prometheus secure pull mode; Listen Host = {}, Metrics Port = {}", listen_host, metrics_port);
         }
