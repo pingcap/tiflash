@@ -85,6 +85,26 @@ protected:
         }
         return ret;
     }
+    static void verifyRestoreBlocks(Spiller & spiller, size_t restore_partition_id, size_t restore_max_stream_size, size_t expected_stream_size, const Blocks & expected_blocks)
+    {
+        auto block_streams = spiller.restoreBlocks(restore_partition_id, restore_max_stream_size);
+        if (expected_stream_size > 0)
+        {
+            GTEST_ASSERT_EQ(block_streams.size(), expected_stream_size);
+        }
+        Blocks restored_blocks;
+        for (auto & block_stream : block_streams)
+        {
+            for (Block block = block_stream->read(); block; block = block_stream->read())
+                restored_blocks.push_back(block);
+        }
+        GTEST_ASSERT_EQ(expected_blocks.size(), restored_blocks.size());
+        for (size_t i = 0; i < expected_blocks.size(); ++i)
+        {
+            blockEqual(expected_blocks[i], restored_blocks[i]);
+        }
+    }
+
     static String spill_dir;
     Block spiller_test_header;
     std::shared_ptr<SpillConfig> spill_config_ptr;
@@ -194,22 +214,8 @@ try
     for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
     {
         size_t max_restore_streams = 2 + partition_id * 10;
-        auto restore_block_streams = spiller.restoreBlocks(partition_id, max_restore_streams);
         size_t expected_streams = std::min(max_restore_streams, spill_num);
-        GTEST_ASSERT_EQ(restore_block_streams.size(), expected_streams);
-        Blocks all_restored_blocks;
-        for (const auto & block_stream : restore_block_streams)
-        {
-            for (Block block = block_stream->read(); block; block = block_stream->read())
-            {
-                all_restored_blocks.push_back(block);
-            }
-        }
-        GTEST_ASSERT_EQ(all_restored_blocks.size(), all_blocks[partition_id].size());
-        for (size_t i = 0; i < all_restored_blocks.size(); ++i)
-        {
-            blockEqual(all_blocks[partition_id][i], all_restored_blocks[i]);
-        }
+        verifyRestoreBlocks(spiller, partition_id, max_restore_streams, expected_streams, all_blocks[partition_id]);
     }
 }
 CATCH
@@ -244,22 +250,40 @@ try
         for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
         {
             size_t max_restore_streams = 2 + partition_id * 10;
-            auto restore_block_streams = spiller->restoreBlocks(partition_id, max_restore_streams);
             size_t expected_streams = std::min(max_restore_streams, spill_num);
-            GTEST_ASSERT_EQ(restore_block_streams.size(), expected_streams);
-            Blocks all_restored_blocks;
-            for (const auto & block_stream : restore_block_streams)
-            {
-                for (Block block = block_stream->read(); block; block = block_stream->read())
-                {
-                    all_restored_blocks.push_back(block);
-                }
-            }
-            GTEST_ASSERT_EQ(all_restored_blocks.size(), all_blocks[partition_id].size());
-            for (size_t i = 0; i < all_restored_blocks.size(); ++i)
-            {
-                blockEqual(all_blocks[partition_id][i], all_restored_blocks[i]);
-            }
+            verifyRestoreBlocks(*spiller, partition_id, max_restore_streams, expected_streams, all_blocks[partition_id]);
+        }
+    }
+}
+CATCH
+
+TEST_F(SpillerTest, ReleaseFileOnRestore)
+try
+{
+    std::vector<std::unique_ptr<Spiller>> spillers;
+    spillers.push_back(std::make_unique<Spiller>(*spill_config_ptr, false, 1, spiller_test_header, logger, 1, false));
+    auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "release_file_on_restore_test", rand());
+    SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_spilled_size_per_spill, spill_config_ptr->file_provider);
+    Poco::File new_spiller_dir(new_spill_config.spill_dir);
+    /// remove spiller dir if exists
+    if (new_spiller_dir.exists())
+        new_spiller_dir.remove(true);
+    new_spiller_dir.createDirectories();
+    spillers.push_back(std::make_unique<Spiller>(new_spill_config, false, 1, spiller_test_header, logger));
+
+    Blocks blocks = generateBlocks(50);
+    for (auto & spiller : spillers)
+    {
+        spiller->spillBlocks(blocks, 0);
+        spiller->finishSpill();
+        verifyRestoreBlocks(*spiller, 0, 0, 0, blocks);
+        if (!spiller->releaseSpilledFileOnRestore())
+            verifyRestoreBlocks(*spiller, 0, 0, 0, blocks);
+        else
+        {
+            std::vector<String> files;
+            new_spiller_dir.list(files);
+            GTEST_ASSERT_EQ(files.size(), 0);
         }
     }
 }
@@ -285,23 +309,8 @@ try
     for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
     {
         size_t max_restore_streams = 2 + partition_id * 10;
-        auto restore_block_streams = spiller.restoreBlocks(partition_id, max_restore_streams);
-        /// for sorted spill, the restored stream num is always equal to the spill time
         size_t expected_streams = spill_num;
-        GTEST_ASSERT_EQ(restore_block_streams.size(), expected_streams);
-        Blocks all_restored_blocks;
-        for (const auto & block_stream : restore_block_streams)
-        {
-            for (Block block = block_stream->read(); block; block = block_stream->read())
-            {
-                all_restored_blocks.push_back(block);
-            }
-        }
-        GTEST_ASSERT_EQ(all_restored_blocks.size(), all_blocks[partition_id].size());
-        for (size_t i = 0; i < all_restored_blocks.size(); ++i)
-        {
-            blockEqual(all_blocks[partition_id][i], all_restored_blocks[i]);
-        }
+        verifyRestoreBlocks(spiller, partition_id, max_restore_streams, expected_streams, all_blocks[partition_id]);
     }
 }
 CATCH
@@ -336,23 +345,9 @@ try
         for (size_t partition_id = 0; partition_id < partition_num; ++partition_id)
         {
             size_t max_restore_streams = 2 + partition_id * 10;
-            auto restore_block_streams = spiller->restoreBlocks(partition_id, max_restore_streams);
             /// for sorted spill, the restored stream num is always equal to the spill time
             size_t expected_streams = spill_num;
-            GTEST_ASSERT_EQ(restore_block_streams.size(), expected_streams);
-            Blocks all_restored_blocks;
-            for (const auto & block_stream : restore_block_streams)
-            {
-                for (Block block = block_stream->read(); block; block = block_stream->read())
-                {
-                    all_restored_blocks.push_back(block);
-                }
-            }
-            GTEST_ASSERT_EQ(all_restored_blocks.size(), all_blocks[partition_id].size());
-            for (size_t i = 0; i < all_restored_blocks.size(); ++i)
-            {
-                blockEqual(all_blocks[partition_id][i], all_restored_blocks[i]);
-            }
+            verifyRestoreBlocks(*spiller, partition_id, max_restore_streams, expected_streams, all_blocks[partition_id]);
         }
     }
 }
@@ -449,19 +444,7 @@ try
     ret.emplace_back(data);
     spiller.spillBlocks(ret, 0);
     spiller.finishSpill();
-    auto block_streams = spiller.restoreBlocks(0, 2);
-    GTEST_ASSERT_EQ(block_streams.size(), 1);
-    Blocks restored_blocks;
-    for (auto & block_stream : block_streams)
-    {
-        for (Block block = block_stream->read(); block; block = block_stream->read())
-            restored_blocks.push_back(block);
-    }
-    GTEST_ASSERT_EQ(ret.size(), restored_blocks.size());
-    for (size_t i = 0; i < ret.size(); ++i)
-    {
-        blockEqual(ret[i], restored_blocks[i]);
-    }
+    verifyRestoreBlocks(spiller, 0, 2, 1, ret);
 }
 CATCH
 
@@ -497,19 +480,7 @@ try
     ret.emplace_back(data);
     spiller.spillBlocks(ret, 0);
     spiller.finishSpill();
-    auto block_streams = spiller.restoreBlocks(0, 2);
-    GTEST_ASSERT_EQ(block_streams.size(), 1);
-    Blocks restored_blocks;
-    for (auto & block_stream : block_streams)
-    {
-        for (Block block = block_stream->read(); block; block = block_stream->read())
-            restored_blocks.push_back(block);
-    }
-    GTEST_ASSERT_EQ(ret.size(), restored_blocks.size());
-    for (size_t i = 0; i < ret.size(); ++i)
-    {
-        blockEqual(ret[i], restored_blocks[i]);
-    }
+    verifyRestoreBlocks(spiller, 0, 2, 1, ret);
 }
 CATCH
 
@@ -543,19 +514,7 @@ try
     ret.emplace_back(data);
     spiller.spillBlocks(ret, 0);
     spiller.finishSpill();
-    auto block_streams = spiller.restoreBlocks(0, 2);
-    GTEST_ASSERT_EQ(block_streams.size(), 1);
-    Blocks restored_blocks;
-    for (auto & block_stream : block_streams)
-    {
-        for (Block block = block_stream->read(); block; block = block_stream->read())
-            restored_blocks.push_back(block);
-    }
-    GTEST_ASSERT_EQ(ret.size(), restored_blocks.size());
-    for (size_t i = 0; i < ret.size(); ++i)
-    {
-        blockEqual(ret[i], restored_blocks[i]);
-    }
+    verifyRestoreBlocks(spiller, 0, 2, 1, ret);
 }
 CATCH
 
@@ -585,19 +544,7 @@ try
     ret.emplace_back(data);
     spiller.spillBlocks(ret, 0);
     spiller.finishSpill();
-    auto block_streams = spiller.restoreBlocks(0, 2);
-    GTEST_ASSERT_EQ(block_streams.size(), 1);
-    Blocks restored_blocks;
-    for (auto & block_stream : block_streams)
-    {
-        for (Block block = block_stream->read(); block; block = block_stream->read())
-            restored_blocks.push_back(block);
-    }
-    GTEST_ASSERT_EQ(ret.size(), restored_blocks.size());
-    for (size_t i = 0; i < ret.size(); ++i)
-    {
-        blockEqual(ret[i], restored_blocks[i]);
-    }
+    verifyRestoreBlocks(spiller, 0, 2, 1, ret);
 }
 CATCH
 

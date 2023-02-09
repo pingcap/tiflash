@@ -13,11 +13,19 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Executor/DataStreamExecutor.h>
 
 namespace DB
 {
+DataStreamExecutor::DataStreamExecutor(const BlockIO & block_io)
+    : QueryExecutor(block_io.process_list_entry)
+    , data_stream(block_io.in)
+{
+    assert(data_stream);
+}
+
 ExecutionResult DataStreamExecutor::execute(ResultHandler result_handler)
 {
     try
@@ -58,5 +66,10 @@ String DataStreamExecutor::toString() const
 int DataStreamExecutor::estimateNewThreadCount()
 {
     return data_stream->estimateNewThreadCount();
+}
+
+RU DataStreamExecutor::collectRequestUnit()
+{
+    return toRU(data_stream->estimateCPUTimeNs());
 }
 } // namespace DB

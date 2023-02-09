@@ -61,7 +61,7 @@ class IStorage : public std::enable_shared_from_this<IStorage>
     , public ITableDeclaration
 {
 public:
-    /// The main name of the table type (for example, StorageMergeTree).
+    /// The main name of the table type (for example, StorageDeltaMerge).
     virtual std::string getName() const = 0;
 
     /** The name of the table.
