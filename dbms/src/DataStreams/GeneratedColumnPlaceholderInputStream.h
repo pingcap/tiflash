@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Columns/ColumnNullable.h>
-#include <Core/ColumnsWithTypeAndName.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnString.h>
+#include <Core/ColumnsWithTypeAndName.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
