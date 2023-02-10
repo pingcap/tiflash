@@ -2155,8 +2155,11 @@ MergingBuckets::MergingBuckets(const Aggregator & aggregator_, const ManyAggrega
             for (size_t i = 0; i < concurrency; ++i)
                 two_level_parallel_merge_data.push_back(std::make_unique<BlocksList>());
         }
-        // for single level, concurrency must be 1.
-        RUNTIME_CHECK(is_two_level || concurrency == 1);
+        else
+        {
+            // for single level, concurrency must be 1.
+            RUNTIME_CHECK(concurrency == 1);
+        }
 
         /// At least we need one arena in first data item per concurrency
         if (concurrency > data[0]->aggregates_pools.size())
