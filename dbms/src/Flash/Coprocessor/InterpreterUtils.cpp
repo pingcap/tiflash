@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/ThresholdUtils.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
@@ -120,7 +121,7 @@ void orderStreams(
                 order_descr,
                 settings.max_block_size,
                 limit,
-                settings.max_bytes_before_external_sort,
+                getAverageThreshold(settings.max_bytes_before_external_sort, pipeline.streams.size()),
                 SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_spilled_size_per_spill, context.getFileProvider()),
                 log->identifier());
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));

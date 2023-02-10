@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,18 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #pragma once
 
-#include <vector>
+#include <assert.h>
 
-namespace DB
-{
-class Logger;
-using LoggerPtr = std::shared_ptr<Logger>;
-} // namespace DB
+#include <algorithm>
 
-namespace DB::DM
+inline size_t getAverageThreshold(size_t threshold, size_t concurrency)
 {
-// `getNumaNodes` returns cpus of each Numa node.
-std::vector<std::vector<int>> getNumaNodes(const LoggerPtr & log);
-} // namespace DB::DM
+    assert(concurrency > 0);
+    if (threshold == 0)
+        return 0;
+    return std::max(static_cast<size_t>(1), threshold / concurrency);
+}
