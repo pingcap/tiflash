@@ -945,13 +945,11 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
 
         if (ci.hasGeneratedColumnFlag())
         {
-            LOG_WARNING(log, "got generated column");
             auto data_type = getDataTypeByColumnInfoForComputingLayer(ci);
             generated_column_infos.push_back(std::make_pair(i, data_type));
             source_columns_tmp.emplace_back(NameAndTypePair{GeneratedColumnPlaceholderBlockInputStream::getColumnName(i), data_type});
             continue;
         }
-        LOG_WARNING(log, "no got generated column");
         // Column ID -1 return the handle column
         String name;
         if (cid == TiDBPkColumnID)
