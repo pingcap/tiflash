@@ -16,12 +16,13 @@
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
-#include <Common/typeid_cast.h>
 #include <Common/ThresholdUtils.h>
+#include <Common/typeid_cast.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/Aggregator.h>
+
 #include <array>
 #include <cassert>
 
