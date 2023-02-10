@@ -162,6 +162,4 @@ using ColumnWithInt64 = std::vector<ColInt64Type>;
 using ColumnWithUInt64 = std::vector<ColUInt64Type>;
 using ColumnWithFloat64 = std::vector<ColFloat64Type>;
 using ColumnWithString = std::vector<ColStringType>;
-
-void insertGeneratedColumnToTableScanDAGRequest(UInt64 gen_col_index, std::shared_ptr<tipb::DAGRequest> dag_req);
 } // namespace DB::tests

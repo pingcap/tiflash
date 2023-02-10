@@ -15,7 +15,6 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
-#include <Debug/MockExecutor/TableScanBinder.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
@@ -24,7 +23,6 @@
 #include <TestUtils/executorSerializer.h>
 
 #include <functional>
-#include <cstdlib>
 
 namespace DB::tests
 {
@@ -282,51 +280,4 @@ void ExecutorTest::dagRequestEqual(const String & expected_string, const std::sh
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(ExecutorSerializer().serialize(actual.get())));
 }
 
-void insertGeneratedColumnToTableScanDAGRequest(UInt64 gen_col_num, std::shared_ptr<tipb::DAGRequest> dag_req)
-{
-    TiDB::ColumnInfo tidb_column_info;
-    tidb_column_info.tp = TiDB::TP::TypeLong;
-    tidb_column_info.flag = TiDB::ColumnFlag::ColumnFlagGeneratedColumn;
-
-    tipb::Executor * exec = dag_req->mutable_root_executor();
-    tipb::TableScan * tsc = nullptr;
-    while (tsc == nullptr)
-    {
-        switch (exec->tp())
-        {
-            case tipb::ExecType::TypeExchangeSender:
-            {
-                exec = exec->mutable_exchange_sender()->mutable_child();
-                break;
-            }
-            case tipb::ExecType::TypeTableScan:
-            {
-                tsc = exec->mutable_tbl_scan();
-                break;
-            }
-            default:
-            {
-                throw Exception("insertGeneratedColumnToTableScanDAGRequest not implement for now");
-            }
-        }
-    }
-
-    auto ori_columns = tsc->columns();
-    tsc->clear_columns();
-    int ori_column_index = 0;
-    for (size_t i = 0; i < ori_columns.size() + gen_col_num; ++i)
-    {
-        tipb::ColumnInfo * tipb_column_info = tsc->add_columns();
-        if (std::rand() % 2 == 0 || ori_column_index >= ori_columns.size())
-        {
-            String gen_column_name = fmt::format("gen_col_{}", i);
-            tidb_column_info.name = gen_column_name;
-            mock::TableScanBinder::setTipbColumnInfo(tipb_column_info, DAGColumnInfo{gen_column_name, tidb_column_info}, 100 + i);
-        }
-        else
-        {
-            *tipb_column_info = ori_columns[ori_column_index++];
-        }
-    }
-}
 } // namespace DB::tests

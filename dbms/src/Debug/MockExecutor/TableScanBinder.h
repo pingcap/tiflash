@@ -38,7 +38,6 @@ public:
 
     TableID getTableId() const;
 
-    static void setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info, Int64 column_id);
 private:
     TableInfo table_info; /// used by column pruner
 
