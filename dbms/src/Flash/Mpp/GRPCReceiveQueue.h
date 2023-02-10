@@ -20,6 +20,7 @@
 #include <Common/grpcpp.h>
 #include <common/logger_useful.h>
 
+#include <atomic>
 #include <deque>
 #include <functional>
 #include <magic_enum.hpp>
@@ -40,29 +41,69 @@ class TestGRPCReceiveQueue;
 class KickReceiveTag : public grpc::internal::CompletionQueueTag
 {
 public:
-    void * getTag() {
-        std::lock_guard lock(mu);
-        return tag;
-    }
-    void setTag(void * tag_) {
-        std::lock_guard lock(mu);
-        tag = tag_;
-    }
+    explicit KickReceiveTag(void * tag_) : tag(tag_) {}
 
-    bool FinalizeResult(void ** tag, bool * /*status*/) override
+    bool FinalizeResult(void ** tag_, bool * /*status*/) override
     {
-        std::lock_guard lock(mu);
-        *tag = this->tag;
-        this->tag = nullptr;
+        *tag_ = tag;
         return true;
     }
 
 private:
-    std::mutex mu;
     void * tag;
 };
 
-using GRPCReceiveKickFunc = std::function<grpc_call_error(KickReceiveTag *)>;
+using GRPCReceiveKickFunc = std::function<grpc_call_error(KickReceiveTag *, grpc_call *)>;
+using AsyncRetryConnection = std::pair<KickReceiveTag *, grpc_call *>;
+
+// This is a FIFO data struct.
+//
+// When MPMCQueue is full, put the information related with AsyncRequestHandler
+// into this queue so that we can kick it into GRPCCompletionQueue when the
+// MPMCQueue is not full and try to re-write the data.
+class AsyncRequestHandlerWaitQueue
+{
+public:
+    bool empty()
+    {
+        std::lock_guard lock(mu);
+        return wait_retry_queue.empty();
+    }
+
+    void push(AsyncRetryConnection conn)
+    {
+        std::lock_guard lock(mu);
+        wait_retry_queue.push(conn);
+    }
+
+    AsyncRetryConnection pop()
+    {
+        std::lock_guard lock(mu);
+        if (wait_retry_queue.empty())
+            return AsyncRetryConnection(nullptr, nullptr);
+
+        AsyncRetryConnection ret_conn = wait_retry_queue.front();
+        wait_retry_queue.pop();
+
+        return ret_conn;
+    }
+
+    std::queue<AsyncRetryConnection> popAll()
+    {
+        std::lock_guard lock(mu);
+        if (wait_retry_queue.empty())
+            return std::queue<AsyncRetryConnection>{};
+
+        std::queue<AsyncRetryConnection> ret_conn = std::move(wait_retry_queue);
+        return ret_conn;
+    }
+
+private:
+    std::mutex mu;
+    std::queue<AsyncRetryConnection> wait_retry_queue;
+};
+
+using AsyncRequestHandlerWaitQueuePtr = std::shared_ptr<AsyncRequestHandlerWaitQueue>;
 
 enum class GRPCReceiveQueueRes
 {
@@ -83,18 +124,9 @@ class GRPCReceiveQueue
 private:
     using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<T>>>;
 public:
-    GRPCReceiveQueue(MsgChannelPtr & recv_queue_, grpc_call * call, const LoggerPtr & log_)
+    GRPCReceiveQueue(MsgChannelPtr recv_queue_, const LoggerPtr & log_)
         : recv_queue(recv_queue_)
-        , log(log_)
-    {
-        RUNTIME_ASSERT(call != nullptr, log, "call is null");
-        // If a call to `grpc_call_start_batch` with an empty batch returns
-        // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
-        // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-        kick_func = [call](void * t) {
-            return grpc_call_start_batch(call, nullptr, 0, t, nullptr);
-        };
-    }
+        , log(log_) {}
 
     // For gtest usage.
     GRPCReceiveQueue(MsgChannelPtr & recv_queue_, GRPCReceiveKickFunc func)
@@ -113,7 +145,7 @@ public:
     {
         auto ret = recv_queue->cancelWith(reason);
         if (ret)
-            handleTheRemainingTags();
+            handleRemainingTags();
         return ret;
     }
 
@@ -121,49 +153,27 @@ public:
     {
         auto ret = recv_queue->finish();
         if (ret)
-            handleTheRemainingTags();
+            handleRemainingTags();
         return ret;
     }
 
     // Pop data from queue and kick the CompletionQueue to re-push the data
     // if there is data failing to be pushed before because the queue was full.
     template <typename U>
-    bool pop(U && data)
+    MPMCQueueResult pop(U && data)
     {
-        auto ret = recv_queue->pop(std::forward<U>(data)) == MPMCQueueResult::OK;
-        if (ret)
+        auto ret = recv_queue->pop(std::forward<U>(data));
+        if (ret == MPMCQueueResult::OK)
             kickCompletionQueue();
         return ret;
     }
 
-    // Push data into the queue.
-    //
-    // Return FULL if the queue is full and `new_tag` is saved.
-    // When the next pop/finish is called, the `new_tag` will be pushed
-    // into grpc completion queue.
+    // When the queue is full GRPCReceiveQueue will not save the tag.
+    // This action should be taken by the caller.
     template <typename U>
-    GRPCReceiveQueueRes push(U && data, void * new_tag)
+    GRPCReceiveQueueRes push(U && data)
     {
         MPMCQueueResult res = recv_queue->tryPush(data);
-        if (res == MPMCQueueResult::FULL)
-        {
-            // tryPush and push_back must be protected by lock at the same time.
-            // Because if we don't contain the second tryPush in the lock, the
-            // following bug will happen:
-            //   step1. Thread1: tryPush fail at first.
-            //   step2. Thread1: tryPush fail at second.
-            //   step3. Thread2: pop successfully and find that it's needless to
-            //                   kick CompletionQueue.
-            //   step4. Thread1: lock and set tags. However, the pop of the Thread2
-            //                   is the last pop operation, no more pop operation
-            //                   will be executed. So the tag will not be kicked
-            //                   into completion queue forever.
-            std::lock_guard lock(mu);
-            res = recv_queue->tryPush(data);
-            if (res == MPMCQueueResult::FULL)
-                holdTheTagNoLock(new_tag);
-        }
-
         switch (res)
         {
         case MPMCQueueResult::OK:
@@ -182,66 +192,41 @@ public:
 private:
     friend class tests::TestGRPCReceiveQueue;
 
-    // The tag is temporarily saved in the kick_recv_tags.
-    // It will be kick to Completion Queue at an appropriate time.
-    void holdTheTagNoLock(void * tag)
-    {
-        auto iter = kick_recv_tags_map.find(tag);
-        if (iter == kick_recv_tags_map.end())
-        {
-            kick_recv_tags_map[tag];
-            kick_recv_tags_map[tag].setTag(tag);
-        }
-        else
-            iter->second.setTag(tag);
-    }
-
     // Wake up its completion queue.
     void kickCompletionQueue()
     {
-        std::lock_guard lock(mu);
-        if (kick_recv_tags_map.empty())
+        AsyncRetryConnection retry_conn = conn_wait_queue->pop();
+        if (retry_conn.second == nullptr)
             return;
 
-        putTagIntoCompletionQueueNoLock();
+        putTagIntoCompletionQueue(retry_conn);
     }
 
-    void handleTheRemainingTags()
+    void handleRemainingTags()
     {
-        std::lock_guard lock(mu);
-        if (kick_recv_tags_map.empty())
-            return;
-
-        putTagIntoCompletionQueueNoLock(true);
-    }
-
-    void putTagIntoCompletionQueueNoLock(bool is_all = false)
-    {
-        for (auto & iter : kick_recv_tags_map)
+        std::queue<AsyncRetryConnection> remaining_tags = conn_wait_queue->popAll();
+        while (!remaining_tags.empty())
         {
-            if (iter.second.getTag() == nullptr)
-                continue;
-            else
-            {
-                callKickFunc(&(iter.second)); // TODO may be bug
-                if (!is_all)
-                    break;
-            }
+            AsyncRetryConnection conn = remaining_tags.front();
+            remaining_tags.pop();
+            putTagIntoCompletionQueue(conn);
         }
     }
 
-    void callKickFunc(KickReceiveTag * kick_receive_tag)
+    void putTagIntoCompletionQueue(AsyncRetryConnection retry_conn)
     {
-        grpc_call_error error = kick_func(kick_receive_tag);
+        // If a call to `grpc_call_start_batch` with an empty batch returns
+        // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
+        // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
+        grpc_call_error error = grpc_call_start_batch(retry_conn.second, nullptr, 0, retry_conn.first, nullptr);
         // If an error occur, there must be something wrong about shutdown process.
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
 
     MsgChannelPtr recv_queue;
-    std::mutex mu;
-    std::map<void *, KickReceiveTag> kick_recv_tags_map; // Create a KickReceiveTag for each receiver
     const LoggerPtr log;
     GRPCReceiveKickFunc kick_func;
+    AsyncRequestHandlerWaitQueuePtr conn_wait_queue;
 };
 
 } // namespace DB

@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <Flash/Mpp/ReceiverChannelTryWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <grpcpp/alarm.h>
 #include <grpcpp/completion_queue.h>
@@ -51,7 +51,8 @@ public:
     using Self = AsyncRequestHandler<RPCContext, enable_fine_grained_shuffle>;
 
     AsyncRequestHandler(
-        std::vector<MsgChannelPtr> * msg_channels_,
+        std::vector<GRPCReceiveQueue<ReceivedMessage>> * grpc_recv_queues_,
+        AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue_,
         const std::shared_ptr<RPCContext> & context,
         Request && req,
         const String & req_id,
@@ -66,34 +67,42 @@ public:
         , stage(AsyncRequestStage::NEED_INIT)
         , finish_status(RPCContext::getStatusOK())
         , log(Logger::get(req_id, req_info))
-        , channel_writer(msg_channels_, req_info, log, data_size_in_queue, ReceiverMode::Async)
+        , channel_try_writer(grpc_recv_queues_, req_info, log, data_size_in_queue, ReceiverMode::Async)
+        , async_wait_rewrite_queue(std::move(async_wait_rewrite_queue_))
+        , kick_recv_tag(thisAsUnaryCallback())
         , close_conn(std::move(close_conn_))
     {
         start();
     }
 
     // execute will be called by RPC framework so it should be as light as possible.
+    // Do not do anything after processXXX functions.
     void execute(bool & ok) override
     {
         switch (stage)
         {
         case AsyncRequestStage::WAIT_RETRY:
+            // debug
             LOG_INFO(log, "Profiling: enter WAIT_RETRY");
             start();
             break;
         case AsyncRequestStage::WAIT_MAKE_READER:
+            // debug
             LOG_INFO(log, "Profiling: enter WAIT_MAKE_READER");
             processWaitMakeReader(ok);
             break;
         case AsyncRequestStage::WAIT_READ:
+            // debug
             LOG_INFO(log, "Profiling: enter WAIT_READ");
             processWaitRead(ok);
             break;
         case AsyncRequestStage::WAIT_REWRITE:
+            // debug
             LOG_INFO(log, "Profiling: enter WAIT_REWRITE");
             processWaitReWrite();
             break;
         case AsyncRequestStage::WAIT_FINISH:
+            // debug
             LOG_INFO(log, "Profiling: enter WAIT_FINISH");
             processWaitFinish();
             break;
@@ -147,8 +156,9 @@ private:
 
         if (unlikely(isChannelFull(send_res)))
         {
+            // debug
             LOG_INFO(log, "Profiling: channel full...");
-            stage = AsyncRequestStage::WAIT_REWRITE;
+            asyncWaitForRewrite();
             return;
         }
 
@@ -157,7 +167,7 @@ private:
 
     void processWaitReWrite()
     {
-        GRPCReceiveQueueRes res = channel_writer.tryReWrite<enable_fine_grained_shuffle>();
+        GRPCReceiveQueueRes res = channel_try_writer.tryReWrite<enable_fine_grained_shuffle>();
 
         if (unlikely(sendPacketHasError(res)))
         {
@@ -167,10 +177,13 @@ private:
 
         if (unlikely(isChannelFull(res)))
         {
+            // debug
             LOG_INFO(log, "Profiling: rewrite full again");
+            asyncWaitForRewrite();
             return;
         }
 
+        // debug
         LOG_INFO(log, "Profiling: rewrite successfully");
         stage = AsyncRequestStage::WAIT_READ;
         startAsyncRead();
@@ -236,7 +249,6 @@ private:
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(mu);
         rpc_context->makeAsyncReader(request, reader, cq, thisAsUnaryCallback());
-        channel_writer.enableTryWriteMode<AsyncReader>(reader, thisAsUnaryCallback());
     }
 
     bool retryOrDone(String done_msg)
@@ -260,7 +272,7 @@ private:
 
     GRPCReceiveQueueRes sendPacket()
     {
-        return channel_writer.tryWrite<enable_fine_grained_shuffle>(request.source_index, packet);
+        return channel_try_writer.tryWrite<enable_fine_grained_shuffle>(request.source_index, packet);
     }
 
     bool sendPacketHasError(GRPCReceiveQueueRes res)
@@ -279,6 +291,15 @@ private:
         return static_cast<UnaryCallback<bool> *>(this);
     }
 
+    // Do not do anything after this function
+    void asyncWaitForRewrite()
+    {
+        // Do not change the order of these two clauses.
+        // We must ensure that status is set before pushing async handler into queue
+        stage = AsyncRequestStage::WAIT_REWRITE;
+        async_wait_rewrite_queue->push(std::make_pair(&kick_recv_tag, reader->getClientContext()->c_call()));
+    }
+
     // won't be null and do not delete this pointer
     grpc::CompletionQueue * cq;
 
@@ -295,7 +316,11 @@ private:
     TrackedMppDataPacketPtr packet;
     Status finish_status;
     LoggerPtr log;
-    ReceiverChannelWriter channel_writer;
+
+    ReceiverChannelTryWriter channel_try_writer;
+    AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
+    KickReceiveTag kick_recv_tag;
+
     std::mutex mu;
 
     // Do not use any variable in AsyncRequestHandler after close_conn is called,

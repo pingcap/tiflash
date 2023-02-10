@@ -61,6 +61,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , max_buffer_size(std::max<size_t>(batch_packet_count, std::max(source_num, max_streams_) * 2))
     , connection_uncreated_num(source_num)
     , thread_manager(newThreadManager())
+    , async_wait_rewrite_queue(std::make_shared<AsyncRequestHandlerWaitQueue>())
     , live_local_connections(0)
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
@@ -73,6 +74,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     try
     {
         prepareMsgChannels();
+        prepareGRPCReceiveQueue();
         if (isReceiverForTiFlashStorage())
             rpc_context->sendMPPTaskToTiFlashStorageNode(exc_log, disaggregated_dispatch_reqs);
 
@@ -159,6 +161,13 @@ void ExchangeReceiverBase<RPCContext>::prepareMsgChannels()
             msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
     else
         msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::prepareGRPCReceiveQueue()
+{
+    for (auto & msg_channel : msg_channels)
+        grpc_recv_queue.emplace_back(msg_channel, exc_log);
 }
 
 template <typename RPCContext>
@@ -261,7 +270,8 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
     {
         async_handler_fine_grained_ptr.push_back(
             new AsyncRequestHandler<RPCContext, true>(
-                &msg_channels,
+                &grpc_recv_queue,
+                async_wait_rewrite_queue,
                 rpc_context,
                 std::move(request),
                 exc_log->identifier(),
@@ -275,7 +285,8 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
     {
         async_handler_no_fine_grained_ptr.push_back(
             new AsyncRequestHandler<RPCContext, false>(
-                &msg_channels,
+                &grpc_recv_queue,
+                async_wait_rewrite_queue,
                 rpc_context,
                 std::move(request),
                 exc_log->identifier(),
@@ -463,14 +474,14 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
     size_t stream_id,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
-    if (unlikely(stream_id >= msg_channels.size()))
+    if (unlikely(stream_id >= grpc_recv_queue.size()))
     {
-        LOG_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
+        LOG_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, grpc_recv_queue.size());
         return ExchangeReceiverResult::newError(0, "", "stream_id out of range");
     }
 
     std::shared_ptr<ReceivedMessage> recv_msg;
-    if (msg_channels[stream_id]->pop(recv_msg) != MPMCQueueResult::OK)
+    if (grpc_recv_queue[stream_id].pop(recv_msg) != MPMCQueueResult::OK)
     {
         return handleUnnormalChannel(block_queue, decoder_ptr);
     }

@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/AsyncRequestHandler.h>
+#include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Interpreters/Context.h>
 
 #include <future>
@@ -161,6 +162,7 @@ private:
 
 private:
     void prepareMsgChannels();
+    void prepareGRPCReceiveQueue();
     void addLocalConnectionNum();
     void createAsyncRequestHandler(Request && request);
     void destructAllAsyncRequestHandler();
@@ -194,6 +196,8 @@ private:
     DAGSchema schema;
 
     std::vector<MsgChannelPtr> msg_channels;
+    std::vector<GRPCReceiveQueue<ReceivedMessage>> grpc_recv_queue;
+    AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
 
     std::vector<AsyncRequestHandler<RPCContext, true> *> async_handler_fine_grained_ptr;
     std::vector<AsyncRequestHandler<RPCContext, false> *> async_handler_no_fine_grained_ptr;
