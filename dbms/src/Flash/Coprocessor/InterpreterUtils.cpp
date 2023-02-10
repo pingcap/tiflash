@@ -228,8 +228,8 @@ void executeGeneratedColumnPlaceholder(const std::vector<std::pair<UInt64, DataT
     if (generated_column_infos.empty())
         return;
     pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(stream, generated_column_infos, log->identifier());
-            stream->setExtraInfo("generated column placeholder above table scan");
+        stream = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(stream, generated_column_infos, log->identifier());
+        stream->setExtraInfo("generated column placeholder above table scan");
     });
 }
 } // namespace DB

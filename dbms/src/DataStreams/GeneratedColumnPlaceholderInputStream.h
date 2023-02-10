@@ -15,12 +15,12 @@
 #pragma once
 
 #include <Columns/ColumnNullable.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnsNumber.h>
 #include <Core/ColumnsWithTypeAndName.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
 
 namespace DB
 {
@@ -28,14 +28,14 @@ class GeneratedColumnPlaceholderBlockInputStream : public IProfilingBlockInputSt
 {
 public:
     GeneratedColumnPlaceholderBlockInputStream(
-            const BlockInputStreamPtr & input,
-            const std::vector<std::pair<UInt64, DataTypePtr>> & generated_column_infos_,
-            const String & req_id_)
+        const BlockInputStreamPtr & input,
+        const std::vector<std::pair<UInt64, DataTypePtr>> & generated_column_infos_,
+        const String & req_id_)
         : generated_column_infos(generated_column_infos_)
         , log(Logger::get(req_id_))
-        {
-            children.push_back(input);
-        }
+    {
+        children.push_back(input);
+    }
 
     String getName() const override { return NAME; }
     Block getHeader() const override
@@ -49,6 +49,7 @@ public:
     {
         return "generated_column_" + std::to_string(col_index);
     }
+
 protected:
     void readPrefix() override
     {
