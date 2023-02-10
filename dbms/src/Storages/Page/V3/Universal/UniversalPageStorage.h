@@ -114,7 +114,7 @@ public:
 
     DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot);
 
-    PageIdU64 getMaxId(const String & prefix) const;
+    PageIdU64 getMaxIdAfterRestart(const String & prefix) const;
 
     // We may skip the GC to reduce useless reading by default.
     bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);

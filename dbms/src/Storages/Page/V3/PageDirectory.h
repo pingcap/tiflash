@@ -339,7 +339,7 @@ public:
 
     UInt64 getMaxId() const;
 
-    UInt64 getMaxIdWithPrefix(const String & prefix) const;
+    UInt64 getMaxIdAfterRestartWithPrefix(const String & prefix) const;
 
     PageIdSet getAllPageIds();
 

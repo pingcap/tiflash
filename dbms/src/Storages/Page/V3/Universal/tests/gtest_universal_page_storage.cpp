@@ -258,14 +258,14 @@ TEST_F(UniPageStorageTest, GetMaxIdWithPrefix)
         page_storage->write(std::move(wb));
     }
 
-    ASSERT_EQ(page_storage->getMaxId(prefix1), write_count - 1);
-    ASSERT_EQ(page_storage->getMaxId(prefix2), write_count - 1);
-    ASSERT_EQ(page_storage->getMaxId(prefix3), write_count - 1);
+    ASSERT_EQ(page_storage->getMaxIdAfterRestart(prefix1), 0);
+    ASSERT_EQ(page_storage->getMaxIdAfterRestart(prefix2), 0);
+    ASSERT_EQ(page_storage->getMaxIdAfterRestart(prefix3), 0);
 
     reload();
-    ASSERT_EQ(page_storage->getMaxId(prefix1), write_count - 1);
-    ASSERT_EQ(page_storage->getMaxId(prefix2), write_count - 1);
-    ASSERT_EQ(page_storage->getMaxId(prefix3), write_count - 1);
+    ASSERT_EQ(page_storage->getMaxIdAfterRestart(prefix1), write_count - 1);
+    ASSERT_EQ(page_storage->getMaxIdAfterRestart(prefix2), write_count - 1);
+    ASSERT_EQ(page_storage->getMaxIdAfterRestart(prefix3), write_count - 1);
 }
 
 TEST(UniPageStorageIdTest, UniversalPageId)

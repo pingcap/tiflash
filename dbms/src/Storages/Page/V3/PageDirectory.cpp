@@ -1161,7 +1161,7 @@ UInt64 PageDirectory<Trait>::getMaxId() const
 }
 
 template <typename Trait>
-UInt64 PageDirectory<Trait>::getMaxIdWithPrefix(const String & prefix) const
+UInt64 PageDirectory<Trait>::getMaxIdAfterRestartWithPrefix(const String & prefix) const
 {
     if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
     {
@@ -1363,18 +1363,6 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
         {
             // Protected in write_lock
             max_page_id = std::max(max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
-            if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
-            {
-                // TODO: the value is just used at restart, if it slows down the performance, we can avoid calculating it at run time.
-                for (auto & item : max_page_id_by_prefix)
-                {
-                    if (r.page_id.hasPrefix(item.first))
-                    {
-                        item.second = std::max(item.second, Trait::PageIdTrait::getU64ID(r.page_id));
-                        break;
-                    }
-                }
-            }
 
             auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
             if (created)
