@@ -15,20 +15,15 @@
 #include <AggregateFunctions/AggregateFunctionArray.h>
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <Common/FailPoint.h>
-#include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/typeid_cast.h>
-#include <Common/wrapInvocable.h>
+#include <Common/ThresholdUtils.h>
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/Aggregator.h>
-#include <common/demangle.h>
-
 #include <array>
 #include <cassert>
-#include <cstddef>
-#include <iomanip>
 
 namespace DB
 {
@@ -164,6 +159,7 @@ void AggregatedDataVariants::convertToTwoLevel()
     default:
         throw Exception("Wrong data variant passed.", ErrorCodes::LOGICAL_ERROR);
     }
+    aggregator->useTwoLevelHashTable();
 }
 
 
@@ -227,9 +223,6 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
     , log(Logger::get(req_id))
     , is_cancelled([]() { return false; })
 {
-    if (current_memory_tracker)
-        memory_usage_before_aggregation = current_memory_tracker->get();
-
     aggregate_functions.resize(params.aggregates_size);
     for (size_t i = 0; i < params.aggregates_size; ++i)
         aggregate_functions[i] = params.aggregates[i].function.get();
@@ -722,8 +715,7 @@ bool Aggregator::executeOnBlock(
     const Block & block,
     AggregatedDataVariants & result,
     ColumnRawPtrs & key_columns,
-    AggregateColumns & aggregate_columns,
-    Int64 & local_delta_memory)
+    AggregateColumns & aggregate_columns)
 {
     if (is_cancelled())
         return true;
@@ -801,21 +793,14 @@ bool Aggregator::executeOnBlock(
     }
 
     size_t result_size = result.size();
-    Int64 current_memory_usage = 0;
-    if (current_memory_tracker)
-    {
-        current_memory_usage = current_memory_tracker->get();
-        auto updated_local_delta_memory = CurrentMemoryTracker::getLocalDeltaMemory();
-        auto local_delta_memory_diff = updated_local_delta_memory - local_delta_memory;
-        current_memory_usage += (local_memory_usage.fetch_add(local_delta_memory_diff) + local_delta_memory_diff);
-        local_delta_memory = updated_local_delta_memory;
-    }
+    auto result_size_bytes = result.bytesCount();
 
-    auto result_size_bytes = current_memory_usage - memory_usage_before_aggregation; /// Here all the results in the sum are taken into account, from different threads.
-
+    /// worth_convert_to_two_level is set to true if
+    /// 1. some other threads already convert to two level
+    /// 2. the result size exceeds threshold
     bool worth_convert_to_two_level
-        = (params.group_by_two_level_threshold && result_size >= params.group_by_two_level_threshold)
-        || (params.group_by_two_level_threshold_bytes && result_size_bytes >= static_cast<Int64>(params.group_by_two_level_threshold_bytes));
+        = use_two_level_hash_table || (group_by_two_level_threshold && result_size >= group_by_two_level_threshold)
+        || (group_by_two_level_threshold_bytes && result_size_bytes >= group_by_two_level_threshold_bytes);
 
     /** Converting to a two-level data structure.
       * It allows you to make, in the subsequent, an effective merge - either economical from memory or parallel.
@@ -824,16 +809,14 @@ bool Aggregator::executeOnBlock(
         result.convertToTwoLevel();
 
     /** Flush data to disk if too much RAM is consumed.
-      * Data can only be flushed to disk if a two-level aggregation structure is used.
+      * Data can only be flushed to disk if a two-level aggregation is supported.
       */
-    if (params.max_bytes_before_external_group_by
-        && result.isTwoLevel()
-        && current_memory_usage > static_cast<Int64>(params.max_bytes_before_external_group_by)
-        && worth_convert_to_two_level)
+    if (max_bytes_before_external_group_by
+        && (result.isTwoLevel() || result.isConvertibleToTwoLevel())
+        && result_size_bytes > max_bytes_before_external_group_by)
     {
-        /// todo: the memory usage is calculated by memory_tracker, it is not accurate since memory tracker
-        ///  will tracker all the memory usage for the task/query, need to record and maintain the memory usage
-        ///  in Aggregator directly.
+        if (!result.isTwoLevel())
+            result.convertToTwoLevel();
         spill(result);
     }
 
@@ -851,6 +834,13 @@ BlockInputStreams Aggregator::restoreSpilledData()
 {
     assert(spiller != nullptr);
     return spiller->restoreBlocks(0);
+}
+
+void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size)
+{
+    group_by_two_level_threshold = params.getGroupByTwoLevelThreshold();
+    group_by_two_level_threshold_bytes = getAverageThreshold(params.getGroupByTwoLevelThresholdBytes(), aggregated_data_variants_size);
+    max_bytes_before_external_group_by = getAverageThreshold(params.getMaxBytesBeforeExternalGroupBy(), aggregated_data_variants_size);
 }
 
 void Aggregator::spill(AggregatedDataVariants & data_variants)
@@ -979,14 +969,14 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         src_rows += block.rows();
         src_bytes += block.bytes();
 
-        if (!executeOnBlock(block, result, key_columns, aggregate_columns, params.local_delta_memory))
+        if (!executeOnBlock(block, result, key_columns, aggregate_columns))
             break;
     }
 
     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
     /// To do this, we pass a block with zero rows to aggregate.
     if (result.empty() && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
-        executeOnBlock(stream->getHeader(), result, key_columns, aggregate_columns, params.local_delta_memory);
+        executeOnBlock(stream->getHeader(), result, key_columns, aggregate_columns);
 
     double elapsed_seconds = watch.elapsedSeconds();
     size_t rows = result.size();
