@@ -16,14 +16,20 @@ mysql> drop table if exists test.t;
 
 mysql> create table test.t (id int, value decimal(7,4), c1 int, c2 int);
 
-mysql> insert into test.t values(1,1.9286,54,28);
+mysql> insert into test.t values (1,1.9285,54,28), (1,1.9286,54,28);
 
 mysql> alter table test.t set tiflash replica 1;
 
 func> wait_table test t
 
+# note: ref to https://github.com/pingcap/tiflash/issues/1682,
+# The precision of tiflash results is different from that of tidb, which is a compatibility issue
 mysql> use test; set session tidb_isolation_read_engines='tiflash'; select * from t where value = 54/28;
-
 mysql> use test; set session tidb_isolation_read_engines='tiflash'; select * from t where value = c1/c2;
++------+--------+------+------+
+| id   | value  | c1   | c2   |
++------+--------+------+------+
+|    1 | 1.9286 |   54 |   28 |
++------+--------+------+------+
 
 mysql> drop table if exists test.t;
