@@ -20,16 +20,16 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 
-#ifndef IN6ADDRSZ
-#define IN6ADDRSZ 16
+#ifndef INADDRSZ
+#define INADDRSZ 4
 #endif
 
 #ifndef INT16SZ
 #define INT16SZ sizeof(short)
 #endif
 
-#ifndef INADDRSZ
-#define INADDRSZ 4
+#ifndef IN6ADDRSZ
+#define IN6ADDRSZ 16
 #endif
 
 namespace DB
@@ -37,6 +37,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int ILLEGAL_COLUMN;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 } // namespace ErrorCodes
 
@@ -178,7 +179,7 @@ static inline UInt8 isIPv6(const char * src)
         const size_t n = tp - colonp;
         size_t i;
 
-        for (i = 1; i <= n; i++)
+        for (i = 1; i <= n; ++i)
         {
             endp[-i] = colonp[n - i];
             colonp[n - i] = 0;
@@ -190,64 +191,27 @@ static inline UInt8 isIPv6(const char * src)
     return 1;
 }
 
-class FunctionIsIPv4 : public IFunction
+struct IsIPv4Name
 {
-public:
     static constexpr auto name = "tiDBIsIPv4";
-    FunctionIsIPv4() = default;
-
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionIsIPv4>(); };
-
-    std::string getName() const override { return name; }
-    size_t getNumberOfArguments() const override { return 1; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        if (arguments.size() != 1)
-            throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
-        return std::make_shared<DataTypeUInt8>();
-    }
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
-    {
-        if (const auto * col_input = checkAndGetColumn<ColumnString>(block.getByPosition(arguments[0]).column.get()))
-        {
-            size_t size = block.getByPosition(arguments[0]).column->size();
-            const typename ColumnString::Chars_t & data = col_input->getChars();
-            const typename ColumnString::Offsets & offsets = col_input->getOffsets();
-
-            auto col_res = ColumnUInt8::create();
-            ColumnUInt8::Container & vec_res = col_res->getData();
-            vec_res.resize(size);
-
-            size_t prev_offset = 0;
-            for (size_t i = 0; i < size; ++i)
-            {
-                vec_res[i] = static_cast<UInt8>(isIPv4(reinterpret_cast<const char *>(&data[prev_offset])));
-                prev_offset = offsets[i];
-            }
-
-            block.getByPosition(result).column = std::move(col_res);
-        }
-        else
-            throw Exception(
-                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
-                ErrorCodes::ILLEGAL_COLUMN);
-    }
+};
+struct IsIPv6Name
+{
+    static constexpr auto name = "tiDBIsIPv6";
 };
 
-class FunctionIsIPv6 : public IFunction
+template <typename Name, UInt8(Function)(const char *)>
+class FunctionIsIPv4OrIsIPv6 : public IFunction
 {
 public:
-    static constexpr auto name = "tiDBIsIPv6";
-    FunctionIsIPv6() = default;
+    static constexpr auto name = Name::name;
+    FunctionIsIPv4OrIsIPv6() = default;
 
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionIsIPv6>(); };
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionIsIPv4OrIsIPv6>(); };
 
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -255,7 +219,10 @@ public:
             throw Exception(
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
+        if (!arguments[0]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}. Must be String.", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         return std::make_shared<DataTypeUInt8>();
     }
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -273,7 +240,7 @@ public:
             size_t prev_offset = 0;
             for (size_t i = 0; i < size; ++i)
             {
-                vec_res[i] = static_cast<UInt8>(isIPv6(reinterpret_cast<const char *>(&data[prev_offset])));
+                vec_res[i] = Function(reinterpret_cast<const char *>(&data[prev_offset]));
                 prev_offset = offsets[i];
             }
 
@@ -286,3 +253,7 @@ public:
     }
 };
 } // namespace DB
+
+#undef INADDRSZ
+#undef INT16SZ
+#undef IN6ADDRSZ
