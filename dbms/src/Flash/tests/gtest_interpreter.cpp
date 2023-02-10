@@ -14,6 +14,7 @@
 
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+#include <Debug/MockExecutor/TableScanBinder.h>
 
 namespace DB
 {
@@ -32,7 +33,7 @@ public:
         // 1. manually delete the gtest_interpreter.out
         // 2. call setRecord()
         // 3. ./gtests_dbms --gtest_filter=InterpreterExecuteTest.*
-        // setRecord();
+        setRecord();
 
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
@@ -391,6 +392,22 @@ try
                            .topN("s2", false, 10)
                            .build(context, DAGRequestType::list);
         runAndAssert(request, 20);
+    }
+}
+CATCH
+
+TEST_F(InterpreterExecuteTest, GeneratedColumn)
+try
+{
+    {
+        // col_1, col_2, gen_col.
+        auto request = context
+            .scan("test_db", "test_table")
+            .exchangeSender(tipb::PassThrough)
+            .build(context);
+        const auto & tbl_info = context.mockStorage()->getTableInfo("test_table");
+        insertGeneratedColumnToTableScanDAGRequest(tbl_info.columns.size(), request);
+        runAndAssert(request, 1);
     }
 }
 CATCH

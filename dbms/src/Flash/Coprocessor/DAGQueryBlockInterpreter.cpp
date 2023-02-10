@@ -184,6 +184,16 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         pipeline.streams.insert(pipeline.streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }
+    std::vector<std::pair<UInt64, DataTypePtr>> generated_column_infos;
+    for (Int64 i = 0; i < table_scan.getColumnSize(); i++)
+    {
+        if (table_scan.getColumns()[i].hasGeneratedColumnFlag())
+        {
+            auto data_type = getDataTypeByColumnInfoForComputingLayer(table_scan.getColumns()[i]);
+            generated_column_infos.push_back(std::make_pair(i, data_type));
+        }
+    }
+    executeGeneratedColumnPlaceholder(generated_column_infos, log, pipeline);
 }
 
 

@@ -427,7 +427,7 @@ void MockStorage::addTableInfo(const String & name, const MockColumnInfoVec & co
     table_infos[name] = table_info;
 }
 
-TableInfo MockStorage::getTableInfo(const String & name)
+TableInfo & MockStorage::getTableInfo(const String & name)
 {
     return table_infos[name];
 }

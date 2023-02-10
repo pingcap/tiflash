@@ -19,6 +19,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
+#include <DataStreams/GeneratedColumnPlaceholderInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MultiplexInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
@@ -336,6 +337,8 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     /// handle timezone/duration cast for local and remote table scan.
     executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
+
+    executeGeneratedColumnPlaceholder(generated_column_infos, log, pipeline);
 
     /// handle filter conditions for local and remote table scan.
     if (filter_conditions.hasValue())
@@ -940,6 +943,15 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
         auto const & ci = table_scan.getColumns()[i];
         const ColumnID cid = ci.id;
 
+        if (ci.hasGeneratedColumnFlag())
+        {
+            LOG_WARNING(log, "got generated column");
+            auto data_type = getDataTypeByColumnInfoForComputingLayer(ci);
+            generated_column_infos.push_back(std::make_pair(i, data_type));
+            source_columns_tmp.emplace_back(NameAndTypePair{GeneratedColumnPlaceholderBlockInputStream::getColumnName(i), data_type});
+            continue;
+        }
+        LOG_WARNING(log, "no got generated column");
         // Column ID -1 return the handle column
         String name;
         if (cid == TiDBPkColumnID)

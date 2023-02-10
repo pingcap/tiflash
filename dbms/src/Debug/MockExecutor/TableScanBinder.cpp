@@ -17,6 +17,8 @@
 #include <Debug/MockExecutor/TableScanBinder.h>
 #include <Storages/MutableSupport.h>
 
+#include <cstdlib>
+
 namespace DB::mock
 {
 bool TableScanBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, const MPPInfo &, const Context &)
@@ -54,10 +56,23 @@ TableID TableScanBinder::getTableId() const
 void TableScanBinder::setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info) const
 {
     auto names = splitQualifiedName(dag_column_info.first);
+    Int64 column_id = 0;
+    if (names.column_name == MutableSupport::tidb_pk_column_name)
+        column_id = -1;
+    else if (dag_column_info.second.hasGeneratedColumnFlag())
+        column_id = dag_column_info.second.id;
+    else
+        column_id = table_info.getColumnID(names.column_name);
+    setTipbColumnInfo(ci, dag_column_info, column_id);
+}
+
+void TableScanBinder::setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info, Int64 column_id)
+{
+    auto names = splitQualifiedName(dag_column_info.first);
     if (names.column_name == MutableSupport::tidb_pk_column_name)
         ci->set_column_id(-1);
     else
-        ci->set_column_id(table_info.getColumnID(names.column_name));
+        ci->set_column_id(column_id);
     ci->set_tp(dag_column_info.second.tp);
     ci->set_flag(dag_column_info.second.flag);
     ci->set_columnlen(dag_column_info.second.flen);
@@ -119,6 +134,26 @@ ExecutorBinderPtr compileTableScan(size_t & executor_index, TableInfo & table_in
         ci.setPriKeyFlag();
         ci.setNotNullFlag();
         ts_output.emplace_back(std::make_pair(MutableSupport::tidb_pk_column_name, std::move(ci)));
+    }
+    // if (random_gennerated_column)
+    int gen_col_num = 100;
+    auto ori_ts_output = ts_output;
+    size_t ori_output_index = 0;
+    for (size_t i = 0; i < ori_ts_output.size() + gen_col_num; ++i)
+    {
+        if (std::rand() % 2 == 0 || ori_output_index >= ori_ts_output.size())
+        {
+            TiDB::ColumnInfo ci;
+            ci.tp = TiDB::TP::TypeLong;
+            ci.flag = TiDB::ColumnFlag::ColumnFlagGeneratedColumn;
+            String gen_column_name = fmt::format("gen_col_{}", i);
+            ci.name = gen_column_name;
+            ts_output.emplace_back(std::make_pair(db + "." + table_name + "." + gen_column_name, std::move(ci)));
+        }
+        else
+        {
+            ts_output.emplace_back(ori_ts_output[ori_output_index]);
+        }
     }
 
     return std::make_shared<mock::TableScanBinder>(executor_index, ts_output, table_info);

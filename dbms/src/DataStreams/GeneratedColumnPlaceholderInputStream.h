@@ -1,0 +1,97 @@
+// Copyright 2023 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#pragma once
+
+#include <Columns/ColumnNullable.h>
+#include <Core/ColumnsWithTypeAndName.h>
+#include <Columns/ColumnsNumber.h>
+#include <Columns/ColumnString.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
+
+namespace DB
+{
+class GeneratedColumnPlaceholderBlockInputStream : public IProfilingBlockInputStream
+{
+public:
+    GeneratedColumnPlaceholderBlockInputStream(
+            const BlockInputStreamPtr & input,
+            const std::vector<std::pair<UInt64, DataTypePtr>> & generated_column_infos_,
+            const String & req_id_)
+        : generated_column_infos(generated_column_infos_)
+        , log(Logger::get(req_id_))
+        {
+            children.push_back(input);
+        }
+
+    String getName() const override { return NAME; }
+    Block getHeader() const override
+    {
+        Block block = children.back()->getHeader();
+        insertColumns(block, /*insert_null=*/false);
+        return block;
+    }
+
+    static String getColumnName(UInt64 col_index)
+    {
+        return "generated_column_" + std::to_string(col_index);
+    }
+protected:
+    void readPrefix() override
+    {
+        RUNTIME_CHECK(!generated_column_infos.empty());
+        // Validation check.
+        for (size_t i = 1; i < generated_column_infos.size(); ++i)
+        {
+            RUNTIME_CHECK(generated_column_infos[i].first > generated_column_infos[i - 1].first);
+        }
+    }
+
+    Block readImpl() override
+    {
+        Block block = children.back()->read();
+        insertColumns(block, /*insert_null=*/true);
+        return block;
+    }
+
+private:
+    void insertColumns(Block & block, bool insert_null) const
+    {
+        if (!block)
+            return;
+
+        ColumnPtr nested_column = ColumnString::create();
+        for (const auto & ele : generated_column_infos)
+        {
+            auto col_index = ele.first;
+            auto data_type = ele.second;
+            ColumnPtr null_map;
+            if (insert_null)
+                null_map = ColumnUInt8::create(block.rows(), 1);
+            else
+                null_map = ColumnUInt8::create();
+            if (!data_type->isNullable())
+                data_type = std::make_shared<DataTypeNullable>(data_type);
+            ColumnPtr column = ColumnNullable::create(nested_column, std::move(null_map));
+            block.insert(col_index, ColumnWithTypeAndName{column, data_type, getColumnName(col_index)});
+        }
+    }
+
+    static constexpr auto NAME = "GeneratedColumnPlaceholder";
+    const std::vector<std::pair<UInt64, DataTypePtr>> generated_column_infos;
+    const LoggerPtr log;
+};
+} // namespace DB

@@ -90,6 +90,7 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
     const LoggerPtr & log,
     const TiDBTableScan & table_scan)
 {
+    LOG_INFO(log, "gjt debug in PhysicalMockTableScan::build(");
     assert(context.isTest());
     auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, table_scan);
 
@@ -105,12 +106,14 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
 
 void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
 {
+    LOG_INFO(log, "gjt debug in PhysicalMockTableScan 2");
     assert(pipeline.streams.empty());
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
 void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
+    LOG_INFO(log, "gjt debug in PhysicalMockTableScan 3");
     group_builder.init(mock_streams.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {

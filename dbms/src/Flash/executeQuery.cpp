@@ -153,14 +153,21 @@ BlockIO executeAsBlockIO(Context & context, bool internal)
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
+    auto & dag_context = *context.getDAGContext();
+    const auto & logger = dag_context.log;
+    LOG_INFO(logger, fmt::format("gjt debug queryExecute {} {} {} {}", context.isExecutorTest(),
+                context.isInterpreterTest(),  context.getSettingsRef().enable_planner,
+                context.getSettingsRef().enable_pipeline));
     // now only support pipeline model in executor/interpreter test.
     if ((context.isExecutorTest() || context.isInterpreterTest())
         && context.getSettingsRef().enable_planner
         && context.getSettingsRef().enable_pipeline)
     {
+    LOG_INFO(logger, "gjt debug queryExecute 1");
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);
     }
+    LOG_INFO(logger, "gjt debug queryExecute 2");
     return std::make_unique<DataStreamExecutor>(executeAsBlockIO(context, internal));
 }
 } // namespace DB

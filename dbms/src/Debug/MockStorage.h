@@ -105,7 +105,7 @@ public:
     /// for MPP Tasks, it will split data by partition num, then each MPP service will have a subset of mock data.
     ColumnsWithTypeAndName getColumnsForMPPTableScan(const TiDBTableScan & table_scan, Int64 partition_id, Int64 partition_num);
 
-    TableInfo getTableInfo(const String & name);
+    TableInfo & getTableInfo(const String & name);
     TableInfo getTableInfoForDeltaMerge(const String & name);
 
     size_t getTableScanConcurrencyHint(const TiDBTableScan & table_scan);
