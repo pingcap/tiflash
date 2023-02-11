@@ -21,7 +21,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Planner/plans/PhysicalExpand.h>
+#include <Flash/Planner/Plans/PhysicalExpand.h>
 #include <Interpreters/Context.h>
 #include <fmt/format.h>
 
@@ -45,7 +45,7 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     }
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
-    ExpressionActionsPtr before_expand_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
+    ExpressionActionsPtr before_expand_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
 
 
     auto shared_expand = analyzer.buildExpandGroupingColumns(expand, before_expand_actions);
@@ -71,9 +71,9 @@ PhysicalPlanNodePtr PhysicalExpand::build(
 }
 
 
-void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline, Context & context)
+void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
 {
-    auto expand_actions = PhysicalPlanHelper::newActions(child_pipeline.firstStream()->getHeader(), context);
+    auto expand_actions = PhysicalPlanHelper::newActions(child_pipeline.firstStream()->getHeader());
     expand_actions->add(ExpressionAction::expandSource(shared_expand));
     String expand_extra_info = fmt::format("expand, expand_executor_id = {}", execId());
     child_pipeline.transform([&](auto & stream) {
@@ -84,8 +84,8 @@ void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline, Context & con
 
 void PhysicalExpand::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    child->transform(pipeline, context, max_streams);
-    expandTransform(pipeline, context);
+    child->buildBlockInputStream(pipeline, context, max_streams);
+    expandTransform(pipeline);
 }
 
 void PhysicalExpand::finalize(const Names & parent_require)

@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Planner/plans/PhysicalUnary.h>
+#include <Flash/Planner/Plans/PhysicalUnary.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Join.h>
 #include <tipb/executor.pb.h>
@@ -45,12 +45,12 @@ public:
 
     void finalize(const Names & parent_require) override;
 
-    void expandTransform(DAGPipeline & child_pipeline, Context & context);
+    void expandTransform(DAGPipeline & child_pipeline);
 
     const Block & getSampleBlock() const override;
 
 private:
-    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams);
     std::shared_ptr<Expand> shared_expand;
     Block sample_block;
 };

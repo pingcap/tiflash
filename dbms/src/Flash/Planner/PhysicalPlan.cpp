@@ -24,7 +24,7 @@
 #include <Flash/Planner/Plans/PhysicalAggregation.h>
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/Plans/PhysicalExchangeSender.h>
-#include <Flash/Planner/plans/PhysicalExpand.h>
+#include <Flash/Planner/Plans/PhysicalExpand.h>
 #include <Flash/Planner/Plans/PhysicalFilter.h>
 #include <Flash/Planner/Plans/PhysicalJoin.h>
 #include <Flash/Planner/Plans/PhysicalLimit.h>
@@ -37,6 +37,7 @@
 #include <Flash/Planner/Plans/PhysicalWindow.h>
 #include <Flash/Planner/Plans/PhysicalWindowSort.h>
 #include <Flash/Planner/optimize.h>
+#include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 
 namespace DB

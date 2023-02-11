@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
 namespace DB
