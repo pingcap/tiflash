@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Common/TiFlashMetrics.h>
+#include <Common/getNumberOfCPUCores.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Executor/DataStreamExecutor.h>
@@ -24,6 +26,8 @@ DataStreamExecutor::DataStreamExecutor(const BlockIO & block_io)
     , data_stream(block_io.in)
 {
     assert(data_stream);
+    thread_cnt_before_execute = GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Value();
+    estimate_thread_cnt = data_stream->estimateNewThreadCount();
 }
 
 ExecutionResult DataStreamExecutor::execute(ResultHandler result_handler)
@@ -65,11 +69,19 @@ String DataStreamExecutor::toString() const
 
 int DataStreamExecutor::estimateNewThreadCount()
 {
-    return data_stream->estimateNewThreadCount();
+    return estimate_thread_cnt;
 }
 
 RU DataStreamExecutor::collectRequestUnit()
 {
-    return toRU(data_stream->estimateCPUTimeNs());
+    auto origin_cpu_time_ns = data_stream->estimateCPUTimeNs();
+    UInt64 total_thread_cnt = std::max(1, (thread_cnt_before_execute + estimate_thread_cnt));
+    size_t physical_cpu_cores = getNumberOfPhysicalCPUCores();
+    if (origin_cpu_time_ns <= 0 || total_thread_cnt <= physical_cpu_cores)
+        return toRU(origin_cpu_time_ns);
+
+    UInt64 per_thread_cpu_time_ns = ceil(static_cast<double>(origin_cpu_time_ns) / total_thread_cnt);
+    auto cpu_time_ns = per_thread_cpu_time_ns * physical_cpu_cores;
+    return toRU(cpu_time_ns);
 }
 } // namespace DB

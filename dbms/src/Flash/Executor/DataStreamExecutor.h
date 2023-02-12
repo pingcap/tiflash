@@ -41,5 +41,7 @@ protected:
 
 protected:
     BlockInputStreamPtr data_stream;
+    uint64_t thread_cnt_before_execute = 0;
+    uint64_t estimate_thread_cnt = 0;
 };
 } // namespace DB
