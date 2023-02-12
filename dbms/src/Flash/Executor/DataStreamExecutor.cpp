@@ -83,8 +83,8 @@ RU DataStreamExecutor::collectRequestUnit()
     // When the number of threads is greater than the number of cpu cores,
     // BlockInputStream's estimated cpu time will be much greater than the actual value.
     double per_thread_cpu_time_ns = static_cast<double>(origin_cpu_time_ns) / estimate_thread_cnt;
-    // It can be assumed that per_core_cpu_time = per_thread_cpu_time_ns * total_thread_cnt.
-    UInt64 per_core_cpu_time_ns = ceil(static_cast<double>(per_thread_cpu_time_ns) / total_thread_cnt);
+    // It can be assumed that per_core_cpu_time = per_thread_cpu_time_ns * (total_thread_cnt / physical_cpu_cores).
+    UInt64 per_core_cpu_time_ns = ceil(static_cast<double>(per_thread_cpu_time_ns) / total_thread_cnt) * physical_cpu_cores;
     auto cpu_time_ns = per_core_cpu_time_ns * physical_cpu_cores;
     return toRU(cpu_time_ns);
 }
