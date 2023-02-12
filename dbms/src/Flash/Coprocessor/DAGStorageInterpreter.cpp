@@ -946,6 +946,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
 
         if (ci.hasGeneratedColumnFlag())
         {
+            LOG_DEBUG(log, "got column({}) with generated column flag", i);
             auto data_type = getDataTypeByColumnInfoForComputingLayer(ci);
             generated_column_infos.push_back(std::make_pair(i, data_type));
             source_columns_tmp.emplace_back(NameAndTypePair{GeneratedColumnPlaceholderBlockInputStream::getColumnName(i), data_type});

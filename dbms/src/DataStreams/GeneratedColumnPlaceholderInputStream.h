@@ -41,7 +41,7 @@ public:
     Block getHeader() const override
     {
         Block block = children.back()->getHeader();
-        insertColumns(block, /*insert_null=*/false);
+        insertColumns(block, /*insert_data=*/false);
         return block;
     }
 
@@ -64,29 +64,25 @@ protected:
     Block readImpl() override
     {
         Block block = children.back()->read();
-        insertColumns(block, /*insert_null=*/true);
+        insertColumns(block, /*insert_data=*/true);
         return block;
     }
 
 private:
-    void insertColumns(Block & block, bool insert_null) const
+    void insertColumns(Block & block, bool insert_data) const
     {
         if (!block)
             return;
 
-        ColumnPtr nested_column = ColumnString::create();
         for (const auto & ele : generated_column_infos)
         {
             auto col_index = ele.first;
             auto data_type = ele.second;
-            ColumnPtr null_map;
-            if (insert_null)
-                null_map = ColumnUInt8::create(block.rows(), 1);
+            ColumnPtr column = nullptr;
+            if (insert_data)
+                column = data_type->createColumnConstWithDefaultValue(block.rows());
             else
-                null_map = ColumnUInt8::create();
-            if (!data_type->isNullable())
-                data_type = std::make_shared<DataTypeNullable>(data_type);
-            ColumnPtr column = ColumnNullable::create(nested_column, std::move(null_map));
+                column = data_type->createColumn();
             block.insert(col_index, ColumnWithTypeAndName{column, data_type, getColumnName(col_index)});
         }
     }
