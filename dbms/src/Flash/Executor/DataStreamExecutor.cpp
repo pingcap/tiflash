@@ -80,8 +80,12 @@ RU DataStreamExecutor::collectRequestUnit()
     if (origin_cpu_time_ns <= 0 || total_thread_cnt <= physical_cpu_cores)
         return toRU(origin_cpu_time_ns);
 
-    UInt64 per_thread_cpu_time_ns = ceil(static_cast<double>(origin_cpu_time_ns) / total_thread_cnt);
-    auto cpu_time_ns = per_thread_cpu_time_ns * physical_cpu_cores;
+    // When the number of threads is greater than the number of cpu cores,
+    // BlockInputStream's estimated cpu time will be much greater than the actual value.
+    double per_thread_cpu_time_ns = static_cast<double>(origin_cpu_time_ns) / estimate_thread_cnt;
+    // It can be assumed that per_core_cpu_time = per_thread_cpu_time_ns * total_thread_cnt.
+    UInt64 per_core_cpu_time_ns = ceil(static_cast<double>(per_thread_cpu_time_ns) / total_thread_cnt);
+    auto cpu_time_ns = per_core_cpu_time_ns * physical_cpu_cores;
     return toRU(cpu_time_ns);
 }
 } // namespace DB
