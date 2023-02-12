@@ -48,12 +48,6 @@ public:
         : prefix(std::move(prefix_))
     {}
 
-    UniversalWriteBatch(UniversalWriteBatch && rhs)
-        : prefix(std::move(rhs.prefix))
-        , writes(std::move(rhs.writes))
-        , total_data_size(rhs.total_data_size)
-    {}
-
     void putPage(PageIdU64 page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
         putPage(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag, read_buffer, size, data_sizes);
@@ -147,12 +141,6 @@ public:
         return count;
     }
 
-    void swap(UniversalWriteBatch & o)
-    {
-        writes.swap(o.writes);
-        std::swap(o.total_data_size, total_data_size);
-    }
-
     void merge(UniversalWriteBatch & rhs)
     {
         writes.reserve(writes.size() + rhs.writes.size());
@@ -205,6 +193,19 @@ public:
             },
             ",");
         return fmt_buffer.toString();
+    }
+
+    UniversalWriteBatch(UniversalWriteBatch && rhs)
+        : prefix(std::move(rhs.prefix))
+        , writes(std::move(rhs.writes))
+        , total_data_size(rhs.total_data_size)
+    {}
+
+    void swap(UniversalWriteBatch & o)
+    {
+        prefix.swap(o.prefix);
+        writes.swap(o.writes);
+        std::swap(o.total_data_size, total_data_size);
     }
 
 private:

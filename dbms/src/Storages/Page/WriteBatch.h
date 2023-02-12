@@ -82,12 +82,6 @@ public:
     explicit WriteBatch(NamespaceId namespace_id_)
         : namespace_id(namespace_id_)
     {}
-    WriteBatch(WriteBatch && rhs)
-        : writes(std::move(rhs.writes))
-        , sequence(rhs.sequence)
-        , namespace_id(rhs.namespace_id)
-        , total_data_size(rhs.total_data_size)
-    {}
 
     void putPage(PageIdU64 page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
@@ -187,13 +181,6 @@ public:
         return count;
     }
 
-    void swap(WriteBatch & o)
-    {
-        writes.swap(o.writes);
-        std::swap(o.total_data_size, total_data_size);
-        std::swap(o.sequence, sequence);
-    }
-
     void copyWrite(const Write write)
     {
         writes.emplace_back(write);
@@ -272,6 +259,21 @@ public:
             },
             ",");
         return fmt_buffer.toString();
+    }
+
+    WriteBatch(WriteBatch && rhs)
+        : writes(std::move(rhs.writes))
+        , sequence(rhs.sequence)
+        , namespace_id(rhs.namespace_id)
+        , total_data_size(rhs.total_data_size)
+    {}
+
+    void swap(WriteBatch & o)
+    {
+        writes.swap(o.writes);
+        std::swap(o.sequence, sequence);
+        std::swap(o.namespace_id, namespace_id);
+        std::swap(o.total_data_size, total_data_size);
     }
 
 private:

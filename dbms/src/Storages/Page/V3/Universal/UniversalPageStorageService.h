@@ -22,6 +22,9 @@ namespace DB
 class UniversalPageStorageService;
 using UniversalPageStorageServicePtr = std::shared_ptr<UniversalPageStorageService>;
 
+// This is wrapper class for UniversalPageStorage.
+// It mainly manages background tasks like gc for UniversalPageStorage.
+// It is like StoragePool for Page V2, and GlobalStoragePool for Page V3.
 class UniversalPageStorageService final
 {
 public:
