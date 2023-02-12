@@ -339,6 +339,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
 
     executeGeneratedColumnPlaceholder(generated_column_infos, log, pipeline);
+    recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
 
     /// handle filter conditions for local and remote table scan.
     if (filter_conditions.hasValue())
