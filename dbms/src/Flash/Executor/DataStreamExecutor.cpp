@@ -27,7 +27,7 @@ DataStreamExecutor::DataStreamExecutor(const BlockIO & block_io)
 {
     assert(data_stream);
     thread_cnt_before_execute = GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Value();
-    estimate_thread_cnt = data_stream->estimateNewThreadCount();
+    estimate_thread_cnt = std::max(data_stream->estimateNewThreadCount(), 1);
 }
 
 ExecutionResult DataStreamExecutor::execute(ResultHandler result_handler)
@@ -75,7 +75,7 @@ int DataStreamExecutor::estimateNewThreadCount()
 RU DataStreamExecutor::collectRequestUnit()
 {
     auto origin_cpu_time_ns = data_stream->estimateCPUTimeNs();
-    UInt64 total_thread_cnt = std::max(1, (thread_cnt_before_execute + estimate_thread_cnt));
+    UInt64 total_thread_cnt = thread_cnt_before_execute + estimate_thread_cnt;
     size_t physical_cpu_cores = getNumberOfPhysicalCPUCores();
     if (origin_cpu_time_ns <= 0 || total_thread_cnt <= physical_cpu_cores)
         return toRU(origin_cpu_time_ns);
