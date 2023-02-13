@@ -74,18 +74,37 @@ int DataStreamExecutor::estimateNewThreadCount()
 
 RU DataStreamExecutor::collectRequestUnit()
 {
-    auto origin_cpu_time_ns = data_stream->estimateCPUTimeNs();
-    UInt64 total_thread_cnt = thread_cnt_before_execute + estimate_thread_cnt;
-    size_t physical_cpu_cores = getNumberOfPhysicalCPUCores();
-    if (origin_cpu_time_ns <= 0 || total_thread_cnt <= physical_cpu_cores)
-        return toRU(origin_cpu_time_ns);
+    // The cputime returned by BlockInputSrream is a count of the execution time of each thread.
+    // However, cputime here is imprecise and is affected by thread scheduling and condition_cv.wait.
+    // The following attempts to eliminate the effects of thread scheduling.
 
+    auto execute_time_ns = data_stream->estimateCPUTimeNs();
+    UInt64 total_thread_cnt = thread_cnt_before_execute + estimate_thread_cnt;
+    size_t logical_cpu_cores = getNumberOfLogicalCPUCores();
     // When the number of threads is greater than the number of cpu cores,
     // BlockInputStream's estimated cpu time will be much greater than the actual value.
-    double per_thread_cpu_time_ns = static_cast<double>(origin_cpu_time_ns) / estimate_thread_cnt;
-    // It can be assumed that per_core_cpu_time = per_thread_cpu_time_ns * (total_thread_cnt / physical_cpu_cores).
-    UInt64 per_core_cpu_time_ns = ceil(per_thread_cpu_time_ns / total_thread_cnt) * physical_cpu_cores;
-    auto cpu_time_ns = per_core_cpu_time_ns * physical_cpu_cores;
+    if (execute_time_ns <= 0 || total_thread_cnt <= logical_cpu_cores)
+        return toRU(execute_time_ns);
+
+    // Here we use `execute_time_ns / thread_cnt` to get the average execute time of each thread.
+    // So we have `per_thread_execute_time_ns = execute_time_ns / estimate_thread_cnt`.
+    // Since a cpu core executes several threads, think of `execute_time_of_thread_A = cputime_of_thread_A + cputime_of_other_thread`.
+    // Assuming that the cputime of other threads is the same as thread A, then we have `execute_time_of_thread_A = total_thread_cnt * cputime_of_thread_A`.
+    // Assuming that threads is divided equally among all cpu cores, then `the number of threads allocated to cpu core A = total_thread_cnt / logical_cpu_cores`.
+    // So we have `per_thread_cputime_ns = per_thread_execute_time_ns / (total_thread_cnt / logical_cpu_cores)`.
+    // And the number of threads of `data_stream` executed by one cpu core is `estimate_thread_cnt / logical_cpu_cores`.
+    // So we have `per_core_cputime_ns = per_thread_cputime_ns * (estimate_thread_cnt / logical_cpu_cores)`
+    // So it can be assumed that
+    //     per_core_cpu_time = per_thread_cputime_ns * (estimate_thread_cnt / logical_cpu_cores)
+    //                       = per_thread_execute_time_ns / (total_thread_cnt / logical_cpu_cores) * (estimate_thread_cnt / logical_cpu_cores)
+    //                       = per_thread_execute_time_ns / total_thread_cnt * estimate_thread_cnt
+    // So that we have
+    //     cputime_ns = per_core_cpu_time * logical_cpu_cores
+    //                = per_thread_execute_time_ns / total_thread_cnt * estimate_thread_cnt * logical_cpu_cores
+    //                = execute_time_ns / total_thread_cnt / estimate_thread_cnt * estimate_thread_cnt * logical_cpu_cores
+    //                = execute_time_ns / total_thread_cnt * logical_cpu_cores
+    auto cpu_time_ns = ceil(static_cast<double>(execute_time_ns) / total_thread_cnt * logical_cpu_cores);
+    // But there is still no way to eliminate the effect of `condition_cv.wait` here...
     return toRU(cpu_time_ns);
 }
 } // namespace DB
