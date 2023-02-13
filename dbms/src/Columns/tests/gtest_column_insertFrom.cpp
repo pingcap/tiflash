@@ -58,6 +58,9 @@ public:
         /// Test insertManyFrom
         for (size_t i = 0; i < 3; ++i)
             cols[0]->insertFrom(*column_ptr, 1);
+        for (size_t i = 0; i < 3; ++i)
+            cols[0]->insertFrom(*column_ptr, 1);
+        cols[1]->insertManyFrom(*column_ptr, 1, 3);
         cols[1]->insertManyFrom(*column_ptr, 1, 3);
         {
             ColumnWithTypeAndName ref(std::move(cols[0]), col_with_type_and_name.type, "");
@@ -74,8 +77,12 @@ public:
         position_vec.push_back(0);
         position_vec.push_back(2);
         position_vec.push_back(4);
+        position_vec.push_back(0);
+        position_vec.push_back(2);
+        position_vec.push_back(4);
         for (size_t position : position_vec)
             cols[0]->insertFrom(*column_ptr, position);
+        cols[1]->insertDisjunctFrom(*column_ptr, position_vec);
         cols[1]->insertDisjunctFrom(*column_ptr, position_vec);
         {
             ColumnWithTypeAndName ref(std::move(cols[0]), col_with_type_and_name.type, "");
@@ -90,6 +97,9 @@ public:
         }
         for (size_t i = 0; i < 3; ++i)
             cols[0]->insertDefault();
+        for (size_t i = 0; i < 3; ++i)
+            cols[0]->insertDefault();
+        cols[1]->insertManyDefaults(3);
         cols[1]->insertManyDefaults(3);
         {
             ColumnWithTypeAndName ref(std::move(cols[0]), col_with_type_and_name.type, "");

@@ -305,7 +305,6 @@ public:
         offsets.reserve(offsets.size() + length);
         for (size_t i = 0; i < length; ++i)
         {
-            chars.push_back(0);
             offsets.push_back(offsets.empty() ? 1 : (offsets.back() + 1));
         }
     }
