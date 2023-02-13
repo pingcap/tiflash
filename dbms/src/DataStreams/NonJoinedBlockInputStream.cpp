@@ -226,12 +226,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
         current_not_mapped_row = current_not_mapped_row->next;
         setNextCurrentNotMappedRow();
         if (rows_added == max_block_size)
-        {
-            /// Fill left columns with defaults
-            for (size_t j = 0; j < num_columns_left; ++j)
-                mutable_columns_left[j]->insertManyDefaults(rows_added);
-            return rows_added;
-        }
+            break;
     }
     /// Fill left columns with defaults
     for (size_t j = 0; j < num_columns_left; ++j)
@@ -240,6 +235,9 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
         /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
         /// for detailed explanation
         mutable_columns_left[j]->insertManyDefaults(rows_added);
+
+    if (rows_added == max_block_size)
+        return rows_added;
 
     /// then add rows that in hash table, but not joined
     if (!position)
