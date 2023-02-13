@@ -583,9 +583,10 @@ void StoragePool::startup(ExternalPageCallbacks && callbacks)
     }
     case PageStorageRunMode::UNI_PS:
     {
+        // For uni ps, the GC is handled by `UniversalPageStorageService`, register callbacks with prefix for this table
         UniversalExternalPageCallbacks us_callbacks;
-        us_callbacks.remover = callbacks.remover;
-        us_callbacks.scanner = callbacks.scanner;
+        us_callbacks.remover = std::move(callbacks.remover);
+        us_callbacks.scanner = std::move(callbacks.scanner);
         us_callbacks.prefix = UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id);
         uni_ps->registerUniversalExternalPagesCallbacks(us_callbacks);
         break;
