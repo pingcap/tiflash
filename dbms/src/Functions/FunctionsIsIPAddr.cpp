@@ -20,8 +20,8 @@ namespace DB
 
 void registerFunctionsIsIPAddr(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionIsIPv4OrIsIPv6<IsIPv4Name, isIPv4>>();
-    factory.registerFunction<FunctionIsIPv4OrIsIPv6<IsIPv6Name, isIPv6>>();
+    factory.registerFunction<FunctionIsIPv4OrIsIPv6<CheckIsIPv4Impl>>();
+    factory.registerFunction<FunctionIsIPv4OrIsIPv6<CheckIsIPv6Impl>>();
 }
 
 } // namespace DB
