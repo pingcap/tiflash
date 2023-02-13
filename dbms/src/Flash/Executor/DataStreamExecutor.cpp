@@ -103,8 +103,10 @@ RU DataStreamExecutor::collectRequestUnit()
     //                = per_thread_execute_time_ns / total_thread_cnt * estimate_thread_cnt * logical_cpu_cores
     //                = execute_time_ns / total_thread_cnt / estimate_thread_cnt * estimate_thread_cnt * logical_cpu_cores
     //                = execute_time_ns / total_thread_cnt * logical_cpu_cores
-    auto cpu_time_ns = ceil(static_cast<double>(execute_time_ns) / total_thread_cnt * logical_cpu_cores);
+    auto cpu_time_ns = static_cast<double>(execute_time_ns) / total_thread_cnt * logical_cpu_cores;
     // But there is still no way to eliminate the effect of `condition_cv.wait` here...
-    return toRU(cpu_time_ns);
+    // We can assume `condition.wait` takes half of datastream execute time.
+    cpu_time_ns /= 2;
+    return toRU(ceil(cpu_time_ns));
 }
 } // namespace DB
