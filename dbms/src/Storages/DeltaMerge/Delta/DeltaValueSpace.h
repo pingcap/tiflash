@@ -30,6 +30,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefinesBase.h>
 
@@ -300,7 +301,7 @@ class DeltaValueSnapshot
     friend class DeltaValueSpace;
 
 private:
-    bool is_update;
+    bool is_update{false};
 
     // The delta index of cached.
     DeltaIndexPtr shared_delta_index;
@@ -310,7 +311,7 @@ private:
     ColumnFileSetSnapshotPtr persisted_files_snap;
 
     // We need a reference to original delta object, to release the "is_updating" lock.
-    DeltaValueSpacePtr _delta;
+    DeltaValueSpacePtr delta;
 
     const CurrentMetrics::Metric type;
 
@@ -326,7 +327,7 @@ public:
         c->mem_table_snap = mem_table_snap->clone();
         c->persisted_files_snap = persisted_files_snap->clone();
 
-        c->_delta = _delta;
+        c->delta = delta;
 
         return c;
     }
@@ -340,7 +341,7 @@ public:
     ~DeltaValueSnapshot()
     {
         if (is_update)
-            _delta->releaseUpdating();
+            delta->releaseUpdating();
         CurrentMetrics::sub(type);
     }
 
@@ -370,7 +371,7 @@ private:
     DeltaSnapshotPtr delta_snap;
     // The delta index which we actually use. Could be cloned from shared_delta_index with some updates and compacts.
     // We only keep this member here to prevent it from being released.
-    DeltaIndexCompactedPtr _compacted_delta_index;
+    DeltaIndexCompactedPtr compacted_delta_index;
 
     ColumnFileSetReaderPtr mem_table_reader;
 
@@ -393,7 +394,7 @@ public:
     // This method create a new reader based on then current one. It will reuse some caches in the current reader.
     DeltaValueReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs);
 
-    void setDeltaIndex(const DeltaIndexCompactedPtr & delta_index_) { _compacted_delta_index = delta_index_; }
+    void setDeltaIndex(const DeltaIndexCompactedPtr & delta_index_) { compacted_delta_index = delta_index_; }
 
     const auto & getDeltaSnap() { return delta_snap; }
 
@@ -413,7 +414,7 @@ public:
                      UInt64 max_version);
 };
 
-class DeltaValueInputStream : public IBlockInputStream
+class DeltaValueInputStream : public SkippableBlockInputStream
 {
 private:
     ColumnFileSetInputStream mem_table_input_stream;
@@ -433,6 +434,27 @@ public:
 
     String getName() const override { return "DeltaValue"; }
     Block getHeader() const override { return persisted_files_input_stream.getHeader(); }
+
+    bool getSkippedRows(size_t &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
+
+    /// Skip next block in the stream.
+    /// Return false if failed to skip or the end of stream.
+    bool skipNextBlock(size_t skip_rows) override
+    {
+        read_rows += skip_rows;
+        if (persisted_files_done)
+            return mem_table_input_stream.skipNextBlock(skip_rows);
+
+        if (persisted_files_input_stream.skipNextBlock(skip_rows))
+        {
+            return true;
+        }
+        else
+        {
+            persisted_files_done = true;
+            return mem_table_input_stream.skipNextBlock(skip_rows);
+        }
+    }
 
     Block read() override
     {

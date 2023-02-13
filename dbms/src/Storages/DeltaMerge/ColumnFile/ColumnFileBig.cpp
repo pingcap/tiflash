@@ -257,6 +257,26 @@ Block ColumnFileBigReader::readNextBlock()
     }
 }
 
+bool ColumnFileBigReader::skipNextBlock(size_t skip_rows)
+{
+    initStream();
+
+    if (pk_ver_only)
+    {
+        if (next_block_index_in_cache >= cached_pk_ver_columns.size())
+        {
+            return false;
+        }
+        assert(cached_pk_ver_columns[next_block_index_in_cache].front()->size() == skip_rows);
+        next_block_index_in_cache += 1;
+        return true;
+    }
+    else
+    {
+        return file_stream->skipNextBlock(skip_rows);
+    }
+}
+
 ColumnFileReaderPtr ColumnFileBigReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
     // Currently we don't reuse the cache data.

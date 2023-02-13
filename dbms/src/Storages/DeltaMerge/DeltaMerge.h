@@ -165,6 +165,8 @@ public:
         return true;
     }
 
+    bool skipNextBlock(size_t) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
+
     Block read() override
     {
         if constexpr (skippable_place)

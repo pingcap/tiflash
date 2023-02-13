@@ -171,6 +171,8 @@ public:
 
     Block readNextBlock() override;
 
+    bool skipNextBlock(size_t skip_rows) override;
+
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
 };
 } // namespace DM

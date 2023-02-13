@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 
 namespace DB
@@ -165,6 +166,8 @@ public:
     std::pair<size_t, size_t> readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
 
     Block readNextBlock() override;
+
+    bool skipNextBlock(size_t skip_rows) override;
 
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
 };

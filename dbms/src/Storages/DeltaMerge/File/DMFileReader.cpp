@@ -91,7 +91,7 @@ DMFileReader::Stream::Stream(
     size_t buffer_size = 0;
     size_t estimated_size = 0;
 
-    const auto & use_packs = reader.pack_filter.getUsePacks();
+    const auto & use_packs = reader.pack_filter.getUsePacksConst();
     if (!reader.dmfile->configuration)
     {
         for (size_t i = 0; i < packs;)
@@ -243,13 +243,13 @@ DMFileReader::DMFileReader(
 bool DMFileReader::shouldSeek(size_t pack_id)
 {
     // If current pack is the first one, or we just finished reading the last pack, then no need to seek.
-    return pack_id != 0 && !pack_filter.getUsePacks()[pack_id - 1];
+    return pack_id != 0 && !pack_filter.getUsePacksConst()[pack_id - 1];
 }
 
 bool DMFileReader::getSkippedRows(size_t & skip_rows)
 {
     skip_rows = 0;
-    const auto & use_packs = pack_filter.getUsePacks();
+    const auto & use_packs = pack_filter.getUsePacksConst();
     const auto & pack_stats = dmfile->getPackStats();
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
@@ -259,6 +259,42 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     }
     next_row_offset += skip_rows;
     return next_pack_id < use_packs.size();
+}
+
+
+bool DMFileReader::skipNextBlock(size_t skip_rows [[maybe_unused]])
+{
+    // Go to next available pack.
+    size_t skip;
+    if (!getSkippedRows(skip))
+        return false;
+
+    // The next contiguous packs will be read in next read, mark them as not used.
+    size_t read_pack_limit = read_one_pack_every_time ? 1 : 0;
+    const std::vector<RSResult> & handle_res = pack_filter.getHandleRes();
+    RSResult expected_handle_res = handle_res[next_pack_id];
+    auto & use_packs = pack_filter.getUsePacks();
+    size_t start_pack_id = next_pack_id;
+    const auto & pack_stats = dmfile->getPackStats();
+    size_t read_rows = 0;
+    for (; next_pack_id < use_packs.size() && use_packs[next_pack_id] && read_rows < rows_threshold_per_read; ++next_pack_id)
+    {
+        if (read_pack_limit != 0 && next_pack_id - start_pack_id >= read_pack_limit)
+            break;
+        if (enable_handle_clean_read && handle_res[next_pack_id] != expected_handle_res)
+            break;
+
+        read_rows += pack_stats[next_pack_id].rows;
+        scan_context->total_dmfile_skipped_packs += 1;
+
+        // Mark this pack as not used.
+        use_packs[next_pack_id] = false;
+    }
+
+    assert(skip_rows == read_rows);
+    scan_context->total_dmfile_skipped_rows += read_rows;
+    next_row_offset += read_rows;
+    return true;
 }
 
 inline bool isExtraColumn(const ColumnDefine & cd)
@@ -282,7 +318,7 @@ Block DMFileReader::read()
 
     getSkippedRows(skip_rows);
 
-    const auto & use_packs = pack_filter.getUsePacks();
+    const auto & use_packs = pack_filter.getUsePacksConst();
     if (next_pack_id >= use_packs.size())
         return {};
     // Find max continuing rows we can read.

@@ -22,7 +22,7 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
-#include <memory>
+
 namespace DB
 {
 class Context;
@@ -43,7 +43,7 @@ public:
         }
     }
 
-    ~DMFileBlockInputStream()
+    ~DMFileBlockInputStream() override
     {
         if (enable_read_thread)
         {
@@ -56,6 +56,8 @@ public:
     Block getHeader() const override { return reader.getHeader(); }
 
     bool getSkippedRows(size_t & skip_rows) override { return reader.getSkippedRows(skip_rows); }
+
+    bool skipNextBlock(size_t skip_rows) override { return reader.skipNextBlock(skip_rows); }
 
     Block read() override
     {

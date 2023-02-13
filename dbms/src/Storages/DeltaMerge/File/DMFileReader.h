@@ -102,6 +102,11 @@ public:
     /// Skipped rows before next call of #read().
     /// Return false if it is the end of stream.
     bool getSkippedRows(size_t & skip_rows);
+
+    /// Find the packs to read next, and mark them as not used.
+    /// Return false if it is the end of file.
+    bool skipNextBlock(size_t skip_rows);
+
     Block read();
     std::string path() const
     {

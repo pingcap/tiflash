@@ -2318,7 +2318,7 @@ std::pair<std::vector<PackInfo>, IdSetPtr> parseDMFilePackInfo(const DMFilePtr &
         dm_context.db_context.getReadLimiter(),
         dm_context.scan_context,
         dm_context.tracing_id);
-    const auto & use_packs = pack_filter.getUsePacks();
+    const auto & use_packs = pack_filter.getUsePacksConst();
     const auto & handle_res = pack_filter.getHandleRes();
     const auto & pack_stats = dmfile->getPackStats();
 
