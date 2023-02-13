@@ -70,21 +70,23 @@ ExpressionActionsPtr FilterTransformAction::getExperssion() const
     return expression;
 }
 
-bool FilterTransformAction::transform(Block & block, FilterPtr child_filter)
+bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, bool return_filter)
 {
     if (unlikely(!block))
         return true;
 
     expression->execute(block);
 
-    if (constant_filter_description.always_true && !child_filter)
+    if (constant_filter_description.always_true)
+    {
+        if (return_filter)
+            res_filter = nullptr;
         return true;
+    }
 
     size_t columns = block.columns();
     size_t rows = block.rows();
     ColumnPtr column_of_filter = block.safeGetByPosition(filter_column).column;
-
-    RUNTIME_CHECK_MSG(!child_filter || child_filter->size() == rows, "Unexpected child filter size");
 
     /** It happens that at the stage of analysis of expressions (in sample_block) the columns-constants have not been calculated yet,
         *  and now - are calculated. That is, not all cases are covered by the code above.
@@ -99,60 +101,30 @@ bool FilterTransformAction::transform(Block & block, FilterPtr child_filter)
         return true;
     }
 
-    IColumn::Filter * filter;
-    ColumnPtr filter_holder;
-
     if (constant_filter_description.always_true)
     {
-        if (child_filter)
-            filter = child_filter;
-        else
-            return true;
+        if (return_filter)
+            res_filter = nullptr;
+        return true;
     }
     else
     {
         FilterDescription filter_and_holder(*column_of_filter);
-        filter = const_cast<IColumn::Filter *>(filter_and_holder.data);
-        filter_holder = filter_and_holder.data_holder;
-
-        if (child_filter)
-        {
-            /// Merge child_filter
-            std::transform(filter->cbegin(), filter->cend(), child_filter->cbegin(), filter->begin(), [](const UInt8 a, const UInt8 b) { return a > 0 && b != 0; });
-        }
+        filter.resize(rows);
+        std::copy(filter_and_holder.data->cbegin(), filter_and_holder.data->cend(), filter.begin());
     }
 
-    /** Let's find out how many rows will be in result.
-      * To do this, we filter out the first non-constant column
-      *  or calculate number of set bytes in the filter.
-      */
-    size_t first_non_constant_column = 0;
-    for (size_t i = 0; i < columns; ++i)
-    {
-        if (!block.safeGetByPosition(i).column->isColumnConst())
-        {
-            first_non_constant_column = i;
-
-            if (first_non_constant_column != filter_column)
-                break;
-        }
-    }
-
-    size_t filtered_rows = 0;
-    if (first_non_constant_column != filter_column)
-    {
-        ColumnWithTypeAndName & current_column = block.safeGetByPosition(first_non_constant_column);
-        current_column.column = current_column.column->filter(*filter, -1);
-        filtered_rows = current_column.column->size();
-    }
-    else
-    {
-        filtered_rows = countBytesInFilter(*filter);
-    }
+    size_t filtered_rows = countBytesInFilter(filter);
 
     /// If the current block is completely filtered out, let's move on to the next one.
     if (filtered_rows == 0)
         return false;
+
+    if (return_filter)
+    {
+        res_filter = &filter;
+        return true;
+    }
 
     /// If all the rows pass through the filter.
     if (filtered_rows == rows)
@@ -180,13 +152,10 @@ bool FilterTransformAction::transform(Block & block, FilterPtr child_filter)
             continue;
         }
 
-        if (i == first_non_constant_column)
-            continue;
-
         if (current_column.column->isColumnConst())
             current_column.column = current_column.column->cut(0, filtered_rows);
         else
-            current_column.column = current_column.column->filter(*filter, filtered_rows);
+            current_column.column = current_column.column->filter(filter, filtered_rows);
     }
 
     return true;

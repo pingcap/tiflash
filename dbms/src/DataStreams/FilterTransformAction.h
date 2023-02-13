@@ -32,7 +32,8 @@ public:
 
     bool alwaysFalse() const;
     // return false if all filter out.
-    bool transform(Block & block, FilterPtr child_filter);
+    // if return_filter is true and all rows are passed, return nullptr.
+    bool transform(Block & block, FilterPtr & res_filter, bool return_filter);
     Block getHeader() const;
     ExpressionActionsPtr getExperssion() const;
 
@@ -42,6 +43,7 @@ private:
     size_t filter_column;
 
     ConstantFilterDescription constant_filter_description;
+    IColumn::Filter filter{};
 };
 
 } // namespace DB

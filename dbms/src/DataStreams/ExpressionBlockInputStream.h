@@ -43,7 +43,13 @@ public:
     Block getHeader() const override;
 
 protected:
-    Block readImpl() override;
+    Block readImpl() override
+    {
+        FilterPtr filter_ignoreg;
+        return readImpl(filter_ignoreg, false);
+    }
+
+    Block readImpl(FilterPtr & res_filter, bool return_filter) override;
 
 private:
     ExpressionActionsPtr expression;
