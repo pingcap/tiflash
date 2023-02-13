@@ -170,7 +170,11 @@ using Blocks = std::vector<Block>;
 using BlocksList = std::list<Block>;
 using BucketBlocksListMap = std::map<Int32, BlocksList>;
 
-Block mergeBlocks(Blocks && blocks);
+/// join blocks by columns
+Block hstackBlocks(Blocks && blocks, const Block & header);
+
+/// join blocks by rows
+Block vstackBlocks(Blocks && blocks);
 
 Block popBlocksListFront(BlocksList & blocks);
 

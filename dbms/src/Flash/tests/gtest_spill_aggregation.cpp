@@ -86,13 +86,13 @@ try
     {
         ASSERT_EQ(block.rows() <= small_max_block_size, true);
     }
-    ASSERT_COLUMNS_EQ_UR(ref_columns, mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName());
+    ASSERT_COLUMNS_EQ_UR(ref_columns, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName());
     blocks = getExecuteStreamsReturnBlocks(request, original_max_streams, true);
     for (auto & block : blocks)
     {
         ASSERT_EQ(block.rows() <= small_max_block_size, true);
     }
-    ASSERT_COLUMNS_EQ_UR(ref_columns, mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName());
+    ASSERT_COLUMNS_EQ_UR(ref_columns, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName());
 }
 CATCH
 } // namespace tests

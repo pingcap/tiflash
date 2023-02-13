@@ -514,7 +514,29 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
     return ReturnType(true);
 }
 
-Block mergeBlocks(Blocks && blocks)
+/// join blocks by columns
+Block hstackBlocks(Blocks && blocks, const Block & header)
+{
+    if (blocks.empty())
+        return {};
+
+    Block res = header.cloneEmpty();
+
+    size_t num_rows = blocks.front().rows();
+    for (const auto & block : blocks)
+    {
+        RUNTIME_CHECK_MSG(block.rows() == num_rows, "Cannot hstack blocks with different number of rows");
+        for (const auto & elem : block)
+        {
+            res.getByName(elem.name).column = std::move(elem.column);
+        }
+    }
+
+    return res;
+}
+
+/// join blocks by rows
+Block vstackBlocks(Blocks && blocks)
 {
     if (blocks.empty())
     {
@@ -526,13 +548,13 @@ Block mergeBlocks(Blocks && blocks)
         return std::move(blocks[0]);
     }
 
-    auto & first_block = blocks[0];
     size_t result_rows = 0;
     for (const auto & block : blocks)
     {
         result_rows += block.rows();
     }
 
+    auto & first_block = blocks.front();
     MutableColumns dst_columns(first_block.columns());
 
     for (size_t i = 0; i < first_block.columns(); ++i)
@@ -546,9 +568,9 @@ Block mergeBlocks(Blocks && blocks)
         if (likely(blocks[i].rows() > 0))
         {
             assert(blocksHaveEqualStructure(first_block, blocks[i]));
-            for (size_t column = 0; column < blocks[i].columns(); ++column)
+            for (size_t idx = 0; idx < blocks[i].columns(); ++idx)
             {
-                dst_columns[column]->insertRangeFrom(*blocks[i].getByPosition(column).column, 0, blocks[i].rows());
+                dst_columns[idx]->insertRangeFrom(*blocks[i].getByPosition(idx).column, 0, blocks[i].rows());
             }
         }
     }
