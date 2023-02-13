@@ -67,7 +67,7 @@ public:
 
     auto getFile() const { return file; }
 
-    PageId getDataPageId() { return file->pageId(); }
+    PageIdU64 getDataPageId() { return file->pageId(); }
 
     size_t getRows() const override { return valid_rows; }
     size_t getBytes() const override { return valid_bytes; };
@@ -85,7 +85,7 @@ public:
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    static ColumnFilePersistedPtr deserializeMetadata(DMContext & context, //
+    static ColumnFilePersistedPtr deserializeMetadata(const DMContext & context, //
                                                       const RowKeyRange & segment_range,
                                                       ReadBuffer & buf);
 

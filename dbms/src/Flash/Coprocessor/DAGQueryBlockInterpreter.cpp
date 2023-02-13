@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/ThresholdUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
@@ -184,6 +185,8 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         pipeline.streams.insert(pipeline.streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }
+
+    // Ignore handling GeneratedColumnPlaceholderBlockInputStream for now, because we don't support generated column in test framework.
 }
 
 
@@ -397,6 +400,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         context,
         before_agg_header,
         pipeline.streams.size(),
+        enable_fine_grained_shuffle ? pipeline.streams.size() : 1,
         key_names,
         collators,
         aggregate_descriptions,
@@ -712,11 +716,11 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
         limit = query_block.limit_or_topn->limit().limit();
     else
         limit = query_block.limit_or_topn->topn().limit();
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, log->identifier()); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
     if (pipeline.hasMoreThanOneStream())
     {
         executeUnion(pipeline, max_streams, log, false, "for partial limit");
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, log->identifier()); });
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
     }
 }
 

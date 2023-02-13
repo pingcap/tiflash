@@ -34,6 +34,7 @@ Block AggregatingBlockInputStream::readImpl()
             return this->isCancelled();
         };
         aggregator.setCancellationHook(hook);
+        aggregator.initThresholdByAggregatedDataVariantsSize(1);
 
         aggregator.execute(children.back(), *data_variants);
 

@@ -84,7 +84,7 @@ public:
         while (op_pipeline->execute() != OperatorStatus::FINISHED)
         {
         }
-        ASSERT_COLUMNS_EQ_UR(expect_columns, mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName());
+        ASSERT_COLUMNS_EQ_UR(expect_columns, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName());
     }
 };
 

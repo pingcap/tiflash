@@ -16,7 +16,7 @@
 
 #include <Core/Types.h>
 #include <Interpreters/SettingsCommon.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 
 namespace DB
 {
@@ -84,6 +84,14 @@ struct PageStorageConfig
     SettingUInt64 prob_do_gc_when_write_is_low = 10;
 
     MVCC::VersionSetConfig version_set_config;
+
+    // Use a more easy gc config for v2 when all of its data will be transformed to v3.
+    static PageStorageConfig getEasyGCConfig()
+    {
+        PageStorageConfig gc_config;
+        gc_config.file_roll_size = PAGE_FILE_SMALL_SIZE;
+        return gc_config;
+    }
 
     //==========================================================================================
     // V3 config

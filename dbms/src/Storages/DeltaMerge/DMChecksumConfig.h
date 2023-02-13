@@ -88,7 +88,7 @@ public:
         }
     }
 
-    [[maybe_unused]] static std::optional<DMChecksumConfig> fromDBContext(const DB::Context & context, bool is_single_file);
+    [[maybe_unused]] static std::optional<DMChecksumConfig> fromDBContext(const DB::Context & context);
 
 private:
     size_t checksum_frame_length; ///< the length of checksum frame

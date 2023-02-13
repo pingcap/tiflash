@@ -43,8 +43,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(region_exception_after_read_from_storage_all_error)         \
     M(exception_before_dmfile_remove_encryption)                  \
     M(exception_before_dmfile_remove_from_disk)                   \
-    M(force_enable_region_persister_compatible_mode)              \
-    M(force_disable_region_persister_compatible_mode)             \
     M(force_triggle_background_merge_delta)                       \
     M(force_triggle_foreground_flush)                             \
     M(exception_before_mpp_register_non_root_mpp_task)            \
@@ -58,7 +56,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_during_mpp_root_task_run)                         \
     M(exception_during_write_to_storage)                          \
     M(force_set_sst_to_dtfile_block_size)                         \
-    M(force_set_sst_decode_rand)                                  \
     M(exception_before_page_file_write_sync)                      \
     M(force_set_segment_ingest_packs_fail)                        \
     M(segment_merge_after_ingest_packs)                           \

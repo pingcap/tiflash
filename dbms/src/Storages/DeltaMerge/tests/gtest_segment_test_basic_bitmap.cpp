@@ -58,7 +58,7 @@ RowKeyRange SegmentTestBasic::buildRowKeyRange(Int64 begin, Int64 end)
     return RowKeyRange::fromHandleRange(range);
 }
 
-std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(PageId segment_id)
+std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(PageIdU64 segment_id)
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
@@ -69,7 +69,7 @@ std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(Pa
     RUNTIME_CHECK(snapshot != nullptr);
     return {segment, snapshot};
 }
-std::vector<Block> SegmentTestBasic::readSegment(PageId segment_id, bool need_row_id, const RowKeyRanges & ranges)
+std::vector<Block> SegmentTestBasic::readSegment(PageIdU64 segment_id, bool need_row_id, const RowKeyRanges & ranges)
 {
     auto [segment, snapshot] = getSegmentForRead(segment_id);
     ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
@@ -91,7 +91,7 @@ std::vector<Block> SegmentTestBasic::readSegment(PageId segment_id, bool need_ro
     return blks;
 }
 
-ColumnPtr SegmentTestBasic::getSegmentRowId(PageId segment_id, const RowKeyRanges & ranges)
+ColumnPtr SegmentTestBasic::getSegmentRowId(PageIdU64 segment_id, const RowKeyRanges & ranges)
 {
     LOG_INFO(logger_op, "getSegmentRowId, segment_id={}", segment_id);
     auto blks = readSegment(segment_id, true, ranges);
@@ -108,7 +108,7 @@ ColumnPtr SegmentTestBasic::getSegmentRowId(PageId segment_id, const RowKeyRange
     }
 }
 
-ColumnPtr SegmentTestBasic::getSegmentHandle(PageId segment_id, const RowKeyRanges & ranges)
+ColumnPtr SegmentTestBasic::getSegmentHandle(PageIdU64 segment_id, const RowKeyRanges & ranges)
 {
     LOG_INFO(logger_op, "getSegmentHandle, segment_id={}", segment_id);
     auto blks = readSegment(segment_id, false, ranges);
@@ -118,14 +118,14 @@ ColumnPtr SegmentTestBasic::getSegmentHandle(PageId segment_id, const RowKeyRang
     }
     else
     {
-        auto block = mergeBlocks(std::move(blks));
+        auto block = vstackBlocks(std::move(blks));
         RUNTIME_CHECK(block.has(EXTRA_HANDLE_COLUMN_NAME));
         RUNTIME_CHECK(block.segmentRowIdCol() == nullptr);
         return block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
     }
 }
 
-void SegmentTestBasic::writeSegmentWithDeleteRange(PageId segment_id, Int64 begin, Int64 end)
+void SegmentTestBasic::writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end)
 {
     auto range = buildRowKeyRange(begin, end);
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());

@@ -243,7 +243,7 @@ try
 
         // Start a segment merge and suspend it before applyMerge
         auto sp_seg_split_apply = SyncPointCtl::enableInScope("before_Segment::applySplit");
-        PageId new_seg_id;
+        PageIdU64 new_seg_id;
         auto th_seg_split = std::async([&]() {
             auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Auto, /* check_rows */ false);
             ASSERT_TRUE(new_seg_id_opt.has_value());
@@ -392,7 +392,7 @@ try
         auto [memory_cf, persisted_cf] = delta->cloneAllColumnFiles(lock, *dm_context, segment->getRowKeyRange(), wbs);
         ASSERT_FALSE(memory_cf.empty());
         ASSERT_TRUE(persisted_cf.empty());
-        BlockPtr last_schema;
+        ColumnFileSchemaPtr last_schema;
         for (const auto & column_file : memory_cf)
         {
             if (auto * t_file = column_file->tryToTinyFile(); t_file)

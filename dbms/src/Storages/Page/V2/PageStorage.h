@@ -17,8 +17,8 @@
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V2/PageDefines.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/Page/WriteBatch.h>
@@ -92,7 +92,7 @@ public:
                 const FileProviderPtr & file_provider_,
                 BackgroundProcessingPool & ver_compact_pool_,
                 bool no_more_insert_ = false);
-    ~PageStorage() override { shutdown(); }
+    ~PageStorage() override { shutdown(); } // NOLINT(clang-analyzer-optin.cplusplus.VirtualCall)
 
     void restore() override;
 

@@ -47,13 +47,14 @@ SpilledFile::~SpilledFile()
     }
 }
 
-Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, size_t partition_num_, const Block & input_schema_, const LoggerPtr & logger_, Int64 spill_version_)
+Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, size_t partition_num_, const Block & input_schema_, const LoggerPtr & logger_, Int64 spill_version_, bool release_spilled_file_on_restore_)
     : config(config_)
     , is_input_sorted(is_input_sorted_)
     , partition_num(partition_num_)
     , input_schema(input_schema_)
     , logger(logger_)
     , spill_version(spill_version_)
+    , release_spilled_file_on_restore(release_spilled_file_on_restore_)
 {
     for (size_t i = 0; i < partition_num; ++i)
         spilled_files.push_back(std::make_unique<SpilledFiles>());
@@ -117,31 +118,41 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
     BlockInputStreams ret;
     if (is_input_sorted)
     {
-        for (const auto & file : spilled_files[partition_id]->spilled_files)
+        for (auto & file : spilled_files[partition_id]->spilled_files)
         {
             RUNTIME_CHECK_MSG(file->exists(), "Spill file {} does not exists", file->path());
             details.merge(file->getSpillDetails());
-            std::vector<String> files{file->path()};
-            ret.push_back(std::make_shared<SpilledFilesInputStream>(files, input_schema, config.file_provider, spill_version));
+            std::vector<SpilledFileInfo> file_infos;
+            file_infos.emplace_back(file->path());
+            if (release_spilled_file_on_restore)
+                file_infos.back().file = std::move(file);
+            ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos), input_schema, config.file_provider, spill_version));
         }
     }
     else
     {
         size_t return_stream_num = std::min(max_stream_size, spilled_files[partition_id]->spilled_files.size());
-        std::vector<std::vector<String>> files(return_stream_num);
+        std::vector<std::vector<SpilledFileInfo>> file_infos(return_stream_num);
         // todo balance based on SpilledRows
         for (size_t i = 0; i < spilled_files[partition_id]->spilled_files.size(); ++i)
         {
-            const auto & file = spilled_files[partition_id]->spilled_files[i];
+            auto & file = spilled_files[partition_id]->spilled_files[i];
             RUNTIME_CHECK_MSG(file->exists(), "Spill file {} does not exists", file->path());
             details.merge(file->getSpillDetails());
-            files[i % return_stream_num].push_back(file->path());
+            file_infos[i % return_stream_num].push_back(file->path());
+            if (release_spilled_file_on_restore)
+                file_infos[i % return_stream_num].back().file = std::move(file);
         }
         for (size_t i = 0; i < return_stream_num; ++i)
         {
-            if (likely(!files[i].empty()))
-                ret.push_back(std::make_shared<SpilledFilesInputStream>(files[i], input_schema, config.file_provider, spill_version));
+            if (likely(!file_infos[i].empty()))
+                ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos[i]), input_schema, config.file_provider, spill_version));
         }
+    }
+    if (release_spilled_file_on_restore)
+    {
+        /// clear the spilled_files so we can safely assume that the element in spilled_files is always not nullptr
+        spilled_files[partition_id]->spilled_files.clear();
     }
     LOG_DEBUG(logger, "Will restore {} rows from file of size {:.3f} MiB compressed, {:.3f} MiB uncompressed.", details.rows, (details.data_bytes_compressed / 1048576.0), (details.data_bytes_uncompressed / 1048576.0));
     if (ret.empty())

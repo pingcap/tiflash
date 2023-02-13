@@ -109,6 +109,7 @@ namespace DM
 class MinMaxIndexCache;
 class DeltaIndexManager;
 class GlobalStoragePool;
+class SharedBlockSchemas;
 using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 } // namespace DM
 
@@ -178,7 +179,6 @@ private:
     DAGContext * dag_context = nullptr;
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
-
     /// Use copy constructor or createGlobal() instead
     Context();
 
@@ -203,7 +203,6 @@ public:
     void setPathPool(const Strings & main_data_paths,
                      const Strings & latest_data_paths,
                      const Strings & kvstore_paths,
-                     bool enable_raft_compatible_mode,
                      PathCapacityMetricsPtr global_capacity_,
                      FileProviderPtr file_provider);
 
@@ -510,6 +509,9 @@ public:
     {
         return disaggregated_mode == DisaggregatedMode::Storage;
     }
+
+    const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
+    void initializeSharedBlockSchemas();
 
     // todo: remove after AutoScaler is stable.
     void setUseAutoScaler(bool use)

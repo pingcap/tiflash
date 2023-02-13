@@ -718,7 +718,7 @@ struct AggregatedDataVariants : private boost::noncopyable
     case Type::NAME:                                                                                       \
     {                                                                                                      \
         const auto * ptr = reinterpret_cast<const AggregationMethodName(NAME) *>(aggregation_method_impl); \
-        return ptr->data.size() + (without_key != nullptr);                                                \
+        return ptr->data.size();                                                                           \
     }
 
             APPLY_FOR_AGGREGATED_VARIANTS(M)
@@ -727,6 +727,34 @@ struct AggregatedDataVariants : private boost::noncopyable
         default:
             throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
         }
+    }
+
+    size_t bytesCount() const
+    {
+        size_t bytes_count = 0;
+        switch (type)
+        {
+        case Type::EMPTY:
+        case Type::without_key:
+            break;
+
+#define M(NAME, IS_TWO_LEVEL)                                                                              \
+    case Type::NAME:                                                                                       \
+    {                                                                                                      \
+        const auto * ptr = reinterpret_cast<const AggregationMethodName(NAME) *>(aggregation_method_impl); \
+        bytes_count = ptr->data.getBufferSizeInBytes();                                                    \
+        break;                                                                                             \
+    }
+
+            APPLY_FOR_AGGREGATED_VARIANTS(M)
+#undef M
+
+        default:
+            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+        }
+        for (const auto & pool : aggregates_pools)
+            bytes_count += pool->size();
+        return bytes_count;
     }
 
     const char * getMethodName() const
@@ -888,23 +916,10 @@ public:
         AggregateDescriptions aggregates;
         size_t keys_size;
         size_t aggregates_size;
-        Int64 local_delta_memory = 0;
-
-        /// Two-level aggregation settings (used for a large number of keys).
-        /** With how many keys or the size of the aggregation state in bytes,
-          *  two-level aggregation begins to be used. Enough to reach of at least one of the thresholds.
-          * 0 - the corresponding threshold is not specified.
-          */
-        const size_t group_by_two_level_threshold;
-        const size_t group_by_two_level_threshold_bytes;
-
-        /// Settings to flush temporary data to the filesystem (external aggregation).
-        const size_t max_bytes_before_external_group_by; /// 0 - do not use external aggregation.
 
         /// Return empty result when aggregating without keys on empty set.
         bool empty_result_for_aggregation_by_empty_set;
 
-        const std::string tmp_path;
         SpillConfig spill_config;
 
         UInt64 max_block_size;
@@ -926,13 +941,13 @@ public:
             , aggregates(aggregates_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
-            , group_by_two_level_threshold(group_by_two_level_threshold_)
-            , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
-            , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
             , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
             , spill_config(spill_config_)
             , max_block_size(max_block_size_)
             , collators(collators_)
+            , group_by_two_level_threshold(group_by_two_level_threshold_)
+            , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
+            , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
         {
         }
 
@@ -962,6 +977,17 @@ public:
 
         /// Calculate the column numbers in `keys` and `aggregates`.
         void calculateColumnNumbers(const Block & block);
+
+        size_t getGroupByTwoLevelThreshold() const { return group_by_two_level_threshold; }
+        size_t getGroupByTwoLevelThresholdBytes() const { return group_by_two_level_threshold_bytes; }
+        size_t getMaxBytesBeforeExternalGroupBy() const { return max_bytes_before_external_group_by; }
+
+    private:
+        /// Note these thresholds should not be used directly, they are only used to
+        /// init the threshold in Aggregator
+        const size_t group_by_two_level_threshold;
+        const size_t group_by_two_level_threshold_bytes;
+        const size_t max_bytes_before_external_group_by; /// 0 - do not use external aggregation.
     };
 
 
@@ -980,8 +1006,8 @@ public:
         const Block & block,
         AggregatedDataVariants & result,
         ColumnRawPtrs & key_columns,
-        AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-        Int64 & local_delta_memory);
+        AggregateColumns & aggregate_columns /// Passed to not create them anew for each block
+    );
 
     /** Convert the aggregation data structure into a block.
       * If final = false, then ColumnAggregateFunction is created as the aggregation columns with the state of the calculations,
@@ -1002,7 +1028,7 @@ public:
     using BucketToBlocks = std::map<Int32, BlocksList>;
 
     /// Merge several partially aggregated blocks into one.
-    BlocksList mergeBlocks(BlocksList & blocks, bool final);
+    BlocksList vstackBlocks(BlocksList & blocks, bool final);
 
     /** Split block with partially-aggregated data to many blocks, as if two-level method of aggregation was used.
       * This is needed to simplify merging of that data with other results, that are already two-level.
@@ -1020,6 +1046,8 @@ public:
     void finishSpill();
     BlockInputStreams restoreSpilledData();
     bool hasSpilledData() const { return spiller != nullptr && spiller->hasSpilledData(); }
+    void useTwoLevelHashTable() { use_two_level_hash_table = true; }
+    void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);
 
     /// Get data structure of the result.
     Block getHeader(bool final) const;
@@ -1064,10 +1092,7 @@ protected:
 
     bool all_aggregates_has_trivial_destructor = false;
 
-    /// How many RAM were used to process the query before processing the first block.
-    Int64 memory_usage_before_aggregation = 0;
-
-    std::atomic<Int64> local_memory_usage = 0;
+    std::atomic<bool> use_two_level_hash_table = false;
 
     std::mutex mutex;
 
@@ -1075,6 +1100,16 @@ protected:
 
     /// Returns true if you can abort the current task.
     CancellationHook is_cancelled;
+
+    /// Two-level aggregation settings (used for a large number of keys).
+    /** With how many keys or the size of the aggregation state in bytes,
+          *  two-level aggregation begins to be used. Enough to reach of at least one of the thresholds.
+          * 0 - the corresponding threshold is not specified.
+          */
+    size_t group_by_two_level_threshold = 0;
+    size_t group_by_two_level_threshold_bytes = 0;
+    /// Settings to flush temporary data to the filesystem (external aggregation).
+    size_t max_bytes_before_external_group_by = 0;
 
     /// For external aggregation.
     std::unique_ptr<Spiller> spiller;

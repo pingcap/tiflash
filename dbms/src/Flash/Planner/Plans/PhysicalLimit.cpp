@@ -45,11 +45,11 @@ void PhysicalLimit::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & 
 {
     child->buildBlockInputStream(pipeline, context, max_streams);
 
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, log->identifier()); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
     if (pipeline.hasMoreThanOneStream())
     {
         executeUnion(pipeline, max_streams, log, false, "for partial limit");
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, log->identifier()); });
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, /*offset*/ 0, log->identifier()); });
     }
 }
 
