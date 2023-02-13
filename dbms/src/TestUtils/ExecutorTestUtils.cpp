@@ -181,7 +181,7 @@ void ExecutorTest::executeExecutor(
     WRAP_FOR_TEST_END
 }
 
-void ExecutorTest::checkSorted(
+void ExecutorTest::checkBlockSorted(
     const std::shared_ptr<tipb::DAGRequest> & request,
     const SortDescription & sort_desc,
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &, const ColumnsWithTypeAndName &)> assert_func)
@@ -222,7 +222,7 @@ void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGR
 
 void ExecutorTest::executeAndAssertSortedBlocks(const std::shared_ptr<tipb::DAGRequest> & request, const SortDescription & sort_desc)
 {
-    checkSorted(request, sort_desc, [&](const ColumnsWithTypeAndName & expect_columns, const ColumnsWithTypeAndName & res) {
+    checkBlockSorted(request, sort_desc, [&](const ColumnsWithTypeAndName & expect_columns, const ColumnsWithTypeAndName & res) {
         return columnsEqual(expect_columns, res, /*_restrict=*/false) << "\n  expect_block: \n"
                                                                       << getColumnsContent(expect_columns)
                                                                       << "\n actual_block: \n"

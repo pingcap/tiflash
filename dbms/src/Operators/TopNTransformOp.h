@@ -19,8 +19,6 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Operators/Operator.h>
 
-#include <cstddef>
-
 namespace DB
 {
 class TopNTransformOp : public TransformOp

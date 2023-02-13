@@ -79,7 +79,6 @@ public:
         return context.scan(db_name, table_name).topN(col_name, is_desc, limit_num).build(context);
     }
 
-
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, MockOrderByItemVec order_by_items, int limit, MockAstVec func_proj_ast = {}, MockAstVec out_proj_ast = {})
     {
         if (func_proj_ast.empty())

@@ -19,8 +19,6 @@
 #include <Interpreters/ExpressionActions.h>
 #include <tipb/executor.pb.h>
 
-#include <cstddef>
-
 namespace DB
 {
 class PhysicalTopN : public PhysicalUnary

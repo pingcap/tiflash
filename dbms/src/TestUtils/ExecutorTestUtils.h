@@ -120,7 +120,7 @@ private:
         const std::shared_ptr<tipb::DAGRequest> & request,
         std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func);
 
-    void checkSorted(
+    void checkBlockSorted(
         const std::shared_ptr<tipb::DAGRequest> & request,
         const SortDescription & sort_desc,
         std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &, const ColumnsWithTypeAndName &)> assert_func);
