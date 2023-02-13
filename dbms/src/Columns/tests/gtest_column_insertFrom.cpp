@@ -77,9 +77,8 @@ public:
         position_vec.push_back(0);
         position_vec.push_back(2);
         position_vec.push_back(4);
-        position_vec.push_back(0);
-        position_vec.push_back(2);
-        position_vec.push_back(4);
+        for (size_t position : position_vec)
+            cols[0]->insertFrom(*column_ptr, position);
         for (size_t position : position_vec)
             cols[0]->insertFrom(*column_ptr, position);
         cols[1]->insertDisjunctFrom(*column_ptr, position_vec);
