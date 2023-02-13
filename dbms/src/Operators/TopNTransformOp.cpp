@@ -49,9 +49,8 @@ OperatorStatus TopNTransformOp::tryOutputImpl(Block & block)
     if (impl)
     {
         block = impl->read();
-        return OperatorStatus::HAS_OUTPUT;
     }
-    return OperatorStatus::NEED_INPUT;
+    return OperatorStatus::HAS_OUTPUT;
 }
 
 void TopNTransformOp::transformHeaderImpl(Block &)
