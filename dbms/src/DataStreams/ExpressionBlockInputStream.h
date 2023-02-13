@@ -45,8 +45,8 @@ public:
 protected:
     Block readImpl() override
     {
-        FilterPtr filter_ignoreg;
-        return readImpl(filter_ignoreg, false);
+        FilterPtr filter_ignored;
+        return readImpl(filter_ignored, false);
     }
 
     Block readImpl(FilterPtr & res_filter, bool return_filter) override;
