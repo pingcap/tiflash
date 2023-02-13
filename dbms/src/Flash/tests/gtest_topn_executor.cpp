@@ -79,7 +79,8 @@ public:
         return context.scan(db_name, table_name).topN(col_name, is_desc, limit_num).build(context);
     }
 
-    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, MockOrderByItemVec order_by_items, int limit, MockAstVec func_proj_ast = {}, MockColumnNameVec out_proj_ast = {})
+
+    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, MockOrderByItemVec order_by_items, int limit, MockAstVec func_proj_ast = {}, MockAstVec out_proj_ast = {})
     {
         if (func_proj_ast.empty())
             return context.scan(db_name, table_name).topN(order_by_items, limit).build(context);
@@ -113,43 +114,19 @@ try
         size_t col_data_num = col0.size();
         for (size_t i = 1; i <= 1; ++i)
         {
-            bool is_desc;
-            is_desc = static_cast<bool>(i); /// Set descent or ascent
-            if (is_desc)
-                sort(col0.begin(), col0.end(), std::greater<ColStringNullableType>()); /// Sort col0 for the following comparison
-            else
-                sort(col0.begin(), col0.end());
-
+            bool is_desc = static_cast<bool>(i); /// Set descent or ascent
             for (size_t limit_num = 0; limit_num <= col_data_num + 5; ++limit_num)
             {
                 request = buildDAGRequest(table_single_name, single_col_name, is_desc, limit_num);
-
-                expect_cols.clear();
-                if (limit_num == 0 || limit_num > col_data_num)
-                    expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithNullableString(col0.begin(), col0.end()))});
-                else
-                    expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithNullableString(col0.begin(), col0.begin() + limit_num))});
-
-                executeAndAssertColumnsEqual(request, expect_cols.back());
+                SortDescription desc;
+                desc.emplace_back("topn_1_single_col", is_desc ? -1 : 1, -1, nullptr);
+                executeAndAssertSortedBlocks(request, desc);
             }
         }
     }
 
     {
         /// Test multi-columns
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithNullableInt32{36, 34, 32, 27, {}, {}}),
-                        toNullableVec<String>(col_name[1], ColumnWithNullableString{"female", "male", "male", "female", "male", "female"}),
-                        toNullableVec<String>(col_name[2], ColumnWithNullableString{"china", "china", "usa", "usa", "china", "korea"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithNullableInt32{900, -300, {}, 0, {}, 1300})},
-                       {toNullableVec<Int32>(col_name[0], ColumnWithNullableInt32{32, {}, 34, 27, 36, {}}),
-                        toNullableVec<String>(col_name[1], ColumnWithNullableString{"male", "male", "male", "female", "female", "female"}),
-                        toNullableVec<String>(col_name[2], ColumnWithNullableString{"usa", "china", "china", "usa", "china", "korea"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithNullableInt32{{}, {}, -300, 0, 900, 1300})},
-                       {toNullableVec<Int32>(col_name[0], ColumnWithNullableInt32{34, {}, 32, 36, {}, 27}),
-                        toNullableVec<String>(col_name[1], ColumnWithNullableString{"male", "male", "male", "female", "female", "female"}),
-                        toNullableVec<String>(col_name[2], ColumnWithNullableString{"china", "china", "usa", "china", "korea", "usa"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithNullableInt32{-300, {}, {}, 900, 1300, 0})}};
-
         std::vector<MockOrderByItemVec> order_by_items{
             /// select * from clerk order by age DESC, gender DESC;
             {MockOrderByItem(col_name[0], true), MockOrderByItem(col_name[1], true)},
@@ -158,12 +135,19 @@ try
             /// select * from clerk order by gender DESC, country ASC, salary DESC;
             {MockOrderByItem(col_name[1], true), MockOrderByItem(col_name[2], false), MockOrderByItem(col_name[3], true)}};
 
-        size_t test_num = expect_cols.size();
+        std::vector<SortDescription> descs{
+            {{"topn_1_age", -1, -1, nullptr},
+             {"topn_1_gender", -1, -1, nullptr}},
+            {{"topn_1_gender", -1, -1, nullptr},
+             {"topn_1_salary", 1, -1, nullptr}},
+            {{"topn_1_gender", -1, -1, nullptr},
+             {"topn_1_country", 1, -1, nullptr},
+             {"topn_1_salary", -1, -1, nullptr}}};
 
-        for (size_t i = 0; i < test_num; ++i)
+        for (size_t i = 0; i < order_by_items.size(); ++i)
         {
             request = buildDAGRequest(table_name, order_by_items[i], 100);
-            executeAndAssertColumnsEqual(request, expect_cols[i]);
+            executeAndAssertSortedBlocks(request, descs[i]);
         }
     }
 }
@@ -173,8 +157,11 @@ TEST_F(TopNExecutorTestRunner, TopNFunction)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
-    std::vector<ColumnsWithTypeAndName> expect_cols;
-    MockColumnNameVec output_projection{col_name[0], col_name[1], col_name[2], col_name[3]};
+    std::vector<MockAstVec> output_projections{
+        {col(col_name[0]), col(col_name[1]), col(col_name[2]), col(col_name[3]), And(col("age"), col("salary"))},
+        {col(col_name[0]), col(col_name[1]), col(col_name[2]), col(col_name[3]), eq(col("age"), col("salary"))},
+        {col(col_name[0]), col(col_name[1]), col(col_name[2]), col(col_name[3]), gt(col("age"), col("salary"))}};
+
     MockAstVec func_projection; // Do function operation for topn
     MockOrderByItemVec order_by_items;
     ASTPtr col0_ast = col(col_name[0]);
@@ -183,57 +170,44 @@ try
     ASTPtr col3_ast = col(col_name[3]);
     ASTPtr func_ast;
 
+    /// "and" function
     {
-        /// "and" function
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithNullableInt32{{}, {}, 32, 27, 36, 34}),
-                        toNullableVec<String>(col_name[1], ColumnWithNullableString{"female", "male", "male", "female", "female", "male"}),
-                        toNullableVec<String>(col_name[2], ColumnWithNullableString{"korea", "china", "usa", "usa", "china", "china"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithNullableInt32{1300, {}, {}, 0, 900, -300})}};
-
-        {
-            /// select * from clerk order by age and salary ASC limit 100;
-            order_by_items = {MockOrderByItem("and(age, salary)", false)};
-            func_ast = And(col(col_name[0]), col(col_name[3]));
-            func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
-
-            request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            executeAndAssertColumnsEqual(request, expect_cols.back());
-        }
+        /// select * from clerk order by age and salary ASC limit 100;
+        order_by_items = {MockOrderByItem("and(age, salary)", false)};
+        func_ast = And(col(col_name[0]), col(col_name[3]));
+        func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
+        request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projections[0]);
+        SortDescription desc;
+        desc.emplace_back("project_3_CAST(and(notEquals(age, 0_Int64)_collator_0 , notEquals(salary, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_String)_collator_0 ", 1, -1, nullptr);
+        executeAndAssertSortedBlocks(request, desc);
     }
 
+
+    /// "equal" function
     {
-        /// "equal" function
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithNullableInt32{27, 36, 34, 32, {}, {}}),
-                        toNullableVec<String>(col_name[1], ColumnWithNullableString{"female", "female", "male", "male", "female", "male"}),
-                        toNullableVec<String>(col_name[2], ColumnWithNullableString{"usa", "china", "china", "usa", "korea", "china"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithNullableInt32{0, 900, -300, {}, 1300, {}})}};
+        /// select age, salary from clerk order by age = salary DESC limit 100;
+        order_by_items = {MockOrderByItem("equals(age, salary)", true)};
+        func_ast = eq(col(col_name[0]), col(col_name[3]));
+        func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
-        {
-            /// select age, salary from clerk order by age = salary DESC limit 100;
-            order_by_items = {MockOrderByItem("equals(age, salary)", true)};
-            func_ast = eq(col(col_name[0]), col(col_name[3]));
-            func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
-
-            request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            executeAndAssertColumnsEqual(request, expect_cols.back());
-        }
+        request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projections[1]);
+        SortDescription desc;
+        desc.emplace_back("project_3_CAST(equals(age, salary)_collator_46 , Nullable(UInt64)_String)_collator_0 ", -1, -1, nullptr);
+        executeAndAssertSortedBlocks(request, desc);
     }
 
     {
         /// "greater" function
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithNullableInt32{{}, 32, {}, 36, 27, 34}),
-                        toNullableVec<String>(col_name[1], ColumnWithNullableString{"female", "male", "male", "female", "female", "male"}),
-                        toNullableVec<String>(col_name[2], ColumnWithNullableString{"korea", "usa", "china", "china", "usa", "china"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithNullableInt32{1300, {}, {}, 900, 0, -300})}};
-
         {
             /// select age, gender, country, salary from clerk order by age > salary ASC limit 100;
             order_by_items = {MockOrderByItem("greater(age, salary)", false)};
             func_ast = gt(col(col_name[0]), col(col_name[3]));
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
-            request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            executeAndAssertColumnsEqual(request, expect_cols.back());
+            request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projections[2]);
+            SortDescription desc;
+            desc.emplace_back("project_3_CAST(greater(age, salary)_collator_46 , Nullable(UInt64)_String)_collator_0 ", 1, -1, nullptr);
+            executeAndAssertSortedBlocks(request, desc);
         }
     }
 
@@ -254,8 +228,11 @@ try
                                .scan("test_db", table)
                                .topN("key", false, limit_num)
                                .build(context);
-            auto expect = executeStreams(request, 1);
-            executeAndAssertColumnsEqual(request, expect);
+
+            SortDescription desc;
+            desc.emplace_back("topn_1_key", 1, -1, nullptr);
+
+            executeAndAssertSortedBlocks(request, desc);
         }
     }
 }

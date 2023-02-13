@@ -78,6 +78,7 @@ public:
 
     ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency = 1);
     void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
+    void executeAndAssertSortedBlocks(const std::shared_ptr<tipb::DAGRequest> & request, const SortDescription & sort_desc);
     void executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows);
 
     enum SourceType
@@ -102,7 +103,7 @@ public:
         }
     }
 
-    ColumnsWithTypeAndName executeStreams(DAGContext * dag_context, bool enalbe_memory_tracker = false);
+    ColumnsWithTypeAndName executeStreams(DAGContext * dag_context, bool enable_memory_tracker = false);
 
     ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
@@ -118,6 +119,11 @@ private:
     void executeExecutor(
         const std::shared_ptr<tipb::DAGRequest> & request,
         std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func);
+
+    void checkSorted(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const SortDescription & sort_desc,
+        std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &, const ColumnsWithTypeAndName &)> assert_func);
 
 protected:
     MockDAGRequestContext context;
