@@ -52,7 +52,7 @@ Block mergeSegmentRowIds(std::vector<Block> && blocks)
     return accumulated_block;
 }
 
-RowKeyRange SegmentTestBasic::buildRowKeyRange(Int64 begin, Int64 end)
+static RowKeyRange SegmentTestBasic::buildRowKeyRange(Int64 begin, Int64 end)
 {
     HandleRange range(begin, end);
     return RowKeyRange::fromHandleRange(range);
@@ -118,7 +118,7 @@ ColumnPtr SegmentTestBasic::getSegmentHandle(PageIdU64 segment_id, const RowKeyR
     }
     else
     {
-        auto block = mergeBlocks(std::move(blks));
+        auto block = vstackBlocks(std::move(blks));
         RUNTIME_CHECK(block.has(EXTRA_HANDLE_COLUMN_NAME));
         RUNTIME_CHECK(block.segmentRowIdCol() == nullptr);
         return block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
