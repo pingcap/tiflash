@@ -88,7 +88,7 @@ try
 
         const auto res0 = ColumnWithInt64{1, 1, 0, 0, -1, -1};
         const auto * col_0 = typeid_cast<const ColumnInt64 *>(block.getColumns()[0].get());
-        for (int i = 0; i < int(expand_rows); ++i)
+        for (int i = 0; i < static_cast<int>(expand_rows); ++i)
         {
             ASSERT_EQ(col_0->getElement(i), res0[i]);
         }
@@ -96,7 +96,7 @@ try
         const auto res1 = ColumnWithString{"1   ", "null", "1  ", "null", "1 ", "null"};
         const auto * col_1 = typeid_cast<const ColumnNullable *>(block.getColumns()[1].get());
         const auto * col_1_nest = &static_cast<const ColumnString &>(col_1->getNestedColumn());
-        for (int i = 0; i < int(expand_rows); ++i)
+        for (int i = 0; i < static_cast<int>(expand_rows); ++i)
         {
             if (res1[i] == "null")
             {
@@ -111,7 +111,7 @@ try
         const auto res2 = ColumnWithString{"null", "1", "null", "2", "null", "3"};
         const auto * col_2 = typeid_cast<const ColumnNullable *>(block.getColumns()[2].get());
         const auto * col_2_nest = &static_cast<const ColumnString &>(col_2->getNestedColumn());
-        for (int i = 0; i < int(expand_rows); ++i)
+        for (int i = 0; i < static_cast<int>(expand_rows); ++i)
         {
             if (res2[i] == "null")
             {
@@ -125,14 +125,14 @@ try
 
         const auto res3 = ColumnWithUInt64{1, 1, 1, 1, 0, 0};
         const auto * col_3 = typeid_cast<const ColumnUInt64 *>(block.getColumns()[3].get());
-        for (int i = 0; i < int(expand_rows); ++i)
+        for (int i = 0; i < static_cast<int>(expand_rows); ++i)
         {
             ASSERT_EQ(col_3->getElement(i), res3[i]);
         }
 
         const auto res4 = ColumnWithUInt64{1, 2, 1, 2, 1, 2};
         const auto * col_4 = typeid_cast<const ColumnUInt64 *>(block.getColumns()[4].get());
-        for (int i = 0; i < int(expand_rows); ++i)
+        for (int i = 0; i < static_cast<int>(expand_rows); ++i)
         {
             ASSERT_EQ(col_4->getElement(i), res4[i]);
         }
@@ -188,7 +188,7 @@ try
 
         const auto res0 = ColumnWithInt64{1, 1, 1, 0, 0, 0, -1, -1, -1};
         const auto * col_0 = typeid_cast<const ColumnInt64 *>(block.getColumns()[0].get());
-        for (int i = 0; i < int(expand_rows); ++i)
+        for (int i = 0; i < static_cast<int>(expand_rows); ++i)
         {
             ASSERT_EQ(col_0->getElement(i), res0[i]);
         }
@@ -196,7 +196,7 @@ try
         const auto res1 = ColumnWithString{"aaa", "null", "null", "bbb", "null", "null", "ccc", "null", "null"};
         const auto * col_1 = typeid_cast<const ColumnNullable *>(block.getColumns()[1].get());
         const auto * col_1_nest = &static_cast<const ColumnString &>(col_1->getNestedColumn());
-        for (int i = 0; i < int(expand_rows); ++i)
+        for (int i = 0; i < static_cast<int>(expand_rows); ++i)
         {
             if (res1[i] == "null")
             {
@@ -211,7 +211,7 @@ try
         const auto res2 = ColumnWithString{"null", "1", "null", "null", "2", "null", "null", "3", "null"};
         const auto * col_2 = typeid_cast<const ColumnNullable *>(block.getColumns()[2].get());
         const auto * col_2_nest = &static_cast<const ColumnString &>(col_2->getNestedColumn());
-        for (int i = 0; i < int(expand_rows); ++i)
+        for (int i = 0; i < static_cast<int>(expand_rows); ++i)
         {
             if (res2[i] == "null")
             {
@@ -224,12 +224,12 @@ try
         }
 
         // use UInt64(-1) to represent null.
-        const auto res3 = ColumnWithUInt64{UInt64(-1), UInt64(-1), 1, UInt64(-1), UInt64(-1), 1, UInt64(-1), UInt64(-1), 0};
+        const auto res3 = ColumnWithUInt64{static_cast<UInt64>(-1), static_cast<UInt64>(-1), 1, static_cast<UInt64>(-1), static_cast<UInt64>(-1), 1, static_cast<UInt64>(-1), static_cast<UInt64>(-1), 0};
         const auto * col_3 = typeid_cast<const ColumnNullable *>(block.getColumns()[3].get());
         const auto * col_3_nest = &typeid_cast<const ColumnUInt64 &>(col_3->getNestedColumn());
-        for (int i = 0; i < int(expand_rows); ++i)
+        for (int i = 0; i < static_cast<int>(expand_rows); ++i)
         {
-            if (res3[i] == UInt64(-1))
+            if (res3[i] == static_cast<UInt64>(-1))
             {
                 ASSERT_EQ(col_3->isNullAt(i), true);
             }
@@ -241,7 +241,7 @@ try
 
         const auto res4 = ColumnWithUInt64{1, 2, 3, 1, 2, 3, 1, 2, 3};
         const auto * col_4 = typeid_cast<const ColumnUInt64 *>(block.getColumns()[4].get());
-        for (int i = 0; i < int(expand_rows); ++i)
+        for (int i = 0; i < static_cast<int>(expand_rows); ++i)
         {
             ASSERT_EQ(col_4->getElement(i), res4[i]);
         }
