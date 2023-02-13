@@ -79,7 +79,7 @@ public:
     ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency = 1);
     void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
 
-    // To check the output column with index = column_index sorted. 
+    // To check the output column with index = column_index sorted.
     struct SortInfo
     {
         size_t column_index;
@@ -178,5 +178,4 @@ using ColumnWithInt64 = std::vector<ColInt64Type>;
 using ColumnWithUInt64 = std::vector<ColUInt64Type>;
 using ColumnWithFloat64 = std::vector<ColFloat64Type>;
 using ColumnWithString = std::vector<ColStringType>;
-
 } // namespace DB::tests
