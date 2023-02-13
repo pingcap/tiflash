@@ -23,8 +23,6 @@
 #include <iterator>
 #include <memory>
 
-#include "common/defines.h"
-
 
 namespace DB
 {
