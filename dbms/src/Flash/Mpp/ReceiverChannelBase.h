@@ -105,7 +105,15 @@ struct ReceivedMessage
         , error_ptr(error_ptr_)
         , resp_ptr(resp_ptr_)
         , chunks(chunks_)
-    {}
+    {
+        auto * log = &Poco::Logger::get("LRUCache");
+        LOG_INFO(log, "Profiling: rm_cons", reinterpret_cast<size_t>(this));
+    }
+
+    ~ReceivedMessage() {
+        auto * log = &Poco::Logger::get("LRUCache");
+        LOG_INFO(log, "Profiling: rm_des", reinterpret_cast<size_t>(this));
+    }
 
     void switchMemTracker()
     {

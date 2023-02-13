@@ -51,7 +51,7 @@ public:
     using Self = AsyncRequestHandler<RPCContext, enable_fine_grained_shuffle>;
 
     AsyncRequestHandler(
-        std::vector<GRPCReceiveQueue<ReceivedMessage>> * grpc_recv_queues_,
+        std::vector<GRPCReceiveQueue<ReceivedMessage>> & grpc_recv_queues_,
         AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue_,
         const std::shared_ptr<RPCContext> & context,
         Request && req,
@@ -72,7 +72,12 @@ public:
         , kick_recv_tag(thisAsUnaryCallback())
         , close_conn(std::move(close_conn_))
     {
+        LOG_INFO(log, "Profiling: async_cons {}", reinterpret_cast<UInt64>(this));
         start();
+    }
+
+    ~AsyncRequestHandler() override {
+        LOG_INFO(log, "Profiling: async_des {}", reinterpret_cast<UInt64>(this));
     }
 
     // execute will be called by RPC framework so it should be as light as possible.

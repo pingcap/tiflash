@@ -153,6 +153,7 @@ private:
 
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
+    void destructAsyncRequestHandler();
 
     ExchangeReceiverResult toDecodeResult(
         std::queue<Block> & block_queue,
@@ -199,8 +200,8 @@ private:
     std::vector<GRPCReceiveQueue<ReceivedMessage>> grpc_recv_queue;
     AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
 
-    std::vector<AsyncRequestHandler<RPCContext, true> *> async_handler_fine_grained_ptr;
-    std::vector<AsyncRequestHandler<RPCContext, false> *> async_handler_no_fine_grained_ptr;
+    std::vector<AsyncRequestHandler<RPCContext, true> *> async_handler_fine_grained_ptrs;
+    std::vector<AsyncRequestHandler<RPCContext, false> *> async_handler_no_fine_grained_ptrs;
 
     std::mutex mu;
     std::condition_variable cv;

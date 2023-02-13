@@ -124,8 +124,9 @@ class GRPCReceiveQueue
 private:
     using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<T>>>;
 public:
-    GRPCReceiveQueue(MsgChannelPtr recv_queue_, const LoggerPtr & log_)
-        : recv_queue(recv_queue_)
+    GRPCReceiveQueue(MsgChannelPtr recv_queue_, AsyncRequestHandlerWaitQueuePtr conn_wait_queue_, const LoggerPtr & log_)
+        : recv_queue(std::move(recv_queue_))
+        , conn_wait_queue(std::move(conn_wait_queue_))
         , log(log_) {}
 
     // For gtest usage.
@@ -147,6 +148,11 @@ public:
         if (ret)
             handleRemainingTags();
         return ret;
+    }
+
+    bool cancel()
+    {
+        return cancelWith("");
     }
 
     bool finish()
@@ -224,9 +230,9 @@ private:
     }
 
     MsgChannelPtr recv_queue;
-    const LoggerPtr log;
     GRPCReceiveKickFunc kick_func;
     AsyncRequestHandlerWaitQueuePtr conn_wait_queue;
+    const LoggerPtr log;
 };
 
 } // namespace DB

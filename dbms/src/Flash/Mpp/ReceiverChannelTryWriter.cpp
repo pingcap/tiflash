@@ -133,7 +133,7 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite()
 
 GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteImpl(size_t index, std::shared_ptr<ReceivedMessage> && msg)
 {
-    GRPCReceiveQueueRes res = (*grpc_recv_queues)[index].push(std::move(msg));
+    GRPCReceiveQueueRes res = grpc_recv_queues[index].push(std::move(msg));
     if (res == GRPCReceiveQueueRes::FULL)
         rewrite_msgs.insert({index, std::move(msg)});
     return res;
@@ -141,7 +141,7 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteImpl(size_t index, std::sh
 
 GRPCReceiveQueueRes ReceiverChannelTryWriter::tryRewriteImpl(size_t index, std::shared_ptr<ReceivedMessage> & msg)
 {
-    return (*grpc_recv_queues)[index].push(msg);
+    return grpc_recv_queues[index].push(msg);
 }
 
 template GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite<true>();

@@ -73,6 +73,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 {
     try
     {
+        LOG_INFO(exc_log, "Profiling: er_cons {}", reinterpret_cast<UInt64>(this));
         prepareMsgChannels();
         prepareGRPCReceiveQueue();
         if (isReceiverForTiFlashStorage())
@@ -100,12 +101,15 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
-    // TODO delete async_req_handler_ptr at the appropriate time
     try
     {
         close();
+        LOG_INFO(exc_log, "Profiling: er_des {} 1", reinterpret_cast<UInt64>(this));
         waitAllConnectionDone();
+        LOG_INFO(exc_log, "Profiling: er_des {} 2", reinterpret_cast<UInt64>(this));
         thread_manager->wait();
+        LOG_INFO(exc_log, "Profiling: er_des {} 3", reinterpret_cast<UInt64>(this));
+        destructAsyncRequestHandler();
         ExchangeReceiverMetric::clearDataSizeMetric(data_size_in_queue);
     }
     catch (...)
@@ -115,6 +119,15 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
         RUNTIME_ASSERT(live_local_connections == 0, "We should wait the close of local connection");
         tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
     }
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::destructAsyncRequestHandler()
+{
+    for (auto * ptr : async_handler_fine_grained_ptrs)
+        delete ptr;
+    for (auto * ptr : async_handler_no_fine_grained_ptrs)
+        delete ptr;
 }
 
 template <typename RPCContext>
@@ -131,10 +144,13 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
 {
     std::unique_lock lock(mu);
+    LOG_INFO(exc_log, "Profiling: er_des_wait_all {} 0", reinterpret_cast<UInt64>(this));
     auto pred = [&] {
         return live_connections == 0;
     };
     cv.wait(lock, pred);
+
+    LOG_INFO(exc_log, "Profiling: er_des_wait_all {} 1", reinterpret_cast<UInt64>(this));
 
     // The meaning of calling of connectionDone by local tunnel is to tell the receiver
     // to close channels and the local tunnel may still alive after it calls connectionDone.
@@ -142,6 +158,7 @@ void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
     // In order to ensure the destructions of local tunnels are
     // after the ExchangeReceiver, we need to wait at here.
     waitLocalConnectionDone(lock);
+    LOG_INFO(exc_log, "Profiling: er_des_wait_all {} 2", reinterpret_cast<UInt64>(this));
 }
 
 template <typename RPCContext>
@@ -167,7 +184,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::prepareGRPCReceiveQueue()
 {
     for (auto & msg_channel : msg_channels)
-        grpc_recv_queue.emplace_back(msg_channel, exc_log);
+        grpc_recv_queue.emplace_back(msg_channel, async_wait_rewrite_queue, exc_log);
 }
 
 template <typename RPCContext>
@@ -268,9 +285,9 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
 {
     if (enable_fine_grained_shuffle_flag)
     {
-        async_handler_fine_grained_ptr.push_back(
+        async_handler_fine_grained_ptrs.push_back(
             new AsyncRequestHandler<RPCContext, true>(
-                &grpc_recv_queue,
+                grpc_recv_queue,
                 async_wait_rewrite_queue,
                 rpc_context,
                 std::move(request),
@@ -283,9 +300,10 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
     }
     else
     {
-        async_handler_no_fine_grained_ptr.push_back(
+        async_handler_no_fine_grained_ptrs.push_back(
+
             new AsyncRequestHandler<RPCContext, false>(
-                &grpc_recv_queue,
+                grpc_recv_queue,
                 async_wait_rewrite_queue,
                 rpc_context,
                 std::move(request),
@@ -302,10 +320,10 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::destructAllAsyncRequestHandler()
 {
     if (enable_fine_grained_shuffle_flag)
-        for (auto handler_ptr : async_handler_fine_grained_ptr)
+        for (auto handler_ptr : async_handler_fine_grained_ptrs)
             delete handler_ptr;
     else
-        for (auto handler_ptr : async_handler_no_fine_grained_ptr)
+        for (auto handler_ptr : async_handler_no_fine_grained_ptrs)
             delete handler_ptr;
 }
 
@@ -654,15 +672,31 @@ void ExchangeReceiverBase<RPCContext>::connectionLocalDone()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::finishAllMsgChannels()
 {
-    for (auto & msg_channel : msg_channels)
-        msg_channel->finish();
+    if (grpc_recv_queue.empty())
+    {
+        for (auto & msg_channel : msg_channels)
+            msg_channel->finish();
+    }
+    else
+    {
+        for (auto & channel : grpc_recv_queue)
+            channel.finish();
+    }
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancelAllMsgChannels()
 {
-    for (auto & msg_channel : msg_channels)
-        msg_channel->cancel();
+    if (grpc_recv_queue.empty())
+    {
+        for (auto & msg_channel : msg_channels)
+            msg_channel->cancel();
+    }
+    else
+    {
+        for (auto & channel : grpc_recv_queue)
+            channel.cancel();
+    }
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
