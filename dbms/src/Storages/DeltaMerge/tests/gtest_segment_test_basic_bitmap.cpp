@@ -52,7 +52,7 @@ Block mergeSegmentRowIds(std::vector<Block> && blocks)
     return accumulated_block;
 }
 
-static RowKeyRange SegmentTestBasic::buildRowKeyRange(Int64 begin, Int64 end)
+RowKeyRange SegmentTestBasic::buildRowKeyRange(Int64 begin, Int64 end)
 {
     HandleRange range(begin, end);
     return RowKeyRange::fromHandleRange(range);
