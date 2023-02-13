@@ -78,7 +78,17 @@ public:
 
     ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency = 1);
     void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
-    void executeAndAssertSortedBlocks(const std::shared_ptr<tipb::DAGRequest> & request, const SortDescription & sort_desc);
+
+    // To check the output column with index = column_index sorted. 
+    struct SortInfo
+    {
+        size_t column_index;
+        bool desc;
+    };
+    using SortInfos = std::vector<SortInfo>;
+
+    // check whether the column in each output block sorted.
+    void executeAndAssertSortedBlocks(const std::shared_ptr<tipb::DAGRequest> & request, const SortInfos & sort_infos);
     void executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows);
 
     enum SourceType
@@ -122,7 +132,7 @@ private:
 
     void checkBlockSorted(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        const SortDescription & sort_desc,
+        const SortInfos & sort_infos,
         std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &, const ColumnsWithTypeAndName &)> assert_func);
 
 protected:
@@ -168,4 +178,5 @@ using ColumnWithInt64 = std::vector<ColInt64Type>;
 using ColumnWithUInt64 = std::vector<ColUInt64Type>;
 using ColumnWithFloat64 = std::vector<ColFloat64Type>;
 using ColumnWithString = std::vector<ColStringType>;
+
 } // namespace DB::tests

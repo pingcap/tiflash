@@ -16,8 +16,6 @@
 #include <Interpreters/sortBlock.h>
 #include <Operators/TopNTransformOp.h>
 
-#include <memory>
-
 namespace DB
 {
 OperatorStatus TopNTransformOp::transformImpl(Block & block)
@@ -49,8 +47,9 @@ OperatorStatus TopNTransformOp::tryOutputImpl(Block & block)
     if (impl)
     {
         block = impl->read();
+        return OperatorStatus::HAS_OUTPUT;
     }
-    return OperatorStatus::HAS_OUTPUT;
+    return OperatorStatus::NEED_INPUT;
 }
 
 void TopNTransformOp::transformHeaderImpl(Block &)

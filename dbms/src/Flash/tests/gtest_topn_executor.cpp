@@ -117,9 +117,8 @@ try
             for (size_t limit_num = 0; limit_num <= col_data_num + 5; ++limit_num)
             {
                 request = buildDAGRequest(table_single_name, single_col_name, is_desc, limit_num);
-                SortDescription desc;
-                desc.emplace_back("topn_1_single_col", is_desc ? -1 : 1, -1, nullptr);
-                executeAndAssertSortedBlocks(request, desc);
+                SortInfos sort_infos{{0, is_desc}};
+                executeAndAssertSortedBlocks(request, sort_infos);
             }
         }
     }
@@ -134,19 +133,15 @@ try
             /// select * from clerk order by gender DESC, country ASC, salary DESC;
             {MockOrderByItem(col_name[1], true), MockOrderByItem(col_name[2], false), MockOrderByItem(col_name[3], true)}};
 
-        std::vector<SortDescription> descs{
-            {{"topn_1_age", -1, -1, nullptr},
-             {"topn_1_gender", -1, -1, nullptr}},
-            {{"topn_1_gender", -1, -1, nullptr},
-             {"topn_1_salary", 1, -1, nullptr}},
-            {{"topn_1_gender", -1, -1, nullptr},
-             {"topn_1_country", 1, -1, nullptr},
-             {"topn_1_salary", -1, -1, nullptr}}};
+        std::vector<SortInfos> infos{
+            {{0, true}, {1, true}},
+            {{1, true}, {3, false}},
+            {{1, true}, {2, false}, {3, true}}};
 
         for (size_t i = 0; i < order_by_items.size(); ++i)
         {
             request = buildDAGRequest(table_name, order_by_items[i], 100);
-            executeAndAssertSortedBlocks(request, descs[i]);
+            executeAndAssertSortedBlocks(request, infos[i]);
         }
     }
 }
@@ -176,9 +171,8 @@ try
         func_ast = And(col(col_name[0]), col(col_name[3]));
         func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
         request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projections[0]);
-        SortDescription desc;
-        desc.emplace_back("project_3_CAST(and(notEquals(age, 0_Int64)_collator_0 , notEquals(salary, 0_Int64)_collator_0 )_collator_46 , Nullable(UInt64)_String)_collator_0 ", 1, -1, nullptr);
-        executeAndAssertSortedBlocks(request, desc);
+        SortInfos sort_infos{{4, false}};
+        executeAndAssertSortedBlocks(request, sort_infos);
     }
 
 
@@ -190,9 +184,8 @@ try
         func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
         request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projections[1]);
-        SortDescription desc;
-        desc.emplace_back("project_3_CAST(equals(age, salary)_collator_46 , Nullable(UInt64)_String)_collator_0 ", -1, -1, nullptr);
-        executeAndAssertSortedBlocks(request, desc);
+        SortInfos sort_infos{{4, true}};
+        executeAndAssertSortedBlocks(request, sort_infos);
     }
 
     {
@@ -204,9 +197,8 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projections[2]);
-            SortDescription desc;
-            desc.emplace_back("project_3_CAST(greater(age, salary)_collator_46 , Nullable(UInt64)_String)_collator_0 ", 1, -1, nullptr);
-            executeAndAssertSortedBlocks(request, desc);
+            SortInfos sort_infos{{4, false}};
+            executeAndAssertSortedBlocks(request, sort_infos);
         }
     }
 
@@ -227,11 +219,8 @@ try
                                .scan("test_db", table)
                                .topN("key", false, limit_num)
                                .build(context);
-
-            SortDescription desc;
-            desc.emplace_back("topn_1_key", 1, -1, nullptr);
-
-            executeAndAssertSortedBlocks(request, desc);
+            SortInfos sort_infos{{0, false}};
+            executeAndAssertSortedBlocks(request, sort_infos);
         }
     }
 }

@@ -23,7 +23,6 @@
 #include <TestUtils/executorSerializer.h>
 
 #include <functional>
-#include <memory>
 
 namespace DB::tests
 {
@@ -183,7 +182,7 @@ void ExecutorTest::executeExecutor(
 
 void ExecutorTest::checkBlockSorted(
     const std::shared_ptr<tipb::DAGRequest> & request,
-    const SortDescription & sort_desc,
+    const SortInfos & sort_infos,
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &, const ColumnsWithTypeAndName &)> assert_func)
 {
     WRAP_FOR_TEST_BEGIN
@@ -196,12 +195,12 @@ void ExecutorTest::checkBlockSorted(
         {
             context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             auto return_blocks = getExecuteStreamsReturnBlocks(request, concurrency);
+            SortDescription sort_desc;
+            for (auto sort_info : sort_infos)
+                sort_desc.emplace_back(return_blocks.back().getColumnsWithTypeAndName()[sort_info.column_index].name, sort_info.desc ? -1 : 1, -1);
 
-            if (enable_planner)
-            {
-                for (auto & block : return_blocks)
-                    ASSERT_TRUE(isAlreadySorted(block, sort_desc)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
-            }
+            for (auto & block : return_blocks)
+                ASSERT_TRUE(isAlreadySorted(block, sort_desc)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
 
             auto res = mergeBlocks(std::move(return_blocks)).getColumnsWithTypeAndName();
             ASSERT_TRUE(assert_func(expected_res, res)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
@@ -220,9 +219,9 @@ void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGR
     });
 }
 
-void ExecutorTest::executeAndAssertSortedBlocks(const std::shared_ptr<tipb::DAGRequest> & request, const SortDescription & sort_desc)
+void ExecutorTest::executeAndAssertSortedBlocks(const std::shared_ptr<tipb::DAGRequest> & request, const SortInfos & sort_infos)
 {
-    checkBlockSorted(request, sort_desc, [&](const ColumnsWithTypeAndName & expect_columns, const ColumnsWithTypeAndName & res) {
+    checkBlockSorted(request, sort_infos, [&](const ColumnsWithTypeAndName & expect_columns, const ColumnsWithTypeAndName & res) {
         return columnsEqual(expect_columns, res, /*_restrict=*/false) << "\n  expect_block: \n"
                                                                       << getColumnsContent(expect_columns)
                                                                       << "\n actual_block: \n"

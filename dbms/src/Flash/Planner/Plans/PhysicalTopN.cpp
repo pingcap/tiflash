@@ -25,8 +25,6 @@
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/TopNTransformOp.h>
 
-#include <memory>
-
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalTopN::build(
