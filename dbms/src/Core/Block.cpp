@@ -554,27 +554,27 @@ Block vstackBlocks(Blocks && blocks)
         result_rows += block.rows();
     }
 
-    Block out = blocks.front().cloneEmpty();
-    MutableColumns columns = out.mutateColumns();
-    for (auto & col : columns)
+    auto & first_block = blocks.front();
+    MutableColumns dst_columns(first_block.columns());
+
+    for (size_t i = 0; i < first_block.columns(); ++i)
     {
-        col->reserve(result_rows);
+        dst_columns[i] = (*std::move(first_block.getByPosition(i).column)).mutate();
+        dst_columns[i]->reserve(result_rows);
     }
 
     for (size_t i = 1; i < blocks.size(); ++i)
     {
         if (likely(blocks[i].rows() > 0))
         {
-            assert(blocksHaveEqualStructure(blocks.front(), blocks[i]));
+            assert(blocksHaveEqualStructure(first_block, blocks[i]));
             for (size_t idx = 0; idx < blocks[i].columns(); ++idx)
             {
-                columns[idx]->insertRangeFrom(*blocks[i].getByPosition(idx).column, 0, blocks[i].rows());
+                dst_columns[idx]->insertRangeFrom(*blocks[i].getByPosition(idx).column, 0, blocks[i].rows());
             }
         }
     }
-
-    out.setColumns(std::move(columns));
-    return out;
+    return first_block.cloneWithColumns(std::move(dst_columns));
 }
 
 Block popBlocksListFront(BlocksList & blocks)
