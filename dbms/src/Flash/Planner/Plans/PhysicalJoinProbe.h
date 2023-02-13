@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Planner/Plans/PhysicalUnary.h>
+#include <Flash/Planner/Plans/PipelineBreakerHelper.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Join.h>
 
@@ -35,28 +36,10 @@ public:
         , prepare_actions(prepare_actions_)
     {}
 
-    void buildPipeline(PipelineBuilder &) override
-    {
-        throw Exception("Unsupport");
-    }
-
-    void finalize(const Names &) override
-    {
-        throw Exception("Unsupport");
-    }
-
-    const Block & getSampleBlock() const override
-    {
-        throw Exception("Unsupport");
-    }
-
     void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/) override;
 
 private:
-    void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override
-    {
-        throw Exception("Unsupport");
-    }
+    DISABLE_NON_BUILD_PIPELINE_FUNCTION
 
 private:
     JoinPtr join_ptr;
