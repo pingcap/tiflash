@@ -35,27 +35,10 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
     : dmfile(dmfile_)
     , write_columns(write_columns_)
     , options(options_)
-    ,
-    // assume pack_stat_file is the first file created inside DMFile
-    // it will create encryption info for the whole DMFile
-    pack_stat_file(dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(
-                       file_provider_,
-                       dmfile->packStatPath(),
-                       dmfile->encryptionPackStatPath(),
-                       true,
-                       write_limiter_,
-                       dmfile->configuration->getChecksumAlgorithm(),
-                       dmfile->configuration->getChecksumFrameLength())
-                                         : createWriteBufferFromFileBaseByFileProvider(file_provider_,
-                                                                                       dmfile->packStatPath(),
-                                                                                       dmfile->encryptionPackStatPath(),
-                                                                                       true,
-                                                                                       write_limiter_,
-                                                                                       0,
-                                                                                       0,
-                                                                                       options.max_compress_block_size))
     , file_provider(file_provider_)
     , write_limiter(write_limiter_)
+    // Create a new file is necessarily here. Because it will create encryption info for the whole DMFile.
+    , file(createFile())
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
@@ -67,6 +50,54 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
         addStreams(cd.id, cd.type, do_index);
         dmfile->column_stats.emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
     }
+}
+
+DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createFile()
+{
+    if (dmfile->useMetaV2())
+    {
+        return createMetaV2File();
+    }
+    else
+    {
+        return createPackStatsFile();
+    }
+}
+
+DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaV2File()
+{
+    // Use a fixed checksums algorithm is meta file.
+    // We don't use `dmfile-configuration` here because the information of configuration will store in meta file.
+    return createWriteBufferFromFileBaseByFileProvider(
+        file_provider,
+        dmfile->metav2Path(),
+        dmfile->encryptionMetav2Path(),
+        /*create_new_encryption_info*/ true,
+        write_limiter,
+        ChecksumAlgo::CRC32,
+        TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE);
+}
+
+DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
+{
+    return dmfile->configuration ? 
+        createWriteBufferFromFileBaseByFileProvider(
+            file_provider,
+            dmfile->packStatPath(),
+            dmfile->encryptionPackStatPath(),
+            /*create_new_encryption_info*/ true,
+            write_limiter,
+            dmfile->configuration->getChecksumAlgorithm(),
+            dmfile->configuration->getChecksumFrameLength()) :
+        createWriteBufferFromFileBaseByFileProvider(
+            file_provider,
+            dmfile->packStatPath(),
+            dmfile->encryptionPackStatPath(),
+            /*create_new_encryption_info*/ true,
+            write_limiter,
+            0,
+            0,
+            options.max_compress_block_size);
 }
 
 void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
@@ -112,8 +143,6 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
             stat.first_tag = static_cast<UInt8>(col->get64(0));
     }
 
-    writePODBinary(stat, *pack_stat_file);
-
     dmfile->addPack(stat);
 
     auto & properties = dmfile->getPackProperties();
@@ -125,14 +154,38 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
 
 void DMFileWriter::finalize()
 {
-    pack_stat_file->sync();
-
     for (auto & cd : write_columns)
     {
         finalizeColumn(cd.id, cd.type);
     }
+    if (dmfile->useMetaV2())
+    {
+        finalizeMetaV2();
+    }
+    else
+    {
+        finalizeMeta();
+    }
+}
+
+void DMFileWriter::finalizeMeta()
+{
+    const auto & pack_stats = dmfile->getPackStats();
+    for (const auto & pack_stat : pack_stats)
+    {
+        writePODBinary(pack_stat, *file);
+    }
+    file->sync();
 
     dmfile->finalizeForFolderMode(file_provider, write_limiter);
+}
+
+void DMFileWriter::finalizeMetaV2()
+{
+    dmfile->finalizeMetaV2(*file);
+    file->sync();
+    file->close();
+    dmfile->finalizeDirName();
 }
 
 void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column, const ColumnVector<UInt8> * del_mark)
@@ -189,6 +242,9 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 {
     size_t bytes_written = 0;
+    size_t data_bytes = 0;
+    size_t index_bytes = 0;
+    size_t mark_bytes = 0;
 #ifndef NDEBUG
     auto examine_buffer_size = [](auto & buf, auto & fp) {
         if (!fp.isEncryptionEnabled())
@@ -210,7 +266,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         examine_buffer_size(*stream->plain_file, *this->file_provider);
 #endif
         bytes_written += stream->getWrittenBytes();
-
+        data_bytes = stream->plain_file->getMaterializedBytes();
+        mark_bytes = stream->mark_file->getMaterializedBytes();
         if (stream->minmaxes)
         {
             if (!dmfile->configuration)
@@ -227,7 +284,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
                 // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
                 // and we cannot change the index file format for empty dmfile because of backward compatibility.
-                bytes_written += is_empty_file ? 0 : buf.getMaterializedBytes();
+                index_bytes = buf.getMaterializedBytes();
+                bytes_written += is_empty_file ? 0 : index_bytes;
             }
             else
             {
@@ -244,7 +302,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
                 // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
                 // and we cannot change the index file format for empty dmfile because of backward compatibility.
-                bytes_written += is_empty_file ? 0 : buf->getMaterializedBytes();
+                index_bytes = buf->getMaterializedBytes();
+                bytes_written += is_empty_file ? 0 : index_bytes;
 #ifndef NDEBUG
                 examine_buffer_size(*buf, *this->file_provider);
 #endif
@@ -254,7 +313,11 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     type->enumerateStreams(callback, {});
 
     // Update column's bytes in disk
-    dmfile->column_stats.at(col_id).serialized_bytes = bytes_written;
+    auto & col_stat = dmfile->column_stats.at(col_id);
+    col_stat.serialized_bytes = bytes_written;
+    col_stat.data_bytes = data_bytes;
+    col_stat.index_bytes = index_bytes;
+    col_stat.mark_bytes = mark_bytes;
 }
 
 } // namespace DM
