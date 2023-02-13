@@ -19,10 +19,13 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalExpand.h>
 #include <Interpreters/Context.h>
+#include <Operators/ExpressionTransformOp.h>
+#include <Operators/FilterTransformOp.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -46,9 +49,10 @@ PhysicalPlanNodePtr PhysicalExpand::build(
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr before_expand_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
-
+    ExpressionActionsPtr expand_actions_itself = PhysicalPlanHelper::newActions(child->getSampleBlock());
 
     auto shared_expand = analyzer.buildExpandGroupingColumns(expand, before_expand_actions);
+    expand_actions_itself->add(ExpressionAction::expandSource(shared_expand));
 
     // construct sample block.
     NamesAndTypes expand_output_columns;
@@ -65,6 +69,7 @@ PhysicalPlanNodePtr PhysicalExpand::build(
         log->identifier(),
         child,
         shared_expand,
+        expand_actions_itself,
         Block(expand_output_columns));
 
     return physical_expand;
@@ -73,16 +78,26 @@ PhysicalPlanNodePtr PhysicalExpand::build(
 
 void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
 {
-    auto expand_actions = PhysicalPlanHelper::newActions(child_pipeline.firstStream()->getHeader());
-    expand_actions->add(ExpressionAction::expandSource(shared_expand));
     String expand_extra_info = fmt::format("expand, expand_executor_id = {}", execId());
+    FmtBuffer fb;
+    fb.append(": grouping set ");
+    shared_expand->getGroupingSetsDes(fb);
+    expand_extra_info.append(fb.toString());
     child_pipeline.transform([&](auto & stream) {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, expand_actions, log->identifier());
         stream->setExtraInfo(expand_extra_info);
     });
 }
 
-void PhysicalExpand::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalExpand::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context &, size_t)
+{
+    auto input_header = group_builder.getCurrentHeader();
+    group_builder.transform([&](auto &builder) {
+        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, expand_actions, log->identifier()));
+    });
+}
+
+void PhysicalExpand::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     child->buildBlockInputStream(pipeline, context, max_streams);
     expandTransform(pipeline);

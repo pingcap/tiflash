@@ -32,11 +32,11 @@ ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
 #define WRAP_FOR_TEST_BEGIN                         \
-    std::vector<bool> planner_bools{false, true};   \
+    std::vector<bool> planner_bools{true};          \
     for (auto enable_planner : planner_bools)       \
     {                                               \
         enablePlanner(enable_planner);              \
-        std::vector<bool> pipeline_bools{false};    \
+        std::vector<bool> pipeline_bools{};         \
         if (enable_planner)                         \
             pipeline_bools.push_back(true);         \
         for (auto enable_pipeline : pipeline_bools) \

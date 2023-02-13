@@ -39,26 +39,26 @@ Expand::Expand(const DB::GroupingSets & gss)
 
 void Expand::getGroupingSetsDes(FmtBuffer & buffer) const
 {
-    buffer.fmtAppend("[");
+    buffer.append("[");
     for (const auto & grouping_set : group_sets_names)
     {
-        buffer.fmtAppend("{{");
+        buffer.append("{");
         for (const auto & grouping_exprs : grouping_set)
         {
-            buffer.fmtAppend("<");
+            buffer.append("<");
             for (size_t i = 0; i < grouping_exprs.size(); i++)
             {
                 if (i != 0)
                 {
-                    buffer.fmtAppend(",");
+                    buffer.append(",");
                 }
-                buffer.fmtAppend(grouping_exprs.at(i));
+                buffer.append(grouping_exprs.at(i));
             }
-            buffer.fmtAppend(">");
+            buffer.append(">");
         }
-        buffer.fmtAppend("}}");
+        buffer.append("}");
     }
-    buffer.fmtAppend("]");
+    buffer.append("]");
 }
 
 /// for cases like: select count(distinct a), count(distinct b) from t;

@@ -165,24 +165,24 @@ void serializeExpandSource(const String & executor_id, const tipb::Expand & expa
     buf.fmtAppend("{} | expanded_by: [", executor_id);
     for (const auto & grouping_set : expand.grouping_sets())
     {
-        buf.fmtAppend("<");
+        buf.append("<");
         for (const auto & grouping_exprs : grouping_set.grouping_exprs())
         {
-            buf.fmtAppend("{{");
+            buf.append("{");
             for (auto i = 0; i < grouping_exprs.grouping_expr().size(); i++)
             {
                 if (i != 0)
                 {
-                    buf.fmtAppend(",");
+                    buf.append(",");
                 }
                 auto expr = grouping_exprs.grouping_expr().Get(i);
                 serializeExpression(expr, buf);
             }
-            buf.fmtAppend("}}");
+            buf.append("}");
         }
-        buf.fmtAppend(">");
+        buf.append(">");
     }
-    buf.fmtAppend("]\n");
+    buf.append("]\n");
 }
 
 void serializeJoin(const String & executor_id, const tipb::Join & join, FmtBuffer & buf)

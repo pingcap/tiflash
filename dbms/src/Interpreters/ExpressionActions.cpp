@@ -258,7 +258,7 @@ void ExpressionAction::prepare(Block & sample_block)
     {
         Block new_block;
 
-        for (auto & projection : projections) // change alias
+        for (auto & projection : projections)
         {
             const std::string & name = projection.first;
             const std::string & alias = projection.second;
