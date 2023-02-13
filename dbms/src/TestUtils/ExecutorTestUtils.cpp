@@ -216,7 +216,7 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
     Blocks actual_blocks;
     for (const auto & stream : streams)
         readStream(actual_blocks, stream);
-    return mergeBlocks(std::move(actual_blocks)).getColumnsWithTypeAndName();
+    return vstackBlocks(std::move(actual_blocks)).getColumnsWithTypeAndName();
 }
 
 void ExecutorTest::enablePlanner(bool is_enable)
@@ -244,7 +244,7 @@ ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context, bo
     // Currently, don't care about regions information in tests.
     Blocks blocks;
     queryExecute(context.context, /*internal=*/!enable_memory_tracker)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
-    return mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName();
+    return vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName();
 }
 
 Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::DAGRequest> & request,

@@ -300,9 +300,9 @@ Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool i
         is_deleted);
 }
 
-Block sortMergeBlocks(std::vector<Block> && blocks)
+Block sortvstackBlocks(std::vector<Block> && blocks)
 {
-    auto accumulated_block = mergeBlocks(std::move(blocks));
+    auto accumulated_block = vstackBlocks(std::move(blocks));
 
     SortDescription sort;
     sort.emplace_back(EXTRA_HANDLE_COLUMN_NAME, 1, 0);
@@ -375,7 +375,7 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(PageIdU64 segment_id, UI
                   remaining_rows);
     }
 
-    return sortMergeBlocks(std::move(blocks));
+    return sortvstackBlocks(std::move(blocks));
 }
 
 void SegmentTestBasic::writeSegment(PageIdU64 segment_id, UInt64 write_rows, std::optional<Int64> start_at)
