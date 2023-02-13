@@ -1822,9 +1822,9 @@ void NO_INLINE Aggregator::mergeWithoutKeyStreamsImpl(
     block.clear();
 }
 
-BlocksList Aggregator::mergeBlocks(BlocksList & blocks, bool final)
+BlocksList Aggregator::vstackBlocks(BlocksList & blocks, bool final)
 {
-    RUNTIME_CHECK_MSG(!blocks.empty(), "The input blocks list for Aggregator::mergeBlocks must be non-empty");
+    RUNTIME_CHECK_MSG(!blocks.empty(), "The input blocks list for Aggregator::vstackBlocks must be non-empty");
 
     auto bucket_num = blocks.front().info.bucket_num;
 

@@ -1050,7 +1050,7 @@ public:
     MergingBucketsPtr mergeAndConvertToBlocks(ManyAggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
 
     /// Merge several partially aggregated blocks into one.
-    BlocksList mergeBlocks(BlocksList & blocks, bool final);
+    BlocksList vstackBlocks(BlocksList & blocks, bool final);
 
     /** Split block with partially-aggregated data to many blocks, as if two-level method of aggregation was used.
       * This is needed to simplify merging of that data with other results, that are already two-level.

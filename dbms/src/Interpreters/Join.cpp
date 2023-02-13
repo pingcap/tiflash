@@ -1953,7 +1953,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
     }
     else
     {
-        block = mergeBlocks(std::move(result_blocks));
+        block = vstackBlocks(std::move(result_blocks));
     }
 }
 
