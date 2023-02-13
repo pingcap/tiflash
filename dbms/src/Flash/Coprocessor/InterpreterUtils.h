@@ -83,5 +83,5 @@ void executeGeneratedColumnPlaceholder(
     size_t remote_read_streams_start_index,
     const std::vector<std::pair<UInt64, DataTypePtr>> & generated_column_infos,
     LoggerPtr log,
-    DAGPipeline & pipeline);
+    BlockInputStreams & streams);
 } // namespace DB

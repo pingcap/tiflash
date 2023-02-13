@@ -21,6 +21,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 
 namespace DB
 {
@@ -48,6 +49,20 @@ public:
     static String getColumnName(UInt64 col_index)
     {
         return "generated_column_" + std::to_string(col_index);
+    }
+
+    static std::vector<std::pair<UInt64, DataTypePtr>> getGeneratedColumnInfos(const TiDBTableScan & table_scan)
+    {
+        std::vector<std::pair<UInt64, DataTypePtr>> generated_column_infos;
+        for (Int64 i = 0; i < table_scan.getColumnSize(); ++i)
+        {
+            if (table_scan.getColumns()[i].hasGeneratedColumnFlag())
+            {
+                auto data_type = getDataTypeByColumnInfoForComputingLayer(table_scan.getColumns()[i]);
+                generated_column_infos.push_back(std::make_pair(i, data_type));
+            }
+        }
+        return generated_column_infos;
     }
 
 protected:
@@ -91,4 +106,5 @@ private:
     const std::vector<std::pair<UInt64, DataTypePtr>> generated_column_infos;
     const LoggerPtr log;
 };
+
 } // namespace DB

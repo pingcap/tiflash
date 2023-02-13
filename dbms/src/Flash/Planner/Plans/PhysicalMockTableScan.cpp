@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <DataStreams/MockTableScanBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
@@ -67,6 +69,8 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     assert(!schema.empty());
     assert(!mock_streams.empty());
 
+    auto generated_column_infos = GeneratedColumnPlaceholderBlockInputStream::getGeneratedColumnInfos(table_scan);
+    executeGeneratedColumnPlaceholder(mock_streams.size(), generated_column_infos, log, mock_streams);
     return {std::move(schema), std::move(mock_streams)};
 }
 } // namespace

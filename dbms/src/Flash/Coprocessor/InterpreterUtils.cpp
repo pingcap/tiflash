@@ -16,7 +16,7 @@
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
-#include <DataStreams/GeneratedColumnPlaceholderInputStream.h>
+#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
@@ -227,14 +227,14 @@ void executeGeneratedColumnPlaceholder(
     size_t remote_read_streams_start_index,
     const std::vector<std::pair<UInt64, DataTypePtr>> & generated_column_infos,
     LoggerPtr log,
-    DAGPipeline & pipeline)
+    BlockInputStreams & streams)
 {
     if (generated_column_infos.empty())
         return;
-    assert(remote_read_streams_start_index <= pipeline.streams.size());
+    assert(remote_read_streams_start_index <= streams.size());
     for (size_t i = 0; i < remote_read_streams_start_index; ++i)
     {
-        auto & stream = pipeline.streams[i];
+        auto & stream = streams[i];
         stream = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(stream, generated_column_infos, log->identifier());
         stream->setExtraInfo("generated column placeholder above table scan");
     }
