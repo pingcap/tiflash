@@ -54,6 +54,7 @@ protected:
 
 private:
     FilterTransformAction filter_transform_action;
+
     const LoggerPtr log;
 };
 
