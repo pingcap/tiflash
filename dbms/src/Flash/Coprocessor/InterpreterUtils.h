@@ -43,4 +43,45 @@ ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,
     const Context & context,
     const NamesWithAliases & project_cols);
+<<<<<<< HEAD
+=======
+
+void executeExpression(
+    DAGPipeline & pipeline,
+    const ExpressionActionsPtr & expr_actions,
+    const LoggerPtr & log,
+    const String & extra_info = "");
+
+void orderStreams(
+    DAGPipeline & pipeline,
+    size_t max_streams,
+    const SortDescription & order_descr,
+    Int64 limit,
+    bool enable_fine_grained_shuffle,
+    const Context & context,
+    const LoggerPtr & log);
+
+void executeCreatingSets(
+    DAGPipeline & pipeline,
+    const Context & context,
+    size_t max_streams,
+    const LoggerPtr & log);
+
+std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
+    const FilterConditions & filter_conditions,
+    DAGExpressionAnalyzer & analyzer);
+
+void executePushedDownFilter(
+    size_t remote_read_streams_start_index,
+    const FilterConditions & filter_conditions,
+    DAGExpressionAnalyzer & analyzer,
+    LoggerPtr log,
+    DAGPipeline & pipeline);
+
+void executeGeneratedColumnPlaceholder(
+    size_t remote_read_streams_start_index,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
+    LoggerPtr log,
+    DAGPipeline & pipeline);
+>>>>>>> e84ed489e6 (add GeneratedColumnPlaceholderInputStream (#6796))
 } // namespace DB
