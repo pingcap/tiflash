@@ -14,6 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
@@ -24,13 +25,40 @@ template <class ExchangeWriterPtr>
 BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
     ExchangeWriterPtr writer_,
     Int64 batch_send_min_limit_,
-    DAGContext & dag_context_)
+    DAGContext & dag_context_,
+    MPPDataPacketVersion data_codec_version_,
+    tipb::CompressionMode compression_mode_,
+    bool is_broadcast_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
     , writer(writer_)
+    , is_broadcast(is_broadcast_)
+    , data_codec_version(data_codec_version_)
+    , compression_method(ToInternalCompressionMethod(compression_mode_))
 {
     rows_in_blocks = 0;
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
+
+    switch (data_codec_version)
+    {
+    case MPPDataPacketV0:
+        break;
+    case MPPDataPacketV1:
+    default:
+    {
+        // make `batch_send_min_limit` always GT 0
+        if (batch_send_min_limit <= 0)
+        {
+            // set upper limit if not specified
+            batch_send_min_limit = 8 * 1024 /* 8K */;
+        }
+        for (const auto & field_type : dag_context.result_field_types)
+        {
+            expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
+        }
+        break;
+    }
+    }
 }
 
 template <class ExchangeWriterPtr>
@@ -63,7 +91,7 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::writeBlocks()
     if (unlikely(blocks.empty()))
         return;
 
-    writer->broadcastOrPassThroughWrite(blocks);
+    writer->broadcastOrPassThroughWrite(blocks, data_codec_version, compression_method, is_broadcast);
     blocks.clear();
     rows_in_blocks = 0;
 }
