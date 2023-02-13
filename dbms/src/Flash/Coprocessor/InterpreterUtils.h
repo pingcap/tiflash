@@ -66,4 +66,24 @@ void executeCreatingSets(
     const Context & context,
     size_t max_streams,
     const LoggerPtr & log);
+<<<<<<< HEAD
+=======
+
+std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
+    const FilterConditions & filter_conditions,
+    DAGExpressionAnalyzer & analyzer);
+
+void executePushedDownFilter(
+    size_t remote_read_streams_start_index,
+    const FilterConditions & filter_conditions,
+    DAGExpressionAnalyzer & analyzer,
+    LoggerPtr log,
+    DAGPipeline & pipeline);
+
+void executeGeneratedColumnPlaceholder(
+    size_t remote_read_streams_start_index,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
+    LoggerPtr log,
+    DAGPipeline & pipeline);
+>>>>>>> e84ed489e6 (add GeneratedColumnPlaceholderInputStream (#6796))
 } // namespace DB
