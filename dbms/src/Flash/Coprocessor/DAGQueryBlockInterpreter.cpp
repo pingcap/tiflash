@@ -194,7 +194,7 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
             generated_column_infos.push_back(std::make_pair(i, data_type));
         }
     }
-    executeGeneratedColumnPlaceholder(generated_column_infos, log, pipeline);
+    executeGeneratedColumnPlaceholder(pipeline.streams.size(), generated_column_infos, log, pipeline);
 }
 
 
