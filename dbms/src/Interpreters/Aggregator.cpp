@@ -2192,50 +2192,41 @@ Block MergingBuckets::getDataForSingleLevel()
 {
     assert(!data.empty());
 
-    AggregatedDataVariantsPtr & first = data[0];
-
-    if (current_bucket_num == -1)
-    {
-        ++current_bucket_num;
-
-        if (first->type == AggregatedDataVariants::Type::without_key)
-        {
-            aggregator.mergeWithoutKeyDataImpl(data);
-            single_level_blocks = aggregator.prepareBlocksAndFillWithoutKey(
-                *first,
-                final);
-            return popBlocksListFront(single_level_blocks);
-        }
-    }
-
     Block out_block = popBlocksListFront(single_level_blocks);
     if (likely(out_block))
     {
         return out_block;
     }
-
+    // The bucket number of single level merge can only be 0.
     if (current_bucket_num > 0)
         return {};
 
+    AggregatedDataVariantsPtr & first = data[0];
     if (first->type == AggregatedDataVariants::Type::without_key)
-        return {};
-
-    ++current_bucket_num;
-
+    {
+        aggregator.mergeWithoutKeyDataImpl(data);
+        single_level_blocks = aggregator.prepareBlocksAndFillWithoutKey(
+            *first,
+            final);
+    }
+    else
+    {
 #define M(NAME)                                                                 \
     case AggregationMethodType(NAME):                                           \
     {                                                                           \
         aggregator.mergeSingleLevelDataImpl<AggregationMethodName(NAME)>(data); \
         break;                                                                  \
     }
-    switch (first->type)
-    {
-        APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
-    default:
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-    }
+        switch (first->type)
+        {
+            APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
+        default:
+            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+        }
 #undef M
-    single_level_blocks = aggregator.prepareBlocksAndFillSingleLevel(*first, final);
+        single_level_blocks = aggregator.prepareBlocksAndFillSingleLevel(*first, final);
+    }
+    ++current_bucket_num;
     return popBlocksListFront(single_level_blocks);
 }
 
@@ -2253,13 +2244,6 @@ Block MergingBuckets::getDataForTwoLevel(size_t concurrency_index)
     while (true)
     {
         auto local_current_bucket_num = current_bucket_num.fetch_add(1);
-        // -1 only makes sense for single level(to handle without_key type),
-        // when current_bucket_num is equal to -1, two level merge is skipped directly
-        if (unlikely(local_current_bucket_num == -1))
-        {
-            local_current_bucket_num = current_bucket_num.fetch_add(1);
-            assert(local_current_bucket_num >= 0);
-        }
         if (unlikely(local_current_bucket_num >= NUM_BUCKETS))
             return {};
 

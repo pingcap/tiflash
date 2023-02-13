@@ -921,7 +921,7 @@ private:
     // use unique_ptr to avoid false sharing.
     std::vector<std::unique_ptr<BlocksList>> two_level_parallel_merge_data;
 
-    std::atomic<Int32> current_bucket_num = -1;
+    std::atomic<Int32> current_bucket_num = 0;
     static constexpr Int32 NUM_BUCKETS = 256;
 };
 using MergingBucketsPtr = std::shared_ptr<MergingBuckets>;
