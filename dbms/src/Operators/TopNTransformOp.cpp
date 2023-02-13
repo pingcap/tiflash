@@ -37,7 +37,7 @@ OperatorStatus TopNTransformOp::transformImpl(Block & block)
         return OperatorStatus::HAS_OUTPUT;
     }
     if (impl)
-        return OperatorStatus::HAS_OUTPUT;
+        throw Exception("Can not reach here.");
 
     sortBlock(block, order_desc, limit);
     blocks.emplace_back(std::move(block));
