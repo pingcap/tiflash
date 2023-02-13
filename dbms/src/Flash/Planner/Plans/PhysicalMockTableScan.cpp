@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <DataStreams/MockTableScanBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
@@ -69,8 +68,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     assert(!schema.empty());
     assert(!mock_streams.empty());
 
-    auto generated_column_infos = GeneratedColumnPlaceholderBlockInputStream::getGeneratedColumnInfos(table_scan);
-    executeGeneratedColumnPlaceholder(mock_streams.size(), generated_column_infos, log, mock_streams);
+    // Ignore handling GeneratedColumnPlaceholderBlockInputStream for now, because we don't support generated column in test framework.
     return {std::move(schema), std::move(mock_streams)};
 }
 } // namespace

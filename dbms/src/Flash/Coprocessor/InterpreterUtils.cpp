@@ -225,16 +225,16 @@ void executePushedDownFilter(
 
 void executeGeneratedColumnPlaceholder(
     size_t remote_read_streams_start_index,
-    const std::vector<std::pair<UInt64, DataTypePtr>> & generated_column_infos,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log,
-    BlockInputStreams & streams)
+    DAGPipeline & pipeline)
 {
     if (generated_column_infos.empty())
         return;
-    assert(remote_read_streams_start_index <= streams.size());
+    assert(remote_read_streams_start_index <= pipeline.streams.size());
     for (size_t i = 0; i < remote_read_streams_start_index; ++i)
     {
-        auto & stream = streams[i];
+        auto & stream = pipeline.streams[i];
         stream = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(stream, generated_column_infos, log->identifier());
         stream->setExtraInfo("generated column placeholder above table scan");
     }

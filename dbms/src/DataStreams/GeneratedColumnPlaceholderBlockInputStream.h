@@ -30,7 +30,7 @@ class GeneratedColumnPlaceholderBlockInputStream : public IProfilingBlockInputSt
 public:
     GeneratedColumnPlaceholderBlockInputStream(
         const BlockInputStreamPtr & input,
-        const std::vector<std::pair<UInt64, DataTypePtr>> & generated_column_infos_,
+        const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos_,
         const String & req_id_)
         : generated_column_infos(generated_column_infos_)
         , log(Logger::get(req_id_))
@@ -51,20 +51,6 @@ public:
         return "generated_column_" + std::to_string(col_index);
     }
 
-    static std::vector<std::pair<UInt64, DataTypePtr>> getGeneratedColumnInfos(const TiDBTableScan & table_scan)
-    {
-        std::vector<std::pair<UInt64, DataTypePtr>> generated_column_infos;
-        for (Int64 i = 0; i < table_scan.getColumnSize(); ++i)
-        {
-            if (table_scan.getColumns()[i].hasGeneratedColumnFlag())
-            {
-                auto data_type = getDataTypeByColumnInfoForComputingLayer(table_scan.getColumns()[i]);
-                generated_column_infos.push_back(std::make_pair(i, data_type));
-            }
-        }
-        return generated_column_infos;
-    }
-
 protected:
     void readPrefix() override
     {
@@ -72,7 +58,7 @@ protected:
         // Validation check.
         for (size_t i = 1; i < generated_column_infos.size(); ++i)
         {
-            RUNTIME_CHECK(generated_column_infos[i].first > generated_column_infos[i - 1].first);
+            RUNTIME_CHECK(std::get<0>(generated_column_infos[i]) > std::get<0>(generated_column_infos[i - 1]));
         }
     }
 
@@ -91,19 +77,20 @@ private:
 
         for (const auto & ele : generated_column_infos)
         {
-            auto col_index = ele.first;
-            auto data_type = ele.second;
+            const auto & col_index = std::get<0>(ele);
+            const auto & col_name = std::get<1>(ele);
+            const auto & data_type = std::get<2>(ele);
             ColumnPtr column = nullptr;
             if (insert_data)
                 column = data_type->createColumnConstWithDefaultValue(block.rows());
             else
                 column = data_type->createColumn();
-            block.insert(col_index, ColumnWithTypeAndName{column, data_type, getColumnName(col_index)});
+            block.insert(col_index, ColumnWithTypeAndName{column, data_type, col_name});
         }
     }
 
     static constexpr auto NAME = "GeneratedColumnPlaceholder";
-    const std::vector<std::pair<UInt64, DataTypePtr>> generated_column_infos;
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
     const LoggerPtr log;
 };
 

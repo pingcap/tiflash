@@ -81,7 +81,7 @@ void executePushedDownFilter(
 
 void executeGeneratedColumnPlaceholder(
     size_t remote_read_streams_start_index,
-    const std::vector<std::pair<UInt64, DataTypePtr>> & generated_column_infos,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log,
-    BlockInputStreams & streams);
+    DAGPipeline & pipeline);
 } // namespace DB

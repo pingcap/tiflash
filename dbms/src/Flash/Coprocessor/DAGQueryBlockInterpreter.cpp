@@ -19,7 +19,6 @@
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
-#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
@@ -187,8 +186,7 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
         pipeline.streams.insert(pipeline.streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }
 
-    auto generated_column_infos = GeneratedColumnPlaceholderBlockInputStream::getGeneratedColumnInfos(table_scan);
-    executeGeneratedColumnPlaceholder(pipeline.streams.size(), generated_column_infos, log, pipeline.streams);
+    // Ignore handling GeneratedColumnPlaceholderBlockInputStream for now, because we don't support generated column in test framework.
 }
 
 

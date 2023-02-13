@@ -135,7 +135,7 @@ private:
     Names required_columns;
     NamesAndTypes source_columns;
     // For generated column, just need a placeholder, and TiDB will fill this column.
-    std::vector<std::pair<UInt64, DataTypePtr>> generated_column_infos;
+    std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
 };
 
 } // namespace DB
