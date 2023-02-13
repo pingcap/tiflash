@@ -213,27 +213,8 @@ try
     ASSERT_EQ(segments.size(), 1);
 
     /// make sure all column file in delta value space is deleted
-    ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr || storage_pool->log_storage_v2 != nullptr || storage_pool->uni_ps != nullptr);
-    if (storage_pool->log_storage_v3)
-    {
-        storage_pool->log_storage_v3->gc(/* not_skip */ true);
-        storage_pool->data_storage_v3->gc(/* not_skip */ true);
-        ASSERT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
-        ASSERT_EQ(storage_pool->data_storage_v3->getNumberOfPages(), 1);
-    }
-    if (storage_pool->log_storage_v2)
-    {
-        storage_pool->log_storage_v2->gc(/* not_skip */ true);
-        storage_pool->data_storage_v2->gc(/* not_skip */ true);
-        ASSERT_EQ(storage_pool->log_storage_v2->getNumberOfPages(), 0);
-        ASSERT_EQ(storage_pool->data_storage_v2->getNumberOfPages(), 1);
-    }
-    if (storage_pool->uni_ps)
-    {
-        storage_pool->uni_ps->gc(/* not_skip */ true);
-        ASSERT_EQ(storage_pool->uni_ps->getNumberOfPages(UniversalPageIdFormat::toFullPrefix(StorageType::Log, NAMESPACE_ID)), 0);
-        ASSERT_EQ(storage_pool->uni_ps->getNumberOfPages(UniversalPageIdFormat::toFullPrefix(StorageType::Data, NAMESPACE_ID)), 1);
-    }
+    ASSERT_EQ(getPageNumAfterGC(StorageType::Log, NAMESPACE_ID), 0);
+    ASSERT_EQ(getPageNumAfterGC(StorageType::Data, NAMESPACE_ID), 1);
 }
 CATCH
 
