@@ -35,7 +35,6 @@ public:
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config);
 
-    void restore();
     bool gc();
     UniversalPageStoragePtr getUniversalPageStorage() const { return uni_page_storage; }
     ~UniversalPageStorageService();

@@ -25,18 +25,14 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
 {
     auto service = UniversalPageStorageServicePtr(new UniversalPageStorageService(context));
     service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider());
-    return service;
-}
-
-void UniversalPageStorageService::restore()
-{
-    uni_page_storage->restore();
-    gc_handle = global_context.getBackgroundPool().addTask(
-        [this] {
-            return this->gc();
+    service->uni_page_storage->restore();
+    service->gc_handle = context.getBackgroundPool().addTask(
+        [service] {
+            return service->uni_page_storage->gc();
         },
         false,
-        /*interval_ms*/ 30 * 1000);
+        /*interval_ms*/ 60 * 1000);
+    return service;
 }
 
 bool UniversalPageStorageService::gc()
