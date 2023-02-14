@@ -2282,7 +2282,7 @@ void MergingBuckets::doLevelMerge(Int32 bucket_num, size_t concurrency_index)
     {
         APPLY_FOR_VARIANTS_TWO_LEVEL(M)
     default:
-        break;
+        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
     }
 #undef M
 }
