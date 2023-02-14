@@ -77,6 +77,7 @@ Attr pkAttr()
     return Attr{col.name, col.id, col.type};
 }
 
+
 bool checkMatch(
     const String & test_case,
     Context & context,
@@ -87,6 +88,11 @@ bool checkMatch(
     bool check_pk = false)
 {
     String name = "DMMinMaxIndexTest_" + test_case;
+    // We cannot restore tables with the same table id multiple times in a single run.
+    // Because we don't update max_page_id for PS instance at run time.
+    // And when restoring table, it will use the max_page_id from PS as the start point for allocating page id.
+    // So if we restore the same table multiple times in a single run, it may write different data using the same page id.
+    static int next_table_id = 100;
 
     auto clean_up = [&]() {
         context.dropMinMaxIndexCache();
@@ -109,13 +115,12 @@ bool checkMatch(
     Block block = genBlock(header, block_tuples);
 
     // max page id is only updated at restart, so we need recreate page v3 before recreate table
-    context.initializeGlobalStoragePoolIfNeed(context.getPathPool());
     DeltaMergeStorePtr store = std::make_shared<DeltaMergeStore>(
         context,
         false,
         "test_database",
         name,
-        /*table_id*/ 100,
+        /*table_id*/ next_table_id++,
         true,
         table_columns,
         getExtraHandleColumnDefine(is_common_handle),
