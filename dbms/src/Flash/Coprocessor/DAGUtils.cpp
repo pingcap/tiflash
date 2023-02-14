@@ -1447,5 +1447,4 @@ tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
         throw Exception(fmt::format("Unsupported function {}", name));
     return func_name_sig_map[name];
 }
-
 } // namespace DB
