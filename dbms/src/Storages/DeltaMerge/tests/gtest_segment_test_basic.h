@@ -98,7 +98,7 @@ public:
     ColumnPtr getSegmentHandle(PageIdU64 segment_id, const RowKeyRanges & ranges);
     void writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end);
     RowKeyValue buildRowKeyValue(Int64 key);
-    RowKeyRange buildRowKeyRange(Int64 begin, Int64 end);
+    static RowKeyRange buildRowKeyRange(Int64 begin, Int64 end);
 
     size_t getPageNumAfterGC(StorageType type, NamespaceId ns_id) const;
 
