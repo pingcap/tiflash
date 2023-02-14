@@ -100,7 +100,8 @@ grpc::Status ManualCompactManager::doWorkWithCatch(const ::kvrpcpb::CompactReque
 grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
 {
     const auto & tmt_context = global_context.getTMTContext();
-    auto storage = tmt_context.getStorages().get(request->physical_table_id());
+    // TODO(iosmanthus): support compact keyspace tables;
+    auto storage = tmt_context.getStorages().get(NullspaceID, request->physical_table_id());
     if (storage == nullptr)
     {
         response->mutable_error()->mutable_err_physical_table_not_exist();

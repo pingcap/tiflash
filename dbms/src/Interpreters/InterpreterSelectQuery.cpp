@@ -227,7 +227,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     const String qualified_name = database_name + "." + table_name;
 
     /// Get current schema version in schema syncer for a chance to shortcut.
-    const auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
+    const auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion(NullspaceID);
 
     /// Lambda for get storage, then align schema version under the read lock.
     auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<StoragePtr, TableLockHolder, Int64, bool> {
@@ -298,7 +298,10 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     {
         log_schema_version("not OK, syncing schemas.");
         auto start_time = Clock::now();
-        context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
+        // Since InterpreterSelectQuery will only be trigger while using ClickHouse client,
+        // and we do not support keyspace feature for ClickHouse interface,
+        // we could use nullspace id here safely.
+        context.getTMTContext().getSchemaSyncer()->syncSchemas(context, NullspaceID);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(log, "Table {} schema sync cost {}ms.", qualified_name, schema_sync_cost);
 

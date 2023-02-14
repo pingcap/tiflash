@@ -55,18 +55,19 @@ RowKeyValue RowKeyValueRef::toRowKeyValue() const
     }
 }
 
-std::unordered_map<TableID, RowKeyRange::TableRangeMinMax> RowKeyRange::table_min_max_data;
+std::unordered_map<KeyspaceTableID, RowKeyRange::TableRangeMinMax, boost::hash<KeyspaceTableID>> RowKeyRange::table_min_max_data;
 std::shared_mutex RowKeyRange::table_mutex;
 
-const RowKeyRange::TableRangeMinMax & RowKeyRange::getTableMinMaxData(TableID table_id, bool is_common_handle)
+const RowKeyRange::TableRangeMinMax & RowKeyRange::getTableMinMaxData(KeyspaceID keyspace_id, TableID table_id, bool is_common_handle)
 {
+    auto keyspace_table_id = KeyspaceTableID{keyspace_id, table_id};
     {
         std::shared_lock lock(table_mutex);
-        if (auto it = table_min_max_data.find(table_id); it != table_min_max_data.end())
+        if (auto it = table_min_max_data.find(keyspace_table_id); it != table_min_max_data.end())
             return it->second;
     }
     std::unique_lock lock(table_mutex);
-    return table_min_max_data.try_emplace(table_id, table_id, is_common_handle).first->second;
+    return table_min_max_data.try_emplace(keyspace_table_id, keyspace_id, table_id, is_common_handle).first->second;
 }
 
 template <bool enable_redact, bool right_open = true>

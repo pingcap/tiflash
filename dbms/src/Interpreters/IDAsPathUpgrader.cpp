@@ -503,7 +503,7 @@ std::vector<TiDB::DBInfoPtr> IDAsPathUpgrader::fetchInfosFromTiDB() const
         try
         {
             auto schema_syncer = global_context.getTMTContext().getSchemaSyncer();
-            return schema_syncer->fetchAllDBs();
+            return schema_syncer->fetchAllDBs(NullspaceID);
         }
         catch (Poco::Exception & e)
         {

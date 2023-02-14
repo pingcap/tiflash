@@ -43,15 +43,15 @@ bool GCManager::work()
         return false;
     }
 
-    LOG_DEBUG(log, "Start GC with table id: {}", next_table_id);
+    LOG_DEBUG(log, "Start GC with keyspace id: {}, table id: {}", next_keyspace_table_id.first, next_keyspace_table_id.second);
     // Get a storage snapshot with weak_ptrs first
     // TODO: avoid gc on storage which have no data?
-    std::map<TableID, std::weak_ptr<IManageableStorage>> storages;
-    for (const auto & [table_id, storage] : global_context.getTMTContext().getStorages().getAllStorage())
-        storages.emplace(table_id, storage);
+    std::map<KeyspaceTableID, std::weak_ptr<IManageableStorage>> storages;
+    for (const auto & [ks_tb_id, storage] : global_context.getTMTContext().getStorages().getAllStorage())
+        storages.emplace(ks_tb_id, storage);
     auto iter = storages.begin();
-    if (next_table_id != InvalidTableID)
-        iter = storages.lower_bound(next_table_id);
+    if (next_keyspace_table_id != KeyspaceTableID{NullspaceID, InvalidTableID})
+        iter = storages.lower_bound(next_keyspace_table_id);
 
     UInt64 checked_storage_num = 0;
     while (true)
@@ -79,7 +79,7 @@ bool GCManager::work()
             // do not acquire structure lock on the storage.
             auto gc_segments_num = storage->onSyncGc(gc_segments_limit, DM::GCOptions::newAll());
             gc_segments_limit = gc_segments_limit - gc_segments_num;
-            LOG_TRACE(log, "GCManager gc {} segments of table {}", gc_segments_num, storage->getTableInfo().id);
+            LOG_TRACE(log, "GCManager gc {} segments of keyspace {}, table {}", gc_segments_num, storage->getTableInfo().keyspace_id, storage->getTableInfo().id);
             // Reach the limit on the number of segments to be gc, stop here
             if (gc_segments_limit <= 0)
                 break;
@@ -97,8 +97,8 @@ bool GCManager::work()
     }
     if (iter == storages.end())
         iter = storages.begin();
-    next_table_id = iter->first;
-    LOG_DEBUG(log, "End GC and next gc will start with table id: {}", next_table_id);
+    next_keyspace_table_id = iter->first;
+    LOG_DEBUG(log, "End GC and next gc will start with keyspace {}, table id: {}", next_keyspace_table_id.first, next_keyspace_table_id.second);
     gc_check_stop_watch.restart();
     // Always return false
     return false;

@@ -137,8 +137,9 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
 bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed)
 {
     fiu_do_on(FailPoints::force_fail_in_flush_region_data, { return false; });
+    auto keyspace_id = region.getKeyspaceID();
     auto table_id = region.getMappedTableID();
-    auto storage = tmt.getStorages().get(table_id);
+    auto storage = tmt.getStorages().get(keyspace_id, table_id);
     if (unlikely(storage == nullptr))
     {
         LOG_WARNING(log,

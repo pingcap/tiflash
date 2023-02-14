@@ -20,6 +20,7 @@
 
 namespace DB
 {
+using KeyspaceDatabaseMap = std::unordered_map<KeyspaceDatabaseID, TiDB::DBInfoPtr, boost::hash<KeyspaceDatabaseID>>;
 template <typename Getter, typename NameMapper>
 struct SchemaBuilder
 {
@@ -29,17 +30,20 @@ struct SchemaBuilder
 
     Context & context;
 
-    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & databases;
+    KeyspaceDatabaseMap & databases;
 
     Int64 target_version;
 
+    KeyspaceID keyspace_id;
+
     Poco::Logger * log;
 
-    SchemaBuilder(Getter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & dbs_, Int64 version)
+    SchemaBuilder(Getter & getter_, Context & context_, KeyspaceDatabaseMap & dbs_, Int64 version)
         : getter(getter_)
         , context(context_)
         , databases(dbs_)
         , target_version(version)
+        , keyspace_id(getter_.getKeyspaceID())
         , log(&Poco::Logger::get("SchemaBuilder"))
     {}
 

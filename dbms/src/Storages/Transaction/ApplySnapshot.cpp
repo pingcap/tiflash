@@ -120,7 +120,8 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
 
     {
         auto table_id = new_region->getMappedTableID();
-        if (auto storage = tmt.getStorages().get(table_id); storage)
+        auto keyspace_id = new_region->getKeyspaceID();
+        if (auto storage = tmt.getStorages().get(keyspace_id, table_id); storage)
         {
             switch (storage->engineType())
             {
@@ -143,10 +144,11 @@ template <typename RegionPtrWrap>
 void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
 {
     RegionID region_id = new_region_wrap->id();
+    auto keyspace_id = new_region_wrap->getKeyspaceID();
 
     {
         auto table_id = new_region_wrap->getMappedTableID();
-        if (auto storage = tmt.getStorages().get(table_id); storage && storage->engineType() == TiDB::StorageEngine::DT)
+        if (auto storage = tmt.getStorages().get(keyspace_id, table_id); storage && storage->engineType() == TiDB::StorageEngine::DT)
         {
             try
             {
@@ -293,6 +295,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
     TMTContext & tmt)
 {
     auto context = tmt.getContext();
+    auto keyspace_id = new_region->getKeyspaceID();
     bool force_decode = false;
     size_t expected_block_size = DEFAULT_MERGE_BLOCK_SIZE;
 
@@ -385,7 +388,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                 // Update schema and try to decode again
                 LOG_INFO(log, "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]", new_region->toString(true), e.displayText());
                 GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-                tmt.getSchemaSyncer()->syncSchemas(context);
+                tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
                 // Next time should force_decode
                 force_decode = true;
 
@@ -575,7 +578,8 @@ RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTVi
     if (!external_files.empty())
     {
         auto table_id = region->getMappedTableID();
-        if (auto storage = tmt.getStorages().get(table_id); storage)
+        auto keyspace_id = region->getKeyspaceID();
+        if (auto storage = tmt.getStorages().get(keyspace_id, table_id); storage)
         {
             // Ingest DTFiles into DeltaMerge storage
             auto & context = tmt.getContext();

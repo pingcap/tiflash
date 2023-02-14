@@ -21,6 +21,9 @@
 
 namespace DB
 {
+static const size_t KEYSPACE_PREFIX_LEN = 4;
+static const char TXN_MODE_PREFIX = 'x';
+
 template <bool is_key>
 struct StringObject : std::string
 {
@@ -100,6 +103,10 @@ struct DecodedTiKVKey : std::string
         (Base &)* this = (Base &&) obj;
         return *this;
     }
+
+    KeyspaceID getKeyspaceID() const;
+    std::string_view getUserKey() const;
+    static std::string makeKeyspacePrefix(KeyspaceID keyspace_id);
 };
 
 static_assert(sizeof(DecodedTiKVKey) == sizeof(std::string));

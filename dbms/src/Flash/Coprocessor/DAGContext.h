@@ -127,7 +127,12 @@ class DAGContext
 {
 public:
     // for non-mpp(cop/batchCop)
-    explicit DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_)
+    explicit DAGContext(const tipb::DAGRequest & dag_request_,
+                        TablesRegionsInfo && tables_regions_info_,
+                        KeyspaceID keyspace_id_,
+                        const String & tidb_host_,
+                        bool is_batch_cop_,
+                        LoggerPtr log_)
         : dag_request(&dag_request_)
         , dummy_query_string(dag_request->DebugString())
         , dummy_ast(makeDummyQuery())
@@ -143,6 +148,7 @@ public:
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
+        , keyspace_id(keyspace_id_)
     {
         assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
         return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
@@ -166,6 +172,7 @@ public:
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
+        , keyspace_id(meta_.keyspace_id())
     {
         assert(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
         // only mpp task has join executor.
@@ -335,6 +342,8 @@ public:
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
+
     const tipb::DAGRequest * dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
     /// dummy_query_string and dummy_ast is used for that
@@ -416,6 +425,9 @@ private:
     // In disaggregated tiflash mode, table_scan in tiflash_compute node will be converted ExchangeReceiver.
     // Record here so we can add to receiver_set and cancel/close it.
     std::optional<std::pair<String, ExchangeReceiverPtr>> disaggregated_compute_exchange_receiver;
+
+    // The keyspace that the DAG request from
+    const KeyspaceID keyspace_id = NullspaceID;
 };
 
 } // namespace DB

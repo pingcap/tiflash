@@ -61,13 +61,14 @@ static void writeRegionDataToStorage(
 {
     constexpr auto FUNCTION_NAME = __FUNCTION__; // NOLINT(readability-identifier-naming)
     const auto & tmt = context.getTMTContext();
+    auto keyspace_id = region->getKeyspaceID();
     TableID table_id = region->getMappedTableID();
     UInt64 region_decode_cost = -1, write_part_cost = -1;
 
     /// Declare lambda of atomic read then write to call multiple times.
     auto atomic_read_write = [&](bool force_decode) {
         /// Get storage based on table ID.
-        auto storage = tmt.getStorages().get(table_id);
+        auto storage = tmt.getStorages().get(keyspace_id, table_id);
         if (storage == nullptr || storage->isTombstone())
         {
             if (!force_decode) // Need to update.
@@ -187,7 +188,7 @@ static void writeRegionDataToStorage(
     /// If first try failed, sync schema and force read then write.
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context);
+        tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
 
         if (!atomic_read_write(true))
         {
@@ -399,6 +400,7 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
 /// Pre-decode region data into block cache and remove committed data from `region`
 RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Context & context)
 {
+    auto keyspace_id = region->getKeyspaceID();
     const auto & tmt = context.getTMTContext();
     {
         Timestamp gc_safe_point = 0;
@@ -441,7 +443,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 
     const auto atomic_decode = [&](bool force_decode) -> bool {
         Stopwatch watch;
-        auto storage = tmt.getStorages().get(table_id);
+        auto storage = tmt.getStorages().get(keyspace_id, table_id);
         if (storage == nullptr || storage->isTombstone())
         {
             if (!force_decode) // Need to update.
@@ -483,7 +485,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     if (!atomic_decode(false))
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context);
+        tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
 
         if (!atomic_decode(true))
             throw Exception("Pre-decode " + region->toString() + " cache to table " + std::to_string(table_id) + " block failed",
@@ -502,11 +504,12 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     std::shared_ptr<StorageDeltaMerge> dm_storage;
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
 
+    auto keyspace_id = region->getKeyspaceID();
     auto table_id = region->getMappedTableID();
     LOG_DEBUG(Logger::get(__PRETTY_FUNCTION__), "Get schema for table {}", table_id);
     auto context = tmt.getContext();
     const auto atomic_get = [&](bool force_decode) -> bool {
-        auto storage = tmt.getStorages().get(table_id);
+        auto storage = tmt.getStorages().get(keyspace_id, table_id);
         if (storage == nullptr)
         {
             if (!force_decode)
@@ -527,7 +530,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     if (!atomic_get(false))
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
-        tmt.getSchemaSyncer()->syncSchemas(context);
+        tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
 
         if (!atomic_get(true))
             throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",

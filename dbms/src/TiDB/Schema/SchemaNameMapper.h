@@ -26,18 +26,56 @@ struct SchemaNameMapper
 
     static constexpr auto DATABASE_PREFIX = "db_";
     static constexpr auto TABLE_PREFIX = "t_";
+    static constexpr auto KEYSPACE_PREFIX = "ks_";
 
-    virtual String mapDatabaseName(const TiDB::DBInfo & db_info) const { return DATABASE_PREFIX + std::to_string(db_info.id); }
-    virtual String displayDatabaseName(const TiDB::DBInfo & db_info) const { return db_info.name; }
-    virtual String mapTableName(const TiDB::TableInfo & table_info) const { return TABLE_PREFIX + std::to_string(table_info.id); }
-    virtual String displayTableName(const TiDB::TableInfo & table_info) const { return table_info.name; }
+
+    static KeyspaceID getMappedNameKeyspaceID(const String & name)
+    {
+        auto keyspace_prefix_len = std::strlen(KEYSPACE_PREFIX);
+        auto pos = name.find(KEYSPACE_PREFIX);
+        if (pos == String::npos)
+            return NullspaceID;
+        assert(pos == 0);
+        pos = name.find('_', keyspace_prefix_len);
+        assert(pos != String::npos);
+        return std::stoull(name.substr(keyspace_prefix_len, pos - keyspace_prefix_len));
+    }
+
+    static String map2Keyspace(KeyspaceID keyspace_id, const String & name)
+    {
+        return keyspace_id == NullspaceID ? name : KEYSPACE_PREFIX + std::to_string(keyspace_id) + "_" + name;
+    }
+
+    virtual String mapDatabaseName(const TiDB::DBInfo & db_info) const
+    {
+        auto db_name = DATABASE_PREFIX + std::to_string(db_info.id);
+        return map2Keyspace(db_info.keyspace_id, db_name);
+    }
+    virtual String displayDatabaseName(const TiDB::DBInfo & db_info) const
+    {
+        return map2Keyspace(db_info.keyspace_id, db_info.name);
+    }
+    virtual String mapTableName(const TiDB::TableInfo & table_info) const
+    {
+        auto table_name = TABLE_PREFIX + std::to_string(table_info.id);
+        return map2Keyspace(table_info.keyspace_id, table_name);
+    }
+    virtual String displayTableName(const TiDB::TableInfo & table_info) const
+    {
+        return map2Keyspace(table_info.keyspace_id, table_info.name);
+    }
     virtual String mapPartitionName(const TiDB::TableInfo & table_info) const { return mapTableName(table_info); }
 
     // Only use for logging / debugging
-    virtual String debugDatabaseName(const TiDB::DBInfo & db_info) const { return db_info.name + "(" + std::to_string(db_info.id) + ")"; }
+    virtual String debugDatabaseName(const TiDB::DBInfo & db_info) const
+    {
+        auto db_name = db_info.name + "(" + std::to_string(db_info.id) + ")";
+        return map2Keyspace(db_info.keyspace_id, db_name);
+    }
     virtual String debugTableName(const TiDB::TableInfo & table_info) const
     {
-        return table_info.name + "(" + std::to_string(table_info.id) + ")";
+        auto table_name = table_info.name + "(" + std::to_string(table_info.id) + ")";
+        return map2Keyspace(table_info.keyspace_id, table_name);
     }
     virtual String debugCanonicalName(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info) const
     {

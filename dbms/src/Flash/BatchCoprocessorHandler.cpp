@@ -72,6 +72,7 @@ grpc::Status BatchCoprocessorHandler::execute()
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),
+                cop_request->context().keyspace_id(),
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 /*is_batch_cop=*/true,
                 Logger::get("BatchCoprocessorHandler"));

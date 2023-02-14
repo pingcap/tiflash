@@ -40,35 +40,42 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
     handle = background_pool.addTask(
         [&, this] {
             String stage;
+            auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
+            KeyspaceID cur_ks = NullspaceID;
             bool done_anything = false;
             try
             {
-                /// Do sync schema first, then gc.
-                /// They must be performed synchronously,
-                /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
-                // GC safe point must be obtained ahead of syncing schema.
                 auto gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
-                stage = "Sync schemas";
-                done_anything = syncSchemas();
-                if (done_anything)
-                    GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
+                for (auto const iter : keyspaces)
+                {
+                    auto ks = iter.first;
+                    LOG_DEBUG(log, "Auto sync schema for keyspace {}", ks);
+                    cur_ks = ks;
+                    /// Do sync schema first, then gc.
+                    /// They must be performed synchronously,
+                    /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
+                    // GC safe point must be obtained ahead of syncing schema.
+                    stage = "Sync schemas";
+                    done_anything = syncSchemas(ks);
+                    if (done_anything)
+                        GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
 
-                stage = "GC";
-                done_anything = gc(gc_safe_point);
-
+                    stage = "GC";
+                    done_anything = gc(gc_safe_point, ks);
+                }
                 return done_anything;
             }
             catch (const Exception & e)
             {
-                LOG_ERROR(log, "{} failed by {} \n stack : {}", stage, e.displayText(), e.getStackTrace().toString());
+                LOG_ERROR(log, "[keyspace {}] {} failed by {} \n stack : {}", cur_ks, stage, e.displayText(), e.getStackTrace().toString());
             }
             catch (const Poco::Exception & e)
             {
-                LOG_ERROR(log, "{} failed by {}", stage, e.displayText());
+                LOG_ERROR(log, "[keyspace {}] {} failed by {}", cur_ks, stage, e.displayText());
             }
             catch (const std::exception & e)
             {
-                LOG_ERROR(log, "{} failed by {}", stage, e.what());
+                LOG_ERROR(log, "[keyspace {}] {} failed by {}", cur_ks, stage, e.what());
             }
             return false;
         },
@@ -80,9 +87,9 @@ SchemaSyncService::~SchemaSyncService()
     background_pool.removeTask(handle);
 }
 
-bool SchemaSyncService::syncSchemas()
+bool SchemaSyncService::syncSchemas(KeyspaceID keyspace_id)
 {
-    return context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
+    return context.getTMTContext().getSchemaSyncer()->syncSchemas(context, keyspace_id);
 }
 
 template <typename DatabaseOrTablePtr>
@@ -91,7 +98,7 @@ inline bool isSafeForGC(const DatabaseOrTablePtr & ptr, Timestamp gc_safe_point)
     return ptr->isTombstone() && ptr->getTombstone() < gc_safe_point;
 }
 
-bool SchemaSyncService::gc(Timestamp gc_safe_point)
+bool SchemaSyncService::gc(Timestamp gc_safe_point, KeyspaceID keyspace_id)
 {
     auto & tmt_context = context.getTMTContext();
     if (gc_safe_point == gc_context.last_gc_safe_point)
@@ -105,6 +112,9 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
     auto dbs = context.getDatabases();
     for (const auto & iter : dbs)
     {
+        auto db_ks_id = SchemaNameMapper::getMappedNameKeyspaceID(iter.first);
+        if (db_ks_id != keyspace_id)
+            continue;
         const auto & db = iter.second;
         for (auto table_iter = db->getIterator(context); table_iter->isValid(); table_iter->next())
         {
@@ -171,7 +181,8 @@ bool SchemaSyncService::gc(Timestamp gc_safe_point)
     for (const auto & iter : dbs)
     {
         const auto & db = iter.second;
-        if (!isSafeForGC(db, gc_safe_point))
+        auto ks_db_id = SchemaNameMapper::getMappedNameKeyspaceID(iter.first);
+        if (!isSafeForGC(db, gc_safe_point) || ks_db_id != keyspace_id)
             continue;
 
         const auto & db_name = iter.first;

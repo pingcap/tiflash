@@ -212,20 +212,28 @@ inline Timestamp getTs(const TiKVKey & key)
     return decodeUInt64Desc(read<UInt64>(key.data() + key.dataSize() - 8));
 }
 
-inline TableID getTableId(const DecodedTiKVKey & key)
+template <typename T>
+inline TableID getTableId(const T & key)
 {
     return decodeInt64(read<UInt64>(key.data() + 1));
 }
 
 inline HandleID getHandle(const DecodedTiKVKey & key)
 {
-    return decodeInt64(read<UInt64>(key.data() + RAW_KEY_NO_HANDLE_SIZE));
+    return decodeInt64(read<UInt64>(key.getUserKey().data()));
+}
+
+inline std::string_view getRawTiDBPKView(const DecodedTiKVKey & key)
+{
+    auto user_key = key.getUserKey();
+    return std::string_view(user_key.data() + RAW_KEY_NO_HANDLE_SIZE, user_key.size() - RAW_KEY_NO_HANDLE_SIZE);
 }
 
 inline RawTiDBPK getRawTiDBPK(const DecodedTiKVKey & key)
 {
-    return std::make_shared<const std::string>(key.begin() + RAW_KEY_NO_HANDLE_SIZE, key.end());
+    return std::make_shared<const std::string>(getRawTiDBPKView(key));
 }
+
 
 inline TableID getTableId(const TiKVKey & key)
 {

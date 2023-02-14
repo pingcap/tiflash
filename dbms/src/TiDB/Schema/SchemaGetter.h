@@ -14,16 +14,8 @@
 
 #pragma once
 
+#include <Storages/Transaction/KeyspaceSnapshot.h>
 #include <Storages/Transaction/TiDB.h>
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
-#ifdef __clang__
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#include <pingcap/kv/Snapshot.h>
-#pragma GCC diagnostic pop
-
 #include <common/logger_useful.h>
 
 #include <optional>
@@ -137,14 +129,18 @@ struct SchemaDiff
 
 struct SchemaGetter
 {
-    pingcap::kv::Snapshot snap;
+    KeyspaceSnapshot snap;
+
+    KeyspaceID keyspace_id;
 
     Poco::Logger * log;
 
-    SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_)
-        : snap(cluster_, tso_)
+    SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_, KeyspaceID keyspace_id_)
+        : snap(keyspace_id_, cluster_, tso_)
+        , keyspace_id(keyspace_id_)
         , log(&Poco::Logger::get("SchemaGetter"))
-    {}
+    {
+    }
 
     Int64 getVersion();
 
@@ -167,6 +163,8 @@ struct SchemaGetter
     std::vector<TiDB::DBInfoPtr> listDBs();
 
     std::vector<TiDB::TableInfoPtr> listTables(DatabaseID db_id);
+
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
 };
 
 } // namespace DB

@@ -45,14 +45,14 @@ public:
     ~SchemaSyncService();
 
 private:
-    bool syncSchemas();
+    bool syncSchemas(KeyspaceID keyspace_id);
 
     struct GCContext
     {
         Timestamp last_gc_safe_point = 0;
     } gc_context;
 
-    bool gc(Timestamp gc_safe_point);
+    bool gc(Timestamp gc_safe_point, KeyspaceID keyspace_id);
 
 private:
     Context & context;

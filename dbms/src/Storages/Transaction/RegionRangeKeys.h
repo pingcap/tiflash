@@ -56,11 +56,13 @@ public:
     const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys() const;
     explicit RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key);
     TableID getMappedTableID() const;
+    KeyspaceID getKeyspaceID() const;
 
 private:
     RegionRange ori;
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> raw;
     TableID mapped_table_id;
+    KeyspaceID keyspace_id;
 };
 
 } // namespace DB

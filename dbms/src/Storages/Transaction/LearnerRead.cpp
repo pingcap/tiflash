@@ -128,7 +128,7 @@ public:
             regions_info_ptr = &*regions_info;
             // Only for test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
             // todo support partition table
-            auto regions = tmt.getRegionTable().getRegionsByTable(logical_table_id);
+            auto regions = tmt.getRegionTable().getRegionsByTable(NullspaceID, logical_table_id);
             regions_info_ptr->reserve(regions.size());
             for (const auto & [id, region] : regions)
             {

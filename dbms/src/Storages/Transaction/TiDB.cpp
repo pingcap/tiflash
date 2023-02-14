@@ -588,6 +588,7 @@ try
 
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);
+    json->set("keyspace_id", keyspace_id);
     Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
     name_json->set("O", name);
     name_json->set("L", name);
@@ -616,6 +617,10 @@ try
     Poco::Dynamic::Var result = parser.parse(json_str);
     auto obj = result.extract<Poco::JSON::Object::Ptr>();
     id = obj->getValue<DatabaseID>("id");
+    if (obj->has("keyspace_id"))
+    {
+        keyspace_id = obj->getValue<KeyspaceID>("keyspace_id");
+    }
     name = obj->get("db_name").extract<Poco::JSON::Object::Ptr>()->get("L").convert<String>();
     charset = obj->get("charset").convert<String>();
     collate = obj->get("collate").convert<String>();
@@ -777,14 +782,23 @@ catch (const Poco::Exception & e)
 ///////////////////////
 ////// TableInfo //////
 ///////////////////////
-TableInfo::TableInfo(Poco::JSON::Object::Ptr json)
+TableInfo::TableInfo(Poco::JSON::Object::Ptr json, KeyspaceID keyspace_id_)
 {
     deserialize(json);
+    if (keyspace_id == NullspaceID)
+    {
+        keyspace_id = keyspace_id_;
+    }
 }
 
-TableInfo::TableInfo(const String & table_info_json)
+TableInfo::TableInfo(const String & table_info_json, KeyspaceID keyspace_id_)
 {
     deserialize(table_info_json);
+    // If the table_info_json has no keyspace id, we use the keyspace_id_ as the default value.
+    if (keyspace_id == NullspaceID)
+    {
+        keyspace_id = keyspace_id_;
+    }
 }
 
 String TableInfo::serialize() const
@@ -794,6 +808,7 @@ try
 
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);
+    json->set("keyspace_id", keyspace_id);
     Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
     name_json->set("O", name);
     name_json->set("L", name);
@@ -864,6 +879,10 @@ void TableInfo::deserialize(Poco::JSON::Object::Ptr obj)
 try
 {
     id = obj->getValue<TableID>("id");
+    if (obj->has("keyspace_id"))
+    {
+        keyspace_id = obj->getValue<KeyspaceID>("keyspace_id");
+    }
     name = obj->getObject("name")->getValue<String>("L");
 
     auto cols_arr = obj->getArray("cols");

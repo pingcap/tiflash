@@ -15,7 +15,6 @@
 #include <Common/TiFlashException.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <TiDB/Schema/SchemaGetter.h>
-#include <pingcap/kv/Scanner.h>
 
 namespace DB
 {
@@ -102,14 +101,14 @@ struct TxnStructure
     }
 
 public:
-    static String get(pingcap::kv::Snapshot & snap, const String & key)
+    static String get(KeyspaceSnapshot & snap, const String & key)
     {
         String encode_key = encodeStringDataKey(key);
         String value = snap.Get(encode_key);
         return value;
     }
 
-    static String hGet(pingcap::kv::Snapshot & snap, const String & key, const String & field)
+    static String hGet(KeyspaceSnapshot & snap, const String & key, const String & field)
     {
         String encode_key = encodeHashDataKey(key, field);
         String value = snap.Get(encode_key);
@@ -117,7 +116,7 @@ public:
     }
 
     // For convinient, we only return values.
-    static std::vector<std::pair<String, String>> hGetAll(pingcap::kv::Snapshot & snap, const String & key)
+    static std::vector<std::pair<String, String>> hGetAll(KeyspaceSnapshot & snap, const String & key)
     {
         auto tikv_key_prefix = hashDataKeyPrefix(key);
         String tikv_key_end = pingcap::kv::prefixNext(tikv_key_prefix);
@@ -249,7 +248,7 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
         return nullptr;
 
     LOG_DEBUG(log, "Get DB Info from TiKV : " + json);
-    auto db_info = std::make_shared<TiDB::DBInfo>(json);
+    auto db_info = std::make_shared<TiDB::DBInfo>(json, keyspace_id);
     return db_info;
 }
 
@@ -265,7 +264,7 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     if (table_info_json.empty())
         return nullptr;
     LOG_DEBUG(log, "Get Table Info from TiKV : " + table_info_json);
-    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json);
+    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, keyspace_id);
     return table_info;
 }
 
@@ -275,7 +274,7 @@ std::vector<TiDB::DBInfoPtr> SchemaGetter::listDBs()
     auto pairs = TxnStructure::hGetAll(snap, DBs);
     for (const auto & pair : pairs)
     {
-        auto db_info = std::make_shared<TiDB::DBInfo>(pair.second);
+        auto db_info = std::make_shared<TiDB::DBInfo>(pair.second, keyspace_id);
         res.push_back(db_info);
     }
     return res;
@@ -307,7 +306,7 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
             continue;
         }
         const String & json = kv_pair.second;
-        auto table_info = std::make_shared<TiDB::TableInfo>(json);
+        auto table_info = std::make_shared<TiDB::TableInfo>(json, keyspace_id);
 
         res.push_back(table_info);
     }
