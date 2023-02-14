@@ -79,8 +79,6 @@ public:
     {
         // clean data and create path pool instance
         path_pool = createCleanPathPool(test_path);
-        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
-        global_ctx.initializeWriteNodePageStorageIfNeed(*path_pool);
         reloadKVSFromDisk();
 
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
@@ -103,6 +101,7 @@ protected:
     {
         kvstore.reset();
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+        global_ctx.initializeWriteNodePageStorageIfNeed(*path_pool);
         kvstore = std::make_unique<KVStore>(global_ctx);
         // only recreate kvstore and restore data from disk, don't recreate proxy instance
         kvstore->restore(*path_pool, proxy_helper.get());

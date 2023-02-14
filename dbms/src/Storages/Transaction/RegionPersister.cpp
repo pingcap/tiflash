@@ -27,6 +27,7 @@
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 
 namespace CurrentMetrics
@@ -43,9 +44,9 @@ extern const int LOGICAL_ERROR;
 
 void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
-    DB::WriteBatchWrapper wb_v2{run_mode, getWriteBatchPrefix()};
-    wb_v2.delPage(region_id);
-    page_writer->write(std::move(wb_v2), global_context.getWriteLimiter());
+    DB::WriteBatchWrapper wb{run_mode, getWriteBatchPrefix()};
+    wb.delPage(region_id);
+    page_writer->write(std::move(wb), global_context.getWriteLimiter());
 }
 
 void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer)
@@ -268,7 +269,7 @@ RegionMap RegionPersister::restore(PathPool & path_pool, const TiFlashRaftProxyH
         }
 
         CurrentMetrics::set(CurrentMetrics::RegionPersisterRunMode, static_cast<UInt8>(run_mode));
-        LOG_INFO(log, "RegionPersister running. Current Run Mode is {}", static_cast<UInt8>(run_mode));
+        LOG_INFO(log, "RegionPersister running. Current Run Mode is {}", magic_enum::enum_name(run_mode));
     }
 
     RegionMap regions;

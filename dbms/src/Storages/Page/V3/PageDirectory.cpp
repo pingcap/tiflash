@@ -1499,20 +1499,21 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
             RUNTIME_CHECK(page_iter != mvcc_table_directory.end(), ref_id, ori_id, ver);
         }
         const auto & version_entries = page_iter->second;
+        // After storing all data in one PageStorage instance, we will run full gc
+        // with external pages. Skip rewriting if it is an external pages.
+        if (version_entries->isExternalPage())
+            continue;
         // the latest entry with version.seq <= ref_id.create_ver.seq
         auto entry = version_entries->getLastEntry(ver.sequence);
-        // entry.has_value() can only be true if `ori_id` is VAR_ENTRY
-        if (entry.has_value())
+        RUNTIME_CHECK_MSG(entry.has_value(), "ref_id={} ori_id={} ver={} entries={}", ref_id, ori_id, ver, version_entries->toDebugString());
+        // If the being-ref entry lays on the full gc candidate blobfiles, then we
+        // need to rewrite the ref-id to a normal page.
+        if (blob_id_set.count(entry->file_id) > 0)
         {
-            // If the being-ref entry lays on the full gc candidate blobfiles, then we
-            // need to rewrite the ref-id to a normal page.
-            if (blob_id_set.count(entry->file_id) > 0)
-            {
-                blob_versioned_entries[entry->file_id].emplace_back(ref_id, ver, *entry);
-                total_page_size += entry->size;
-                total_page_nums += 1;
-                num_ref_id_rewrite += 1;
-            }
+            blob_versioned_entries[entry->file_id].emplace_back(ref_id, ver, *entry);
+            total_page_size += entry->size;
+            total_page_nums += 1;
+            num_ref_id_rewrite += 1;
         }
     }
 
