@@ -40,6 +40,15 @@ public:
                               toNullableVec<String>(col_name[1], col_gender),
                               toNullableVec<String>(col_name[2], col_country),
                               toNullableVec<Int32>(col_name[3], col_salary)});
+        context.addMockTable({db_name, empty_name},
+                             {{col_name[0], TiDB::TP::TypeLong},
+                              {col_name[1], TiDB::TP::TypeString},
+                              {col_name[2], TiDB::TP::TypeString},
+                              {col_name[3], TiDB::TP::TypeLong}},
+                             {toNullableVec<Int32>(col_name[0], {}),
+                              toNullableVec<String>(col_name[1], {}),
+                              toNullableVec<String>(col_name[2], {}),
+                              toNullableVec<Int32>(col_name[3], {})});
 
         /// table with 200 rows
         {
@@ -100,6 +109,9 @@ public:
     ColumnWithNullableString col_gender{"female", "female", "male", "female", "male", "male"};
     ColumnWithNullableString col_country{"korea", "usa", "usa", "china", "china", "china"};
     ColumnWithNullableInt32 col_salary{1300, 0, {}, 900, {}, -300};
+
+    // empty table
+    const String empty_name{"empty_table"};
 };
 
 TEST_F(TopNExecutorTestRunner, TopN)
@@ -216,12 +228,27 @@ try
         for (auto limit_num : limits)
         {
             auto request = context
-                               .scan("test_db", table)
+                               .scan(db_name, table)
                                .topN("key", false, limit_num)
                                .build(context);
             SortInfos sort_infos{{0, false}};
             executeAndAssertSortedBlocks(request, sort_infos);
         }
+    }
+}
+CATCH
+
+TEST_F(TopNExecutorTestRunner, Empty)
+try
+{
+    for (size_t i = 0; i < col_name.size(); ++i)
+    {
+        auto request = context
+                           .scan(db_name, empty_name)
+                           .topN(col_name[i], false, 100)
+                           .build(context);
+        SortInfos sort_infos{{i, false}};
+        executeAndAssertSortedBlocks(request, sort_infos);
     }
 }
 CATCH

@@ -34,8 +34,7 @@ OperatorStatus TopNTransformOp::transformImpl(Block & block)
         }
         return OperatorStatus::HAS_OUTPUT;
     }
-    if (impl)
-        throw Exception("Can not reach here.");
+    RUNTIME_CHECK_MSG(!impl, "Impl must be nullptr here.");
 
     sortBlock(block, order_desc, limit);
     blocks.emplace_back(std::move(block));

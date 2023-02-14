@@ -195,15 +195,18 @@ void ExecutorTest::checkBlockSorted(
         {
             context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             auto return_blocks = getExecuteStreamsReturnBlocks(request, concurrency);
-            SortDescription sort_desc;
-            for (auto sort_info : sort_infos)
-                sort_desc.emplace_back(return_blocks.back().getColumnsWithTypeAndName()[sort_info.column_index].name, sort_info.desc ? -1 : 1, -1);
+            if (!return_blocks.empty())
+            {
+                SortDescription sort_desc;
+                for (auto sort_info : sort_infos)
+                    sort_desc.emplace_back(return_blocks.back().getColumnsWithTypeAndName()[sort_info.column_index].name, sort_info.desc ? -1 : 1, -1);
 
-            for (auto & block : return_blocks)
-                ASSERT_TRUE(isAlreadySorted(block, sort_desc)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
+                for (auto & block : return_blocks)
+                    ASSERT_TRUE(isAlreadySorted(block, sort_desc)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
 
-            auto res = mergeBlocks(std::move(return_blocks)).getColumnsWithTypeAndName();
-            ASSERT_TRUE(assert_func(expected_res, res)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
+                auto res = mergeBlocks(std::move(return_blocks)).getColumnsWithTypeAndName();
+                ASSERT_TRUE(assert_func(expected_res, res)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
+            }
         };
         WRAP_FOR_TEST_END
     }
