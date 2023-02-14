@@ -75,7 +75,7 @@ try
     // test ColumnConst with nullable but non-null value
     ASSERT_COLUMN_EQ(createConstColumn<UInt8>(2, 1), executeFunction("tiDBIsIPv6", {createConstColumn<Nullable<String>>(2, "F746:C349:48E3:22F2:81E0:0EA8:E7B6:8286")}));
     ASSERT_COLUMN_EQ(createConstColumn<UInt8>(2, 0), executeFunction("tiDBIsIPv6", {createConstColumn<Nullable<String>>(2, "aidjio")}));
-    
+
     // test ColumnConst with nullable and null value
     ASSERT_COLUMN_EQ(createConstColumn<UInt8>(4, 0), executeFunction("tiDBIsIPv6", {createConstColumn<Nullable<String>>(4, std::nullopt)}));
 }
