@@ -108,6 +108,8 @@ bool checkMatch(
     Block header = toEmptyBlock(table_columns);
     Block block = genBlock(header, block_tuples);
 
+    // max page id is only updated at restart, so we need recreate page v3 before recreate table
+    context.initializeGlobalStoragePoolIfNeed(context.getPathPool());
     DeltaMergeStorePtr store = std::make_shared<DeltaMergeStore>(
         context,
         false,
