@@ -21,10 +21,9 @@
 #include <common/logger_useful.h>
 
 #include <atomic>
-#include <deque>
+#include <queue>
 #include <functional>
 #include <magic_enum.hpp>
-#include <map>
 #include <mutex>
 #include <set>
 #include <utility>
