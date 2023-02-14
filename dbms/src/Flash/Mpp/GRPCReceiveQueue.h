@@ -21,10 +21,10 @@
 #include <common/logger_useful.h>
 
 #include <atomic>
-#include <queue>
 #include <functional>
 #include <magic_enum.hpp>
 #include <mutex>
+#include <queue>
 #include <set>
 #include <utility>
 
