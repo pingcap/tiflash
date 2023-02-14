@@ -43,7 +43,8 @@ private:
     size_t filter_column;
 
     ConstantFilterDescription constant_filter_description;
-    IColumn::Filter filter{};
+    IColumn::Filter * filter = nullptr;
+    ColumnPtr filter_holder;
 };
 
 } // namespace DB

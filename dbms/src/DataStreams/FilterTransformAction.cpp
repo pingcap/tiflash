@@ -110,11 +110,11 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
     else
     {
         FilterDescription filter_and_holder(*column_of_filter);
-        filter.resize(rows);
-        std::copy(filter_and_holder.data->cbegin(), filter_and_holder.data->cend(), filter.begin());
+        filter = const_cast<IColumn::Filter *>(filter_and_holder.data);
+        filter_holder = filter_and_holder.data_holder;
     }
 
-    size_t filtered_rows = countBytesInFilter(filter);
+    size_t filtered_rows = countBytesInFilter(*filter);
 
     /// If the current block is completely filtered out, let's move on to the next one.
     if (filtered_rows == 0)
@@ -122,7 +122,7 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
 
     if (return_filter)
     {
-        res_filter = &filter;
+        res_filter = filter;
         return true;
     }
 
@@ -155,7 +155,7 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
         if (current_column.column->isColumnConst())
             current_column.column = current_column.column->cut(0, filtered_rows);
         else
-            current_column.column = current_column.column->filter(filter, filtered_rows);
+            current_column.column = current_column.column->filter(*filter, filtered_rows);
     }
 
     return true;
