@@ -23,7 +23,7 @@ namespace DB
 {
 // General UniversalPageId Format: Prefix + PageIdU64.
 // So normally the size of page id should be larger than 8 bytes(size of PageIdU64).
-// If the size of page id is smaller than 8 bytes, it will be regraded as a whole.(Its Prefix is empty, while PageIdU64 is INVALID_PAGE_U64_ID)
+// If the size of page id is smaller than 8 bytes, it will be regraded as a whole.(Its Prefix is itself, while PageIdU64 is INVALID_PAGE_U64_ID)
 //
 // Currently, if the PageIdU64 is 0(which is INVALID_PAGE_U64_ID), it may have some special meaning in some cases,
 // so please avoid it in the following case:
@@ -102,10 +102,8 @@ public:
 
     static inline String getFullPrefix(const UniversalPageId & page_id)
     {
-        if (page_id.size() >= sizeof(UInt64))
-            return page_id.substr(0, page_id.size() - sizeof(UInt64)).toStr();
-        else
-            return "";
+        size_t prefix_length = (page_id.size() >= sizeof(UInt64)) ? (page_id.size() - sizeof(UInt64)) : page_id.size();
+        return page_id.substr(0, prefix_length).toStr();
     }
 
     // These prefixes can be passed as argument to UniversalPageStorage::getMaxId(const String & prefix).
@@ -151,6 +149,7 @@ struct fmt::formatter<DB::UniversalPageId>
     template <typename FormatContext>
     auto format(const DB::UniversalPageId & value, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(ctx.out(), "{}.{} {}", DB::UniversalPageIdFormat::getFullPrefix(value), DB::UniversalPageIdFormat::getU64ID(value), Redact::keyToHexString(value.data(), value.size()));
+        auto prefix = DB::UniversalPageIdFormat::getFullPrefix(value);
+        return format_to(ctx.out(), "{}.{}", Redact::keyToHexString(prefix.data(), prefix.size()), DB::UniversalPageIdFormat::getU64ID(value));
     }
 };

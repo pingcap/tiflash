@@ -279,7 +279,7 @@ TEST(UniPageStorageIdTest, UniversalPageId)
     {
         auto u_id = "z";
         ASSERT_EQ(UniversalPageIdFormat::getU64ID(u_id), 0);
-        ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(u_id), "");
+        ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(u_id), "z");
     }
 }
 } // namespace PS::universal::tests
