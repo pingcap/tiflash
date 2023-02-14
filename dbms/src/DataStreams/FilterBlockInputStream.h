@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Columns/ColumnsCommon.h>
 #include <DataStreams/FilterTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 
@@ -47,20 +46,8 @@ public:
 protected:
     Block readImpl() override
     {
-        // FilterPtr filter_ignored;
-        // return readImpl(filter_ignored, false);
-        // TODO: for test, remove it after test
-        FilterPtr filter = nullptr;
-        Block res = readImpl(filter, true);
-        if (filter && res)
-        {
-            size_t passed_rows = countBytesInFilter(*filter);
-            for (auto & col : res)
-            {
-                col.column = col.column->filter(*filter, passed_rows);
-            }
-        }
-        return res;
+        FilterPtr filter_ignored;
+        return readImpl(filter_ignored, false);
     }
 
     Block readImpl(FilterPtr & res_filter, bool return_filter) override;

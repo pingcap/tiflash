@@ -65,7 +65,9 @@ FilterDescription::FilterDescription(const IColumn & column)
 {
     if (const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&column))
     {
-        data = &concrete_column->getData();
+        MutableColumnPtr mutable_holder = concrete_column->cloneResized(concrete_column->size());
+        data = &typeid_cast<ColumnUInt8 *>(mutable_holder.get())->getData();
+        data_holder = std::move(mutable_holder);
         return;
     }
 
