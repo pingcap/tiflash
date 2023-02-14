@@ -47,11 +47,11 @@ namespace TiDB
 {
 using DB::ColumnID;
 using DB::DatabaseID;
+using DB::KeyspaceID;
+using DB::NullspaceID;
 using DB::String;
 using DB::TableID;
 using DB::Timestamp;
-using DB::KeyspaceID;
-using DB::NullspaceID;
 
 // Column types.
 // In format:
