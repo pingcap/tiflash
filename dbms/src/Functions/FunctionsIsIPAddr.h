@@ -14,7 +14,9 @@
 
 #pragma once
 
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
@@ -212,6 +214,7 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
     bool useDefaultImplementationForConstants() const override { return true; }
+    bool useDefaultImplementationForNulls() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -219,15 +222,20 @@ public:
             throw Exception(
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        if (!arguments[0]->isString())
-            throw Exception(
-                fmt::format("Illegal type {} of first argument of function {}. Must be String.", arguments[0]->getName(), getName()),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!arguments[0]->onlyNull())
+        {
+            DataTypePtr data_type = removeNullable(arguments[0]);
+            if (!data_type->isString())
+                throw Exception(
+                    fmt::format("Illegal argument type {} of function {}, should be integer", arguments[0]->getName(), getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
         return std::make_shared<DataTypeUInt8>();
     }
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        if (const auto * col_input = checkAndGetColumn<ColumnString>(block.getByPosition(arguments[0]).column.get()))
+        auto [column, nullmap] = removeNullable(block.getByPosition(arguments[0]).column.get());
+        if (const auto * col_input = checkAndGetColumn<ColumnString>(column))
         {
             size_t size = block.getByPosition(arguments[0]).column->size();
             const typename ColumnString::Chars_t & data = col_input->getChars();
@@ -240,7 +248,14 @@ public:
             size_t prev_offset = 0;
             for (size_t i = 0; i < size; ++i)
             {
-                vec_res[i] = Impl::isMatch(reinterpret_cast<const char *>(&data[prev_offset]));
+                if (nullmap && (*nullmap)[i])
+                {
+                    vec_res[i] = 0;
+                }
+                else
+                {
+                    vec_res[i] = Impl::isMatch(reinterpret_cast<const char *>(&data[prev_offset]));
+                }
                 prev_offset = offsets[i];
             }
 
