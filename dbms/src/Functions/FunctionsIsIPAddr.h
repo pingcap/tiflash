@@ -234,16 +234,27 @@ public:
     }
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
+        size_t size = block.getByPosition(arguments[0]).column->size();
+        auto col_res = ColumnUInt8::create();
+        ColumnUInt8::Container & vec_res = col_res->getData();
+        vec_res.resize(size);
+
+        /// Always null.
+        if (block.getByPosition(arguments[0]).type->onlyNull())
+        {
+            for (size_t i = 0; i < size; ++i)
+            {
+                vec_res[i] = 0;
+            }
+            block.getByPosition(result).column = std::move(col_res);
+            return;
+        }
+
         auto [column, nullmap] = removeNullable(block.getByPosition(arguments[0]).column.get());
         if (const auto * col_input = checkAndGetColumn<ColumnString>(column))
         {
-            size_t size = block.getByPosition(arguments[0]).column->size();
             const typename ColumnString::Chars_t & data = col_input->getChars();
             const typename ColumnString::Offsets & offsets = col_input->getOffsets();
-
-            auto col_res = ColumnUInt8::create();
-            ColumnUInt8::Container & vec_res = col_res->getData();
-            vec_res.resize(size);
 
             size_t prev_offset = 0;
             for (size_t i = 0; i < size; ++i)
