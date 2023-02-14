@@ -1710,7 +1710,7 @@ try
         EXPECT_ENTRY_EQ(entry3, dir, 12, snap);
         EXPECT_ENTRY_NOT_EXIST(dir, 10, snap);
         auto external_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
-        ASSERT_GT(external_ids.count(50), 0);
+        ASSERT_GT(external_ids->count(50), 0);
     }
 
     // del 11->entry2
@@ -1735,7 +1735,7 @@ try
     }
 
     auto external_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
-    ASSERT_GT(external_ids.count(50), 0);
+    ASSERT_GT(external_ids->count(50), 0);
     auto all_page_ids = dir->getAllPageIds();
     ASSERT_EQ(all_page_ids.size(), 2);
     ASSERT_GT(all_page_ids.count(buildV3Id(TEST_NAMESPACE_ID, 50)), 0);
