@@ -428,6 +428,8 @@ private:
 private:
     // max page id after restart(just used for table storage).
     // it may be for the whole instance or just for some specific prefix which is depending on the Trait passed.
+    // Keeping it up to date is costly but useless, so it is not updated after restarting. Do NOT rely on it
+    // except for specific situations
     UInt64 max_page_id;
     std::atomic<UInt64> sequence;
 
