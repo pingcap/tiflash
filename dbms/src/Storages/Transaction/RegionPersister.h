@@ -34,13 +34,6 @@ class RegionTaskLock;
 struct RegionManager;
 
 struct TiFlashRaftProxyHelper;
-namespace PS
-{
-namespace V1
-{
-class PageStorage;
-}
-} // namespace PS
 class PageStorage;
 
 class RegionPersister final : private boost::noncopyable
@@ -61,9 +54,7 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const;
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#endif
 
     void forceTransformKVStoreV2toV3();
 
@@ -82,11 +73,7 @@ private:
         }
     }
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#else
-public:
-#endif
 
     Context & global_context;
     PageStorageRunMode run_mode;

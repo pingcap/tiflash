@@ -205,6 +205,7 @@ public:
         : dir_path(TiFlashTestEnv::getTemporaryPath("/region_persister_test"))
     {
         test_run_mode = GetParam();
+        old_run_mode = test_run_mode;
     }
 
     static void SetUpTestCase() {}
