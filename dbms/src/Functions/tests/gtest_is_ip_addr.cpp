@@ -42,6 +42,7 @@ try
 
     // test ColumnVector with nullable
     ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0, 0, 1, 0}), executeFunction("tiDBIsIPv4", {createColumn<Nullable<String>>({"123.123.123.123", "aidjio", "1236.461.841.312", "99.99.99.99", std::nullopt})}));
+    ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 0, 0, 0, 0}), executeFunction("tiDBIsIPv4", {createColumn<Nullable<String>>({std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt})}));
 
     // test ColumnConst without nullable
     ASSERT_COLUMN_EQ(createConstColumn<UInt8>(4, 1), executeFunction("tiDBIsIPv4", {createConstColumn<String>(4, "123.123.123.123")}));
@@ -65,6 +66,7 @@ try
 
     // test ColumnVector with nullable
     ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0, 0, 0, 0}), executeFunction("tiDBIsIPv6", {createColumn<Nullable<String>>({"F746:C349:48E3:22F2:81E0:0EA8:E7B6:8286", "aidjio", "1236.461.841.312", "99.99.99.99", std::nullopt})}));
+    ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 0, 0, 0, 0}), executeFunction("tiDBIsIPv6", {createColumn<Nullable<String>>({std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt})}));
 
     // test ColumnConst without nullable
     ASSERT_COLUMN_EQ(createConstColumn<UInt8>(4, 1), executeFunction("tiDBIsIPv6", {createConstColumn<String>(4, "F746:C349:48E3:22F2:81E0:0EA8:E7B6:8286")}));
@@ -73,7 +75,7 @@ try
     // test ColumnConst with nullable but non-null value
     ASSERT_COLUMN_EQ(createConstColumn<UInt8>(2, 1), executeFunction("tiDBIsIPv6", {createConstColumn<Nullable<String>>(2, "F746:C349:48E3:22F2:81E0:0EA8:E7B6:8286")}));
     ASSERT_COLUMN_EQ(createConstColumn<UInt8>(2, 0), executeFunction("tiDBIsIPv6", {createConstColumn<Nullable<String>>(2, "aidjio")}));
-
+    
     // test ColumnConst with nullable and null value
     ASSERT_COLUMN_EQ(createConstColumn<UInt8>(4, 0), executeFunction("tiDBIsIPv6", {createConstColumn<Nullable<String>>(4, std::nullopt)}));
 }
