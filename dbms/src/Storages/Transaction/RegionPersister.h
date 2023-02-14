@@ -55,7 +55,6 @@ public:
     FileUsageStatistics getFileUsageStatistics() const;
 
 private:
-
     void forceTransformKVStoreV2toV3();
 
     void doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock & lock, const Region & region);
@@ -74,7 +73,6 @@ private:
     }
 
 private:
-
     Context & global_context;
     PageStorageRunMode run_mode;
     PageWriterPtr page_writer;
