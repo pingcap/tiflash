@@ -610,23 +610,24 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
     const String & local_err_msg,
     const LoggerPtr & log)
 {
-    Int32 copy_live_connections;
     String first_err_msg = local_err_msg;
+
+    // We must protect the following codes with lock.
+    // Because once live_connections == 0, ExchangeReceiver may be destructed immediately
+    // and the data in ExchangeReceiver is no longer alive.
+    std::lock_guard lock(mu);
+
+    if (meet_error)
     {
-        std::lock_guard lock(mu);
-
-        if (meet_error)
-        {
-            if (state == ExchangeReceiverState::NORMAL)
-                state = ExchangeReceiverState::ERROR;
-            if (err_msg.empty())
-                err_msg = local_err_msg;
-            else
-                first_err_msg = err_msg;
-        }
-
-        copy_live_connections = --live_connections;
+        if (state == ExchangeReceiverState::NORMAL)
+            state = ExchangeReceiverState::ERROR;
+        if (err_msg.empty())
+            err_msg = local_err_msg;
+        else
+            first_err_msg = err_msg;
     }
+
+    --live_connections;
 
     if (meet_error)
     {
@@ -635,23 +636,23 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
             "connection end. meet error: {}, err msg: {}, current alive connections: {}",
             meet_error,
             local_err_msg,
-            copy_live_connections);
+            live_connections);
     }
     else
     {
         LOG_DEBUG(
             log,
             "connection end. Current alive connections: {}",
-            copy_live_connections);
+            live_connections);
     }
-    assert(copy_live_connections >= 0);
-    if (copy_live_connections == 0)
+    assert(live_connections >= 0);
+    if (live_connections == 0)
     {
         LOG_DEBUG(log, "All threads end in ExchangeReceiver");
         cv.notify_all();
     }
 
-    if (meet_error || copy_live_connections == 0)
+    if (meet_error || live_connections == 0)
     {
         LOG_INFO(exc_log, "receiver channels finished, meet error: {}, error message: {}", meet_error, first_err_msg);
         finishAllMsgChannels();
