@@ -130,7 +130,7 @@ struct RowKeyValue
         return std::make_shared<DecodedTiKVKey>(prefix + *value);
     }
 
-    bool operator==(const RowKeyValue & v)
+    bool operator==(const RowKeyValue & v) const
     {
         return is_common_handle == v.is_common_handle && (*value) == (*v.value) && int_value == v.int_value;
     }
@@ -173,14 +173,15 @@ struct RowKeyValue
      */
     RowKeyValue toNext() const
     {
+        // We want to always ensure that the IntHandle.stringValue == IntHandle.intValue.
+        if (!is_common_handle)
+            return toPrefixNext();
+
         HandleValuePtr next_value = std::make_shared<String>(value->begin(), value->end());
         next_value->push_back(0x0);
 
-        Int64 next_int_value = int_value;
-        if (!is_common_handle && next_int_value != std::numeric_limits<Int64>::max())
-            next_int_value++;
-
-        return RowKeyValue(is_common_handle, next_value, next_int_value);
+        // For common handle, int_value will not be used in compare. Let's keep it unchanged.
+        return RowKeyValue(/* is_common_handle */ true, next_value, int_value);
     }
 
     void serialize(WriteBuffer & buf) const

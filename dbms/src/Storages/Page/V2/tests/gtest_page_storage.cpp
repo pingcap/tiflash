@@ -24,8 +24,8 @@
 #include <Poco/PatternFormatter.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V2/PageDefines.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
@@ -1286,7 +1286,7 @@ TEST_F(PageStorageWith2Pages_test, SnapshotReadSnapshotVersion)
         };
         auto pages = storage->read(ids, nullptr, snapshot);
         ASSERT_EQ(pages.count(1), 1UL);
-        ASSERT_EQ(*pages[1].data.begin(), ch_before);
+        ASSERT_EQ(*pages.at(1).data.begin(), ch_before);
         // TODO read(vec<PageId>, callback) with snapshot
 
         // new page do appear while read with snapshot
@@ -1343,13 +1343,13 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     // read(vec<PageId>) with snapshot
     auto pages = storage->read(ids, nullptr, s1);
     ASSERT_EQ(pages.count(1), 1UL);
-    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    ASSERT_EQ(*pages.at(1).data.begin(), ch_before);
     pages = storage->read(ids, nullptr, s2);
     ASSERT_EQ(pages.count(1), 1UL);
-    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    ASSERT_EQ(*pages.at(1).data.begin(), ch_before);
     pages = storage->read(ids, nullptr, s3);
     ASSERT_EQ(pages.count(1), 1UL);
-    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    ASSERT_EQ(*pages.at(1).data.begin(), ch_before);
     // TODO read(vec<PageId>, callback) with snapshot
     // without snapshot
     p1_entry = storage->getEntry(1);
@@ -1369,13 +1369,13 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     page1 = storage->read(1, nullptr, s3);
     ASSERT_EQ(*page1.data.begin(), ch_before);
     // read(vec<PageId>) with snapshot
-    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    ASSERT_EQ(*pages.at(1).data.begin(), ch_before);
     pages = storage->read(ids, nullptr, s2);
     ASSERT_EQ(pages.count(1), 1UL);
-    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    ASSERT_EQ(*pages.at(1).data.begin(), ch_before);
     pages = storage->read(ids, nullptr, s3);
     ASSERT_EQ(pages.count(1), 1UL);
-    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    ASSERT_EQ(*pages.at(1).data.begin(), ch_before);
     // TODO read(vec<PageId>, callback) with snapshot
     // without snapshot
     p1_entry = storage->getEntry(1);
@@ -1393,7 +1393,7 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     // read(vec<PageId>) with snapshot
     pages = storage->read(ids, nullptr, s3);
     ASSERT_EQ(pages.count(1), 1UL);
-    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    ASSERT_EQ(*pages.at(1).data.begin(), ch_before);
     // TODO read(vec<PageId>, callback) with snapshot
     // without snapshot
     p1_entry = storage->getEntry(1);

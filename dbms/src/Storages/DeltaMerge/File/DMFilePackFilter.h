@@ -246,7 +246,6 @@ private:
                     dmfile->encryptionIndexPath(file_name_base),
                     std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), index_file_size),
                     read_limiter);
-                index_buf.seek(dmfile->colIndexOffset(file_name_base));
                 return MinMaxIndex::read(*type, index_buf, dmfile->colIndexSize(file_name_base));
             }
             else
@@ -258,7 +257,6 @@ private:
                                                                             read_limiter,
                                                                             dmfile->configuration->getChecksumAlgorithm(),
                                                                             dmfile->configuration->getChecksumFrameLength());
-                index_buf->seek(dmfile->colIndexOffset(file_name_base));
                 auto header_size = dmfile->configuration->getChecksumHeaderLength();
                 auto frame_total_size = dmfile->configuration->getChecksumFrameLength() + header_size;
                 auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);

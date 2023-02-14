@@ -39,7 +39,6 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_set_sst_to_dtfile_block_size[];
-extern const char force_set_sst_decode_rand[];
 extern const char pause_until_apply_raft_snapshot[];
 } // namespace FailPoints
 
@@ -353,7 +352,6 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                 bounded_stream,
                 storage,
                 schema_snap,
-                snapshot_apply_method,
                 job_type,
                 /* split_after_rows */ global_settings.dt_segment_limit_rows,
                 /* split_after_size */ global_settings.dt_segment_limit_size,
@@ -493,22 +491,6 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
         LOG_WARNING(log, "[region {}] is not found at [term {}, index {}], might be removed already", region_id, term, index);
         return EngineStoreApplyRes::NotFound;
     }
-
-    fiu_do_on(FailPoints::force_set_sst_decode_rand, {
-        static int num_call = 0;
-        switch (num_call++ % 2)
-        {
-        case 0:
-            snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
-            break;
-        case 1:
-            snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
-            break;
-        default:
-            break;
-        }
-        LOG_INFO(log, "{} ingest sst by method {}", region->toString(true), applyMethodToString(snapshot_apply_method));
-    });
 
     const auto func_try_flush = [&]() {
         if (!region->writeCFCount())

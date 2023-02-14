@@ -67,7 +67,7 @@ struct SpilledFiles
 class Spiller
 {
 public:
-    Spiller(const SpillConfig & config, bool is_input_sorted, size_t partition_num, const Block & input_schema, const LoggerPtr & logger, Int64 spill_version = 1);
+    Spiller(const SpillConfig & config, bool is_input_sorted, size_t partition_num, const Block & input_schema, const LoggerPtr & logger, Int64 spill_version = 1, bool release_spilled_file_on_restore = true);
     void spillBlocks(const Blocks & blocks, size_t partition_id);
     /// spill blocks by reading from BlockInputStream, this is more memory friendly compared to spillBlocks
     void spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, size_t partition_id, const std::function<bool()> & is_cancelled);
@@ -75,7 +75,9 @@ public:
     BlockInputStreams restoreBlocks(size_t partition_id, size_t max_stream_size = 0);
     size_t spilledRows(size_t partition_id);
     void finishSpill() { spill_finished = true; };
-    bool hasSpilledData() { return has_spilled_data; };
+    bool hasSpilledData() const { return has_spilled_data; };
+    /// only for test now
+    bool releaseSpilledFileOnRestore() const { return release_spilled_file_on_restore; }
 
 private:
     friend class SpillHandler;
@@ -83,16 +85,21 @@ private:
     SpillHandler createSpillHandler(size_t partition_id);
 
     const SpillConfig config;
-    bool is_input_sorted;
-    size_t partition_num;
+    const bool is_input_sorted;
+    const size_t partition_num;
     /// todo remove input_schema if spiller does not rely on BlockInputStream
-    Block input_schema;
-    LoggerPtr logger;
+    const Block input_schema;
+    const LoggerPtr logger;
     std::atomic<bool> spill_finished{false};
     std::atomic<bool> has_spilled_data{false};
     static std::atomic<Int64> tmp_file_index;
     std::vector<std::unique_ptr<SpilledFiles>> spilled_files;
-    Int64 spill_version = 1;
+    const Int64 spill_version = 1;
+    /// If release_spilled_file_on_restore is true, the spilled file will be released once all the data in the spilled
+    /// file is read, otherwise, the spilled file will be released when destruct the spiller. Currently, all the spilled
+    /// file can be released on restore since it is only read once, but in the future if SharedScan(shared cte) need spill,
+    /// the data may be restored multiple times and release_spilled_file_on_restore need to be set to false.
+    const bool release_spilled_file_on_restore;
 };
 
 } // namespace DB

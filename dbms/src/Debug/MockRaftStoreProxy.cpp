@@ -623,11 +623,6 @@ void MockRaftStoreProxy::snapshot(
     // The new entry is committed on Proxy's side.
     region->updateCommitIndex(index);
 
-    auto ori_snapshot_apply_method = kvs.snapshot_apply_method;
-    kvs.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
-    SCOPE_EXIT({
-        kvs.snapshot_apply_method = ori_snapshot_apply_method;
-    });
     std::vector<SSTView> ssts;
     for (auto & cf : cfs)
     {
@@ -662,7 +657,7 @@ TableID MockRaftStoreProxy::bootstrap_table(
     columns.ordinary = NamesAndTypesList({NameAndTypePair{"a", data_type_factory.get("Int64")}});
     auto tso = tmt.getPDClient()->getTS();
     MockTiDB::instance().newDataBase("d");
-    UInt64 table_id = MockTiDB::instance().newTable("d", "t", columns, tso, "", "dt");
+    UInt64 table_id = MockTiDB::instance().newTable("d", "t" + toString(random()), columns, tso, "", "dt");
 
     auto schema_syncer = tmt.getSchemaSyncer();
     schema_syncer->syncSchemas(ctx, NullspaceID);

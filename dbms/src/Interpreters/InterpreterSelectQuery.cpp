@@ -1199,10 +1199,10 @@ void InterpreterSelectQuery::executePreLimit(Pipeline & pipeline)
     getLimitLengthAndOffset(query, limit_length, limit_offset);
 
     /// If there is LIMIT
-    if (query.limit_length)
+    if (limit_length)
     {
         pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length + limit_offset, /*req_id=*/"");
+            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length + limit_offset, /* offset */ 0, /*req_id=*/"");
         });
     }
 }
@@ -1240,10 +1240,11 @@ void InterpreterSelectQuery::executeLimit(Pipeline & pipeline)
     getLimitLengthAndOffset(query, limit_length, limit_offset);
 
     /// If there is LIMIT
-    if (query.limit_length)
+    if (limit_length)
     {
+        RUNTIME_CHECK_MSG(pipeline.streams.size() == 1, "Cannot executeLimit with multiple streams");
         pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length, /*req_id=*/"");
+            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length, limit_offset, /*req_id=*/"");
         });
     }
 }

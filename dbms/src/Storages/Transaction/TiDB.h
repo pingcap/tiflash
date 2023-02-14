@@ -119,7 +119,8 @@ enum TP
     M(NoDefaultValue, (1 << 12)) \
     M(OnUpdateNow, (1 << 13))    \
     M(PartKey, (1 << 14))        \
-    M(Num, (1 << 15))
+    M(Num, (1 << 15))            \
+    M(GeneratedColumn, (1 << 23))
 
 enum ColumnFlag
 {

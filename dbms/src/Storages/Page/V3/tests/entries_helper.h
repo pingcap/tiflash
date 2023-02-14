@@ -18,8 +18,8 @@
 #include <Common/FmtUtils.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -81,7 +81,7 @@ inline ::testing::AssertionResult getEntryCompare(
     const char * page_id_expr,
     const char * snap_expr,
     const PageEntryV3 & expected_entry,
-    const PageDirectoryPtr & dir,
+    const u128::PageDirectoryPtr & dir,
     const PageIdV3Internal page_id,
     const PageDirectorySnapshotPtr & snap)
 {
@@ -140,7 +140,7 @@ inline ::testing::AssertionResult getEntriesCompare(
     const char * page_ids_expr,
     const char * snap_expr,
     const PageIDAndEntriesV3 & expected_entries,
-    const PageDirectoryPtr & dir,
+    const u128::PageDirectoryPtr & dir,
     const PageIdV3Internals page_ids,
     const PageDirectorySnapshotPtr & snap)
 {
@@ -214,7 +214,7 @@ inline ::testing::AssertionResult getEntryNotExist(
     const char * dir_expr,
     const char * page_id_expr,
     const char * snap_expr,
-    const PageDirectoryPtr & dir,
+    const u128::PageDirectoryPtr & dir,
     const PageIdV3Internal page_id,
     const PageDirectorySnapshotPtr & snap)
 {
@@ -254,7 +254,7 @@ inline ::testing::AssertionResult getEntriesNotExist(
     const char * dir_expr,
     const char * page_ids_expr,
     const char * snap_expr,
-    const PageDirectoryPtr & dir,
+    const u128::PageDirectoryPtr & dir,
     const PageIdV3Internals page_ids,
     const PageDirectorySnapshotPtr & snap)
 {

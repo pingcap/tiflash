@@ -122,8 +122,16 @@ public:
 
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
-    void setTotals(const Block & block) { totals = block; }
-    bool hasTotals() const { return static_cast<bool>(totals); };
+    void setTotals(const Block & block)
+    {
+        std::unique_lock lock(rwlock);
+        totals = block;
+    }
+    bool hasTotals() const
+    {
+        std::shared_lock lock(rwlock);
+        return static_cast<bool>(totals);
+    };
 
     void joinTotals(Block & block) const;
 
@@ -174,7 +182,7 @@ public:
         return getBuildConcurrencyInternal();
     }
 
-    void meetError();
+    void meetError(const String & error_message);
 
     /// Reference to the row in block.
     struct RowRef
@@ -304,6 +312,7 @@ private:
     size_t active_probe_concurrency;
 
     bool meet_error = false;
+    String error_message;
 
 private:
     /// collators for the join key

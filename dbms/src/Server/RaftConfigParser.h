@@ -39,15 +39,10 @@ struct TiFlashRaftConfig
     // Actually it is "flash.service_addr"
     std::string flash_server_addr;
 
-    // Use PageStorage V1 for kvstore or not.
-    // TODO: remove this config
-    bool enable_compatible_mode = true;
-
     bool for_unit_test = false;
 
     static constexpr TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
     TiDB::StorageEngine engine = DEFAULT_ENGINE;
-    TiDB::SnapshotApplyMethod snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
 
 public:
     TiFlashRaftConfig() = default;

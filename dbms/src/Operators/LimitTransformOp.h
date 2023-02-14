@@ -26,9 +26,11 @@ class LimitTransformOp : public TransformOp
 {
 public:
     LimitTransformOp(
+        PipelineExecutorStatus & exec_status_,
         const GlobalLimitPtr & action_,
         const String & req_id)
-        : action(action_)
+        : TransformOp(exec_status_)
+        , action(action_)
         , log(Logger::get(req_id))
     {}
 
