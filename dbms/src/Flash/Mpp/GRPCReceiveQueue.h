@@ -41,7 +41,9 @@ class TestGRPCReceiveQueue;
 class KickReceiveTag : public grpc::internal::CompletionQueueTag
 {
 public:
-    explicit KickReceiveTag(void * tag_) : tag(tag_) {}
+    explicit KickReceiveTag(void * tag_)
+        : tag(tag_)
+    {}
 
     bool FinalizeResult(void ** tag_, bool * /*status*/) override
     {
@@ -123,11 +125,13 @@ class GRPCReceiveQueue
 {
 private:
     using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<T>>>;
+
 public:
     GRPCReceiveQueue(MsgChannelPtr recv_queue_, AsyncRequestHandlerWaitQueuePtr conn_wait_queue_, const LoggerPtr & log_)
         : recv_queue(std::move(recv_queue_))
         , conn_wait_queue(std::move(conn_wait_queue_))
-        , log(log_) {}
+        , log(log_)
+    {}
 
     // For gtest usage.
     GRPCReceiveQueue(MsgChannelPtr & recv_queue_, GRPCReceiveKickFunc func)

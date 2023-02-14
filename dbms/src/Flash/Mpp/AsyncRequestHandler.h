@@ -15,13 +15,13 @@
 #pragma once
 
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
+#include <Flash/Mpp/GRPCReceiveQueue.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/ReceiverChannelTryWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
+#include <common/defines.h>
 #include <grpcpp/alarm.h>
 #include <grpcpp/completion_queue.h>
-#include <Flash/Mpp/GRPCReceiveQueue.h>
-#include <common/defines.h>
-#include <Flash/Mpp/MppVersion.h>
 
 namespace DB
 {
@@ -76,7 +76,8 @@ public:
         start();
     }
 
-    ~AsyncRequestHandler() override {
+    ~AsyncRequestHandler() override
+    {
         LOG_INFO(log, "Profiling: async_des {}", reinterpret_cast<UInt64>(this));
     }
 

@@ -17,8 +17,8 @@
 #include <Common/FailPoint.h>
 #include <Common/MPMCQueue.h>
 #include <Common/TiFlashMetrics.h>
-#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 
 #include <memory>
 
@@ -53,7 +53,10 @@ inline void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]]
     }
 }
 
-inline bool loopJudge(GRPCReceiveQueueRes res) { return (res == GRPCReceiveQueueRes::OK || res == GRPCReceiveQueueRes::FULL); }
+inline bool loopJudge(GRPCReceiveQueueRes res)
+{
+    return (res == GRPCReceiveQueueRes::OK || res == GRPCReceiveQueueRes::FULL);
+}
 
 // result can not be changed from FULL to OK
 inline void updateResult(GRPCReceiveQueueRes & dst, GRPCReceiveQueueRes & src)
@@ -110,7 +113,8 @@ struct ReceivedMessage
         LOG_INFO(log, "Profiling: rm_cons", reinterpret_cast<size_t>(this));
     }
 
-    ~ReceivedMessage() {
+    ~ReceivedMessage()
+    {
         auto * log = &Poco::Logger::get("LRUCache");
         LOG_INFO(log, "Profiling: rm_des", reinterpret_cast<size_t>(this));
     }

@@ -17,9 +17,9 @@
 #include <Common/FailPoint.h>
 #include <Common/MPMCQueue.h>
 #include <Common/TiFlashMetrics.h>
-#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/ReceiverChannelBase.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 
 #include <memory>
 
@@ -35,7 +35,8 @@ public:
         LOG_INFO(log, "Profiling: rct_cons {}", reinterpret_cast<size_t>(this));
     }
 
-    ~ReceiverChannelTryWriter() {
+    ~ReceiverChannelTryWriter()
+    {
         LOG_INFO(log, "Profiling: rct_des {}", reinterpret_cast<size_t>(this));
     }
 

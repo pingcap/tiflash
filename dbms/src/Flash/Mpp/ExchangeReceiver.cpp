@@ -293,10 +293,9 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
                 std::move(request),
                 exc_log->identifier(),
                 &data_size_in_queue,
-                [this](bool meet_error, const String & local_err_msg, const LoggerPtr &log) {
+                [this](bool meet_error, const String & local_err_msg, const LoggerPtr & log) {
                     this->connectionDone(meet_error, local_err_msg, log);
-                })
-        );
+                }));
     }
     else
     {
@@ -309,10 +308,9 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
                 std::move(request),
                 exc_log->identifier(),
                 &data_size_in_queue,
-                [this](bool meet_error, const String & local_err_msg, const LoggerPtr &log) {
+                [this](bool meet_error, const String & local_err_msg, const LoggerPtr & log) {
                     this->connectionDone(meet_error, local_err_msg, log);
-                })
-        );
+                }));
     }
 }
 

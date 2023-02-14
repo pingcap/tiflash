@@ -17,11 +17,11 @@
 #include <Common/FailPoint.h>
 #include <Common/MPMCQueue.h>
 #include <Common/TiFlashMetrics.h>
-#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/ReceiverChannelBase.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
+
 #include <memory>
-#include <Flash/Mpp/ReceiverChannelBase.h>
 
 namespace DB
 {
@@ -30,7 +30,8 @@ class ReceiverChannelWriter : public ReceiverChannelBase
 public:
     ReceiverChannelWriter(std::vector<MsgChannelPtr> * msg_channels_, const String & req_info_, const LoggerPtr & log_, std::atomic<Int64> * data_size_in_queue_, ReceiverMode mode_)
         : ReceiverChannelBase(msg_channels_->size(), req_info_, log_, data_size_in_queue_, mode_)
-        , msg_channels(msg_channels_) {}
+        , msg_channels(msg_channels_)
+    {}
 
     // "write" means writing the packet to the channel which is a MPMCQueue.
     //

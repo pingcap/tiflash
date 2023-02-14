@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Mpp/ReceiverChannelTryWriter.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
+#include <Flash/Mpp/ReceiverChannelTryWriter.h>
+
 #include <utility>
 
 namespace DB

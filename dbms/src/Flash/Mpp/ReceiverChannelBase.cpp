@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Mpp/ReceiverChannelBase.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
+#include <Flash/Mpp/ReceiverChannelBase.h>
+
 #include <utility>
 
 namespace DB
@@ -29,9 +30,9 @@ bool ReceiverChannelBase::splitPacketIntoChunks(size_t source_index, mpp::MPPDat
         // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
         // This can happen when there are old version nodes when upgrading.
         LOG_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
-                        "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
-                        "Cannot handle this.",
-                    source_index);
+                       "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
+                       "Cannot handle this.",
+                  source_index);
         return false;
     }
 

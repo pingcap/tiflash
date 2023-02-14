@@ -17,8 +17,8 @@
 #include <Common/MPMCQueue.h>
 #include <Common/Stopwatch.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
+#include <Flash/Mpp/GRPCSendQueue.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 
 namespace DB

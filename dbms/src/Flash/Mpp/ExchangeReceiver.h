@@ -17,9 +17,9 @@
 #include <Common/ThreadManager.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/AsyncRequestHandler.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
+#include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Interpreters/Context.h>
 
 #include <future>
