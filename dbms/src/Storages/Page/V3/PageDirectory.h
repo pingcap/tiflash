@@ -337,9 +337,7 @@ public:
 
     PageId getNormalPageId(const PageId & page_id, const DB::PageStorageSnapshotPtr & snap_, bool throw_on_not_exist) const;
 
-    UInt64 getMaxId() const;
-
-    UInt64 getMaxIdAfterRestartWithPrefix(const String & prefix) const;
+    UInt64 getMaxIdAfterRestart() const;
 
     PageIdSet getAllPageIds();
 
@@ -426,8 +424,9 @@ private:
     }
 
 private:
+    // max page id after restart(just used for table storage).
+    // it may be for the whole instance or just for some specific prefix which is depending on the Trait passed.
     UInt64 max_page_id;
-    std::map<String, UInt64> max_page_id_by_prefix;
     std::atomic<UInt64> sequence;
 
     // Used for avoid concurrently apply edits to wal and mvcc_table_directory.

@@ -106,18 +106,6 @@ public:
         return page_id.substr(0, prefix_length).toStr();
     }
 
-    // These prefixes can be passed as argument to UniversalPageStorage::getMaxId(const String & prefix).
-    // If you need to get the max id of a new prefix, just add it here is enough.
-    static std::vector<String> getAllPrefixesWithMaxId()
-    {
-        static const std::vector<String> res = {
-            toSubPrefix(StorageType::Log),
-            toSubPrefix(StorageType::Data),
-            toSubPrefix(StorageType::Meta),
-        };
-        return res;
-    }
-
 private:
     static inline void encodeUInt64(const UInt64 x, WriteBuffer & ss)
     {

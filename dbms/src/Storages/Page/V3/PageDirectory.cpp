@@ -859,16 +859,7 @@ PageDirectory<Trait>::PageDirectory(String storage_name, WALStorePtr && wal_, UI
     , wal(std::move(wal_))
     , max_persisted_log_files(max_persisted_log_files_)
     , log(Logger::get(storage_name))
-{
-    if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
-    {
-        const auto & prefixes = UniversalPageIdFormat::getAllPrefixesWithMaxId();
-        for (const auto & prefix : prefixes)
-        {
-            max_page_id_by_prefix[prefix] = 0;
-        }
-    }
-}
+{}
 
 template <typename Trait>
 PageDirectorySnapshotPtr PageDirectory<Trait>::createSnapshot(const String & tracing_id) const
@@ -1154,24 +1145,10 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(cons
 }
 
 template <typename Trait>
-UInt64 PageDirectory<Trait>::getMaxId() const
+UInt64 PageDirectory<Trait>::getMaxIdAfterRestart() const
 {
     std::shared_lock read_lock(table_rw_mutex);
     return max_page_id;
-}
-
-template <typename Trait>
-UInt64 PageDirectory<Trait>::getMaxIdAfterRestartWithPrefix(const String & prefix) const
-{
-    if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
-    {
-        std::shared_lock read_lock(table_rw_mutex);
-        return max_page_id_by_prefix.at(prefix);
-    }
-    else
-    {
-        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
-    }
 }
 
 template <typename Trait>
@@ -1362,8 +1339,6 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
         for (const auto & r : edit.getRecords())
         {
             // Protected in write_lock
-            max_page_id = std::max(max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
-
             auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
             if (created)
             {

@@ -531,9 +531,9 @@ PageStorageRunMode StoragePool::restore()
     }
     case PageStorageRunMode::UNI_PS:
     {
-        max_log_page_id = uni_ps->getMaxIdAfterRestart(UniversalPageIdFormat::toSubPrefix(StorageType::Log));
-        max_data_page_id = uni_ps->getMaxIdAfterRestart(UniversalPageIdFormat::toSubPrefix(StorageType::Data));
-        max_meta_page_id = uni_ps->getMaxIdAfterRestart(UniversalPageIdFormat::toSubPrefix(StorageType::Meta));
+        max_log_page_id = uni_ps->getMaxIdAfterRestart();
+        max_data_page_id = uni_ps->getMaxIdAfterRestart();
+        max_meta_page_id = uni_ps->getMaxIdAfterRestart();
         break;
     }
     default:

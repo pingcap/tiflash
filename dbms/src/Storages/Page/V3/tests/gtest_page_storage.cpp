@@ -1495,7 +1495,7 @@ try
         batch.putExternal(1999, 0);
         batch.putExternal(2000, 0);
         page_storage->write(std::move(batch));
-        ASSERT_EQ(page_storage->getMaxId(), 2000);
+        ASSERT_EQ(page_storage->getMaxId(), 0);
     }
 
     {
@@ -1523,7 +1523,7 @@ try
         batch.putExternal(20000, 0);
         batch.putExternal(20001, 0);
         page_storage->write(std::move(batch));
-        ASSERT_EQ(page_storage->getMaxId(), 20001);
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
     }
 
     {
