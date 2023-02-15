@@ -24,7 +24,6 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
 
-#include <cstdlib>
 
 namespace DB
 {
