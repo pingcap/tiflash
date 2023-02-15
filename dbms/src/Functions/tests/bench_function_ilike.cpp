@@ -112,7 +112,7 @@ BENCHMARK_DEFINE_F(IlikeBench, ilike)
 try
 {
     FunctionIlike3Args function_ilike;
-    TiDB::TiDBCollatorPtr collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
+    TiDB::TiDBCollatorPtr collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN);
     function_ilike.setCollator(collator);
     std::vector<Block> blocks{Block(data1), Block(data2), Block(data3), Block(data4), Block(data5)};
     for (auto & block : blocks)
@@ -133,7 +133,7 @@ try
 {
     FunctionLowerUTF8 function_lower;
     FunctionLike function_like;
-    TiDB::TiDBCollatorPtr collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
+    TiDB::TiDBCollatorPtr collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN);
     function_like.setCollator(collator);
     std::vector<Block> lower_blocks{
         Block(lower_data11),

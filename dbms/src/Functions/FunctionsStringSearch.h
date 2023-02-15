@@ -29,104 +29,78 @@
 
 #include <cstring>
 #include <string_view>
+#include "common/defines.h"
 
 namespace DB
 {
 using Chars_t = ColumnString::Chars_t;
 using Offsets = ColumnString::Offsets;
 
-inline void copyColumnStringDataImpl(ColumnString * dst_col, const ColumnString * src_col)
+struct IlikeHelper
 {
-    auto & dst_data = dst_col->getChars();
-    auto & dst_offsets = dst_col->getOffsets();
-
-    const auto & src_data = src_col->getChars();
-    const auto & src_offsets = src_col->getOffsets();
-
-    dst_data.resize(src_data.size());
-    dst_offsets.resize(src_offsets.size());
-
-    memcpy(&dst_data[0], &src_data[0], src_data.size());
-    memcpy(&dst_offsets[0], &src_offsets[0], src_offsets.size() * sizeof(ColumnString::Offset));
-}
-
-inline void copyColumnStringData(MutableColumnPtr & dst_col, const ColumnPtr & src_col, const ColumnConst * src_col_const)
-{
-    if (src_col_const != nullptr)
+    static void lowerStrings(Chars_t & chars)
     {
-        auto dst_str_col = ColumnString::create();
-        copyColumnStringDataImpl(&*dst_str_col, typeid_cast<const ColumnString *>(&src_col_const->getDataColumn()));
-        dst_col = ColumnConst::create(ColumnPtr(std::move(dst_str_col)), src_col_const->size());
-    }
-    else
-    {
-        dst_col = ColumnString::create();
-        copyColumnStringDataImpl(typeid_cast<ColumnString *>(&*dst_col), typeid_cast<const ColumnString *>(&*src_col));
-    }
-}
-
-inline void lowerOneString(Chars_t & str_container, size_t pos, size_t size)
-{
-    size_t i = 0;
-    while (i < size)
-    {
-        if (isASCII(str_container[pos + i]))
+        size_t size = chars.size();
+        size_t i = 0;
+        while (i < size)
         {
-            if (isUpperAlphaASCII(str_container[pos + i]))
-                str_container[pos + i] = toLowerIfAlphaASCII(str_container[pos + i]);
-            ++i;
+            if (unlikely(chars[i] == '\0'))
+            {
+                ++i;
+                continue;
+            }
+
+            if (isASCII(chars[i]))
+            {
+                if (isUpperAlphaASCII(chars[i]))
+                    chars[i] = toLowerIfAlphaASCII(chars[i]);
+
+                ++i;
+            }
+            else
+            {
+                size_t utf8_len = UTF8::seqLength(chars[i]);
+                i += utf8_len;
+            }
         }
+    }
+
+    static void lowerColumnConst(ColumnConst * lowered_col_const)
+    {
+        auto * col_data = typeid_cast<ColumnString *>(&lowered_col_const->getDataColumn());
+        RUNTIME_ASSERT(col_data != nullptr, "Invalid column type, should be ColumnString");
+
+        lowerStrings(col_data->getChars());
+    }
+
+    static void lowerColumnString(MutableColumnPtr & col)
+    {
+        auto * col_vector = typeid_cast<ColumnString *>(&*col);
+        RUNTIME_ASSERT(col_vector != nullptr, "Invalid column type, should be ColumnString");
+
+        lowerStrings(col_vector->getChars());
+    }
+
+    // Only lower the 'A', 'B', 'C'...
+    static void lowerEnglishWords(Block & block, const ColumnNumbers & arguments)
+    {
+        MutableColumnPtr column_haystack = block.getByPosition(arguments[0]).column->assumeMutable();
+        MutableColumnPtr column_needle = block.getByPosition(arguments[1]).column->assumeMutable();
+
+        auto * col_haystack_const = typeid_cast<ColumnConst *>(&*column_haystack);
+        auto * col_needle_const = typeid_cast<ColumnConst *>(&*column_needle);
+
+        if (col_haystack_const != nullptr)
+            lowerColumnConst(col_haystack_const);
         else
-        {
-            size_t utf8_len = UTF8::seqLength(str_container[pos + i]);
-            i += utf8_len;
-        }
+            lowerColumnString(column_haystack);
+
+        if (col_needle_const != nullptr)
+            lowerColumnConst(col_needle_const);
+        else
+            lowerColumnString(column_needle);
     }
-}
-
-inline void lowerColumnConst(ColumnConst * lowered_col_const)
-{
-    auto * col_data = typeid_cast<ColumnString *>(&lowered_col_const->getDataColumn());
-    RUNTIME_ASSERT(col_data != nullptr, "Invalid column type, should be ColumnString");
-
-    auto & str_container = col_data->getChars();
-    auto str_size = col_data->getOffsets()[0];
-
-    lowerOneString(str_container, 0, str_size);
-}
-
-inline void lowerColumnString(MutableColumnPtr & col)
-{
-    auto * col_vector = typeid_cast<ColumnString *>(&*col);
-    RUNTIME_ASSERT(col_vector != nullptr, "Invalid column type, should be ColumnString");
-
-    auto & str_container = col_vector->getChars();
-    const auto & str_offsets = col_vector->getOffsets();
-
-    size_t str_num = col_vector->size();
-    for (size_t i = 0; i < str_num; ++i)
-        lowerOneString(str_container, StringUtil::offsetAt(str_offsets, i), StringUtil::sizeAt(str_offsets, i) - 1);
-}
-
-// Only lower the 'A', 'B', 'C'...
-inline void lowerEnglishWords(Block & block, const ColumnNumbers & arguments)
-{
-    MutableColumnPtr column_haystack = block.getByPosition(arguments[0]).column->assumeMutable();
-    MutableColumnPtr column_needle = block.getByPosition(arguments[1]).column->assumeMutable();
-
-    auto * col_haystack_const = typeid_cast<ColumnConst *>(&*column_haystack);
-    auto * col_needle_const = typeid_cast<ColumnConst *>(&*column_needle);
-
-    if (col_haystack_const != nullptr)
-        lowerColumnConst(col_haystack_const);
-    else
-        lowerColumnString(column_haystack);
-
-    if (col_needle_const != nullptr)
-        lowerColumnConst(col_needle_const);
-    else
-        lowerColumnString(column_needle);
-}
+};
 
 /** Search and replace functions in strings:
   *
@@ -226,8 +200,20 @@ public:
         return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    void executeImpl(Block & result_block, const ColumnNumbers & arguments, size_t result) const override
     {
+        auto block = result_block;
+        if constexpr (name == std::string_view(NameIlike3Args::name))
+        {
+            if (!collator->isCI())
+            {
+                block.getByPosition(arguments[0]).column = (*std::move(result_block.getByPosition(arguments[0]).column)).mutate();
+                block.getByPosition(arguments[1]).column = (*std::move(result_block.getByPosition(arguments[1]).column)).mutate();
+
+                IlikeHelper::lowerEnglishWords(block, arguments);
+            }
+        }
+
         using ResultType = typename Impl::ResultType;
 
         const ColumnPtr & column_haystack = block.getByPosition(arguments[0]).column;
@@ -235,17 +221,6 @@ public:
 
         const auto * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
         const auto * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
-
-        MutableColumnPtr ilike_col0_copy_ptr;
-        MutableColumnPtr ilike_col1_copy_ptr;
-
-        if constexpr (name == std::string_view(NameIlike3Args::name))
-        {
-            copyColumnStringData(ilike_col0_copy_ptr, column_haystack, col_haystack_const);
-            copyColumnStringData(ilike_col1_copy_ptr, column_needle, col_needle_const);
-
-            lowerEnglishWords(block, arguments);
-        }
 
         UInt8 escape_char = CH_ESCAPE_CHAR;
         String match_type;
@@ -291,9 +266,7 @@ public:
             ResultType res{};
             auto needle_string = col_needle_const->getValue<String>();
             Impl::constantConstant(col_haystack_const->getValue<String>(), needle_string, escape_char, match_type, collator, res);
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
-            if constexpr (name == std::string_view(NameIlike3Args::name))
-                restoreData(block, arguments, std::move(ilike_col0_copy_ptr), std::move(ilike_col1_copy_ptr));
+            result_block.getByPosition(result).column = result_block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
             return;
         }
 
@@ -333,19 +306,10 @@ public:
                                 + getName(),
                             ErrorCodes::ILLEGAL_COLUMN);
 
-        block.getByPosition(result).column = std::move(col_res);
-        if constexpr (name == std::string_view(NameIlike3Args::name))
-            restoreData(block, arguments, std::move(ilike_col0_copy_ptr), std::move(ilike_col1_copy_ptr));
+        result_block.getByPosition(result).column = std::move(col_res);
     }
 
 private:
-    // We lower the character in-place for ilike function, and we should restore them with cloned data.
-    void restoreData(Block & block, const ColumnNumbers & arguments, ColumnPtr && col0, ColumnPtr && col1) const
-    {
-        block.getByPosition(arguments[0]).column = std::move(col0);
-        block.getByPosition(arguments[1]).column = std::move(col1);
-    }
-
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
