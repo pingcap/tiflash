@@ -138,6 +138,18 @@ public:
 
     void insertFrom(const IColumn & src, size_t n) override;
 
+    void insertManyFrom(const IColumn & src_, size_t n, size_t length) override
+    {
+        for (size_t i = 0; i < length; ++i)
+            insertFrom(src_, n);
+    }
+
+    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override
+    {
+        for (auto position : position_vec)
+            insertFrom(src_, position);
+    }
+
     void insertFrom(ConstAggregateDataPtr __restrict place);
 
     /// Merge state at last row with specified state in another column.
@@ -150,6 +162,12 @@ public:
     void insert(const Field & x) override;
 
     void insertDefault() override;
+
+    void insertManyDefaults(size_t length) override
+    {
+        for (size_t i = 0; i < length; ++i)
+            insertDefault();
+    }
 
     StringRef serializeValueIntoArena(size_t n, Arena & dst, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
 
