@@ -67,10 +67,10 @@ void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
         child->toTreeString(buffer, level);
 }
 
-void Pipeline::addGetResultSink(ResultHandler result_handler)
+void Pipeline::addGetResultSink(ResultHandler && result_handler)
 {
     assert(!plan_nodes.empty());
-    auto get_result_sink = PhysicalGetResultSink::build(result_handler, plan_nodes.back());
+    auto get_result_sink = PhysicalGetResultSink::build(std::move(result_handler), plan_nodes.back());
     addPlanNode(get_result_sink);
 }
 
@@ -122,6 +122,7 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
     traverseExecutors(
         &dag_request,
         [&](const tipb::Executor & executor) {
+            // TODO support fine grained shuffle.
             if (FineGrainedShuffle(&executor).enable())
             {
                 is_supported = false;

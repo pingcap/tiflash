@@ -54,7 +54,7 @@ public:
     void toTreeString(FmtBuffer & buffer, size_t level = 0) const;
 
     // only used for test to get the result blocks.
-    void addGetResultSink(ResultHandler result_handler);
+    void addGetResultSink(ResultHandler && result_handler);
 
     PipelineExecGroup buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
 

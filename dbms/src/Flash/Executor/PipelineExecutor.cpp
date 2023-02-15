@@ -36,7 +36,7 @@ ExecutionResult PipelineExecutor::execute(ResultHandler result_handler)
     // for result_handler.isIgnored(), the sink plan of root_pipeline must be nullptr.
     // Now only used by unit tests.
     if (unlikely(!result_handler.isIgnored()))
-        root_pipeline->addGetResultSink(result_handler);
+        root_pipeline->addGetResultSink(std::move(result_handler));
 
     {
         auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
