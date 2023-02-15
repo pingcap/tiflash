@@ -204,7 +204,7 @@ void ExecutorTest::checkBlockSorted(
                 for (auto & block : return_blocks)
                     ASSERT_TRUE(isAlreadySorted(block, sort_desc)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
 
-                auto res = mergeBlocks(std::move(return_blocks)).getColumnsWithTypeAndName();
+                auto res = vstackBlocks(std::move(return_blocks)).getColumnsWithTypeAndName();
                 ASSERT_TRUE(assert_func(expected_res, res)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
             }
         };
