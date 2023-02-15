@@ -111,16 +111,8 @@ static inline void updatePartitionWriterMetrics(CompressionMethod method, size_t
 }
 
 template <typename Tunnel>
-static void MPPTunnelBroadcastWrite(Blocks & blocks, MPPTunnelSetBase<Tunnel> & mpp_tunnel)
+void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWriteImpl(TrackedMppDataPacketPtr & tracked_packet, bool is_broadcast)
 {
-    RUNTIME_CHECK(!mpp_tunnel.getTunnels().empty());
-}
-
-template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool is_broadcast)
-{
-    RUNTIME_CHECK(!tunnels.empty());
-    auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
     if (!tracked_packet)
         return;
 
@@ -135,7 +127,7 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool
         size_t data_bytes = 0;
         size_t local_data_bytes = 0;
         {
-            auto tunnel_cnt = getPartitionNum();
+            auto tunnel_cnt = tunnels.size();
             size_t local_tunnel_cnt = 0;
             for (size_t i = 0; i < tunnel_cnt; ++i)
             {
@@ -160,24 +152,33 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool
 }
 
 template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool is_broadcast)
+{
+    RUNTIME_CHECK(!tunnels.empty());
+    auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
+    if (!tracked_packet)
+        return;
+    broadcastOrPassThroughWriteImpl(tracked_packet, is_broadcast);
+}
+
+template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method, bool is_broadcast)
 {
     if (MPPDataPacketV0 == version)
         return broadcastOrPassThroughWrite(blocks, is_broadcast);
 
     RUNTIME_CHECK(!tunnels.empty());
-    size_t local_tunnel_cnt = std::accumulate(tunnels.begin(), tunnels.end(), 0, [](auto res, auto && tunnel) {
+    const size_t local_tunnel_cnt = std::accumulate(tunnels.begin(), tunnels.end(), 0, [](auto res, auto && tunnel) {
         return res + tunnel->isLocal();
     });
-    if (!local_tunnel_cnt)
+    // Only if all tunnels are local mode, use original way
+    if (local_tunnel_cnt == getPartitionNum())
     {
-        
+        return broadcastOrPassThroughWrite(blocks, is_broadcast);
     }
-
-    auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
-    if (!tracked_packet)
-        return;
-    tracked_packet->getPacket().set_version(version);
+    size_t original_size = 0;
+    auto && tracked_packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
+    broadcastOrPassThroughWriteImpl(tracked_packet, is_broadcast);
 }
 
 template <typename Tunnel>

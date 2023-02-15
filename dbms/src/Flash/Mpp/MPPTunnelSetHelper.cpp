@@ -45,14 +45,23 @@ TrackedMppDataPacketPtr ToPacket(
 TrackedMppDataPacketPtr ToPacket(
     Blocks && blocks,
     MPPDataPacketVersion version,
-    CompressionMethod compression_method,
+    CompressionMethod method,
     size_t & original_size)
 {
     assert(version > MPPDataPacketV0);
 
     if (blocks.empty())
         return nullptr;
-    auto && codec = CHBlockChunkCodecV1();
+    const Block & header = blocks.front().cloneEmpty();
+    auto && codec = CHBlockChunkCodecV1{header};
+    auto && res = codec.encode(std::move(blocks), method);
+    if unlikely (res.empty())
+        return nullptr;
+
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
+    tracked_packet->addChunk(std::move(res));
+    original_size += codec.original_size;
+    return tracked_packet;
 }
 
 TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::FieldType> & field_types)

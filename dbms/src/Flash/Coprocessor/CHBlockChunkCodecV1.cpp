@@ -248,6 +248,10 @@ struct CHBlockChunkCodecV1Impl
     {
         return encodeImpl(blocks, compression_method);
     }
+    CHBlockChunkCodecV1::EncodeRes encode(std::vector<Block> && blocks, CompressionMethod compression_method)
+    {
+        return encodeImpl(blocks, compression_method);
+    }
 
     static const ColumnPtr & toColumnPtr(const Columns & c, size_t index)
     {
@@ -268,6 +272,10 @@ struct CHBlockChunkCodecV1Impl
     static const ColumnPtr & toColumnPtr(const Block & block, size_t index)
     {
         return block.getByPosition(index).column;
+    }
+    static ColumnPtr && toColumnPtr(Block && block, size_t index)
+    {
+        return std::move(block.getByPosition(index).column);
     }
 
     template <typename ColumnsHolder>
@@ -483,6 +491,19 @@ CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(std::vector<Columns> 
     return CHBlockChunkCodecV1Impl{*this}.encodeImpl(std::move(columns), compression_method);
 }
 CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(const std::vector<Block> & blocks, CompressionMethod compression_method, bool check_schema)
+{
+    if (check_schema)
+    {
+        for (auto && block : blocks)
+        {
+            checkSchema(header, block);
+        }
+    }
+
+    return CHBlockChunkCodecV1Impl{*this}.encode(blocks, compression_method);
+}
+
+CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(std::vector<Block> && blocks, CompressionMethod compression_method, bool check_schema)
 {
     if (check_schema)
     {

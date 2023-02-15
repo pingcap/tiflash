@@ -88,8 +88,15 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::writeBlocks()
 {
-    if (unlikely(blocks.empty()))
+    if unlikely (blocks.empty())
         return;
+
+    // check schema
+    if (!expected_types.empty())
+    {
+        for (auto && block : blocks)
+            assertBlockSchema(expected_types, block, "BroadcastOrPassThroughWriter");
+    }
 
     writer->broadcastOrPassThroughWrite(blocks, data_codec_version, compression_method, is_broadcast);
     blocks.clear();

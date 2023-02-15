@@ -28,6 +28,12 @@ namespace DB::MPPTunnelSetHelper
 TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::FieldType> & field_types);
 
 TrackedMppDataPacketPtr ToPacket(
+    Blocks && blocks,
+    MPPDataPacketVersion version,
+    CompressionMethod method,
+    size_t & original_size);
+
+TrackedMppDataPacketPtr ToPacket(
     const Block & header,
     std::vector<MutableColumns> && part_columns,
     MPPDataPacketVersion version,

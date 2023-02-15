@@ -53,6 +53,7 @@ struct CHBlockChunkCodecV1 : boost::noncopyable
     EncodeRes encode(std::vector<Columns> && columns, CompressionMethod compression_method);
     EncodeRes encode(const Block & block, CompressionMethod compression_method, bool check_schema = true);
     EncodeRes encode(const std::vector<Block> & blocks, CompressionMethod compression_method, bool check_schema = true);
+    EncodeRes encode(std::vector<Block> && blocks, CompressionMethod compression_method, bool check_schema = true);
     //
     static Block decode(const Block & header, std::string_view str);
 };
