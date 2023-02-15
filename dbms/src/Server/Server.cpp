@@ -1117,6 +1117,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
+    global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
+
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
 
@@ -1283,10 +1285,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// setting up elastic thread pool
-    if (settings.enable_elastic_threadpool)
+    bool enable_elastic_threadpool = settings.enable_elastic_threadpool;
+    if (enable_elastic_threadpool)
         DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
             settings.elastic_threadpool_init_cap,
             std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
+    SCOPE_EXIT({
+        if (enable_elastic_threadpool)
+        {
+            assert(DynamicThreadPool::global_instance);
+            DynamicThreadPool::global_instance.reset();
+        }
+    });
 
     // For test mode, TaskScheduler is controlled by test case.
     bool enable_pipeline = settings.enable_pipeline && !global_context->isTest();

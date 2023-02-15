@@ -30,7 +30,6 @@
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
-#include <DataStreams/MergingAggregatedBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>

@@ -44,6 +44,7 @@ void registerFunctionsStringMath(FunctionFactory &);
 void registerFunctionsDuration(FunctionFactory &);
 void registerFunctionsRegexp(FunctionFactory &);
 void registerFunctionsJson(FunctionFactory &);
+void registerFunctionsIsIPAddr(FunctionFactory &);
 
 
 void registerFunctions()
@@ -73,6 +74,7 @@ void registerFunctions()
     registerFunctionsDuration(factory);
     registerFunctionsRegexp(factory);
     registerFunctionsJson(factory);
+    registerFunctionsIsIPAddr(factory);
 }
 
 } // namespace DB

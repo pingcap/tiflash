@@ -600,6 +600,91 @@ PageIdU64 SegmentTestBasic::getRandomSegmentId() // Complexity is O(n)
     return segment_id;
 }
 
+size_t SegmentTestBasic::getPageNumAfterGC(StorageType type, NamespaceId ns_id) const
+{
+    if (storage_pool->uni_ps)
+    {
+        storage_pool->uni_ps->gc(/* not_skip */ true);
+        return storage_pool->uni_ps->getNumberOfPages(UniversalPageIdFormat::toFullPrefix(type, ns_id));
+    }
+    else
+    {
+        assert(storage_pool->log_storage_v3 != nullptr || storage_pool->log_storage_v2 != nullptr);
+        switch (type)
+        {
+        case StorageType::Log:
+            if (storage_pool->log_storage_v3)
+            {
+                storage_pool->log_storage_v3->gc(/* not_skip */ true);
+                return storage_pool->log_storage_v3->getNumberOfPages();
+            }
+            else
+            {
+                storage_pool->log_storage_v2->gc(/* not_skip */ true);
+                return storage_pool->log_storage_v2->getNumberOfPages();
+            }
+            break;
+        case StorageType::Data:
+            if (storage_pool->data_storage_v3)
+            {
+                storage_pool->data_storage_v3->gc(/* not_skip */ true);
+                return storage_pool->data_storage_v3->getNumberOfPages();
+            }
+            else
+            {
+                storage_pool->data_storage_v2->gc(/* not_skip */ true);
+                return storage_pool->data_storage_v2->getNumberOfPages();
+            }
+            break;
+        default:
+            throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+        }
+    }
+}
+
+std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsWithoutGC(NamespaceId ns_id) const
+{
+    if (storage_pool->uni_ps)
+    {
+        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id)));
+    }
+    else
+    {
+        assert(storage_pool->data_storage_v3 != nullptr || storage_pool->data_storage_v2 != nullptr);
+        if (storage_pool->data_storage_v3)
+        {
+            return storage_pool->data_storage_v3->getAliveExternalPageIds(ns_id);
+        }
+        else
+        {
+            return storage_pool->data_storage_v2->getAliveExternalPageIds(ns_id);
+        }
+    }
+}
+
+std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceId ns_id) const
+{
+    if (storage_pool->uni_ps)
+    {
+        storage_pool->uni_ps->gc(/* not_skip */ true);
+        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id)));
+    }
+    else
+    {
+        assert(storage_pool->data_storage_v3 != nullptr || storage_pool->data_storage_v2 != nullptr);
+        if (storage_pool->data_storage_v3)
+        {
+            storage_pool->data_storage_v3->gc(/* not_skip */ true);
+            return storage_pool->data_storage_v3->getAliveExternalPageIds(ns_id);
+        }
+        else
+        {
+            storage_pool->data_storage_v2->gc(/* not_skip */ true);
+            return storage_pool->data_storage_v2->getAliveExternalPageIds(ns_id);
+        }
+    }
+}
+
 SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings)
 {
     TiFlashStorageTestBasic::reload(std::move(db_settings));
