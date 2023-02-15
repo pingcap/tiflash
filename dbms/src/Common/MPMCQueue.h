@@ -313,8 +313,9 @@ private:
 
             /// update pos only after all operations that may throw an exception.
             ++read_pos;
+            /// assert so in debug mode, we can get notified if some bugs happens when updating current_auxiliary_memory_usage
+            assert(read_pos != write_pos || current_auxiliary_memory_usage == 0);
             if (read_pos == write_pos)
-                /// if there is no element, the current_auxiliary_memory_usage must be zero
                 current_auxiliary_memory_usage = 0;
 
             /// Notify next writer within the critical area because:
