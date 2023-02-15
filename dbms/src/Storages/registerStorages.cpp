@@ -24,7 +24,6 @@ void registerStorageDeltaMerge(StorageFactory & factory);
 void registerStorageNull(StorageFactory & factory);
 void registerStorageMemory(StorageFactory & factory);
 void registerStorageSet(StorageFactory & factory);
-void registerStorageView(StorageFactory & factory);
 
 
 void registerStorages()
@@ -36,7 +35,6 @@ void registerStorages()
     registerStorageNull(factory);
     registerStorageMemory(factory);
     registerStorageSet(factory);
-    registerStorageView(factory);
 }
 
 } // namespace DB
