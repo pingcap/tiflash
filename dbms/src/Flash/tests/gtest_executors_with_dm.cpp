@@ -28,6 +28,7 @@ public:
     {
         ExecutorTest::initializeContext();
         context.mockStorage()->setUseDeltaMerge(true);
+        context.context.setSetting("dt_enable_read_thread", "true");
         // note that
         // 1. the first column is pk.
         // 2. The decimal type is not supported.
@@ -130,6 +131,7 @@ try
         {{toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"})}});
 
     // filter
+    // ywq todo why?
     request = context
                   .scan("test_db", "t0")
                   .filter(lt(col("col0"), lit(Field(static_cast<Int64>(4)))))

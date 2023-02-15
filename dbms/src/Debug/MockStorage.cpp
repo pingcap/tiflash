@@ -183,6 +183,52 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     }
 }
 
+
+
+// ywq test todo
+SourceOps MockStorage::getSourceOpsFromDeltaMerge(PipelineExecutorStatus &exec_status_, Context & context, Int64 table_id, FilterConditions * filter_conditions)
+{
+    assert(tableExistsForDeltaMerge(table_id));
+    auto storage = storage_delta_merge_map[table_id];
+    auto column_infos = table_schema_for_delta_merge[table_id];
+    assert(storage);
+    assert(!column_infos.empty());
+    Names column_names;
+    for (const auto & column_info : column_infos)
+        column_names.push_back(column_info.first);
+
+    auto scan_context = std::make_shared<DM::ScanContext>();
+    SelectQueryInfo query_info;
+    query_info.query = std::make_shared<ASTSelectQuery>();
+    query_info.keep_order = false;
+    query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(context.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max(), scan_context);
+    if (filter_conditions && filter_conditions->hasValue())
+    {
+        std::cout << "ywq test reach here" << std::endl;
+        // ywq todo
+        // auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
+        // query_info.dag_query = std::make_unique<DAGQueryInfo>(
+        //     filter_conditions->conditions,
+        //     analyzer->getPreparedSets(),
+        //     analyzer->getCurrentInputColumns(),
+        //     context.getTimezoneInfo());
+        // auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(*filter_conditions, *analyzer);
+        // BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
+        // // TODO: set num_streams, then ins.size() != 1
+        // BlockInputStreamPtr in = ins[0];
+        // in = std::make_shared<FilterBlockInputStream>(in, before_where, filter_column_name, "test");
+        // in->setExtraInfo("push down filter");
+        // in = std::make_shared<ExpressionBlockInputStream>(in, project_after_where, "test");
+        // in->setExtraInfo("projection after push down filter");
+        // return in;
+        return {};
+    }
+    else
+    {
+        return storage->readSourceOps(exec_status_, column_names, query_info, context, 8192, 2); // ywq todo remove hard code.
+    }
+}
+
 void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColumnInfoVec & columns)
 {
     TableInfo table_info;

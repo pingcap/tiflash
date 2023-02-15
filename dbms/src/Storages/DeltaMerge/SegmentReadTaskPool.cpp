@@ -262,6 +262,22 @@ void SegmentReadTaskPool::popBlock(Block & block)
     }
 }
 
+bool SegmentReadTaskPool::tryPopBlock(Block & block)
+{
+    if (q.tryPop(block))
+    {
+        blk_stat.pop(block);
+        global_blk_stat.pop(block);
+        if (exceptionHappened())
+            throw exception;
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 void SegmentReadTaskPool::pushBlock(Block && block)
 {
     blk_stat.push(block);

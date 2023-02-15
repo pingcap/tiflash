@@ -31,6 +31,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Interpreters/Context.h>
+#include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
@@ -284,6 +285,88 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 
     executeImpl(pipeline);
 }
+
+void DAGStorageInterpreter::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t concurrency)
+{
+    prepare();
+    buildPipelineExecImpl(group_builder, context, concurrency);
+}
+
+// ywq todo
+void DAGStorageInterpreter::buildPipelineExecImpl(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency)
+{
+    auto scan_context = std::make_shared<DM::ScanContext>();
+    dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+    mvcc_query_info->scan_context = scan_context;
+
+    SourceOps source_ops;
+    if (!mvcc_query_info->regions_query_info.empty())
+    {
+        // Ywq todo build local pipeline
+        source_ops = buildLocalSourceOps(group_builder.exec_status, context.getSettingsRef().max_block_size);
+    }
+
+    // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
+    // auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
+
+    auto remote_requests = buildRemoteRequests(scan_context);
+    RUNTIME_CHECK_MSG(remote_requests.empty(), "pipeline model doesn't support remote read currently");
+
+    // A failpoint to test pause before alter lock released
+    FAIL_POINT_PAUSE(FailPoints::pause_with_alter_locks_acquired);
+    // Release alter locks
+    // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
+    // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
+    // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
+    const TableLockHolders drop_locks = releaseAlterLocks();
+
+    // after buildRemoteStreams, remote read stream will be appended in pipeline.streams.
+    // size_t remote_read_streams_start_index = source_ops.size();
+
+    // // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
+    // if (!remote_requests.empty())
+    //     buildRemoteStreams(remote_requests, pipeline);
+
+    /// record local and remote io input stream
+    // auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
+    // pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
+
+    // if (pipeline.streams.empty())
+    // {
+    //     pipeline.streams.emplace_back(std::move(null_stream_if_empty));
+    //     // reset remote_read_streams_start_index for null_stream_if_empty.
+    //     remote_read_streams_start_index = 1;
+    // }
+
+    // ywq todo how to handle?
+
+    // for (const auto & lock : drop_locks)
+    //     dagContext().addTableLock(lock);
+
+    {
+        group_builder.init(concurrency);
+        size_t i = 0;
+        group_builder.transform([&](auto & builder) {
+            builder.setSourceOp(std::move(source_ops[i++]));
+        });
+    }
+
+    // FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
+    // FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
+
+    // /// handle timezone/duration cast for local and remote table scan.
+    // // ywq todo
+    // // executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
+
+    // /// handle filter conditions for local and remote table scan.
+    // if (filter_conditions.hasValue())
+    // {
+    //     // ywq todo
+    //     // ::DB::executePushedDownFilter(remote_read_streams_start_index, filter_conditions, *analyzer, log, pipeline);
+    //     // recordProfileStreams(pipeline, filter_conditions.executor_id);
+    // }
+}
+
 
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
@@ -730,6 +813,66 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
     }
 }
 
+// ywq todo
+SourceOps DAGStorageInterpreter::buildLocalSourceOpForPhysicalTable(
+    PipelineExecutorStatus & exec_status_,
+    const TableID & table_id,
+    const SelectQueryInfo & query_info,
+    size_t max_block_size)
+{
+    size_t region_num = query_info.mvcc_query_info->regions_query_info.size();
+    if (region_num == 0)
+        return {};
+
+    assert(storages_with_structure_lock.find(table_id) != storages_with_structure_lock.end());
+    auto & storage = storages_with_structure_lock[table_id].storage;
+
+    const DAGContext & dag_context = *context.getDAGContext();
+    for (int num_allow_retry = 1; num_allow_retry >= 0; --num_allow_retry)
+    {
+        try
+        {
+            // QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
+            // auto sourceOps = storage->read(); // ywq todo
+            auto sources = storage->readSourceOps(exec_status_, required_columns, query_info, context, max_block_size, max_streams);
+
+            injectFailPointForLocalRead(query_info);
+
+            // After getting streams from storage, we need to validate whether Regions have changed or not after learner read.
+            // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `streams`
+            // may contain different data other than expected.
+            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+            return sources;
+        }
+        catch (RegionException & e)
+        {
+            query_info.mvcc_query_info->scan_context->total_local_region_num -= e.unavailable_region.size();
+            /// Recover from region exception for batchCop/MPP
+            if (dag_context.isBatchCop() || dag_context.isMPPTask())
+            {
+                // pipeline.streams.clear();
+                if (likely(checkRetriableForBatchCopOrMPP(table_id, query_info, e, num_allow_retry)))
+                    continue;
+                else
+                    break;
+            }
+            else
+            {
+                // Throw an exception for TiDB / TiSpark to retry
+                e.addMessage(genErrMsgForLocalRead(storage, table_id, logical_table_id));
+                throw;
+            }
+        }
+        catch (DB::Exception & e)
+        {
+            /// Other unknown exceptions
+            e.addMessage(genErrMsgForLocalRead(storage, table_id, logical_table_id));
+            throw;
+        }
+    }
+    return {};
+}
+
 void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size)
 {
     const DAGContext & dag_context = *context.getDAGContext();
@@ -761,6 +904,23 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
             pipeline.streams.push_back(std::make_shared<MultiplexInputStream>(stream_pool, req_info));
         }
     }
+}
+
+// ywq todo
+SourceOps DAGStorageInterpreter::buildLocalSourceOps(PipelineExecutorStatus & exec_status_, int max_block_size)
+{
+    // const DAGContext & dag_context = *context.getDAGContext();
+    size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
+    if (total_local_region_num == 0)
+        return {};
+    mvcc_query_info->scan_context->total_local_region_num = total_local_region_num;
+    const auto table_query_infos = generateSelectQueryInfos();
+    RUNTIME_CHECK(table_query_infos.size() == 1);
+    const auto & table_query_info = *table_query_infos.cbegin();
+    const TableID table_id = table_query_info.first;
+    const SelectQueryInfo & query_info = table_query_info.second;
+
+    return buildLocalSourceOpForPhysicalTable(exec_status_, table_id, query_info, max_block_size);
 }
 
 std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAGStorageInterpreter::getAndLockStorages(Int64 query_schema_version)

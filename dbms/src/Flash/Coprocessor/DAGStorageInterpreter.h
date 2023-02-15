@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
@@ -51,6 +52,8 @@ public:
 
     void execute(DAGPipeline & pipeline);
 
+    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/);
+
     /// Members will be transferred to DAGQueryBlockInterpreter after execute
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
@@ -75,7 +78,15 @@ private:
         const SelectQueryInfo & query_info,
         DAGPipeline & pipeline,
         size_t max_block_size);
+
+    SourceOps buildLocalSourceOpForPhysicalTable(
+        PipelineExecutorStatus & exec_status_,
+        const TableID & table_id,
+        const SelectQueryInfo & query_info,
+        size_t max_block_size);
+
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
+    SourceOps buildLocalSourceOps(PipelineExecutorStatus & exec_status_, int max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
@@ -101,6 +112,8 @@ private:
     void prepare();
 
     void executeImpl(DAGPipeline & pipeline);
+
+    void buildPipelineExecImpl(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/);
 
 private:
     std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;

@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Operators/Operator.h>
 #include <common/types.h>
 
 #include <atomic>
@@ -83,6 +84,7 @@ public:
     NamesAndTypes getNameAndTypesForDeltaMerge(Int64 table_id);
 
     BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions = nullptr);
+    SourceOps getSourceOpsFromDeltaMerge(PipelineExecutorStatus &exec_status_, Context & context, Int64 table_id, FilterConditions * filter_conditions = nullptr);
 
     bool tableExistsForDeltaMerge(Int64 table_id);
 
