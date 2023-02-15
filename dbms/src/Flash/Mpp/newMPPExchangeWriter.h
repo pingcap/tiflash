@@ -103,7 +103,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
                 writer,
                 chosen_batch_send_min_limit,
                 dag_context,
-                data_codec_version,
+                MPPDataPacketV1, // hacked for tests, use V1
                 compression_mode,
                 exchange_type == tipb::ExchangeType::Broadcast);
         }
