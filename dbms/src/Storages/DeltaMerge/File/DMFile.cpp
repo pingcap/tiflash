@@ -819,8 +819,8 @@ std::vector<char> DMFile::readMetaV2(const FileProviderPtr & file_provider)
         file_provider,
         metav2Path(),
         encryptionMetav2Path(),
-        meta_read_buffer_size, 
-        /*read_limiter*/ nullptr, 
+        meta_read_buffer_size,
+        /*read_limiter*/ nullptr,
         ChecksumAlgo::CRC32,
         TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE);
     std::vector<char> buf(meta_read_buffer_size);
@@ -841,28 +841,28 @@ std::vector<char> DMFile::readMetaV2(const FileProviderPtr & file_provider)
 
 void DMFile::parseMetaV2(std::string_view buffer)
 {
-    const auto * footer = reinterpret_cast<const MetaFooter*>(buffer.data() + buffer.size() - sizeof(MetaFooter));
+    const auto * footer = reinterpret_cast<const MetaFooter *>(buffer.data() + buffer.size() - sizeof(MetaFooter));
     if (footer->checksum_algorithm != 0 && footer->checksum_frame_length != 0)
     {
-        configuration = DMChecksumConfig{/*embedded_checksum*/{}, footer->checksum_frame_length, static_cast<ChecksumAlgo>(footer->checksum_algorithm)};
+        configuration = DMChecksumConfig{/*embedded_checksum*/ {}, footer->checksum_frame_length, static_cast<ChecksumAlgo>(footer->checksum_algorithm)};
     }
     else
     {
         configuration.reset();
     }
 
-    const auto * ptr = reinterpret_cast<const char*>(footer);
+    const auto * ptr = reinterpret_cast<const char *>(footer);
     {
-        const auto * handle = reinterpret_cast<const MetaBlockHandle*>(ptr - sizeof(MetaBlockHandle));
+        const auto * handle = reinterpret_cast<const MetaBlockHandle *>(ptr - sizeof(MetaBlockHandle));
         parseColumnStat(buffer.substr(handle->offset, handle->size));
     }
     {
-        const auto * handle = reinterpret_cast<const MetaBlockHandle*>(ptr - sizeof(MetaBlockHandle) * 2);
+        const auto * handle = reinterpret_cast<const MetaBlockHandle *>(ptr - sizeof(MetaBlockHandle) * 2);
         parsePackProperty(buffer.substr(handle->offset, handle->size));
     }
     {
-        const auto * handle = reinterpret_cast<const MetaBlockHandle*>(ptr - sizeof(MetaBlockHandle) * 3);
-        parsePackStat(buffer.substr(handle->offset, handle->size));    
+        const auto * handle = reinterpret_cast<const MetaBlockHandle *>(ptr - sizeof(MetaBlockHandle) * 3);
+        parsePackStat(buffer.substr(handle->offset, handle->size));
     }
     use_meta_v2 = true;
 }
@@ -883,7 +883,7 @@ void DMFile::parseColumnStat(std::string_view buffer)
 
 void DMFile::parsePackProperty(std::string_view buffer)
 {
-    const auto * pp = reinterpret_cast<const PackProperty*>(buffer.data());
+    const auto * pp = reinterpret_cast<const PackProperty *>(buffer.data());
     auto count = buffer.size() / sizeof(PackProperty);
     pack_properties.mutable_property()->Reserve(count);
     for (size_t i = 0; i < count; ++i)
@@ -893,10 +893,10 @@ void DMFile::parsePackProperty(std::string_view buffer)
 }
 
 void DMFile::parsePackStat(std::string_view buffer)
-{   
+{
     auto count = buffer.size() / sizeof(PackStat);
     pack_stats.resize(count);
-    memcpy(reinterpret_cast<char*>(pack_stats.data()), buffer.data(), buffer.size());
+    memcpy(reinterpret_cast<char *>(pack_stats.data()), buffer.data(), buffer.size());
 }
 
 void DMFile::finalizeDirName()

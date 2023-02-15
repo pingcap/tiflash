@@ -164,6 +164,7 @@ private:
     WriteBufferFromFileBasePtr createPackStatsFile();
     void finalizeMeta();
     void finalizeMetaV2();
+
 private:
     DMFilePtr dmfile;
     ColumnDefines write_columns;

@@ -80,24 +80,23 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaV2File()
 
 DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
 {
-    return dmfile->configuration ? 
-        createWriteBufferFromFileBaseByFileProvider(
-            file_provider,
-            dmfile->packStatPath(),
-            dmfile->encryptionPackStatPath(),
-            /*create_new_encryption_info*/ true,
-            write_limiter,
-            dmfile->configuration->getChecksumAlgorithm(),
-            dmfile->configuration->getChecksumFrameLength()) :
-        createWriteBufferFromFileBaseByFileProvider(
-            file_provider,
-            dmfile->packStatPath(),
-            dmfile->encryptionPackStatPath(),
-            /*create_new_encryption_info*/ true,
-            write_limiter,
-            0,
-            0,
-            options.max_compress_block_size);
+    return dmfile->configuration ? createWriteBufferFromFileBaseByFileProvider(
+               file_provider,
+               dmfile->packStatPath(),
+               dmfile->encryptionPackStatPath(),
+               /*create_new_encryption_info*/ true,
+               write_limiter,
+               dmfile->configuration->getChecksumAlgorithm(),
+               dmfile->configuration->getChecksumFrameLength())
+                                 : createWriteBufferFromFileBaseByFileProvider(
+                                     file_provider,
+                                     dmfile->packStatPath(),
+                                     dmfile->encryptionPackStatPath(),
+                                     /*create_new_encryption_info*/ true,
+                                     write_limiter,
+                                     0,
+                                     0,
+                                     options.max_compress_block_size);
 }
 
 void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
