@@ -79,6 +79,7 @@ public:
         : capacity(capacity_)
         , max_auxiliary_memory_usage(std::numeric_limits<Int64>::max())
         , get_auxiliary_memory_usage([](const T &) { return 0; })
+        , element_auxiliary_memory(capacity, 0)
         , data(capacity * sizeof(T))
     {
     }
@@ -88,6 +89,7 @@ public:
         : capacity(capacity_)
         , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
         , get_auxiliary_memory_usage(std::move(get_auxiliary_memory_usage_))
+        , element_auxiliary_memory(capacity, 0)
         , data(capacity * sizeof(T))
     {
     }
@@ -309,7 +311,7 @@ private:
             auto & obj = getObj(read_pos);
             res = std::move(obj);
             destruct(obj);
-            current_auxiliary_memory_usage -= get_auxiliary_memory_usage(res);
+            updateElementAuxiliaryMemory<true>(read_pos);
 
             /// update pos only after all operations that may throw an exception.
             ++read_pos;
@@ -328,8 +330,11 @@ private:
                 notifyNext(writer_head);
             return Result::OK;
         }
-        if (is_timeout)
-            return Result::TIMEOUT;
+        if constexpr (need_wait)
+        {
+            if (is_timeout)
+                return Result::TIMEOUT;
+        }
         switch (status)
         {
         case Status::NORMAL:
@@ -367,7 +372,7 @@ private:
         {
             void * addr = getObjAddr(write_pos);
             assigner(addr);
-            current_auxiliary_memory_usage += get_auxiliary_memory_usage(getObj(write_pos));
+            updateElementAuxiliaryMemory<false>(write_pos);
 
             /// update pos only after all operations that may throw an exception.
             ++write_pos;
@@ -376,8 +381,11 @@ private:
             notifyNext(reader_head);
             return Result::OK;
         }
-        if (is_timeout)
-            return Result::TIMEOUT;
+        if constexpr (need_wait)
+        {
+            if (is_timeout)
+                return Result::TIMEOUT;
+        }
         switch (status)
         {
         case Status::NORMAL:
@@ -452,6 +460,22 @@ private:
         return false;
     }
 
+    template <bool read>
+    ALWAYS_INLINE void updateElementAuxiliaryMemory(size_t pos)
+    {
+        if constexpr (read)
+        {
+            current_auxiliary_memory_usage -= element_auxiliary_memory[pos % capacity];
+            element_auxiliary_memory[pos % capacity] = 0;
+        }
+        else
+        {
+            auto auxiliary_memory = get_auxiliary_memory_usage(getObj(pos));
+            current_auxiliary_memory_usage += auxiliary_memory;
+            element_auxiliary_memory[pos % capacity] = auxiliary_memory;
+        }
+    }
+
 private:
     const Int64 capacity;
     /// max_auxiliary_memory_usage is the bound of all the element's auxiliary memory
@@ -475,6 +499,7 @@ private:
     String cancel_reason;
     Int64 current_auxiliary_memory_usage = 0;
 
+    std::vector<Int64> element_auxiliary_memory;
     std::vector<UInt8> data;
 };
 
