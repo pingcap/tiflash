@@ -73,20 +73,20 @@ class MPMCQueue
 public:
     using Status = MPMCQueueStatus;
     using Result = MPMCQueueResult;
-    using ElementAuxiliaryMemoryUsageFunc = std::function<size_t(const T & element)>;
+    using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
 
     explicit MPMCQueue(size_t capacity_)
         : capacity(capacity_)
-        , max_auxiliary_memory_usage(std::numeric_limits<size_t>::max())
+        , max_auxiliary_memory_usage(std::numeric_limits<Int64>::max())
         , get_auxiliary_memory_usage([](const T &) { return 0; })
         , data(capacity * sizeof(T))
     {
     }
 
-    /// max_auxiliary_memory_usage_ = 0 means no limit on auxiliary memory usage
-    MPMCQueue(size_t capacity_, size_t max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
+    /// max_auxiliary_memory_usage_ <= 0 means no limit on auxiliary memory usage
+    MPMCQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
         : capacity(capacity_)
-        , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ == 0 ? std::numeric_limits<size_t>::max() : max_auxiliary_memory_usage_)
+        , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
         , get_auxiliary_memory_usage(std::move(get_auxiliary_memory_usage_))
         , data(capacity * sizeof(T))
     {
@@ -463,7 +463,7 @@ private:
     /// auxiliary memory usage, then the user should provide the function to calculate the auxiliary memory usage
     /// Note: unlike capacity, max_auxiliary_memory_usage is actually a soft-limit because we need to make at least
     /// one element can be pushed to the queue even if its auxiliary memory exceeds max_auxiliary_memory_usage
-    const size_t max_auxiliary_memory_usage;
+    const Int64 max_auxiliary_memory_usage;
     const ElementAuxiliaryMemoryUsageFunc get_auxiliary_memory_usage;
 
     mutable std::mutex mu;
@@ -473,7 +473,7 @@ private:
     Int64 write_pos = 0;
     Status status = Status::NORMAL;
     String cancel_reason;
-    size_t current_auxiliary_memory_usage = 0;
+    Int64 current_auxiliary_memory_usage = 0;
 
     std::vector<UInt8> data;
 };
