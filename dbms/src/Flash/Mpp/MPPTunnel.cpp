@@ -355,11 +355,14 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
         while (send_queue.pop(res) == MPMCQueueResult::OK)
         {
             MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, res->getPacket().ByteSizeLong());
+            LOG_INFO(log, "Begin write packet, size: {}", res->getPacket().ByteSizeLong());
             if (!writer->write(res->packet))
             {
+                LOG_WARNING(log, "Failed to write packet");
                 err_msg = "grpc writes failed.";
                 break;
             }
+            LOG_INFO(log, "Finish write packet");
         }
         /// write the last error packet if needed
         if (send_queue.getStatus() == MPMCQueueStatus::CANCELLED)

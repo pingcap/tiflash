@@ -589,9 +589,10 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             bool has_data = false;
             for (;;)
             {
-                LOG_TRACE(log, "begin next ");
                 TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+                LOG_INFO(log, "Begin read packet");
                 bool success = reader->read(packet);
+                LOG_INFO(log, "Finish read packet, success: {}", success);
                 if (!success)
                     break;
                 has_data = true;
