@@ -187,10 +187,13 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilt
     chain.addStep();
 
     // remove useless tmp column and keep the schema of local streams and remote streams the same.
+    NamesWithAliases project_cols;
     for (const auto & col : analyzer.getCurrentInputColumns())
     {
         chain.getLastStep().required_output.push_back(col.name);
+        project_cols.emplace_back(col.name, col.name);
     }
+    chain.getLastActions()->add(ExpressionAction::project(project_cols));
     ExpressionActionsPtr project_after_where = chain.getLastActions();
     chain.finalize();
     chain.clear();
