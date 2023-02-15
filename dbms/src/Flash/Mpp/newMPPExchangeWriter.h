@@ -94,6 +94,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
             auto data_codec_version = mpp_version == MppVersionV0
                 ? MPPDataPacketV0
                 : MPPDataPacketV1;
+            data_codec_version = MPPDataPacketV1; // hacked for tests: use V1;
             auto chosen_batch_send_min_limit = mpp_version == MppVersionV0
                 ? batch_send_min_limit
                 : batch_send_min_limit_compression;
@@ -103,7 +104,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
                 writer,
                 chosen_batch_send_min_limit,
                 dag_context,
-                MPPDataPacketV1, // hacked for tests, use V1
+                data_codec_version,
                 compression_mode,
                 exchange_type == tipb::ExchangeType::Broadcast);
         }
