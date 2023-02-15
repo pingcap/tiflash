@@ -273,7 +273,7 @@ struct CHBlockChunkCodecV1Impl
     {
         return block.getByPosition(index).column;
     }
-    static ColumnPtr && toColumnPtr(Block && block, size_t index)
+    static ColumnPtr toColumnPtr(Block && block, size_t index)
     {
         return std::move(block.getByPosition(index).column);
     }
@@ -357,6 +357,13 @@ struct CHBlockChunkCodecV1Impl
         return encodeColumnImpl(block, ostr_ptr);
     }
     void encodeColumn(const std::vector<Block> & blocks, WriteBuffer * ostr_ptr)
+    {
+        for (auto && block : blocks)
+        {
+            encodeColumnImpl(block, ostr_ptr);
+        }
+    }
+    void encodeColumn(std::vector<Block> && blocks, WriteBuffer * ostr_ptr)
     {
         for (auto && block : blocks)
         {
@@ -513,7 +520,7 @@ CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(std::vector<Block> &&
         }
     }
 
-    return CHBlockChunkCodecV1Impl{*this}.encode(blocks, compression_method);
+    return CHBlockChunkCodecV1Impl{*this}.encode(std::move(blocks), compression_method);
 }
 
 static Block decodeCompression(const Block & header, ReadBuffer & istr)
