@@ -855,7 +855,6 @@ SourceOps StorageDeltaMerge::readSourceOps(
 
     LOG_TRACE(tracing_logger, "[ranges: {}] [sources: {}]", ranges.size(), source_ops.size());
 
-    // return streams;
     return source_ops;
 }
 

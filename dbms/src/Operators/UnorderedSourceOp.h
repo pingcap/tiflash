@@ -66,20 +66,27 @@ public:
     {
         if (has_temp_block)
         {
+            std::cout << "ywq test has temp block" << std::endl;
             std::swap(block, t_block);
             has_temp_block = false;
             if (action.transform(block))
+            {
+                std::cout << "ywq test block rows v1:" << block.rows() << std::endl;
                 return OperatorStatus::HAS_OUTPUT;
+            }
             else
                 return OperatorStatus::FINISHED;
         }
         else
         {
+            size_t i = 0;
             while (true)
             {
+                std::cout << "ywq test while i=" << i << std::endl;
                 Block res;
                 if (!task_pool->tryPopBlock(res))
                 {
+                    std::cout << "ywq test waiting" << std::endl;
                     return OperatorStatus::WAITING;
                 }
 
@@ -88,15 +95,19 @@ public:
                     if (action.transform(res))
                     {
                         std::swap(block, res);
+                        std::cout << "ywq test block rows:" << block.rows() << std::endl;
                         return OperatorStatus::HAS_OUTPUT;
                     }
                     else
                     {
+                        std::cout << "ywq test block empty" << std::endl;
+                        i++;
                         continue;
                     }
                 }
                 else
                 {
+                    std::cout << "ywq test finished" << std::endl;
                     return OperatorStatus::FINISHED;
                 }
             }
@@ -108,6 +119,7 @@ public:
         Block res;
         if (!task_pool->tryPopBlock(res))
         {
+            // std::cout << "ywq test await waiting" << std::endl;
             return OperatorStatus::WAITING;
         }
         if (res)
@@ -118,10 +130,12 @@ public:
             }
             t_block = std::move(res);
             has_temp_block = true;
+            std::cout << "ywq test await done" << std::endl;
             return OperatorStatus::HAS_OUTPUT;
         }
         else
         {
+            std::cout << "ywq test await finished" << std::endl;
             return OperatorStatus::FINISHED;
         }
     }

@@ -2146,7 +2146,7 @@ bool Segment::placeUpsert(const DMContext & dm_context,
                                               : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
     auto compacted_index = update_delta_tree.getCompactedEntries();
-
+    std::cout << "ywq test new new:" << dm_context.stable_pack_rows << std::endl;
     auto merged_stream = getPlacedStream<skippable_place>( //
         dm_context,
         {handle, getVersionColumnDefine()},

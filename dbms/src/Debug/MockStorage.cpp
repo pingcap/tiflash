@@ -130,7 +130,7 @@ Int64 MockStorage::addTableDataForDeltaMerge(Context & context, const String & n
 
         // write data to DeltaMergeStorage
         ASTPtr insertptr(new ASTInsertQuery());
-        BlockOutputStreamPtr output = storage->write(insertptr, context.getSettingsRef());
+        BlockOutputStreamPtr output = storage->write(insertptr, context.getGlobalContext().getSettingsRef());
 
         Block insert_block{columns};
 
@@ -186,7 +186,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
 
 
 // ywq test todo
-SourceOps MockStorage::getSourceOpsFromDeltaMerge(PipelineExecutorStatus &exec_status_, Context & context, Int64 table_id, FilterConditions * filter_conditions)
+SourceOps MockStorage::getSourceOpsFromDeltaMerge(PipelineExecutorStatus &exec_status_, Context & context, Int64 table_id, FilterConditions * filter_conditions, size_t concurrency)
 {
     assert(tableExistsForDeltaMerge(table_id));
     auto storage = storage_delta_merge_map[table_id];
@@ -225,7 +225,8 @@ SourceOps MockStorage::getSourceOpsFromDeltaMerge(PipelineExecutorStatus &exec_s
     }
     else
     {
-        return storage->readSourceOps(exec_status_, column_names, query_info, context, 8192, 2); // ywq todo remove hard code.
+        std::cout << "ywq test max block size: " << context.getSettingsRef().max_block_size << std::endl;
+        return storage->readSourceOps(exec_status_, column_names, query_info, context, context.getSettingsRef().max_block_size, concurrency); // ywq todo remove hard code.
     }
 }
 

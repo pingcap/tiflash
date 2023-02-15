@@ -302,6 +302,7 @@ Block DMFileReader::read()
 
     const std::vector<RSResult> & handle_res = pack_filter.getHandleRes(); // alias of handle_res in pack_filter
     RSResult expected_handle_res = handle_res[next_pack_id];
+    std::cout << "ywq test rows_threshold_per_read: " << rows_threshold_per_read << std::endl;
     for (; next_pack_id < use_packs.size() && use_packs[next_pack_id] && read_rows < rows_threshold_per_read; ++next_pack_id)
     {
         if (read_pack_limit != 0 && next_pack_id - start_pack_id >= read_pack_limit)
