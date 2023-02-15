@@ -61,8 +61,17 @@ public:
 
     RU collectRequestUnit() override;
 
+    Block getSampleBlock() const override;
+
+    BaseRuntimeStatistics getRuntimeStatistics(DAGContext &) const override;
+
 protected:
-    ExecutionResult execute(ResultHandler result_handler) override;
+    ExecutionResult execute(ResultHandler && result_handler) override;
+
+    void doExecuteAsync(ResultHandler && result_handler);
+    void doExecuteSync(ResultHandler && result_handler);
+
+    void schedulePipeline();
 
 private:
     Context & context;

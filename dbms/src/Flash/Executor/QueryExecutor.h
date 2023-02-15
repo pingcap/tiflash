@@ -17,6 +17,7 @@
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/toRU.h>
+#include <Flash/Statistics/BaseRuntimeStatistics.h>
 #include <common/types.h>
 
 #include <memory>
@@ -25,6 +26,8 @@ namespace DB
 {
 class ProcessListEntry;
 using ProcessListEntryPtr = std::shared_ptr<ProcessListEntry>;
+
+class DAGContext;
 
 class QueryExecutor
 {
@@ -37,6 +40,7 @@ public:
 
     ExecutionResult execute();
     ExecutionResult execute(ResultHandler::Handler handler);
+    ExecutionResult executeAsync(ResultHandler::Handler handler);
 
     virtual void cancel() = 0;
 
@@ -46,8 +50,12 @@ public:
 
     virtual RU collectRequestUnit() = 0;
 
+    virtual Block getSampleBlock() const = 0;
+
+    virtual BaseRuntimeStatistics getRuntimeStatistics(DAGContext &) const = 0;
+
 protected:
-    virtual ExecutionResult execute(ResultHandler) = 0;
+    virtual ExecutionResult execute(ResultHandler &&) = 0;
 
 protected:
     ProcessListEntryPtr process_list_entry;

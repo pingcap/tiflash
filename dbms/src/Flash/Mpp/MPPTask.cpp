@@ -416,13 +416,16 @@ void MPPTask::runImpl()
         LOG_INFO(log, "mpp finish with request unit: {}", ru);
         GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(ru);
 
-        const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
+        mpp_task_statistics.collectRuntimeStatistics();
+
+        auto runtime_statistics = query_executor_holder->getRuntimeStatistics(*dag_context);
         LOG_DEBUG(
             log,
-            "finish with {} rows, {} blocks, {} bytes",
-            return_statistics.rows,
-            return_statistics.blocks,
-            return_statistics.bytes);
+            "finish with {} seconds, {} rows, {} blocks, {} bytes",
+            runtime_statistics.execution_time_ns / static_cast<double>(1000000000),
+            runtime_statistics.rows,
+            runtime_statistics.blocks,
+            runtime_statistics.bytes);
     }
     catch (...)
     {

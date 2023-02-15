@@ -20,10 +20,16 @@
 namespace DB
 {
 class GetResultSinkOp;
+class SharedQueue;
+using SharedQueuePtr = std::shared_ptr<SharedQueue>;
 
 class PhysicalGetResultSink : public PhysicalUnary
 {
 public:
+    static PhysicalPlanNodePtr build(
+        const SharedQueuePtr & shared_queue,
+        const PhysicalPlanNodePtr & child);
+
     static PhysicalPlanNodePtr build(
         ResultHandler && result_handler,
         const PhysicalPlanNodePtr & child);
@@ -33,11 +39,13 @@ public:
         const NamesAndTypes & schema_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
-        ResultHandler && result_handler_)
+        ResultHandler && result_handler_,
+        const SharedQueuePtr & shared_queue_)
         : PhysicalUnary(executor_id_, PlanType::GetResult, schema_, req_id, child_)
         , result_handler(std::move(result_handler_))
+        , shared_queue(shared_queue_)
     {
-        assert(!result_handler.isIgnored());
+        assert((!result_handler.isIgnored()) != (shared_queue != nullptr));
     }
 
     void finalize(const Names &) override
@@ -55,8 +63,12 @@ public:
 private:
     friend class GetResultSinkOp;
 
+    // for sync
     std::mutex mu;
     ResultHandler result_handler;
+
+    // for async
+    SharedQueuePtr shared_queue;
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline &, Context &, size_t) override

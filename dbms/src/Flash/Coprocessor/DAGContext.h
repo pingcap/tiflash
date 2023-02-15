@@ -144,9 +144,20 @@ public:
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
-        assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
-        return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
-
+        RUNTIME_CHECK((dag_request->executors_size() > 0) != dag_request->has_root_executor());
+        if (dag_request->has_root_executor())
+        {
+            return_executor_id = dag_request->root_executor().has_executor_id();
+            if (return_executor_id)
+                root_executor_id = dag_request->root_executor().executor_id();
+        }
+        else
+        {
+            const auto & root_executor = dag_request->executors(dag_request->executors_size() - 1);
+            return_executor_id = root_executor.has_executor_id();
+            if (return_executor_id)
+                root_executor_id = root_executor.executor_id();
+        }
         initOutputInfo();
     }
 
@@ -167,7 +178,8 @@ public:
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
-        assert(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
+        RUNTIME_CHECK(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
+        root_executor_id = dag_request->root_executor().executor_id();
         // only mpp task has join executor.
         initExecutorIdToJoinIdMap();
         initOutputInfo();
@@ -203,9 +215,20 @@ public:
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
-        assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
-        return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
-
+        RUNTIME_CHECK((dag_request->executors_size() > 0) != dag_request->has_root_executor());
+        if (dag_request->has_root_executor())
+        {
+            return_executor_id = dag_request->root_executor().has_executor_id();
+            if (return_executor_id)
+                root_executor_id = dag_request->root_executor().executor_id();
+        }
+        else
+        {
+            const auto & root_executor = dag_request->executors(dag_request->executors_size() - 1);
+            return_executor_id = root_executor.has_executor_id();
+            if (return_executor_id)
+                root_executor_id = root_executor.executor_id();
+        }
         initOutputInfo();
     }
 
@@ -335,6 +358,15 @@ public:
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
+    String getRootExecutorId()
+    {
+        return return_executor_id
+            ? root_executor_id
+            : (list_based_executors_order.empty()
+                   ? ""
+                   : list_based_executors_order.back());
+    }
+
     const tipb::DAGRequest * dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
     /// dummy_query_string and dummy_ast is used for that
@@ -350,6 +382,7 @@ public:
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
     bool return_executor_id{};
+    String root_executor_id = "";
     /* const */ bool is_mpp_task = false;
     /* const */ bool is_root_mpp_task = false;
     /* const */ bool is_batch_cop = false;

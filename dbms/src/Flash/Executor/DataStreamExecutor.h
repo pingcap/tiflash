@@ -36,8 +36,12 @@ public:
 
     RU collectRequestUnit() override;
 
+    Block getSampleBlock() const override;
+
+    BaseRuntimeStatistics getRuntimeStatistics(DAGContext & dag_context) const override;
+
 protected:
-    ExecutionResult execute(ResultHandler result_handler) override;
+    ExecutionResult execute(ResultHandler && result_handler) override;
 
 protected:
     BlockInputStreamPtr data_stream;

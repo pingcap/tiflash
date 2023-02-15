@@ -45,6 +45,12 @@ void Pipeline::addChild(const PipelinePtr & child)
     children.push_back(child);
 }
 
+Block Pipeline::getSampleBlock() const
+{
+    assert(!plan_nodes.empty());
+    return plan_nodes.back()->getSampleBlock();
+}
+
 void Pipeline::toSelfString(FmtBuffer & buffer, size_t level) const
 {
     if (level > 0)
@@ -71,6 +77,13 @@ void Pipeline::addGetResultSink(ResultHandler && result_handler)
 {
     assert(!plan_nodes.empty());
     auto get_result_sink = PhysicalGetResultSink::build(std::move(result_handler), plan_nodes.back());
+    addPlanNode(get_result_sink);
+}
+
+void Pipeline::addGetResultSink(const SharedQueuePtr & shared_queue)
+{
+    assert(!plan_nodes.empty());
+    auto get_result_sink = PhysicalGetResultSink::build(shared_queue, plan_nodes.back());
     addPlanNode(get_result_sink);
 }
 

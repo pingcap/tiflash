@@ -14,35 +14,58 @@
 
 #pragma once
 
-#include <Flash/Executor/ResultHandler.h>
+#include <Common/MPMCQueue.h>
 #include <Operators/Operator.h>
+
+#include <atomic>
 
 namespace DB
 {
-class PhysicalGetResultSink;
-using PhysicalGetResultSinkPtr = std::shared_ptr<PhysicalGetResultSink>;
-// The sink operator for getting the execution results.
-class GetResultSinkOp : public SinkOp
+class SharedQueue;
+using SharedQueuePtr = std::shared_ptr<SharedQueue>;
+class SharedQueue
 {
 public:
-    GetResultSinkOp(
+    SharedQueue(size_t queue_size);
+
+    MPMCQueueResult tryPush(Block && block);
+    MPMCQueueResult pop(Block & block);
+
+    void setProducerNum(int32_t num);
+    void producerFinish();
+
+private:
+    MPMCQueue<Block> queue;
+    std::atomic_int32_t active_producer = -1;
+};
+
+class SharedQueueSinkOp : public SinkOp
+{
+public:
+    SharedQueueSinkOp(
         PipelineExecutorStatus & exec_status_,
-        const PhysicalGetResultSinkPtr & physical_sink_)
+        const SharedQueuePtr & shared_queue_)
         : SinkOp(exec_status_)
-        , physical_sink(physical_sink_)
+        , shared_queue(shared_queue_)
     {
-        assert(physical_sink);
+    }
+
+    ~SharedQueueSinkOp()
+    {
+        shared_queue->producerFinish();
     }
 
     String getName() const override
     {
-        return "GetResultSinkOp";
+        return "SharedQueueSinkOp";
     }
 
-protected:
     OperatorStatus writeImpl(Block && block) override;
 
+    OperatorStatus awaitImpl() override;
+
 private:
-    PhysicalGetResultSinkPtr physical_sink;
+    std::optional<Block> res;
+    SharedQueuePtr shared_queue;
 };
 } // namespace DB

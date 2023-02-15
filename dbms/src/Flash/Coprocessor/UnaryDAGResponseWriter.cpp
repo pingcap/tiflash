@@ -80,6 +80,11 @@ void UnaryDAGResponseWriter::flush()
     }
     // TODO separate from UnaryDAGResponseWriter and support mpp/batchCop.
     appendWarningsToDAGResponse();
+
+    if (unlikely(accurate::greaterOp(dag_response->ByteSizeLong(), std::numeric_limits<int>::max())))
+        throw TiFlashException(
+            "DAG response is too big, please check config about region size or region merge scheduler",
+            Errors::Coprocessor::Internal);
 }
 
 void UnaryDAGResponseWriter::write(const Block & block)

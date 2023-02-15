@@ -40,6 +40,9 @@ using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
 
 class PipelineExecutorStatus;
 
+class SharedQueue;
+using SharedQueuePtr = std::shared_ptr<SharedQueue>;
+
 class Pipeline : public std::enable_shared_from_this<Pipeline>
 {
 public:
@@ -53,14 +56,19 @@ public:
 
     void toTreeString(FmtBuffer & buffer, size_t level = 0) const;
 
-    // only used for test to get the result blocks.
+    // used for get the result blocks by sync way.
     void addGetResultSink(ResultHandler && result_handler);
+
+    // used for get the result blocks by async way.
+    void addGetResultSink(const SharedQueuePtr & shared_queue);
 
     PipelineExecGroup buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
 
     Events toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
 
     static bool isSupported(const tipb::DAGRequest & dag_request);
+
+    Block getSampleBlock() const;
 
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;

@@ -24,15 +24,18 @@ class ResultHandler
 {
 public:
     using Handler = std::function<void(const Block &)>;
-    explicit ResultHandler(Handler handler_)
+    explicit ResultHandler(Handler handler_, bool is_async_ = false)
         : handler(handler_)
         , is_ignored(false)
+        , is_async(is_async_)
     {}
     ResultHandler()
         : is_ignored(true)
+        , is_async(false)
     {}
 
     bool isIgnored() const { return is_ignored; }
+    bool isAsync() const { return is_async; }
 
     void operator()(const Block & block) const
     {
@@ -43,5 +46,6 @@ private:
     Handler handler;
 
     bool is_ignored;
+    bool is_async;
 };
 } // namespace DB
