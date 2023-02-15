@@ -110,6 +110,7 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
 {
     RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", config.spill_id, partition_id, partition_num);
     RUNTIME_CHECK_MSG(spill_finished, "{}: restore before the spiller is finished.", config.spill_id);
+    std::unique_lock partition_lock(spilled_files[partition_id]->spilled_files_mutex);
     if (max_stream_size == 0)
         max_stream_size = spilled_files[partition_id]->spilled_files.size();
     if (is_input_sorted && spilled_files[partition_id]->spilled_files.size() > max_stream_size)
@@ -149,12 +150,12 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
                 ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos[i]), input_schema, config.file_provider, spill_version));
         }
     }
+    LOG_INFO(logger, "Will restore {} rows from {} files of size {:.3f} MiB compressed, {:.3f} MiB uncompressed by {} streams.", details.rows, spilled_files[partition_id]->spilled_files.size(), (details.data_bytes_compressed / 1048576.0), (details.data_bytes_uncompressed / 1048576.0), ret.size());
     if (release_spilled_file_on_restore)
     {
         /// clear the spilled_files so we can safely assume that the element in spilled_files is always not nullptr
         spilled_files[partition_id]->spilled_files.clear();
     }
-    LOG_DEBUG(logger, "Will restore {} rows from file of size {:.3f} MiB compressed, {:.3f} MiB uncompressed.", details.rows, (details.data_bytes_compressed / 1048576.0), (details.data_bytes_uncompressed / 1048576.0));
     if (ret.empty())
         ret.push_back(std::make_shared<NullBlockInputStream>(input_schema));
     return ret;
