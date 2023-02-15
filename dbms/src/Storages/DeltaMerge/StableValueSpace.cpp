@@ -365,7 +365,6 @@ StableValueSpace::Snapshot::getInputStream(
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size)
             .setReadPacks(read_packs.size() > i ? read_packs[i] : nullptr);
-        std::cout << "ywq test final expected_block_size: " << expected_block_size << std::endl;
         streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
         rows.push_back(stable->files[i]->getRows());
     }

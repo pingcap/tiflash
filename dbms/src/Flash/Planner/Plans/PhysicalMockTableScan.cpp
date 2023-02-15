@@ -119,7 +119,7 @@ void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_b
         group_builder.init(source_ops.size());
         size_t i = 0;
         group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::move(source_ops[i]));
+            builder.setSourceOp(std::move(source_ops[i++]));
         });
     }
     else
