@@ -26,10 +26,10 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <Functions/StringUtil.h>
+#include <common/defines.h>
 
 #include <cstring>
 #include <string_view>
-#include "common/defines.h"
 
 namespace DB
 {
@@ -44,12 +44,6 @@ struct IlikeHelper
         size_t i = 0;
         while (i < size)
         {
-            if (unlikely(chars[i] == '\0'))
-            {
-                ++i;
-                continue;
-            }
-
             if (isASCII(chars[i]))
             {
                 if (isUpperAlphaASCII(chars[i]))
@@ -82,7 +76,7 @@ struct IlikeHelper
     }
 
     // Only lower the 'A', 'B', 'C'...
-    static void lowerEnglishWords(Block & block, const ColumnNumbers & arguments)
+    static void lowerAlphaASCII(Block & block, const ColumnNumbers & arguments)
     {
         MutableColumnPtr column_haystack = block.getByPosition(arguments[0]).column->assumeMutable();
         MutableColumnPtr column_needle = block.getByPosition(arguments[1]).column->assumeMutable();
@@ -210,7 +204,7 @@ public:
                 block.getByPosition(arguments[0]).column = (*std::move(result_block.getByPosition(arguments[0]).column)).mutate();
                 block.getByPosition(arguments[1]).column = (*std::move(result_block.getByPosition(arguments[1]).column)).mutate();
 
-                IlikeHelper::lowerEnglishWords(block, arguments);
+                IlikeHelper::lowerAlphaASCII(block, arguments);
             }
         }
 
