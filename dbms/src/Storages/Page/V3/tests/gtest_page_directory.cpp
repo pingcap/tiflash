@@ -1600,8 +1600,7 @@ try
         ASSERT_EQ(std::get<0>(ids[0]), buildV3Id(TEST_NAMESPACE_ID, 11));
         ASSERT_EQ(std::get<0>(ids[1]), buildV3Id(TEST_NAMESPACE_ID, 12));
 
-        // upsert 11->entry2
-        // upsert 12->entry3
+        // Mock full gc happen in BlobStore. upsert 11->entry2, upsert 12->entry3
         PageEntriesEdit edit;
         edit.upsertPage(std::get<0>(ids[0]), std::get<1>(ids[0]), entry2);
         edit.upsertPage(std::get<0>(ids[1]), std::get<1>(ids[1]), entry3);
@@ -1643,6 +1642,104 @@ try
     }
 
     ASSERT_EQ(dir->getAllPageIds().empty(), true);
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, RewriteRefedIdToExternalPage)
+try
+{
+    // 10->entry1, 11->10, 12->10
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        u128::PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry1);
+        dir->apply(std::move(edit));
+    }
+    {
+        u128::PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 11), buildV3Id(TEST_NAMESPACE_ID, 10));
+        dir->apply(std::move(edit));
+    }
+    {
+        u128::PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 12), buildV3Id(TEST_NAMESPACE_ID, 10));
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 10));
+        dir->apply(std::move(edit));
+    }
+    // 50->ext_id, 51->50
+    {
+        u128::PageEntriesEdit edit;
+        edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 50));
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 51), buildV3Id(TEST_NAMESPACE_ID, 50));
+        dir->apply(std::move(edit));
+    }
+    // entry1 should not be removed
+    {
+        auto outdated_entries = dir->gcInMemEntries();
+        EXPECT_TRUE(outdated_entries.empty());
+    }
+
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry3{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123 + 1024, .checksum = 0x4567};
+    {
+        // this will return ref page 11 and 12 that need to be rewritten
+        // to new blob file.
+        auto full_gc_entries = dir->getEntriesByBlobIds({1});
+        ASSERT_EQ(full_gc_entries.first.size(), 1);
+        auto ids = full_gc_entries.first.at(1);
+        ASSERT_EQ(ids.size(), 2);
+        ASSERT_EQ(std::get<0>(ids[0]), buildV3Id(TEST_NAMESPACE_ID, 11));
+        ASSERT_EQ(std::get<0>(ids[1]), buildV3Id(TEST_NAMESPACE_ID, 12));
+
+        // Mock full gc happen in BlobStore. upsert 11->entry2, upsert 12->entry3
+        u128::PageEntriesEdit edit;
+        edit.upsertPage(std::get<0>(ids[0]), std::get<1>(ids[0]), entry2);
+        edit.upsertPage(std::get<0>(ids[1]), std::get<1>(ids[1]), entry3);
+        // this will rewrite ref page 11, 12 to normal page
+        dir->gcApply(std::move(edit));
+    }
+
+    // page 10 get removed
+    auto removed_entries = dir->gcInMemEntries();
+    ASSERT_EQ(removed_entries.size(), 1);
+    EXPECT_SAME_ENTRY(removed_entries[0], entry1);
+
+    {
+        auto snap = dir->createSnapshot();
+        EXPECT_ENTRY_EQ(entry2, dir, 11, snap);
+        EXPECT_ENTRY_EQ(entry3, dir, 12, snap);
+        EXPECT_ENTRY_NOT_EXIST(dir, 10, snap);
+        auto external_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        ASSERT_GT(external_ids->count(50), 0);
+    }
+
+    // del 11->entry2
+    {
+        u128::PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 11));
+        dir->apply(std::move(edit));
+        // entry2 get removed
+        auto outdated_entries = dir->gcInMemEntries();
+        ASSERT_EQ(1, outdated_entries.size());
+        EXPECT_SAME_ENTRY(entry2, outdated_entries[0]);
+    }
+    // del 12->entry3
+    {
+        u128::PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 12));
+        dir->apply(std::move(edit));
+        // entry3 get removed
+        auto outdated_entries = dir->gcInMemEntries();
+        ASSERT_EQ(1, outdated_entries.size());
+        EXPECT_SAME_ENTRY(entry3, outdated_entries[0]);
+    }
+
+    auto external_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+    ASSERT_GT(external_ids->count(50), 0);
+    auto all_page_ids = dir->getAllPageIds();
+    ASSERT_EQ(all_page_ids.size(), 2);
+    ASSERT_GT(all_page_ids.count(buildV3Id(TEST_NAMESPACE_ID, 50)), 0);
+    ASSERT_GT(all_page_ids.count(buildV3Id(TEST_NAMESPACE_ID, 51)), 0);
 }
 CATCH
 
