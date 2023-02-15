@@ -22,8 +22,6 @@
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
 
-#include <numeric>
-
 namespace DB
 {
 namespace
@@ -111,11 +109,12 @@ static inline void updatePartitionWriterMetrics(CompressionMethod method, size_t
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWriteImpl(TrackedMppDataPacketPtr & tracked_packet, bool is_broadcast)
+void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool is_broadcast)
 {
+    RUNTIME_CHECK(!tunnels.empty());
+    auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
     if (!tracked_packet)
         return;
-
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
     // TODO avoid copy packet for broadcast.
@@ -123,7 +122,6 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWriteImpl(TrackedMppDataPac
         tunnels[i]->write(tracked_packet->copy());
     tunnels[0]->write(std::move(tracked_packet));
     {
-        // statistic
         size_t data_bytes = 0;
         size_t local_data_bytes = 0;
         {
@@ -152,16 +150,6 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWriteImpl(TrackedMppDataPac
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool is_broadcast)
-{
-    RUNTIME_CHECK(!tunnels.empty());
-    auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
-    if (!tracked_packet)
-        return;
-    broadcastOrPassThroughWriteImpl(tracked_packet, is_broadcast);
-}
-
-template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method, bool is_broadcast)
 {
     if (MPPDataPacketV0 == version)
@@ -178,7 +166,43 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPD
     }
     size_t original_size = 0;
     auto && tracked_packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
-    broadcastOrPassThroughWriteImpl(tracked_packet, is_broadcast);
+    if (!tracked_packet)
+        return;
+    auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
+    checkPacketSize(packet_bytes);
+    // TODO avoid copy packet for broadcast.
+    for (size_t i = 1; i < tunnels.size(); ++i)
+        tunnels[i]->write(tracked_packet->copy());
+    tunnels[0]->write(std::move(tracked_packet));
+
+    auto total_original_size = tunnels.size() * original_size;
+    auto total_packet_size = tunnels.size() * packet_bytes;
+    if (is_broadcast)
+        GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_original).Increment(total_original_size);
+    else
+        GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_original).Increment(total_original_size);
+
+    switch (compression_method)
+    {
+    case CompressionMethod::LZ4:
+    {
+        if (is_broadcast)
+            GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_lz4_compression_remote).Increment(total_packet_size);
+        else
+            GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_lz4_compression_remote).Increment(total_packet_size);
+        break;
+    }
+    case CompressionMethod::ZSTD:
+    {
+        if (is_broadcast)
+            GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_zstd_compression_remote).Increment(total_packet_size);
+        else
+            GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_zstd_compression_remote).Increment(total_packet_size);
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 template <typename Tunnel>

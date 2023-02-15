@@ -87,7 +87,6 @@ public:
 
 private:
     bool isLocal(size_t index) const;
-    void broadcastOrPassThroughWriteImpl(TrackedMppDataPacketPtr & tracked_packet, bool is_broadcast);
 
 private:
     std::vector<TunnelPtr> tunnels;
