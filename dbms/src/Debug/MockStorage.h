@@ -84,7 +84,7 @@ public:
     NamesAndTypes getNameAndTypesForDeltaMerge(Int64 table_id);
 
     BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions = nullptr);
-    SourceOps getSourceOpsFromDeltaMerge(PipelineExecutorStatus & exec_status_, Context & context, Int64 table_id, FilterConditions * filter_conditions = nullptr, size_t concurrency = 1);
+    SourceOps getSourceOpsFromDeltaMerge(PipelineExecutorStatus & exec_status_, Context & context, Int64 table_id, size_t concurrency = 1);
 
     bool tableExistsForDeltaMerge(Int64 table_id);
 

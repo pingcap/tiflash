@@ -79,14 +79,7 @@ private:
         DAGPipeline & pipeline,
         size_t max_block_size);
 
-    SourceOps buildLocalSourceOpForPhysicalTable(
-        PipelineExecutorStatus & exec_status_,
-        const TableID & table_id,
-        const SelectQueryInfo & query_info,
-        size_t max_block_size);
-
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
-    SourceOps buildLocalSourceOps(PipelineExecutorStatus & exec_status_, int max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
@@ -112,8 +105,6 @@ private:
     void prepare();
 
     void executeImpl(DAGPipeline & pipeline);
-
-    void buildPipelineExecImpl(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/);
 
 private:
     std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;

@@ -28,7 +28,7 @@ public:
     {
         ExecutorTest::initializeContext();
         context.mockStorage()->setUseDeltaMerge(true);
-        context.context.getGlobalContext().getSettingsRef().dt_enable_read_thread  = true;
+        context.context.getGlobalContext().getSettingsRef().dt_enable_read_thread = true;
         context.context.getGlobalContext().getSettingsRef().dt_segment_stable_pack_rows = 1;
         context.context.getGlobalContext().getSettingsRef().dt_segment_limit_rows = 1;
         context.context.getGlobalContext().getSettingsRef().dt_segment_delta_cache_limit_rows = 1;

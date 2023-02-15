@@ -115,7 +115,7 @@ void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_b
 {
     if (context.mockStorage()->useDeltaMerge())
     {
-        auto source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(group_builder.exec_status, context, table_id, &filter_conditions, concurrency);
+        auto source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(group_builder.exec_status, context, table_id, concurrency);
         group_builder.init(source_ops.size());
         size_t i = 0;
         group_builder.transform([&](auto & builder) {

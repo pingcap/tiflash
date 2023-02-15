@@ -20,11 +20,8 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
-#include <optional>
-
 namespace DB
 {
-
 class UnorderedSourceOp : public SourceOp
 {
 public:
@@ -42,7 +39,6 @@ public:
         , log(Logger::get(req_id))
         , ref_no(0)
         , task_pool_added(false)
-
     {
         if (extra_table_id_index != InvalidColumnID)
         {
@@ -54,7 +50,6 @@ public:
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
         addReadTaskPoolToScheduler();
         setHeader(header);
-        LOG_DEBUG(log, "prepare");
     }
 
     String getName() const override
@@ -62,83 +57,9 @@ public:
         return "UnorderedSourceOp";
     }
 
-    OperatorStatus readImpl(Block & block) override
-    {
-        if (has_temp_block)
-        {
-            std::cout << "ywq test has temp block" << std::endl;
-            std::swap(block, t_block);
-            has_temp_block = false;
-            if (action.transform(block))
-            {
-                std::cout << "ywq test block rows v1:" << block.rows() << std::endl;
-                return OperatorStatus::HAS_OUTPUT;
-            }
-            else
-                return OperatorStatus::FINISHED;
-        }
-        else
-        {
-            size_t i = 0;
-            while (true)
-            {
-                std::cout << "ywq test while i=" << i << std::endl;
-                Block res;
-                if (!task_pool->tryPopBlock(res))
-                {
-                    std::cout << "ywq test waiting" << std::endl;
-                    return OperatorStatus::WAITING;
-                }
+    OperatorStatus readImpl(Block & block) override;
 
-                if (res)
-                {
-                    if (action.transform(res))
-                    {
-                        std::swap(block, res);
-                        std::cout << "ywq test block rows:" << block.rows() << std::endl;
-                        return OperatorStatus::HAS_OUTPUT;
-                    }
-                    else
-                    {
-                        std::cout << "ywq test block empty" << std::endl;
-                        i++;
-                        continue;
-                    }
-                }
-                else
-                {
-                    std::cout << "ywq test finished" << std::endl;
-                    return OperatorStatus::FINISHED;
-                }
-            }
-        }
-    }
-
-    OperatorStatus awaitImpl() override
-    {
-        Block res;
-        if (!task_pool->tryPopBlock(res))
-        {
-            // std::cout << "ywq test await waiting" << std::endl;
-            return OperatorStatus::WAITING;
-        }
-        if (res)
-        {
-            if (res.rows() == 0)
-            {
-                return OperatorStatus::WAITING;
-            }
-            t_block = std::move(res);
-            has_temp_block = true;
-            std::cout << "ywq test await done" << std::endl;
-            return OperatorStatus::HAS_OUTPUT;
-        }
-        else
-        {
-            std::cout << "ywq test await finished" << std::endl;
-            return OperatorStatus::FINISHED;
-        }
-    }
+    OperatorStatus awaitImpl() override;
 
     void addReadTaskPoolToScheduler()
     {

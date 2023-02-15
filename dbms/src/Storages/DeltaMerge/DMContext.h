@@ -125,7 +125,6 @@ public:
         , tracing_id(tracing_id_)
         , scan_context(scan_context_)
     {
-        std::cout << "ywq test stable_pack_rows:" << stable_pack_rows << std::endl;
     }
 
     WriteLimiterPtr getWriteLimiter() const { return db_context.getWriteLimiter(); }
