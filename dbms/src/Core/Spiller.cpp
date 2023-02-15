@@ -150,7 +150,7 @@ BlockInputStreams Spiller::restoreBlocks(size_t partition_id, size_t max_stream_
                 ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos[i]), input_schema, config.file_provider, spill_version));
         }
     }
-    LOG_INFO(logger, "Will restore {} rows from {} files of size {:.3f} MiB compressed, {:.3f} MiB uncompressed by {} streams.", details.rows, spilled_files[partition_id]->spilled_files.size(), (details.data_bytes_compressed / 1048576.0), (details.data_bytes_uncompressed / 1048576.0), ret.size());
+    LOG_INFO(logger, "Will restore {} rows from {} files of size {:.3f} MiB compressed, {:.3f} MiB uncompressed using {} streams.", details.rows, spilled_files[partition_id]->spilled_files.size(), (details.data_bytes_compressed / 1048576.0), (details.data_bytes_uncompressed / 1048576.0), ret.size());
     if (release_spilled_file_on_restore)
     {
         /// clear the spilled_files so we can safely assume that the element in spilled_files is always not nullptr
