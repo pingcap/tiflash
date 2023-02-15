@@ -62,7 +62,7 @@ public:
     void setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context = nullptr);
 
     PageIdU64 getId() const { return id; }
-    void saveMeta(WriteBatch & meta_wb);
+    void saveMeta(WriteBatchWrapper & meta_wb);
 
     size_t getRows() const;
     size_t getBytes() const;

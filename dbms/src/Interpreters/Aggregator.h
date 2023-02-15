@@ -28,21 +28,16 @@
 #include <Common/HashTable/TwoLevelHashMap.h>
 #include <Common/HashTable/TwoLevelStringHashMap.h>
 #include <Common/Logger.h>
-#include <Common/ThreadManager.h>
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <DataStreams/SizeLimits.h>
-#include <Encryption/FileProvider.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
-#include <Poco/TemporaryFile.h>
 #include <Storages/Transaction/Collator.h>
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
 
 #include <functional>
 #include <memory>
-#include <mutex>
 
 
 namespace DB
@@ -890,6 +885,47 @@ struct AggregatedDataVariants : private boost::noncopyable
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
 using ManyAggregatedDataVariants = std::vector<AggregatedDataVariantsPtr>;
 
+/// Combines aggregation states together, turns them into blocks, and outputs.
+class MergingBuckets
+{
+public:
+    /** The input is a set of non-empty sets of partially aggregated data,
+      *  which are all either single-level, or are two-level.
+      */
+    MergingBuckets(const Aggregator & aggregator_, const ManyAggregatedDataVariants & data_, bool final_, size_t concurrency_);
+
+    Block getHeader() const;
+
+    Block getData(size_t concurrency_index);
+
+    size_t getConcurrency() const { return concurrency; }
+
+private:
+    Block getDataForSingleLevel();
+
+    Block getDataForTwoLevel(size_t concurrency_index);
+
+    void doLevelMerge(Int32 bucket_num, size_t concurrency_index);
+
+private:
+    const LoggerPtr log;
+    const Aggregator & aggregator;
+    ManyAggregatedDataVariants data;
+    bool final;
+    size_t concurrency;
+
+    bool is_two_level = false;
+
+    BlocksList single_level_blocks;
+
+    // use unique_ptr to avoid false sharing.
+    std::vector<std::unique_ptr<BlocksList>> two_level_parallel_merge_data;
+
+    std::atomic<Int32> current_bucket_num = 0;
+    static constexpr Int32 NUM_BUCKETS = 256;
+};
+using MergingBucketsPtr = std::shared_ptr<MergingBuckets>;
+
 /** How are "total" values calculated with WITH TOTALS?
   * (For more details, see TotalsHavingBlockInputStream.)
   *
@@ -897,7 +933,6 @@ using ManyAggregatedDataVariants = std::vector<AggregatedDataVariantsPtr>;
   * Later, the aggregate function states for all rows (passed through HAVING) are merged into one - this will be TOTALS.
   *
   */
-
 
 /** Aggregates the source of the blocks.
   */
@@ -1009,31 +1044,18 @@ public:
         AggregateColumns & aggregate_columns /// Passed to not create them anew for each block
     );
 
-    /** Convert the aggregation data structure into a block.
-      * If final = false, then ColumnAggregateFunction is created as the aggregation columns with the state of the calculations,
-      *  which can then be combined with other states (for distributed query processing).
-      * If final = true, then columns with ready values are created as aggregate columns.
+    /** Merge several aggregation data structures and output the MergingBucketsPtr used to merge.
+      * Return nullptr if there are no non empty data_variant.
       */
-    BlocksList convertToBlocks(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
-
-    /** Merge several aggregation data structures and output the result as a block stream.
-      */
-    std::unique_ptr<IBlockInputStream> mergeAndConvertToBlocks(ManyAggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
-
-    /** Merge the stream of partially aggregated blocks into one data structure.
-      * (Pre-aggregate several blocks that represent the result of independent aggregations from remote servers.)
-      */
-    void mergeStream(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t max_threads);
-
-    using BucketToBlocks = std::map<Int32, BlocksList>;
+    MergingBucketsPtr mergeAndConvertToBlocks(ManyAggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
 
     /// Merge several partially aggregated blocks into one.
-    BlocksList mergeBlocks(BlocksList & blocks, bool final);
+    BlocksList vstackBlocks(BlocksList & blocks, bool final);
 
     /** Split block with partially-aggregated data to many blocks, as if two-level method of aggregation was used.
       * This is needed to simplify merging of that data with other results, that are already two-level.
       */
-    std::vector<Block> convertBlockToTwoLevel(const Block & block);
+    Blocks convertBlockToTwoLevel(const Block & block);
 
     using CancellationHook = std::function<bool()>;
 
@@ -1054,7 +1076,7 @@ public:
 
 protected:
     friend struct AggregatedDataVariants;
-    friend class MergingAndConvertingBlockInputStream;
+    friend class MergingBuckets;
 
     Params params;
 
@@ -1093,8 +1115,6 @@ protected:
     bool all_aggregates_has_trivial_destructor = false;
 
     std::atomic<bool> use_two_level_hash_table = false;
-
-    std::mutex mutex;
 
     const LoggerPtr log;
 
@@ -1264,23 +1284,8 @@ protected:
         Columns & materialized_columns,
         AggregateFunctionInstructions & instructions);
 
-    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const;
     BlocksList prepareBlocksAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const;
-    Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
     BlocksList prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
-    BlocksList prepareBlocksAndFillTwoLevel(
-        AggregatedDataVariants & data_variants,
-        bool final,
-        ThreadPoolManager * thread_pool,
-        size_t max_threads) const;
-
-    template <typename Method>
-    BlocksList prepareBlocksAndFillTwoLevelImpl(
-        AggregatedDataVariants & data_variants,
-        Method & method,
-        bool final,
-        ThreadPoolManager * thread_pool,
-        size_t max_threads) const;
 
     template <typename Method, typename Table>
     void mergeStreamsImplCase(
@@ -1312,7 +1317,7 @@ protected:
         Arena * pool,
         ColumnRawPtrs & key_columns,
         const Block & source,
-        std::vector<Block> & destinations) const;
+        Blocks & destinations) const;
 
     template <typename Method, typename Table>
     void destroyImpl(Table & table) const;

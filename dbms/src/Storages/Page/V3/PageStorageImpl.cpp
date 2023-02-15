@@ -76,7 +76,7 @@ void PageStorageImpl::restore()
 
 PageIdU64 PageStorageImpl::getMaxId()
 {
-    return page_directory->getMaxId();
+    return page_directory->getMaxIdAfterRestart();
 }
 
 void PageStorageImpl::drop()
