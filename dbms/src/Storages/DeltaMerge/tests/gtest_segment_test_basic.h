@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -98,6 +99,11 @@ public:
     void writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end);
     RowKeyValue buildRowKeyValue(Int64 key);
     static RowKeyRange buildRowKeyRange(Int64 begin, Int64 end);
+
+    size_t getPageNumAfterGC(StorageType type, NamespaceId ns_id) const;
+
+    std::set<PageIdU64> getAliveExternalPageIdsWithoutGC(NamespaceId ns_id) const;
+    std::set<PageIdU64> getAliveExternalPageIdsAfterGC(NamespaceId ns_id) const;
 
 protected:
     std::mt19937 random;

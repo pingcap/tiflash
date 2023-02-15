@@ -731,6 +731,8 @@ try
         table_info.is_common_handle = false;
         table_info.pk_is_handle = false;
 
+        // max page id is only updated at restart, so we need recreate page v3 before recreate table
+        ctx.initializeGlobalStoragePoolIfNeed(ctx.getPathPool());
         storage = StorageDeltaMerge::create("TiFlash",
                                             /* db_name= */ "default",
                                             table_name,
