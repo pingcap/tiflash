@@ -72,11 +72,20 @@ public:
 
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src, size_t n) override;
+    void insertManyFrom(const IColumn & src, size_t n, size_t length) override;
+    void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) override;
 
     void insertDefault() override
     {
         getNestedColumn().insertDefault();
         getNullMapData().push_back(1);
+    }
+
+    void insertManyDefaults(size_t length) override
+    {
+        getNestedColumn().insertManyDefaults(length);
+        auto & map = getNullMapData();
+        map.resize_fill(map.size() + length, 1);
     }
 
     void popBack(size_t n) override;

@@ -43,7 +43,7 @@ std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
     String storage_name,
     FileProviderPtr & provider,
     PSDiskDelegatorPtr & delegator,
-    WALConfig config)
+    const WALConfig & config)
 {
     auto reader = WALStoreReader::create(storage_name,
                                          provider,
@@ -66,7 +66,7 @@ WALStore::WALStore(
     const PSDiskDelegatorPtr & delegator_,
     const FileProviderPtr & provider_,
     Format::LogNumberType last_log_num_,
-    WALConfig config_)
+    const WALConfig & config_)
     : storage_name(std::move(storage_name_))
     , delegator(delegator_)
     , provider(provider_)
