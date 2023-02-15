@@ -22,7 +22,6 @@ namespace DB
 void registerStorageLog(StorageFactory & factory);
 void registerStorageDeltaMerge(StorageFactory & factory);
 void registerStorageNull(StorageFactory & factory);
-void registerStorageMerge(StorageFactory & factory);
 void registerStorageMemory(StorageFactory & factory);
 void registerStorageSet(StorageFactory & factory);
 void registerStorageView(StorageFactory & factory);
@@ -35,7 +34,6 @@ void registerStorages()
     registerStorageLog(factory);
     registerStorageDeltaMerge(factory);
     registerStorageNull(factory);
-    registerStorageMerge(factory);
     registerStorageMemory(factory);
     registerStorageSet(factory);
     registerStorageView(factory);
