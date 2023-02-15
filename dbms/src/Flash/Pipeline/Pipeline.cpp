@@ -132,6 +132,7 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
             case tipb::ExecType::TypeProjection:
             case tipb::ExecType::TypeSelection:
             case tipb::ExecType::TypeLimit:
+            case tipb::ExecType::TypeTopN:
             // Only support mock table_scan/exchange_sender/exchange_receiver in test mode now.
             case tipb::ExecType::TypeTableScan:
             case tipb::ExecType::TypeExchangeSender:

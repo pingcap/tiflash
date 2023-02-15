@@ -293,6 +293,25 @@ void ColumnDecimal<T>::insertRangeFrom(const IColumn & src, size_t start, size_t
     }
 }
 
+template <typename T>
+void ColumnDecimal<T>::insertManyFrom(const IColumn & src, size_t position, size_t length)
+{
+    size_t old_size = data.size();
+    auto & value = static_cast<const Self &>(src).getData()[position];
+    data.resize_fill(old_size + length, value);
+}
+
+template <typename T>
+void ColumnDecimal<T>::insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec)
+{
+    const auto & src_data = static_cast<const ColumnDecimal &>(src).data;
+    size_t old_size = data.size();
+    size_t to_add_size = position_vec.size();
+    data.resize(old_size + to_add_size);
+    for (size_t i = 0; i < to_add_size; ++i)
+        data[i + old_size] = src_data[position_vec[i]];
+}
+
 #pragma GCC diagnostic pop
 
 template <typename T>
