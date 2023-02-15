@@ -20,15 +20,12 @@
 namespace DB
 {
 void registerStorageLog(StorageFactory & factory);
-void registerStorageTinyLog(StorageFactory & factory);
 void registerStorageDeltaMerge(StorageFactory & factory);
-void registerStorageStripeLog(StorageFactory & factory);
 void registerStorageNull(StorageFactory & factory);
 void registerStorageMerge(StorageFactory & factory);
 void registerStorageMemory(StorageFactory & factory);
 void registerStorageSet(StorageFactory & factory);
 void registerStorageView(StorageFactory & factory);
-void registerStorageMaterializedView(StorageFactory & factory);
 
 
 void registerStorages()
@@ -36,15 +33,12 @@ void registerStorages()
     auto & factory = StorageFactory::instance();
 
     registerStorageLog(factory);
-    registerStorageTinyLog(factory);
     registerStorageDeltaMerge(factory);
-    registerStorageStripeLog(factory);
     registerStorageNull(factory);
     registerStorageMerge(factory);
     registerStorageMemory(factory);
     registerStorageSet(factory);
     registerStorageView(factory);
-    registerStorageMaterializedView(factory);
 }
 
 } // namespace DB
