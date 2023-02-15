@@ -23,7 +23,7 @@
 namespace DB
 {
 UniversalPageStoragePtr UniversalPageStorage::create(
-    String name,
+    const String & name,
     PSDiskDelegatorPtr delegator,
     const PageStorageConfig & config,
     const FileProviderPtr & file_provider)
@@ -45,6 +45,11 @@ void UniversalPageStorage::restore()
     page_directory = factory
                          .setBlobStore(*blob_store)
                          .create(storage_name, file_provider, delegator, PS::V3::WALConfig::from(config));
+}
+
+size_t UniversalPageStorage::getNumberOfPages(const String & prefix) const
+{
+    return page_directory->numPagesWithPrefix(prefix);
 }
 
 void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter) const
@@ -182,9 +187,9 @@ DB::PageEntry UniversalPageStorage::getEntry(const UniversalPageId & page_id, Sn
     }
 }
 
-PageIdU64 UniversalPageStorage::getMaxId() const
+PageIdU64 UniversalPageStorage::getMaxIdAfterRestart() const
 {
-    return page_directory->getMaxId();
+    return page_directory->getMaxIdAfterRestart();
 }
 
 bool UniversalPageStorage::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
