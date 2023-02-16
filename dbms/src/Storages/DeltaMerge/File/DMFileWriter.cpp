@@ -173,7 +173,7 @@ void DMFileWriter::finalizeMeta()
         writePODBinary(pack_stat, *file);
     }
     file->sync();
-
+    file.reset();
     dmfile->finalizeForFolderMode(file_provider, write_limiter);
 }
 
@@ -181,7 +181,7 @@ void DMFileWriter::finalizeMetaV2()
 {
     dmfile->finalizeMetaV2(*file);
     file->sync();
-    file->close();
+    file.reset();
     dmfile->finalizeDirName();
 }
 

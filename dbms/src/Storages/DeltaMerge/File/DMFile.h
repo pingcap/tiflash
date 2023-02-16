@@ -432,9 +432,10 @@ public:
      *
      * `PackStatsHandle`, `PackPropertiesHandle` and `ColumnStatsHandle` are offset and size of `PackStats`, `PackProperties` and `ColumnStats`.
      */
-    // Use a fixed checksums algorithm for meta file.
+    // Use a fixed checksums algorithm and checksum frame length for meta file.
     // We don't use `dmfile.configuration` because the information of configuration will store in meta file.
-    static constexpr size_t meta_checksum_frame_length = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE;
+    // Size of meta is about 10~20KB, 64KB is large enough.
+    static constexpr size_t meta_checksum_frame_length = 64 * 1024;
     static constexpr DB::ChecksumAlgo meta_checksum_algorithm = DB::ChecksumAlgo::XXH3;
     void finalizeMetaV2(WriteBuffer & buffer);
     MetaBlockHandle writeSLPackStatToBuffer(WriteBuffer & buffer);
