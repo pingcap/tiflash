@@ -86,7 +86,7 @@ enum class ReceiverMode
     Async
 };
 
-using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<ReceivedMessage>>>;
+using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<ReceivedMessage>, true>>;
 
 class ReceiverChannelWriter
 {

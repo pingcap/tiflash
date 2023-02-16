@@ -88,9 +88,6 @@ target_link_libraries (persisted_container clickhouse_common_io)
 add_executable (uint128_perf uint128_perf.cpp)
 target_link_libraries (uint128_perf clickhouse_common_io)
 
-add_executable (mpmc_queue_perftest mpmc_queue_perftest.cpp)
-target_link_libraries (mpmc_queue_perftest clickhouse_common_io)
-
 add_executable (allocator_perf allocator_perf.cpp)
 target_link_libraries (allocator_perf clickhouse_common_io)
 

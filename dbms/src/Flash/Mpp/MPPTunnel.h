@@ -172,7 +172,7 @@ class SyncTunnelSender : public TunnelSender
 public:
     SyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, data_size_in_queue_)
-        , send_queue(MPMCQueue<TrackedMppDataPacketPtr>(queue_size))
+        , send_queue(MPMCQueue<TrackedMppDataPacketPtr, true>(queue_size))
     {}
 
     ~SyncTunnelSender() override;
@@ -197,7 +197,7 @@ private:
     friend class tests::TestMPPTunnel;
     void sendJob(PacketWriter * writer);
     std::shared_ptr<ThreadManager> thread_manager;
-    MPMCQueue<TrackedMppDataPacketPtr> send_queue;
+    MPMCQueue<TrackedMppDataPacketPtr, true> send_queue;
 };
 
 /// AsyncTunnelSender is mainly triggered by the Async PacketWriter which handles GRPC request/response in async mode, send one element one time
@@ -363,7 +363,7 @@ public:
 
 private:
     bool cancel_reason_sent = false;
-    MPMCQueue<TrackedMppDataPacketPtr> send_queue;
+    MPMCQueue<TrackedMppDataPacketPtr, true> send_queue;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;

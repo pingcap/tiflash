@@ -304,7 +304,7 @@ private:
         /// The order of the rows matters. If it is changed, then the situation is possible,
         /// when before exception, an empty block (end of data) will be put into the queue,
         /// and the exception is lost.
-        output_queue.emplace(exception);
+        output_queue.push(Payload{exception});
         /// can not cancel itself or the exception might be lost
         /// use cancel instead of kill to avoid too many useless error message
         processor.cancel(false);
@@ -319,18 +319,18 @@ private:
         void onBlock(Block & block, size_t /*thread_num*/)
         {
             if constexpr (!ignore_block)
-                parent.output_queue.emplace(block);
+                parent.output_queue.push(Payload{block});
         }
 
         void onBlock(Block & block, BlockExtraInfo & extra_info, size_t /*thread_num*/)
         {
             if constexpr (!ignore_block)
-                parent.output_queue.emplace(block, extra_info);
+                parent.output_queue.push(Payload{block, extra_info});
         }
 
         void onFinish()
         {
-            parent.output_queue.emplace();
+            parent.output_queue.push(Payload{});
         }
 
         void onFinishThread(size_t /*thread_num*/)

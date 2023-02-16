@@ -23,6 +23,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <type_traits>
@@ -33,8 +34,6 @@ namespace MPMCQueueDetail
 {
 /// WaitingNode is used to construct a double-linked waiting list so that
 /// every time a push/pop succeeds, it can notify next reader/writer in fifo.
-///
-/// Double link is to support remove self from the mid of the list when timeout.
 struct WaitingNode : public SimpleIntrusiveNode<WaitingNode>
 {
     std::condition_variable cv;
@@ -53,7 +52,6 @@ enum class MPMCQueueResult
     OK,
     CANCELLED,
     FINISHED,
-    TIMEOUT,
     EMPTY,
     FULL,
 };
@@ -67,7 +65,7 @@ enum class MPMCQueueResult
 /// waiting list and everyone only wait on its own condition_variable.
 ///
 /// This can significantly reduce contentions and avoid "thundering herd" problem.
-template <typename T>
+template <typename T, bool enable_remaings = false>
 class MPMCQueue
 {
 public:
@@ -118,14 +116,6 @@ public:
         return popObj<true>(obj);
     }
 
-    /// Besides all conditions mentioned at `pop`, `popTimeout` will return TIMEOUT if `timeout` is exceeded.
-    template <typename Duration>
-    ALWAYS_INLINE Result popTimeout(T & obj, const Duration & timeout)
-    {
-        auto deadline = SteadyClock::now() + timeout;
-        return popObj<true>(obj, &deadline);
-    }
-
     /// Non-blocking function.
     /// Besides all conditions mentioned at `pop`, `tryPop` will immediately return EMPTY if queue is `NORMAL` but empty.
     ALWAYS_INLINE Result tryPop(T & obj)
@@ -141,48 +131,22 @@ public:
     * | Finished         | Yes/No     | return FINISHED          |
     * | Cancelled        | Yes/No     | return CANCELLED         |
     * */
-    template <typename U>
-    ALWAYS_INLINE Result push(U && u)
+    ALWAYS_INLINE Result push(T && obj)
     {
-        return pushObj<true>(std::forward<U>(u));
-    }
-
-    /// Besides all conditions mentioned at `push`, `pushTimeout` will return TIMEOUT if `timeout` is exceeded.
-    template <typename U, typename Duration>
-    ALWAYS_INLINE Result pushTimeout(U && u, const Duration & timeout)
-    {
-        auto deadline = SteadyClock::now() + timeout;
-        return pushObj<true>(std::forward<U>(u), &deadline);
+        return assignObj<true, false>(std::move(obj));
     }
 
     /// Non-blocking function.
     /// Besides all conditions mentioned at `push`, `tryPush` will immediately return FULL if queue is `NORMAL` and full.
-    template <typename U>
-    ALWAYS_INLINE Result tryPush(U && u)
+    ALWAYS_INLINE Result tryPush(T && obj)
     {
-        return pushObj<false>(std::forward<U>(u));
+        return assignObj<false, false>(std::move(obj));
     }
 
-    /// The same as `push` except it will construct the object in place.
-    template <typename... Args>
-    ALWAYS_INLINE Result emplace(Args &&... args)
+    /// Non-blocking function.
+    ALWAYS_INLINE Result nonBlockingPush(T && obj)
     {
-        return emplaceObj<true>(nullptr, std::forward<Args>(args)...);
-    }
-
-    /// The same as `pushTimeout` except it will construct the object in place.
-    template <typename... Args, typename Duration>
-    ALWAYS_INLINE Result emplaceTimeout(Args &&... args, const Duration & timeout)
-    {
-        auto deadline = SteadyClock::now() + timeout;
-        return emplaceObj<true>(&deadline, std::forward<Args>(args)...);
-    }
-
-    /// The same as `tryPush` except it will construct the object in place.
-    template <typename... Args>
-    ALWAYS_INLINE Result tryEmplace(Args &&... args)
-    {
-        return emplaceObj<false>(nullptr, std::forward<Args>(args)...);
+        return assignObj<false, true>(std::move(obj));
     }
 
     /// Cancel a NORMAL queue will wake up all blocking readers and writers.
@@ -222,7 +186,24 @@ public:
     {
         std::unique_lock lock(mu);
         assert(write_pos >= read_pos);
-        return static_cast<size_t>(write_pos - read_pos);
+        size_t value = static_cast<size_t>(write_pos - read_pos);
+        if constexpr (enable_remaings)
+        {
+            value += remaings.size();
+        }
+        return value;
+    }
+
+    bool isFull() const
+    {
+        std::unique_lock lock(mu);
+        if constexpr (enable_remaings)
+        {
+            if (!remaings.empty())
+                return true;
+        }
+        assert(write_pos >= read_pos && current_auxiliary_memory_usage >= 0);
+        return write_pos - read_pos >= capacity || current_auxiliary_memory_usage >= max_auxiliary_memory_usage;
     }
 
     const String & getCancelReason() const
@@ -233,8 +214,6 @@ public:
     }
 
 private:
-    using SteadyClock = std::chrono::steady_clock;
-    using TimePoint = SteadyClock::time_point;
     using WaitingNode = MPMCQueueDetail::WaitingNode;
 
     void notifyAll()
@@ -246,34 +225,18 @@ private:
     }
 
     template <typename Pred>
-    ALWAYS_INLINE bool wait(
+    ALWAYS_INLINE void wait(
         std::unique_lock<std::mutex> & lock,
         WaitingNode & head,
         WaitingNode & node,
-        Pred pred,
-        const TimePoint * deadline)
+        Pred pred)
     {
-        if (deadline)
+        while (!pred())
         {
-            while (!pred())
-            {
-                node.prependTo(&head);
-                auto res = node.cv.wait_until(lock, *deadline);
-                node.detach();
-                if (res == std::cv_status::timeout)
-                    return false;
-            }
+            node.prependTo(&head);
+            node.cv.wait(lock);
+            node.detach();
         }
-        else
-        {
-            while (!pred())
-            {
-                node.prependTo(&head);
-                node.cv.wait(lock);
-                node.detach();
-            }
-        }
-        return true;
     }
 
     ALWAYS_INLINE void notifyNext(WaitingNode & head)
@@ -286,8 +249,21 @@ private:
         }
     }
 
+    ALWAYS_INLINE void doAssignObj(T && obj)
+    {
+        void * addr = getObjAddr(write_pos);
+        new (addr) T(std::move(obj));
+        updateElementAuxiliaryMemory<false>(write_pos);
+
+        /// update pos only after all operations that may throw an exception.
+        ++write_pos;
+
+        /// See comments in `popObj`.
+        notifyNext(reader_head);
+    }
+
     template <bool need_wait>
-    Result popObj(T & res, [[maybe_unused]] const TimePoint * deadline = nullptr)
+    Result popObj(T & res)
     {
 #ifdef __APPLE__
         WaitingNode node;
@@ -295,7 +271,6 @@ private:
         thread_local WaitingNode node;
 #endif
         std::unique_lock lock(mu);
-        bool is_timeout = false;
 
         if constexpr (need_wait)
         {
@@ -303,8 +278,7 @@ private:
             auto pred = [&] {
                 return read_pos < write_pos || !isNormal();
             };
-            if (!wait(lock, reader_head, node, pred, deadline))
-                is_timeout = true;
+            wait(lock, reader_head, node, pred);
         }
         /// double check status after potential wait
         if (!isCancelled() && read_pos < write_pos)
@@ -328,13 +302,26 @@ private:
             /// 2. If we do not remove the next writer, only obtain its pointer and notify it later,
             ///    deadlock can be possible because different readers may notify one writer.
             if (current_auxiliary_memory_usage < max_auxiliary_memory_usage)
-                notifyNext(writer_head);
+            {
+                if constexpr (enable_remaings)
+                {
+                    if (remaings.empty())
+                    {
+                        notifyNext(writer_head);
+                    }
+                    else
+                    {
+                        doAssignObj(std::move(remaings.back()));
+                        remaings.pop_back();
+                    }
+                }
+                else
+                {
+                    notifyNext(writer_head);
+                }
+            }
+
             return Result::OK;
-        }
-        if constexpr (need_wait)
-        {
-            if (is_timeout)
-                return Result::TIMEOUT;
         }
         switch (status)
         {
@@ -347,8 +334,8 @@ private:
         }
     }
 
-    template <bool need_wait, typename F>
-    Result assignObj([[maybe_unused]] const TimePoint * deadline, F && assigner)
+    template <bool need_wait, bool push_remaings>
+    Result assignObj(T && obj)
     {
 #ifdef __APPLE__
         WaitingNode node;
@@ -356,36 +343,31 @@ private:
         thread_local WaitingNode node;
 #endif
         std::unique_lock lock(mu);
-        bool is_timeout = false;
 
         if constexpr (need_wait)
         {
+            static_assert(!push_remaings);
             auto pred = [&] {
                 return (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage) || !isNormal();
             };
-            if (!wait(lock, writer_head, node, pred, deadline))
-                is_timeout = true;
+            wait(lock, writer_head, node, pred);
         }
 
         /// double check status after potential wait
-        /// check write_pos because timeouted will also reach here.
-        if (isNormal() && (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage))
+        if (isNormal())
         {
-            void * addr = getObjAddr(write_pos);
-            assigner(addr);
-            updateElementAuxiliaryMemory<false>(write_pos);
+            if (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage)
+            {
+                doAssignObj(std::move(obj));
+                return Result::OK;
+            }
 
-            /// update pos only after all operations that may throw an exception.
-            ++write_pos;
-
-            /// See comments in `popObj`.
-            notifyNext(reader_head);
-            return Result::OK;
-        }
-        if constexpr (need_wait)
-        {
-            if (is_timeout)
-                return Result::TIMEOUT;
+            if constexpr (push_remaings)
+            {
+                static_assert(enable_remaings);
+                remaings.push_front(std::move(obj));
+                return Result::OK;
+            }
         }
         switch (status)
         {
@@ -396,18 +378,6 @@ private:
         case Status::FINISHED:
             return Result::FINISHED;
         }
-    }
-
-    template <bool need_wait, typename U>
-    ALWAYS_INLINE Result pushObj(U && u, const TimePoint * deadline = nullptr)
-    {
-        return assignObj<need_wait>(deadline, [&](void * addr) { new (addr) T(std::forward<U>(u)); });
-    }
-
-    template <bool need_wait, typename... Args>
-    ALWAYS_INLINE Result emplaceObj(const TimePoint * deadline, Args &&... args)
-    {
-        return assignObj<need_wait>(deadline, [&](void * addr) { new (addr) T(std::forward<Args>(args)...); });
     }
 
     ALWAYS_INLINE bool isNormal() const
@@ -446,6 +416,10 @@ private:
         read_pos = 0;
         write_pos = 0;
         current_auxiliary_memory_usage = 0;
+        if constexpr (enable_remaings)
+        {
+            remaings.clear();
+        }
     }
 
     template <typename F>
@@ -503,6 +477,7 @@ private:
 
     std::vector<Int64> element_auxiliary_memory;
     std::vector<UInt8> data;
+    std::deque<T> remaings;
 };
 
 } // namespace DB

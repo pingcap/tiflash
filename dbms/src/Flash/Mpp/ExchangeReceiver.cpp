@@ -411,9 +411,9 @@ void ExchangeReceiverBase<RPCContext>::prepareMsgChannels()
 {
     if (enable_fine_grained_shuffle_flag)
         for (size_t i = 0; i < output_stream_count; ++i)
-            msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+            msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>, true>>(max_buffer_size));
     else
-        msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+        msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>, true>>(max_buffer_size));
 }
 
 template <typename RPCContext>

@@ -116,7 +116,7 @@ struct MockWriter
         mpp::MPPDataPacket packet;
         auto tracked_packet = std::make_shared<TrackedMppDataPacket>(packet, nullptr);
         tracked_packet->serializeByResponse(response);
-        queue->push(tracked_packet);
+        queue->push(std::move(tracked_packet));
     }
     void sendExecutionSummary(const tipb::SelectResponse & response)
     {

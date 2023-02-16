@@ -152,7 +152,7 @@ protected:
                 FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_sharedquery_failpoint);
                 Block block = in->read();
                 // in is finished or queue is canceled
-                if (!block || queue.push(block) != MPMCQueueResult::OK)
+                if (!block || queue.push(std::move(block)) != MPMCQueueResult::OK)
                     break;
             }
             in->readSuffix();

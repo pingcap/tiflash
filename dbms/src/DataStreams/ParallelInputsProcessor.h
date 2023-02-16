@@ -182,7 +182,7 @@ private:
             , unprepared_inputs(inputs_.size())
         {
             for (size_t i = 0; i < inputs_.size(); ++i)
-                unprepared_inputs.emplace(inputs_[i], i);
+                unprepared_inputs.push(InputData{inputs_[i], i});
         }
         /** A set of available sources that are not currently processed by any thread.
           * Each thread takes one source from this set, takes a block out of the source (at this moment the source does the calculations)
@@ -296,7 +296,7 @@ private:
         {
             input.in->readPrefix();
 
-            work.available_inputs.push(input);
+            work.available_inputs.push(std::move(input));
         }
 
         // The condition is false when all input streams are exhausted or
@@ -308,8 +308,9 @@ private:
 
             if (block)
             {
-                work.available_inputs.push(input);
-                publishPayload(input.in, block, thread_num);
+                auto tmp_in = input.in;
+                work.available_inputs.push(std::move(input));
+                publishPayload(tmp_in, block, thread_num);
             }
             else
             {
