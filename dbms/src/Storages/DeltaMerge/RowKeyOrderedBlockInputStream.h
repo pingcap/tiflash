@@ -49,12 +49,25 @@ public:
 
     bool skipNextBlock(size_t skip_rows) override
     {
-        return ::DB::DM::skipBlock(stable, delta, skip_rows);
+        return skipBlock(stable, delta, skip_rows);
+    }
+
+    Block readWithFilter(const IColumn::Filter & filter) override
+    {
+        auto [block, from_delta] = readBlockWithFilter(stable, delta, filter);
+        if (block)
+        {
+            if (from_delta)
+            {
+                block.setStartOffset(block.startOffset() + stable_rows);
+            }
+        }
+        return block;
     }
 
     Block read() override
     {
-        auto [block, from_delta] = ::DB::DM::readBlock(stable, delta);
+        auto [block, from_delta] = readBlock(stable, delta);
         if (block)
         {
             if (from_delta)

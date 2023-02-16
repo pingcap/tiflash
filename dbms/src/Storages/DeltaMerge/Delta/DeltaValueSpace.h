@@ -34,6 +34,8 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefinesBase.h>
 
+#include "Columns/ColumnsCommon.h"
+
 namespace DB
 {
 namespace DM
@@ -454,6 +456,19 @@ public:
             persisted_files_done = true;
             return mem_table_input_stream.skipNextBlock(skip_rows);
         }
+    }
+
+    Block readWithFilter(const IColumn::Filter & filter) override
+    {
+        auto block = read();
+        if (size_t passed_count = countBytesInFilter(filter); passed_count != block.rows())
+        {
+            for (auto & col : block)
+            {
+                col.column = col.column->filter(filter, passed_count);
+            }
+        }
+        return block;
     }
 
     Block read() override

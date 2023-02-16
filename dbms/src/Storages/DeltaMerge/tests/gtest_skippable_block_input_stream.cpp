@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnsCommon.h>
 #include <Common/Logger.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyOrderedBlockInputStream.h>
@@ -117,10 +118,10 @@ std::vector<SegDataUnit> parseSegData(std::string_view seg_data)
 
 } // namespace
 
-class SegmentSkipBlockTest : public SegmentTestBasic
+class SkippableBlockInputStreamTest : public SegmentTestBasic
 {
 protected:
-    DB::LoggerPtr log = DB::Logger::get("SegmentSkipBlockTest");
+    DB::LoggerPtr log = DB::Logger::get("SkippableBlockInputStreamTest");
     static constexpr auto SEG_ID = DELTA_MERGE_FIRST_SEGMENT_ID;
     RowKeyRanges read_ranges;
 
@@ -128,11 +129,12 @@ protected:
     SkippableBlockInputStreamPtr getInputStream(const SegmentPtr & segment,
                                                 const SegmentSnapshotPtr & snapshot,
                                                 const ColumnDefines & columns_to_read,
-                                                const RowKeyRanges & read_ranges,
-                                                bool enable_handle_clean_read,
-                                                bool enable_del_clean_read,
-                                                bool is_fast_scan)
+                                                const RowKeyRanges & read_ranges)
     {
+        auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
+        constexpr auto is_fast_scan = true;
+        auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
+
         SkippableBlockInputStreamPtr stable_stream = snapshot->stable->getInputStream(
             *dm_context,
             columns_to_read,
@@ -154,7 +156,7 @@ protected:
         return std::make_shared<RowKeyOrderedBlockInputStream>(columns_to_read, stable_stream, delta_stream, snapshot->stable->getDMFilesRows(), dm_context->tracing_id);
     }
 
-    void testCase(std::string_view seg_data, std::vector<size_t> skip_block_idxs = {})
+    void testSkipBlockCase(std::string_view seg_data, std::vector<size_t> skip_block_idxs = {})
     {
         auto seg_data_units = parseSegData(seg_data);
         for (const auto & unit : seg_data_units)
@@ -166,11 +168,7 @@ protected:
         ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
                                          getVersionColumnDefine()};
 
-        auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
-        constexpr auto is_fast_scan = true;
-        auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
-
-        auto stream = getInputStream(segment, snapshot, columns_to_read, read_ranges, enable_handle_clean_read, enable_del_clean_read, is_fast_scan);
+        auto stream = getInputStream(segment, snapshot, columns_to_read, read_ranges);
 
         stream->readPrefix();
         std::vector<Block> expected_blks;
@@ -180,7 +178,7 @@ protected:
         }
         stream->readSuffix();
 
-        stream = getInputStream(segment, snapshot, columns_to_read, read_ranges, enable_handle_clean_read, enable_del_clean_read, is_fast_scan);
+        stream = getInputStream(segment, snapshot, columns_to_read, read_ranges);
 
         stream->readPrefix();
         for (size_t i = 0; i < expected_blks.size(); ++i)
@@ -195,6 +193,42 @@ protected:
         }
         ASSERT_BLOCK_EQ(stream->read(), Block{});
         stream->readSuffix();
+    }
+
+    void testReadWithFilterCase(std::string_view seg_data)
+    {
+        auto seg_data_units = parseSegData(seg_data);
+        for (const auto & unit : seg_data_units)
+        {
+            writeSegment(unit);
+        }
+
+        auto [segment, snapshot] = getSegmentForRead(SEG_ID);
+        ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
+                                         getVersionColumnDefine()};
+
+        auto stream1 = getInputStream(segment, snapshot, columns_to_read, read_ranges);
+        auto stream2 = getInputStream(segment, snapshot, columns_to_read, read_ranges);
+
+        stream1->readPrefix();
+        stream2->readPrefix();
+
+        std::default_random_engine e;
+        for (auto blk = stream1->read(); blk; blk = stream1->read())
+        {
+            IColumn::Filter filter(blk.rows(), 1);
+            std::transform(filter.begin(), filter.end(), filter.begin(), [&e](auto) { return e() % 2 == 0 ? 0 : 1; });
+            size_t passed_count = countBytesInFilter(filter);
+            for (auto & col : blk)
+            {
+                col.column = col.column->filter(filter, passed_count);
+            }
+            auto blk2 = stream2->readWithFilter(filter);
+            ASSERT_BLOCK_EQ(blk, blk2);
+        }
+        ASSERT_BLOCK_EQ(stream2->read(), Block{});
+        stream1->readSuffix();
+        stream2->readSuffix();
     }
 
     void writeSegment(const SegDataUnit & unit)
@@ -240,110 +274,125 @@ protected:
     }
 };
 
-TEST_F(SegmentSkipBlockTest, InMemory1)
+TEST_F(SkippableBlockInputStreamTest, InMemory1)
 try
 {
-    testCase("d_mem:[0, 1000)");
+    testSkipBlockCase("d_mem:[0, 1000)");
+    testReadWithFilterCase("d_mem:[0, 1000)");
 }
 CATCH
 
-TEST_F(SegmentSkipBlockTest, InMemory2)
+TEST_F(SkippableBlockInputStreamTest, InMemory2)
 try
 {
-    testCase("d_mem:[0, 1000)|d_mem:[0, 1000)", {0});
+    testSkipBlockCase("d_mem:[0, 1000)|d_mem:[0, 1000)", {0});
+    testReadWithFilterCase("d_mem:[0, 1000)|d_mem:[0, 1000)");
 }
 CATCH
 
-TEST_F(SegmentSkipBlockTest, InMemory3)
+TEST_F(SkippableBlockInputStreamTest, InMemory3)
 try
 {
-    testCase("d_mem:[0, 1000)|d_mem:[100, 200)", {3, 6, 9});
+    testSkipBlockCase("d_mem:[0, 1000)|d_mem:[100, 200)", {3, 6, 9});
+    testReadWithFilterCase("d_mem:[0, 1000)|d_mem:[100, 200)");
 }
 CATCH
 
-TEST_F(SegmentSkipBlockTest, InMemory4)
+TEST_F(SkippableBlockInputStreamTest, InMemory4)
 try
 {
-    testCase("d_mem:[0, 1000)|d_mem:[-100, 100)", {0, 1, 3, 4, 5, 6, 7, 8});
+    testSkipBlockCase("d_mem:[0, 1000)|d_mem:[-100, 100)", {0, 1, 3, 4, 5, 6, 7, 8});
+    testReadWithFilterCase("d_mem:[0, 1000)|d_mem:[-100, 100)");
 }
 CATCH
 
-TEST_F(SegmentSkipBlockTest, InMemory5)
+TEST_F(SkippableBlockInputStreamTest, InMemory5)
 try
 {
-    testCase("d_mem:[0, 1000)|d_mem_del:[0, 1000)", {4, 5, 6});
+    testSkipBlockCase("d_mem:[0, 1000)|d_mem_del:[0, 1000)", {4, 5, 6});
+    testReadWithFilterCase("d_mem:[0, 1000)|d_mem_del:[0, 1000)");
 }
 CATCH
 
-TEST_F(SegmentSkipBlockTest, InMemory6)
+TEST_F(SkippableBlockInputStreamTest, InMemory6)
 try
 {
-    testCase("d_mem:[0, 1000)|d_mem_del:[100, 200)", {});
+    testSkipBlockCase("d_mem:[0, 1000)|d_mem_del:[100, 200)", {});
+    testReadWithFilterCase("d_mem:[0, 1000)|d_mem_del:[100, 200)");
 }
 CATCH
 
-TEST_F(SegmentSkipBlockTest, InMemory7)
+TEST_F(SkippableBlockInputStreamTest, InMemory7)
 try
 {
-    testCase("d_mem:[0, 1000)|d_mem_del:[-100, 100)", {0, 1, 2, 3, 4, 5, 6, 7, 8});
+    testSkipBlockCase("d_mem:[0, 1000)|d_mem_del:[-100, 100)", {0, 1, 2, 3, 4, 5, 6, 7, 8});
+    testReadWithFilterCase("d_mem:[0, 1000)|d_mem_del:[-100, 100)");
 }
 CATCH
 
-TEST_F(SegmentSkipBlockTest, Tiny1)
+TEST_F(SkippableBlockInputStreamTest, Tiny1)
 try
 {
-    testCase("d_tiny:[100, 500)|d_mem:[200, 1000)", {1, 2, 3, 4, 5, 6});
+    testSkipBlockCase("d_tiny:[100, 500)|d_mem:[200, 1000)", {1, 2, 3, 4, 5, 6});
+    testReadWithFilterCase("d_tiny:[100, 500)|d_mem:[200, 1000)");
 }
 CATCH
 
-TEST_F(SegmentSkipBlockTest, TinyDel1)
+TEST_F(SkippableBlockInputStreamTest, TinyDel1)
 try
 {
-    testCase("d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)", {7, 8, 9});
+    testSkipBlockCase("d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)", {7, 8, 9});
+    testReadWithFilterCase("d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)");
 }
 CATCH
 
-TEST_F(SegmentSkipBlockTest, DeleteRange)
+TEST_F(SkippableBlockInputStreamTest, DeleteRange)
 try
 {
-    testCase("d_tiny:[100, 500)|d_dr:[250, 300)|d_mem:[240, 290)", {1, 2, 3, 4, 5, 9});
+    testSkipBlockCase("d_tiny:[100, 500)|d_dr:[250, 300)|d_mem:[240, 290)", {1, 2, 3, 4, 5, 9});
+    testReadWithFilterCase("d_tiny:[100, 500)|d_dr:[250, 300)|d_mem:[240, 290)");
 }
 CATCH
 
-TEST_F(SegmentSkipBlockTest, Big)
+TEST_F(SkippableBlockInputStreamTest, Big)
 try
 {
-    testCase("d_tiny:[100, 500)|d_big:[250, 1000)|d_mem:[240, 290)", {1, 3, 4, 9});
+    testSkipBlockCase("d_tiny:[100, 500)|d_big:[250, 1000)|d_mem:[240, 290)", {1, 3, 4, 9});
+    testReadWithFilterCase("d_tiny:[100, 500)|d_big:[250, 1000)|d_mem:[240, 290)");
 }
 CATCH
 
-TEST_F(SegmentSkipBlockTest, Stable1)
+TEST_F(SkippableBlockInputStreamTest, Stable1)
 try
 {
-    testCase("s:[0, 1024)|d_dr:[0, 1023)", {0});
+    testSkipBlockCase("s:[0, 1024)|d_dr:[0, 1023)", {0});
+    testReadWithFilterCase("s:[0, 1024)|d_dr:[0, 1023)");
 }
 CATCH
 
-TEST_F(SegmentSkipBlockTest, Stable2)
+TEST_F(SkippableBlockInputStreamTest, Stable2)
 try
 {
-    testCase("s:[0, 102294)|d_dr:[0, 1023)", {2});
-}
-CATCH
-
-
-TEST_F(SegmentSkipBlockTest, Stable3)
-try
-{
-    testCase("s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)", {0});
+    testSkipBlockCase("s:[0, 102294)|d_dr:[0, 1023)", {2});
+    testReadWithFilterCase("s:[0, 102294)|d_dr:[0, 1023)");
 }
 CATCH
 
 
-TEST_F(SegmentSkipBlockTest, Mix)
+TEST_F(SkippableBlockInputStreamTest, Stable3)
 try
 {
-    testCase("s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)", {1, 2});
+    testSkipBlockCase("s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)", {0});
+    testReadWithFilterCase("s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)");
+}
+CATCH
+
+
+TEST_F(SkippableBlockInputStreamTest, Mix)
+try
+{
+    testSkipBlockCase("s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)", {1, 2});
+    testReadWithFilterCase("s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)");
 }
 CATCH
 

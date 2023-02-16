@@ -72,4 +72,37 @@ bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamP
     }
 }
 
+std::pair<Block, bool> readBlockWithFilter(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, const IColumn::Filter & filter)
+{
+    if (filter.empty())
+    {
+        return {{}, false};
+    }
+
+    if (stable == nullptr && delta == nullptr)
+    {
+        return {{}, false};
+    }
+
+    if (stable == nullptr)
+    {
+        return {delta->readWithFilter(filter), true};
+    }
+
+    auto block = stable->readWithFilter(filter);
+    if (block)
+    {
+        return {block, false};
+    }
+    else
+    {
+        stable = nullptr;
+        if (delta != nullptr)
+        {
+            block = delta->readWithFilter(filter);
+        }
+        return {block, true};
+    }
+}
+
 } // namespace DB::DM

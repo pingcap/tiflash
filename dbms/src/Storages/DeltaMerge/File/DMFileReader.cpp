@@ -30,6 +30,8 @@
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
 
+#include "Columns/ColumnsCommon.h"
+
 namespace CurrentMetrics
 {
 extern const Metric OpenFileForRead;
@@ -261,7 +263,6 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     return next_pack_id < use_packs.size();
 }
 
-
 bool DMFileReader::skipNextBlock(size_t skip_rows [[maybe_unused]])
 {
     // Go to next available pack.
@@ -295,6 +296,87 @@ bool DMFileReader::skipNextBlock(size_t skip_rows [[maybe_unused]])
     scan_context->total_dmfile_skipped_rows += read_rows;
     next_row_offset += read_rows;
     return true;
+}
+
+Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
+{
+    size_t skip_rows;
+    if (!getSkippedRows(skip_rows))
+        return {};
+
+    const auto & pack_stats = dmfile->getPackStats();
+    auto & use_packs = pack_filter.getUsePacks();
+
+    size_t start_row_offset = next_row_offset;
+
+    size_t read_rows = 0;
+    size_t next_pack_id_cp = next_pack_id;
+    while (next_pack_id_cp < use_packs.size() && read_rows + pack_stats[next_pack_id_cp].rows <= filter.size())
+    {
+        const auto begin = filter.cbegin() + read_rows;
+        const auto end = filter.cbegin() + read_rows + pack_stats[next_pack_id_cp].rows;
+        use_packs[next_pack_id_cp] = use_packs[next_pack_id_cp] && std::find(begin, end, 1) != end;
+        read_rows += pack_stats[next_pack_id_cp].rows;
+        ++next_pack_id_cp;
+    }
+    // filter.size() equals to the number of rows in the next block
+    // so read_rows should be equal to filter.size() here.
+    RUNTIME_CHECK(read_rows == filter.size());
+
+    // mark the next pack after next read as not used temporarily
+    // to avoid reading it and its following packs in this round
+    bool next_pack_id_use_packs_cp = false;
+    if (next_pack_id_cp < use_packs.size())
+    {
+        next_pack_id_use_packs_cp = use_packs[next_pack_id_cp];
+        use_packs[next_pack_id_cp] = false;
+    }
+
+    Blocks blocks;
+    blocks.reserve(next_pack_id_cp - next_pack_id);
+
+    read_rows = 0;
+    for (size_t i = next_pack_id; i < next_pack_id_cp; ++i)
+    {
+        // When the next pack is not used or the pack is the last pack, call read() to read theses packs and filter them
+        // For example:
+        //  When next_pack_id_cp = use_packs.size() and use_packs[next_pack_id:next_pack_id_cp] = [true, true, false, true, true, true]
+        //  The algorithm runs as follows:
+        //      When i = next_pack_id + 2, call read() to read {next_pack_id, next_pack_id + 1}th packs
+        //      When i = next_pack_id + 5, call read() to read {next_pack_id + 3, next_pack_id + 4, next_pack_id + 5}th packs
+        if (use_packs[i] && (i + 1 == use_packs.size() || !use_packs[i + 1]))
+        {
+            Block block = read();
+
+            IColumn::Filter block_filter;
+            block_filter.resize(block.rows());
+            std::copy(filter.cbegin() + read_rows, filter.cbegin() + read_rows + block.rows(), block_filter.begin());
+            read_rows += block.rows();
+
+            if (size_t passed_count = countBytesInFilter(block_filter); passed_count != block.rows())
+            {
+                for (auto & col : block)
+                {
+                    col.column = col.column->filter(block_filter, passed_count);
+                }
+            }
+
+            blocks.emplace_back(std::move(block));
+        }
+        else if (!use_packs[i])
+        {
+            read_rows += pack_stats[i].rows;
+        }
+    }
+
+    // restore the use_packs of next pack after next read
+    if (next_pack_id_cp < use_packs.size())
+        use_packs[next_pack_id_cp] = next_pack_id_use_packs_cp;
+
+    // merge blocks
+    Block res = vstackBlocks(std::move(blocks));
+    res.setStartOffset(start_row_offset);
+    return res;
 }
 
 inline bool isExtraColumn(const ColumnDefine & cd)

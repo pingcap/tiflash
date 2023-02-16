@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Columns/ColumnsCommon.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
@@ -144,6 +145,8 @@ public:
         }
         return {};
     }
+
+    Block readWithFilter(const IColumn::Filter &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
 };
 } // namespace DM
 } // namespace DB

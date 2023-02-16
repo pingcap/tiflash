@@ -107,6 +107,9 @@ public:
     /// Return false if it is the end of file.
     bool skipNextBlock(size_t skip_rows);
 
+    /// Read specified rows.
+    Block readWithFilter(const IColumn::Filter & filter);
+
     Block read();
     std::string path() const
     {
