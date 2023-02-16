@@ -132,6 +132,35 @@ void ExecutorTest::executeInterpreterWithDeltaMerge(const String & expected_stri
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->toString()));
 }
 
+
+namespace
+{
+String testInfoMsg(const std::shared_ptr<tipb::DAGRequest> & request, bool enable_planner, bool enable_pipeline, size_t concurrency, size_t block_size)
+{
+    const auto & test_info = testing::UnitTest::GetInstance()->current_test_info();
+    assert(test_info);
+    return fmt::format(
+        "test info:\n"
+        "    file: {}\n"
+        "    line: {}\n"
+        "    test_case_name: {}\n"
+        "    test_func_name: {}\n"
+        "    enable_planner: {}\n"
+        "    enable_pipeline: {}\n"
+        "    concurrency: {}\n"
+        "    block_size: {}\n"
+        "    dag_request: \n{}",
+        test_info->file(),
+        test_info->line(),
+        test_info->test_case_name(),
+        test_info->name(),
+        enable_planner,
+        enable_pipeline,
+        concurrency,
+        block_size,
+        ExecutorSerializer().serialize(request.get()));
+}
+} // namespace
 void ExecutorTest::executeExecutor(
     const std::shared_ptr<tipb::DAGRequest> & request,
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
@@ -145,41 +174,61 @@ void ExecutorTest::executeExecutor(
         {
             context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             auto res = executeStreams(request, concurrency);
-            auto test_info_msg = [&]() {
-                const auto & test_info = testing::UnitTest::GetInstance()->current_test_info();
-                assert(test_info);
-                return fmt::format(
-                    "test info:\n"
-                    "    file: {}\n"
-                    "    line: {}\n"
-                    "    test_case_name: {}\n"
-                    "    test_func_name: {}\n"
-                    "    enable_planner: {}\n"
-                    "    concurrency: {}\n"
-                    "    block_size: {}\n"
-                    "    dag_request: \n{}"
-                    "    result_block: \n{}",
-                    test_info->file(),
-                    test_info->line(),
-                    test_info->test_case_name(),
-                    test_info->name(),
-                    enable_planner,
-                    concurrency,
-                    block_size,
-                    ExecutorSerializer().serialize(request.get()),
-                    getColumnsContent(res));
-            };
-            ASSERT_TRUE(assert_func(res)) << test_info_msg();
+            ASSERT_TRUE(assert_func(res)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
         }
     }
     WRAP_FOR_TEST_END
+}
+
+void ExecutorTest::checkBlockSorted(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    const SortInfos & sort_infos,
+    std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &, const ColumnsWithTypeAndName &)> assert_func)
+{
+    WRAP_FOR_TEST_BEGIN
+    std::vector<size_t> concurrencies{2, 5, 10};
+    for (auto concurrency : concurrencies)
+    {
+        auto expected_res = executeStreams(request, concurrency);
+        std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
+        for (auto block_size : block_sizes)
+        {
+            context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+            auto return_blocks = getExecuteStreamsReturnBlocks(request, concurrency);
+            if (!return_blocks.empty())
+            {
+                SortDescription sort_desc;
+                for (auto sort_info : sort_infos)
+                    sort_desc.emplace_back(return_blocks.back().getColumnsWithTypeAndName()[sort_info.column_index].name, sort_info.desc ? -1 : 1, -1);
+
+                for (auto & block : return_blocks)
+                    ASSERT_TRUE(isAlreadySorted(block, sort_desc)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
+
+                auto res = vstackBlocks(std::move(return_blocks)).getColumnsWithTypeAndName();
+                ASSERT_TRUE(assert_func(expected_res, res)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
+            }
+        };
+        WRAP_FOR_TEST_END
+    }
 }
 
 void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
 {
     executeExecutor(request, [&](const ColumnsWithTypeAndName & res) {
         return columnsEqual(expect_columns, res, /*_restrict=*/false) << "\n  expect_block: \n"
-                                                                      << getColumnsContent(expect_columns);
+                                                                      << getColumnsContent(expect_columns)
+                                                                      << "\n actual_block: \n"
+                                                                      << getColumnsContent(res);
+    });
+}
+
+void ExecutorTest::executeAndAssertSortedBlocks(const std::shared_ptr<tipb::DAGRequest> & request, const SortInfos & sort_infos)
+{
+    checkBlockSorted(request, sort_infos, [&](const ColumnsWithTypeAndName & expect_columns, const ColumnsWithTypeAndName & res) {
+        return columnsEqual(expect_columns, res, /*_restrict=*/false) << "\n  expect_block: \n"
+                                                                      << getColumnsContent(expect_columns)
+                                                                      << "\n actual_block: \n"
+                                                                      << getColumnsContent(res);
     });
 }
 
