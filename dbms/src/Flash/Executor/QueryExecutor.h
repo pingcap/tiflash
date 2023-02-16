@@ -27,13 +27,15 @@ namespace DB
 class ProcessListEntry;
 using ProcessListEntryPtr = std::shared_ptr<ProcessListEntry>;
 
+class Context;
 class DAGContext;
 
 class QueryExecutor
 {
 public:
-    explicit QueryExecutor(const ProcessListEntryPtr & process_list_entry_)
+    QueryExecutor(const ProcessListEntryPtr & process_list_entry_, Context & context_)
         : process_list_entry(process_list_entry_)
+        , context(context_)
     {}
 
     virtual ~QueryExecutor() = default;
@@ -51,13 +53,16 @@ public:
 
     virtual Block getSampleBlock() const = 0;
 
-    virtual BaseRuntimeStatistics getRuntimeStatistics(DAGContext &) const = 0;
+    virtual BaseRuntimeStatistics getRuntimeStatistics() const = 0;
 
 protected:
     virtual ExecutionResult execute(ResultHandler &&) = 0;
 
+    DAGContext & dagContext() const;
+
 protected:
     ProcessListEntryPtr process_list_entry;
+    Context & context;
 };
 
 using QueryExecutorPtr = std::unique_ptr<QueryExecutor>;

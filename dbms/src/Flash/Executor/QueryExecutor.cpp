@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/QueryExecutor.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -24,5 +26,10 @@ ExecutionResult QueryExecutor::execute()
 ExecutionResult QueryExecutor::execute(ResultHandler::Handler handler)
 {
     return execute(ResultHandler{handler});
+}
+
+DAGContext & QueryExecutor::dagContext() const
+{
+    return *context.getDAGContext();
 }
 } // namespace DB

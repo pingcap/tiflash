@@ -23,8 +23,7 @@ PipelineExecutor::PipelineExecutor(
     const ProcessListEntryPtr & process_list_entry_,
     Context & context_,
     const PipelinePtr & root_pipeline_)
-    : QueryExecutor(process_list_entry_)
-    , context(context_)
+    : QueryExecutor(process_list_entry_, context_)
     , root_pipeline(root_pipeline_)
 {
     assert(root_pipeline);
@@ -92,7 +91,7 @@ Block PipelineExecutor::getSampleBlock() const
     return root_pipeline->getSampleBlock();
 }
 
-BaseRuntimeStatistics PipelineExecutor::getRuntimeStatistics(DAGContext &) const
+BaseRuntimeStatistics PipelineExecutor::getRuntimeStatistics() const
 {
     // TODO support getRuntimeStatistics
     BaseRuntimeStatistics runtime_statistics;

@@ -181,7 +181,7 @@ try
         }
     }
 
-    auto runtime_statistics = query_executor->getRuntimeStatistics(dag_context);
+    auto runtime_statistics = query_executor->getRuntimeStatistics();
     LOG_DEBUG(
         log,
         "dag request without encode cost: {} seconds, produce {} rows, {} bytes.",

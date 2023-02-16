@@ -20,8 +20,8 @@
 
 namespace DB
 {
-DataStreamExecutor::DataStreamExecutor(const BlockIO & block_io)
-    : QueryExecutor(block_io.process_list_entry)
+DataStreamExecutor::DataStreamExecutor(Context & context_, const BlockIO & block_io)
+    : QueryExecutor(block_io.process_list_entry, context_)
     , data_stream(block_io.in)
 {
     assert(data_stream);
@@ -79,9 +79,10 @@ Block DataStreamExecutor::getSampleBlock() const
     return data_stream->getHeader();
 }
 
-BaseRuntimeStatistics DataStreamExecutor::getRuntimeStatistics(DAGContext & dag_context) const
+BaseRuntimeStatistics DataStreamExecutor::getRuntimeStatistics() const
 {
     BaseRuntimeStatistics runtime_statistics;
+    auto & dag_context = dagContext();
     auto root_executor_id = dag_context.getRootExecutorId();
     const auto & profile_streams_map = dag_context.getProfileStreamsMap();
     auto it = profile_streams_map.find(root_executor_id);

@@ -141,12 +141,12 @@ QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
     if (context.getSettingsRef().enable_planner)
     {
         PlanQuerySource plan(context);
-        return std::make_unique<DataStreamExecutor>(doExecuteAsBlockIO(plan, context, internal));
+        return std::make_unique<DataStreamExecutor>(context, doExecuteAsBlockIO(plan, context, internal));
     }
     else
     {
         DAGQuerySource dag(context);
-        return std::make_unique<DataStreamExecutor>(doExecuteAsBlockIO(dag, context, internal));
+        return std::make_unique<DataStreamExecutor>(context, doExecuteAsBlockIO(dag, context, internal));
     }
 }
 } // namespace

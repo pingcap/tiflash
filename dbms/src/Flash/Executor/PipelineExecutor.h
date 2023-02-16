@@ -63,14 +63,12 @@ public:
 
     Block getSampleBlock() const override;
 
-    BaseRuntimeStatistics getRuntimeStatistics(DAGContext &) const override;
+    BaseRuntimeStatistics getRuntimeStatistics() const override;
 
 protected:
     ExecutionResult execute(ResultHandler && result_handler) override;
 
 private:
-    Context & context;
-
     PipelinePtr root_pipeline;
 
     PipelineExecutorStatus status;

@@ -418,7 +418,7 @@ void MPPTask::runImpl()
 
         mpp_task_statistics.collectRuntimeStatistics();
 
-        auto runtime_statistics = query_executor_holder->getRuntimeStatistics(*dag_context);
+        auto runtime_statistics = query_executor_holder->getRuntimeStatistics();
         LOG_DEBUG(
             log,
             "finish with {} seconds, {} rows, {} blocks, {} bytes",
