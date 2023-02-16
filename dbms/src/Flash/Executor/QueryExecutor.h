@@ -40,7 +40,6 @@ public:
 
     ExecutionResult execute();
     ExecutionResult execute(ResultHandler::Handler handler);
-    ExecutionResult executeAsync(ResultHandler::Handler handler);
 
     virtual void cancel() = 0;
 

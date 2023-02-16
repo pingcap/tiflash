@@ -12,14 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/MPMCQueue.h>
 #include <Flash/Executor/PipelineExecutor.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Interpreters/Context.h>
-#include <Operators/SharedQueue.h>
-
-#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -34,26 +30,24 @@ PipelineExecutor::PipelineExecutor(
     assert(root_pipeline);
 }
 
-void PipelineExecutor::schedulePipeline()
-{
-    auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
-    Events without_input_events;
-    for (const auto & event : events)
-    {
-        if (event->withoutInput())
-            without_input_events.push_back(event);
-    }
-    for (const auto & event : without_input_events)
-        event->schedule();
-}
-
 ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
 {
     assert(root_pipeline);
-    if (result_handler.isAsync())
-        doExecuteAsync(std::move(result_handler));
-    else
-        doExecuteSync(std::move(result_handler));
+    // for !result_handler.isIgnored(), the sink plan of root_pipeline must be nullptr.
+    if (unlikely(!result_handler.isIgnored()))
+        root_pipeline->addGetResultSink(std::move(result_handler));
+
+    {
+        auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
+        Events without_input_events;
+        for (const auto & event : events)
+        {
+            if (event->withoutInput())
+                without_input_events.push_back(event);
+        }
+        for (const auto & event : without_input_events)
+            event->schedule();
+    }
 
     if (unlikely(context.isTest()))
     {
@@ -66,38 +60,6 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
         status.wait();
     }
     return status.toExecutionResult();
-}
-
-void PipelineExecutor::doExecuteAsync(ResultHandler && result_handler)
-{
-    assert(!result_handler.isIgnored());
-    SharedQueuePtr shared_queue = std::make_shared<SharedQueue>(5 * context.getMaxStreams());
-    // for !result_handler.isIgnored(), the sink plan of root_pipeline must be nullptr.
-    root_pipeline->addGetResultSink(shared_queue);
-    schedulePipeline();
-    while (true)
-    {
-        Block block;
-        auto queue_result = shared_queue->pop(block);
-        switch (queue_result)
-        {
-        case MPMCQueueResult::OK:
-            result_handler(block);
-            break;
-        case MPMCQueueResult::FINISHED:
-            return;
-        default:
-            RUNTIME_ASSERT(false, "Unexpected queue result: {}", magic_enum::enum_name(queue_result));
-        }
-    }
-}
-
-void PipelineExecutor::doExecuteSync(ResultHandler && result_handler)
-{
-    // for !result_handler.isIgnored(), the sink plan of root_pipeline must be nullptr.
-    if (unlikely(!result_handler.isIgnored()))
-        root_pipeline->addGetResultSink(std::move(result_handler));
-    schedulePipeline();
 }
 
 void PipelineExecutor::cancel()

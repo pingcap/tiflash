@@ -25,9 +25,4 @@ ExecutionResult QueryExecutor::execute(ResultHandler::Handler handler)
 {
     return execute(ResultHandler{handler});
 }
-
-ExecutionResult QueryExecutor::executeAsync(ResultHandler::Handler handler)
-{
-    return execute(ResultHandler{handler, /*is_async_=*/true});
-}
 } // namespace DB

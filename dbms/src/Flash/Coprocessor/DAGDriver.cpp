@@ -141,7 +141,7 @@ try
             context.getSettingsRef().batch_send_min_limit,
             dag_context);
         response_writer->prepare(query_executor->getSampleBlock());
-        query_executor->executeAsync([&response_writer](const Block & block) { response_writer->write(block); }).verify();
+        query_executor->execute([&response_writer](const Block & block) { response_writer->write(block); }).verify();
         response_writer->flush();
 
         if (dag_context.collect_execution_summaries)

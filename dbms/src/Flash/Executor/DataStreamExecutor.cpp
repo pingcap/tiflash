@@ -31,8 +31,6 @@ ExecutionResult DataStreamExecutor::execute(ResultHandler && result_handler)
 {
     try
     {
-        // Ignore result_handler.isAsync() here.
-        // Because DataStreamExecutor always use result handler in async way.
         data_stream->readPrefix();
         if (result_handler.isIgnored())
         {

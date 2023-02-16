@@ -15,39 +15,21 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Operators/GetResultSinkOp.h>
-#include <Operators/SharedQueue.h>
 
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalGetResultSink::build(
-    const SharedQueuePtr & shared_queue,
-    const PhysicalPlanNodePtr & child)
-{
-    return std::make_shared<PhysicalGetResultSink>("get_result_sink", child->getSchema(), "", child, ResultHandler{}, shared_queue);
-}
-
-PhysicalPlanNodePtr PhysicalGetResultSink::build(
     ResultHandler && result_handler,
     const PhysicalPlanNodePtr & child)
 {
-    return std::make_shared<PhysicalGetResultSink>("get_result_sink", child->getSchema(), "", child, std::move(result_handler), nullptr);
+    return std::make_shared<PhysicalGetResultSink>("get_result_sink", child->getSchema(), "", child, std::move(result_handler));
 }
 
 void PhysicalGetResultSink::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
-    if (!result_handler.isIgnored())
-    {
-        auto this_shared_ptr = std::static_pointer_cast<PhysicalGetResultSink>(shared_from_this());
-        group_builder.transform([&](auto & builder) {
-            builder.setSinkOp(std::make_unique<GetResultSinkOp>(group_builder.exec_status, this_shared_ptr));
-        });
-    }
-    else
-    {
-        shared_queue->setProducerNum(group_builder.concurrency);
-        group_builder.transform([&](auto & builder) {
-            builder.setSinkOp(std::make_unique<SharedQueueSinkOp>(group_builder.exec_status, shared_queue));
-        });
-    }
+    auto this_shared_ptr = std::static_pointer_cast<PhysicalGetResultSink>(shared_from_this());
+    group_builder.transform([&](auto & builder) {
+        builder.setSinkOp(std::make_unique<GetResultSinkOp>(group_builder.exec_status, this_shared_ptr));
+    });
 }
 } // namespace DB

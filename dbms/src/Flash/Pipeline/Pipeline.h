@@ -56,11 +56,8 @@ public:
 
     void toTreeString(FmtBuffer & buffer, size_t level = 0) const;
 
-    // used for get the result blocks by sync way.
+    // used for get the result blocks.
     void addGetResultSink(ResultHandler && result_handler);
-
-    // used for get the result blocks by async way.
-    void addGetResultSink(const SharedQueuePtr & shared_queue);
 
     PipelineExecGroup buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
 

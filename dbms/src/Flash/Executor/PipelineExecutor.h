@@ -68,11 +68,6 @@ public:
 protected:
     ExecutionResult execute(ResultHandler && result_handler) override;
 
-    void doExecuteAsync(ResultHandler && result_handler);
-    void doExecuteSync(ResultHandler && result_handler);
-
-    void schedulePipeline();
-
 private:
     Context & context;
 
