@@ -221,7 +221,7 @@ public:
     using PackProperties = dtpb::PackProperties;
 
     static DMFilePtr
-    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, bool use_meta_v2_ = true);
+    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, bool use_meta_v2_ = false);
 
     static DMFilePtr restore(
         const FileProviderPtr & file_provider,
