@@ -91,7 +91,7 @@ try
     auto start_time = Clock::now();
     DAGContext & dag_context = *context.getDAGContext();
 
-    auto query_executor = queryExecute(context);
+    auto query_executor = queryExecute(context, internal);
     if (!query_executor)
         // Only query is allowed, so query_executor must not be null
         throw TiFlashException("DAG is not query.", Errors::Coprocessor::Internal);
@@ -188,16 +188,6 @@ try
         runtime_statistics.execution_time_ns / static_cast<double>(1000000000),
         runtime_statistics.rows,
         runtime_statistics.bytes);
-
-    if constexpr (!batch)
-    {
-        // Under some test cases, there may be dag response whose size is bigger than INT_MAX, and GRPC can not limit it.
-        // Throw exception to prevent receiver from getting wrong response.
-        if (accurate::greaterOp(runtime_statistics.bytes, std::numeric_limits<int>::max()))
-            throw TiFlashException(
-                "DAG response is too big, please check config about region size or region merge scheduler",
-                Errors::Coprocessor::Internal);
-    }
 }
 catch (const RegionException & e)
 {
