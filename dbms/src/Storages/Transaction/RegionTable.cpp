@@ -25,6 +25,8 @@
 #include <Storages/Transaction/TiKVRange.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 
+#include "Common/Exception.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -452,17 +454,18 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
 
     auto keyspace_id = region_range_keys.getKeyspaceID();
     auto table_id = region_range_keys.getMappedTableID();
-    auto ks_tb_id = KeyspaceTableID{keyspace_id, table_id};
+    auto ks_tbl_id = KeyspaceTableID{keyspace_id, table_id};
     auto new_handle_range = region_range_keys.rawKeys();
 
     if (auto it = regions.find(region_id); it != regions.end())
     {
-        if (ks_tb_id != it->second)
-            throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id " + std::to_string(table_id) + " not match previous one "
-                                + std::to_string(it->second.second) + " in regions " + std::to_string(region_id),
-                            ErrorCodes::LOGICAL_ERROR);
+        RUNTIME_CHECK_MSG(
+            ks_tbl_id == it->second,
+            "{}: table id not match the previous one"
+            ", region_id={} keyspace_id={} table_id={}, old_keyspace_id={} old_table_id={}",
+            __PRETTY_FUNCTION__, region_id, keyspace_id, table_id, it->second.first, it->second.second);
 
-        InternalRegion & internal_region = doGetInternalRegion(ks_tb_id, region_id);
+        InternalRegion & internal_region = doGetInternalRegion(ks_tbl_id, region_id);
         if (*(internal_region.range_in_table.first) <= *(new_handle_range.first)
             && *(internal_region.range_in_table.second) >= *(new_handle_range.second))
         {
