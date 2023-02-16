@@ -47,7 +47,7 @@ ExecutionResult DataStreamExecutor::execute(ResultHandler && result_handler)
     }
     catch (...)
     {
-        return ExecutionResult::fail(getCurrentExceptionMessage(true, true));
+        return ExecutionResult::fail(std::current_exception());
     }
 }
 

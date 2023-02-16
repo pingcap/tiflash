@@ -408,10 +408,6 @@ void MPPTask::runImpl()
             // finish MPPTunnel
             finishWrite();
         }
-        else
-        {
-            err_msg = result.err_msg;
-        }
         auto ru = query_executor_holder->collectRequestUnit();
         LOG_INFO(log, "mpp finish with request unit: {}", ru);
         GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(ru);
@@ -426,6 +422,8 @@ void MPPTask::runImpl()
             runtime_statistics.rows,
             runtime_statistics.blocks,
             runtime_statistics.bytes);
+
+        result.verify();
     }
     catch (...)
     {
