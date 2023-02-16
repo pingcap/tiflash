@@ -32,8 +32,7 @@ public:
     ConcurrentIOQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, typename MPMCQueue<T>::ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
         : mpmc_queue(capacity_, max_auxiliary_memory_usage_, std::move(get_auxiliary_memory_usage_))
         , capacity(capacity_)
-    {
-    }
+    {}
 
     MPMCQueueResult pop(T & data)
     {
@@ -78,6 +77,14 @@ public:
         return res;
     }
 
+    size_t size() const
+    {
+        std::lock_guard lock(mu);
+        return remaings.size() + mpmc_queue.size();
+    }
+
+    // When the queue is finished, it may appear that the mpmc_queue is empty but the remaings are not, causing isFull to return true.
+    // But this is expected, and the return value of isFull is meaningless after finished/cancelled.
     bool isFull()
     {
         {
@@ -85,7 +92,7 @@ public:
             if (!remaings.empty())
                 return true;
         }
-        return mpmc_queue.size() > capacity;
+        return mpmc_queue.size() >= capacity;
     }
 
     MPMCQueueStatus getStatus() const
@@ -143,6 +150,7 @@ private:
         if (!remaings.empty())
         {
             data = std::move(remaings.back());
+            remaings.pop_back();
             return true;
         }
         return false;

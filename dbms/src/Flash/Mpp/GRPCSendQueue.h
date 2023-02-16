@@ -152,9 +152,9 @@ public:
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
 
         auto res = send_queue.tryPop(data);
-        // Double check if this queue is empty.
         if (res == MPMCQueueResult::EMPTY)
         {
+            // Double check if this queue is empty.
             std::unique_lock lock(mu);
             RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
             res = send_queue.tryPop(data);
