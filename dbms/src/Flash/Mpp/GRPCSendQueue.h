@@ -16,7 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/MPMCQueue.h>
+#include <Common/ConcurrentIOQueue.h>
 #include <Common/grpcpp.h>
 #include <common/logger_useful.h>
 
@@ -110,10 +110,9 @@ public:
     ///
     /// Return true if push succeed.
     /// Else return false.
-    template <typename U>
-    bool push(U && u)
+    bool push(T && data)
     {
-        auto ret = send_queue.push(std::forward<U>(u)) == MPMCQueueResult::OK;
+        auto ret = send_queue.push(std::move(data)) == MPMCQueueResult::OK;
         if (ret)
         {
             kickCompletionQueue();
@@ -225,7 +224,7 @@ private:
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
 
-    MPMCQueue<T> send_queue;
+    ConcurrentIOQueue<T> send_queue;
 
     const LoggerPtr log;
 

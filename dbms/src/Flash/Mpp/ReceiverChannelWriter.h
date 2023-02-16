@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/FailPoint.h>
-#include <Common/MPMCQueue.h>
+#include <Common/ConcurrentIOQueue.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 
@@ -86,7 +86,7 @@ enum class ReceiverMode
     Async
 };
 
-using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<ReceivedMessage>>>;
+using MsgChannelPtr = std::shared_ptr<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>;
 
 class ReceiverChannelWriter
 {

@@ -14,7 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/MPMCQueue.h>
+#include <Common/ConcurrentIOQueue.h>
 #include <Common/MemoryTracker.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
@@ -152,7 +152,7 @@ public:
         , data_size_in_queue(0)
         , log(Logger::get())
     {
-        msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(10));
+        msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(10));
     }
 
     void connectionDone(bool meet_error, const String & local_err_msg)
