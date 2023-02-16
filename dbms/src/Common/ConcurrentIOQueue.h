@@ -29,6 +29,12 @@ public:
         , capacity(capacity_)
     {}
 
+    ConcurrentIOQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, typename MPMCQueue<T>::ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
+        : mpmc_queue(capacity_, max_auxiliary_memory_usage_, std::move(get_auxiliary_memory_usage_))
+        , capacity(capacity_)
+    {
+    }
+
     MPMCQueueResult pop(T & data)
     {
         auto res = mpmc_queue.pop(data);
