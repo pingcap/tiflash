@@ -306,6 +306,7 @@ private:
             if (!wait(lock, reader_head, node, pred, deadline))
                 is_timeout = true;
         }
+        /// double check status after potential wait
         if (!isCancelled() && read_pos < write_pos)
         {
             auto & obj = getObj(read_pos);
@@ -465,8 +466,9 @@ private:
     {
         if constexpr (read)
         {
-            current_auxiliary_memory_usage -= element_auxiliary_memory[pos % capacity];
-            element_auxiliary_memory[pos % capacity] = 0;
+            auto & elem_value = element_auxiliary_memory[pos % capacity];
+            current_auxiliary_memory_usage -= elem_value;
+            elem_value = 0;
         }
         else
         {
