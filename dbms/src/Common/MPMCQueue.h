@@ -228,8 +228,8 @@ public:
     bool isFull() const
     {
         std::unique_lock lock(mu);
-        assert(write_pos >= read_pos && current_auxiliary_memory_usage > 0);
-        return (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage);
+        assert(write_pos >= read_pos && current_auxiliary_memory_usage >= 0);
+        return (write_pos - read_pos >= capacity || current_auxiliary_memory_usage >= max_auxiliary_memory_usage);
     }
 
     const String & getCancelReason() const
