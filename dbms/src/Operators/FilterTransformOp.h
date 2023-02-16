@@ -45,6 +45,7 @@ public:
 
 private:
     FilterTransformAction filter_transform_action;
+    FilterPtr filter_ignored = nullptr;
     const LoggerPtr log;
 };
 } // namespace DB
