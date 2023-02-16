@@ -153,27 +153,19 @@ public:
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
 
         auto res = send_queue.tryPop(data);
-        switch (res)
-        {
-        case MPMCQueueResult::OK:
-            return GRPCSendQueueRes::OK;
-        case MPMCQueueResult::FINISHED:
-            return GRPCSendQueueRes::FINISHED;
-        case MPMCQueueResult::CANCELLED:
-            return GRPCSendQueueRes::CANCELLED;
-        case MPMCQueueResult::EMPTY:
-            // Handle this case later.
-            break;
-        default:
-            RUNTIME_ASSERT(false, log, "Result {} is invalid", static_cast<Int32>(res));
-        }
-
-        std::unique_lock lock(mu);
-
-        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
-
         // Double check if this queue is empty.
-        res = send_queue.tryPop(data);
+        if (res == MPMCQueueResult::EMPTY)
+        {
+            std::unique_lock lock(mu);
+            RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
+            res = send_queue.tryPop(data);
+            if (res == MPMCQueueResult::EMPTY)
+            {
+                // If empty, change status to WAITING.
+                status = Status::WAITING;
+                tag = new_tag;
+            }
+        }
         switch (res)
         {
         case MPMCQueueResult::OK:
@@ -183,12 +175,7 @@ public:
         case MPMCQueueResult::CANCELLED:
             return GRPCSendQueueRes::CANCELLED;
         case MPMCQueueResult::EMPTY:
-        {
-            // If empty, change status to WAITING.
-            status = Status::WAITING;
-            tag = new_tag;
             return GRPCSendQueueRes::EMPTY;
-        }
         default:
             RUNTIME_ASSERT(false, log, "Result {} is invalid", magic_enum::enum_name(res));
         }
