@@ -481,10 +481,8 @@ try
 
     for (const auto * collator : collators)
     {
-        std::cout << "here\n";
         for (auto & cas : cases)
         {
-            std::cout << "here11111\n";
             InferredDataVector<Nullable<String>> needle_raw = {};
             InferredDataVector<Nullable<UInt8>> result_raw = {};
 
