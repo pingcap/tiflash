@@ -26,38 +26,58 @@ class ConcurrentIOQueue
 public:
     explicit ConcurrentIOQueue(size_t capacity_)
         : mpmc_queue(capacity_)
-        , capacity(capacity_)
     {}
 
     ConcurrentIOQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, typename MPMCQueue<T>::ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
         : mpmc_queue(capacity_, max_auxiliary_memory_usage_, std::move(get_auxiliary_memory_usage_))
-        , capacity(capacity_)
     {}
 
     MPMCQueueResult pop(T & data)
     {
         auto res = mpmc_queue.pop(data);
-        if (res == MPMCQueueResult::OK)
-            kickRemaingsOnce();
-        else if (res == MPMCQueueResult::FINISHED)
+        switch (res)
         {
+        case MPMCQueueResult::FINISHED:
             // when finished, we still should pop the remaings.
             return kickRemaingsOnce(data) ? MPMCQueueResult::OK : MPMCQueueResult::FINISHED;
+        case MPMCQueueResult::OK:
+            kickRemaingsOnce();
+        default:
+            return res;
         }
-        return res;
     }
 
     MPMCQueueResult tryPop(T & data)
     {
         auto res = mpmc_queue.tryPop(data);
-        if (res == MPMCQueueResult::OK)
-            kickRemaingsOnce();
-        else if (res == MPMCQueueResult::FINISHED)
+        switch (res)
         {
+        case MPMCQueueResult::FINISHED:
             // when finished, we still should pop the remaings.
             return kickRemaingsOnce(data) ? MPMCQueueResult::OK : MPMCQueueResult::FINISHED;
+        case MPMCQueueResult::EMPTY:
+        {
+            // Double check if this queue is empty.
+            std::lock_guard lock(mu);
+            res = mpmc_queue.tryPop(data);
+            switch (res)
+            {
+            case MPMCQueueResult::EMPTY:
+            case MPMCQueueResult::FINISHED:
+                // when finished, we still should pop the remaings.
+                // when mpmc_queue empty, we can try pop from remaings.
+                return kickRemaingsOnceWithoutLock(data) ? MPMCQueueResult::OK : res;
+            case MPMCQueueResult::OK:
+                kickRemaingsOnceWithoutLock();
+            default:
+                return res;
+            }
         }
-        return res;
+        case MPMCQueueResult::OK:
+            kickRemaingsOnce();
+        default:
+            return res;
+        }
     }
 
     MPMCQueueResult push(T && data)
@@ -70,9 +90,14 @@ public:
         auto res = mpmc_queue.tryPush(std::move(data));
         if (res == MPMCQueueResult::FULL)
         {
+            // Double check if this queue is full.
             std::lock_guard lock(mu);
-            remaings.push_front(std::move(data));
-            return MPMCQueueResult::OK;
+            res = mpmc_queue.tryPush(std::move(data));
+            if (res == MPMCQueueResult::FULL)
+            {
+                remaings.push_front(std::move(data));
+                return MPMCQueueResult::OK;
+            }
         }
         return res;
     }
@@ -133,9 +158,8 @@ public:
     }
 
 private:
-    void kickRemaingsOnce()
+    void kickRemaingsOnceWithoutLock()
     {
-        std::lock_guard lock(mu);
         if (!remaings.empty())
         {
             auto res = mpmc_queue.tryPush(std::move(remaings.back()));
@@ -144,9 +168,14 @@ private:
         }
     }
 
-    bool kickRemaingsOnce(T & data)
+    void kickRemaingsOnce()
     {
         std::lock_guard lock(mu);
+        kickRemaingsOnceWithoutLock();
+    }
+
+    bool kickRemaingsOnceWithoutLock(T & data)
+    {
         if (!remaings.empty())
         {
             data = std::move(remaings.back());
@@ -156,10 +185,15 @@ private:
         return false;
     }
 
+    bool kickRemaingsOnce(T & data)
+    {
+        std::lock_guard lock(mu);
+        return kickRemaingsOnceWithoutLock(data);
+    }
+
 private:
     mutable std::mutex mu;
     std::deque<T> remaings;
     MPMCQueue<T> mpmc_queue;
-    size_t capacity;
 };
 } // namespace DB
