@@ -85,14 +85,14 @@ public:
 
     // When the queue is finished, it may appear that the mpmc_queue is empty but the remaings are not, causing isFull to return true.
     // But this is expected, and the return value of isFull is meaningless after finished/cancelled.
-    bool isFull()
+    bool isFull() const
     {
         {
             std::lock_guard lock(mu);
             if (!remaings.empty())
                 return true;
         }
-        return mpmc_queue.size() >= capacity;
+        return mpmc_queue.isFull();
     }
 
     MPMCQueueStatus getStatus() const
