@@ -127,110 +127,16 @@ class DAGContext
 {
 public:
     // for non-mpp(cop/batchCop)
-    explicit DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_)
-        : dag_request(&dag_request_)
-        , dummy_query_string(dag_request->DebugString())
-        , dummy_ast(makeDummyQuery())
-        , tidb_host(tidb_host_)
-        , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
-        , is_mpp_task(false)
-        , is_root_mpp_task(false)
-        , is_batch_cop(is_batch_cop_)
-        , tables_regions_info(std::move(tables_regions_info_))
-        , log(std::move(log_))
-        , flags(dag_request->flags())
-        , sql_mode(dag_request->sql_mode())
-        , max_recorded_error_count(getMaxErrorCount(*dag_request))
-        , warnings(max_recorded_error_count)
-        , warning_count(0)
-    {
-        RUNTIME_CHECK((dag_request->executors_size() > 0) != dag_request->has_root_executor());
-        if (dag_request->has_root_executor())
-        {
-            return_executor_id = dag_request->root_executor().has_executor_id();
-            if (return_executor_id)
-                root_executor_id = dag_request->root_executor().executor_id();
-        }
-        else
-        {
-            const auto & root_executor = dag_request->executors(dag_request->executors_size() - 1);
-            return_executor_id = root_executor.has_executor_id();
-            if (return_executor_id)
-                root_executor_id = root_executor.executor_id();
-        }
-        initOutputInfo();
-    }
+    DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
 
     // for mpp
-    DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
-        : dag_request(&dag_request_)
-        , dummy_query_string(dag_request->DebugString())
-        , dummy_ast(makeDummyQuery())
-        , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
-        , return_executor_id(true)
-        , is_mpp_task(true)
-        , is_root_mpp_task(is_root_mpp_task_)
-        , flags(dag_request->flags())
-        , sql_mode(dag_request->sql_mode())
-        , mpp_task_meta(meta_)
-        , mpp_task_id(mpp_task_meta)
-        , max_recorded_error_count(getMaxErrorCount(*dag_request))
-        , warnings(max_recorded_error_count)
-        , warning_count(0)
-    {
-        RUNTIME_CHECK(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
-        root_executor_id = dag_request->root_executor().executor_id();
-        // only mpp task has join executor.
-        initExecutorIdToJoinIdMap();
-        initOutputInfo();
-    }
+    DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
 
     // for test
-    explicit DAGContext(UInt64 max_error_count_)
-        : dag_request(nullptr)
-        , dummy_ast(makeDummyQuery())
-        , collect_execution_summaries(false)
-        , is_mpp_task(false)
-        , is_root_mpp_task(false)
-        , flags(0)
-        , sql_mode(0)
-        , max_recorded_error_count(max_error_count_)
-        , warnings(max_recorded_error_count)
-        , warning_count(0)
-    {}
+    explicit DAGContext(UInt64 max_error_count_);
 
     // for tests need to run query tasks.
-    explicit DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency)
-        : dag_request(&dag_request_)
-        , dummy_query_string(dag_request->DebugString())
-        , dummy_ast(makeDummyQuery())
-        , initialize_concurrency(concurrency)
-        , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
-        , is_mpp_task(false)
-        , is_root_mpp_task(false)
-        , log(Logger::get(log_identifier))
-        , flags(dag_request->flags())
-        , sql_mode(dag_request->sql_mode())
-        , max_recorded_error_count(getMaxErrorCount(*dag_request))
-        , warnings(max_recorded_error_count)
-        , warning_count(0)
-    {
-        RUNTIME_CHECK((dag_request->executors_size() > 0) != dag_request->has_root_executor());
-        if (dag_request->has_root_executor())
-        {
-            return_executor_id = dag_request->root_executor().has_executor_id();
-            if (return_executor_id)
-                root_executor_id = dag_request->root_executor().executor_id();
-        }
-        else
-        {
-            const auto & root_executor = dag_request->executors(dag_request->executors_size() - 1);
-            return_executor_id = root_executor.has_executor_id();
-            if (return_executor_id)
-                root_executor_id = root_executor.executor_id();
-        }
-        initOutputInfo();
-    }
+    DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
 
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
@@ -358,14 +264,7 @@ public:
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
-    String getRootExecutorId()
-    {
-        return return_executor_id
-            ? root_executor_id
-            : (list_based_executors_order.empty()
-                   ? ""
-                   : list_based_executors_order.back());
-    }
+    String getRootExecutorId();
 
     const tipb::DAGRequest * dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
