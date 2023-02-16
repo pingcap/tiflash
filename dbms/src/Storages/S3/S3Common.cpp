@@ -80,7 +80,7 @@ public:
 
     void Log(Aws::Utils::Logging::LogLevel log_level, const char * tag, const char * format_str, ...) final // NOLINT
     {
-        callLogImpl(log_level, tag, format_str); /// FIXME. Variadic arguments?
+        callLogImpl(log_level, tag, format_str);
     }
 
     void LogStream(Aws::Utils::Logging::LogLevel log_level, const char * tag, const Aws::OStringStream & message_stream) final
@@ -88,11 +88,10 @@ public:
         callLogImpl(log_level, tag, message_stream.str().c_str());
     }
 
-    static void callLogImpl(Aws::Utils::Logging::LogLevel log_level, const char * tag, const char * message)
+    void callLogImpl(Aws::Utils::Logging::LogLevel log_level, const char * tag, const char * message)
     {
         auto prio = convertLogLevel(log_level);
-        auto log = DB::Logger::get(tag);
-        LOG_IMPL(log, prio, "{}", message);
+        LOG_IMPL(default_logger, prio, "tag={} message={}", tag, message);
     }
 
     void Flush() final {}
@@ -169,23 +168,22 @@ bool isNotFoundError(Aws::S3::S3Errors error)
     return error == Aws::S3::S3Errors::RESOURCE_NOT_FOUND || error == Aws::S3::S3Errors::NO_SUCH_KEY;
 }
 
-Aws::S3::Model::HeadObjectOutcome headObject(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, [[maybe_unused]] bool for_disk_s3)
+Aws::S3::Model::HeadObjectOutcome headObject(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id)
 {
     ProfileEvents::increment(ProfileEvents::S3HeadObject);
-
     Aws::S3::Model::HeadObjectRequest req;
     req.SetBucket(bucket);
     req.SetKey(key);
-
     if (!version_id.empty())
+    {
         req.SetVersionId(version_id);
-
+    }
     return client.HeadObject(req);
 }
 
-S3::ObjectInfo getObjectInfo(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool throw_on_error, bool for_disk_s3)
+S3::ObjectInfo getObjectInfo(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool throw_on_error)
 {
-    auto outcome = headObject(client, bucket, key, version_id, for_disk_s3);
+    auto outcome = headObject(client, bucket, key, version_id);
 
     if (outcome.IsSuccess())
     {
@@ -203,28 +201,30 @@ S3::ObjectInfo getObjectInfo(const Aws::S3::S3Client & client, const String & bu
     return {};
 }
 
-size_t getObjectSize(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool throw_on_error, bool for_disk_s3)
+size_t getObjectSize(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool throw_on_error)
 {
-    return getObjectInfo(client, bucket, key, version_id, throw_on_error, for_disk_s3).size;
+    return getObjectInfo(client, bucket, key, version_id, throw_on_error).size;
 }
 
-bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool for_disk_s3)
+bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id)
 {
-    auto outcome = headObject(client, bucket, key, version_id, for_disk_s3);
-
+    auto outcome = headObject(client, bucket, key, version_id);
     if (outcome.IsSuccess())
+    {
         return true;
-
+    }
     const auto & error = outcome.GetError();
     if (isNotFoundError(error.GetErrorType()))
+    {
         return false;
-
+    }
     throw Exception(ErrorCodes::S3_ERROR,
                     "Failed to check existence of key {} in bucket {}: {}",
                     key,
                     bucket,
                     error.GetMessage());
 }
+
 void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname)
 {
     Stopwatch sw;
@@ -235,16 +235,13 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
     req.SetBody(istr);
     req.SetContentType("binary/octet-stream");
     auto result = client.PutObject(req);
-    if (!result.IsSuccess())
-    {
-        throw Exception(ErrorCodes::S3_ERROR,
-                        "S3 PutObject failed, local_fname={}, remote_fname={}, exception={}, message={}",
-                        local_fname,
-                        remote_fname,
-                        result.GetError().GetExceptionName(),
-                        result.GetError().GetMessage());
-    }
-    static auto * log = &Poco::Logger::get("S3UploadFile");
+    RUNTIME_CHECK_MSG(result.IsSuccess(),
+                      "S3 PutObject failed, local_fname={}, remote_fname={}, exception={}, message={}",
+                      local_fname,
+                      remote_fname,
+                      result.GetError().GetExceptionName(),
+                      result.GetError().GetMessage());
+    static auto * log = &Poco::Logger::get("S3PutObject");
     LOG_DEBUG(log, "local_fname={}, remote_fname={}, cost={}ms", local_fname, remote_fname, sw.elapsedMilliseconds());
 }
 
@@ -255,18 +252,15 @@ void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const
     req.SetBucket(bucket);
     req.SetKey(remote_fname);
     auto result = client.GetObject(req);
-    if (!result.IsSuccess())
-    {
-        throw Exception(ErrorCodes::S3_ERROR,
-                        "S3 GetObject failed, local_fname={}, remote_fname={}, exception={}, message={}",
-                        local_fname,
-                        remote_fname,
-                        result.GetError().GetExceptionName(),
-                        result.GetError().GetMessage());
-    }
+    RUNTIME_CHECK_MSG(result.IsSuccess(),
+                      "S3 GetObject failed, local_fname={}, remote_fname={}, exception={}, message={}",
+                      local_fname,
+                      remote_fname,
+                      result.GetError().GetExceptionName(),
+                      result.GetError().GetMessage());
     Aws::OFStream ostr(local_fname, std::ios_base::out | std::ios_base::binary);
     ostr << result.GetResult().GetBody().rdbuf();
-    static auto * log = &Poco::Logger::get("S3DownloadFile");
+    static auto * log = &Poco::Logger::get("S3GetObject");
     LOG_DEBUG(log, "local_fname={}, remote_fname={}, cost={}ms", local_fname, remote_fname, sw.elapsedMilliseconds());
 }
 
@@ -277,14 +271,11 @@ std::unordered_map<String, size_t> listPrefix(const Aws::S3::S3Client & client, 
     req.SetBucket(bucket);
     req.SetPrefix(prefix);
     auto result = client.ListObjects(req);
-    if (!result.IsSuccess())
-    {
-        throw Exception(ErrorCodes::S3_ERROR,
-                        "S3 ListObjects failed, prefix={}, exception={}, message={}",
-                        prefix,
-                        result.GetError().GetExceptionName(),
-                        result.GetError().GetMessage());
-    }
+    RUNTIME_CHECK_MSG(result.IsSuccess(),
+                      "S3 ListObjects failed, prefix={}, exception={}, message={}",
+                      prefix,
+                      result.GetError().GetExceptionName(),
+                      result.GetError().GetMessage());
     const auto & objects = result.GetResult().GetContents();
     std::unordered_map<String, size_t> keys_with_size;
     keys_with_size.reserve(objects.size());
@@ -292,7 +283,7 @@ std::unordered_map<String, size_t> listPrefix(const Aws::S3::S3Client & client, 
     {
         keys_with_size.emplace(object.GetKey().substr(prefix.size()), object.GetSize()); // Cut prefix
     }
-    static auto * log = &Poco::Logger::get("S3ListPrefix");
+    static auto * log = &Poco::Logger::get("S3ListObjects");
     LOG_DEBUG(log, "prefix={}, keys={}, cost={}", prefix, keys_with_size, sw.elapsedMilliseconds());
     return keys_with_size;
 }
