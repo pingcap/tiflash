@@ -13,7 +13,10 @@
 // limitations under the License.
 
 #include <Common/ConcurrentIOQueue.h>
+#include <Common/ThreadManager.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
+#include <atomic>
 
 namespace DB::tests
 {
@@ -33,19 +36,19 @@ try
         for (size_t i = 0; i < max_size; ++i)
         {
             ASSERT_TRUE(!queue.isFull());
-            ASSERT_TRUE(queue.push(std::move(i)) == MPMCQueueResult::OK);
+            ASSERT_EQ(queue.push(std::move(i)), MPMCQueueResult::OK);
         }
         ASSERT_TRUE(queue.isFull());
-        ASSERT_TRUE(queue.nonBlockingPush(0 + max_size) == MPMCQueueResult::OK);
+        ASSERT_EQ(queue.nonBlockingPush(0 + max_size), MPMCQueueResult::OK);
         ASSERT_TRUE(queue.isFull());
-        ASSERT_TRUE((max_size + 1) == queue.size());
+        ASSERT_EQ((max_size + 1), queue.size());
 
         for (size_t i = 0; i < max_size; ++i)
-            ASSERT_TRUE(queue.pop(i) == MPMCQueueResult::OK);
+            ASSERT_EQ(queue.pop(i), MPMCQueueResult::OK);
         ASSERT_TRUE(!queue.isFull());
         size_t i;
-        ASSERT_TRUE(queue.pop(i) == MPMCQueueResult::OK);
-        ASSERT_TRUE(queue.tryPop(i) == MPMCQueueResult::EMPTY);
+        ASSERT_EQ(queue.pop(i), MPMCQueueResult::OK);
+        ASSERT_EQ(queue.tryPop(i), MPMCQueueResult::EMPTY);
     }
 
     // case 2 finished
@@ -55,21 +58,21 @@ try
         for (size_t i = 0; i < max_size; ++i)
         {
             ASSERT_TRUE(!queue.isFull());
-            ASSERT_TRUE(queue.push(std::move(i)) == MPMCQueueResult::OK);
+            ASSERT_EQ(queue.push(std::move(i)), MPMCQueueResult::OK);
         }
         ASSERT_TRUE(queue.isFull());
-        ASSERT_TRUE(queue.nonBlockingPush(0 + max_size) == MPMCQueueResult::OK);
+        ASSERT_EQ(queue.nonBlockingPush(0 + max_size), MPMCQueueResult::OK);
         ASSERT_TRUE(queue.isFull());
-        ASSERT_TRUE((max_size + 1) == queue.size());
+        ASSERT_EQ((max_size + 1), queue.size());
 
         queue.finish();
-        ASSERT_TRUE(queue.push(0 + max_size) == MPMCQueueResult::FINISHED);
+        ASSERT_EQ(queue.push(0 + max_size), MPMCQueueResult::FINISHED);
         for (size_t i = 0; i < max_size; ++i)
-            ASSERT_TRUE(queue.pop(i) == MPMCQueueResult::OK);
+            ASSERT_EQ(queue.pop(i), MPMCQueueResult::OK);
         size_t i;
-        ASSERT_TRUE(queue.pop(i) == MPMCQueueResult::OK);
-        ASSERT_TRUE(queue.pop(i) == MPMCQueueResult::FINISHED);
-        ASSERT_TRUE(queue.tryPop(i) == MPMCQueueResult::FINISHED);
+        ASSERT_EQ(queue.pop(i), MPMCQueueResult::OK);
+        ASSERT_EQ(queue.pop(i), MPMCQueueResult::FINISHED);
+        ASSERT_EQ(queue.tryPop(i), MPMCQueueResult::FINISHED);
     }
 
     // case 3 cancelled
@@ -79,19 +82,108 @@ try
         for (size_t i = 0; i < max_size; ++i)
         {
             ASSERT_TRUE(!queue.isFull());
-            ASSERT_TRUE(queue.push(std::move(i)) == MPMCQueueResult::OK);
+            ASSERT_EQ(queue.push(std::move(i)), MPMCQueueResult::OK);
         }
         ASSERT_TRUE(queue.isFull());
-        ASSERT_TRUE(queue.nonBlockingPush(0 + max_size) == MPMCQueueResult::OK);
+        ASSERT_EQ(queue.nonBlockingPush(0 + max_size), MPMCQueueResult::OK);
         ASSERT_TRUE(queue.isFull());
-        ASSERT_TRUE((max_size + 1) == queue.size());
+        ASSERT_EQ((max_size + 1), queue.size());
 
         queue.cancel();
-        ASSERT_TRUE(queue.push(0 + max_size) == MPMCQueueResult::CANCELLED);
+        ASSERT_EQ(queue.push(0 + max_size), MPMCQueueResult::CANCELLED);
         size_t i;
-        ASSERT_TRUE(queue.pop(i) == MPMCQueueResult::CANCELLED);
-        ASSERT_TRUE(queue.tryPop(i) == MPMCQueueResult::CANCELLED);
+        ASSERT_EQ(queue.pop(i), MPMCQueueResult::CANCELLED);
+        ASSERT_EQ(queue.tryPop(i), MPMCQueueResult::CANCELLED);
     }
+}
+CATCH
+
+TEST_F(ConcurrentIOQueueTest, concurrent1)
+try
+{
+    auto thread_manager = newThreadManager();
+    ConcurrentIOQueue<Int64> queue(5);
+
+    std::atomic_size_t producer_num = 20;
+    size_t produce_count_per_producer = 1000;
+    std::atomic_size_t total_count = producer_num * produce_count_per_producer;
+    for (size_t i = 0; i < producer_num; ++i)
+    {
+        thread_manager->schedule(false, "producer", [&]() {
+            for (size_t i = 0; i < produce_count_per_producer; ++i)
+            {
+                while (queue.isFull())
+                {
+                }
+                Int64 tmp = 0;
+                ASSERT_EQ(queue.nonBlockingPush(std::move(tmp)), MPMCQueueResult::OK);
+            }
+            if (1 == producer_num.fetch_sub(1))
+                queue.finish();
+        });
+    }
+    for (size_t i = 0; i < 10; ++i)
+    {
+        thread_manager->schedule(false, "consumer", [&]() {
+            while (true)
+            {
+                Int64 tmp;
+                if (queue.pop(tmp) == MPMCQueueResult::OK)
+                    --total_count;
+                else
+                    return;
+            }
+        });
+    }
+    thread_manager->wait();
+    ASSERT_EQ(0, total_count);
+}
+CATCH
+
+TEST_F(ConcurrentIOQueueTest, concurrent2)
+try
+{
+    auto thread_manager = newThreadManager();
+    ConcurrentIOQueue<Int64> queue(5);
+
+    std::atomic_size_t producer_num = 20;
+    size_t produce_count_per_producer = 1000;
+    std::atomic_size_t total_count = producer_num * produce_count_per_producer;
+    for (size_t i = 0; i < producer_num; ++i)
+    {
+        thread_manager->schedule(false, "producer", [&]() {
+            for (size_t i = 0; i < produce_count_per_producer; ++i)
+            {
+                while (queue.isFull())
+                {
+                }
+                Int64 tmp = 0;
+                ASSERT_EQ(queue.nonBlockingPush(std::move(tmp)), MPMCQueueResult::OK);
+            }
+            if (1 == producer_num.fetch_sub(1))
+                queue.finish();
+        });
+    }
+    for (size_t i = 0; i < 10; ++i)
+    {
+        thread_manager->schedule(false, "consumer", [&]() {
+            while (true)
+            {
+                Int64 tmp;
+                switch (queue.tryPop(tmp))
+                {
+                case MPMCQueueResult::OK:
+                    --total_count;
+                case MPMCQueueResult::EMPTY:
+                    break;
+                default:
+                    return;
+                }
+            }
+        });
+    }
+    thread_manager->wait();
+    ASSERT_EQ(0, total_count);
 }
 CATCH
 
