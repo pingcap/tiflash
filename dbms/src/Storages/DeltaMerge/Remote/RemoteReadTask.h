@@ -6,6 +6,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <Storages/DeltaMerge/Remote/LocalPageCache_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Transaction/Types.h>
@@ -32,12 +33,6 @@ class RemoteTableReadTask;
 using RemoteTableReadTaskPtr = std::shared_ptr<RemoteTableReadTask>;
 class RemoteSegmentReadTask;
 using RemoteSegmentReadTaskPtr = std::shared_ptr<RemoteSegmentReadTask>;
-
-namespace Remote
-{
-class LocalPageCache;
-using LocalPageCachePtr = std::shared_ptr<LocalPageCache>;
-} // namespace Remote
 
 enum class SegmentReadTaskState
 {
@@ -243,6 +238,7 @@ public:
 
 private:
     Remote::LocalPageCachePtr page_cache;
+    Remote::LocalPageCacheGuardPtr pages_guard;
 
     // The snapshot of reading ids acquired from write node
     std::vector<UInt64> delta_page_ids;

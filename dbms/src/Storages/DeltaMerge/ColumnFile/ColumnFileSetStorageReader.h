@@ -22,12 +22,6 @@
 namespace DB::DM
 {
 
-namespace Remote
-{
-class Manager;
-using ManagerPtr = std::shared_ptr<Manager>;
-} // namespace Remote
-
 class IColumnFileSetStorageReader
 {
 public:
@@ -87,15 +81,7 @@ public:
     {}
 
     Page readForColumnFileTiny(
-        const PageStorage::PageReadFields & fields) const override
-    {
-        auto oid = Remote::PageOID{
-            .write_node_id = write_node_id,
-            .table_id = table_id,
-            .page_id = fields.first,
-        };
-        return page_cache->getPage(oid, fields.second);
-    }
+        const PageStorage::PageReadFields & fields) const override;
 
     Page readForColumnFileTiny(PageId) const override
     {

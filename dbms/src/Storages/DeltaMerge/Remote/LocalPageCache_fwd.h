@@ -14,35 +14,17 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
-#include <Storages/DeltaMerge/Remote/LocalPageCache_fwd.h>
-
-#include <boost/noncopyable.hpp>
+#include <memory>
 
 namespace DB::DM::Remote
 {
 
-class Manager;
-using ManagerPtr = std::shared_ptr<Manager>;
+class LocalPageCache;
+using LocalPageCachePtr = std::shared_ptr<LocalPageCache>;
 
-class Manager : private boost::noncopyable
-{
-public:
-    explicit Manager(const Context & global_context, String nfs_directory);
+class LocalPageCacheLRU;
 
-    LocalPageCachePtr getPageCache() const
-    {
-        return page_cache;
-    }
-
-    IDataStorePtr getDataStore() const
-    {
-        return data_store;
-    }
-
-private:
-    LocalPageCachePtr page_cache;
-    IDataStorePtr data_store;
-};
+class LocalPageCacheGuard;
+using LocalPageCacheGuardPtr = std::shared_ptr<LocalPageCacheGuard>;
 
 } // namespace DB::DM::Remote

@@ -12,21 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/Remote/DataStore/DataStoreNFS.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSetStorageReader.h>
 #include <Storages/DeltaMerge/Remote/LocalPageCache.h>
-#include <Storages/DeltaMerge/Remote/Manager.h>
 
-namespace DB::DM::Remote
+namespace DB::DM
 {
 
-Manager::Manager(const Context & global_context, String nfs_directory)
-    : page_cache(std::make_shared<LocalPageCache>(global_context)) // TODO: Write Node does not need this. We need to refine the interface..
-    , data_store(std::make_shared<DataStoreNFS>(
-          DataStoreNFS::Config{
-              .base_directory = nfs_directory,
-          },
-          global_context.getFileProvider()))
-{}
+Page RemoteColumnFileSetStorage::readForColumnFileTiny(const PageStorage::PageReadFields & fields) const
+{
+    auto oid = Remote::PageOID{
+        .write_node_id = write_node_id,
+        .table_id = table_id,
+        .page_id = fields.first,
+    };
+    return page_cache->getPage(oid, fields.second);
+}
 
-} // namespace DB::DM::Remote
+} // namespace DB::DM

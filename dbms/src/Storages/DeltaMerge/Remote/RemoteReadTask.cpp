@@ -12,6 +12,7 @@
 #include <Storages/DeltaMerge/File/dtpb/column_file.pb.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <Storages/DeltaMerge/Remote/LocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RemoteSegmentThreadInputStream.h>
@@ -425,7 +426,9 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
         size_t total_persisted_size = 0;
         auto persisted_cfs = task->segment_snap->delta->getPersistedFileSetSnapshot();
         std::vector<Remote::PageOID> all_persisted_ids;
+        std::vector<size_t> all_persisted_sizes;
         all_persisted_ids.reserve(persisted_cfs->getColumnFileCount());
+        all_persisted_sizes.reserve(persisted_cfs->getColumnFileCount());
         for (const auto & cfs : persisted_cfs->getColumnFiles())
         {
             if (auto * tiny = cfs->tryToTinyFile(); tiny)
@@ -436,17 +439,20 @@ RemoteSegmentReadTaskPtr RemoteSegmentReadTask::buildFrom(
                     .page_id = tiny->getDataPageId(),
                 };
                 all_persisted_ids.emplace_back(page_oid);
+                all_persisted_sizes.emplace_back(tiny->getBytes());
                 task->total_num_cftiny += 1;
                 total_persisted_size += tiny->getBytes();
             }
         }
 
-        auto pending_oids = task->page_cache->getMissingIds(all_persisted_ids);
+        auto occupy_result = task->page_cache->occupySpace(all_persisted_ids, all_persisted_sizes);
+        task->pages_guard = occupy_result.pages_guard;
+
+        auto & pending_oids = occupy_result.pages_not_in_cache;
         task->pending_page_ids.reserve(pending_oids.size());
         for (const auto & oid : pending_oids)
-        {
             task->pending_page_ids.emplace_back(oid.page_id);
-        }
+
         LOG_INFO(log,
                  "mem-table cfs: {}, persisted cfs: {} (size={}), local cache hit rate: {}, pending_ids: {}, all_oids: {}",
                  task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
