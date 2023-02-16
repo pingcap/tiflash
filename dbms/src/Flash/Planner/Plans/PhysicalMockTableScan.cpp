@@ -24,8 +24,6 @@
 #include <Interpreters/Context.h>
 #include <Operators/BlockInputStreamSourceOp.h>
 
-#include <cstddef>
-
 namespace DB
 {
 namespace

@@ -52,8 +52,6 @@ public:
 
     void execute(DAGPipeline & pipeline);
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/);
-
     /// Members will be transferred to DAGQueryBlockInterpreter after execute
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
@@ -78,7 +76,6 @@ private:
         const SelectQueryInfo & query_info,
         DAGPipeline & pipeline,
         size_t max_block_size);
-
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);

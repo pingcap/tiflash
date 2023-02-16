@@ -66,6 +66,25 @@ public:
                                    toNullableVec<MyDate>("col7", col_mydate),
                                    toNullableVec<MyDateTime>("col8", col_mydatetime),
                                    toNullableVec<String>("col9", col_string)});
+
+        // with 200 rows.
+        std::vector<TypeTraits<Int64>::FieldType> key(200);
+        std::vector<std::optional<String>> value(200);
+        for (size_t i = 0; i < 200; ++i)
+        {
+            key[i] = i % 15;
+            value[i] = {fmt::format("val_{}", i)};
+        }
+        context.addMockDeltaMerge(
+            {"test_db", "big_table"},
+            {{"key", TiDB::TP::TypeLongLong},
+             {"value", TiDB::TP::TypeString}},
+            {toVec<Int64>("key", key), toNullableVec<String>("value", value)});
+
+        context.addMockDeltaMerge(
+            {"test_db", "empty_table"},
+            {{"col0", TiDB::TP::TypeLongLong}},
+            {toVec<Int32>("col0", {})});
     }
 
     ColumnWithInt64 col_id{1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -115,6 +134,23 @@ try
          toNullableVec<MyDate>(col_mydate),
          toNullableVec<MyDateTime>(col_mydatetime),
          toNullableVec<String>(col_string)});
+
+    request = context
+                  .scan("test_db", "big_table")
+                  .build(context);
+    enablePlanner(false);
+    auto expect = executeStreams(request, 1);
+
+    executeAndAssertColumnsEqual(
+        request,
+        expect);
+
+    request = context
+                  .scan("test_db", "empty_table")
+                  .build(context);
+    executeAndAssertColumnsEqual(
+        request,
+        {});
 
     // projection
     request = context
