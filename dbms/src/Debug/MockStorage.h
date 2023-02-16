@@ -84,7 +84,7 @@ public:
     MockColumnInfoVec getTableSchemaForDeltaMerge(Int64 table_id);
 
     NamesAndTypes getNameAndTypesForDeltaMerge(Int64 table_id);
-    
+
     std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> prepareForRead(Context & context, Int64 table_id);
     BlockInputStreamPtr getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions = nullptr);
     SourceOps getSourceOpsFromDeltaMerge(PipelineExecutorStatus & exec_status_, Context & context, Int64 table_id, size_t concurrency = 1);
