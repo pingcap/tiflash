@@ -60,6 +60,7 @@
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -164,6 +165,10 @@ struct ContextShared
     IORateLimiter io_rate_limiter;
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
+
+    /// The PS instance available on Write Node.
+    UniversalPageStorageServicePtr ps_write;
+
     TiFlashSecurityConfigPtr security_config;
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
@@ -554,7 +559,6 @@ void Context::setPathPool(
     const Strings & main_data_paths,
     const Strings & latest_data_paths,
     const Strings & kvstore_paths,
-    bool enable_raft_compatible_mode,
     PathCapacityMetricsPtr global_capacity_,
     FileProviderPtr file_provider_)
 {
@@ -564,8 +568,7 @@ void Context::setPathPool(
         latest_data_paths,
         kvstore_paths,
         global_capacity_,
-        file_provider_,
-        enable_raft_compatible_mode);
+        file_provider_);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)
@@ -1547,18 +1550,31 @@ static bool isPageStorageV2Existed(const PathPool & path_pool)
 
 static bool isPageStorageV3Existed(const PathPool & path_pool)
 {
+    const std::vector<String> path_prefixes = {
+        PathPool::log_path_prefix,
+        PathPool::data_path_prefix,
+        PathPool::meta_path_prefix,
+        PathPool::kvstore_path_prefix,
+    };
     for (const auto & path : path_pool.listGlobalPagePaths())
     {
-        Poco::File dir(path);
-        if (!dir.exists())
-            continue;
-
-        std::vector<std::string> files;
-        dir.list(files);
-        if (!files.empty())
+        for (const auto & path_prefix : path_prefixes)
         {
-            return true;
+            Poco::File dir(path + "/" + path_prefix);
+            if (dir.exists())
+                return true;
         }
+    }
+    return false;
+}
+
+static bool isWriteNodeUniPSExisted(const PathPool & path_pool)
+{
+    for (const auto & path : path_pool.listGlobalPagePaths())
+    {
+        Poco::File dir(path + "/" + PathPool::write_uni_path_prefix);
+        if (dir.exists())
+            return true;
     }
     return false;
 }
@@ -1579,19 +1595,34 @@ void Context::initializePageStorageMode(const PathPool & path_pool, UInt64 stora
     case PageFormat::V1:
     case PageFormat::V2:
     {
-        if (isPageStorageV3Existed(path_pool))
+        if (isPageStorageV3Existed(path_pool) || isWriteNodeUniPSExisted(path_pool))
         {
-            throw Exception("Invalid config `storage.format_version`, Current page V3 data exist. But using the PageFormat::V2."
+            throw Exception("Invalid config `storage.format_version`, newer format page data exist. But using the PageFormat::V2."
                             "If you are downgrading the format_version for this TiFlash node, you need to rebuild the data from scratch.",
                             ErrorCodes::LOGICAL_ERROR);
         }
-        // not exist V3
+        // not exist newer format page data
         shared->storage_run_mode = PageStorageRunMode::ONLY_V2;
         return;
     }
     case PageFormat::V3:
     {
+        if (isWriteNodeUniPSExisted(path_pool))
+        {
+            throw Exception("Invalid config `storage.format_version`, newer format page data exist. But using the PageFormat::V3."
+                            "If you are downgrading the format_version for this TiFlash node, you need to rebuild the data from scratch.",
+                            ErrorCodes::LOGICAL_ERROR);
+        }
         shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
+        return;
+    }
+    case PageFormat::V4:
+    {
+        if (isPageStorageV2Existed(path_pool) || isPageStorageV3Existed(path_pool))
+        {
+            throw Exception("Uni PS can only be enabled on a fresh start", ErrorCodes::LOGICAL_ERROR);
+        }
+        shared->storage_run_mode = PageStorageRunMode::UNI_PS;
         return;
     }
     default:
@@ -1619,6 +1650,7 @@ bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
     {
         // GlobalStoragePool may be initialized many times in some test cases for restore.
         LOG_WARNING(shared->log, "GlobalStoragePool has already been initialized.");
+        shared->global_storage_pool->shutdown();
     }
     CurrentMetrics::set(CurrentMetrics::GlobalStorageRunMode, static_cast<UInt8>(shared->storage_run_mode));
     if (shared->storage_run_mode == PageStorageRunMode::MIX_MODE || shared->storage_run_mode == PageStorageRunMode::ONLY_V3)
@@ -1646,6 +1678,43 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
 {
     auto lock = getLock();
     return shared->global_storage_pool;
+}
+
+void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)
+{
+    auto lock = getLock();
+    if (shared->storage_run_mode == PageStorageRunMode::UNI_PS)
+    {
+        if (shared->ps_write)
+        {
+            // GlobalStoragePool may be initialized many times in some test cases for restore.
+            LOG_WARNING(shared->log, "GlobalUniversalPageStorage(WriteNode) has already been initialized.");
+        }
+        PageStorageConfig config;
+        shared->ps_write = UniversalPageStorageService::create( //
+            *this,
+            "write",
+            path_pool.getPSDiskDelegatorGlobalMulti(PathPool::write_uni_path_prefix),
+            config);
+        LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
+    }
+    else
+    {
+        shared->ps_write = nullptr;
+    }
+}
+
+UniversalPageStoragePtr Context::getWriteNodePageStorage() const
+{
+    auto lock = getLock();
+    if (shared->ps_write)
+    {
+        return shared->ps_write->getUniversalPageStorage();
+    }
+    else
+    {
+        return nullptr;
+    }
 }
 
 UInt16 Context::getTCPPort() const

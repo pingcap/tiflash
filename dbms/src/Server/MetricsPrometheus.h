@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/Timer.h>
 #include <Poco/Net/HTTPServer.h>
-#include <common/logger_useful.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
 
@@ -46,7 +46,7 @@ private:
 
     Timer timer;
     const AsynchronousMetrics & async_metrics;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     int metrics_interval;
     std::shared_ptr<prometheus::Gateway> gateway;

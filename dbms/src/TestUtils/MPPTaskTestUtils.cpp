@@ -99,7 +99,7 @@ ColumnsWithTypeAndName extractColumns(Context & context, const std::shared_ptr<t
     auto schema = getSelectSchema(context);
     for (const auto & chunk : dag_response->chunks())
         blocks.emplace_back(codec->decode(chunk.rows_data(), schema));
-    return mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName();
+    return vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName();
 }
 
 ColumnsWithTypeAndName MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request)

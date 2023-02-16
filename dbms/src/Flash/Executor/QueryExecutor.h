@@ -16,6 +16,7 @@
 
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
+#include <Flash/Executor/toRU.h>
 #include <common/types.h>
 
 #include <memory>
@@ -42,6 +43,8 @@ public:
     virtual String toString() const = 0;
 
     virtual int estimateNewThreadCount() = 0;
+
+    virtual RU collectRequestUnit() = 0;
 
 protected:
     virtual ExecutionResult execute(ResultHandler) = 0;

@@ -548,19 +548,22 @@ try
     std::vector<String> tables{"big_table_1", "big_table_2", "big_table_3", "big_table_4"};
     for (const auto & table : tables)
     {
-        auto request = context
-                           .scan("test_db", table)
-                           .aggregation({Max(col("value"))}, {col("key")})
-                           .build(context);
-        auto expect = executeStreams(request, 1);
-        context.context.setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
-        // 0: use one level merge
-        // 1: use two level merge
-        std::vector<UInt64> two_level_thresholds{0, 1};
-        for (auto two_level_threshold : two_level_thresholds)
+        std::vector<std::shared_ptr<tipb::DAGRequest>> requests{
+            context.scan("test_db", table).aggregation({Max(col("value"))}, {col("key")}).build(context),
+            context.scan("test_db", table).aggregation({Max(col("value"))}, {}).build(context),
+        };
+        for (const auto & request : requests)
         {
-            context.context.setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
-            executeAndAssertColumnsEqual(request, expect);
+            auto expect = executeStreams(request, 1);
+            context.context.setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+            // 0: use one level merge
+            // 1: use two level merge
+            std::vector<UInt64> two_level_thresholds{0, 1};
+            for (auto two_level_threshold : two_level_thresholds)
+            {
+                context.context.setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
+                executeAndAssertColumnsEqual(request, expect);
+            }
         }
     }
 }
@@ -603,6 +606,22 @@ try
             }
         }
     }
+}
+CATCH
+
+TEST_F(AggExecutorTestRunner, Empty)
+try
+{
+    context.addMockTable({"test_db", "empty_table"},
+                         {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
+                         {toVec<Int64>("s1", {}),
+                          toVec<Int64>("s2", {})});
+
+    auto request = context
+                       .scan("test_db", "empty_table")
+                       .aggregation({Max(col("s1"))}, {col("s2")})
+                       .build(context);
+    executeAndAssertColumnsEqual(request, {});
 }
 CATCH
 

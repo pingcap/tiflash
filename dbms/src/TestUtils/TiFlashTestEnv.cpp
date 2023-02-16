@@ -48,6 +48,20 @@ String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool g
         return poco_path.toString();
 }
 
+void TiFlashTestEnv::tryCreatePath(const std::string & path)
+{
+    try
+    {
+        Poco::File p(path);
+        if (!p.exists())
+            p.createDirectories();
+    }
+    catch (...)
+    {
+        tryLogCurrentException("gtest", fmt::format("while removing dir `{}`", path));
+    }
+}
+
 void TiFlashTestEnv::tryRemovePath(const std::string & path, bool recreate)
 {
     try
@@ -119,12 +133,12 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
         paths.first,
         paths.second,
         Strings{},
-        /*enable_raft_compatible_mode=*/true,
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
     global_context->setPageStorageRunMode(ps_run_mode);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
+    global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
     LOG_INFO(Logger::get(), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     TiFlashRaftConfig raft_config;
@@ -157,8 +171,9 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
         testdata_path.push_back(root_path);
     context.setPath(root_path);
     auto paths = getPathPool(testdata_path);
-    context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
+    context.setPathPool(paths.first, paths.second, Strings{}, context.getPathCapacity(), context.getFileProvider());
     global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
+    global_contexts[0]->initializeWriteNodePageStorageIfNeed(context.getPathPool());
     context.getSettingsRef() = settings;
     return context;
 }

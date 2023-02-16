@@ -80,4 +80,10 @@ int PipelineExecutor::estimateNewThreadCount()
 {
     return 0;
 }
+
+RU PipelineExecutor::collectRequestUnit()
+{
+    // TODO support collectRequestUnit
+    return 0;
+}
 } // namespace DB
