@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/IManageableStorage.h>
@@ -24,8 +25,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <TiDB/Schema/SchemaSyncer.h>
-
-#include "Common/Exception.h"
 
 namespace DB
 {

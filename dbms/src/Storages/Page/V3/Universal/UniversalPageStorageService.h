@@ -16,6 +16,7 @@
 
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
