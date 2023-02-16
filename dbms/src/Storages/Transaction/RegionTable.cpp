@@ -463,7 +463,12 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
             ks_tbl_id == it->second,
             "{}: table id not match the previous one"
             ", region_id={} keyspace_id={} table_id={}, old_keyspace_id={} old_table_id={}",
-            __PRETTY_FUNCTION__, region_id, keyspace_id, table_id, it->second.first, it->second.second);
+            __PRETTY_FUNCTION__,
+            region_id,
+            keyspace_id,
+            table_id,
+            it->second.first,
+            it->second.second);
 
         InternalRegion & internal_region = doGetInternalRegion(ks_tbl_id, region_id);
         if (*(internal_region.range_in_table.first) <= *(new_handle_range.first)
