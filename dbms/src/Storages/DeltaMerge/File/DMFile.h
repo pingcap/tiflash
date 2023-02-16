@@ -221,7 +221,7 @@ public:
     using PackProperties = dtpb::PackProperties;
 
     static DMFilePtr
-    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, bool use_meta_v2_ = false);
+    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, bool use_meta_v2_ = true);
 
     static DMFilePtr restore(
         const FileProviderPtr & file_provider,
@@ -432,6 +432,10 @@ public:
      *
      * `PackStatsHandle`, `PackPropertiesHandle` and `ColumnStatsHandle` are offset and size of `PackStats`, `PackProperties` and `ColumnStats`.
      */
+    // Use a fixed checksums algorithm for meta file.
+    // We don't use `dmfile.configuration` because the information of configuration will store in meta file.
+    static constexpr size_t meta_checksum_frame_length = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE;
+    static constexpr DB::ChecksumAlgo meta_checksum_algorithm = DB::ChecksumAlgo::XXH3;
     void finalizeMetaV2(WriteBuffer & buffer);
     MetaBlockHandle writeSLPackStatToBuffer(WriteBuffer & buffer);
     MetaBlockHandle writeSLPackPropertyToBuffer(WriteBuffer & buffer);

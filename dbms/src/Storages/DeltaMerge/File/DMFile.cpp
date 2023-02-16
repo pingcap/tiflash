@@ -814,26 +814,25 @@ void DMFile::finalizeMetaV2(WriteBuffer & buffer)
 
 std::vector<char> DMFile::readMetaV2(const FileProviderPtr & file_provider)
 {
-    constexpr size_t meta_read_buffer_size = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE;
     auto rbuf = createReadBufferFromFileBaseByFileProvider(
         file_provider,
         metav2Path(),
         encryptionMetav2Path(),
-        meta_read_buffer_size,
+        meta_checksum_frame_length,
         /*read_limiter*/ nullptr,
-        ChecksumAlgo::CRC32,
-        TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE);
-    std::vector<char> buf(meta_read_buffer_size);
+        meta_checksum_algorithm,
+        meta_checksum_frame_length);
+    std::vector<char> buf(meta_checksum_frame_length);
     size_t read_bytes = 0;
     for (;;)
     {
-        read_bytes += rbuf->readBig(buf.data() + read_bytes, meta_read_buffer_size);
+        read_bytes += rbuf->readBig(buf.data() + read_bytes, meta_checksum_frame_length);
         if (likely(read_bytes < buf.size()))
         {
             break;
         }
         LOG_WARNING(log, "{}'s size is larger than {}", metav2Path(), buf.size());
-        buf.resize(buf.size() + meta_read_buffer_size);
+        buf.resize(buf.size() + meta_checksum_frame_length);
     }
     buf.resize(read_bytes);
     return buf;

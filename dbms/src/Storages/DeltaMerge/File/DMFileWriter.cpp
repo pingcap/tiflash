@@ -66,16 +66,14 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createFile()
 
 DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaV2File()
 {
-    // Use a fixed checksums algorithm is meta file.
-    // We don't use `dmfile-configuration` here because the information of configuration will store in meta file.
     return createWriteBufferFromFileBaseByFileProvider(
         file_provider,
         dmfile->metav2Path(),
         dmfile->encryptionMetav2Path(),
         /*create_new_encryption_info*/ true,
         write_limiter,
-        ChecksumAlgo::CRC32,
-        TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE);
+        DMFile::meta_checksum_algorithm,
+        DMFile::meta_checksum_frame_length);
 }
 
 DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
