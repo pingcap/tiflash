@@ -62,6 +62,41 @@ private:
         , offsets(src.offsets.begin(), src.offsets.end())
         , chars(src.chars.begin(), src.chars.end()){};
 
+    void ALWAYS_INLINE insertFromImpl(const ColumnString & src, size_t n)
+    {
+        if likely (n != 0)
+        {
+            const size_t size_to_append = src.offsets[n] - src.offsets[n - 1];
+
+            if (size_to_append == 1)
+            {
+                /// shortcut for empty string
+                chars.push_back(0);
+                offsets.push_back(chars.size());
+            }
+            else
+            {
+                const size_t old_size = chars.size();
+                const size_t offset = src.offsets[n - 1];
+                const size_t new_size = old_size + size_to_append;
+
+                chars.resize(new_size);
+                memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[offset], size_to_append);
+                offsets.push_back(new_size);
+            }
+        }
+        else
+        {
+            const size_t old_size = chars.size();
+            const size_t size_to_append = src.offsets[0];
+            const size_t new_size = old_size + size_to_append;
+
+            chars.resize(new_size);
+            memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[0], size_to_append);
+            offsets.push_back(new_size);
+        }
+    }
+
 public:
     const char * getFamilyName() const override { return "String"; }
 
@@ -129,38 +164,24 @@ public:
     void insertFrom(const IColumn & src_, size_t n) override
     {
         const auto & src = static_cast<const ColumnString &>(src_);
+        insertFromImpl(src, n);
+    }
 
-        if (n != 0)
-        {
-            const size_t size_to_append = src.offsets[n] - src.offsets[n - 1];
+    /// TODO: might be further optimized by using the same char* and offeset
+    void insertManyFrom(const IColumn & src_, size_t position, size_t length) override
+    {
+        const auto & src = static_cast<const ColumnString &>(src_);
+        offsets.reserve(offsets.size() + length);
+        for (size_t i = 0; i < length; ++i)
+            insertFromImpl(src, position);
+    }
 
-            if (size_to_append == 1)
-            {
-                /// shortcut for empty string
-                chars.push_back(0);
-                offsets.push_back(chars.size());
-            }
-            else
-            {
-                const size_t old_size = chars.size();
-                const size_t offset = src.offsets[n - 1];
-                const size_t new_size = old_size + size_to_append;
-
-                chars.resize(new_size);
-                memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[offset], size_to_append);
-                offsets.push_back(new_size);
-            }
-        }
-        else
-        {
-            const size_t old_size = chars.size();
-            const size_t size_to_append = src.offsets[0];
-            const size_t new_size = old_size + size_to_append;
-
-            chars.resize(new_size);
-            memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[0], size_to_append);
-            offsets.push_back(new_size);
-        }
+    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override
+    {
+        const auto & src = static_cast<const ColumnString &>(src_);
+        offsets.reserve(offsets.size() + position_vec.size());
+        for (auto position : position_vec)
+            insertFromImpl(src, position);
     }
 
     template <bool add_terminating_zero>
@@ -276,6 +297,16 @@ public:
     {
         chars.push_back(0);
         offsets.push_back(offsets.empty() ? 1 : (offsets.back() + 1));
+    }
+
+    void insertManyDefaults(size_t length) override
+    {
+        chars.resize_fill(chars.size() + length);
+        offsets.reserve(offsets.size() + length);
+        for (size_t i = 0; i < length; ++i)
+        {
+            offsets.push_back(offsets.empty() ? 1 : (offsets.back() + 1));
+        }
     }
 
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int /*nan_direction_hint*/) const override

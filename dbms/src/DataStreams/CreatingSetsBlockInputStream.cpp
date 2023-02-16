@@ -292,4 +292,24 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     }
 }
 
+uint64_t CreatingSetsBlockInputStream::collectCPUTimeNsImpl(bool is_thread_runner)
+{
+    // `CreatingSetsBlockInputStream` does not count its own execute time,
+    // whether `CreatingSetsBlockInputStream` is `thread-runner` or not,
+    // because `CreatingSetsBlockInputStream` basically does not use cpu, only `condition_cv.wait`.
+    uint64_t cpu_time_ns = 0;
+    std::shared_lock lock(children_mutex);
+    if (!children.empty())
+    {
+        // Each of `CreatingSetsBlockInputStream`'s children is a thread-runner.
+        size_t i = 0;
+        for (; i < children.size() - 1; ++i)
+            cpu_time_ns += children[i]->collectCPUTimeNs(true);
+        // The last child is running on the same thread as `CreatingSetsBlockInputStream`.
+        // Since we don't count `CreatingSetsBlockInputStream`'s execute time, we try to collect the last child's cpu time here.
+        cpu_time_ns += children[i]->collectCPUTimeNs(is_thread_runner);
+    }
+    return cpu_time_ns;
+}
+
 } // namespace DB

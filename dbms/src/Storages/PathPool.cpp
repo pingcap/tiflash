@@ -52,18 +52,22 @@ inline String getNormalizedPath(const String & s)
     return removeTrailingSlash(Poco::Path{s}.toString());
 }
 
+const String PathPool::log_path_prefix = "log";
+const String PathPool::data_path_prefix = "data";
+const String PathPool::meta_path_prefix = "meta";
+const String PathPool::kvstore_path_prefix = "kvstore";
+const String PathPool::write_uni_path_prefix = "write";
+
 // Constructor to be used during initialization
 PathPool::PathPool(
     const Strings & main_data_paths_,
     const Strings & latest_data_paths_,
     const Strings & kvstore_paths_, //
     PathCapacityMetricsPtr global_capacity_,
-    FileProviderPtr file_provider_,
-    bool enable_raft_compatible_mode_)
+    FileProviderPtr file_provider_)
     : main_data_paths(main_data_paths_)
     , latest_data_paths(latest_data_paths_)
     , kvstore_paths(kvstore_paths_)
-    , enable_raft_compatible_mode(enable_raft_compatible_mode_)
     , global_capacity(global_capacity_)
     , file_provider(file_provider_)
     , log(Logger::get("PathPool"))
@@ -74,7 +78,7 @@ PathPool::PathPool(
         for (const auto & s : latest_data_paths)
         {
             // Get a normalized path without trailing '/'
-            auto p = getNormalizedPath(s + "/kvstore");
+            auto p = getNormalizedPath(s + "/" + PathPool::kvstore_path_prefix);
             kvstore_paths.emplace_back(std::move(p));
         }
     }

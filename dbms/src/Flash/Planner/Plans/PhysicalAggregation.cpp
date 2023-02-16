@@ -99,6 +99,7 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
         context,
         before_agg_header,
         pipeline.streams.size(),
+        fine_grained_shuffle.enable() ? pipeline.streams.size() : 1,
         aggregation_keys,
         aggregation_collators,
         aggregate_descriptions,

@@ -97,7 +97,7 @@ void IBlockInputStream::dumpTree(FmtBuffer & buffer, size_t indent, size_t multi
     for (const auto & child : children)
         ++multipliers[child->getTreeID()];
 
-    for (auto & child : children)
+    for (const auto & child : children)
     {
         String id = child->getTreeID();
         size_t & subtree_multiplier = multipliers[id];
@@ -109,4 +109,12 @@ void IBlockInputStream::dumpTree(FmtBuffer & buffer, size_t indent, size_t multi
     }
 }
 
+uint64_t IBlockInputStream::collectCPUTimeNs(bool is_thread_runner)
+{
+    if (cpu_time_ns_collected)
+        return 0;
+
+    cpu_time_ns_collected = true;
+    return collectCPUTimeNsImpl(is_thread_runner);
+}
 } // namespace DB

@@ -57,17 +57,11 @@ struct PageIdTrait
     }
     static inline PageIdU64 getU64ID(const PageId & page_id)
     {
-        if (page_id.size() >= sizeof(UInt64))
-            return UniversalPageIdFormat::decodeUInt64(page_id.data() + page_id.size() - sizeof(UInt64));
-        else
-            return INVALID_PAGE_U64_ID;
+        return UniversalPageIdFormat::getU64ID(page_id);
     }
     static inline Prefix getPrefix(const PageId & page_id)
     {
-        if (page_id.size() >= sizeof(UInt64))
-            return page_id.substr(0, page_id.size() - sizeof(UInt64)).toStr();
-        else
-            return "";
+        return UniversalPageIdFormat::getFullPrefix(page_id);
     }
     static inline PageId getPageMapKey(const PageId & page_id)
     {

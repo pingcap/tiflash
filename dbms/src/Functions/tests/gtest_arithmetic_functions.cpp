@@ -19,7 +19,9 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
+#include <Functions/divide.cpp>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -102,6 +104,141 @@ protected:
         }
     }
 };
+
+template <typename TYPE>
+void doTiDBDivideDecimalRoundInternalTest()
+{
+    auto apply = static_cast<TYPE (*)(TYPE, TYPE)>(&TiDBDivideFloatingImpl<TYPE, TYPE, false>::apply);
+
+    constexpr TYPE max = std::numeric_limits<TYPE>::max();
+    // note: Int256's min is not equal to -max-1
+    // according to https://www.boost.org/doc/libs/1_60_0/libs/multiprecision/doc/html/boost_multiprecision/tut/ints/cpp_int.html
+    constexpr TYPE min = std::numeric_limits<TYPE>::min();
+
+    // clang-format off
+    const std::vector<std::array<TYPE, 3>> cases = {
+        {1, 2, 1}, {1, -2, -1}, {-1, 2, -1}, {-1, -2, 1},
+
+        {0, 3, 0}, {0, -3, 0}, {0, 3, 0}, {0, -3, 0},
+        {1, 3, 0}, {1, -3, 0}, {-1, 3, 0}, {-1, -3, 0},
+        {2, 3, 1}, {2, -3, -1}, {-2, 3, -1}, {-2, -3, 1},
+        {3, 3, 1}, {3, -3, -1}, {-3, 3, -1}, {-3, -3, 1},
+        {4, 3, 1}, {4, -3, -1}, {-4, 3, -1}, {-4, -3, 1},
+        {5, 3, 2}, {5, -3, -2}, {-5, 3, -2}, {-5, -3, 2},
+
+        // ±max as divisor
+        {0, max, 0}, {max/2-1, max, 0}, {max/2, max, 0}, {max/2+1, max, 1}, {max-1, max, 1}, {max, max, 1},
+        {-1, max, 0}, {-max/2+1, max, 0},  {-max/2, max, 0}, {-max/2-1, max, -1}, {-max+1, max, -1}, {-max, max, -1}, {min, max, -1},
+        {0, -max, 0}, {max/2-1, -max, 0}, {max/2, -max, 0}, {max/2+1, -max, -1}, {max-1, -max, -1}, {max, -max, -1},
+        {-1, -max, 0}, {-max/2+1, -max, 0},  {-max/2, -max, 0}, {-max/2-1, -max, 1}, {-max+1, -max, 1}, {-max, -max, 1}, {min, -max, 1},
+
+        // ±max as dividend
+        {max, 1, max}, {max, 2, max/2+1}, {max, max/2-1, 2}, {max, max/2, 2}, {max, max/2+1, 2}, {max, max-1, 1},
+        {max, -1, -max}, {max, -2, -max/2-1}, {max, -max/2+1, -2}, {max, -max/2, -2}, {max, -max/2-1, -2}, {max, -max+1, -1},
+        {-max, 1, -max}, {-max, 2, -max/2-1}, {-max, max/2+1, -2}, {-max, max/2, -2}, {-max, max/2-1, -2}, {-max, max-1, -1},
+        {-max, -1, max}, {-max, -2, max/2+1}, {-max, -max/2-1, 2}, {-max, -max/2, 2}, {-max, -max/2+1, 2}, {-max, -max+1, 1},
+    };
+    // clang-format on
+
+    for (const auto & expect : cases)
+    {
+        std::array<TYPE, 3> actual = {expect[0], expect[1], apply(expect[0], expect[1])};
+        ASSERT_EQ(expect, actual);
+    }
+}
+
+TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDecimalRoundInternal)
+try
+{
+    doTiDBDivideDecimalRoundInternalTest<Int32>();
+    doTiDBDivideDecimalRoundInternalTest<Int64>();
+    doTiDBDivideDecimalRoundInternalTest<Int128>();
+    doTiDBDivideDecimalRoundInternalTest<Int256>();
+}
+CATCH
+
+TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDecimalRound)
+try
+{
+    const String func_name = "tidbDivide";
+
+    // decimal32
+    {
+        // int and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+            executeFunction(
+                func_name,
+                createColumn<Int32>({1, 1, 1, 1, 1}),
+                createColumn<Decimal32>(std::make_tuple(20, 4), {DecimalField32(100000000, 4), DecimalField32(100010000, 4), DecimalField32(199990000, 4), DecimalField32(200000000, 4), DecimalField32(200010000, 4)})));
+
+        // decimal and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal128>>(std::make_tuple(26, 8), {DecimalField128(10000, 8), DecimalField128(9999, 8), DecimalField128(5000, 8), DecimalField128(5000, 8), DecimalField128(5000, 8)}),
+            executeFunction(
+                func_name,
+                createColumn<Decimal32>(std::make_tuple(18, 4), {DecimalField32(10000, 4), DecimalField32(10000, 4), DecimalField32(10000, 4), DecimalField32(10000, 4), DecimalField32(10000, 4)}),
+                createColumn<Decimal32>(std::make_tuple(18, 4), {DecimalField32(100000000, 4), DecimalField32(100010000, 4), DecimalField32(199990000, 4), DecimalField32(200000000, 4), DecimalField32(200010000, 4)})));
+    }
+
+    // decimal64
+    {
+        // int and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+            executeFunction(
+                func_name,
+                createColumn<Int32>({1, 1, 1, 1, 1}),
+                createColumn<Decimal64>(std::make_tuple(20, 4), {DecimalField64(100000000, 4), DecimalField64(100010000, 4), DecimalField64(199990000, 4), DecimalField64(200000000, 4), DecimalField64(200010000, 4)})));
+
+        // decimal and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal128>>(std::make_tuple(26, 8), {DecimalField128(10000, 8), DecimalField128(9999, 8), DecimalField128(5000, 8), DecimalField128(5000, 8), DecimalField128(5000, 8)}),
+            executeFunction(
+                func_name,
+                createColumn<Decimal64>(std::make_tuple(18, 4), {DecimalField64(10000, 4), DecimalField64(10000, 4), DecimalField64(10000, 4), DecimalField64(10000, 4), DecimalField64(10000, 4)}),
+                createColumn<Decimal64>(std::make_tuple(18, 4), {DecimalField64(100000000, 4), DecimalField64(100010000, 4), DecimalField64(199990000, 4), DecimalField64(200000000, 4), DecimalField64(200010000, 4)})));
+    }
+
+    // decimal128
+    {
+        // int and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+            executeFunction(
+                func_name,
+                createColumn<Int32>({1, 1, 1, 1, 1}),
+                createColumn<Decimal128>(std::make_tuple(20, 4), {DecimalField128(100000000, 4), DecimalField128(100010000, 4), DecimalField128(199990000, 4), DecimalField128(200000000, 4), DecimalField128(200010000, 4)})));
+
+        // decimal and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal128>>(std::make_tuple(26, 8), {DecimalField128(10000, 8), DecimalField128(9999, 8), DecimalField128(5000, 8), DecimalField128(5000, 8), DecimalField128(5000, 8)}),
+            executeFunction(
+                func_name,
+                createColumn<Decimal128>(std::make_tuple(18, 4), {DecimalField128(10000, 4), DecimalField128(10000, 4), DecimalField128(10000, 4), DecimalField128(10000, 4), DecimalField128(10000, 4)}),
+                createColumn<Decimal128>(std::make_tuple(18, 4), {DecimalField128(100000000, 4), DecimalField128(100010000, 4), DecimalField128(199990000, 4), DecimalField128(200000000, 4), DecimalField128(200010000, 4)})));
+    }
+
+    // decimal256
+    {
+        // int and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+            executeFunction(
+                func_name,
+                createColumn<Int32>({1, 1, 1, 1, 1}),
+                createColumn<Decimal256>(std::make_tuple(20, 4), {DecimalField256(Int256(100000000), 4), DecimalField256(Int256(100010000), 4), DecimalField256(Int256(199990000), 4), DecimalField256(Int256(200000000), 4), DecimalField256(Int256(200010000), 4)})));
+
+        // decimal and decimal
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Decimal128>>(std::make_tuple(26, 8), {DecimalField128(10000, 8), DecimalField128(9999, 8), DecimalField128(5000, 8), DecimalField128(5000, 8), DecimalField128(5000, 8)}),
+            executeFunction(
+                func_name,
+                createColumn<Decimal256>(std::make_tuple(18, 4), {DecimalField256(Int256(10000), 4), DecimalField256(Int256(10000), 4), DecimalField256(Int256(10000), 4), DecimalField256(Int256(10000), 4), DecimalField256(Int256(10000), 4)}),
+                createColumn<Decimal256>(std::make_tuple(18, 4), {DecimalField256(Int256(100000000), 4), DecimalField256(Int256(100010000), 4), DecimalField256(Int256(199990000), 4), DecimalField256(Int256(200000000), 4), DecimalField256(Int256(200010000), 4)})));
+    }
+}
+CATCH
 
 TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDecimal)
 try
