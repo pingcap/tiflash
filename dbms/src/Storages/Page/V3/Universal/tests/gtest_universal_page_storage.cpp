@@ -42,6 +42,11 @@ public:
         log = Logger::get("PageStorageTest");
     }
 
+    void reload()
+    {
+        page_storage = reopenWithConfig(config);
+    }
+
     std::shared_ptr<UniversalPageStorage> reopenWithConfig(const PageStorageConfig & config_)
     {
         auto path = getTemporaryPath();
@@ -75,13 +80,13 @@ try
 
     {
         UniversalWriteBatch wb;
-        wb.putPage(UniversalPageId::toFullPageId(prefix, 0), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(UniversalPageId::toFullPageId(prefix, 21), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        wb.putPage(UniversalPageId::toFullPageId(prefix, 200), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 0), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 21), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 200), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
         page_storage->write(std::move(wb));
     }
 
-    DB::Page page0 = page_storage->read(UniversalPageId::toFullPageId(prefix, 0));
+    DB::Page page0 = page_storage->read(UniversalPageIdFormat::toFullPageId(prefix, 0));
     ASSERT_TRUE(page0.isValid());
     ASSERT_EQ(page0.data.size(), buf_sz);
     ASSERT_EQ(page0.page_id, 0UL);
@@ -89,7 +94,7 @@ try
     {
         EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
     }
-    DB::Page page1 = page_storage->read(UniversalPageId::toFullPageId(prefix, 21));
+    DB::Page page1 = page_storage->read(UniversalPageIdFormat::toFullPageId(prefix, 21));
     ASSERT_TRUE(page1.isValid());
     ASSERT_EQ(page1.data.size(), buf_sz);
     ASSERT_EQ(page1.page_id, 21UL);
@@ -97,7 +102,7 @@ try
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
     }
-    DB::Page page2 = page_storage->read(UniversalPageId::toFullPageId(prefix, 500), nullptr, {}, false);
+    DB::Page page2 = page_storage->read(UniversalPageIdFormat::toFullPageId(prefix, 500), nullptr, {}, false);
     ASSERT_TRUE(!page2.isValid());
 }
 CATCH
@@ -115,7 +120,7 @@ TEST_F(UniPageStorageTest, Traverse)
         {
             c_buff[0] = 10;
             c_buff[1] = i;
-            wb.putPage(UniversalPageId::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
         }
         page_storage->write(std::move(wb));
     }
@@ -126,7 +131,7 @@ TEST_F(UniPageStorageTest, Traverse)
         {
             c_buff[0] = 10;
             c_buff[1] = i;
-            wb.putPage(UniversalPageId::toFullPageId(prefix2, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix2, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
         }
         page_storage->write(std::move(wb));
     }
@@ -134,7 +139,7 @@ TEST_F(UniPageStorageTest, Traverse)
     {
         size_t read_count = 0;
         auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
-            ASSERT_TRUE(page_id.isPrefix(prefix1));
+            ASSERT_TRUE(page_id.hasPrefix(prefix1));
             ASSERT_TRUE(page.isValid());
             read_count += 1;
         };
@@ -145,7 +150,7 @@ TEST_F(UniPageStorageTest, Traverse)
     {
         size_t read_count = 0;
         auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
-            ASSERT_TRUE(page_id.isPrefix(prefix2));
+            ASSERT_TRUE(page_id.hasPrefix(prefix2));
             ASSERT_TRUE(page.isValid());
             read_count += 1;
         };
@@ -156,7 +161,7 @@ TEST_F(UniPageStorageTest, Traverse)
     {
         size_t read_count = 0;
         auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
-            ASSERT_TRUE(page_id.isPrefix(prefix3));
+            ASSERT_TRUE(page_id.hasPrefix(prefix3));
             ASSERT_TRUE(page.isValid());
             read_count += 1;
         };
@@ -176,7 +181,7 @@ TEST_F(UniPageStorageTest, TraverseWithSnap)
         {
             c_buff[0] = 10;
             c_buff[1] = i;
-            wb.putPage(UniversalPageId::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
         }
         page_storage->write(std::move(wb));
     }
@@ -189,7 +194,7 @@ TEST_F(UniPageStorageTest, TraverseWithSnap)
         {
             c_buff[0] = 10;
             c_buff[1] = i;
-            wb.putPage(UniversalPageId::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
         }
         page_storage->write(std::move(wb));
     }
@@ -197,7 +202,7 @@ TEST_F(UniPageStorageTest, TraverseWithSnap)
     {
         size_t read_count = 0;
         auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
-            ASSERT_TRUE(page_id.isPrefix(prefix1));
+            ASSERT_TRUE(page_id.hasPrefix(prefix1));
             ASSERT_TRUE(page.isValid());
             read_count += 1;
         };
@@ -212,7 +217,7 @@ TEST_F(UniPageStorageTest, TraverseWithSnap)
         {
             c_buff[0] = 10;
             c_buff[1] = i;
-            wb.delPage(UniversalPageId::toFullPageId(prefix1, i));
+            wb.delPage(UniversalPageIdFormat::toFullPageId(prefix1, i));
         }
         page_storage->write(std::move(wb));
     }
@@ -220,7 +225,7 @@ TEST_F(UniPageStorageTest, TraverseWithSnap)
     {
         size_t read_count = 0;
         auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
-            ASSERT_TRUE(page_id.isPrefix(prefix1));
+            ASSERT_TRUE(page_id.hasPrefix(prefix1));
             ASSERT_TRUE(page.isValid());
             read_count += 1;
         };
@@ -229,18 +234,48 @@ TEST_F(UniPageStorageTest, TraverseWithSnap)
     }
 }
 
+TEST_F(UniPageStorageTest, GetMaxIdWithPrefix)
+{
+    const String prefix1 = UniversalPageIdFormat::toSubPrefix(StorageType::Log);
+    const String prefix2 = UniversalPageIdFormat::toSubPrefix(StorageType::Data);
+    const String prefix3 = UniversalPageIdFormat::toSubPrefix(StorageType::Data);
+    const String prefix4 = "aaa";
+    const String prefix5 = "bbb";
+    const UInt64 tag = 0;
+    const size_t write_count = 100;
+    {
+        UniversalWriteBatch wb;
+        for (size_t i = 0; i < write_count; i++)
+        {
+            c_buff[0] = 10;
+            c_buff[1] = i;
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix1, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix2, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix3, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix4, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+            wb.putPage(UniversalPageIdFormat::toFullPageId(prefix5, i), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        }
+        page_storage->write(std::move(wb));
+    }
+
+    ASSERT_EQ(page_storage->getMaxIdAfterRestart(), 0);
+
+    reload();
+    ASSERT_EQ(page_storage->getMaxIdAfterRestart(), write_count - 1);
+}
+
 TEST(UniPageStorageIdTest, UniversalPageId)
 {
     {
-        auto u_id = UniversalPageId::toFullPageId("aaa", 100);
-        ASSERT_EQ(DB::PS::V3::universal::PageIdTrait::getU64ID(u_id), 100);
-        ASSERT_EQ(DB::PS::V3::universal::PageIdTrait::getPrefix(u_id), "aaa");
+        auto u_id = UniversalPageIdFormat::toFullPageId("aaa", 100);
+        ASSERT_EQ(UniversalPageIdFormat::getU64ID(u_id), 100);
+        ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(u_id), "aaa");
     }
 
     {
         auto u_id = "z";
-        ASSERT_EQ(DB::PS::V3::universal::PageIdTrait::getU64ID(u_id), 0);
-        ASSERT_EQ(DB::PS::V3::universal::PageIdTrait::getPrefix(u_id), "");
+        ASSERT_EQ(UniversalPageIdFormat::getU64ID(u_id), 0);
+        ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(u_id), "z");
     }
 }
 } // namespace PS::universal::tests
