@@ -44,11 +44,9 @@ struct IlikeHelper
         size_t i = 0;
         while (i < size)
         {
-            if (isASCII(chars[i]))
+            if (isUpperAlphaASCII(chars[i]))
             {
-                if (isUpperAlphaASCII(chars[i]))
-                    chars[i] = toLowerIfAlphaASCII(chars[i]);
-
+                chars[i] = toLowerIfAlphaASCII(chars[i]);
                 ++i;
             }
             else
