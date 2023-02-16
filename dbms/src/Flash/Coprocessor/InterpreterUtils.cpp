@@ -196,6 +196,8 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilt
     chain.finalize();
     chain.clear();
 
+    // make sure chain finalization add project action successfully.
+    RUNTIME_CHECK(!project_after_where->getActions().empty());
     return {before_where, filter_column_name, project_after_where};
 }
 
