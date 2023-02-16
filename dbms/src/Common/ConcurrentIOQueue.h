@@ -148,4 +148,4 @@ private:
     MPMCQueue<T> mpmc_queue;
     size_t capacity;
 };
-}
+} // namespace DB

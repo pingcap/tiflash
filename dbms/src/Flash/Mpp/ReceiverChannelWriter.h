@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Common/FailPoint.h>
 #include <Common/ConcurrentIOQueue.h>
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 

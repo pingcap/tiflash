@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/ConcurrentIOQueue.h>
 #include <Common/grpcpp.h>
 #include <common/logger_useful.h>
 

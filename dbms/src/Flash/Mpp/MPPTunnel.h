@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/ConcurrentIOQueue.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
