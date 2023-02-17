@@ -124,7 +124,7 @@ public:
 
     const GroupingColumnNames & getGroupSetColumnNamesByOffset(size_t offset) const;
 
-    void getAllGroupSetColumnNames(std::set<String> & name_set) const;
+    std::set<String> getAllGroupSetColumnNames() const;
 
     static std::shared_ptr<Expand> sharedExpand(const GroupingSets & groupingSets);
 

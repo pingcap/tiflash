@@ -36,7 +36,7 @@ public:
         const NamesAndTypes & schema_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
-        const std::shared_ptr<Expand> & shared_expand,
+        const std::shared_ptr<const Expand> & shared_expand,
         const ExpressionActionsPtr & expand_actions,
         const Block & sample_block_)
         : PhysicalUnary(executor_id_, PlanType::Expand, schema_, req_id, child_)
@@ -55,7 +55,7 @@ public:
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
-    std::shared_ptr<Expand> shared_expand;
+    std::shared_ptr<const Expand> shared_expand;
     ExpressionActionsPtr expand_actions;
     Block sample_block;
 };

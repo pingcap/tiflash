@@ -46,14 +46,7 @@ void Expand::getGroupingSetsDes(FmtBuffer & buffer) const
         for (const auto & grouping_exprs : grouping_set)
         {
             buffer.append("<");
-            for (size_t i = 0; i < grouping_exprs.size(); i++)
-            {
-                if (i != 0)
-                {
-                    buffer.append(",");
-                }
-                buffer.append(grouping_exprs.at(i));
-            }
+            buffer.joinStr(grouping_exprs.begin(), grouping_exprs.end());
             buffer.append(">");
         }
         buffer.append("}");
@@ -103,13 +96,13 @@ void Expand::replicateAndFillNull(Block & block) const
     added_grouping_id_column.reserve(1);
     added_grouping_id_column.push_back(grouping_id_column->getPtr());
 
-    for (size_t i = 0; i < origin_rows; i++)
+    for (size_t i = 0; i < origin_rows; ++i)
     {
         current_offset += replicate_times_for_one_row;
         (*offsets_to_replicate)[i] = current_offset;
 
         // in the same loop, to fill the grouping id.
-        for (UInt64 j = 0; j < replicate_times_for_one_row; j++)
+        for (UInt64 j = 0; j < replicate_times_for_one_row; ++j)
         {
             // start from 1.
             Field grouping_id = j + 1;
@@ -143,7 +136,7 @@ void Expand::replicateAndFillNull(Block & block) const
 
 
     // after replication, it just copied the same row for N times, we still need to fill corresponding Field with null value.
-    for (size_t grouping_offset = 0; grouping_offset < replicate_times_for_one_row; grouping_offset++)
+    for (size_t grouping_offset = 0; grouping_offset < replicate_times_for_one_row; ++grouping_offset)
     {
         auto grouping_columns = getGroupSetColumnNamesByOffset(grouping_offset);
         // for every grouping col, get the mutated one of them.
@@ -180,14 +173,14 @@ void Expand::replicateAndFillNull(Block & block) const
             ///      2  2       1   +  replicate_group2        for b, it's 1, we should pick and set:
             ///      2  2       2   +                              replicate_group_rows[1].b = null
             ///    -----------------+
-            for (size_t i = 0; i < origin_rows; i++)
+            for (size_t i = 0; i < origin_rows; ++i)
             {
                 // for every original one row mapped N rows, fill the corresponding group set column as null value according to the offset.
                 // only when the offset in replicate_group equals to current group_offset, set the data to null.
                 // eg: for case above, for grouping_offset of <a> = 0, we only set the every offset = 0 in each
                 // small replicate_group_x to null.
                 //
-                for (UInt64 j = 0; j < replicate_times_for_one_row; j++)
+                for (UInt64 j = 0; j < replicate_times_for_one_row; ++j)
                 {
                     if (j == grouping_offset)
                     {
@@ -234,8 +227,9 @@ const GroupingColumnNames & Expand::getGroupSetColumnNamesByOffset(size_t offset
     return group_sets_names[offset][0];
 }
 
-void Expand::getAllGroupSetColumnNames(std::set<String> & name_set) const
+std::set<String> Expand::getAllGroupSetColumnNames() const
 {
+    std::set<String> name_set;
     for (const auto & it1 : group_sets_names)
     {
         // for every grouping set.
@@ -248,6 +242,7 @@ void Expand::getAllGroupSetColumnNames(std::set<String> & name_set) const
             }
         }
     }
+    return name_set;
 }
 
 std::shared_ptr<Expand> Expand::sharedExpand(const GroupingSets & groupingSets)

@@ -51,24 +51,25 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     ExpressionActionsPtr before_expand_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
     ExpressionActionsPtr expand_actions_itself = PhysicalPlanHelper::newActions(child->getSampleBlock());
 
-    auto shared_expand = analyzer.buildExpandGroupingColumns(expand, before_expand_actions);
-    expand_actions_itself->add(ExpressionAction::expandSource(shared_expand));
+    auto grouping_sets = analyzer.buildExpandGroupingColumns(expand, before_expand_actions);
+    auto expand_action = ExpressionAction::expandSource(grouping_sets);
+    expand_actions_itself->add(expand_action);
 
     // construct sample block.
     NamesAndTypes expand_output_columns;
     auto child_header = child->getSchema();
     for (const auto & one : child_header)
     {
-        expand_output_columns.emplace_back(one.name, shared_expand->isInGroupSetColumn(one.name) ? makeNullable(one.type) : one.type);
+        expand_output_columns.emplace_back(one.name, expand_action.expand->isInGroupSetColumn(one.name) ? makeNullable(one.type) : one.type);
     }
-    expand_output_columns.emplace_back(shared_expand->grouping_identifier_column_name, shared_expand->grouping_identifier_column_type);
+    expand_output_columns.emplace_back(expand_action.expand->grouping_identifier_column_name, expand_action.expand->grouping_identifier_column_type);
 
     auto physical_expand = std::make_shared<PhysicalExpand>(
         executor_id,
         expand_output_columns,
         log->identifier(),
         child,
-        shared_expand,
+        expand_action.expand,
         expand_actions_itself,
         Block(expand_output_columns));
 
@@ -108,8 +109,7 @@ void PhysicalExpand::finalize(const Names & parent_require)
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
     Names required_output;
     required_output.reserve(shared_expand->getGroupSetNum()); // grouping set column should be existed in the child output schema.
-    auto name_set = std::set<String>();
-    shared_expand->getAllGroupSetColumnNames(name_set);
+    auto name_set = shared_expand->getAllGroupSetColumnNames();
     // append parent_require column it may expect self-filled groupingID.
     for (const auto & one : parent_require)
     {

@@ -805,7 +805,7 @@ NamesAndTypes DAGExpressionAnalyzer::buildOrderColumns(
     return order_columns;
 }
 
-std::shared_ptr<Expand> DAGExpressionAnalyzer::buildExpandGroupingColumns(
+GroupingSets DAGExpressionAnalyzer::buildExpandGroupingColumns(
     const tipb::Expand & expand,
     const ExpressionActionsPtr & actions)
 {
@@ -843,8 +843,7 @@ std::shared_ptr<Expand> DAGExpressionAnalyzer::buildExpandGroupingColumns(
             mutable_one.type = makeNullable(mutable_one.type);
     }
     source_columns.emplace_back(Expand::grouping_identifier_column_name, Expand::grouping_identifier_column_type);
-    auto shared_expand = Expand::sharedExpand(group_sets_columns);
-    return shared_expand;
+    return group_sets_columns;
 }
 
 ExpressionActionsPtr DAGExpressionAnalyzer::appendExpand(
@@ -856,8 +855,8 @@ ExpressionActionsPtr DAGExpressionAnalyzer::appendExpand(
     {
         last_step.required_output.push_back(origin_col.name);
     }
-    auto shared_expand = buildExpandGroupingColumns(expand, last_step.actions);
-    last_step.actions->add(ExpressionAction::expandSource(shared_expand));
+    auto grouping_sets = buildExpandGroupingColumns(expand, last_step.actions);
+    last_step.actions->add(ExpressionAction::expandSource(grouping_sets));
 
     auto before_expand = chain.getLastActions();
     chain.finalize();

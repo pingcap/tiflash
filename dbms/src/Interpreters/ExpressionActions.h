@@ -112,7 +112,7 @@ public:
     static ExpressionAction project(const NamesWithAliases & projected_columns_);
     static ExpressionAction project(const Names & projected_columns_);
     static ExpressionAction ordinaryJoin(std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_);
-    static ExpressionAction expandSource(std::shared_ptr<const Expand> expand_);
+    static ExpressionAction expandSource(GroupingSets grouping_sets);
 
     /// Which columns necessary to perform this action.
     Names getNeededColumns() const;

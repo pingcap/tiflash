@@ -71,7 +71,7 @@ public:
         ExpressionActionsChain & chain,
         const std::vector<const tipb::Expr *> & conditions);
 
-    std::shared_ptr<Expand> buildExpandGroupingColumns(const tipb::Expand & expand, const ExpressionActionsPtr & actions);
+    GroupingSets buildExpandGroupingColumns(const tipb::Expand & expand, const ExpressionActionsPtr & actions);
 
     ExpressionActionsPtr appendExpand(const tipb::Expand & expand, ExpressionActionsChain & chain);
 

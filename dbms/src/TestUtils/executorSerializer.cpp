@@ -169,7 +169,7 @@ void serializeExpandSource(const String & executor_id, const tipb::Expand & expa
         for (const auto & grouping_exprs : grouping_set.grouping_exprs())
         {
             buf.append("{");
-            for (auto i = 0; i < grouping_exprs.grouping_expr().size(); i++)
+            for (auto i = 0; i < grouping_exprs.grouping_expr().size(); ++i)
             {
                 if (i != 0)
                 {

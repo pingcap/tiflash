@@ -135,14 +135,13 @@ ExpressionAction ExpressionAction::ordinaryJoin(std::shared_ptr<const Join> join
     return a;
 }
 
-ExpressionAction ExpressionAction::expandSource(std::shared_ptr<const Expand> expand_)
+ExpressionAction ExpressionAction::expandSource(GroupingSets grouping_sets_)
 {
     ExpressionAction a;
     a.type = EXPAND;
-    a.expand = expand_;
+    a.expand = std::make_shared<Expand>(grouping_sets_);
     return a;
 }
-
 
 void ExpressionAction::prepare(Block & sample_block)
 {
@@ -239,8 +238,7 @@ void ExpressionAction::prepare(Block & sample_block)
     case EXPAND:
     {
         // sample_block is just for schema check followed by later block, modify it if your schema has changed during this action.
-        auto name_set = std::set<String>();
-        expand->getAllGroupSetColumnNames(name_set);
+        auto name_set = expand->getAllGroupSetColumnNames();
         // make grouping set column to be nullable.
         for (const auto & col_name : name_set)
         {
