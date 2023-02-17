@@ -15,37 +15,47 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <DataStreams/FilterTransformAction.h>
+#include <Core/SortDescription.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
-class FilterTransformOp : public TransformOp
+class TopNTransformOp : public TransformOp
 {
 public:
-    FilterTransformOp(
+    TopNTransformOp(
         PipelineExecutorStatus & exec_status_,
-        const Block & input_header,
-        const ExpressionActionsPtr & expression,
-        const String & filter_column_name,
-        const String & req_id)
+        const SortDescription & order_desc_,
+        size_t limit_,
+        size_t max_block_size_,
+        const String & req_id_)
         : TransformOp(exec_status_)
-        , filter_transform_action(input_header, expression, filter_column_name)
-        , log(Logger::get(req_id))
+        , log(Logger::get(req_id_))
+        , order_desc(order_desc_)
+        , limit(limit_)
+        , max_block_size(max_block_size_)
+        , req_id(req_id_)
     {}
 
     String getName() const override
     {
-        return "FilterTransformOp";
+        return "TopNTransformOp";
     }
 
     OperatorStatus transformImpl(Block & block) override;
+    OperatorStatus tryOutputImpl(Block & block) override;
 
     void transformHeaderImpl(Block & header_) override;
 
+
 private:
-    FilterTransformAction filter_transform_action;
-    FilterPtr filter_ignored = nullptr;
     const LoggerPtr log;
+    SortDescription order_desc;
+    size_t limit;
+    size_t max_block_size;
+    String req_id;
+    Blocks blocks;
+    std::unique_ptr<IBlockInputStream> impl;
 };
 } // namespace DB
