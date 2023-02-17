@@ -224,12 +224,42 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
     const UInt8 * filt_end = filt_pos + size;
     const T * data_pos = &data[0];
 
-#if __SSE2__
+#if __AVX2__
     /** A slightly more optimized version.
         * Based on the assumption that often pieces of consecutive values
         *  completely pass or do not pass the filter.
         * Therefore, we will optimistically check the parts of `SIMD_BYTES` values.
         */
+
+    static constexpr size_t SIMD_BYTES = 32;
+    const __m256i zero32 = _mm256_setzero_si256();
+    const UInt8 * filt_end_avx = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
+
+    while (filt_pos < filt_end_avx)
+    {
+        int mask = _mm256_movemask_epi8(_mm256_cmpgt_epi8(_mm256_loadu_si256(reinterpret_cast<const __m256i *>(filt_pos)), zero32));
+
+        if (0 == mask)
+        {
+            /// Nothing is inserted.
+        }
+        else if (-1 == mask) /// 0xFFFFFFFF
+        {
+            res_data.insert(res_data.end(), data_pos, data_pos + SIMD_BYTES);
+        }
+        else
+        {
+            for (size_t i = 0; i < SIMD_BYTES; ++i)
+            {
+                if (filt_pos[i])
+                    res_data.push_back(data_pos[i]);
+            }
+        }
+
+        filt_pos += SIMD_BYTES;
+        data_pos += SIMD_BYTES;
+    }
+#elif __SSE2__
 
     static constexpr size_t SIMD_BYTES = 16;
     const __m128i zero16 = _mm_setzero_si128();
