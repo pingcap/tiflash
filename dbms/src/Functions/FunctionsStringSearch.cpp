@@ -1568,7 +1568,7 @@ inline void registerFunctionsStringSearch(FunctionFactory & factory)
 
 #ifndef GENERATE_WEAK_SYMBOL
 // This is a useless function, just for generating codes for weak symbol functions,
-// or the codes o functions defined with inline will not be generated.
+// or the codes of functions defined with inline will not be generated.
 void generate_weak_symbol()
 {
     String s;
