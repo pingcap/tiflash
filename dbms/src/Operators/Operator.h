@@ -56,6 +56,10 @@ public:
     OperatorStatus await();
     virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
 
+    // These two methods are used to set state, log and etc, and should not perform calculation logic, and no errors are expected.
+    virtual void operatePrefix() {}
+    virtual void operateSuffix() {}
+
     virtual String getName() const = 0;
 
     /** Get data structure of the operator in a form of "header" block (it is also called "sample block").

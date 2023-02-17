@@ -63,6 +63,17 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
     tunnels.back()->write(serializePacket(response));
 }
 
+template <typename Tunnel>
+bool MPPTunnelSetBase<Tunnel>::isReadyForWrite() const
+{
+    for (const auto & tunnel : tunnels)
+    {
+        if (!tunnel->isReadyForWrite())
+            return false;
+    }
+    return true;
+}
+
 static inline void updatePartitionWriterMetrics(size_t packet_bytes, bool is_local)
 {
     // statistic

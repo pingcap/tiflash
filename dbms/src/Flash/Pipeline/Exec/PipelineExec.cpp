@@ -17,6 +17,28 @@
 
 namespace DB
 {
+PipelineExec::PipelineExec(
+    SourceOpPtr && source_op_,
+    TransformOps && transform_ops_,
+    SinkOpPtr && sink_op_)
+    : source_op(std::move(source_op_))
+    , transform_ops(std::move(transform_ops_))
+    , sink_op(std::move(sink_op_))
+{
+    sink_op->operatePrefix();
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+        (*it)->operatePrefix();
+    source_op->operatePrefix();
+}
+
+PipelineExec::~PipelineExec()
+{
+    sink_op->operateSuffix();
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+        (*it)->operateSuffix();
+    source_op->operateSuffix();
+}
+
 OperatorStatus PipelineExec::execute()
 {
     auto op_status = executeImpl();

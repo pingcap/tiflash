@@ -102,10 +102,13 @@ public:
     }
 
     virtual bool push(TrackedMppDataPacketPtr &&) = 0;
+    virtual bool nonBlockingPush(TrackedMppDataPacketPtr &&) = 0;
 
     virtual void cancelWith(const String &) = 0;
 
     virtual bool finish() = 0;
+
+    virtual bool isReadyForWrite() const = 0;
 
     void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg()
@@ -183,6 +186,11 @@ public:
         return send_queue.push(std::move(data)) == MPMCQueueResult::OK;
     }
 
+    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    {
+        return send_queue.nonBlockingPush(std::move(data)) == MPMCQueueResult::OK;
+    }
+
     void cancelWith(const String & reason) override
     {
         send_queue.cancelWith(reason);
@@ -191,6 +199,11 @@ public:
     bool finish() override
     {
         return send_queue.finish();
+    }
+
+    bool isReadyForWrite() const override
+    {
+        return !send_queue.isFull();
     }
 
 private:
@@ -220,9 +233,19 @@ public:
         return queue.push(std::move(data));
     }
 
+    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    {
+        return queue.nonBlockingPush(std::move(data));
+    }
+
     bool finish() override
     {
         return queue.finish();
+    }
+
+    bool isReadyForWrite() const override
+    {
+        return !queue.isFull();
     }
 
     void cancelWith(const String & reason) override
@@ -288,7 +311,18 @@ public:
         // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
         data->switchMemTracker(local_request_handler.recv_mem_tracker);
 
-        return local_request_handler.write<enable_fine_grained_shuffle>(source_index, data);
+        return local_request_handler.write<enable_fine_grained_shuffle, false>(source_index, data);
+    }
+
+    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    {
+        if (unlikely(checkPacketErr(data)))
+            return false;
+
+        // same as function push.
+        data->switchMemTracker(local_request_handler.recv_mem_tracker);
+
+        return local_request_handler.write<enable_fine_grained_shuffle, true>(source_index, data);
     }
 
     void cancelWith(const String & reason) override
@@ -300,6 +334,11 @@ public:
     {
         finishWrite(false, "");
         return true;
+    }
+
+    bool isReadyForWrite() const override
+    {
+        return local_request_handler.isReadyForWrite();
     }
 
 private:
@@ -351,6 +390,11 @@ public:
         return send_queue.push(std::move(data)) == MPMCQueueResult::OK;
     }
 
+    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    {
+        return send_queue.nonBlockingPush(std::move(data)) == MPMCQueueResult::OK;
+    }
+
     void cancelWith(const String & reason) override
     {
         send_queue.cancelWith(reason);
@@ -359,6 +403,11 @@ public:
     bool finish() override
     {
         return send_queue.finish();
+    }
+
+    bool isReadyForWrite() const override
+    {
+        return !send_queue.isFull();
     }
 
 private:
@@ -424,8 +473,32 @@ public:
 
     const String & id() const { return tunnel_id; }
 
-    // write a single packet to the tunnel's send queue, it will block if tunnel is not ready.
-    void write(TrackedMppDataPacketPtr && data);
+    // write a single packet to the tunnel's send queue, it will block if tunnel is not ready and non_blocking = false.
+    template <bool non_blocking = false>
+    void write(TrackedMppDataPacketPtr && data)
+    {
+        LOG_TRACE(log, "ready to write");
+        if constexpr (!non_blocking)
+        {
+            std::unique_lock lk(mu);
+            waitUntilConnectedOrFinished(lk);
+            RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
+        }
+
+        auto pushed_data_size = data->getPacket().ByteSizeLong();
+        bool push_result{false};
+        if constexpr (non_blocking)
+            push_result = tunnel_sender->nonBlockingPush(std::move(data));
+        else
+            push_result = tunnel_sender->push(std::move(data));
+        if (push_result)
+        {
+            updateMetric(data_size_in_queue, pushed_data_size, mode);
+            updateConnProfileInfo(pushed_data_size);
+            return;
+        }
+        throw Exception(fmt::format("write to tunnel {} which is already closed, {}", tunnel_id, tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
+    }
 
     // finish the writing, and wait until the sender finishes.
     void writeDone();
@@ -445,6 +518,9 @@ public:
     void connectAsync(IAsyncCallData * data);
 
     void connectLocalV1(PacketWriter * writer);
+
+    // Used by pipeline model operator to check the mpptunnel if ready for write.
+    bool isReadyForWrite() const;
 
     // wait until all the data has been transferred.
     void waitForFinish();
@@ -491,7 +567,10 @@ private:
         connection_profile_info.packets += 1;
     }
 
-    std::mutex mu;
+    // Update metric for tunnel's response bytes
+    static void updateMetric(std::atomic<Int64> & data_size_in_queue, size_t pushed_data_size, TunnelSenderMode mode);
+
+    mutable std::mutex mu;
     std::condition_variable cv_for_status_changed;
 
     TunnelStatus status;

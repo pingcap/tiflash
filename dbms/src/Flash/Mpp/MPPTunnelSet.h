@@ -83,6 +83,8 @@ public:
 
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
 
+    bool isReadyForWrite() const;
+
 private:
     bool isLocal(size_t index) const;
 
