@@ -101,89 +101,107 @@ CATCH
 TEST_F(ConcurrentIOQueueTest, concurrent1)
 try
 {
-    auto thread_manager = newThreadManager();
-    ConcurrentIOQueue<Int64> queue(5);
+    for (size_t producer = 1; producer < 25; producer += 4)
+    {
+        for (size_t consumer = 1; consumer < 25; consumer += 4)
+        {
+            for (size_t queue_size = 1; queue_size < 25; queue_size += 4)
+            {
+                auto thread_manager = newThreadManager();
+                ConcurrentIOQueue<Int64> queue(queue_size);
 
-    std::atomic_size_t producer_num = 20;
-    size_t produce_count_per_producer = 1000;
-    std::atomic_size_t total_count = producer_num * produce_count_per_producer;
-    for (size_t i = 0; i < producer_num; ++i)
-    {
-        thread_manager->schedule(false, "producer", [&]() {
-            for (size_t i = 0; i < produce_count_per_producer; ++i)
-            {
-                while (queue.isFull())
+                std::atomic_size_t producer_num = producer;
+                size_t produce_count_per_producer = 1000;
+                std::atomic_size_t total_count = producer_num * produce_count_per_producer;
+                for (size_t i = 0; i < producer_num; ++i)
                 {
+                    thread_manager->schedule(false, "producer", [&]() {
+                        for (size_t i = 0; i < produce_count_per_producer; ++i)
+                        {
+                            while (queue.isFull())
+                            {
+                            }
+                            Int64 tmp = 0;
+                            ASSERT_EQ(queue.nonBlockingPush(std::move(tmp)), MPMCQueueResult::OK);
+                        }
+                        if (1 == producer_num.fetch_sub(1))
+                            queue.finish();
+                    });
                 }
-                Int64 tmp = 0;
-                ASSERT_EQ(queue.nonBlockingPush(std::move(tmp)), MPMCQueueResult::OK);
+                for (size_t i = 0; i < consumer; ++i)
+                {
+                    thread_manager->schedule(false, "consumer", [&]() {
+                        while (true)
+                        {
+                            Int64 tmp;
+                            if (queue.pop(tmp) == MPMCQueueResult::OK)
+                                --total_count;
+                            else
+                                return;
+                        }
+                    });
+                }
+                thread_manager->wait();
+                ASSERT_EQ(0, total_count);
             }
-            if (1 == producer_num.fetch_sub(1))
-                queue.finish();
-        });
+        }
     }
-    for (size_t i = 0; i < 10; ++i)
-    {
-        thread_manager->schedule(false, "consumer", [&]() {
-            while (true)
-            {
-                Int64 tmp;
-                if (queue.pop(tmp) == MPMCQueueResult::OK)
-                    --total_count;
-                else
-                    return;
-            }
-        });
-    }
-    thread_manager->wait();
-    ASSERT_EQ(0, total_count);
 }
 CATCH
 
 TEST_F(ConcurrentIOQueueTest, concurrent2)
 try
 {
-    auto thread_manager = newThreadManager();
-    ConcurrentIOQueue<Int64> queue(5);
+    for (size_t producer = 1; producer < 25; producer += 4)
+    {
+        for (size_t consumer = 1; consumer < 25; consumer += 4)
+        {
+            for (size_t queue_size = 1; queue_size < 25; queue_size += 4)
+            {
+                auto thread_manager = newThreadManager();
+                ConcurrentIOQueue<Int64> queue(queue_size);
 
-    std::atomic_size_t producer_num = 20;
-    size_t produce_count_per_producer = 1000;
-    std::atomic_size_t total_count = producer_num * produce_count_per_producer;
-    for (size_t i = 0; i < producer_num; ++i)
-    {
-        thread_manager->schedule(false, "producer", [&]() {
-            for (size_t i = 0; i < produce_count_per_producer; ++i)
-            {
-                while (queue.isFull())
+                std::atomic_size_t producer_num = producer;
+                size_t produce_count_per_producer = 1000;
+                std::atomic_size_t total_count = producer_num * produce_count_per_producer;
+                for (size_t i = 0; i < producer_num; ++i)
                 {
+                    thread_manager->schedule(false, "producer", [&]() {
+                        for (size_t i = 0; i < produce_count_per_producer; ++i)
+                        {
+                            while (queue.isFull())
+                            {
+                            }
+                            Int64 tmp = 0;
+                            ASSERT_EQ(queue.nonBlockingPush(std::move(tmp)), MPMCQueueResult::OK);
+                        }
+                        if (1 == producer_num.fetch_sub(1))
+                            queue.finish();
+                    });
                 }
-                Int64 tmp = 0;
-                ASSERT_EQ(queue.nonBlockingPush(std::move(tmp)), MPMCQueueResult::OK);
-            }
-            if (1 == producer_num.fetch_sub(1))
-                queue.finish();
-        });
-    }
-    for (size_t i = 0; i < 10; ++i)
-    {
-        thread_manager->schedule(false, "consumer", [&]() {
-            while (true)
-            {
-                Int64 tmp;
-                switch (queue.tryPop(tmp))
+                for (size_t i = 0; i < consumer; ++i)
                 {
-                case MPMCQueueResult::OK:
-                    --total_count;
-                case MPMCQueueResult::EMPTY:
-                    break;
-                default:
-                    return;
+                    thread_manager->schedule(false, "consumer", [&]() {
+                        while (true)
+                        {
+                            Int64 tmp;
+                            switch (queue.tryPop(tmp))
+                            {
+                            case MPMCQueueResult::OK:
+                                --total_count;
+                            case MPMCQueueResult::EMPTY:
+                                break;
+                            default:
+                                return;
+                            }
+                        }
+                    });
                 }
+                thread_manager->wait();
+                ASSERT_EQ(0, total_count);
             }
-        });
+        }
     }
-    thread_manager->wait();
-    ASSERT_EQ(0, total_count);
 }
 CATCH
 

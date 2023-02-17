@@ -26,25 +26,32 @@ namespace DB
   * while (queue.isFull()) {}
   * queue.nonBlockingPush(std::move(obj));
   * ```
-  * There is additional overhead compared to using mpmcqueue directly
+  * There are additional overheads compared to using mpmcqueue directly
   * - two locks
-  * - condition double check.
+  * - condition double check
   * Since io queues are not performance sensitive, they are acceptable.
   */
 template <typename T>
 class ConcurrentIOQueue
 {
 public:
-    explicit ConcurrentIOQueue(size_t capacity_)
-        : mpmc_queue(capacity_)
+    explicit ConcurrentIOQueue(size_t capacity)
+        : mpmc_queue(std::max(1, capacity))
     {}
 
     ConcurrentIOQueue(
-        size_t capacity_,
+        size_t capacity,
         Int64 max_auxiliary_memory_usage_,
         typename MPMCQueue<T>::ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
-        : mpmc_queue(capacity_, max_auxiliary_memory_usage_, std::move(get_auxiliary_memory_usage_))
+        : mpmc_queue(std::max(1, capacity), max_auxiliary_memory_usage_, std::move(get_auxiliary_memory_usage_))
     {}
+
+    /// blocking function.
+    /// Just like MPMCQueue::push.
+    MPMCQueueResult push(T && data)
+    {
+        return mpmc_queue.push(std::move(data));
+    }
 
     /// Non-blocking function.
     /// Besides all conditions mentioned at `push`, `nonBlockingPush` will still return OK if queue is `NORMAL` and full.
@@ -116,15 +123,11 @@ public:
         }
     }
 
-    MPMCQueueResult push(T && data)
-    {
-        return mpmc_queue.push(std::move(data));
-    }
-
     size_t size() const
     {
+        size_t mpmc_queue_size = mpmc_queue.size();
         std::lock_guard lock(mu);
-        return remaings.size() + mpmc_queue.size();
+        return mpmc_queue_size + remaings.size();
     }
 
     // When the queue is finished, it may appear that the mpmc_queue is empty but the remaings are not, causing isFull to return true.
@@ -179,14 +182,8 @@ public:
 private:
     void kickRemaingsWithoutLock()
     {
-        while (!remaings.empty())
-        {
-            auto res = mpmc_queue.tryPush(std::move(remaings.back()));
-            if (res == MPMCQueueResult::OK)
-                remaings.pop_back();
-            else
-                return;
-        }
+        while (!remaings.empty() && mpmc_queue.tryPush(std::move(remaings.back())) == MPMCQueueResult::OK)
+            remaings.pop_back();
     }
 
     void kickRemaings()
