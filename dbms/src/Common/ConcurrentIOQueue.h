@@ -28,9 +28,34 @@ public:
         : mpmc_queue(capacity_)
     {}
 
-    ConcurrentIOQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, typename MPMCQueue<T>::ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
+    ConcurrentIOQueue(
+        size_t capacity_,
+        Int64 max_auxiliary_memory_usage_,
+        typename MPMCQueue<T>::ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
         : mpmc_queue(capacity_, max_auxiliary_memory_usage_, std::move(get_auxiliary_memory_usage_))
     {}
+
+    /// Non-blocking function.
+    /// Besides all conditions mentioned at `push`, `nonBlockingPush` will still return OK if queue is `NORMAL` and full.
+    /// The obj that exceeds its capacity will be stored in remaings and wait for the next pop/tryPop to trigger kickRemaings.
+    MPMCQueueResult nonBlockingPush(T && data)
+    {
+        auto res = mpmc_queue.tryPush(std::move(data));
+        if (res == MPMCQueueResult::FULL)
+        {
+            // Double check if this queue is full.
+            std::lock_guard lock(mu);
+            res = mpmc_queue.tryPush(std::move(data));
+            if (res == MPMCQueueResult::FULL)
+            {
+                // obj that exceeds its capacity will be stored in remaings
+                // and wait for the next pop/tryPop to trigger kickRemaingsOnce.
+                remaings.push_front(std::move(data));
+                return MPMCQueueResult::OK;
+            }
+        }
+        return res;
+    }
 
     MPMCQueueResult pop(T & data)
     {
@@ -41,7 +66,7 @@ public:
             // when finished, we still should pop the remaings.
             return kickRemaingsOnce(data) ? MPMCQueueResult::OK : MPMCQueueResult::FINISHED;
         case MPMCQueueResult::OK:
-            kickRemaingsOnce();
+            kickRemaings();
         default:
             return res;
         }
@@ -62,19 +87,19 @@ public:
             res = mpmc_queue.tryPop(data);
             switch (res)
             {
-            case MPMCQueueResult::EMPTY:
             case MPMCQueueResult::FINISHED:
+            case MPMCQueueResult::EMPTY:
                 // when finished, we still should pop the remaings.
                 // when mpmc_queue empty, we can try pop from remaings.
                 return kickRemaingsOnceWithoutLock(data) ? MPMCQueueResult::OK : res;
             case MPMCQueueResult::OK:
-                kickRemaingsOnceWithoutLock();
+                kickRemaingsWithoutLock();
             default:
                 return res;
             }
         }
         case MPMCQueueResult::OK:
-            kickRemaingsOnce();
+            kickRemaings();
         default:
             return res;
         }
@@ -83,23 +108,6 @@ public:
     MPMCQueueResult push(T && data)
     {
         return mpmc_queue.push(std::move(data));
-    }
-
-    MPMCQueueResult nonBlockingPush(T && data)
-    {
-        auto res = mpmc_queue.tryPush(std::move(data));
-        if (res == MPMCQueueResult::FULL)
-        {
-            // Double check if this queue is full.
-            std::lock_guard lock(mu);
-            res = mpmc_queue.tryPush(std::move(data));
-            if (res == MPMCQueueResult::FULL)
-            {
-                remaings.push_front(std::move(data));
-                return MPMCQueueResult::OK;
-            }
-        }
-        return res;
     }
 
     size_t size() const
@@ -158,20 +166,22 @@ public:
     }
 
 private:
-    void kickRemaingsOnceWithoutLock()
+    void kickRemaingsWithoutLock()
     {
-        if (!remaings.empty())
+        while (!remaings.empty())
         {
             auto res = mpmc_queue.tryPush(std::move(remaings.back()));
             if (res == MPMCQueueResult::OK)
                 remaings.pop_back();
+            else
+                return;
         }
     }
 
-    void kickRemaingsOnce()
+    void kickRemaings()
     {
         std::lock_guard lock(mu);
-        kickRemaingsOnceWithoutLock();
+        kickRemaingsWithoutLock();
     }
 
     bool kickRemaingsOnceWithoutLock(T & data)
@@ -193,6 +203,8 @@ private:
 
 private:
     mutable std::mutex mu;
+    // Used to hold objs pushed by `NonBlockingPush` that exceed the capacity.
+    // remaings will try to push into the mpmc_queue when pop/tryPop.
     std::deque<T> remaings;
     MPMCQueue<T> mpmc_queue;
 };
