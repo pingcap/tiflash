@@ -45,6 +45,12 @@ public:
     ColumnPtr filter(const Filter & filter, ssize_t result_size_hint) const override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     void insertDefault() override;
+
+    void insertManyDefaults(size_t length) override
+    {
+        for (size_t i = 0; i < length; ++i)
+            insertDefault();
+    }
     void popBack(size_t n) override;
     ScatterColumns scatter(
         IColumn::ColumnIndex num_columns,
@@ -81,6 +87,16 @@ public:
     }
 
     void insertRangeFrom(const IColumn &, size_t, size_t) override
+    {
+        throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    void insertManyFrom(const IColumn &, size_t, size_t) override
+    {
+        throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    void insertDisjunctFrom(const IColumn &, const std::vector<size_t> &) override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

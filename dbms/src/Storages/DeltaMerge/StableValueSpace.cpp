@@ -73,7 +73,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
     this->files = files_;
 }
 
-void StableValueSpace::saveMeta(WriteBatch & meta_wb)
+void StableValueSpace::saveMeta(WriteBatchWrapper & meta_wb)
 {
     MemoryWriteBuffer buf(0, 8192);
     writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);

@@ -24,8 +24,7 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
-#include <Storages/Page/V3/PageDirectory/PageIdTrait.h>
-#include <Storages/Page/V3/Universal/UniversalPageId.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormat.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatch.h>
 #include <common/defines.h>
 
@@ -56,7 +55,7 @@ public:
 public:
     static UniversalPageStoragePtr
     create(
-        String name,
+        const String & name,
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config,
         const FileProviderPtr & file_provider);
@@ -96,6 +95,8 @@ public:
         return u;
     }
 
+    size_t getNumberOfPages(const String & prefix) const;
+
     void write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) const;
 
     Page read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
@@ -113,7 +114,7 @@ public:
 
     DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot);
 
-    PageIdU64 getMaxId() const;
+    PageIdU64 getMaxIdAfterRestart() const;
 
     // We may skip the GC to reduce useless reading by default.
     bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr);

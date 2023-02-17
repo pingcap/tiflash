@@ -309,7 +309,7 @@ SegmentPtr Segment::restoreSegment( //
     return segment;
 }
 
-void Segment::serialize(WriteBatch & wb)
+void Segment::serialize(WriteBatchWrapper & wb)
 {
     MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
     writeIntBinary(STORAGE_FORMAT_CURRENT.segment, buf);
