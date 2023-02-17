@@ -384,7 +384,7 @@ inline bool likePatternIsStrstr(const String & pattern, String & res)
 // this function does not check the validation of the orig_string
 // for example, for string "abcd" and escape char 'd', it will
 // return "abc\"
-String replaceEscapeChar(String & orig_string, UInt8 escape_char)
+inline String replaceEscapeChar(String & orig_string, UInt8 escape_char)
 {
     std::stringstream ss;
     for (size_t i = 0; i < orig_string.size(); i++)
@@ -1550,7 +1550,7 @@ using FunctionExtract = FunctionsStringSearchToString<ExtractImpl, NameExtract>;
 using FunctionReplaceOne = FunctionStringReplace<ReplaceStringImpl<true>, NameReplaceOne>;
 using FunctionReplaceAll = FunctionStringReplace<ReplaceStringImpl<false>, NameReplaceAll>;
 
-void registerFunctionsStringSearch(FunctionFactory & factory)
+inline void registerFunctionsStringSearch(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionReplaceOne>();
     factory.registerFunction<FunctionReplaceAll>();
@@ -1565,4 +1565,15 @@ void registerFunctionsStringSearch(FunctionFactory & factory)
     factory.registerFunction<FunctionNotLike>();
     factory.registerFunction<FunctionExtract>();
 }
+
+#ifndef GENERATE_WEAK_SYMBOL
+void generate_weak_symbol()
+{
+    String s;
+    registerFunctionsStringSearch(FunctionFactory::instance());
+    replaceEscapeChar(s, 0);
+    likePatternIsStrstr(s, s);
+}
+#endif
+
 } // namespace DB

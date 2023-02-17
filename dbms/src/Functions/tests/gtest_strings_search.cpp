@@ -17,7 +17,9 @@
 #include <Storages/Transaction/Collator.h>
 #include <TestUtils/FunctionTestUtils.h>
 
+#define GENERATE_WEAK_SYMBOL
 #include <Functions/FunctionsStringSearch.cpp>
+#undef GENERATE_WEAK_SYMBOL
 
 namespace DB
 {
