@@ -495,6 +495,27 @@ grpc::Status FlashService::Compact(grpc::ServerContext * grpc_context, const kvr
 
     return manual_compact_manager->handleRequest(request, response);
 }
+
+grpc::Status FlashService::tryAddLock(grpc::ServerContext * grpc_context, const kvrpcpb::TryAddLockRequest * request, kvrpcpb::TryAddLockResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    return s3_lock_service->tryAddLock(request, response);
+}
+
+grpc::Status FlashService::tryMarkDelete(grpc::ServerContext * grpc_context, const kvrpcpb::TryMarkDeleteRequest * request, kvrpcpb::TryMarkDeleteResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    return s3_lock_service->tryMarkDelete(request, response);
+}
+
 grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const mpp::EstablishDisaggregatedTaskRequest * request, mpp::EstablishDisaggregatedTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();

@@ -217,7 +217,6 @@ target_link_libraries (dbms
     tipb
     dtpb
     PSCheckpointProto
-    S3LockServiceProto
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}

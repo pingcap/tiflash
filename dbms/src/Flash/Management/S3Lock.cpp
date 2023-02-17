@@ -12,20 +12,103 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include "S3Lock.h"
 
-#include "S3LockService.h"
-
+#include <Storages/Transaction/TMTContext.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <fmt/core.h>
+#include <grpcpp/client_context.h>
+#include <pingcap/kv/Rpc.h>
+#include <pingcap/kv/internal/conn.h>
 
 #include <ext/scope_guard.h>
 
 
-namespace DB::DM
+namespace pingcap::kv
 {
+// The rpc trait
+template <>
+struct RpcTypeTraits<kvrpcpb::TryAddLockRequest>
+{
+    using RequestType = kvrpcpb::TryAddLockRequest;
+    using ResultType = kvrpcpb::TryAddLockResponse;
+    static const char * err_msg() { return "tryAddLock Failed"; } // NOLINT(readability-identifier-naming)
+    static ::grpc::Status doRPCCall(
+        grpc::ClientContext * context,
+        std::shared_ptr<KvConnClient> client,
+        const RequestType & req,
+        ResultType * res)
+    {
+        return client->stub->tryAddLock(context, req, res);
+    }
+};
+
+template <>
+struct RpcTypeTraits<kvrpcpb::TryMarkDeleteRequest>
+{
+    using RequestType = kvrpcpb::TryMarkDeleteRequest;
+    using ResultType = kvrpcpb::TryMarkDeleteResponse;
+    static const char * err_msg() { return "tryMarkDelete Failed"; } // NOLINT(readability-identifier-naming)
+    static ::grpc::Status doRPCCall(
+        grpc::ClientContext * context,
+        std::shared_ptr<KvConnClient> client,
+        const RequestType & req,
+        ResultType * res)
+    {
+        return client->stub->tryMarkDelete(context, req, res);
+    }
+};
+
+} // namespace pingcap::kv
+
+
+namespace DB::Management
+{
+
+bool S3LockService::sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq)
+{
+    auto req = std::make_shared<kvrpcpb::TryAddLockRequest>();
+    req->set_ori_data_file(ori_data_file);
+    req->set_ori_store_id(ori_store_id);
+    req->set_lock_store_id(lock_store_id);
+    req->set_upload_seq(upload_seq);
+
+    auto res = std::make_shared<kvrpcpb::TryAddLockResponse>();
+    auto call = pingcap::kv::RpcCall<kvrpcpb::TryAddLockRequest>(req);
+    auto * cluster = context.getTMTContext().getKVCluster();
+    LOG_DEBUG(log, "Send TryAddLock request, address={} req={}", address, req->DebugString());
+    cluster->rpc_client->sendRequest(address, call, timeout);
+    const auto & resp = call.getResp();
+    LOG_DEBUG(log, "Received TryAddLock response.");
+    // TODO: handle error
+    if (!resp->error_msg().empty())
+        throw Exception(fmt::format("TryAddLock get resp with error={}", resp->error_msg()));
+
+    return resp->is_success();
+}
+
+bool S3LockService::sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id)
+{
+    auto req = std::make_shared<kvrpcpb::TryMarkDeleteRequest>();
+    req->set_ori_data_file(ori_data_file);
+    req->set_ori_store_id(ori_store_id);
+
+    auto res = std::make_shared<kvrpcpb::TryMarkDeleteResponse>();
+    auto call = pingcap::kv::RpcCall<kvrpcpb::TryMarkDeleteRequest>(req);
+    auto * cluster = context.getTMTContext().getKVCluster();
+    LOG_DEBUG(log, "Send TryMarkDelete request, address={} req={}", address, req->DebugString());
+    cluster->rpc_client->sendRequest(address, call, timeout);
+    const auto & resp = call.getResp();
+    LOG_DEBUG(log, "Received TryMarkDelete response.");
+
+    if (!resp->error_msg().empty())
+        throw Exception(fmt::format("TryMarkDelete get resp with error={}", resp->error_msg()));
+
+    return resp->is_success();
+}
+
 
 bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq)
 {
@@ -50,7 +133,7 @@ bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_stor
         if (it == file_latch_map.end())
         {
             std::unique_lock lock(file_latch_map_mutex);
-            it = file_latch_map.emplace(data_file_name, std::make_shared<DataFileMutex>(std::mutex())).first;
+            it = file_latch_map.emplace(data_file_name, std::make_shared<DataFileMutex>()).first;
         }
     }
     auto & file_lock = it->second;
@@ -127,7 +210,7 @@ bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id)
         if (it == file_latch_map.end())
         {
             std::unique_lock lock(file_latch_map_mutex);
-            it = file_latch_map.emplace(data_file_name, std::make_shared<DataFileMutex>(std::mutex())).first;
+            it = file_latch_map.emplace(data_file_name, std::make_shared<DataFileMutex>()).first;
         }
     }
     auto & file_lock = it->second;
@@ -173,4 +256,4 @@ bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id)
     return true;
 }
 
-} // namespace DB::DM
+} // namespace DB::Management

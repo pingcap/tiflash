@@ -19,6 +19,7 @@
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
+#include "Flash/Management/S3Lock.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -84,6 +85,10 @@ public:
     // Exchange page data
     grpc::Status FetchDisaggregatedPages(grpc::ServerContext * grpc_context, const mpp::FetchDisaggregatedPagesRequest * request, grpc::ServerWriter<::mpp::PagesPacket> * sync_writer) override;
 
+    // For S3 Lock Service
+    grpc::Status tryAddLock(grpc::ServerContext * /*context*/, const kvrpcpb::TryAddLockRequest * request, kvrpcpb::TryAddLockResponse * response) override;
+    grpc::Status tryMarkDelete(grpc::ServerContext * /*context*/, const kvrpcpb::TryMarkDeleteRequest * request, kvrpcpb::TryMarkDeleteResponse * response) override;
+
     void setMockStorage(MockStorage & mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
     Context * getContext() { return context; }
@@ -100,6 +105,7 @@ protected:
     bool enable_async_grpc_client = false;
 
     std::unique_ptr<Management::ManualCompactManager> manual_compact_manager;
+    std::unique_ptr<Management::S3LockService> s3_lock_service;
 
     /// for mpp unit test.
     MockStorage mock_storage;
