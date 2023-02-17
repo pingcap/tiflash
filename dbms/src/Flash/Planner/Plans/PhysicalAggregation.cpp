@@ -25,7 +25,12 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalAggregation.h>
+#include <Flash/Planner/Plans/PhysicalMergeAggregation.h>
+#include <Flash/Planner/Plans/PhysicalPreAggregation.h>
 #include <Interpreters/Context.h>
+
+#include <cassert>
+#include <memory>
 
 namespace DB
 {
@@ -155,16 +160,37 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
 
 void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)
 {
+    auto agg_context = std::make_shared<AggregateContext>(
+        is_final_agg,
+        log->identifier());
+    // TODO support fine grained shuffle.
+    assert(!fine_grained_shuffle.enable());
+    auto pre_agg = std::make_shared<PhysicalPreAggregation>(
+        executor_id,
+        schema,
+        log->identifier(),
+        child,
+        before_agg_actions,
+        aggregation_keys,
+        aggregation_collators,
+        is_final_agg,
+        aggregate_descriptions,
+        expr_after_agg,
+        agg_context);
     // Break the pipeline for pre-agg.
-    // FIXME: Should be newly created PhysicalPreAgg.
-    auto pre_agg_builder = builder.breakPipeline(shared_from_this());
+    auto pre_agg_builder = builder.breakPipeline(pre_agg);
     // Pre-agg pipeline.
     child->buildPipeline(pre_agg_builder);
     pre_agg_builder.build();
     // Final-agg pipeline.
-    // FIXME: Should be newly created PhysicalFinalAgg.
-    builder.addPlanNode(shared_from_this());
-    throw Exception("Unsupport");
+    auto merge_agg = std::make_shared<PhysicalMergeAggregation>(
+        executor_id,
+        schema,
+        log->identifier(),
+        agg_context,
+        expr_after_agg
+    );
+    builder.addPlanNode(merge_agg);
 }
 
 void PhysicalAggregation::finalize(const Names & parent_require)
