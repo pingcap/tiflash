@@ -20,6 +20,17 @@
 
 namespace DB
 {
+/** A simple thread-safe concurrent queue for io.
+  * Provide functions `nonBlockingPush` and `isFull` to support asynchronous writes.
+  * ```
+  * while (!queue.isFull()) {}
+  * queue.nonBlockingPush(std::move(obj));
+  * ```
+  * There is additional overhead compared to using mpmcqueue directly
+  * - two locks
+  * - condition double check.
+  * Since io queues are not performance sensitive, they are acceptable.
+  */
 template <typename T>
 class ConcurrentIOQueue
 {
