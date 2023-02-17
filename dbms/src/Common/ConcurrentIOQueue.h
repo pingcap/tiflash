@@ -48,8 +48,8 @@ public:
             res = mpmc_queue.tryPush(std::move(data));
             if (res == MPMCQueueResult::FULL)
             {
-                // obj that exceeds its capacity will be stored in remaings
-                // and wait for the next pop/tryPop to trigger kickRemaingsOnce.
+                // obj that exceeds its capacity will be stored in remaings.
+                // And then waiting for the next pop/tryPop to trigger kickRemaings.
                 remaings.push_front(std::move(data));
                 return MPMCQueueResult::OK;
             }
