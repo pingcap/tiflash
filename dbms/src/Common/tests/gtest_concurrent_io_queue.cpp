@@ -98,7 +98,7 @@ try
 }
 CATCH
 
-TEST_F(ConcurrentIOQueueTest, concurrent1)
+TEST_F(ConcurrentIOQueueTest, ConcurrentNonBlockingPushAndPop)
 try
 {
     for (size_t producer = 1; producer < 25; producer += 4)
@@ -149,7 +149,7 @@ try
 }
 CATCH
 
-TEST_F(ConcurrentIOQueueTest, concurrent2)
+TEST_F(ConcurrentIOQueueTest, ConcurrentNonBlockingPushAndTryPop)
 try
 {
     for (size_t producer = 1; producer < 25; producer += 4)
