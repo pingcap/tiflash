@@ -722,9 +722,9 @@ String getEnv(std::string_view key)
     const auto * id = std::getenv(key.data());
     if (id != nullptr)
     {
-        return id;
+        return String{id};
     }
-    return {};
+    return String{};
 }
 
 void setEnv(std::string_view key, std::string_view value)
