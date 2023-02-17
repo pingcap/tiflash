@@ -23,7 +23,7 @@ namespace DB
 /** A simple thread-safe concurrent queue for io.
   * Provide functions `nonBlockingPush` and `isFull` to support asynchronous writes.
   * ```
-  * while (!queue.isFull()) {}
+  * while (queue.isFull()) {}
   * queue.nonBlockingPush(std::move(obj));
   * ```
   * There is additional overhead compared to using mpmcqueue directly
