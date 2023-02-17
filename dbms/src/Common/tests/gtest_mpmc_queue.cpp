@@ -732,10 +732,10 @@ try
 }
 CATCH
 
-TEST_F(MPMCQueueTest, EnableRemaings)
+TEST_F(MPMCQueueTest, EnableRemaingsBase)
 try
 {
-    // base
+    // case 1 normal
     {
         size_t max_size = 10;
         MPMCQueue<size_t, true> queue(max_size);
@@ -757,7 +757,57 @@ try
         ASSERT_EQ(queue.tryPop(i), MPMCQueueResult::EMPTY);
     }
 
-    // concurrent nonBlockingPush + pop
+    // case 2 finished
+    {
+        size_t max_size = 10;
+        MPMCQueue<size_t, true> queue(max_size);
+        for (size_t i = 0; i < max_size; ++i)
+        {
+            ASSERT_TRUE(!queue.isFull());
+            ASSERT_EQ(queue.push(std::move(i)), MPMCQueueResult::OK);
+        }
+        ASSERT_TRUE(queue.isFull());
+        ASSERT_EQ(queue.nonBlockingPush(0 + max_size), MPMCQueueResult::OK);
+        ASSERT_TRUE(queue.isFull());
+        ASSERT_EQ((max_size + 1), queue.size());
+
+        queue.finish();
+        ASSERT_EQ(queue.push(0 + max_size), MPMCQueueResult::FINISHED);
+        for (size_t i = 0; i < max_size; ++i)
+            ASSERT_EQ(queue.pop(i), MPMCQueueResult::OK);
+        size_t i;
+        ASSERT_EQ(queue.pop(i), MPMCQueueResult::OK);
+        ASSERT_EQ(queue.pop(i), MPMCQueueResult::FINISHED);
+        ASSERT_EQ(queue.tryPop(i), MPMCQueueResult::FINISHED);
+    }
+
+    // case 3 cancelled
+    {
+        size_t max_size = 10;
+        MPMCQueue<size_t, true> queue(max_size);
+        for (size_t i = 0; i < max_size; ++i)
+        {
+            ASSERT_TRUE(!queue.isFull());
+            ASSERT_EQ(queue.push(std::move(i)), MPMCQueueResult::OK);
+        }
+        ASSERT_TRUE(queue.isFull());
+        ASSERT_EQ(queue.nonBlockingPush(0 + max_size), MPMCQueueResult::OK);
+        ASSERT_TRUE(queue.isFull());
+        ASSERT_EQ((max_size + 1), queue.size());
+
+        queue.cancel();
+        ASSERT_EQ(queue.push(0 + max_size), MPMCQueueResult::CANCELLED);
+        size_t i;
+        ASSERT_EQ(queue.pop(i), MPMCQueueResult::CANCELLED);
+        ASSERT_EQ(queue.tryPop(i), MPMCQueueResult::CANCELLED);
+    }
+}
+CATCH
+
+TEST_F(MPMCQueueTest, EnableRemaingsConcurrent)
+try
+{
+    // nonBlockingPush + pop
     {
         auto thread_manager = newThreadManager();
         MPMCQueue<Int64, true> queue(5);
@@ -797,7 +847,7 @@ try
         ASSERT_EQ(0, total_count);
     }
 
-    // concurrent nonBlockingPush + tryPop
+    // nonBlockingPush + tryPop
     {
         auto thread_manager = newThreadManager();
         MPMCQueue<Int64, true> queue(5);

@@ -290,40 +290,53 @@ private:
             wait(lock, reader_head, node, pred);
         }
         /// double check status after potential wait
-        if (!isCancelled() && read_pos < write_pos)
+        if (!isCancelled())
         {
-            auto & obj = getObj(read_pos);
-            res = std::move(obj);
-            destruct(obj);
-            updateElementAuxiliaryMemory<true>(read_pos);
+            if (read_pos < write_pos)
+            {
+                auto & obj = getObj(read_pos);
+                res = std::move(obj);
+                destruct(obj);
+                updateElementAuxiliaryMemory<true>(read_pos);
 
-            /// update pos only after all operations that may throw an exception.
-            ++read_pos;
-            /// assert so in debug mode, we can get notified if some bugs happens when updating current_auxiliary_memory_usage
-            assert(read_pos != write_pos || current_auxiliary_memory_usage == 0);
-            if (read_pos == write_pos)
-                current_auxiliary_memory_usage = 0;
+                /// update pos only after all operations that may throw an exception.
+                ++read_pos;
+                /// assert so in debug mode, we can get notified if some bugs happens when updating current_auxiliary_memory_usage
+                assert(read_pos != write_pos || current_auxiliary_memory_usage == 0);
+                if (read_pos == write_pos)
+                    current_auxiliary_memory_usage = 0;
 
-            /// Notify next writer within the critical area because:
-            /// 1. If we remove the next writer node and notify it later,
-            ///    it may find itself can't obtain the lock while not being in the list.
-            ///    This need carefully procesing in `assignObj`.
-            /// 2. If we do not remove the next writer, only obtain its pointer and notify it later,
-            ///    deadlock can be possible because different readers may notify one writer.
+                /// Notify next writer within the critical area because:
+                /// 1. If we remove the next writer node and notify it later,
+                ///    it may find itself can't obtain the lock while not being in the list.
+                ///    This need carefully procesing in `assignObj`.
+                /// 2. If we do not remove the next writer, only obtain its pointer and notify it later,
+                ///    deadlock can be possible because different readers may notify one writer.
+                if constexpr (enable_remaings)
+                {
+                    // if enable_remaings, try to push remaings first.
+                    while (!remaings.empty())
+                    {
+                        if (!doAssignObj(std::move(remaings.back())))
+                            break;
+                        remaings.pop_back();
+                    }
+                }
+                if (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage)
+                    notifyNext(writer_head);
+
+                return Result::OK;
+            }
+
+            // If data is empty, we need to try to pop from remaings.
             if constexpr (enable_remaings)
             {
-                // if enable_remaings, try to push remaings first.
-                while (!remaings.empty())
+                if (!remaings.empty())
                 {
-                    if (!doAssignObj(std::move(remaings.back())))
-                        break;
+                    res = std::move(remaings.back());
                     remaings.pop_back();
                 }
             }
-            if (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage)
-                notifyNext(writer_head);
-
-            return Result::OK;
         }
         switch (status)
         {
