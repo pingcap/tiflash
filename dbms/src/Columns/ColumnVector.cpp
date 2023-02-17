@@ -237,22 +237,25 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
 
     while (filt_pos < filt_end_avx)
     {
-        int mask = _mm256_movemask_epi8(_mm256_cmpgt_epi8(_mm256_loadu_si256(reinterpret_cast<const __m256i *>(filt_pos)), zero32));
+        UInt32 mask = _mm256_movemask_epi8(_mm256_cmpgt_epi8(_mm256_loadu_si256(reinterpret_cast<const __m256i *>(filt_pos)), zero32));
 
         if (0 == mask)
         {
             /// Nothing is inserted.
         }
-        else if (-1 == mask) /// 0xFFFFFFFF
+        else if (0xFFFFFFFF == mask) /// 0xFFFFFFFF
         {
             res_data.insert(res_data.end(), data_pos, data_pos + SIMD_BYTES);
         }
         else
         {
-            for (size_t i = 0; i < SIMD_BYTES; ++i)
+            // Due to SIMD_BYTES become larger, it is harder to meet the above two conditions.
+            // So we use the following code to handle the general case.
+            while (mask)
             {
-                if (filt_pos[i])
-                    res_data.push_back(data_pos[i]);
+                size_t offset = __builtin_ctz(mask);
+                res_data.push_back(data_pos[offset]);
+                mask &= mask - 1;
             }
         }
 
