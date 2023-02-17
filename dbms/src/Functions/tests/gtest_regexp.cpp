@@ -21,10 +21,8 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <common/types.h>
 
-#define GENERATE_WEAK_SYMBOL
 #include <Functions/FunctionsRegexp.cpp> // NOLINT
 #include <Functions/FunctionsStringSearch.cpp> // NOLINT
-#undef GENERATE_WEAK_SYMBOL
 #include <string>
 #include <vector>
 

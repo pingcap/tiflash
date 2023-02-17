@@ -17,10 +17,6 @@
 #include <Storages/Transaction/Collator.h>
 #include <TestUtils/FunctionTestUtils.h>
 
-#define GENERATE_WEAK_SYMBOL
-#include <Functions/FunctionsStringSearch.cpp>
-#undef GENERATE_WEAK_SYMBOL
-
 namespace DB
 {
 namespace tests
@@ -679,48 +675,29 @@ TEST_F(StringMatch, IlikeConstWithConst)
 TEST_F(StringMatch, CheckInvariance)
 {
     ColumnWithTypeAndName escape = createConstColumn<Int32>(1, static_cast<Int32>('\\'));
-    FunctionIlike3Args function_ilike;
-    TiDB::TiDBCollatorPtr collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
-    function_ilike.setCollator(collator);
+    TiDB::TiDBCollatorPtr collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN);
 
     std::vector<std::optional<String>> vec_vec_vec_col0{"aAa", "", "123", "a嗯A"};
-    std::vector<std::optional<String>> vec_vec_vec_col1{"aAa", "123", "", "嗯嗯a嗯"};
+    std::vector<std::optional<String>> vec_vec_vec_col1{"aaA", "123", "", "嗯嗯a嗯"};
     String const_const_col0("aSd");
     String const_const_col1("a嗯A嗯");
 
-    ColumnsWithTypeAndName vec_vec_vec{
-        toVec(vec_vec_vec_col0),
-        toVec(vec_vec_vec_col1),
-        escape};
-    ColumnsWithTypeAndName const_const_vec{
-        toConst(const_const_col0),
-        toConst(const_const_col1),
-        escape};
+    auto vec_vec_vec_col0_col = toVec(vec_vec_vec_col0);
+    auto vec_vec_vec_col0_expect_col = toVec(vec_vec_vec_col0);
+    auto vec_vec_vec_col1_col = toVec(vec_vec_vec_col1);
+    auto vec_vec_vec_col1_expect_col = toVec(vec_vec_vec_col1);
+    auto const_const_col0_col = toConst(const_const_col0);
+    auto const_const_col0_expect_col = toConst(const_const_col0);
+    auto const_const_col1_col = toConst(const_const_col1);
+    auto const_const_col1_expect_col = toConst(const_const_col1);
 
-    ColumnsWithTypeAndName vec_vec_vec_expect{
-        toVec(vec_vec_vec_col0),
-        toVec(vec_vec_vec_col1),
-        escape};
-    ColumnsWithTypeAndName const_const_vec_expect{
-        toConst(const_const_col0),
-        toConst(const_const_col1),
-        escape};
+    executeFunction(func_ilike_name, {vec_vec_vec_col0_col, vec_vec_vec_col1_col, escape}, collator);
+    ASSERT_COLUMN_EQ(vec_vec_vec_col0_col, vec_vec_vec_col0_expect_col);
+    ASSERT_COLUMN_EQ(vec_vec_vec_col1_col, vec_vec_vec_col1_expect_col);
 
-    ColumnNumbers arguments{0, 1, 2};
-    std::vector<Block> expect_blocks{Block(vec_vec_vec), Block(const_const_vec)};
-    std::vector<Block> blocks{Block(vec_vec_vec_expect), Block(const_const_vec_expect)};
-    for (auto & block : blocks)
-        block.insert({nullptr, std::make_shared<DataTypeNumber<UInt8>>(), "res"});
-
-    for (size_t i = 0; i < 3; ++i)
-    {
-        for (size_t i = 0; i < blocks.size(); ++i)
-        {
-            function_ilike.executeImpl(blocks[i], arguments, 3);
-            ASSERT_COLUMN_EQ(expect_blocks[i].getByPosition(0), blocks[i].getByPosition(0));
-            ASSERT_COLUMN_EQ(expect_blocks[i].getByPosition(1), blocks[i].getByPosition(1));
-        }
-    }
+    executeFunction(func_ilike_name, {const_const_col0_col, const_const_col1_col, escape}, collator);
+    ASSERT_COLUMN_EQ(const_const_col0_col, const_const_col0_expect_col);
+    ASSERT_COLUMN_EQ(const_const_col1_col, const_const_col1_expect_col);
 }
 
 } // namespace tests

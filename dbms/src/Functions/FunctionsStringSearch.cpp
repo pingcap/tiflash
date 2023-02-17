@@ -341,7 +341,7 @@ struct PositionImpl
 };
 
 /// Is the LIKE expression reduced to finding a substring in a string?
-inline bool likePatternIsStrstr(const String & pattern, String & res)
+bool likePatternIsStrstr(const String & pattern, String & res)
 {
     res = "";
 
@@ -384,7 +384,7 @@ inline bool likePatternIsStrstr(const String & pattern, String & res)
 // this function does not check the validation of the orig_string
 // for example, for string "abcd" and escape char 'd', it will
 // return "abc\"
-inline String replaceEscapeChar(String & orig_string, UInt8 escape_char)
+String replaceEscapeChar(String & orig_string, UInt8 escape_char)
 {
     std::stringstream ss;
     for (size_t i = 0; i < orig_string.size(); i++)
@@ -1550,7 +1550,7 @@ using FunctionExtract = FunctionsStringSearchToString<ExtractImpl, NameExtract>;
 using FunctionReplaceOne = FunctionStringReplace<ReplaceStringImpl<true>, NameReplaceOne>;
 using FunctionReplaceAll = FunctionStringReplace<ReplaceStringImpl<false>, NameReplaceAll>;
 
-inline void registerFunctionsStringSearch(FunctionFactory & factory)
+void registerFunctionsStringSearch(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionReplaceOne>();
     factory.registerFunction<FunctionReplaceAll>();
@@ -1565,17 +1565,4 @@ inline void registerFunctionsStringSearch(FunctionFactory & factory)
     factory.registerFunction<FunctionNotLike>();
     factory.registerFunction<FunctionExtract>();
 }
-
-#ifndef GENERATE_WEAK_SYMBOL
-// This is a useless function, just for generating codes for weak symbol functions,
-// or the codes of functions defined with inline will not be generated.
-void generate_weak_symbol()
-{
-    String s;
-    registerFunctionsStringSearch(FunctionFactory::instance());
-    replaceEscapeChar(s, 0);
-    likePatternIsStrstr(s, s);
-}
-#endif
-
 } // namespace DB
