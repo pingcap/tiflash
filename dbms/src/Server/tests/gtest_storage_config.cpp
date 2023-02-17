@@ -13,6 +13,7 @@
 // limitations under the License.
 
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
+#include <Poco/Environment.h>
 #if !__clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
@@ -717,30 +718,16 @@ background_read_weight=2
 }
 CATCH
 
-String getEnv(std::string_view key)
-{
-    const auto * id = std::getenv(key.data());
-    if (id != nullptr)
-    {
-        return String{id};
-    }
-    return String{};
-}
-
-void setEnv(std::string_view key, std::string_view value)
-{
-    ASSERT_EQ(::setenv(key.data(), value.data(), true), 0) << strerror(errno);
-}
-
 std::pair<String, String> getS3Env()
 {
-    return {std::getenv("AWS_ACCESS_KEY_ID"), std::getenv("AWS_SECRET_ACCESS_KEY")};
+    return {Poco::Environment::get("AWS_ACCESS_KEY_ID", /*default*/ ""),
+            Poco::Environment::get("AWS_SECRET_ACCESS_KEY", /*default*/ "")};
 }
 
-void setS3Env(std::string_view id, std::string_view key)
+void setS3Env(const String & id, const String & key)
 {
-    setEnv("AWS_ACCESS_KEY_ID", id.data());
-    setEnv("AWS_SECRET_ACCESS_KEY", key.data());
+    Poco::Environment::set("AWS_ACCESS_KEY_ID", id);
+    Poco::Environment::set("AWS_SECRET_ACCESS_KEY", key);
 }
 
 TEST_F(StorageConfigTest, S3Config)

@@ -530,16 +530,9 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     readConfig(table, "endpoint", endpoint);
     readConfig(table, "bucket", bucket);
 
-    const auto * id = std::getenv("AWS_ACCESS_KEY_ID");
-    if (id != nullptr)
-    {
-        access_key_id = id;
-    }
-    const auto * key = std::getenv("AWS_SECRET_ACCESS_KEY");
-    if (key != nullptr)
-    {
-        secret_access_key = key;
-    }
+    access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", /*default*/ "");
+    secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", /*default*/ "");
+
     LOG_INFO(log, "endpoint={} bucket={} isS3Enabled={}", endpoint, bucket, isS3Enabled());
 }
 
