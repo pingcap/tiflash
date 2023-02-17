@@ -203,6 +203,130 @@ void ColumnVector<T>::insertRangeFrom(const IColumn & src, size_t start, size_t 
     memcpy(&data[old_size], &src_vec.data[start], length * sizeof(data[0]));
 }
 
+namespace
+{
+
+/// Transform 64-byte mask to 64-bit mask
+inline UInt64 bytes64MaskToBits64Mask(const UInt8 * bytes64)
+{
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+    const __m512i vbytes = _mm512_loadu_si512(reinterpret_cast<const void *>(bytes64));
+    UInt64 res = _mm512_testn_epi8_mask(vbytes, vbytes);
+#elif defined(__AVX__) && defined(__AVX2__)
+    const __m256i zero32 = _mm256_setzero_si256();
+    UInt64 res = (static_cast<UInt64>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(
+                      _mm256_loadu_si256(reinterpret_cast<const __m256i *>(bytes64)),
+                      zero32)))
+                  & 0xffffffff)
+        | (static_cast<UInt64>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(
+               _mm256_loadu_si256(reinterpret_cast<const __m256i *>(bytes64 + 32)),
+               zero32)))
+           << 32);
+#elif defined(__SSE2__)
+    const __m128i zero16 = _mm_setzero_si128();
+    UInt64 res = (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64)),
+                      zero16)))
+                  & 0xffff)
+        | ((static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 16)),
+                zero16)))
+            << 16)
+           & 0xffff0000)
+        | ((static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 32)),
+                zero16)))
+            << 32)
+           & 0xffff00000000)
+        | ((static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 48)),
+                zero16)))
+            << 48)
+           & 0xffff000000000000);
+#elif defined(__aarch64__) && defined(__ARM_NEON)
+    const uint8x16_t bitmask = {0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80, 0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80};
+    const auto * src = reinterpret_cast<const unsigned char *>(bytes64);
+    const uint8x16_t p0 = vceqzq_u8(vld1q_u8(src));
+    const uint8x16_t p1 = vceqzq_u8(vld1q_u8(src + 16));
+    const uint8x16_t p2 = vceqzq_u8(vld1q_u8(src + 32));
+    const uint8x16_t p3 = vceqzq_u8(vld1q_u8(src + 48));
+    uint8x16_t t0 = vandq_u8(p0, bitmask);
+    uint8x16_t t1 = vandq_u8(p1, bitmask);
+    uint8x16_t t2 = vandq_u8(p2, bitmask);
+    uint8x16_t t3 = vandq_u8(p3, bitmask);
+    uint8x16_t sum0 = vpaddq_u8(t0, t1);
+    uint8x16_t sum1 = vpaddq_u8(t2, t3);
+    sum0 = vpaddq_u8(sum0, sum1);
+    sum0 = vpaddq_u8(sum0, sum0);
+    UInt64 res = vgetq_lane_u64(vreinterpretq_u64_u8(sum0), 0);
+#else
+    UInt64 res = 0;
+    for (size_t i = 0; i < 64; ++i)
+        res |= static_cast<UInt64>(0 == bytes64[i]) << i;
+#endif
+    return ~res;
+}
+
+/// If mask is a number of this kind: [0]*[1]* function returns the length of the cluster of 1s.
+/// Otherwise it returns the special value: 0xFF.
+UInt8 prefixToCopy(UInt64 mask)
+{
+    if (mask == 0)
+        return 0;
+    if (mask == static_cast<UInt64>(-1))
+        return 64;
+    /// Row with index 0 correspond to the least significant bit.
+    /// So the length of the prefix to copy is 64 - #(leading zeroes).
+    const UInt64 leading_zeroes = __builtin_clzll(mask);
+    if (mask == ((static_cast<UInt64>(-1) << leading_zeroes) >> leading_zeroes))
+        return 64 - leading_zeroes;
+    else
+        return 0xFF;
+}
+
+uint8_t suffixToCopy(UInt64 mask)
+{
+    const auto prefix_to_copy = prefixToCopy(~mask);
+    return prefix_to_copy >= 64 ? prefix_to_copy : 64 - prefix_to_copy;
+}
+
+} // namespace
+
+template <typename T, typename Container, size_t SIMD_BYTES>
+inline void doFilterAligned(const UInt8 *& filt_pos, const UInt8 *& filt_end_aligned, const T *& data_pos, Container & res_data)
+{
+    while (filt_pos < filt_end_aligned)
+    {
+        UInt64 mask = bytes64MaskToBits64Mask(filt_pos);
+        const UInt8 prefix_to_copy = prefixToCopy(mask);
+
+        if (0xFF != prefix_to_copy)
+        {
+            res_data.insert(data_pos, data_pos + prefix_to_copy);
+        }
+        else
+        {
+            const uint8_t suffix_to_copy = suffixToCopy(mask);
+            if (0xFF != suffix_to_copy)
+            {
+                res_data.insert(data_pos + SIMD_BYTES - suffix_to_copy, data_pos + SIMD_BYTES);
+            }
+            else
+            {
+                while (mask)
+                {
+                    size_t index = __builtin_ctzll(mask);
+                    res_data.push_back(data_pos[index]);
+                    mask &= mask - 1;
+                }
+            }
+        }
+
+        filt_pos += SIMD_BYTES;
+        data_pos += SIMD_BYTES;
+    }
+}
+
 template <typename T>
 ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_size_hint) const
 {
@@ -224,73 +348,16 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
     const UInt8 * filt_end = filt_pos + size;
     const T * data_pos = &data[0];
 
-#if __AVX2__
     /** A slightly more optimized version.
         * Based on the assumption that often pieces of consecutive values
         *  completely pass or do not pass the filter.
         * Therefore, we will optimistically check the parts of `SIMD_BYTES` values.
         */
 
-    static constexpr size_t SIMD_BYTES = 32;
-    const __m256i zero32 = _mm256_setzero_si256();
-    const UInt8 * filt_end_avx = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
+    static constexpr size_t SIMD_BYTES = 64;
+    const UInt8 * filt_end_aligned = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
 
-    while (filt_pos < filt_end_avx)
-    {
-        UInt32 mask = _mm256_movemask_epi8(_mm256_cmpgt_epi8(_mm256_loadu_si256(reinterpret_cast<const __m256i *>(filt_pos)), zero32));
-
-        if (0 == mask)
-        {
-            /// Nothing is inserted.
-        }
-        else if (0xFFFFFFFF == mask) /// 0xFFFFFFFF
-        {
-            res_data.insert(res_data.end(), data_pos, data_pos + SIMD_BYTES);
-        }
-        else
-        {
-            // Due to SIMD_BYTES become larger, it is harder to meet the above two conditions.
-            // So we use the following code to handle the general case.
-            while (mask)
-            {
-                size_t offset = __builtin_ctz(mask);
-                res_data.push_back(data_pos[offset]);
-                mask &= mask - 1;
-            }
-        }
-
-        filt_pos += SIMD_BYTES;
-        data_pos += SIMD_BYTES;
-    }
-#elif __SSE2__
-
-    static constexpr size_t SIMD_BYTES = 16;
-    const __m128i zero16 = _mm_setzero_si128();
-    const UInt8 * filt_end_sse = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
-
-    while (filt_pos < filt_end_sse)
-    {
-        int mask = _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)), zero16));
-
-        if (0 == mask)
-        {
-            /// Nothing is inserted.
-        }
-        else if (0xFFFF == mask)
-        {
-            res_data.insert(data_pos, data_pos + SIMD_BYTES);
-        }
-        else
-        {
-            for (size_t i = 0; i < SIMD_BYTES; ++i)
-                if (filt_pos[i])
-                    res_data.push_back(data_pos[i]);
-        }
-
-        filt_pos += SIMD_BYTES;
-        data_pos += SIMD_BYTES;
-    }
-#endif
+    doFilterAligned<T, Container, SIMD_BYTES>(filt_pos, filt_end_aligned, data_pos, res_data);
 
     while (filt_pos < filt_end)
     {
