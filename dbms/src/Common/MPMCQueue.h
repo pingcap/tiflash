@@ -144,8 +144,11 @@ public:
     }
 
     /// Non-blocking function.
+    /// Besides all conditions mentioned at `push`, `nonBlockingPush` will still return OK if queue is `NORMAL` and full.
+    /// The obj that exceeds its capacity will be stored in remaings and wait for the next pop/tryPop to trigger doAssignObj.
     ALWAYS_INLINE Result nonBlockingPush(T && obj)
     {
+        static_assert(enable_remaings);
         return assignObj<false, true>(std::move(obj));
     }
 
@@ -249,17 +252,23 @@ private:
         }
     }
 
-    ALWAYS_INLINE void doAssignObj(T && obj)
+    ALWAYS_INLINE bool doAssignObj(T && obj)
     {
-        void * addr = getObjAddr(write_pos);
-        new (addr) T(std::move(obj));
-        updateElementAuxiliaryMemory<false>(write_pos);
+        if (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage)
+        {
+            void * addr = getObjAddr(write_pos);
+            new (addr) T(std::move(obj));
+            updateElementAuxiliaryMemory<false>(write_pos);
 
-        /// update pos only after all operations that may throw an exception.
-        ++write_pos;
+            /// update pos only after all operations that may throw an exception.
+            ++write_pos;
 
-        /// See comments in `popObj`.
-        notifyNext(reader_head);
+            /// See comments in `popObj`.
+            notifyNext(reader_head);
+
+            return true;
+        }
+        return false;
     }
 
     template <bool need_wait>
@@ -301,25 +310,18 @@ private:
             ///    This need carefully procesing in `assignObj`.
             /// 2. If we do not remove the next writer, only obtain its pointer and notify it later,
             ///    deadlock can be possible because different readers may notify one writer.
-            if (current_auxiliary_memory_usage < max_auxiliary_memory_usage)
+            if constexpr (enable_remaings)
             {
-                if constexpr (enable_remaings)
+                // if enable_remaings, try to push remaings first.
+                while (!remaings.empty())
                 {
-                    if (remaings.empty())
-                    {
-                        notifyNext(writer_head);
-                    }
-                    else
-                    {
-                        doAssignObj(std::move(remaings.back()));
-                        remaings.pop_back();
-                    }
-                }
-                else
-                {
-                    notifyNext(writer_head);
+                    if (!doAssignObj(std::move(remaings.back())))
+                        break;
+                    remaings.pop_back();
                 }
             }
+            if (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage)
+                notifyNext(writer_head);
 
             return Result::OK;
         }
@@ -356,14 +358,13 @@ private:
         /// double check status after potential wait
         if (isNormal())
         {
-            if (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage)
-            {
-                doAssignObj(std::move(obj));
+            if (doAssignObj(std::move(obj)))
                 return Result::OK;
-            }
 
             if constexpr (push_remaings)
             {
+                // If push_remaings, obj that exceeds its capacity will be stored in remaings
+                // and wait for the next pop/tryPop to trigger doAssignObj.
                 static_assert(enable_remaings);
                 remaings.push_front(std::move(obj));
                 return Result::OK;
@@ -477,6 +478,8 @@ private:
 
     std::vector<Int64> element_auxiliary_memory;
     std::vector<UInt8> data;
+    // Used to hold objs pushed by NonBlockingPush that exceed the capacity.
+    // remaings will try to push into the queue when pop/tryPop.
     std::deque<T> remaings;
 };
 
