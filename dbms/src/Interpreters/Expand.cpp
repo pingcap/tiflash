@@ -64,7 +64,7 @@ void Expand::getGroupingSetsDes(FmtBuffer & buffer) const
 ///      1  1       target a -+----->     1  null  groupingID for a =1
 ///      2  2                 +----->     2  null  groupingID for b =2
 ///                 target b -+----->     null  1  groupingID for a =1
-///                           +----->     null  a  groupingID for b =2
+///                           +----->     null  2  groupingID for b =2
 ///
 /// when target a specified group set, other group set columns should be filled
 /// with null value to make group by(a,b) operator to meet the equivalence effect
@@ -145,15 +145,8 @@ void Expand::replicateAndFillNull(Block & block) const
             assert(block.getByName(grouping_col).column->isColumnNullable());
 
             const auto * nullable_column = typeid_cast<const ColumnNullable *>(block.getByName(grouping_col).column.get());
-            auto origin_size = nullable_column->size();
-            // clone the nested column.
-            MutableColumnPtr new_nested_col = nullable_column->getNestedColumn().cloneResized(origin_size);
-            // just get mutable new null map.
-            auto new_null_map = ColumnUInt8::create();
-            new_null_map->getData().resize(origin_size);
-            memcpy(new_null_map->getData().data(), nullable_column->getNullMapData().data(), origin_size * sizeof(nullable_column->getNullMapData()[0]));
-
-            auto cloned_one = ColumnNullable::create(std::move(new_nested_col), std::move(new_null_map));
+            auto cloned = ColumnNullable::create(nullable_column->getNestedColumnPtr(), nullable_column->getNullMapColumnPtr());
+            auto cloned_one = typeid_cast<ColumnNullable *>(cloned->assumeMutable().get());
 
             /// travel total rows, and set null values for current grouping set column.
             /// basically looks like:
@@ -162,7 +155,7 @@ void Expand::replicateAndFillNull(Block & block) const
             ///      1  1       target a -+----->     1  null  groupingID for a =1
             ///      2  2                 +----->     2  null  groupingID for b =2
             ///                 target b -+----->     null  1  groupingID for a =1
-            ///                           +----->     null  a  groupingID for b =2
+            ///                           +----->     null  2  groupingID for b =2
             ///
             /// after the replicate is now, the data form likes like below
             ///      <a, b, groupingID>              ==>       for one : in <a, b>
@@ -179,7 +172,6 @@ void Expand::replicateAndFillNull(Block & block) const
                 // only when the offset in replicate_group equals to current group_offset, set the data to null.
                 // eg: for case above, for grouping_offset of <a> = 0, we only set the every offset = 0 in each
                 // small replicate_group_x to null.
-                //
                 for (UInt64 j = 0; j < replicate_times_for_one_row; ++j)
                 {
                     if (j == grouping_offset)
@@ -193,7 +185,7 @@ void Expand::replicateAndFillNull(Block & block) const
                     cloned_one->getNullMapData().data()[computed_offset] = 1;
                 }
             }
-            block.getByName(grouping_col).column = std::move(cloned_one);
+            block.getByName(grouping_col).column = std::move(cloned);
         }
         // finish of adjustment for one grouping set columns. (by now one column for one grouping set).
     }

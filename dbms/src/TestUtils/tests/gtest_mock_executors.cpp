@@ -14,7 +14,6 @@
 
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
-#include <gtest/gtest.h>
 
 namespace DB
 {
