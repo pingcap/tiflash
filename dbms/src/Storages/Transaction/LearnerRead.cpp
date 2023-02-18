@@ -164,7 +164,7 @@ LearnerReadSnapshot doLearnerRead(
         auto region = kvstore->getRegion(info.region_id);
         if (region == nullptr)
         {
-            LOG_WARNING(log, "[region {}] is not found in KVStore, try again", info.region_id);
+            LOG_WARNING(log, "region not found in KVStore, region_id={}", info.region_id);
             throw RegionException({info.region_id}, RegionException::RegionReadStatus::NOT_FOUND);
         }
         regions_snapshot.emplace(info.region_id, std::move(region));
@@ -316,7 +316,7 @@ LearnerReadSnapshot doLearnerRead(
                 return;
             }
             // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
-            throw TiFlashException(Errors::Coprocessor::RegionError, "Region {} is unavailable at {}", region_id, index);
+            throw TiFlashException(Errors::Coprocessor::RegionError, "Region unavailable, region_id={} index={}", region_id, index);
         };
         const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
         for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < num_regions; ++region_idx, ++read_index_res_idx)
@@ -380,7 +380,7 @@ LearnerReadSnapshot doLearnerRead(
                             {
                                 LOG_WARNING(
                                     log,
-                                    "Check memory cache, region {}, version {}, handle range {}, status {}",
+                                    "Check memory cache, region_id={} version={} handle_range={} status={}",
                                     region_to_query.region_id,
                                     region_to_query.version,
                                     RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table),
@@ -396,9 +396,9 @@ LearnerReadSnapshot doLearnerRead(
         stats.wait_index_elapsed_ms = watch.elapsedMilliseconds();
         LOG_DEBUG(
             log,
-            "Finish wait index | resolve locks | check memory cache for {} regions, cost {}ms, {} unavailable regions",
-            batch_read_index_req.size(),
+            "Finish wait index | resolve locks | check memory cache, wait_cost={}ms n_regions={} n_unavailable={}",
             stats.wait_index_elapsed_ms,
+            batch_read_index_req.size(),
             unavailable_regions.size());
     };
 
@@ -465,7 +465,7 @@ void validateQueryInfo(
             fail_status = status;
             LOG_WARNING(
                 log,
-                "Check after read from Storage, region {}, version {}, handle range {}, status {}",
+                "Check after snapshot acquired from storage, region_id={} version={} handle_range={} status={}",
                 region_query_info.region_id,
                 region_query_info.version,
                 RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_query_info.range_in_table),

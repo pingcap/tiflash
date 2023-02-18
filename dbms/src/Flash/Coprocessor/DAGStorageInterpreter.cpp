@@ -99,7 +99,7 @@ MakeRegionQueryInfos(
             if (r.key_ranges.empty())
             {
                 throw TiFlashException(
-                    fmt::format("Income key ranges is empty for region: {}", r.region_id),
+                    fmt::format("Income key ranges is empty for region_id={}", r.region_id),
                     Errors::Coprocessor::BadRequest);
             }
             if (region_force_retry.count(id))
@@ -130,7 +130,7 @@ MakeRegionQueryInfos(
                     {
                         throw TiFlashException(
                             fmt::format(
-                                "Income key ranges is illegal for region: {}, table id in key range is {}, table id in region is {}",
+                                "Income key ranges is illegal for region_id={}, table id in key range is {}, table id in region is {}",
                                 r.region_id,
                                 table_id_in_range,
                                 physical_table_id),
@@ -138,7 +138,7 @@ MakeRegionQueryInfos(
                     }
                     if (p.first->compare(*info.range_in_table.first) < 0 || p.second->compare(*info.range_in_table.second) > 0)
                         throw TiFlashException(
-                            fmt::format("Income key ranges is illegal for region: {}", r.region_id),
+                            fmt::format("Income key ranges is illegal for region_id={}", r.region_id),
                             Errors::Coprocessor::BadRequest);
                 }
                 info.required_handle_ranges = r.key_ranges;

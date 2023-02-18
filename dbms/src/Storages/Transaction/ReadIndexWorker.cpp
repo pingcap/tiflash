@@ -375,7 +375,7 @@ void ReadIndexFuture::update(kvrpcpb::ReadIndexResponse resp)
 
     if (notifier)
     {
-        TEST_LOG_FMT("wake notifier for region {}", req.context().region_id());
+        TEST_LOG_FMT("wake notifier for region_id={}", req.context().region_id());
         notifier->wake();
     }
 }
@@ -387,7 +387,7 @@ std::optional<kvrpcpb::ReadIndexResponse> ReadIndexFuture::poll(const std::share
     {
         if (notifier_ != notifier)
         {
-            TEST_LOG_FMT("set notifier for region {}", req.context().region_id());
+            TEST_LOG_FMT("set notifier for region_id={}", req.context().region_id());
             notifier = notifier_;
         }
         return {};
@@ -397,7 +397,7 @@ std::optional<kvrpcpb::ReadIndexResponse> ReadIndexFuture::poll(const std::share
 
 void ReadIndexDataNode::ReadIndexElement::doTriggerCallbacks()
 {
-    TEST_LOG_FMT("start to triggerCallbacks for region {} callbacks size {}", region_id, callbacks.size());
+    TEST_LOG_FMT("start to triggerCallbacks for region_id={} callbacks size {}", region_id, callbacks.size());
 
     if (resp.has_locked())
     {
@@ -442,13 +442,13 @@ void ReadIndexDataNode::ReadIndexElement::doPoll(const TiFlashRaftProxyHelper & 
             bool clean_task = false;
             if (helper.pollReadIndexTask(task, resp, raw_waker))
             {
-                TEST_LOG_FMT("poll ReadIndexElement success for region {}, resp {}", region_id, resp.ShortDebugString());
+                TEST_LOG_FMT("poll ReadIndexElement success for region_id={}, resp {}", region_id, resp.ShortDebugString());
 
                 clean_task = true;
             }
             else if (std::chrono::steady_clock::now() > timeout + start_time)
             {
-                TEST_LOG_FMT("poll ReadIndexElement timeout for region {}", region_id);
+                TEST_LOG_FMT("poll ReadIndexElement timeout for region_id={}", region_id);
 
                 clean_task = true;
                 resp.mutable_region_error()->mutable_server_is_busy(); // set region_error `server_is_busy` for task timeout
@@ -456,7 +456,7 @@ void ReadIndexDataNode::ReadIndexElement::doPoll(const TiFlashRaftProxyHelper & 
             else
             {
                 TEST_LOG_FMT(
-                    "poll ReadIndexElement failed for region {}, time cost {}, timeout {}, start time {}",
+                    "poll ReadIndexElement failed for region_id={}, time cost {}, timeout {}, start time {}",
                     region_id,
                     std::chrono::steady_clock::now() - start_time,
                     timeout,
@@ -571,7 +571,7 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
         auto region_id = max_ts_task->req.context().region_id();
 
         TEST_LOG_FMT(
-            "try to use max_ts {}, from request for region {}, waiting_tasks size {}, running_tasks {}",
+            "try to use max_ts {}, from request for region_id={}, waiting_tasks size {}, running_tasks {}",
             max_ts,
             region_id,
             waiting_tasks.size(),
@@ -598,14 +598,14 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
 
                 if (auto t = makeReadIndexTask(helper, max_ts_task->req); t)
                 {
-                    TEST_LOG_FMT("successfully make ReadIndexTask for region {} ts {}", region_id, max_ts);
+                    TEST_LOG_FMT("successfully make ReadIndexTask for region_id={} ts {}", region_id, max_ts);
                     AsyncWaker waker{helper, new RegionReadIndexNotifier(region_id, max_ts, notify)};
                     run_it = running_tasks.try_emplace(max_ts, region_id, max_ts).first;
                     run_it->second.task_pair.emplace(std::move(*t), std::move(waker));
                 }
                 else
                 {
-                    TEST_LOG_FMT("failed to make ReadIndexTask for region {} ts {}", region_id, max_ts);
+                    TEST_LOG_FMT("failed to make ReadIndexTask for region_id={} ts {}", region_id, max_ts);
                     run_it = running_tasks.try_emplace(max_ts, region_id, max_ts).first;
                     run_it->second.resp.mutable_region_error();
                 }
@@ -628,7 +628,7 @@ ReadIndexDataNode::~ReadIndexDataNode()
     kvrpcpb::ReadIndexResponse resp;
     resp.mutable_region_error()->mutable_region_not_found();
 
-    TEST_LOG_FMT("~ReadIndexDataNode region {}: waiting_tasks {}, running_tasks {} ", region_id, waiting_tasks.size(), running_tasks.size());
+    TEST_LOG_FMT("~ReadIndexDataNode region_id={}: waiting_tasks {}, running_tasks {} ", region_id, waiting_tasks.size(), running_tasks.size());
 
     if (auto waiting_tasks = this->waiting_tasks.popAll(); waiting_tasks)
     {
@@ -659,7 +659,7 @@ ReadIndexDataNodePtr ReadIndexWorker::DataMap::upsertDataNode(RegionID region_id
 {
     auto _ = genWriteLockGuard();
 
-    TEST_LOG_FMT("upsertDataNode for region {}", region_id);
+    TEST_LOG_FMT("upsertDataNode for region_id={}", region_id);
 
     auto [it, ok] = region_map.try_emplace(region_id);
     if (ok)
@@ -701,7 +701,7 @@ void ReadIndexWorker::consumeReadIndexNotifyCtrl()
     for (auto && [region_id, ts] : read_index_notify_ctrl->popAll())
     {
         auto node = data_map.getDataNode(region_id);
-        TEST_LOG_FMT("consume region {}, ts {}", region_id, ts);
+        TEST_LOG_FMT("consume region_id={}, ts {}", region_id, ts);
         node->consume(proxy_helper, ts);
     }
 }
@@ -903,7 +903,7 @@ BatchReadIndexRes ReadIndexWorkerManager::batchReadIndex(
 
 void ReadIndexWorker::removeRegion(uint64_t region_id)
 {
-    TEST_LOG_FMT("remove region {}", region_id);
+    TEST_LOG_FMT("remove region_id={}", region_id);
     data_map.removeRegion(region_id);
 }
 

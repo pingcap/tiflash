@@ -22,6 +22,7 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SSTReader.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
@@ -88,8 +89,8 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::writeSuffix()
 
     LOG_INFO(
         log,
-        "Transformed snapshot in SSTFile to DTFiles, region={} job_type={} cost_ms={} rows={} bytes={} write_cf_keys={} default_cf_keys={} lock_cf_keys={} dt_files=[{}]",
-        child->getRegion()->toString(true),
+        "Transformed snapshot in SSTFile to DTFiles, region_id={} job_type={} cost_ms={} rows={} bytes={} write_cf_keys={} default_cf_keys={} lock_cf_keys={} dt_files=[{}]",
+        child->getRegion()->id(),
         magic_enum::enum_name(job_type),
         watch.elapsedMilliseconds(),
         total_committed_rows,
@@ -132,8 +133,8 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::newDTFileStream()
 
     LOG_DEBUG(
         log,
-        "Create new DTFile for snapshot data, region={} file_idx={} file={}",
-        child->getRegion()->toString(true),
+        "Create new DTFile for snapshot data, region_id={} file_idx={} file={}",
+        child->getRegion()->id(),
         ingest_files.size() - 1,
         dt_file->path());
 
@@ -159,8 +160,8 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::finalizeDTFileStream()
 
     LOG_INFO(
         log,
-        "Finished writing DTFile from snapshot data, region={} file_idx={} file_rows={} file_bytes={} data_range={} file_bytes_on_disk={} file={}",
-        child->getRegion()->toString(true),
+        "Finished writing DTFile from snapshot data, region_id={} file_idx={} file_rows={} file_bytes={} data_range={} file_bytes_on_disk={} file={}",
+        child->getRegion()->id(),
         ingest_files.size() - 1,
         committed_rows_this_dt_file,
         committed_bytes_this_dt_file,

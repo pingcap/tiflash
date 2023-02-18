@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FmtUtils.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
@@ -46,7 +47,6 @@ HttpRequestRes HandleHttpRequestSyncStatus(
             return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
     }
 
-    std::stringstream ss;
     auto & tmt = *server->tmt;
 
     std::vector<RegionID> region_list;
@@ -87,12 +87,12 @@ HttpRequestRes HandleHttpRequestSyncStatus(
             }
         });
     }
-    ss << ready_region_count << std::endl;
-    for (const auto & region_id : region_list)
-        ss << region_id << ' ';
-    ss << std::endl;
+    FmtBuffer buf;
+    buf.fmtAppend("{}\n", ready_region_count);
+    buf.joinStr(region_list.begin(), region_list.end(), " ");
+    buf.append("\n");
 
-    auto * s = RawCppString::New(ss.str());
+    auto * s = RawCppString::New(buf.toString());
     return HttpRequestRes{
         .status = status,
         .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}}};

@@ -101,7 +101,7 @@ void SSTFilesToBlockInputStream::readPrefix()
     {
         lock_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Lock, make_inner_func, ssts_lock, log);
     }
-    LOG_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {} region {}", ssts_write.size(), ssts_lock.size(), ssts_default.size(), this->region->id());
+    LOG_INFO(log, "Finish Construct MultiSSTReader, write={} lock={} default={} region_id={}", ssts_write.size(), ssts_lock.size(), ssts_default.size(), this->region->id());
 
     process_keys.default_cf = 0;
     process_keys.write_cf = 0;

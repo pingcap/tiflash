@@ -59,8 +59,8 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     {
         LOG_WARNING(
             Logger::get(),
-            "Persisting big region: {} with data info: {}, serialized size {}",
-            region.toString(),
+            "Persisting big region={} with data info: {}, serialized size {}",
+            region.toString(true),
             region.dataInfo(),
             region_size);
     }
@@ -284,8 +284,11 @@ RegionMap RegionPersister::restore(PathPool & path_pool, const TiFlashRaftProxyH
 
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
         auto region = Region::deserialize(buf, proxy_helper);
-        if (page.page_id != region->id())
-            throw Exception("region id and page id not match!", ErrorCodes::LOGICAL_ERROR);
+        RUNTIME_CHECK_MSG(
+            page.page_id == region->id(),
+            "region_id and page_id not match! region_id={} page_id={}",
+            region->id(),
+            page.page_id);
 
         regions.emplace(page.page_id, region);
     };

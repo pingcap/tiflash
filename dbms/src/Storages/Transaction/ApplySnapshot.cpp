@@ -64,11 +64,12 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
         old_applied_index = old_region->appliedIndex();
         if (auto new_index = new_region->appliedIndex(); old_applied_index > new_index)
         {
-            auto s = fmt::format("[region {}] already has newer apply-index {} than {}, should not happen",
-                                 region_id,
-                                 old_applied_index,
-                                 new_index);
-            throw Exception(s, ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "try to apply with older index, region_id={} applied_index={} new_index={}",
+                region_id,
+                old_applied_index,
+                new_index);
         }
         else if (old_applied_index == new_index)
         {
@@ -101,16 +102,15 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
                 auto state = getProxyHelper()->getRegionLocalState(overlapped_region.first);
                 if (state.state() != raft_serverpb::PeerState::Tombstone)
                 {
-                    throw Exception(fmt::format(
-                                        "range of region {} is overlapped with {}, state: {}",
-                                        region_id,
-                                        overlapped_region.first,
-                                        state.ShortDebugString()),
-                                    ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR,
+                                    "range of region_id={} is overlapped with region_id={}, state: {}",
+                                    region_id,
+                                    overlapped_region.first,
+                                    state.ShortDebugString());
                 }
                 else
                 {
-                    LOG_INFO(log, "range of region {} is overlapped with `Tombstone` region {}", region_id, overlapped_region.first);
+                    LOG_INFO(log, "range of region_id={} is overlapped with `Tombstone` region_id={}", region_id, overlapped_region.first);
                     handleDestroy(overlapped_region.first, tmt, task_lock);
                 }
             }
@@ -167,7 +167,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                         storage->getRowKeyColumnSize());
                     if (old_key_range != new_key_range)
                     {
-                        LOG_INFO(log, "clear region {} old range {} before apply snapshot of new range {}", region_id, old_key_range.toDebugString(), new_key_range.toDebugString());
+                        LOG_INFO(log, "clear old range before apply snapshot, region_id={} old_range={} new_range={}", region_id, old_key_range.toDebugString(), new_key_range.toDebugString());
                         dm_storage->deleteRange(old_key_range, context.getSettingsRef());
                         // We must flush the deletion to the disk here, because we only flush new range when persisting this region later.
                         dm_storage->flushCache(context, old_key_range, /*try_until_succeed*/ true);
@@ -225,8 +225,11 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 
         if (getRegion(region_id) != old_region || (old_region && old_region_index != old_region->appliedIndex()))
         {
-            auto s = fmt::format("{}: [region {}] instance changed, should not happen", __PRETTY_FUNCTION__, region_id);
-            throw Exception(s, ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "{}: region_id={} instance changed, should not happen",
+                __PRETTY_FUNCTION__,
+                region_id);
         }
 
         if (old_region != nullptr)
@@ -420,7 +423,7 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
 
     FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
-    LOG_INFO(log, "Finish apply snapshot, new_region={}", new_region->toString(false));
+    LOG_INFO(log, "Finish apply snapshot, new_region={}", new_region->toString(true));
 }
 
 template void KVStore::applyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TMTContext &);
@@ -442,8 +445,11 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
     }
 
     throw Exception(
-        fmt::format("{}: [peer {}] not found in [region {}]", __PRETTY_FUNCTION__, peer_id, region.id()),
-        ErrorCodes::LOGICAL_ERROR);
+        ErrorCodes::LOGICAL_ERROR,
+        "{}: peer not found in region, peer_id={} region_id={}",
+        __PRETTY_FUNCTION__,
+        peer_id,
+        region.id());
 }
 
 RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term)
@@ -485,7 +491,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     const RegionPtr region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_WARNING(log, "[region {}] is not found at [term {}, index {}], might be removed already", region_id, term, index);
+        LOG_WARNING(log, "region not found, might be removed already, region_id={} term={} index={}", region_id, term, index);
         return EngineStoreApplyRes::NotFound;
     }
 
@@ -548,7 +554,7 @@ RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTVi
     }
     catch (DB::Exception & e)
     {
-        e.addMessage(fmt::format("(while handleIngestSST region_id={}, index={}, term={})", tmp_region->id(), index, term));
+        e.addMessage(fmt::format("(while handleIngestSST region_id={} index={} term={})", tmp_region->id(), index, term));
         e.rethrow();
     }
 
