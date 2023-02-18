@@ -124,7 +124,7 @@ bool ExternalPageCallbacksManager<Trait>::gc(
 
     const GCTimeStatistics statistics = doGC(blob_store, page_directory, write_limiter, read_limiter);
     assert(statistics.stage != GCStageType::Unknown); // `doGC` must set the stage
-    LOG_DEBUG(log, statistics.toLogging());
+    LOG_INFO(log, statistics.toLogging());
 
     return statistics.executeNextImmediately();
 }
