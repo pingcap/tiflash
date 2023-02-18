@@ -37,11 +37,13 @@ struct DiskCapacity
 class PathCapacityMetrics : private boost::noncopyable
 {
 public:
-    PathCapacityMetrics(const size_t capacity_quota_, // will be ignored if `main_capacity_quota` is not empty
-        const Strings & main_paths_, const std::vector<size_t> main_capacity_quota_, //
-        const Strings & latest_paths_, const std::vector<size_t> latest_capacity_quota_);
+    PathCapacityMetrics(size_t capacity_quota_, // will be ignored if `main_capacity_quota` is not empty
+                        const Strings & main_paths_,
+                        const std::vector<size_t> & main_capacity_quota_, //
+                        const Strings & latest_paths_,
+                        const std::vector<size_t> & latest_capacity_quota_);
 
-    virtual ~PathCapacityMetrics(){};
+    virtual ~PathCapacityMetrics() = default;
 
     void addUsedSize(std::string_view file_path, size_t used_bytes);
 
@@ -73,18 +75,25 @@ private:
         // Used bytes for this path
         std::atomic<uint64_t> used_bytes = 0;
 
-        std::tuple<FsStats, struct statvfs> getStats(Poco::Logger * log) const;
+        std::tuple<FsStats, struct statvfs> getStats(const LoggerPtr & log) const;
 
         CapacityInfo() = default;
-        CapacityInfo(String p, uint64_t c) : path(std::move(p)), capacity_bytes(c) {}
-        CapacityInfo(const CapacityInfo & rhs) : path(rhs.path), capacity_bytes(rhs.capacity_bytes), used_bytes(rhs.used_bytes.load()) {}
+        CapacityInfo(String p, uint64_t c)
+            : path(std::move(p))
+            , capacity_bytes(c)
+        {}
+        CapacityInfo(const CapacityInfo & rhs)
+            : path(rhs.path)
+            , capacity_bytes(rhs.capacity_bytes)
+            , used_bytes(rhs.used_bytes.load())
+        {}
     };
 
     // Max quota bytes can be use for this TiFlash instance.
     // 0 means no quota, use the whole disk.
     size_t capacity_quota;
     std::vector<CapacityInfo> path_infos;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 } // namespace DB
