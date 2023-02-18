@@ -146,7 +146,7 @@ void Expand::replicateAndFillNull(Block & block) const
 
             const auto * nullable_column = typeid_cast<const ColumnNullable *>(block.getByName(grouping_col).column.get());
             auto cloned = ColumnNullable::create(nullable_column->getNestedColumnPtr(), nullable_column->getNullMapColumnPtr());
-            auto cloned_one = typeid_cast<ColumnNullable *>(cloned->assumeMutable().get());
+            auto *cloned_one = typeid_cast<ColumnNullable *>(cloned->assumeMutable().get());
 
             /// travel total rows, and set null values for current grouping set column.
             /// basically looks like:
@@ -235,11 +235,6 @@ std::set<String> Expand::getAllGroupSetColumnNames() const
         }
     }
     return name_set;
-}
-
-std::shared_ptr<Expand> Expand::sharedExpand(const GroupingSets & groupingSets)
-{
-    return std::make_shared<Expand>(groupingSets);
 }
 
 const std::string Expand::grouping_identifier_column_name = "groupingID";

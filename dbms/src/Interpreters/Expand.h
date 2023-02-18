@@ -18,16 +18,7 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
-#include <Common/Arena.h>
-#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <DataStreams/SizeLimits.h>
-#include <Interpreters/AggregationCommon.h>
-#include <Interpreters/SettingsCommon.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
-#include <common/ThreadPool.h>
-
-#include <shared_mutex>
 
 namespace DB
 {
@@ -124,8 +115,6 @@ public:
     const GroupingColumnNames & getGroupSetColumnNamesByOffset(size_t offset) const;
 
     std::set<String> getAllGroupSetColumnNames() const;
-
-    static std::shared_ptr<Expand> sharedExpand(const GroupingSets & groupingSets);
 
     void getGroupingSetsDes(FmtBuffer & buffer) const;
 
