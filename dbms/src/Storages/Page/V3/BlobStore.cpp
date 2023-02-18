@@ -720,8 +720,8 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
         PageMap page_map;
         for (const auto & [page_id_v3, entry] : entries)
         {
-            (void)entry;
-            LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+            UNUSED(entry);
+            LOG_INFO(log, "Read entry [page_id={}] without entry size.", page_id_v3);
             Page page(page_id_v3);
             page_map.emplace(page_id_v3.low, page);
         }
@@ -808,7 +808,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
     if (buf_size == 0)
     {
-        LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+        LOG_INFO(log, "Read entry [page_id={}] without entry size.", page_id_v3);
         Page page(page_id_v3);
         return page;
     }
