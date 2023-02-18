@@ -134,6 +134,14 @@ public:
     }
 };
 
+struct LearnerReadStatistics
+{
+    UInt64 read_index_elapsed_ms = 0;
+    UInt64 wait_index_elapsed_ms = 0;
+
+    UInt64 num_stale_read = 0;
+};
+
 LearnerReadSnapshot doLearnerRead(
     const TiDB::TableID logical_table_id,
     MvccQueryInfo & mvcc_query_info_,
@@ -174,6 +182,7 @@ LearnerReadSnapshot doLearnerRead(
 
     // TODO: refactor this enormous lambda into smaller parts
     UnavailableRegions unavailable_regions;
+    LearnerReadStatistics stats;
     const auto batch_wait_index = [&](const size_t region_begin_idx) -> void {
         Stopwatch batch_wait_data_watch;
         Stopwatch watch;
@@ -249,8 +258,8 @@ LearnerReadSnapshot doLearnerRead(
         }();
 
         {
-            auto read_index_elapsed_ms = watch.elapsedMilliseconds();
-            GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(read_index_elapsed_ms / 1000.0);
+            stats.read_index_elapsed_ms = watch.elapsedMilliseconds();
+            GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(stats.read_index_elapsed_ms / 1000.0);
             const size_t cached_size = ori_batch_region_size - batch_read_index_req.size();
 
             LOG_DEBUG(
@@ -258,7 +267,7 @@ LearnerReadSnapshot doLearnerRead(
                 "Batch read index, original size {}, send & get {} message, cost {}ms{}",
                 ori_batch_region_size,
                 batch_read_index_req.size(),
-                read_index_elapsed_ms,
+                stats.read_index_elapsed_ms,
                 (cached_size != 0) ? (fmt::format(", {} in cache", cached_size)) : "");
 
             watch.restart(); // restart to count the elapsed of wait index
@@ -371,12 +380,12 @@ LearnerReadSnapshot doLearnerRead(
             }
         }
         GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds()); // For DBaaS SLI
-        auto wait_index_elapsed_ms = watch.elapsedMilliseconds();
+        stats.wait_index_elapsed_ms = watch.elapsedMilliseconds();
         LOG_DEBUG(
             log,
             "Finish wait index | resolve locks | check memory cache for {} regions, cost {}ms, {} unavailable regions",
             batch_read_index_req.size(),
-            wait_index_elapsed_ms,
+            stats.wait_index_elapsed_ms,
             unavailable_regions.size());
     };
 
@@ -392,9 +401,13 @@ LearnerReadSnapshot doLearnerRead(
     LOG_IMPL(
         log,
         log_lvl,
-        "[Learner Read] batch read index | wait index cost {} totally, n_regions={} n_unavailable={}",
+        "[Learner Read] batch read index | wait index"
+        " total_cost={} read_cost={} wait_cost={} n_regions={} n_stale_read={} n_unavailable={}",
         time_elapsed_ms,
+        stats.read_index_elapsed_ms,
+        stats.wait_index_elapsed_ms,
         num_regions,
+        stats.num_stale_read,
         unavailable_regions.size());
 
     if (auto * dag_context = context.getDAGContext())
