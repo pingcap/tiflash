@@ -16,8 +16,6 @@
 #include <Storages/Transaction/RegionMeta.h>
 #include <fmt/core.h>
 
-#include "Common/FmtUtils.h"
-
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -133,8 +131,8 @@ ImutRegionRangePtr RegionMeta::getRange() const
 
 std::string RegionMeta::toString(bool dump_status) const
 {
-    FmtBuffer buf;
-    buf.fmtAppend("[region_id={}", regionId());
+    std::stringstream ss;
+    ss << "[region " << regionId();
     if (dump_status)
     {
         UInt64 term = 0;
@@ -144,9 +142,10 @@ std::string RegionMeta::toString(bool dump_status) const
             term = applied_term;
             index = apply_state.applied_index();
         }
-        buf.fmtAppend(" term={} index={}", term, index);
+        ss << ", applied: term " << term << " index " << index;
     }
-    return buf.fmtAppend("]").toString();
+    ss << "]";
+    return ss.str();
 }
 
 raft_serverpb::PeerState RegionMeta::peerState() const

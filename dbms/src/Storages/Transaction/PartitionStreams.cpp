@@ -58,6 +58,7 @@ static void writeRegionDataToStorage(
     RegionDataReadInfoList & data_list_read,
     const LoggerPtr & log)
 {
+    constexpr auto FUNCTION_NAME = __FUNCTION__; // NOLINT(readability-identifier-naming)
     const auto & tmt = context.getTMTContext();
     TableID table_id = region->getMappedTableID();
     UInt64 region_decode_cost = -1, write_part_cost = -1;
@@ -98,7 +99,7 @@ static void writeRegionDataToStorage(
             auto schema_version = storage->getTableInfo().schema_version;
             std::stringstream ss;
             region.pre_decode_cache->toString(ss);
-            LOG_DEBUG(log, "{} got pre-decode cache {}, storage schema version: {}", region->toString(), ss.str(), schema_version);
+            LOG_DEBUG(log, "{}: {} got pre-decode cache {}, storage schema version: {}", FUNCTION_NAME, region->toString(), ss.str(), schema_version);
 
             if (region.pre_decode_cache->schema_version == schema_version)
             {
@@ -107,7 +108,7 @@ static void writeRegionDataToStorage(
             }
             else
             {
-                LOG_DEBUG(log, "schema version not equal, try to re-decode region cache into block");
+                LOG_DEBUG(log, "{}: schema version not equal, try to re-decode region cache into block", FUNCTION_NAME);
                 region.pre_decode_cache->block.clear();
             }
         }
@@ -119,7 +120,7 @@ static void writeRegionDataToStorage(
         BlockUPtr block_ptr = nullptr;
         if (need_decode)
         {
-            LOG_TRACE(log, "begin to decode table_id={} region_id={}", table_id, region->id());
+            LOG_TRACE(log, "{} begin to decode table {}, region {}", FUNCTION_NAME, table_id, region->id());
             DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
             std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(lock, true);
             block_decoding_schema_version = decoding_schema_snapshot->decoding_schema_version;
@@ -149,7 +150,7 @@ static void writeRegionDataToStorage(
             break;
         }
         default:
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown StorageEngine: {}", magic_enum::enum_name(storage->engineType()));
+            throw Exception("Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
         }
 
         write_part_cost = watch.elapsedMilliseconds();
@@ -157,7 +158,7 @@ static void writeRegionDataToStorage(
         if (need_decode)
             storage->releaseDecodingBlock(block_decoding_schema_version, std::move(block_ptr));
 
-        LOG_TRACE(log, "table_id={} region_id={} cost [region decode {}, write part {}] ms", table_id, region->id(), region_decode_cost, write_part_cost);
+        LOG_TRACE(log, "{}: table {}, region {}, cost [region decode {},  write part {}] ms", FUNCTION_NAME, table_id, region->id(), region_decode_cost, write_part_cost);
         return true;
     };
 
@@ -191,7 +192,8 @@ static void writeRegionDataToStorage(
         {
             // Failure won't be tolerated this time.
             // TODO: Enrich exception message.
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Write region failed! region_id={} table_id={}", region->id(), table_id);
+            throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
+                            ErrorCodes::LOGICAL_ERROR);
         }
     }
 }
@@ -230,10 +232,9 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
             // todo check table id
             TableID mapped_table_id;
             if (!computeMappedTableID(*meta_snap.range->rawKeys().first, mapped_table_id) || mapped_table_id != table_id)
-                throw Exception(ErrorCodes::LOGICAL_ERROR,
-                                "Should not happen, region not belong to table, table_id={} expect_table_id={}",
-                                mapped_table_id,
-                                table_id);
+                throw Exception("Should not happen, region not belong to table: table id in region is " + std::to_string(mapped_table_id)
+                                    + ", expected table id is " + std::to_string(table_id),
+                                ErrorCodes::LOGICAL_ERROR);
         }
 
         /// Deal with locks.
@@ -429,7 +430,8 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         tmt.getSchemaSyncer()->syncSchemas(context);
 
         if (!atomic_get(true))
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "AtomicGetStorageSchema failed, region={} table_id={}", region->toString(), table_id);
+            throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",
+                            ErrorCodes::LOGICAL_ERROR);
     }
 
     return {std::move(drop_lock), std::move(dm_storage), std::move(schema_snapshot)};

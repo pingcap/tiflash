@@ -68,7 +68,7 @@ static void insertRegionInfoToTablesRegionInfo(const google::protobuf::RepeatedP
         if (region_info.key_ranges.empty())
         {
             throw TiFlashException(
-                fmt::format("Income key ranges is empty for region_id={}", region_info.region_id),
+                fmt::format("Income key ranges is empty for region: {}", region_info.region_id),
                 Errors::Coprocessor::BadRequest);
         }
         /// TiFlash does not support regions with duplicated region id, so for regions with duplicated
