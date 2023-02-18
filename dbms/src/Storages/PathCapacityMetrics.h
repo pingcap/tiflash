@@ -75,7 +75,7 @@ private:
         // Used bytes for this path
         std::atomic<uint64_t> used_bytes = 0;
 
-        std::tuple<FsStats, struct statvfs> getStats(const LoggerPtr &log) const;
+        std::tuple<FsStats, struct statvfs> getStats(const LoggerPtr & log) const;
 
         CapacityInfo() = default;
         CapacityInfo(String p, uint64_t c)
