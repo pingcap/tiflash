@@ -214,7 +214,7 @@ private:
     InternalRegion & getOrInsertRegion(const Region & region);
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
     InternalRegion & insertRegion(Table & table, const Region & region);
-    InternalRegion & doGetInternalRegion(KeyspaceTableID ks_tb_id, RegionID region_id);
+    InternalRegion & doGetInternalRegion(KeyspaceTableID ks_table_id, RegionID region_id);
 
     // Try write the committed kvs into cache of columnar DeltaMergeStore.
     // Flush the cache if try_persist is set to true.

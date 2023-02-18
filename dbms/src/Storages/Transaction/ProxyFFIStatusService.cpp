@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FmtUtils.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <RaftStoreProxyFFI/ProxyFFI.h>
@@ -76,7 +77,6 @@ HttpRequestRes HandleHttpRequestSyncStatus(
             return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
     }
 
-    std::stringstream ss;
     auto & tmt = *server->tmt;
 
     std::vector<RegionID> region_list;
@@ -112,16 +112,15 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         ready_region_count = region_list.size();
         if (ready_region_count < regions.size())
         {
-            LOG_DEBUG(Logger::get(__FUNCTION__), "table_id={}, total_region_count={}, ready_region_count={}, lag_region_info={}", table_id, regions.size(), ready_region_count, lag_regions_log.toString());
+            LOG_DEBUG(Logger::get(__FUNCTION__), "table_id={} total_region_count={} ready_region_count={} lag_region_info={}", table_id, regions.size(), ready_region_count, lag_regions_log.toString());
         }
     });
+    FmtBuffer buf;
+    buf.fmtAppend("{}\n", ready_region_count);
+    buf.joinStr(region_list.begin(), region_list.end(), " ");
+    buf.append("\n");
 
-    ss << ready_region_count << std::endl;
-    for (const auto & region_id : region_list)
-        ss << region_id << ' ';
-    ss << std::endl;
-
-    auto * s = RawCppString::New(ss.str());
+    auto * s = RawCppString::New(buf.toString());
     return HttpRequestRes{
         .status = status,
         .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}}};

@@ -40,13 +40,13 @@ extern const int TABLE_IS_DROPPED;
 
 RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id, const TableID table_id)
 {
-    auto ks_tb_id = KeyspaceTableID{keyspace_id, table_id};
-    auto it = tables.find(ks_tb_id);
+    auto ks_table_id = KeyspaceTableID{keyspace_id, table_id};
+    auto it = tables.find(ks_table_id);
     if (it == tables.end())
     {
         // Load persisted info.
-        it = tables.emplace(ks_tb_id, table_id).first;
-        LOG_INFO(log, "get new table {} of keyspace {}", table_id, keyspace_id);
+        it = tables.emplace(ks_table_id, table_id).first;
+        LOG_INFO(log, "get new table, keyspace={} table_id={}", keyspace_id, table_id);
     }
     return it->second;
 }
@@ -66,8 +66,10 @@ RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Reg
     auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region_range_keys.rawKeys()));
     if (!ok)
         throw Exception(
-            std::string(__PRETTY_FUNCTION__) + ": insert duplicate internal region " + DB::toString(region_id),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "{}: insert duplicate internal region, region_id={}",
+            __PRETTY_FUNCTION__,
+            region_id);
 
     // Insert region mapping.
     regions[region_id] = KeyspaceTableID{keyspace_id, table.table_id};
@@ -75,9 +77,9 @@ RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Reg
     return it->second;
 }
 
-RegionTable::InternalRegion & RegionTable::doGetInternalRegion(KeyspaceTableID ks_tb_id, DB::RegionID region_id)
+RegionTable::InternalRegion & RegionTable::doGetInternalRegion(KeyspaceTableID ks_table_id, DB::RegionID region_id)
 {
-    return tables.find(ks_tb_id)->second.regions.find(region_id)->second;
+    return tables.find(ks_table_id)->second.regions.find(region_id)->second;
 }
 
 RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const Region & region)
@@ -113,7 +115,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     {
         if (region.cache_bytes >= th_bytes && period_time >= th_duration)
         {
-            LOG_INFO(log, "region {}, cache size {}, seconds since last {}", region.region_id, region.cache_bytes, std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
+            LOG_INFO(log, "region_id={} cache_size={} seconds_since_last={}", region.region_id, region.cache_bytes, std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
             return true;
         }
     }
@@ -203,7 +205,7 @@ void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
     // Remove from table map.
     tables.erase(it);
 
-    LOG_INFO(log, "remove table {} in RegionTable success", table_id);
+    LOG_INFO(log, "remove table_id={} in RegionTable success", table_id);
 }
 
 void RegionTable::updateRegion(const Region & region)
@@ -256,7 +258,7 @@ void removeObsoleteDataInStorage(
 
 void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const RegionTaskLock &)
 {
-    KeyspaceTableID ks_tb_id;
+    KeyspaceTableID ks_table_id;
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> handle_range;
 
     {
@@ -266,12 +268,12 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         auto it = regions.find(region_id);
         if (it == regions.end())
         {
-            LOG_WARNING(log, "region {} does not exist.", region_id);
+            LOG_WARNING(log, "region does not exist, region_id={}", region_id);
             return;
         }
 
-        ks_tb_id = it->second;
-        auto & table = tables.find(ks_tb_id)->second;
+        ks_table_id = it->second;
+        auto & table = tables.find(ks_table_id)->second;
         auto internal_region_it = table.regions.find(region_id);
         handle_range = internal_region_it->second.range_in_table;
 
@@ -283,9 +285,9 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         table.regions.erase(internal_region_it);
         if (table.regions.empty())
         {
-            tables.erase(ks_tb_id);
+            tables.erase(ks_table_id);
         }
-        LOG_INFO(log, "remove [region {}] in RegionTable done", region_id);
+        LOG_INFO(log, "remove region in RegionTable done, region_id={}", region_id);
     }
 
     // Sometime we don't need to remove data. e.g. remove region after region merge.
@@ -297,8 +299,8 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         // But caller(KVStore) should ensure that no new data write into this handle_range
         // before `removeObsoleteDataInStorage` is done. (by param `RegionTaskLock`)
         // And this is expected not to block for long time.
-        removeObsoleteDataInStorage(context, ks_tb_id, handle_range);
-        LOG_INFO(log, "remove region [{}] in storage done", region_id);
+        removeObsoleteDataInStorage(context, ks_table_id, handle_range);
+        LOG_INFO(log, "remove region in storage done, region_id={}", region_id);
     }
 }
 
@@ -307,7 +309,7 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(RegionID regio
     auto region = context->getTMTContext().getKVStore()->getRegion(region_id);
     if (!region)
     {
-        LOG_WARNING(log, "region {} not found", region_id);
+        LOG_WARNING(log, "region not found, region_id={}", region_id);
         return {};
     }
 
@@ -327,7 +329,7 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPt
         }
         else
         {
-            LOG_WARNING(log, "Internal region {} might be removed", region_id);
+            LOG_WARNING(log, "Internal region might be removed, region_id={}", region_id);
             return false;
         }
     };
@@ -335,7 +337,7 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegionAndFlush(const RegionPt
     bool status = func_update_region([&](InternalRegion & internal_region) -> bool {
         if (internal_region.pause_flush)
         {
-            LOG_INFO(log, "Internal region {} pause flush, may be being flushed", region_id);
+            LOG_INFO(log, "Internal region pause flush, may be being flushed, region_id={}", region_id);
             return false;
         }
         internal_region.pause_flush = true;
@@ -474,10 +476,11 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
             it->second.second);
 
         InternalRegion & internal_region = doGetInternalRegion(ks_tbl_id, region_id);
+
         if (*(internal_region.range_in_table.first) <= *(new_handle_range.first)
             && *(internal_region.range_in_table.second) >= *(new_handle_range.second))
         {
-            LOG_INFO(log, "table {}, internal region {} has larger range", table_id, region_id);
+            LOG_INFO(log, "internal region has larger range, table_id={} region_id={}", table_id, region_id);
         }
         else
         {
@@ -493,7 +496,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
     {
         auto & table = getOrCreateTable(keyspace_id, table_id);
         insertRegion(table, region_range_keys, region_id);
-        LOG_INFO(log, "table {} insert internal region {}", table_id, region_id);
+        LOG_INFO(log, "table {} insert internal region_id={}", table_id, region_id);
     }
 }
 
@@ -521,7 +524,7 @@ bool RegionTable::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 
         *leader_safe_ts = it->second->leader_safe_ts.load(std::memory_order_relaxed);
         *self_safe_ts = it->second->self_safe_ts.load(std::memory_order_relaxed);
     }
-    LOG_TRACE(log, "region_id={}, table_id={}, leader_safe_ts={}, self_safe_ts={}", region_id, regions[region_id], *leader_safe_ts, *self_safe_ts);
+    LOG_TRACE(log, "region_id={} table_id={} leader_safe_ts={} self_safe_ts={}", region_id, regions[region_id], *leader_safe_ts, *self_safe_ts);
     return (*leader_safe_ts > *self_safe_ts) && ((*leader_safe_ts >> TsoPhysicalShiftBits) - (*self_safe_ts >> TsoPhysicalShiftBits) > SafeTsDiffThreshold);
 }
 
@@ -543,7 +546,7 @@ void RegionTable::updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 s
         auto it = safe_ts_map.find(region_id);
         if (it == safe_ts_map.end() && (leader_safe_ts == InvalidSafeTS || self_safe_ts == InvalidSafeTS))
         {
-            LOG_TRACE(log, "safe_ts_map empty but safe ts invalid, region_id:{}, leader_safe_ts:{}, self_safe_ts:{}", region_id, leader_safe_ts, self_safe_ts);
+            LOG_TRACE(log, "safe_ts_map empty but safe ts invalid, region_id={} leader_safe_ts={} self_safe_ts={}", region_id, leader_safe_ts, self_safe_ts);
             return;
         }
         if (it != safe_ts_map.end())

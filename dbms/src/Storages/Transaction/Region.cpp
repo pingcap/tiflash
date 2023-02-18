@@ -226,7 +226,7 @@ void RegionRaftCommandDelegate::execPrepareMerge(
     const auto & target = prepare_merge_request.target();
 
     LOG_INFO(log,
-             "{} execute prepare merge, min_index {}, target [region {}]",
+             "{} execute prepare merge, min_index {}, target region_id={}",
              toString(false),
              prepare_merge_request.min_index(),
              target.id());
@@ -262,7 +262,7 @@ RegionID RegionRaftCommandDelegate::execCommitMerge(const raft_cmdpb::AdminReque
     const auto & source_meta = commit_merge_request.source();
     auto source_region = kvstore.getRegion(source_meta.id());
     LOG_INFO(log,
-             "{} execute commit merge, source [region {}], commit index {}",
+             "{} execute commit merge, source region_id={}, commit index={}",
              toString(false),
              source_meta.id(),
              commit_merge_request.commit());
@@ -411,7 +411,7 @@ std::string Region::getDebugString() const
 {
     const auto & meta_snap = meta.dumpRegionMetaSnapshot();
     return fmt::format(
-        "[region {}, index {}, table {}, ver {}, conf_ver {}, state {}, peer {}]",
+        "[region_id={} index={} table_id={} ver={} conf_ver={} state={} peer={}]",
         id(),
         meta.appliedIndex(),
         mapped_table_id,
