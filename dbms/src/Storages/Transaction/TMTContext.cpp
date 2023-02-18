@@ -217,7 +217,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     }
     {
         LOG_INFO(
-            &Poco::Logger::root(),
+            Logger::get(),
             "read-index max thread num: {}, timeout: {}ms; wait-index timeout: {}ms; wait-region-ready timeout: {}s; read-index-worker-tick: {}ms",
             replicaReadMaxThread(),
             batchReadIndexTimeout(),

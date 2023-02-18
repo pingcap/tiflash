@@ -66,7 +66,7 @@ PathPool::PathPool(
     , enable_raft_compatible_mode(enable_raft_compatible_mode_)
     , global_capacity(global_capacity_)
     , file_provider(file_provider_)
-    , log(Logger::get("PathPool"))
+    , log(Logger::get())
 {
     if (kvstore_paths.empty())
     {
@@ -137,7 +137,7 @@ StoragePathPool::StoragePathPool( //
     , shutdown_called(false)
     , global_capacity(std::move(global_capacity_))
     , file_provider(std::move(file_provider_))
-    , log(Logger::get("StoragePathPool"))
+    , log(Logger::get())
 {
     RUNTIME_CHECK_MSG(!database.empty() && !table.empty(), "Can NOT create StoragePathPool [database={}] [table={}]", database, table);
 
