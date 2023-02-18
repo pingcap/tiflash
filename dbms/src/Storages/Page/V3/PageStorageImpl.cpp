@@ -268,6 +268,23 @@ void PageStorageImpl::traverseImpl(const std::function<void(const DB::Page & pag
     }
 }
 
+Poco::Message::Priority
+PageStorageImpl::GCTimeStatistics::getLoggingLevel() const
+{
+    switch (stage)
+    {
+    case GCStageType::FullGC:
+    case GCStageType::FullGCNothingMoved:
+        return Poco::Message::PRIO_INFORMATION;
+    case GCStageType::OnlyInMem:
+        if (compact_wal_happen)
+            return Poco::Message::PRIO_INFORMATION;
+        return Poco::Message::PRIO_DEBUG;
+    case GCStageType::Unknown:
+        return Poco::Message::PRIO_DEBUG;
+    }
+}
+
 String PageStorageImpl::GCTimeStatistics::toLogging() const
 {
     const std::string_view stage_suffix = [this]() {
@@ -327,7 +344,7 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
 
     const GCTimeStatistics statistics = doGC(write_limiter, read_limiter);
     assert(statistics.stage != GCStageType::Unknown); // `doGC` must set the stage
-    LOG_DEBUG(log, statistics.toLogging());
+    LOG_IMPL(log, statistics.getLoggingLevel(), statistics.toLogging());
 
     return statistics.executeNextImmediately();
 }
@@ -412,7 +429,8 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
 
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    if (page_directory->tryDumpSnapshot(read_limiter, write_limiter, force_wal_compact))
+    statistics.compact_wal_happen = page_directory->tryDumpSnapshot(read_limiter, write_limiter, force_wal_compact);
+    if (statistics.compact_wal_happen)
     {
         GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
     }

@@ -152,6 +152,7 @@ void AffectedOption::deserialize(Poco::JSON::Object::Ptr json)
     old_table_id = json->getValue<Int64>("old_table_id");
     old_schema_id = json->getValue<Int64>("old_schema_id");
 }
+
 void SchemaDiff::deserialize(const String & data)
 {
     Poco::JSON::Parser parser;
