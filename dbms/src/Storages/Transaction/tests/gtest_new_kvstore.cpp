@@ -277,7 +277,7 @@ try
                 };
                 auto ssts = default_cf.ssts();
                 ASSERT_EQ(ssts.size(), sst_size);
-                MultiSSTReader<MonoSSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, ssts};
+                MultiSSTReader<MonoSSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, ssts, Logger::get()};
                 size_t counter = 0;
                 while (reader.remained())
                 {
