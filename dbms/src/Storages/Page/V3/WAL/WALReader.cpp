@@ -213,7 +213,7 @@ bool WALStoreReader::openNextFile()
         const auto log_num = next_file.log_num;
         const auto filename = next_file.filename(next_file.stage);
         const auto fullname = next_file.fullname(next_file.stage);
-        LOG_INFO(logger, "Open log file for reading [file={}]", fullname);
+        LOG_DEBUG(logger, "Open log file for reading [file={}]", fullname);
 
         auto read_buf = createReadBufferFromFileBaseByFileProvider(
             provider,

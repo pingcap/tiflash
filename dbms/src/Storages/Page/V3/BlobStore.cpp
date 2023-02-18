@@ -735,8 +735,8 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
         PageMap page_map;
         for (const auto & [page_id_v3, entry] : entries)
         {
-            UNUSED(entry);
-            LOG_INFO(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+            // Unexception behavior but do no harm
+            LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, toDebugString(entry));
             Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
             page_map.emplace(Trait::PageIdTrait::getPageMapKey(page_id_v3), page);
         }
@@ -823,7 +823,8 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
     // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
     if (buf_size == 0)
     {
-        LOG_INFO(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+        // Unexception behavior but do no harm
+        LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, toDebugString(entry));
         Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
         return page;
     }
