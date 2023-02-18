@@ -22,8 +22,6 @@ namespace DB
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 class Context;
-class Logger;
-using LoggerPtr = std::shared_ptr<Logger>;
 
 class GCManager
 {

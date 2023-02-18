@@ -23,6 +23,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Poco/File.h>
+#include <Poco/Message.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDefines.h>
@@ -735,7 +736,7 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
         PageMap page_map;
         for (const auto & [page_id_v3, entry] : entries)
         {
-            // Unexception behavior but do no harm
+            // Unexpected behavior but do no harm
             LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, toDebugString(entry));
             Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
             page_map.emplace(Trait::PageIdTrait::getPageMapKey(page_id_v3), page);
@@ -823,7 +824,7 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
     // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
     if (buf_size == 0)
     {
-        // Unexception behavior but do no harm
+        // Unexpected behavior but do no harm
         LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, toDebugString(entry));
         Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
         return page;
@@ -888,28 +889,43 @@ BlobFilePtr BlobStore<Trait>::read(const typename BlobStore<Trait>::PageId & pag
 
 struct BlobStoreGCInfo
 {
+    enum Type
+    {
+        ReadOnly = 0,
+        NoNeedGC = 1,
+        FullGC = 2,
+        Truncated = 3,
+    };
+
+    Poco::Message::Priority getLoggingLevel() const
+    {
+        if (blob_gc_info[FullGC].empty() && blob_gc_truncate_info.empty())
+            return Poco::Message::PRIO_DEBUG;
+        return Poco::Message::PRIO_INFORMATION;
+    }
+
     String toString() const
     {
         return fmt::format("{}. {}. {}. {}.",
-                           toTypeString("Read-Only Blob", 0),
-                           toTypeString("No GC Blob", 1),
-                           toTypeString("Full GC Blob", 2),
+                           toTypeString("Read-Only Blob", ReadOnly),
+                           toTypeString("No GC Blob", NoNeedGC),
+                           toTypeString("Full GC Blob", FullGC),
                            toTypeTruncateString("Truncated Blob"));
     }
 
     void appendToReadOnlyBlob(const BlobFileId blob_id, double valid_rate)
     {
-        blob_gc_info[0].emplace_back(std::make_pair(blob_id, valid_rate));
+        blob_gc_info[ReadOnly].emplace_back(std::make_pair(blob_id, valid_rate));
     }
 
     void appendToNoNeedGCBlob(const BlobFileId blob_id, double valid_rate)
     {
-        blob_gc_info[1].emplace_back(std::make_pair(blob_id, valid_rate));
+        blob_gc_info[NoNeedGC].emplace_back(std::make_pair(blob_id, valid_rate));
     }
 
     void appendToNeedGCBlob(const BlobFileId blob_id, double valid_rate)
     {
-        blob_gc_info[2].emplace_back(std::make_pair(blob_id, valid_rate));
+        blob_gc_info[FullGC].emplace_back(std::make_pair(blob_id, valid_rate));
     }
 
     void appendToTruncatedBlob(const BlobFileId blob_id, UInt64 origin_size, UInt64 truncated_size, double valid_rate)
@@ -1075,7 +1091,7 @@ std::vector<BlobFileId> BlobStore<Trait>::getGCStats()
         }
     }
 
-    LOG_INFO(log, "BlobStore gc get status done. gc info: {}", blobstore_gc_info.toString());
+    LOG_IMPL(log, blobstore_gc_info.getLoggingLevel(), "BlobStore gc get status done. gc info: {}", blobstore_gc_info.toString());
 
     return blob_need_gc;
 }
