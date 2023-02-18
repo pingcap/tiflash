@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Poco/Message.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <common/types.h>
-#include <Poco/Message.h>
 
 namespace DB::PS::V3
 {
@@ -83,4 +83,3 @@ private:
 };
 
 } // namespace DB::PS::V3
-
