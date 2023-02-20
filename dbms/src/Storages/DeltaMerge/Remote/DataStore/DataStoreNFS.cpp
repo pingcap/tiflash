@@ -25,18 +25,18 @@ void DataStoreNFS::putDMFile(DMFilePtr local_dmf, const DMFileOID & oid)
 
     const auto src_dmf_dir_poco = Poco::File(local_dmf->path());
     const auto dist_dmf_dir = DMFile::getPathByStatus(buildDMFileParentPathInNFS(oid), local_dmf->fileId(), DMFile::READABLE);
-    LOG_DEBUG(log, "Upload DMFile, oid={} local={} remote={}", oid.info(), local_dmf->path(), dist_dmf_dir);
+    LOG_DEBUG(log, "Upload DMFile, oid={} local={} remote={}", oid, local_dmf->path(), dist_dmf_dir);
 
     // TODO: Make this process atomic? Or may be we should reject this case.
     auto dist_dmf_dir_poco = Poco::File(dist_dmf_dir);
     if (dist_dmf_dir_poco.exists())
     {
-        LOG_WARNING(log, "DMFile already exists in the remote directory, overwriting, oid={} local={} remote={}", oid.info(), local_dmf->path(), dist_dmf_dir);
+        LOG_WARNING(log, "DMFile already exists in the remote directory, overwriting, oid={} local={} remote={}", oid, local_dmf->path(), dist_dmf_dir);
         dist_dmf_dir_poco.remove(true);
     }
 
     src_dmf_dir_poco.copyTo(dist_dmf_dir);
-    LOG_DEBUG(log, "Upload DMFile finished, oid={}", oid.info());
+    LOG_DEBUG(log, "Upload DMFile finished, oid={}", oid);
 }
 
 void DataStoreNFS::copyDMFileMetaToLocalPath(const DMFileOID & remote_oid, const String & local_path)
@@ -45,7 +45,7 @@ void DataStoreNFS::copyDMFileMetaToLocalPath(const DMFileOID & remote_oid, const
     auto remote_dmf_dir_poco = Poco::File(remote_dmf_dir);
     if (!remote_dmf_dir_poco.exists())
     {
-        LOG_WARNING(log, "Target DMFile doesn't exists in the remote directory, There may be somethin wrong. oid={} remote={}", remote_oid.info(), remote_dmf_dir);
+        LOG_WARNING(log, "Target DMFile doesn't exists in the remote directory, There may be something wrong. oid={} remote={}", remote_oid, remote_dmf_dir);
     }
     // TODO: remote hardcode
     std::vector<String> target_files = {"meta.txt", "config", "pack", "property", IDataType::getFileNameForStream(DB::toString(-1), {}) + ".idx"};
@@ -60,7 +60,7 @@ void DataStoreNFS::copyDMFileMetaToLocalPath(const DMFileOID & remote_oid, const
         }
         else
         {
-            LOG_WARNING(log, "Target DMFile subfile doesn't exists in the remote directory. oid={} remote={}", remote_oid.info(), sub_file_path);
+            LOG_WARNING(log, "Target DMFile subfile doesn't exists in the remote directory. oid={} remote={}", remote_oid, sub_file_path);
         }
     }
 }
@@ -73,12 +73,12 @@ void DataStoreNFS::linkDMFile(const DMFileOID & remote_oid, const DMFileOID & se
     auto remote_dmf_dir_poco = Poco::File(remote_dmf_dir);
     if (!remote_dmf_dir_poco.exists())
     {
-        LOG_WARNING(log, "Target DMFile doesn't exists in the remote directory, There may be somethin wrong. oid={} remote={}", remote_oid.info(), remote_dmf_dir);
+        LOG_WARNING(log, "Target DMFile doesn't exists in the remote directory, There may be somethin wrong. oid={} remote={}", remote_oid, remote_dmf_dir);
     }
     auto self_dmf_dir_poco = Poco::File(self_dmf_dir);
     if (self_dmf_dir_poco.exists())
     {
-        LOG_WARNING(log, "DMFile already exists in the remote directory, overwriting, oid={} remote={}", self_oid.info(), self_dmf_dir);
+        LOG_WARNING(log, "DMFile already exists in the remote directory, overwriting, oid={} remote={}", self_oid, self_dmf_dir);
         self_dmf_dir_poco.remove(true);
     }
     Poco::File(self_dmf_parent_dir).createDirectories();
@@ -94,7 +94,7 @@ IPreparedDMFileTokenPtr DataStoreNFS::prepareDMFile(const DMFileOID & oid)
     // TODO: if remote_parent_path is a symlink, is there some extra work that need to be done?
     const auto remote_parent_path = buildDMFileParentPathInNFS(oid);
 
-    LOG_DEBUG(log, "Download DMFile, oid={} remote_parent={} local_cache=(remote_parent)", oid.info(), remote_parent_path);
+    LOG_DEBUG(log, "Download DMFile, oid={} remote_parent={} local_cache=(remote_parent)", oid, remote_parent_path);
 
     // We directly use the NFS directory as the cache directory, relies on OS page cache.
     auto * token = new PreparedDMFileToken(file_provider, oid, remote_parent_path);
@@ -108,11 +108,11 @@ IPreparedDMFileTokenPtr DataStoreNFS::prepareDMFile(const DMFileOID & oid)
         {
             throw DB::Exception(fmt::format(
                 "Cannot find DMFile in the NFS directory, oid={} remote_parent={}",
-                oid.info(),
+                oid,
                 remote_parent_path));
         }
 
-        LOG_DEBUG(log, "DMFile download finished, oid={} rows={}", oid.info(), file->getRows());
+        LOG_DEBUG(log, "DMFile download finished, oid={} rows={}", oid, file->getRows());
     }
 
     return std::shared_ptr<PreparedDMFileToken>(token);

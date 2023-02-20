@@ -16,6 +16,8 @@ set(AWS_PUBLIC_COMPILE_DEFS)
 set(AWS_PRIVATE_COMPILE_DEFS)
 set(AWS_PRIVATE_LIBS)
 
+list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DENABLE_CURL_CLIENT")
+
 if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DDEBUG_BUILD")
 endif()
@@ -67,6 +69,7 @@ file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/external/tinyxml2/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/http/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/http/standard/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/http/curl/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/internal/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/monitoring/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/*.cpp"
@@ -345,6 +348,7 @@ target_include_directories(_aws SYSTEM BEFORE PRIVATE ${AWS_PRIVATE_INCLUDES})
 target_compile_definitions(_aws PUBLIC ${AWS_PUBLIC_COMPILE_DEFS})
 target_compile_definitions(_aws PRIVATE ${AWS_PRIVATE_COMPILE_DEFS})
 target_link_libraries(_aws PRIVATE ${AWS_PRIVATE_LIBS})
+target_no_warning(_aws implicit-function-declaration)
 
 aws_set_thread_affinity_method(_aws)
 aws_set_thread_name_method(_aws)

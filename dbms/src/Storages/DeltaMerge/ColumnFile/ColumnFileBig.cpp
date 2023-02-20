@@ -180,7 +180,7 @@ std::shared_ptr<ColumnFileBig> ColumnFileBig::deserializeFromRemoteProtocol(
     const RowKeyRange & segment_range)
 {
     RUNTIME_CHECK(proto.file_id() == oid.file_id);
-    LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileBig from remote, dmf_oid={}", oid.info());
+    LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileBig from remote, dmf_oid={}", oid);
 
     auto prepared = data_store->prepareDMFile(oid);
     auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
