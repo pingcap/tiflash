@@ -532,6 +532,21 @@ static Block decodeCompression(const Block & header, ReadBuffer & istr)
     return decoded_block;
 }
 
+template <typename Buffer>
+extern size_t CompressionEncode(
+    const char * source,
+    size_t source_size,
+    const CompressionSettings & compression_settings,
+    Buffer & compressed_buffer);
+
+CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(std::string_view str, CompressionMethod compression_method)
+{
+    String compressed_buffer;
+    size_t compressed_size = CompressionEncode(str.data(), str.size(), CompressionSettings(compression_method), compressed_buffer);
+    compressed_buffer.resize(compressed_size);
+    return compressed_buffer;
+}
+
 Block CHBlockChunkCodecV1::decode(const Block & header, std::string_view str)
 {
     assert(!str.empty());

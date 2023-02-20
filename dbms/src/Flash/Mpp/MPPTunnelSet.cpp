@@ -109,10 +109,8 @@ static inline void updatePartitionWriterMetrics(CompressionMethod method, size_t
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool is_broadcast)
+void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWriteImpl(TrackedMppDataPacketPtr && tracked_packet, bool is_broadcast)
 {
-    RUNTIME_CHECK(!tunnels.empty());
-    auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
     if (!tracked_packet)
         return;
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
@@ -150,6 +148,16 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool
 }
 
 template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool is_broadcast)
+{
+    RUNTIME_CHECK(!tunnels.empty());
+    auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
+    if (!tracked_packet)
+        return;
+    broadcastOrPassThroughWriteImpl(std::move(tracked_packet), is_broadcast);
+}
+
+template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method, bool is_broadcast)
 {
     if (MPPDataPacketV0 == version)
@@ -159,49 +167,91 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPD
     const size_t local_tunnel_cnt = std::accumulate(tunnels.begin(), tunnels.end(), 0, [](auto res, auto && tunnel) {
         return res + tunnel->isLocal();
     });
-    // Only if all tunnels are local mode, use original way
-    if (local_tunnel_cnt == getPartitionNum())
-    {
-        return broadcastOrPassThroughWrite(blocks, is_broadcast);
-    }
+    const size_t remote_tunnel_cnt = getPartitionNum() - local_tunnel_cnt;
+
     size_t original_size = 0;
-    auto && tracked_packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
-    if (!tracked_packet)
+    // encode by method NONE
+    auto && local_tunnel_tracked_packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, CompressionMethod::NONE, original_size);
+    if (!local_tunnel_tracked_packet)
         return;
-    auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
-    checkPacketSize(packet_bytes);
-    // TODO avoid copy packet for broadcast.
-    for (size_t i = 1; i < tunnels.size(); ++i)
-        tunnels[i]->write(tracked_packet->copy());
-    tunnels[0]->write(std::move(tracked_packet));
-
-    auto total_original_size = tunnels.size() * original_size;
-    auto total_packet_size = tunnels.size() * packet_bytes;
-    if (is_broadcast)
-        GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_original).Increment(total_original_size);
-    else
-        GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_original).Increment(total_original_size);
-
-    switch (compression_method)
+    // Only if all tunnels are local mode or compression method is NONE
+    if (local_tunnel_cnt == getPartitionNum() || compression_method == CompressionMethod::NONE)
     {
-    case CompressionMethod::LZ4:
-    {
-        if (is_broadcast)
-            GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_lz4_compression_remote).Increment(total_packet_size);
-        else
-            GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_lz4_compression_remote).Increment(total_packet_size);
-        break;
+        return broadcastOrPassThroughWriteImpl(std::move(local_tunnel_tracked_packet), is_broadcast);
     }
-    case CompressionMethod::ZSTD:
+    RUNTIME_ASSERT(local_tunnel_tracked_packet->getPacket().chunks_size() == 1, "expect 1, but got {}", local_tunnel_tracked_packet->getPacket().chunks_size());
+    const auto & chunk = local_tunnel_tracked_packet->getPacket().chunks(0);
+    RUNTIME_ASSERT(static_cast<CompressionMethodByte>(chunk[0]) == CompressionMethodByte::NONE);
+    // re-encode by specified compression method
+    auto && remote_tunnel_tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
     {
-        if (is_broadcast)
-            GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_zstd_compression_remote).Increment(total_packet_size);
-        else
-            GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_zstd_compression_remote).Increment(total_packet_size);
-        break;
+        auto && compressed_buffer = CHBlockChunkCodecV1::encode({&chunk[1], chunk.size() - 1}, compression_method);
+        remote_tunnel_tracked_packet->addChunk(std::move(compressed_buffer));
     }
-    default:
-        break;
+    auto local_packet_bytes = local_tunnel_tracked_packet->getPacket().ByteSizeLong();
+    checkPacketSize(local_packet_bytes);
+    auto remote_packet_bytes = remote_tunnel_tracked_packet->getPacket().ByteSizeLong();
+    checkPacketSize(remote_packet_bytes);
+
+    for (size_t i = 0, local_cnt = 0, remote_cnt = 0; i < tunnels.size(); ++i)
+    {
+        if (isLocal(i))
+        {
+            local_cnt++;
+            if (local_cnt == local_tunnel_cnt)
+                tunnels[i]->write(std::move(local_tunnel_tracked_packet));
+            else
+                tunnels[i]->write(local_tunnel_tracked_packet->copy());
+        }
+        else
+        {
+            remote_cnt++;
+            if (remote_cnt == remote_tunnel_cnt)
+                tunnels[i]->write(std::move(remote_tunnel_tracked_packet));
+            else
+                tunnels[i]->write(remote_tunnel_tracked_packet->copy());
+        }
+    }
+    {
+        auto total_original_size = tunnels.size() * original_size;
+        if (is_broadcast)
+        {
+            GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_original).Increment(total_original_size);
+            GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_none_compression_local).Increment(local_tunnel_cnt * local_packet_bytes);
+        }
+        else
+        {
+            GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_original).Increment(total_original_size);
+            GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_none_compression_local).Increment(local_tunnel_cnt * local_packet_bytes);
+        }
+    }
+    {
+        switch (compression_method)
+        {
+        case CompressionMethod::NONE:
+        {
+            // should not reach here
+            break;
+        }
+        case CompressionMethod::LZ4:
+        {
+            if (is_broadcast)
+                GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_lz4_compression_remote).Increment(remote_tunnel_cnt * remote_packet_bytes);
+            else
+                GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_lz4_compression_remote).Increment(remote_tunnel_cnt * remote_packet_bytes);
+            break;
+        }
+        case CompressionMethod::ZSTD:
+        {
+            if (is_broadcast)
+                GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_zstd_compression_remote).Increment(remote_tunnel_cnt * remote_packet_bytes);
+            else
+                GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_zstd_compression_remote).Increment(remote_tunnel_cnt * remote_packet_bytes);
+            break;
+        }
+        default:
+            break;
+        }
     }
 }
 
