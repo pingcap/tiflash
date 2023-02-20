@@ -37,13 +37,6 @@ public:
         old_run_mode = global_context.getPageStorageRunMode();
         global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
         TiFlashStorageTestBasic::SetUp();
-
-        reload();
-    }
-
-    void reload()
-    {
-        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
         auto path = TiFlashTestEnv::getTemporaryPath("UniPageStorageStoragePoolTest");
         std::vector<size_t> caps = {};
         Strings paths = {path};
@@ -227,7 +220,6 @@ try
     }
 }
 CATCH
-
 
 TEST_F(UniPageStorageStoragePoolTest, PutExt)
 try
