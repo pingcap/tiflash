@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# TODO: set default to false
+option(ENABLE_UNI_PS_FFI "Enable write proxy data to uni ps" ON)
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG" OR SAN_DEBUG)
     set(_TIFLASH_PROXY_BUILD_PROFILE "debug")
@@ -26,6 +28,11 @@ file(GLOB_RECURSE _TIFLASH_PROXY_SRCS "${_TIFLASH_PROXY_SOURCE_DIR}/*.rs")
 
 # Build in the build directory instead of the default source directory
 set(TIFLASH_RUST_ENV "CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR}" ${TIFLASH_RUST_ENV})
+if(ENABLE_UNI_PS_FFI)
+    set(PROXY_ENABLE_FEATURES "ENABLE_FEATURES=raftstore-proxy/enable-pagestorage")
+else()
+    set(PROXY_ENABLE_FEATURES "")
+endif()
 
 # use `CFLAGS=-w CXXFLAGS=-w` to inhibit warning messages.
 if (TIFLASH_LLVM_TOOLCHAIN)
@@ -56,10 +63,12 @@ if(TIFLASH_LLVM_TOOLCHAIN AND USE_LIBCXX)
 endif()
 
 message(STATUS "Using rust env for tiflash-proxy: ${TIFLASH_RUST_ENV}")
+message(STATUS "Using rust features for tiflash-proxy: ${PROXY_ENABLE_FEATURES}")
+message(STATUS "Using rust command for tiflash-proxy: ${_TIFLASH_PROXY_MAKE_COMMAND}")
 
 add_custom_command(OUTPUT ${_TIFLASH_PROXY_LIBRARY}
     COMMENT "Building TiFlash Proxy using ${_TIFLASH_PROXY_BUILD_PROFILE} profile"
-    COMMAND ${CMAKE_COMMAND} -E env ${TIFLASH_RUST_ENV} ${_TIFLASH_PROXY_MAKE_COMMAND}
+    COMMAND ${CMAKE_COMMAND} -E env ${TIFLASH_RUST_ENV} ${PROXY_ENABLE_FEATURES} ${_TIFLASH_PROXY_MAKE_COMMAND}
     VERBATIM
     USES_TERMINAL
     WORKING_DIRECTORY ${_TIFLASH_PROXY_SOURCE_DIR}

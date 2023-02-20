@@ -16,6 +16,7 @@
 #include <Common/nocopyable.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/Page/V3/Universal/RaftDataReader.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
@@ -149,6 +150,188 @@ uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t
     {
         auto & kvstore = server->tmt->getKVStore();
         return kvstore->tryFlushRegionData(region_id, false, flush_pattern, *server->tmt, index, term);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+RawCppPtr CreateWriteBatch(const EngineStoreServerWrap * dummy)
+{
+    UNUSED(dummy);
+    return GenRawCppPtr(new UniversalWriteBatch(), RawCppPtrTypeImpl::WriteBatch);
+}
+
+void WriteBatchPutPage(RawVoidPtr ptr, BaseBuffView page_id, BaseBuffView value)
+{
+    LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI write page {}", UniversalPageId(page_id.data, page_id.len)));
+    auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
+    MemoryWriteBuffer buf(0, value.len);
+    buf.write(value.data, value.len);
+    auto data_size = buf.count();
+    assert(data_size == value.len);
+    wb->putPage(UniversalPageId(page_id.data, page_id.len), 0, buf.tryGetReadBuffer(), data_size);
+}
+
+void WriteBatchDelPage(RawVoidPtr ptr, BaseBuffView page_id)
+{
+    LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI delete page {}", UniversalPageId(page_id.data, page_id.len)));
+    auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
+    wb->delPage(UniversalPageId(page_id.data, page_id.len));
+}
+
+uint64_t GetWriteBatchSize(RawVoidPtr ptr)
+{
+    auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
+    return wb->getTotalDataSize();
+}
+
+uint8_t IsWriteBatchEmpty(RawVoidPtr ptr)
+{
+    auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
+    return wb->empty();
+}
+
+void HandleMergeWriteBatch(RawVoidPtr lhs, RawVoidPtr rhs)
+{
+    auto * lwb = reinterpret_cast<UniversalWriteBatch *>(lhs);
+    auto * rwb = reinterpret_cast<UniversalWriteBatch *>(rhs);
+    lwb->merge(*rwb);
+}
+
+void HandleClearWriteBatch(RawVoidPtr ptr)
+{
+    auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
+    wb->clear();
+}
+
+void HandleConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr ptr)
+{
+    try
+    {
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
+        auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
+        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI consume write batch {}", wb->toString()));
+        uni_ps->write(std::move(*wb));
+        wb->clear();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView page_id)
+{
+    try
+    {
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
+        RaftDataReader reader(*uni_ps);
+        auto * page = new Page(reader.read(UniversalPageId(page_id.data, page_id.len)));
+        if (page->isValid())
+        {
+            LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI read page {} success", UniversalPageId(page_id.data, page_id.len)));
+            return CppStrWithView{.inner = GenRawCppPtr(page, RawCppPtrTypeImpl::UniversalPage), .view = BaseBuffView{page->data.begin(), page->data.size()}};
+        }
+        else
+        {
+            LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI read page {} fail", UniversalPageId(page_id.data, page_id.len)));
+            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id)
+{
+    try
+    {
+        LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI scan page from {} to {}", UniversalPageId(start_page_id.data, start_page_id.len), UniversalPageId(end_page_id.data, end_page_id.len)));
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
+        RaftDataReader reader(*uni_ps);
+        std::vector<UniversalPageId> page_ids;
+        std::vector<DB::Page *> pages;
+        auto checker = [&](const UniversalPageId & page_id, DB::Page page) {
+            page_ids.push_back(page_id);
+            pages.push_back(new Page(std::move(page)));
+        };
+        reader.traverse(
+            UniversalPageId(start_page_id.data, start_page_id.len),
+            UniversalPageId(end_page_id.data, end_page_id.len),
+            checker);
+        auto * data = static_cast<char *>(malloc(pages.size() * sizeof(PageAndCppStrWithView)));
+        for (size_t i = 0; i < pages.size(); i++)
+        {
+            auto * target = reinterpret_cast<PageAndCppStrWithView *>(data) + i;
+            auto * key_str = RawCppString::New(page_ids[i].data(), page_ids[i].size());
+            new (target) PageAndCppStrWithView{
+                .page = GenRawCppPtr(pages[i], RawCppPtrTypeImpl::UniversalPage),
+                .key = GenRawCppPtr(key_str, RawCppPtrTypeImpl::String),
+                .page_view = BaseBuffView{.data = pages[i]->data.begin(), .len = pages[i]->data.size()},
+                .key_view = BaseBuffView{.data = key_str->data(), .len = key_str->size()}};
+        }
+        return RawCppPtrCarr{.inner = reinterpret_cast<PageAndCppStrWithView *>(data), .len = pages.size(), .type = static_cast<RawCppPtrType>(RawCppPtrTypeImpl::PageAndCppStr)};
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+CppStrWithView HandleGetLowerBound(const EngineStoreServerWrap * server, BaseBuffView raw_page_id)
+{
+    try
+    {
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
+        RaftDataReader reader(*uni_ps);
+        auto page_id_opt = reader.getLowerBound(UniversalPageId(raw_page_id.data, raw_page_id.len));
+        if (page_id_opt.has_value())
+        {
+            LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI get lower bound for page {} success", UniversalPageId(raw_page_id.data, raw_page_id.len)));
+            auto * s = RawCppString::New(page_id_opt->asStr());
+            return CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}};
+        }
+        else
+        {
+            LOG_TRACE(&Poco::Logger::get("ProxyFFI"), fmt::format("FFI get lower bound for page {} fail", UniversalPageId(raw_page_id.data, raw_page_id.len)));
+            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+uint8_t IsPSEmpty(const EngineStoreServerWrap * server)
+{
+    try
+    {
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
+        return uni_ps->isEmpty();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+void HandlePurgePageStorage(const EngineStoreServerWrap * server)
+{
+    try
+    {
+        auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
+        uni_ps->gc();
     }
     catch (...)
     {
@@ -443,8 +626,69 @@ void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
         case RawCppPtrTypeImpl::WakerNotifier:
             delete reinterpret_cast<AsyncNotifier *>(ptr);
             break;
+        case RawCppPtrTypeImpl::WriteBatch:
+            delete reinterpret_cast<UniversalWriteBatch *>(ptr);
+            break;
+        case RawCppPtrTypeImpl::UniversalPage:
+            delete reinterpret_cast<Page *>(ptr);
+            break;
         default:
             LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
+            exit(-1);
+        }
+    }
+}
+
+void GcRawCppPtrCArr(RawVoidPtr ptr, RawCppPtrType type, uint64_t len)
+{
+    if (ptr)
+    {
+        switch (static_cast<RawCppPtrTypeImpl>(type))
+        {
+        case RawCppPtrTypeImpl::PageAndCppStr:
+        {
+            auto inner = reinterpret_cast<PageAndCppStrWithView *>(ptr);
+            for (size_t i = 0; i < len; i++)
+            {
+                GcRawCppPtr(inner[i].page.ptr, inner[i].page.type);
+                GcRawCppPtr(inner[i].key.ptr, inner[i].key.type);
+            }
+            delete inner;
+            break;
+        }
+        default:
+            LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type arr {}", type);
+            exit(-1);
+        }
+    }
+}
+
+void GcSpecialRawCppPtr(void * ptr, uint64_t hint_size, SpecialCppPtrType type)
+{
+    UNUSED(hint_size);
+    if (ptr)
+    {
+        switch (static_cast<SpecialCppPtrType>(type))
+        {
+        case SpecialCppPtrType::None:
+            // Do nothing.
+            break;
+        case SpecialCppPtrType::TupleOfRawCppPtr:
+        {
+            auto * special_ptr = reinterpret_cast<RawCppPtrTuple *>(ptr);
+            delete special_ptr->inner;
+            delete special_ptr;
+            break;
+        }
+        case SpecialCppPtrType::ArrayOfRawCppPtr:
+        {
+            auto * special_ptr = reinterpret_cast<RawCppPtrArr *>(ptr);
+            delete special_ptr->inner;
+            delete special_ptr;
+            break;
+        }
+        default:
+            LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", static_cast<std::underlying_type_t<SpecialCppPtrType>>(type));
             exit(-1);
         }
     }

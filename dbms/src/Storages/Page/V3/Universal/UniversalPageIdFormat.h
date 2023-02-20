@@ -31,8 +31,9 @@ namespace DB
 //
 //
 // The main key format types:
-// Raft related key
+// Raft related key format
 //  Format: https://github.com/tikv/tikv/blob/9c0df6d68c72d30021b36d24275fdceca9864235/components/keys/src/lib.rs#L24
+//  And to distinguish data written by kv engine and raft engine, we prepend an `0x01` to the key written by kv engine.
 //
 // KVStore related key
 //  Prefix = [optional prefix] + "kvs"
@@ -92,6 +93,43 @@ public:
         return buff.releaseStr();
     }
 
+    // data is in kv engine, so it has another `0x01` prefix
+    // 0x01 0x01 0x02 region_id 0x03
+    static UniversalPageId toRaftApplyStateKeyInKVEngine(UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x03, buff);
+        return buff.releaseStr();
+    }
+
+    // data is in kv engine, so it has another `0x01` prefix
+    // 0x01 0x01 0x03 region_id 0x01
+    static UniversalPageId toRegionLocalStateKeyInKVEngine(UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x01, buff);
+        writeChar(0x03, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
+    // 0x01 0x02 region_id 0x01
+    static String toFullRaftLogPrefix(UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
     static inline PageIdU64 getU64ID(const UniversalPageId & page_id)
     {
         if (page_id.size() >= sizeof(UInt64))
@@ -138,6 +176,6 @@ struct fmt::formatter<DB::UniversalPageId>
     auto format(const DB::UniversalPageId & value, FormatContext & ctx) const -> decltype(ctx.out())
     {
         auto prefix = DB::UniversalPageIdFormat::getFullPrefix(value);
-        return format_to(ctx.out(), "{}.{}", Redact::keyToHexString(prefix.data(), prefix.size()), DB::UniversalPageIdFormat::getU64ID(value));
+        return format_to(ctx.out(), "0x{}.{}", Redact::keyToHexString(prefix.data(), prefix.size()), DB::UniversalPageIdFormat::getU64ID(value));
     }
 };

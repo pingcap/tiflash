@@ -58,6 +58,9 @@ enum class RawCppPtrTypeImpl : RawCppPtrType
     String,
     PreHandledSnapshotWithFiles,
     WakerNotifier,
+    WriteBatch,
+    UniversalPage,
+    PageAndCppStr,
 };
 
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_ = nullptr, RawCppPtrTypeImpl type_ = RawCppPtrTypeImpl::None);
@@ -130,6 +133,19 @@ uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id);
 // 0: try, but can fail.
 // 1: try until succeed.
 uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_pattern, uint64_t index, uint64_t term);
+RawCppPtr CreateWriteBatch(const EngineStoreServerWrap * dummy);
+void WriteBatchPutPage(RawVoidPtr ptr, BaseBuffView page_id, BaseBuffView value);
+void WriteBatchDelPage(RawVoidPtr ptr, BaseBuffView page_id);
+uint64_t GetWriteBatchSize(RawVoidPtr ptr);
+uint8_t IsWriteBatchEmpty(RawVoidPtr ptr);
+void HandleMergeWriteBatch(RawVoidPtr lhs, RawVoidPtr rhs);
+void HandleClearWriteBatch(RawVoidPtr ptr);
+void HandleConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr ptr);
+CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView page_id);
+RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView start_page_id, BaseBuffView end_page_id);
+CppStrWithView HandleGetLowerBound(const EngineStoreServerWrap * server, BaseBuffView raw_page_id);
+uint8_t IsPSEmpty(const EngineStoreServerWrap * server);
+void HandlePurgePageStorage(const EngineStoreServerWrap * server);
 void AtomicUpdateProxy(EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy);
 void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id);
 EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec snaps, RaftCmdHeader header);
@@ -146,6 +162,8 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppP
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView path, BaseBuffView query, BaseBuffView body);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(void * ptr, RawCppPtrType type);
+void GcRawCppPtrCArr(RawVoidPtr ptr, RawCppPtrType type, uint64_t len);
+void GcSpecialRawCppPtr(void * ptr, uint64_t hint_size, SpecialCppPtrType type);
 BaseBuffView strIntoView(const std::string * str_ptr);
 CppStrWithView GetConfig(EngineStoreServerWrap *, uint8_t full);
 void SetStore(EngineStoreServerWrap *, BaseBuffView);
@@ -166,6 +184,19 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
         .fn_need_flush_data = NeedFlushData,
         .fn_try_flush_data = TryFlushData,
+        .fn_create_write_batch = CreateWriteBatch,
+        .fn_wb_put_page = WriteBatchPutPage,
+        .fn_wb_del_page = WriteBatchDelPage,
+        .fn_get_wb_size = GetWriteBatchSize,
+        .fn_is_wb_empty = IsWriteBatchEmpty,
+        .fn_handle_merge_wb = HandleMergeWriteBatch,
+        .fn_handle_clear_wb = HandleClearWriteBatch,
+        .fn_handle_consume_wb = HandleConsumeWriteBatch,
+        .fn_handle_read_page = HandleReadPage,
+        .fn_handle_scan_page = HandleScanPage,
+        .fn_handle_get_lower_bound = HandleGetLowerBound,
+        .fn_is_ps_empty = IsPSEmpty,
+        .fn_handle_purge_ps = HandlePurgePageStorage,
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,
@@ -176,6 +207,8 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_handle_http_request = HandleHttpRequest,
         .fn_check_http_uri_available = CheckHttpUriAvailable,
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,
+        .fn_gc_raw_cpp_ptr_carr = GcRawCppPtrCArr,
+        .fn_gc_special_raw_cpp_ptr = GcSpecialRawCppPtr,
         .fn_get_config = GetConfig,
         .fn_set_store = SetStore,
         .fn_set_pb_msg_by_bytes = SetPBMsByBytes,
