@@ -137,16 +137,24 @@ AnalysisResult analyzeExpressions(
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeTopN)
     {
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
-        chain.addStep();
     }
 
     if (query_block.expand)
     {
+        chain.addStep();
         res.before_expand = analyzer.appendExpand(query_block.expand->expand(), chain);
     }
 
     const auto & dag_context = *context.getDAGContext();
     // Append final project results if needed.
+    if (query_block.isRootQueryBlock())
+    {
+        std::cout << "Wocao1" << std::endl;
+    }
+    else
+    {
+        std::cout << "Wocao2" << std::endl;
+    }
     final_project = query_block.isRootQueryBlock()
         ? analyzer.appendFinalProjectForRootQueryBlock(
             chain,

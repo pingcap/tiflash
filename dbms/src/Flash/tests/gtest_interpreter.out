@@ -20,10 +20,10 @@ Union: <for test>
 ~result:
 Union: <for test>
  SharedQuery x 10: <restore concurrency>
-  Limit, limit = 10
-   Union: <for partial limit>
-    Limit x 10, limit = 10
-     Expression: <final projection>
+  Expression: <final projection>
+   Limit, limit = 10
+    Union: <for partial limit>
+     Limit x 10, limit = 10
       Expression: <before order and select>
        Filter: <execute having>
         SharedQuery: <restore concurrency>
@@ -84,10 +84,10 @@ Union: <for test>
 ~result:
 Union: <for test>
  SharedQuery x 10: <restore concurrency>
-  Limit, limit = 10
-   Union: <for partial limit>
-    Limit x 10, limit = 10
-     Expression: <final projection>
+  Expression: <final projection>
+   Limit, limit = 10
+    Union: <for partial limit>
+     Limit x 10, limit = 10
       Expression: <projection>
        Expression: <final projection>
         Expression: <before order and select>
@@ -423,10 +423,10 @@ CreatingSets
  Union: <for test>
   MockExchangeSender x 20
    SharedQuery: <restore concurrency>
-    Limit, limit = 10
-     Union: <for partial limit>
-      Limit x 20, limit = 10
-       Expression: <final projection>
+    Expression: <final projection>
+     Limit, limit = 10
+      Union: <for partial limit>
+       Limit x 20, limit = 10
         Expression: <before order and select>
          SharedQuery: <restore concurrency>
           ParallelAggregating, max_threads: 20, final: true
@@ -439,8 +439,8 @@ CreatingSets
 ~test_suite_name: ListBase
 ~result_index: 0
 ~result:
-Limit, limit = 10
- Expression: <final projection>
+Expression: <final projection>
+ Limit, limit = 10
   Aggregating
    Expression: <before aggregation>
     Filter: <execute where>
