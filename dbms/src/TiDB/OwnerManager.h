@@ -109,6 +109,7 @@ private:
 
     void retireOwner();
 
+    Etcd::SessionPtr createEtcdSessionWithRetry(Int64 max_retry);
     Etcd::SessionPtr createEtcdSession();
     void revokeEtcdSession(Etcd::LeaseID lease_id);
 
@@ -118,12 +119,19 @@ private:
     Etcd::ClientPtr client;
     const Int64 leader_ttl;
 
-    enum State
+    enum class State
     {
+        Init,
         Normal,
+        // owner key deleted, retry
         CancelByKeyDeleted,
+        // lease expired, retry
         CancelByLeaseInvalid,
+        // cancel by another methd, won't retry
         CancelByCaller,
+        // cancelled and all sub tasks end.
+        // Can call `campaignOwner` again.
+        CancelDone,
     };
 
     std::mutex mtx_camaign;

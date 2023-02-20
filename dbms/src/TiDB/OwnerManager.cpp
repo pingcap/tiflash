@@ -26,8 +26,10 @@
 #include <chrono>
 #include <condition_variable>
 #include <ext/scope_guard.h>
+#include <limits>
 #include <magic_enum.hpp>
 #include <mutex>
+#include <thread>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -79,7 +81,7 @@ void OwnerManager::cancel()
 {
     {
         std::unique_lock lk(mtx_camaign);
-        state = CancelByCaller;
+        state = State::CancelByCaller;
     }
     cv_camaign.notify_all();
 
@@ -97,11 +99,27 @@ void OwnerManager::cancel()
     {
         th_watch_owner.join();
     }
+
+    {
+        std::unique_lock lk(mtx_camaign);
+        state = State::CancelDone;
+    }
 }
 
 void OwnerManager::campaignOwner()
 {
-    auto session = createEtcdSession();
+    {
+        std::unique_lock lk(mtx_camaign);
+        if (state != State::Init && state != State::CancelDone)
+        {
+            LOG_INFO(log, "campaign is already running");
+            return;
+        }
+
+        state = State::Normal;
+    }
+
+    auto session = createEtcdSessionWithRetry(3); // retry 3 time
     RUNTIME_CHECK_MSG(session != nullptr, "failed to create etcd session");
 
     LOG_INFO(log, "start campaign owner");
@@ -120,9 +138,13 @@ OwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
     std::unique_lock lk(mtx_camaign);
     switch (state)
     {
-    case Normal:
+    case State::Init:
+    case State::CancelDone:
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "unexpected state: {}", magic_enum::enum_name(state));
+
+    case State::Normal:
         break;
-    case CancelByCaller:
+    case State::CancelByCaller:
     {
         // Caller cancel the campaign, maybe program is exiting
         run_next_campaign = false;
@@ -132,26 +154,28 @@ OwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
         revokeEtcdSession(old_session->leaseID());
         break;
     }
-    case CancelByKeyDeleted:
+    case State::CancelByKeyDeleted:
     {
         // try next campaign with the same etcd session (lease_id)
-        state = Normal;
+        state = State::Normal;
         break;
     }
-    case CancelByLeaseInvalid:
+    case State::CancelByLeaseInvalid:
     {
         // try next campaign with new etcd session
-        state = Normal;
+        state = State::Normal;
         lk.unlock();
 
         LOG_INFO(log, "etcd session is expired, create a new one");
         auto old_lease_id = old_session->leaseID();
-        // Start a new session
-        old_session = createEtcdSession();
+        // Start a new session with inf retries
+        old_session = createEtcdSessionWithRetry(std::numeric_limits<Int64>::max());
         if (old_session == nullptr)
         {
             LOG_INFO(log, "break campaign loop, create session failed");
             revokeEtcdSession(old_lease_id); // try revoke old lease id
+
+            lk.lock();
             run_next_campaign = false;
         }
         break;
@@ -251,9 +275,9 @@ void OwnerManager::watchOwner(const String & owner_key, grpc::ClientContext * wa
             {
                 std::unique_lock lk(mtx_camaign);
                 // do not overwrite cancel by caller
-                if (state != CancelByCaller)
+                if (state != State::CancelByCaller)
                 {
-                    state = CancelByKeyDeleted;
+                    state = State::CancelByKeyDeleted;
                 }
             }
             // notify the campaign thread to start a new election
@@ -341,6 +365,26 @@ bool OwnerManager::resignOwner()
     return true;
 }
 
+namespace session
+{
+static constexpr std::chrono::milliseconds RetryInterval(200);
+static constexpr Int64 ErrorLogInterval = 15;
+} // namespace session
+
+Etcd::SessionPtr OwnerManager::createEtcdSessionWithRetry(Int64 max_retry)
+{
+    for (Int64 i = 0; i < max_retry; ++i)
+    {
+        if (auto session = createEtcdSession(); session)
+            return session;
+
+        if (i % session::ErrorLogInterval)
+            LOG_WARNING(log, "fail to create new etcd session");
+        std::this_thread::sleep_for(session::RetryInterval);
+    }
+    return {};
+}
+
 Etcd::SessionPtr OwnerManager::createEtcdSession()
 {
     auto & bkg_pool = global_ctx.getBackgroundPool();
@@ -358,9 +402,9 @@ Etcd::SessionPtr OwnerManager::createEtcdSession()
                 {
                     std::unique_lock lk(mtx_camaign);
                     // do not overwrite cancel by caller
-                    if (state != CancelByCaller)
+                    if (state != State::CancelByCaller)
                     {
-                        state = CancelByLeaseInvalid;
+                        state = State::CancelByLeaseInvalid;
                     }
                 }
                 // notify the campaign thread to start a new election
