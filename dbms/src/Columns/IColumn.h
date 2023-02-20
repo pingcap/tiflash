@@ -325,6 +325,8 @@ public:
     /// Size of column data in memory (may be approximate) - for profiling. Zero, if could not be determined.
     virtual size_t byteSize() const = 0;
 
+    virtual size_t estimateByteSizeForSpill() const { return byteSize(); }
+
     /// Size of column data between [offset, offset+limit) in memory (may be approximate) - for profiling.
     /// This method throws NOT_IMPLEMENTED exception if it is called with unimplemented subclass.
     virtual size_t byteSize(size_t /*offset*/, size_t /*limit*/) const

@@ -42,7 +42,7 @@ protected:
         spiller_test_header = Block(names_and_types);
         auto key_manager = std::make_shared<MockKeyManager>(false);
         auto file_provider = std::make_shared<FileProvider>(key_manager, false);
-        spill_config_ptr = std::make_shared<SpillConfig>(spill_dir, "test", 1024ULL * 1024 * 1024, file_provider);
+        spill_config_ptr = std::make_shared<SpillConfig>(spill_dir, "test", 1024ULL * 1024 * 1024, 0, 0, file_provider);
     }
     void TearDown() override
     {
@@ -226,7 +226,7 @@ try
     std::vector<std::unique_ptr<Spiller>> spillers;
     spillers.push_back(std::make_unique<Spiller>(*spill_config_ptr, false, 2, spiller_test_header, logger));
     auto spiller_config_with_small_max_spill_size = *spill_config_ptr;
-    spiller_config_with_small_max_spill_size.max_spilled_size_per_spill = spill_config_ptr->max_spilled_size_per_spill / 1000;
+    spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller = spill_config_ptr->max_cached_data_bytes_in_spiller / 1000;
     spillers.push_back(std::make_unique<Spiller>(spiller_config_with_small_max_spill_size, false, 2, spiller_test_header, logger));
 
     for (auto & spiller : spillers)
@@ -263,7 +263,7 @@ try
     std::vector<std::unique_ptr<Spiller>> spillers;
     spillers.push_back(std::make_unique<Spiller>(*spill_config_ptr, false, 1, spiller_test_header, logger, 1, false));
     auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "release_file_on_restore_test", rand());
-    SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_spilled_size_per_spill, spill_config_ptr->file_provider);
+    SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider);
     Poco::File new_spiller_dir(new_spill_config.spill_dir);
     /// remove spiller dir if exists
     if (new_spiller_dir.exists())
@@ -321,7 +321,7 @@ try
     std::vector<std::unique_ptr<Spiller>> spillers;
     spillers.push_back(std::make_unique<Spiller>(*spill_config_ptr, true, 2, spiller_test_header, logger));
     auto spiller_config_with_small_max_spill_size = *spill_config_ptr;
-    spiller_config_with_small_max_spill_size.max_spilled_size_per_spill = spill_config_ptr->max_spilled_size_per_spill / 1000;
+    spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller = spill_config_ptr->max_cached_data_bytes_in_spiller / 1000;
     spillers.push_back(std::make_unique<Spiller>(spiller_config_with_small_max_spill_size, true, 2, spiller_test_header, logger));
 
     for (auto & spiller : spillers)
@@ -353,6 +353,23 @@ try
 }
 CATCH
 
+TEST_F(SpillerTest, AppendWrite)
+try
+{
+    auto spiller_config_with_large_spill_rows = *spill_config_ptr;
+    spiller_config_with_large_spill_rows.max_spilled_rows_per_file = 1000000000;
+    Spiller spiller(spiller_config_with_large_spill_rows, false, 2, spiller_test_header, logger);
+    Blocks all_blocks;
+    auto blocks = generateBlocks(50);
+    spiller.spillBlocks(blocks, 0);
+    spiller.spillBlocks(blocks, 0);
+    spiller.finishSpill();
+    all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+    all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+    verifyRestoreBlocks(spiller, 0, 2, 1, all_blocks);
+}
+CATCH
+
 TEST_F(SpillerTest, SpillAndMeetCancelled)
 try
 {
@@ -362,7 +379,7 @@ try
         total_block_size += block.bytes();
 
     auto spiller_config_with_small_max_spill_size = *spill_config_ptr;
-    spiller_config_with_small_max_spill_size.max_spilled_size_per_spill = total_block_size / 50;
+    spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller = total_block_size / 50;
     Spiller spiller(spiller_config_with_small_max_spill_size, false, 1, spiller_test_header, logger);
     BlocksList block_list;
     block_list.insert(block_list.end(), blocks.begin(), blocks.end());

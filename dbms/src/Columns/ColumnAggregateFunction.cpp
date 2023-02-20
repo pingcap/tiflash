@@ -14,11 +14,15 @@
 
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <Columns/ColumnAggregateFunction.h>
+#include <Columns/ColumnString.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Functions/FunctionHelpers.h>
 #include <IO/WriteBufferFromArena.h>
 #include <fmt/format.h>
 
@@ -241,6 +245,25 @@ size_t ColumnAggregateFunction::allocatedBytes() const
     for (const auto & arena : arenas)
         res += arena->size();
 
+    return res;
+}
+
+size_t ColumnAggregateFunction::estimateByteSizeForSpill() const
+{
+    size_t res = func->alignOfData() * size();
+    if (func->allocatesMemoryInArena())
+    {
+        /// Can't estimate the memory usage, so just add all, it will highly overestimates size of a column if it was produced in AggregatingBlockInputStream (it contains size of other columns)
+        for (const auto & arena : arenas)
+            res += arena->size();
+    }
+    else
+    {
+        if (removeNullable(func->getReturnType())->isString())
+            res += size() * ColumnString::APPROX_STRING_SIZE;
+        else if (removeNullable(func->getReturnType())->isFixedString())
+            res += size() * checkAndGetDataType<DataTypeFixedString>(removeNullable(func->getReturnType()).get())->getN();
+    }
     return res;
 }
 
