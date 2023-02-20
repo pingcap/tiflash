@@ -109,8 +109,6 @@ public:
 
     ~FileProvider() = default;
 
-    static FileProviderPtr createForTest();
-
 private:
     KeyManagerPtr key_manager;
     bool encryption_enabled;

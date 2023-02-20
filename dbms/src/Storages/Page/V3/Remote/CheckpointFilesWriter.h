@@ -104,7 +104,7 @@ public:
         {
             if (rec_edit.type == EditRecordType::VAR_EXTERNAL)
             {
-                // TODO: the s3 fullpath of external id
+                // the s3 fullpath of external id
                 RUNTIME_CHECK(rec_edit.entry.remote_info.has_value() && rec_edit.entry.remote_info->data_location.data_file_id && !rec_edit.entry.remote_info->data_location.data_file_id->empty());
                 lock_files.emplace(*rec_edit.entry.remote_info->data_location.data_file_id);
                 continue;
@@ -114,7 +114,7 @@ public:
                 continue;
             if (rec_edit.entry.remote_info.has_value())
             {
-                // TODO: the s3 fullpath that is written in the previous uploaded CheckpointDataFile
+                // the s3 fullpath that is written in the previous uploaded CheckpointDataFile
                 lock_files.emplace(*rec_edit.entry.remote_info->data_location.data_file_id);
                 continue;
             }
@@ -130,7 +130,7 @@ public:
                 .data_location = data_location,
                 .is_local_data_reclaimed = false,
             };
-            // TODO: the s3 fullpath from remote_info
+            // the s3 fullpath from remote_info
             lock_files.emplace(*data_location.data_file_id);
         }
 

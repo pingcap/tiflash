@@ -231,8 +231,4 @@ void FileProvider::renameFile(
         key_manager->deleteFile(src_encryption_path_.full_path, false);
 }
 
-FileProviderPtr FileProvider::createForTest()
-{
-    return std::make_shared<FileProvider>(std::make_shared<MockKeyManager>(false), false);
-}
 } // namespace DB
