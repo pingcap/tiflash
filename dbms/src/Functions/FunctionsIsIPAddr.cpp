@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,29 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsIsIPAddr.h>
 
 namespace DB
 {
-DAGBlockOutputStream::DAGBlockOutputStream(Block && header_, std::unique_ptr<DAGResponseWriter> response_writer_)
-    : header(std::move(header_))
-    , response_writer(std::move(response_writer_))
-{}
 
-void DAGBlockOutputStream::writePrefix()
+void registerFunctionsIsIPAddr(FunctionFactory & factory)
 {
-    response_writer->prepare(header);
-}
-
-void DAGBlockOutputStream::write(const Block & block)
-{
-    response_writer->write(block);
-}
-
-void DAGBlockOutputStream::writeSuffix()
-{
-    // todo error handle
-    response_writer->flush();
+    factory.registerFunction<FunctionIsIPv4OrIsIPv6<CheckIsIPv4Impl>>();
+    factory.registerFunction<FunctionIsIPv4OrIsIPv6<CheckIsIPv6Impl>>();
 }
 
 } // namespace DB

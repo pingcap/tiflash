@@ -123,6 +123,9 @@ using Dependencies = std::vector<DatabaseAndTableName>;
 using TableAndCreateAST = std::pair<StoragePtr, ASTPtr>;
 using TableAndCreateASTs = std::map<String, TableAndCreateAST>;
 
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
+
 /** A set of known objects that can be used in the query.
   * Consists of a shared part (always common to all sessions and queries)
   *  and copied part (which can be its own for each session or query).
@@ -425,6 +428,9 @@ public:
     PageStorageRunMode getPageStorageRunMode() const;
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
+
+    void initializeWriteNodePageStorageIfNeed(const PathPool & path_pool);
+    UniversalPageStoragePtr getWriteNodePageStorage() const;
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();

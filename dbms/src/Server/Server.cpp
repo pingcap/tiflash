@@ -74,6 +74,7 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
@@ -946,6 +947,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashStorageConfig storage_config;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
 
+    if (storage_config.s3_config.isS3Enabled())
+    {
+        S3::ClientFactory::instance().init(storage_config.s3_config);
+    }
+
     if (storage_config.format_version)
     {
         setStorageFormat(storage_config.format_version);
@@ -1104,6 +1110,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
+    global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
+
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
 
@@ -1253,6 +1261,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // `Context::shutdown()` will destroy `DeltaIndexManager`.
         // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
         DB::DM::SegmentReaderPoolManager::instance().stop();
+        if (storage_config.s3_config.isS3Enabled())
+        {
+            S3::ClientFactory::instance().shutdown();
+        }
         global_context->shutdown();
         LOG_DEBUG(log, "Shutted down storages.");
     });
@@ -1266,10 +1278,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// setting up elastic thread pool
-    if (settings.enable_elastic_threadpool)
+    bool enable_elastic_threadpool = settings.enable_elastic_threadpool;
+    if (enable_elastic_threadpool)
         DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
             settings.elastic_threadpool_init_cap,
             std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
+    SCOPE_EXIT({
+        if (enable_elastic_threadpool)
+        {
+            assert(DynamicThreadPool::global_instance);
+            DynamicThreadPool::global_instance.reset();
+        }
+    });
 
     // For test mode, TaskScheduler is controlled by test case.
     bool enable_pipeline = settings.enable_pipeline && !global_context->isTest();
