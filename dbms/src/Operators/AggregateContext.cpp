@@ -52,23 +52,7 @@ void AggregateContext::initConvergent()
     }
     else
     {
-        RUNTIME_CHECK(merging_buckets->getConcurrency() > 0);
-        if (merging_buckets->getConcurrency() > 1)
-        {
-            BlockInputStreams merging_streams;
-            for (size_t i = 0; i < merging_buckets->getConcurrency(); ++i)
-                merging_streams.push_back(
-                    std::make_shared<MergingAndConvertingBlockInputStream>(merging_buckets, i, log->identifier()));
-            impl = std::make_unique<UnionBlockInputStream<>>(
-                merging_streams,
-                BlockInputStreams{},
-                max_threads,
-                log->identifier());
-        }
-        else
-        {
-            impl = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
-        }
+        impl = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
     }
     inited = true;
 }
