@@ -123,7 +123,7 @@ TEST_F(LogSearchTest, SearchDir)
     ASSERT_TRUE(FilterFileByDatetime("/1/server.log.2021-10-09-14:50:55.481.gz", {"/1/test-err.log"}, 1633855377000)); // 1633855377000 : 2021-10-10 16:42:57
     ASSERT_FALSE(FilterFileByDatetime("/1/server.log.2021-10-10-16:43:57.123.gz", {"/1/test-err.log"}, 1633855377000));
 
-    ASSERT_TRUE(FilterFileByDatetime("/1/proxy.log.2021-10-09T14-50-55.123.log", {"/1/test-err.log"}, 1633855377000));
+    ASSERT_TRUE(FilterFileByDatetime("/1/tiflash_tikv.2021-10-09T14-50-55.123.log", {"/1/test-err.log"}, 1633855377000));
 
     {
         const std::string example_data = "[2020/04/23 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
