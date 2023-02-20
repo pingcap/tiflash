@@ -77,7 +77,15 @@ void FlashService::init(Context & context_)
         context->getGlobalContext(),
         context->getGlobalContext().getSettingsRef());
 
-    s3_lock_service = std::make_unique<Management::S3LockService>(context->getGlobalContext(), file_latch_map, file_latch_map_mutex, bucket_name, client_config);
+    // hack
+    Aws::Client::ClientConfiguration client_config;
+    client_config.endpointOverride = "172.16.5.85:9000";
+    client_config.scheme = Aws::Http::Scheme::HTTP;
+    client_config.verifySSL = false;
+    credentials.SetAWSAccessKeyId("minioadmin");
+    credentials.SetAWSSecretKey("minioadmin");
+
+    s3_lock_service = std::make_unique<Management::S3LockService>(context->getGlobalContext(), file_latch_map, file_latch_map_mutex, bucket_name, client_config, credentials);
 
     auto settings = context->getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;

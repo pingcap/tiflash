@@ -106,10 +106,11 @@ protected:
 
     std::unique_ptr<Management::ManualCompactManager> manual_compact_manager;
     std::unordered_map<String, Management::S3LockService::DataFileMutexPtr> file_latch_map;
-    std::shared_mutex file_latch_map_mutex;
+    std::mutex file_latch_map_mutex;
     // TODO: make them configurable
-    const String bucket_name = "ap-storage";
-    const Aws::Client::ClientConfiguration client_config;
+    const String bucket_name = "qiuyang";
+    Aws::Client::ClientConfiguration client_config;
+    Aws::Auth::AWSCredentials credentials;
     std::unique_ptr<Management::S3LockService> s3_lock_service;
 
     /// for mpp unit test.

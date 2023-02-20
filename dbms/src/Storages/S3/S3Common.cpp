@@ -6,6 +6,7 @@
 #include <aws/core/utils/logging/LogMacros.h>
 #include <aws/core/utils/logging/LogSystemInterface.h>
 #include <aws/s3/S3Client.h>
+#include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
@@ -206,6 +207,7 @@ bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const
                     bucket,
                     error.GetMessage());
 }
+
 void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname)
 {
     Stopwatch sw;
@@ -225,7 +227,7 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
                         result.GetError().GetExceptionName(),
                         result.GetError().GetMessage());
     }
-    static auto * log = &Poco::Logger::get("S3UploadFile");
+    static auto log = Logger::get();
     LOG_DEBUG(log, "local_fname={}, remote_fname={}, cost={}ms", local_fname, remote_fname, sw.elapsedMilliseconds());
 }
 
@@ -247,8 +249,27 @@ void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const
     }
     Aws::OFStream ostr(local_fname, std::ios_base::out | std::ios_base::binary);
     ostr << result.GetResult().GetBody().rdbuf();
-    static auto * log = &Poco::Logger::get("S3DownloadFile");
+    static auto log = Logger::get();
     LOG_DEBUG(log, "local_fname={}, remote_fname={}, cost={}ms", local_fname, remote_fname, sw.elapsedMilliseconds());
+}
+
+void deletaFile(const Aws::S3::S3Client & client, const String & bucket, const String & key)
+{
+    Stopwatch sw;
+    Aws::S3::Model::DeleteObjectRequest req;
+    req.SetBucket(bucket);
+    req.SetKey(key);
+    auto result = client.DeleteObject(req);
+    if (!result.IsSuccess())
+    {
+        throw Exception(ErrorCodes::S3_ERROR,
+                        "S3 GetObject failed, key={}, exception={}, message={}",
+                        key,
+                        result.GetError().GetExceptionName(),
+                        result.GetError().GetMessage());
+    }
+    static auto log = Logger::get();
+    LOG_DEBUG(log, "key={}, cost={}ms", key, sw.elapsedMilliseconds());
 }
 
 std::unordered_map<String, size_t> listPrefix(const Aws::S3::S3Client & client, const String & bucket, const String & prefix)
@@ -273,9 +294,30 @@ std::unordered_map<String, size_t> listPrefix(const Aws::S3::S3Client & client, 
     {
         keys_with_size.emplace(object.GetKey().substr(prefix.size()), object.GetSize()); // Cut prefix
     }
-    static auto * log = &Poco::Logger::get("S3ListPrefix");
+    static auto log = Logger::get();
     LOG_DEBUG(log, "prefix={}, keys={}, cost={}", prefix, keys_with_size, sw.elapsedMilliseconds());
     return keys_with_size;
+}
+
+size_t getListPrefixSize(const Aws::S3::S3Client & client, const String & bucket, const String & prefix)
+{
+    Stopwatch sw;
+    Aws::S3::Model::ListObjectsRequest req;
+    req.SetBucket(bucket);
+    req.SetPrefix(prefix);
+    auto result = client.ListObjects(req);
+    if (!result.IsSuccess())
+    {
+        throw Exception(ErrorCodes::S3_ERROR,
+                        "S3 ListObjects failed, prefix={}, exception={}, message={}",
+                        prefix,
+                        result.GetError().GetExceptionName(),
+                        result.GetError().GetMessage());
+    }
+    const auto & objects = result.GetResult().GetContents();
+    static auto log = Logger::get();
+    LOG_DEBUG(log, "prefix={}, keys size={}, cost={}", prefix, objects.size(), sw.elapsedMilliseconds());
+    return objects.size();
 }
 
 } // namespace S3

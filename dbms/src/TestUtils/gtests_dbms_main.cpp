@@ -16,9 +16,11 @@
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 #include <signal.h>
+
 
 namespace DB::FailPoints
 {
@@ -65,6 +67,7 @@ int main(int argc, char ** argv)
     DB::DM::DMFileReaderPool::instance();
     DB::DM::SegmentReaderPoolManager::instance().init(server_info);
     DB::DM::SegmentReadTaskScheduler::instance();
+    DB::S3::ClientFactory::instance().init(/*enable_s3_log*/ false);
 
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
@@ -82,6 +85,7 @@ int main(int argc, char ** argv)
     // Stop threads explicitly before `TiFlashTestEnv::shutdown()`.
     DB::DM::SegmentReaderPoolManager::instance().stop();
     DB::tests::TiFlashTestEnv::shutdown();
+    DB::S3::ClientFactory::instance().shutdown();
 
     return ret;
 }

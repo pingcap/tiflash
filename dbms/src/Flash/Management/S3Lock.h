@@ -17,14 +17,14 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Interpreters/Context.h>
+#include <aws/core/auth/AWSCredentials.h>
 #include <aws/s3/S3Client.h>
 #include <common/types.h>
 #include <grpcpp/support/status.h>
 #include <kvrpcpb.pb.h>
 
-#include <ext/singleton.h>
+#include <fstream>
 #include <mutex>
-#include <shared_mutex>
 #include <unordered_map>
 
 
@@ -34,6 +34,8 @@ namespace DB::Management
 class S3LockService final : private boost::noncopyable
 {
 public:
+    static constexpr auto tmp_empty_file = "/tmp/tmp_empty_file";
+
     struct DataFileMutex
     {
         std::mutex file_mutex;
@@ -65,28 +67,40 @@ private:
     Context & context;
 
     std::unordered_map<String, DataFileMutexPtr> & file_latch_map;
-    std::shared_mutex & file_latch_map_mutex;
+    std::mutex & file_latch_map_mutex;
 
     const String bucket_name;
-    const Aws::Client::ClientConfiguration client_config;
+    const std::unique_ptr<Aws::S3::S3Client> s3_client;
 
     LoggerPtr log;
 
 public:
     S3LockService(Context & context_,
                   std::unordered_map<String, DataFileMutexPtr> & file_latch_map_,
-                  std::shared_mutex & file_latch_map_mutex_,
+                  std::mutex & file_latch_map_mutex_,
                   const String bucket_name_,
-                  const Aws::Client::ClientConfiguration & client_config_)
+                  const Aws::Client::ClientConfiguration & client_config_,
+                  const Aws::Auth::AWSCredentials & credentials_)
         : context(context_)
         , file_latch_map(file_latch_map_)
         , file_latch_map_mutex(file_latch_map_mutex_)
         , bucket_name(bucket_name_)
-        , client_config(client_config_)
+        , s3_client(std::make_unique<Aws::S3::S3Client>(
+              credentials_,
+              client_config_,
+              Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+              /*useVirtualAddressing*/ true))
         , log(Logger::get())
-    {}
+    {
+        std::ofstream tmp_file(tmp_empty_file);
+        tmp_file.close();
+        (void)context;
+    }
 
-    ~S3LockService() = default;
+    ~S3LockService()
+    {
+        std::remove(tmp_empty_file);
+    }
 
     grpc::Status tryAddLock(const kvrpcpb::TryAddLockRequest * request, kvrpcpb::TryAddLockResponse * response)
     try
@@ -122,13 +136,27 @@ public:
         return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
     }
 
-    std::pair<bool, std::optional<kvrpcpb::S3LockError>> sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq);
-    std::pair<bool, std::optional<kvrpcpb::S3LockError>> sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id);
-
 private:
     bool tryAddLockImpl(const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq, kvrpcpb::TryAddLockResponse * response);
 
     bool tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, kvrpcpb::TryMarkDeleteResponse * response);
+};
+
+class S3LockClient
+{
+private:
+    Context & context;
+    LoggerPtr log;
+
+public:
+    explicit S3LockClient(Context & context_)
+        : context(context_)
+        , log(Logger::get())
+    {}
+
+    std::pair<bool, std::optional<kvrpcpb::S3LockError>> sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq);
+
+    std::pair<bool, std::optional<kvrpcpb::S3LockError>> sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id);
 };
 
 } // namespace DB::Management

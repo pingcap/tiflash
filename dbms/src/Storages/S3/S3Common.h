@@ -19,7 +19,7 @@ public:
     void init(bool enable_s3_log);
     void shutdown();
 
-    std::unique_ptr<Aws::S3::S3Client> create(
+    static std::unique_ptr<Aws::S3::S3Client> create(
         const String & endpoint,
         Aws::Http::Scheme scheme,
         bool verifySSL,
@@ -53,5 +53,9 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
 
 void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
 
+void deletaFile(const Aws::S3::S3Client & client, const String & bucket, const String & key);
+
 std::unordered_map<String, size_t> listPrefix(const Aws::S3::S3Client & client, const String & bucket, const String & prefix);
+
+size_t getListPrefixSize(const Aws::S3::S3Client & client, const String & bucket, const String & prefix);
 } // namespace DB::S3
