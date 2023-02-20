@@ -116,6 +116,7 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
 {
     auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
     ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
+    dispatch_req_meta->set_keyspace_id(context.getDAGContext()->getKeyspaceID());
     dispatch_req_meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
     dispatch_req_meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
     dispatch_req_meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);

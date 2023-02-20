@@ -97,7 +97,9 @@ bool GCManager::work()
     }
     if (iter == storages.end())
         iter = storages.begin();
-    next_keyspace_table_id = iter->first;
+
+    if (iter != storages.end())
+        next_keyspace_table_id = iter->first;
     LOG_DEBUG(log, "End GC and next gc will start with keyspace {}, table id: {}", next_keyspace_table_id.first, next_keyspace_table_id.second);
     gc_check_stop_watch.restart();
     // Always return false
