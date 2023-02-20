@@ -21,8 +21,6 @@ SpillHandler::SpillWriter::SpillWriter(const FileProviderPtr & file_provider, co
     : file_buf(file_provider, file_name, EncryptionPath(file_name, ""), true, nullptr, DBMS_DEFAULT_BUFFER_SIZE, append_write ? O_APPEND | O_WRONLY : -1)
     , compressed_buf(file_buf)
 {
-    /// note this implicitly assumes that a SpillWriter will always write to a new file,
-    /// if we support append write, don't need to write the spill version again
     if (!append_write)
         writeVarUInt(spill_version, compressed_buf);
     out = std::make_unique<NativeBlockOutputStream>(compressed_buf, spill_version, header);
@@ -65,8 +63,6 @@ void SpillHandler::setUpNextSpilledFile()
 
 bool SpillHandler::isSpilledFileFull(UInt64 spilled_rows, UInt64 spilled_bytes)
 {
-    if (!spiller->enable_append_write)
-        return false;
     return (spiller->config.max_spilled_rows_per_file > 0 && spilled_rows >= spiller->config.max_spilled_rows_per_file) || (spiller->config.max_spilled_bytes_per_file > 0 && spilled_bytes >= spiller->config.max_spilled_bytes_per_file);
 }
 
@@ -99,7 +95,7 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
             rows_in_file += rows;
             bytes_in_file += block.estimateBytesForSpill();
             writer->write(block);
-            if (isSpilledFileFull(rows_in_file, bytes_in_file))
+            if (spiller->enable_append_write && isSpilledFileFull(rows_in_file, bytes_in_file))
             {
                 spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
                 spilled_files[current_spilled_file_index]->markFull();
@@ -138,12 +134,14 @@ void SpillHandler::finish()
             }
             else
             {
+                /// always mark full if enable_append_write is false since if enable_append_write is false, all the file is full
                 spilled_files[current_spilled_file_index]->markFull();
             }
         }
         else
         {
             /// writer == nullptr means no write to current file
+            /// but if current_append_write is true, we still need to put the original file back
             if (!current_append_write)
             {
                 current_spilled_file_index--;

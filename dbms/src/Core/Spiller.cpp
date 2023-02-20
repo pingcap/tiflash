@@ -162,6 +162,7 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
     RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", config.spill_id, partition_id, partition_num);
     RUNTIME_CHECK_MSG(isSpillFinished(), "{}: restore before the spiller is finished.", config.spill_id);
     std::lock_guard partition_lock(spilled_files[partition_id]->spilled_files_mutex);
+    RUNTIME_CHECK_MSG(spilled_files[partition_id]->mutable_spilled_files.empty(), "{}: the mutable spilled files must be empty when restore.", config.spill_id);
     if (max_stream_size == 0)
         max_stream_size = spilled_files[partition_id]->immutable_spilled_files.size();
     if (is_input_sorted && spilled_files[partition_id]->immutable_spilled_files.size() > max_stream_size)
