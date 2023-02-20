@@ -17,6 +17,7 @@
 #include <Flash/Executor/ExecutionResult.h>
 
 #include <atomic>
+#include <exception>
 #include <mutex>
 
 namespace DB
@@ -24,18 +25,19 @@ namespace DB
 class PipelineExecutorStatus : private boost::noncopyable
 {
 public:
-    static constexpr auto empty_err_msg = "error without err msg";
     static constexpr auto timeout_err_msg = "error with timeout";
 
     ExecutionResult toExecutionResult();
 
-    String getErrMsg();
+    std::exception_ptr getExceptionPtr();
+    String getExceptionMsg();
 
     void onEventSchedule();
 
     void onEventFinish();
 
-    void onErrorOccurred(String && err_msg_);
+    void onErrorOccurred(const String & err_msg);
+    void onErrorOccurred(const std::exception_ptr & exception_ptr_);
 
     void wait();
 
@@ -64,7 +66,7 @@ public:
 private:
     std::mutex mu;
     std::condition_variable cv;
-    String err_msg;
+    std::exception_ptr exception_ptr;
     UInt32 active_event_count{0};
 
     std::atomic_bool is_cancelled{false};
