@@ -15,11 +15,11 @@
 #pragma once
 
 #include <Common/ThreadPool.h>
+#include <Flash/Management/S3Lock.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
-#include "Flash/Management/S3Lock.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -105,6 +105,11 @@ protected:
     bool enable_async_grpc_client = false;
 
     std::unique_ptr<Management::ManualCompactManager> manual_compact_manager;
+    std::unordered_map<String, Management::S3LockService::DataFileMutexPtr> file_latch_map;
+    std::shared_mutex file_latch_map_mutex;
+    // TODO: make them configurable
+    const String bucket_name = "ap-storage";
+    const Aws::Client::ClientConfiguration client_config;
     std::unique_ptr<Management::S3LockService> s3_lock_service;
 
     /// for mpp unit test.

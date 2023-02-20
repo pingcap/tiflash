@@ -67,7 +67,7 @@ struct RpcTypeTraits<kvrpcpb::TryMarkDeleteRequest>
 namespace DB::Management
 {
 
-bool S3LockService::sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq)
+std::pair<bool, std::optional<kvrpcpb::S3LockError>> S3LockService::sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq)
 {
     auto req = std::make_shared<kvrpcpb::TryAddLockRequest>();
     req->set_ori_data_file(ori_data_file);
@@ -82,14 +82,16 @@ bool S3LockService::sendTryAddLockRequest(String address, int timeout, const Str
     cluster->rpc_client->sendRequest(address, call, timeout);
     const auto & resp = call.getResp();
     LOG_DEBUG(log, "Received TryAddLock response.");
-    // TODO: handle error
-    if (!resp->error_msg().empty())
-        throw Exception(fmt::format("TryAddLock get resp with error={}", resp->error_msg()));
+    if (resp->has_error())
+    {
+        LOG_ERROR(log, "TryMarkDelete get resp with error={}", resp->error().DebugString());
+        return {false, resp->error()};
+    }
 
-    return resp->is_success();
+    return {resp->is_success(), std::nullopt};
 }
 
-bool S3LockService::sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id)
+std::pair<bool, std::optional<kvrpcpb::S3LockError>> S3LockService::sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id)
 {
     auto req = std::make_shared<kvrpcpb::TryMarkDeleteRequest>();
     req->set_ori_data_file(ori_data_file);
@@ -103,14 +105,17 @@ bool S3LockService::sendTryMarkDeleteRequest(String address, int timeout, const 
     const auto & resp = call.getResp();
     LOG_DEBUG(log, "Received TryMarkDelete response.");
 
-    if (!resp->error_msg().empty())
-        throw Exception(fmt::format("TryMarkDelete get resp with error={}", resp->error_msg()));
+    if (resp->has_error())
+    {
+        LOG_ERROR(log, "TryMarkDelete get resp with error={}", resp->error().DebugString());
+        return {false, resp->error()};
+    }
 
-    return resp->is_success();
+    return {resp->is_success(), std::nullopt};
 }
 
 
-bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq)
+bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq, kvrpcpb::TryAddLockResponse * response)
 {
     if (ori_data_file.empty())
         return false;
@@ -123,6 +128,7 @@ bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_stor
     else
         return false;
 
+    String delete_file_name = fmt::format("{}.del", data_file_name);
     String lock_file_name = fmt::format("s{}/lock/{}.lock_{}_{}", ori_store_id, ori_data_file, lock_store_id, upload_seq);
 
     // Get the lock of the file
@@ -150,6 +156,7 @@ bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_stor
         }
     });
 
+    // make sure data file exists
     {
         Aws::S3::Model::GetObjectRequest request;
         request.WithBucket(bucket_name);
@@ -158,20 +165,27 @@ bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_stor
         auto outcome = s3_client.GetObject(request);
 
         if (!outcome.IsSuccess())
+        {
+            response->mutable_error()->mutable_err_data_file_is_missing();
             return false;
+        }
     }
 
+    // make sure data file is not mark as deleted
     {
         Aws::S3::Model::GetObjectRequest request;
         request.WithBucket(bucket_name);
-        request.WithKey(lock_file_name);
+        request.WithKey(delete_file_name);
 
         auto outcome = s3_client.GetObject(request);
-
         if (outcome.IsSuccess())
+        {
+            response->mutable_error()->mutable_err_data_file_is_deleted();
             return false;
+        }
     }
 
+    // upload lock file
     {
         Aws::S3::Model::PutObjectRequest request;
         request.WithBucket(bucket_name);
@@ -180,13 +194,16 @@ bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_stor
         auto outcome = s3_client.PutObject(request);
 
         if (!outcome.IsSuccess())
+        {
+            response->mutable_error()->mutable_err_add_lock_file_fail();
             return false;
+        }
     }
 
     return true;
 }
 
-bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id)
+bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, kvrpcpb::TryMarkDeleteResponse * response)
 {
     if (data_file.empty())
         return false;
@@ -215,6 +232,7 @@ bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id)
     }
     auto & file_lock = it->second;
 
+    // TODO: maybe we can reuse client.
     Aws::S3::S3Client s3_client(client_config);
 
     file_lock->lock();
@@ -227,6 +245,7 @@ bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id)
         }
     });
 
+    // make sure data file has not been locked
     {
         Aws::S3::Model::ListObjectsRequest request;
         request.WithBucket(bucket_name);
@@ -239,9 +258,13 @@ bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id)
         const auto & result = outcome.GetResult().GetContents();
 
         if (!result.empty())
+        {
+            response->mutable_error()->mutable_err_data_file_is_locked();
             return false;
+        }
     }
-
+    
+    // upload delete file
     {
         Aws::S3::Model::PutObjectRequest request;
         request.WithBucket(bucket_name);
@@ -250,7 +273,10 @@ bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id)
         auto outcome = s3_client.PutObject(request);
 
         if (!outcome.IsSuccess())
+        {
+            response->mutable_error()->mutable_err_add_delete_file_fail();
             return false;
+        }
     }
 
     return true;

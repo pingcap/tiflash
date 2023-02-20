@@ -33,7 +33,7 @@ namespace DB::Management
 
 class S3LockService final : private boost::noncopyable
 {
-private:
+public:
     struct DataFileMutex
     {
         std::mutex file_mutex;
@@ -61,18 +61,26 @@ private:
 
     using DataFileMutexPtr = std::shared_ptr<DataFileMutex>;
 
-    std::unordered_map<String, DataFileMutexPtr> file_latch_map;
-    std::shared_mutex file_latch_map_mutex;
-    
+private:
     Context & context;
+
+    std::unordered_map<String, DataFileMutexPtr> & file_latch_map;
+    std::shared_mutex & file_latch_map_mutex;
+
     const String bucket_name;
     const Aws::Client::ClientConfiguration client_config;
 
     LoggerPtr log;
 
 public:
-    S3LockService(Context & context_, const String bucket_name_, const Aws::Client::ClientConfiguration & client_config_)
+    S3LockService(Context & context_,
+                  std::unordered_map<String, DataFileMutexPtr> & file_latch_map_,
+                  std::shared_mutex & file_latch_map_mutex_,
+                  const String bucket_name_,
+                  const Aws::Client::ClientConfiguration & client_config_)
         : context(context_)
+        , file_latch_map(file_latch_map_)
+        , file_latch_map_mutex(file_latch_map_mutex_)
         , bucket_name(bucket_name_)
         , client_config(client_config_)
         , log(Logger::get())
@@ -83,7 +91,7 @@ public:
     grpc::Status tryAddLock(const kvrpcpb::TryAddLockRequest * request, kvrpcpb::TryAddLockResponse * response)
     try
     {
-        response->set_is_success(tryAddLockImpl(request->ori_data_file(), request->ori_store_id(), request->lock_store_id(), request->upload_seq()));
+        response->set_is_success(tryAddLockImpl(request->ori_data_file(), request->ori_store_id(), request->lock_store_id(), request->upload_seq(), response));
         return grpc::Status::OK;
     }
     catch (const Exception & e)
@@ -100,7 +108,7 @@ public:
     grpc::Status tryMarkDelete(const kvrpcpb::TryMarkDeleteRequest * request, kvrpcpb::TryMarkDeleteResponse * response)
     try
     {
-        response->set_is_success(tryMarkDeleteImpl(request->ori_data_file(), request->ori_store_id()));
+        response->set_is_success(tryMarkDeleteImpl(request->ori_data_file(), request->ori_store_id(), response));
         return grpc::Status::OK;
     }
     catch (const Exception & e)
@@ -114,13 +122,13 @@ public:
         return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
     }
 
-    bool sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq);
-    bool sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id);
+    std::pair<bool, std::optional<kvrpcpb::S3LockError>> sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq);
+    std::pair<bool, std::optional<kvrpcpb::S3LockError>> sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id);
 
 private:
-    bool tryAddLockImpl(const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq);
+    bool tryAddLockImpl(const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq, kvrpcpb::TryAddLockResponse * response);
 
-    bool tryMarkDeleteImpl(String data_file, UInt64 ori_store_id);
+    bool tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, kvrpcpb::TryMarkDeleteResponse * response);
 };
 
 } // namespace DB::Management
