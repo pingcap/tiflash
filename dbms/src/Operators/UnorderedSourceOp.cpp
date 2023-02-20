@@ -18,10 +18,11 @@ namespace DB
 {
 OperatorStatus UnorderedSourceOp::readImpl(Block & block)
 {
-    if (has_temp_block)
+    auto await_status = awaitImpl();
+    if (await_status == OperatorStatus::HAS_OUTPUT)
     {
-        std::swap(block, t_block);
-        has_temp_block = false;
+        std::swap(block, t_block.value());
+        t_block.reset();
         if (action.transform(block))
         {
             return OperatorStatus::HAS_OUTPUT;
@@ -29,38 +30,13 @@ OperatorStatus UnorderedSourceOp::readImpl(Block & block)
         else
             return OperatorStatus::FINISHED;
     }
-    else
-    {
-        while (true)
-        {
-            Block res;
-            if (!task_pool->tryPopBlock(res))
-            {
-                return OperatorStatus::WAITING;
-            }
-
-            if (res)
-            {
-                if (action.transform(res))
-                {
-                    std::swap(block, res);
-                    return OperatorStatus::HAS_OUTPUT;
-                }
-                else
-                {
-                    continue;
-                }
-            }
-            else
-            {
-                return OperatorStatus::FINISHED;
-            }
-        }
-    }
+    return await_status;
 }
 
 OperatorStatus UnorderedSourceOp::awaitImpl()
 {
+    if (t_block.has_value())
+        return OperatorStatus::HAS_OUTPUT;
     Block res;
     if (!task_pool->tryPopBlock(res))
         return OperatorStatus::WAITING;
@@ -69,7 +45,6 @@ OperatorStatus UnorderedSourceOp::awaitImpl()
         if (res.rows() == 0)
             return OperatorStatus::WAITING;
         t_block = std::move(res);
-        has_temp_block = true;
         return OperatorStatus::HAS_OUTPUT;
     }
     else

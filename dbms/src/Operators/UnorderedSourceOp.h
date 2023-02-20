@@ -34,12 +34,12 @@ public:
         const String & req_id)
         : SourceOp(exec_status_)
         , task_pool(task_pool_)
-        , header(toEmptyBlock(columns_to_read_))
         , action(header, extra_table_id_index, physical_table_id)
         , log(Logger::get(req_id))
         , ref_no(0)
         , task_pool_added(false)
     {
+        setHeader(toEmptyBlock(columns_to_read_));
         if (extra_table_id_index != InvalidColumnID)
         {
             const auto & extra_table_id_col_define = DM::getExtraTableIDColumnDefine();
@@ -49,7 +49,6 @@ public:
         ref_no = task_pool->increaseUnorderedInputStreamRefCount();
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
         addReadTaskPoolToScheduler();
-        setHeader(header);
     }
 
     String getName() const override
@@ -63,20 +62,14 @@ public:
 
     void addReadTaskPoolToScheduler()
     {
-        if (likely(task_pool_added))
-        {
-            return;
-        }
         std::call_once(task_pool->addToSchedulerFlag(), [&]() { DM::SegmentReadTaskScheduler::instance().add(task_pool); });
         task_pool_added = true;
     }
 
 private:
     DM::SegmentReadTaskPoolPtr task_pool;
-    Block header;
     SegmentReadTransformAction action;
-    Block t_block;
-    bool has_temp_block = false;
+    std::optional<Block> t_block;
 
     const LoggerPtr log;
     int64_t ref_no;
