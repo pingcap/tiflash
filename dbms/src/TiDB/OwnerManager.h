@@ -135,9 +135,8 @@ private:
     };
 
     std::mutex mtx_camaign;
-    State state = State::Normal;
+    State state = State::Init;
     std::condition_variable cv_camaign;
-    std::atomic<bool> enable_camaign{true};
     std::thread th_camaign;
 
     std::thread th_watch_owner;

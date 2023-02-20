@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Poco/Environment.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Etcd/Client.h>
 #include <TiDB/OwnerInfo.h>
@@ -26,17 +27,19 @@
 #include <condition_variable>
 #include <magic_enum.hpp>
 #include <mutex>
+#include <thread>
 
 namespace DB::tests
 {
 
 TEST(OwnerManagerTest, BeOwner)
+try
 {
-    auto etcd_endpoint = Poco::Environment::get("ETCD_ENDPOINT");
+    auto etcd_endpoint = Poco::Environment::get("ETCD_ENDPOINT", "");
     if (etcd_endpoint.empty())
     {
-        ::testing::UnitTest::GetInstance()->current_test_info();
-        LOG_INFO(Logger::get(), "{}.{} is skipped because env ETCD_ENDPOINT not set");
+        const auto * t = ::testing::UnitTest::GetInstance()->current_test_info();
+        LOG_INFO(Logger::get(), "{}.{} is skipped because env ETCD_ENDPOINT not set", t->test_case_name(), t->name());
         return;
     }
 
@@ -44,17 +47,16 @@ TEST(OwnerManagerTest, BeOwner)
     pingcap::ClusterConfig config;
     pingcap::pd::ClientPtr pd_client = std::make_shared<pingcap::pd::Client>(Strings{etcd_endpoint}, config);
     auto etcd_client = DB::Etcd::Client::create(pd_client, config);
-    const String id = "OwnerManagerTest";
-    auto owner = OwnerManager::createS3GCOwner(ctx, id, etcd_client);
-    auto owner_id = owner->getOwnerID();
-    EXPECT_EQ(owner_id.status, OwnerType::NoLeader) << magic_enum::enum_name(owner_id.status);
+    const String id = "owner_0";
+    auto owner0 = OwnerManager::createS3GCOwner(ctx, id, etcd_client);
+    auto owner_info = owner0->getOwnerID();
+    EXPECT_EQ(owner_info.status, OwnerType::NoLeader) << magic_enum::enum_name(owner_info.status);
 
     std::mutex mtx;
     std::condition_variable cv;
     bool become_owner = false;
 
-    owner->campaignOwner();
-    owner->setBeOwnerHook([&] {
+    owner0->setBeOwnerHook([&] {
         {
             std::unique_lock lk(mtx);
             become_owner = true;
@@ -62,29 +64,72 @@ TEST(OwnerManagerTest, BeOwner)
         cv.notify_one();
     });
 
+    owner0->campaignOwner();
+
     {
         std::unique_lock lk(mtx);
         cv.wait(lk, [&] { return become_owner; });
     }
 
-    ASSERT_TRUE(owner->isOwner());
+    ASSERT_TRUE(owner0->isOwner());
     {
-        auto owner_id = owner->getOwnerID();
+        auto owner_id = owner0->getOwnerID();
         EXPECT_EQ(owner_id.status, OwnerType::IsOwner);
         EXPECT_EQ(owner_id.owner_id, id);
     }
 
+    const String new_id = "owner_1";
+    auto owner1 = OwnerManager::createS3GCOwner(ctx, new_id, etcd_client);
+    owner_info = owner1->getOwnerID();
+    EXPECT_EQ(owner_info.status, OwnerType::NotOwner) << magic_enum::enum_name(owner_info.status);
+    EXPECT_EQ(owner_info.owner_id, id);
+    owner1->campaignOwner();
+
+    using namespace std::chrono_literals;
     {
-        bool was_owner = owner->resignOwner();
+        std::this_thread::sleep_for(5s);
+
+        // owner is not transferred
+        EXPECT_FALSE(owner1->isOwner());
+        owner_info = owner1->getOwnerID();
+        EXPECT_EQ(owner_info.status, OwnerType::NotOwner) << magic_enum::enum_name(owner_info.status);
+        EXPECT_EQ(owner_info.owner_id, id);
+
+        bool was_owner = owner1->resignOwner();
+        EXPECT_FALSE(was_owner);
+    }
+
+    {
+        bool was_owner = owner0->resignOwner();
         EXPECT_TRUE(was_owner);
     }
 
     {
-        owner->cancel();
-        ASSERT_FALSE(owner->isOwner());
+        owner0->cancel();
+        ASSERT_FALSE(owner0->isOwner());
     }
 
-    sleep(10);
+    {
+        std::this_thread::sleep_for(5s);
+        // owner is transferred to owner1
+        EXPECT_TRUE(owner1->isOwner());
+        owner_info = owner1->getOwnerID();
+        EXPECT_EQ(owner_info.status, OwnerType::IsOwner) << magic_enum::enum_name(owner_info.status);
+        EXPECT_EQ(owner_info.owner_id, new_id);
+    }
+
+    {
+        owner1->cancel();
+        ASSERT_FALSE(owner0->isOwner());
+        ASSERT_FALSE(owner1->isOwner());
+    }
+
+    {
+        owner_info = owner0->getOwnerID();
+        EXPECT_EQ(owner_info.status, OwnerType::NoLeader) << magic_enum::enum_name(owner_info.status);
+        EXPECT_EQ(owner_info.owner_id, "");
+    }
 }
+CATCH
 
 } // namespace DB::tests

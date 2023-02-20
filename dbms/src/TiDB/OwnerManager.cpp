@@ -191,7 +191,8 @@ void OwnerManager::camaignLoop(Etcd::SessionPtr session)
         while (true)
         {
             bool run_next_campaign = true;
-            std::tie(run_next_campaign, session) = runNextCampaign(std::move(session));
+            Etcd::SessionPtr old_session = session; // workaround for clang-tidy
+            std::tie(run_next_campaign, session) = runNextCampaign(std::move(old_session));
             if (!run_next_campaign)
                 break;
 
