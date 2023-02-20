@@ -40,7 +40,6 @@ public:
 
     void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency) override
     {
-        aggregate_context->initMerge();
         group_builder.init(concurrency);
 
         group_builder.transform([&](auto & builder) {

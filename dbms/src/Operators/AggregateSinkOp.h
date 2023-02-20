@@ -41,10 +41,8 @@ public:
     {
         if (unlikely(!block))
         {
-            // ywq todo
             return OperatorStatus::FINISHED;
         }
-        std::cout << "index: " << index << std::endl;
         agg_context->executeOnBlock(index, block);
         block.clear();
         return OperatorStatus::NEED_INPUT;

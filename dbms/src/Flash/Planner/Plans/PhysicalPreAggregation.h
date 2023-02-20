@@ -66,17 +66,16 @@ public:
             builder.setSinkOp(std::make_unique<AggregateSinkOp>(group_builder.exec_status, build_index++, agg_context));
         });
 
-        // todo init agg_context
         Block before_agg_header = group_builder.getCurrentHeader();
         size_t concurrency = group_builder.concurrency;
         AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
         SpillConfig spill_config(context.getTemporaryPath(), fmt::format("{}_aggregation", log->identifier()), context.getSettingsRef().max_spilled_size_per_spill, context.getFileProvider());
-        // ywq todo without spill
+
         auto params = AggregationInterpreterHelper::buildParams(
             context,
             before_agg_header,
             concurrency,
-            1,
+            concurrency,
             aggregation_keys,
             aggregation_collators,
             aggregate_descriptions,
@@ -93,7 +92,7 @@ private:
     ExpressionActionsPtr before_agg_actions;
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
-    bool is_final_agg [[maybe_unused]];
+    bool is_final_agg;
     AggregateDescriptions aggregate_descriptions;
     ExpressionActionsPtr expr_after_agg;
     AggregateContextPtr agg_context;

@@ -20,7 +20,9 @@
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/Operator.h>
+
 #include <memory>
+#include <mutex>
 
 namespace DB
 {
@@ -77,34 +79,44 @@ public:
 
     void initMerge()
     {
-        // add assert
-        if (!aggregator->hasSpilledData())
+        std::unique_lock lock(mu);
+        if (inited)
         {
-            auto merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, is_final, max_threads);
-            if (!merging_buckets)
+            return;
+        }
+
+        auto merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, is_final, max_threads);
+        if (!merging_buckets)
+        {
+            impl = std::make_unique<NullBlockInputStream>(aggregator->getHeader(is_final));
+        }
+        else
+        {
+            RUNTIME_CHECK(merging_buckets->getConcurrency() > 0);
+            if (merging_buckets->getConcurrency() > 1)
             {
-                impl = std::make_unique<NullBlockInputStream>(aggregator->getHeader(is_final));
+                BlockInputStreams merging_streams;
+                for (size_t i = 0; i < merging_buckets->getConcurrency(); ++i)
+                    merging_streams.push_back(
+                        std::make_shared<MergingAndConvertingBlockInputStream>(merging_buckets, i, log->identifier()));
+                impl = std::make_unique<UnionBlockInputStream<>>(
+                    merging_streams,
+                    BlockInputStreams{},
+                    max_threads,
+                    log->identifier());
             }
             else
             {
-                RUNTIME_CHECK(merging_buckets->getConcurrency() > 0);
-                if (merging_buckets->getConcurrency() > 1)
-                {
-                    BlockInputStreams merging_streams;
-                    for (size_t i = 0; i < merging_buckets->getConcurrency(); ++i)
-                        merging_streams.push_back(std::make_shared<MergingAndConvertingBlockInputStream>(merging_buckets, i, log->identifier()));
-                    impl = std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, log->identifier());
-                }
-                else
-                {
-                    impl = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
-                }
+                impl = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
             }
         }
+        inited = true;
     }
 
     void read(Block & block)
     {
+        std::unique_lock lock(mu);
+        RUNTIME_CHECK(inited == true);
         block = impl->read();
     }
 
@@ -121,6 +133,8 @@ private:
     size_t max_threads{};
     bool is_final{};
     std::unique_ptr<IBlockInputStream> impl;
+    bool inited = false;
+    mutable std::shared_mutex mu;
 };
 
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;

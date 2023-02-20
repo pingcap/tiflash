@@ -41,7 +41,12 @@ public:
 protected:
     OperatorStatus readImpl(Block & block) override
     {
-        std::cout << "read block" << std::endl;
+        if (!inited)
+        {
+            agg_context->initMerge();
+            inited = true;
+        }
+
         agg_context->read(block);
         return OperatorStatus::HAS_OUTPUT;
     }
@@ -49,5 +54,6 @@ protected:
 private:
     AggregateContextPtr agg_context;
     const LoggerPtr log;
+    bool inited = false;
 };
 } // namespace DB
