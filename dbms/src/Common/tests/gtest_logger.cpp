@@ -17,6 +17,7 @@
 #include <Common/formatReadable.h>
 #include <Common/tests/TestChannel.h>
 #include <Poco/FormattingChannel.h>
+#include <Poco/Message.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
