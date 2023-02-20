@@ -120,18 +120,9 @@ Block DataStreamExecutor::getSampleBlock() const
 BaseRuntimeStatistics DataStreamExecutor::getRuntimeStatistics() const
 {
     BaseRuntimeStatistics runtime_statistics;
-    auto & dag_context = dagContext();
-    auto root_executor_id = dag_context.getRootExecutorId();
-    const auto & profile_streams_map = dag_context.getProfileStreamsMap();
-    auto it = profile_streams_map.find(root_executor_id);
-    if (it != profile_streams_map.end())
-    {
-        for (const auto & input_stream : it->second)
-        {
-            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get()); p_stream)
-                runtime_statistics.append(p_stream->getProfileInfo());
-        }
-    }
+    assert(data_stream);
+    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(data_stream.get()))
+        runtime_statistics.append(p_stream->getProfileInfo());
     return runtime_statistics;
 }
 } // namespace DB
