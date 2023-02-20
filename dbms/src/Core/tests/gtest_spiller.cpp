@@ -85,9 +85,9 @@ protected:
         }
         return ret;
     }
-    static void verifyRestoreBlocks(Spiller & spiller, size_t restore_partition_id, size_t restore_max_stream_size, size_t expected_stream_size, const Blocks & expected_blocks)
+    static void verifyRestoreBlocks(Spiller & spiller, size_t restore_partition_id, size_t restore_max_stream_size, size_t expected_stream_size, const Blocks & expected_blocks, bool append_dummy_read_stream = false)
     {
-        auto block_streams = spiller.restoreBlocks(restore_partition_id, restore_max_stream_size);
+        auto block_streams = spiller.restoreBlocks(restore_partition_id, restore_max_stream_size, append_dummy_read_stream);
         if (expected_stream_size > 0)
         {
             GTEST_ASSERT_EQ(block_streams.size(), expected_stream_size);
@@ -148,7 +148,7 @@ try
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "Check spill_finished == false failed: test: spill after the spiller is finished.");
+    GTEST_ASSERT_EQ(e.message(), "Check isSpillFinished() == false failed: test: spill after the spiller is finished.");
 }
 
 TEST_F(SpillerTest, InvalidPartitionIdInRestore)
@@ -173,7 +173,7 @@ try
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "Check spill_finished failed: test: restore before the spiller is finished.");
+    GTEST_ASSERT_EQ(e.message(), "Check isSpillFinished() failed: test: restore before the spiller is finished.");
 }
 
 TEST_F(SpillerTest, SpilledBlockDataSize)
@@ -349,6 +349,40 @@ try
             size_t expected_streams = spill_num;
             verifyRestoreBlocks(*spiller, partition_id, max_restore_streams, expected_streams, all_blocks[partition_id]);
         }
+    }
+}
+CATCH
+
+TEST_F(SpillerTest, RestoreWithAppendDummyReadStream)
+try
+{
+    auto spiller_config_for_append_write = *spill_config_ptr;
+
+    /// append_dummy_read = false
+    {
+        spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
+        Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
+        Blocks all_blocks;
+        auto blocks = generateBlocks(20);
+        spiller.spillBlocks(blocks, 0);
+        spiller.spillBlocks(blocks, 0);
+        spiller.finishSpill();
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        verifyRestoreBlocks(spiller, 0, 20, 1, all_blocks, false);
+    }
+    /// append_dummy_read = true
+    {
+        spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
+        Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
+        Blocks all_blocks;
+        auto blocks = generateBlocks(20);
+        spiller.spillBlocks(blocks, 0);
+        spiller.spillBlocks(blocks, 0);
+        spiller.finishSpill();
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        verifyRestoreBlocks(spiller, 0, 20, 20, all_blocks, true);
     }
 }
 CATCH
