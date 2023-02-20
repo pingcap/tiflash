@@ -153,6 +153,8 @@ SpillHandler Spiller::createSpillHandler(UInt64 partition_id)
 
 void Spiller::spillBlocks(const Blocks & blocks, UInt64 partition_id)
 {
+    if (blocks.empty())
+        return;
     auto spiller_handler = createSpillHandler(partition_id);
     spiller_handler.spillBlocks(blocks);
     spiller_handler.finish();
@@ -165,12 +167,14 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
     std::lock_guard partition_lock(spilled_files[partition_id]->spilled_files_mutex);
     RUNTIME_CHECK_MSG(spilled_files[partition_id]->mutable_spilled_files.empty(), "{}: the mutable spilled files must be empty when restore.", config.spill_id);
     auto & partition_spilled_files = spilled_files[partition_id]->immutable_spilled_files;
+
     if (max_stream_size == 0)
         max_stream_size = partition_spilled_files.size();
     if (is_input_sorted && partition_spilled_files.size() > max_stream_size)
     {
         LOG_WARNING(logger, "Sorted spilled data restore does not take max_stream_size into account");
     }
+
     SpillDetails details{0, 0, 0};
     BlockInputStreams ret;
     UInt64 spill_file_read_stream_num = is_input_sorted ? partition_spilled_files.size() : std::min(max_stream_size, partition_spilled_files.size());
@@ -216,7 +220,7 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
     if (release_spilled_file_on_restore)
     {
         /// clear the spilled_files so we can safely assume that the element in spilled_files is always not nullptr
-        spilled_files[partition_id]->immutable_spilled_files.clear();
+        partition_spilled_files.clear();
     }
     if (ret.empty())
         ret.push_back(std::make_shared<NullBlockInputStream>(input_schema));

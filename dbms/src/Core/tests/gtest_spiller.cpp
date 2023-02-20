@@ -356,17 +356,56 @@ CATCH
 TEST_F(SpillerTest, AppendWrite)
 try
 {
-    auto spiller_config_with_large_spill_rows = *spill_config_ptr;
-    spiller_config_with_large_spill_rows.max_spilled_rows_per_file = 1000000000;
-    Spiller spiller(spiller_config_with_large_spill_rows, false, 2, spiller_test_header, logger);
-    Blocks all_blocks;
-    auto blocks = generateBlocks(50);
-    spiller.spillBlocks(blocks, 0);
-    spiller.spillBlocks(blocks, 0);
-    spiller.finishSpill();
-    all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
-    all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
-    verifyRestoreBlocks(spiller, 0, 2, 1, all_blocks);
+    auto spiller_config_for_append_write = *spill_config_ptr;
+
+    /// case 1, multiple spill write to the same file
+    {
+        spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
+        Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
+        Blocks all_blocks;
+        auto blocks = generateBlocks(50);
+        spiller.spillBlocks(blocks, 0);
+        spiller.spillBlocks(blocks, 0);
+        spiller.finishSpill();
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        verifyRestoreBlocks(spiller, 0, 2, 1, all_blocks);
+    }
+    /// case 2, one spill write to multiple files
+    {
+        spiller_config_for_append_write.max_spilled_rows_per_file = 1;
+        Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
+        auto all_blocks = generateBlocks(20);
+        spiller.spillBlocks(all_blocks, 0);
+        spiller.finishSpill();
+        verifyRestoreBlocks(spiller, 0, 0, 20, all_blocks);
+    }
+    /// case 3, spill empty blocks to existing spilled file
+    {
+        spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
+        Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
+        Blocks all_blocks = generateBlocks(20);
+        spiller.spillBlocks(all_blocks, 0);
+        Blocks empty_blocks;
+        spiller.spillBlocks(empty_blocks, 0);
+        BlocksList empty_blocks_list;
+        BlocksListBlockInputStream block_input_stream(std::move(empty_blocks_list));
+        spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
+        spiller.finishSpill();
+        verifyRestoreBlocks(spiller, 0, 2, 1, all_blocks);
+    }
+    /// case 4, spill empty blocks to new spilled file
+    {
+        spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
+        Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
+        Blocks empty_blocks;
+        spiller.spillBlocks(empty_blocks, 0);
+        BlocksList empty_blocks_list;
+        BlocksListBlockInputStream block_input_stream(std::move(empty_blocks_list));
+        spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
+        spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData() == false);
+    }
 }
 CATCH
 
