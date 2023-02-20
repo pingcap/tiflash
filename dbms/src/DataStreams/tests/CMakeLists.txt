@@ -13,14 +13,3 @@
 # limitations under the License.
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
-
-set(SRCS )
-
-add_executable (tab_separated_streams tab_separated_streams.cpp ${SRCS})
-target_link_libraries (tab_separated_streams dbms clickhouse_functions)
-
-add_executable (block_row_transforms block_row_transforms.cpp ${SRCS})
-target_link_libraries (block_row_transforms dbms clickhouse_functions)
-
-add_executable (native_streams native_streams.cpp ${SRCS})
-target_link_libraries (native_streams dbms clickhouse_functions)
