@@ -96,7 +96,7 @@ public:
     /// spill blocks by reading from BlockInputStream, this is more memory friendly compared to spillBlocks
     void spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled);
     /// max_stream_size == 0 means the spiller choose the stream size automatically
-    BlockInputStreams restoreBlocks(UInt64 partition_id, UInt64 max_stream_size = 0, bool force_stream_size = false);
+    BlockInputStreams restoreBlocks(UInt64 partition_id, UInt64 max_stream_size = 0, bool append_dummy_read_stream = false);
     UInt64 spilledRows(UInt64 partition_id);
     void finishSpill();
     bool hasSpilledData() const { return has_spilled_data; };

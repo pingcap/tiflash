@@ -127,23 +127,19 @@ void SpillHandler::finish()
         {
             auto spill_details = writer->finishWrite();
             spilled_files[current_spilled_file_index]->updateSpillDetails(spill_details);
-            if (spiller->enable_append_write)
+            auto current_spill_details = spilled_files[current_spilled_file_index]->getSpillDetails();
+            if (!spiller->enable_append_write || isSpilledFileFull(current_spill_details.rows, current_spill_details.data_bytes_uncompressed))
             {
-                if (isSpilledFileFull(spilled_files[current_spilled_file_index]->getSpillDetails().rows, spilled_files[current_spilled_file_index]->getSpillDetails().data_bytes_uncompressed))
-                    spilled_files[current_spilled_file_index]->markFull();
-            }
-            else
-            {
-                /// always mark full if enable_append_write is false since if enable_append_write is false, all the file is full
+                /// always mark full if enable_append_write is false here, since if enable_append_write is false, all the files are treated as full file
                 spilled_files[current_spilled_file_index]->markFull();
             }
         }
         else
         {
             /// writer == nullptr means no write to current file
-            /// but if current_append_write is true, we still need to put the original file back
             if (!current_append_write)
             {
+                /// if current_append_write is true, we still need to put the original file back, so can not discard the file here
                 current_spilled_file_index--;
                 spilled_files.pop_back();
             }
