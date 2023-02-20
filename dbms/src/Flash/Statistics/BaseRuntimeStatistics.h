@@ -12,16 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/BlockStreamProfileInfo.h>
-#include <Flash/Statistics/ExecutorStatisticsBase.h>
+#pragma once
+
+#include <common/types.h>
 
 namespace DB
 {
-void BaseRuntimeStatistics::append(const BlockStreamProfileInfo & profile_info)
+struct BlockStreamProfileInfo;
+struct BaseRuntimeStatistics
 {
-    rows += profile_info.rows;
-    blocks += profile_info.blocks;
-    bytes += profile_info.bytes;
-    execution_time_ns = std::max(execution_time_ns, profile_info.execution_time);
-}
+    size_t rows = 0;
+    size_t blocks = 0;
+    size_t bytes = 0;
+
+    UInt64 execution_time_ns = 0;
+
+    void append(const BlockStreamProfileInfo &);
+};
 } // namespace DB

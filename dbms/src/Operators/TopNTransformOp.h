@@ -43,6 +43,7 @@ public:
         return "TopNTransformOp";
     }
 
+protected:
     OperatorStatus transformImpl(Block & block) override;
     OperatorStatus tryOutputImpl(Block & block) override;
 
