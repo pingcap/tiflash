@@ -124,11 +124,9 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWriteImpl(TrackedMppDataPac
         size_t local_data_bytes = 0;
         {
             auto tunnel_cnt = tunnels.size();
-            size_t local_tunnel_cnt = 0;
-            for (size_t i = 0; i < tunnel_cnt; ++i)
-            {
-                local_tunnel_cnt += isLocal(i);
-            }
+            const size_t local_tunnel_cnt = std::accumulate(tunnels.begin(), tunnels.end(), 0, [](auto res, auto && tunnel) {
+                return res + tunnel->isLocal();
+            });
             data_bytes = packet_bytes * tunnel_cnt;
             local_data_bytes = packet_bytes * local_tunnel_cnt;
         }
@@ -179,9 +177,11 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPD
     {
         return broadcastOrPassThroughWriteImpl(std::move(local_tunnel_tracked_packet), is_broadcast);
     }
-    RUNTIME_ASSERT(local_tunnel_tracked_packet->getPacket().chunks_size() == 1, "expect 1, but got {}", local_tunnel_tracked_packet->getPacket().chunks_size());
+    assert(local_tunnel_tracked_packet->getPacket().chunks_size() == 1);
+
     const auto & chunk = local_tunnel_tracked_packet->getPacket().chunks(0);
-    RUNTIME_ASSERT(static_cast<CompressionMethodByte>(chunk[0]) == CompressionMethodByte::NONE);
+    assert(static_cast<CompressionMethodByte>(chunk[0]) == CompressionMethodByte::NONE);
+
     // re-encode by specified compression method
     auto && remote_tunnel_tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
     {
