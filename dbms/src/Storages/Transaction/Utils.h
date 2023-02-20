@@ -21,6 +21,8 @@
 
 namespace DB
 {
+using SteadyClock = std::chrono::steady_clock;
+
 class MutexLockWrap
 {
 public:
@@ -67,7 +69,13 @@ struct AsyncNotifier
         Timeout,
         Normal,
     };
-    virtual Status blockedWaitFor(std::chrono::milliseconds) { return AsyncNotifier::Status::Timeout; }
+    // NOT thread safe
+    Status blockedWaitFor(const std::chrono::milliseconds & t)
+    {
+        return blockedWaitUtil(SteadyClock::now() + t);
+    }
+    virtual Status blockedWaitUtil(const SteadyClock::time_point &) = 0;
+    // thread safe
     virtual void wake() = 0;
     virtual ~AsyncNotifier() = default;
 };

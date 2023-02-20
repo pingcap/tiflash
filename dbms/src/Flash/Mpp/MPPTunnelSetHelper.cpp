@@ -79,7 +79,6 @@ TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::Fiel
         tracked_packet->addChunk(codec_stream->getString());
         codec_stream->clear();
     }
-    blocks.clear();
     return tracked_packet;
 }
 

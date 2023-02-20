@@ -19,7 +19,6 @@
 #include <Storages/Transaction/ReadIndexWorker.h>
 #include <fmt/chrono.h>
 
-#include <memory>
 #include <queue>
 
 namespace DB
@@ -68,22 +67,22 @@ void F_TEST_LOG_FMT(const std::string &)
 
 namespace DB
 {
-AsyncNotifier::Status AsyncWaker::Notifier::blockedWaitFor(std::chrono::milliseconds timeout)
+AsyncNotifier::Status AsyncWaker::Notifier::blockedWaitUtil(const SteadyClock::time_point & time_point)
 {
     // if flag from false to false, wait for notification.
     // if flag from true to false, do nothing.
     auto res = AsyncNotifier::Status::Normal;
-    if (!wait_flag.exchange(false, std::memory_order_acq_rel))
+    if (!is_awake.exchange(false, std::memory_order_acq_rel))
     {
         {
             auto lock = genUniqueLock();
-            if (!wait_flag.load(std::memory_order_acquire))
+            if (!is_awake.load(std::memory_order_acquire))
             {
-                if (cv.wait_for(lock, timeout) == std::cv_status::timeout)
+                if (cv.wait_until(lock, time_point) == std::cv_status::timeout)
                     res = AsyncNotifier::Status::Timeout;
             }
         }
-        wait_flag.store(false, std::memory_order_release);
+        is_awake.store(false, std::memory_order_release);
     }
     return res;
 }
@@ -92,7 +91,9 @@ void AsyncWaker::Notifier::wake()
 {
     // if flag from false -> true, then wake up.
     // if flag from true -> true, do nothing.
-    if (!wait_flag.exchange(true, std::memory_order_acq_rel))
+    if (is_awake.load(std::memory_order_acquire))
+        return;
+    if (!is_awake.exchange(true, std::memory_order_acq_rel))
     {
         // wake up notifier
         auto _ = genLockGuard();
@@ -117,9 +118,9 @@ AsyncWaker::AsyncWaker(const TiFlashRaftProxyHelper & helper_, AsyncNotifier * n
 {
 }
 
-AsyncNotifier::Status AsyncWaker::waitFor(std::chrono::milliseconds timeout)
+AsyncNotifier::Status AsyncWaker::waitUtil(SteadyClock::time_point time_point)
 {
-    return notifier.blockedWaitFor(timeout);
+    return notifier.blockedWaitUtil(time_point);
 }
 
 RawVoidPtr AsyncWaker::getRaw() const
@@ -130,30 +131,20 @@ RawVoidPtr AsyncWaker::getRaw() const
 struct BlockedReadIndexHelperTrait
 {
     explicit BlockedReadIndexHelperTrait(uint64_t timeout_ms_)
-        : timeout_ms(timeout_ms_)
+        : time_point(SteadyClock::now() + std::chrono::milliseconds{timeout_ms_})
     {}
-    virtual AsyncNotifier::Status blockedWaitFor(std::chrono::milliseconds) = 0;
+    virtual AsyncNotifier::Status blockedWaitUtil(SteadyClock::time_point) = 0;
 
     // block current runtime and wait.
     virtual AsyncNotifier::Status blockedWait()
     {
-        auto time_cost_ms = check_watch.elapsedMilliseconds();
-
-        if (time_cost_ms >= timeout_ms)
-        {
-            return AsyncNotifier::Status::Timeout;
-        }
-
-        auto remain = std::chrono::milliseconds(timeout_ms - time_cost_ms);
-
         // TODO: use async process if supported by framework
-        return blockedWaitFor(remain);
+        return blockedWaitUtil(time_point);
     }
     virtual ~BlockedReadIndexHelperTrait() = default;
 
 protected:
-    Stopwatch check_watch;
-    uint64_t timeout_ms;
+    SteadyClock::time_point time_point;
 };
 
 struct BlockedReadIndexHelper final : BlockedReadIndexHelperTrait
@@ -170,9 +161,9 @@ public:
         return waker;
     }
 
-    AsyncNotifier::Status blockedWaitFor(std::chrono::milliseconds tm) override
+    AsyncNotifier::Status blockedWaitUtil(SteadyClock::time_point time_point) override
     {
-        return waker.waitFor(tm);
+        return waker.waitUtil(time_point);
     }
 
     ~BlockedReadIndexHelper() override = default;
@@ -189,9 +180,9 @@ struct BlockedReadIndexHelperV3 final : BlockedReadIndexHelperTrait
     {
     }
 
-    AsyncNotifier::Status blockedWaitFor(std::chrono::milliseconds tm) override
+    AsyncNotifier::Status blockedWaitUtil(SteadyClock::time_point time_point) override
     {
-        return notifier.blockedWaitFor(tm);
+        return notifier.blockedWaitUtil(time_point);
     }
 
     ~BlockedReadIndexHelperV3() override = default;
@@ -342,6 +333,10 @@ struct RegionReadIndexNotifier final : AsyncNotifier
         notify->add(region_id, ts);
         notify->wake();
     }
+    Status blockedWaitUtil(const SteadyClock::time_point &) override
+    {
+        return Status::Timeout;
+    }
 
     ~RegionReadIndexNotifier() override = default;
 
@@ -446,7 +441,7 @@ void ReadIndexDataNode::ReadIndexElement::doPoll(const TiFlashRaftProxyHelper & 
 
                 clean_task = true;
             }
-            else if (std::chrono::steady_clock::now() > timeout + start_time)
+            else if (SteadyClock::now() > timeout + start_time)
             {
                 TEST_LOG_FMT("poll ReadIndexElement timeout for region {}", region_id);
 
@@ -458,7 +453,7 @@ void ReadIndexDataNode::ReadIndexElement::doPoll(const TiFlashRaftProxyHelper & 
                 TEST_LOG_FMT(
                     "poll ReadIndexElement failed for region {}, time cost {}, timeout {}, start time {}",
                     region_id,
-                    std::chrono::steady_clock::now() - start_time,
+                    SteadyClock::now() - start_time,
                     timeout,
                     start_time);
             }
@@ -706,7 +701,7 @@ void ReadIndexWorker::consumeReadIndexNotifyCtrl()
     }
 }
 
-void ReadIndexWorker::consumeRegionNotifies(std::chrono::steady_clock::duration min_dur)
+void ReadIndexWorker::consumeRegionNotifies(SteadyClock::duration min_dur)
 {
     if (!lastRunTimeout(min_dur))
     {
@@ -721,7 +716,7 @@ void ReadIndexWorker::consumeRegionNotifies(std::chrono::steady_clock::duration 
     }
 
     TEST_LOG_FMT("worker {} set last run time {}", getID(), Clock::now());
-    last_run_time.store(std::chrono::steady_clock::now(), std::memory_order_release);
+    last_run_time.store(SteadyClock::now(), std::memory_order_release);
 }
 
 ReadIndexFuturePtr ReadIndexWorker::genReadIndexFuture(const kvrpcpb::ReadIndexRequest & req)
@@ -737,7 +732,7 @@ ReadIndexFuturePtr ReadIndexWorkerManager::genReadIndexFuture(const kvrpcpb::Rea
     return getWorkerByRegion(req.context().region_id()).genReadIndexFuture(req);
 }
 
-void ReadIndexWorker::runOneRound(std::chrono::steady_clock::duration min_dur)
+void ReadIndexWorker::runOneRound(SteadyClock::duration min_dur)
 {
     if (!read_index_notify_ctrl->empty())
     {
@@ -759,10 +754,10 @@ ReadIndexWorker::ReadIndexWorker(
 {
 }
 
-bool ReadIndexWorker::lastRunTimeout(std::chrono::steady_clock::duration timeout) const
+bool ReadIndexWorker::lastRunTimeout(SteadyClock::duration timeout) const
 {
     TEST_LOG_FMT("worker {}, last run time {}, timeout {}", getID(), last_run_time.load(std::memory_order_relaxed), timeout);
-    return last_run_time.load(std::memory_order_relaxed) + timeout < std::chrono::steady_clock::now();
+    return last_run_time.load(std::memory_order_relaxed) + timeout < SteadyClock::now();
 }
 
 ReadIndexWorker & ReadIndexWorkerManager::getWorkerByRegion(RegionID region_id)
@@ -828,13 +823,13 @@ ReadIndexWorkerManager::~ReadIndexWorkerManager()
     stop();
 }
 
-void ReadIndexWorkerManager::runOneRoundAll(std::chrono::steady_clock::duration min_dur)
+void ReadIndexWorkerManager::runOneRoundAll(SteadyClock::duration min_dur)
 {
     for (size_t id = 0; id < runners.size(); ++id)
         runOneRound(min_dur, id);
 }
 
-void ReadIndexWorkerManager::runOneRound(std::chrono::steady_clock::duration min_dur, size_t id)
+void ReadIndexWorkerManager::runOneRound(SteadyClock::duration min_dur, size_t id)
 {
     runners[id]->runOneRound(min_dur);
 }
@@ -1003,7 +998,7 @@ void ReadIndexWorkerManager::ReadIndexRunner::blockedWaitFor(std::chrono::millis
     global_notifier->blockedWaitFor(timeout);
 }
 
-void ReadIndexWorkerManager::ReadIndexRunner::runOneRound(std::chrono::steady_clock::duration min_dur)
+void ReadIndexWorkerManager::ReadIndexRunner::runOneRound(SteadyClock::duration min_dur)
 {
     for (size_t i = id; i < workers.size(); i += runner_cnt)
         workers[i]->runOneRound(min_dur);

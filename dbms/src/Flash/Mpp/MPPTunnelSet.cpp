@@ -236,17 +236,17 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPD
         case CompressionMethod::LZ4:
         {
             if (is_broadcast)
-                GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_lz4_compression_remote).Increment(remote_tunnel_cnt * remote_packet_bytes);
+                GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_lz4_compression).Increment(remote_tunnel_cnt * remote_packet_bytes);
             else
-                GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_lz4_compression_remote).Increment(remote_tunnel_cnt * remote_packet_bytes);
+                GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_lz4_compression).Increment(remote_tunnel_cnt * remote_packet_bytes);
             break;
         }
         case CompressionMethod::ZSTD:
         {
             if (is_broadcast)
-                GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_zstd_compression_remote).Increment(remote_tunnel_cnt * remote_packet_bytes);
+                GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_zstd_compression).Increment(remote_tunnel_cnt * remote_packet_bytes);
             else
-                GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_zstd_compression_remote).Increment(remote_tunnel_cnt * remote_packet_bytes);
+                GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_zstd_compression).Increment(remote_tunnel_cnt * remote_packet_bytes);
             break;
         }
         default:
