@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Storages/BackgroundProcessingPool.h>
 #include <common/types.h>
 #include <etcd/kv.pb.h>
 #include <etcd/v3election.pb.h>
@@ -38,11 +37,6 @@
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
-
-namespace DB
-{
-class Context;
-}
 
 namespace DB::Etcd
 {
@@ -77,17 +71,12 @@ public:
     std::tuple<v3electionpb::LeaderKey, grpc::Status>
     campaign(const String & name, const String & value, LeaseID lease_id);
 
-    void proclaim(const String & value, const v3electionpb::LeaderKey & leader_key);
-
-    std::unique_ptr<grpc::ClientReader<v3electionpb::LeaderResponse>>
-    observe(grpc::ClientContext * grpc_context, const String & name);
-
     std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::WatchRequest, etcdserverpb::WatchResponse>>
     watch(grpc::ClientContext * grpc_context);
 
     std::tuple<mvccpb::KeyValue, grpc::Status> leader(const String & name);
 
-    void resign(const v3electionpb::LeaderKey & leader_key);
+    grpc::Status resign(const v3electionpb::LeaderKey & leader_key);
 
 private:
     EtcdConnClientPtr getOrCreateGRPCConn(const String & addr);
@@ -121,6 +110,7 @@ public:
 
 private:
     using KeepAliveWriter = std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::LeaseKeepAliveRequest, etcdserverpb::LeaseKeepAliveResponse>>;
+
     Session(LeaseID l, KeepAliveWriter && w)
         : lease_id(l)
         , writer(std::move(w))

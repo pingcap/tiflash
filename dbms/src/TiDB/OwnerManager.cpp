@@ -68,7 +68,7 @@ OwnerManager::OwnerManager(
     , client(client_)
     , leader_ttl(owner_ttl)
     , global_ctx(context.getGlobalContext())
-    , log(Logger::get(fmt::format("name:{} id:{}", campaign_name, id)))
+    , log(Logger::get(fmt::format("owner_id={}", id)))
 {
 }
 
@@ -354,10 +354,11 @@ void OwnerManager::retireOwner()
 bool OwnerManager::resignOwner()
 {
     std::lock_guard lk(mtx_leader);
-    // this node is not
+    // this node is not the owner, can not resign
     if (leader.name().empty())
         return false;
 
+    // resign and start next campaign
     client->resign(std::move(leader));
     leader.Clear();
     // resign owner success

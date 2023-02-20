@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
-#include <Common/ThreadFactory.h>
-#include <Interpreters/Context.h>
 #include <Poco/URI.h>
 #include <TiDB/Etcd/Client.h>
 #include <TiDB/Etcd/EtcdConnClient.h>
@@ -185,28 +182,6 @@ Client::campaign(const String & name, const String & value, LeaseID lease_id)
     return {resp.leader(), status};
 }
 
-void Client::proclaim(const String & value, const v3electionpb::LeaderKey & leader_key)
-{
-    v3electionpb::ProclaimRequest req;
-    req.mutable_leader()->CopyFrom(leader_key);
-    req.set_value(value);
-
-    grpc::ClientContext context;
-    context.set_deadline(std::chrono::system_clock::now() + timeout);
-
-    v3electionpb::ProclaimResponse resp;
-    auto status = leaderClient()->election_stub->Proclaim(&context, req, &resp);
-    RUNTIME_CHECK_MSG(status.ok(), "proclaim failed, code={} msg={}", status.error_code(), status.error_message());
-}
-
-std::unique_ptr<grpc::ClientReader<v3electionpb::LeaderResponse>>
-Client::observe(grpc::ClientContext * grpc_context, const String & name)
-{
-    v3electionpb::LeaderRequest req;
-    req.set_name(name);
-    return leaderClient()->election_stub->Observe(grpc_context, req);
-}
-
 std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::WatchRequest, etcdserverpb::WatchResponse>>
 Client::watch(grpc::ClientContext * grpc_context)
 {
@@ -227,7 +202,7 @@ std::tuple<mvccpb::KeyValue, grpc::Status> Client::leader(const String & name)
     return {resp.kv(), status};
 }
 
-void Client::resign(const v3electionpb::LeaderKey & leader_key)
+grpc::Status Client::resign(const v3electionpb::LeaderKey & leader_key)
 {
     v3electionpb::ResignRequest req;
     req.mutable_leader()->CopyFrom(leader_key);
@@ -237,7 +212,7 @@ void Client::resign(const v3electionpb::LeaderKey & leader_key)
 
     v3electionpb::ResignResponse resp;
     auto status = leaderClient()->election_stub->Resign(&context, req, &resp);
-    RUNTIME_CHECK_MSG(status.ok(), "resign failed, code={} msg={}", status.error_code(), status.error_message());
+    return status;
 }
 
 bool Session::keepAliveOne()

@@ -21,6 +21,7 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <TiDB/OwnerInfo.h>
+#include <TiDB/OwnerManager.h>
 
 namespace DB
 {
@@ -54,8 +55,6 @@ namespace Etcd
 class Client;
 using ClientPtr = std::shared_ptr<Client>;
 } // namespace Etcd
-class OwnerManager;
-using OwnerManagerPtr = std::unique_ptr<OwnerManager>;
 
 class TMTContext : private boost::noncopyable
 {

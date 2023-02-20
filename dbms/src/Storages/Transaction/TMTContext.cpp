@@ -130,11 +130,13 @@ void TMTContext::shutdown()
     if (s3gc_owner)
     {
         s3gc_owner->cancel();
+        s3gc_owner = nullptr;
     }
 
     if (background_service)
     {
         background_service->shutdown();
+        background_service = nullptr;
     }
 }
 
