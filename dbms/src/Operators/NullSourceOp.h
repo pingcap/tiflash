@@ -14,38 +14,36 @@
 
 #pragma once
 
-#include <Operators/AggregateContext.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
-class AggregateConvergentSourceOp : public SourceOp
+class NullSourceOp : public SourceOp
 {
 public:
-    AggregateConvergentSourceOp(
+    NullSourceOp(
         PipelineExecutorStatus & exec_status_,
-        const AggregateContextPtr & agg_context_,
-        size_t index_,
+        const Block & header_,
         const String & req_id)
         : SourceOp(exec_status_)
-        , agg_context(agg_context_)
         , log(Logger::get(req_id))
-        , index(index_)
     {
-        setHeader(agg_context->getHeader());
+        setHeader(header_);
     }
 
     String getName() const override
     {
-        return "AggregateConvergentSourceOp";
+        return "NullSourceOp";
     }
 
 protected:
-    OperatorStatus readImpl(Block & block) override;
+    OperatorStatus readImpl(Block & block) override
+    {
+        block = {};
+        return OperatorStatus::HAS_OUTPUT;
+    }
 
 private:
-    AggregateContextPtr agg_context;
     const LoggerPtr log;
-    const size_t index;
 };
 } // namespace DB

@@ -41,26 +41,21 @@ void AggregateContext::executeOnBlock(size_t task_index, const Block & block)
 
 void AggregateContext::initConvergent()
 {
-    std::unique_lock lock(mu);
-    if (inited)
-        return;
+    merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, is_final, max_threads);
 
-    auto merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, is_final, max_threads);
-    if (!merging_buckets)
+    if (merging_buckets)
     {
-        impl = std::make_unique<NullBlockInputStream>(aggregator->getHeader(is_final));
+        RUNTIME_CHECK(merging_buckets->getConcurrency() > 0);
     }
-    else
-    {
-        impl = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
-    }
-    inited = true;
 }
 
-void AggregateContext::read(Block & block)
+bool AggregateContext::isTwoLevel()
 {
-    std::unique_lock lock(mu);
-    RUNTIME_CHECK(inited == true);
-    block = impl->read();
+    return many_data[0]->isTwoLevel();
+}
+
+void AggregateContext::read(Block & block, size_t index)
+{
+    block = merging_buckets->getData(index);
 }
 } // namespace DB

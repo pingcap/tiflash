@@ -12,20 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <Flash/Planner/Plans/PhysicalConvergentAggregation.h>
+#include <Operators/AggregateConvergentSourceOp.h>
+#include <Operators/ExpressionTransformOp.h>
+#include <Operators/NullSourceOp.h>
 
 namespace DB
 {
 
 void PhysicalConvergentAggregation::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency)
 {
-    group_builder.init(concurrency);
+    aggregate_context->initConvergent();
+    if (aggregate_context->useNullSource())
+    {
+        group_builder.init(1);
+        group_builder.transform([&](auto & builder) {
+            builder.setSourceOp(std::make_unique<NullSourceOp>(
+                group_builder.exec_status,
+                aggregate_context->getHeader(),
+                log->identifier()));
+        });
+    }
+    else
+    {
+        concurrency = aggregate_context->isTwoLevel() ? concurrency : 1;
+        group_builder.init(concurrency);
+        size_t index = 0;
 
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(
-            group_builder.exec_status,
-            aggregate_context,
-            log->identifier()));
-    });
+        group_builder.transform([&](auto & builder) {
+            builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(
+                group_builder.exec_status,
+                aggregate_context,
+                index++,
+                log->identifier()));
+        });
+    }
 
     if (!expr_after_agg->getActions().empty())
     {

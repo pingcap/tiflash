@@ -19,8 +19,6 @@
 #include <Flash/Planner/Plans/PipelineBreakerHelper.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Operators/AggregateContext.h>
-#include <Operators/AggregateConvergentSourceOp.h>
-#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {

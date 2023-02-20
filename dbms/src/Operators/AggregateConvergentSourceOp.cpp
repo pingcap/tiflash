@@ -17,13 +17,7 @@ namespace DB
 {
 OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
 {
-    if (!inited)
-    {
-        agg_context->initConvergent();
-        inited = true;
-    }
-
-    agg_context->read(block);
+    agg_context->read(block, index);
     return OperatorStatus::HAS_OUTPUT;
 }
 

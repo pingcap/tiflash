@@ -58,22 +58,28 @@ public:
 
     void initConvergent();
 
-    void read(Block & block);
+    void read(Block & block, size_t index);
 
     Block getHeader() const
     {
         return aggregator->getHeader(is_final);
     }
 
+    bool isTwoLevel();
+
+    bool useNullSource()
+    {
+        return !merging_buckets;
+    }
+
 private:
     std::unique_ptr<Aggregator> aggregator;
+    MergingBucketsPtr merging_buckets;
     const LoggerPtr log;
     ManyAggregatedDataVariants many_data;
     std::vector<ThreadData> threads_data;
     size_t max_threads{};
     bool is_final{};
-    std::unique_ptr<IBlockInputStream> impl;
-    bool inited = false;
     mutable std::shared_mutex mu;
 };
 
