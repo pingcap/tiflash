@@ -20,7 +20,7 @@
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
-#include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MPPTunnelSetWriter.h>
 
 namespace DB
 {
@@ -141,5 +141,5 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 }
 
 template class StreamingDAGResponseWriter<StreamWriterPtr>;
-template class StreamingDAGResponseWriter<MPPTunnelSetPtr>;
+template class StreamingDAGResponseWriter<SyncMPPTunnelSetWriterPtr>;
 } // namespace DB

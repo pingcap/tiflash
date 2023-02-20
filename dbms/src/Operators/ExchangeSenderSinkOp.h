@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Operators/Operator.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
-#include <Operators/ExchangeSenderSinkOp.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Operators/ExchangeSenderSinkOp.h>
 
 namespace DB
 {

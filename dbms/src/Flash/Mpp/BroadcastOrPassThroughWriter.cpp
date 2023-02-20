@@ -16,7 +16,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
-#include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MPPTunnelSetWriter.h>
 
 namespace DB
 {
@@ -68,6 +68,5 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::writeBlocks()
     rows_in_blocks = 0;
 }
 
-template class BroadcastOrPassThroughWriter<MPPTunnelSetPtr>;
-
+template class BroadcastOrPassThroughWriter<SyncMPPTunnelSetWriterPtr>;
 } // namespace DB

@@ -18,7 +18,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/HashPartitionWriter.h>
-#include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MPPTunnelSetWriter.h>
 
 namespace DB
 {
@@ -236,6 +236,6 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePartitionBlocks(std::vector<Bl
     }
 }
 
-template class HashPartitionWriter<MPPTunnelSetPtr>;
+template class HashPartitionWriter<SyncMPPTunnelSetWriterPtr>;
 
 } // namespace DB
