@@ -346,6 +346,7 @@ target_link_libraries(_aws PRIVATE ${AWS_PRIVATE_LIBS})
 target_no_warning(_aws deprecated-declarations)
 target_no_warning(_aws implicit-function-declaration)
 target_no_warning(_aws int-conversion)
+target_no_warning(_aws unused-function)
 
 aws_set_thread_affinity_method(_aws)
 aws_set_thread_name_method(_aws)
