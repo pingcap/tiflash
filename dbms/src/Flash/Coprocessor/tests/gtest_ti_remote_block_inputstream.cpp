@@ -128,6 +128,7 @@ struct MockWriter
     {
         return index == 0;
     }
+    bool isReadyForWrite() const { throw Exception("Unsupport async write"); }
 
     std::vector<tipb::FieldType> result_field_types;
 

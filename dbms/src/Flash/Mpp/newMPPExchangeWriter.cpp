@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
 #include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
 #include <Flash/Mpp/MppVersion.h>
-#include <Flash/Coprocessor/DAGContext.h>
 
 namespace DB
 {
-std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
+namespace
+{
+template <typename ExchangeWriterPtr>
+std::unique_ptr<DAGResponseWriter> doNewMPPExchangeWriter(
+    const ExchangeWriterPtr & writer,
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & partition_col_collators,
     const tipb::ExchangeType & exchange_type,
@@ -33,11 +37,8 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     UInt64 fine_grained_shuffle_stream_count,
     UInt64 fine_grained_shuffle_batch_size,
     tipb::CompressionMode compression_mode,
-    Int64 batch_send_min_limit_compression,
-    const String & req_id)
+    Int64 batch_send_min_limit_compression)
 {
-    RUNTIME_CHECK_MSG(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, "exchange writer only run in MPP");
-    auto writer = std::make_shared<SyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
     if (dag_context.isRootMPPTask())
     {
         // No need to use use data compression
@@ -45,7 +46,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
 
         RUNTIME_CHECK(!enable_fine_grained_shuffle);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::PassThrough);
-        return std::make_unique<StreamingDAGResponseWriter<SyncMPPTunnelSetWriterPtr>>(
+        return std::make_unique<StreamingDAGResponseWriter<ExchangeWriterPtr>>(
             writer,
             records_per_chunk,
             batch_send_min_limit,
@@ -62,7 +63,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
 
             if (enable_fine_grained_shuffle)
             {
-                return std::make_unique<FineGrainedShuffleWriter<SyncMPPTunnelSetWriterPtr>>(
+                return std::make_unique<FineGrainedShuffleWriter<ExchangeWriterPtr>>(
                     writer,
                     partition_col_ids,
                     partition_col_collators,
@@ -78,7 +79,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
                     ? batch_send_min_limit
                     : batch_send_min_limit_compression;
 
-                return std::make_unique<HashPartitionWriter<SyncMPPTunnelSetWriterPtr>>(
+                return std::make_unique<HashPartitionWriter<ExchangeWriterPtr>>(
                     writer,
                     partition_col_ids,
                     partition_col_collators,
@@ -94,12 +95,64 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
             RUNTIME_CHECK(compression_mode == tipb::CompressionMode::NONE);
 
             RUNTIME_CHECK(!enable_fine_grained_shuffle);
-            return std::make_unique<BroadcastOrPassThroughWriter<SyncMPPTunnelSetWriterPtr>>(
+            return std::make_unique<BroadcastOrPassThroughWriter<ExchangeWriterPtr>>(
                 writer,
                 batch_send_min_limit,
                 dag_context);
         }
     }
 }
+} // namespace
 
+std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
+    const std::vector<Int64> & partition_col_ids,
+    const TiDB::TiDBCollators & partition_col_collators,
+    const tipb::ExchangeType & exchange_type,
+    Int64 records_per_chunk,
+    Int64 batch_send_min_limit,
+    DAGContext & dag_context,
+    bool enable_fine_grained_shuffle,
+    UInt64 fine_grained_shuffle_stream_count,
+    UInt64 fine_grained_shuffle_batch_size,
+    tipb::CompressionMode compression_mode,
+    Int64 batch_send_min_limit_compression,
+    const String & req_id,
+    bool is_async)
+{
+    RUNTIME_CHECK_MSG(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, "exchange writer only run in MPP");
+    if (is_async)
+    {
+        auto writer = std::make_shared<AsyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
+        return doNewMPPExchangeWriter(
+            writer,
+            partition_col_ids,
+            partition_col_collators,
+            exchange_type,
+            records_per_chunk,
+            batch_send_min_limit,
+            dag_context,
+            enable_fine_grained_shuffle,
+            fine_grained_shuffle_stream_count,
+            fine_grained_shuffle_batch_size,
+            compression_mode,
+            batch_send_min_limit_compression);
+    }
+    else
+    {
+        auto writer = std::make_shared<SyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
+        return doNewMPPExchangeWriter(
+            writer,
+            partition_col_ids,
+            partition_col_collators,
+            exchange_type,
+            records_per_chunk,
+            batch_send_min_limit,
+            dag_context,
+            enable_fine_grained_shuffle,
+            fine_grained_shuffle_stream_count,
+            fine_grained_shuffle_batch_size,
+            compression_mode,
+            batch_send_min_limit_compression);
+    }
+}
 } // namespace DB

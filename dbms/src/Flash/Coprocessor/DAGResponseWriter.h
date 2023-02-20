@@ -30,6 +30,14 @@ public:
     /// prepared with sample block
     virtual void prepare(const Block &){};
     virtual void write(const Block & block) = 0;
+
+    // If writer is an async writer, writer needs to check isReadyForWrite before writing.
+    // ```
+    // while (!isReadyForWrite()) {}
+    // write(block);
+    // ```
+    virtual bool isReadyForWrite() const { throw Exception("Unsupport async write"); }
+
     /// flush cached blocks for batch writer
     virtual void flush() = 0;
     virtual ~DAGResponseWriter() = default;

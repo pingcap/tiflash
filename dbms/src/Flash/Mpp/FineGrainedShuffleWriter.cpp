@@ -96,6 +96,12 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::flush()
 }
 
 template <class ExchangeWriterPtr>
+bool FineGrainedShuffleWriter<ExchangeWriterPtr>::isReadyForWrite() const
+{
+    return writer->isReadyForWrite();
+}
+
+template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(prepared, "FineGrainedShuffleWriter should be prepared before writing.");
@@ -193,5 +199,6 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
 }
 
 template class FineGrainedShuffleWriter<SyncMPPTunnelSetWriterPtr>;
+template class FineGrainedShuffleWriter<AsyncMPPTunnelSetWriterPtr>;
 
 } // namespace DB

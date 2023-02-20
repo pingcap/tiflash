@@ -206,6 +206,7 @@ struct MockExchangeWriter
         // make only part 0 use local tunnel
         return index == 0;
     }
+    bool isReadyForWrite() const { throw Exception("Unsupport async write"); }
 
 private:
     MockExchangeWriterChecker checker;

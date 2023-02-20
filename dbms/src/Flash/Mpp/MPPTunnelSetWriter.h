@@ -70,6 +70,8 @@ public:
 
     uint16_t getPartitionNum() const { return mpp_tunnel_set->getPartitionNum(); }
 
+    virtual bool isReadyForWrite() const = 0;
+
 protected:
     virtual void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) = 0;
     virtual void writeToTunnel(tipb::SelectResponse & response, size_t index) = 0;
@@ -84,11 +86,14 @@ class SyncMPPTunnelSetWriter : public MPPTunnelSetWriterBase
 {
 public:
     SyncMPPTunnelSetWriter(
-        const MPPTunnelSetPtr & mpp_tunnel_set_, 
+        const MPPTunnelSetPtr & mpp_tunnel_set_,
         const std::vector<tipb::FieldType> & result_field_types_,
         const String & req_id)
         : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id)
     {}
+
+    bool isReadyForWrite() const override { throw Exception("Unsupport async write"); }
+
 protected:
     void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) override;
     void writeToTunnel(tipb::SelectResponse & response, size_t index) override;
@@ -104,6 +109,9 @@ public:
         const String & req_id)
         : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id)
     {}
+
+    bool isReadyForWrite() const override { return mpp_tunnel_set->isReadyForWrite(); }
+
 protected:
     void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) override;
     void writeToTunnel(tipb::SelectResponse & response, size_t index) override;

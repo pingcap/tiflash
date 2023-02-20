@@ -41,6 +41,12 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 }
 
 template <class ExchangeWriterPtr>
+bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::isReadyForWrite() const
+{
+    return writer->isReadyForWrite();
+}
+
+template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
@@ -69,4 +75,5 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::writeBlocks()
 }
 
 template class BroadcastOrPassThroughWriter<SyncMPPTunnelSetWriterPtr>;
+template class BroadcastOrPassThroughWriter<AsyncMPPTunnelSetWriterPtr>;
 } // namespace DB

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/TiFlashMetrics.h>
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Mpp/MPPTunnelSetHelper.h>
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
@@ -78,7 +78,7 @@ void updatePartitionWriterMetrics(CompressionMethod method, size_t original_size
 } // namespace
 
 MPPTunnelSetWriterBase::MPPTunnelSetWriterBase(
-    const MPPTunnelSetPtr & mpp_tunnel_set_, 
+    const MPPTunnelSetPtr & mpp_tunnel_set_,
     const std::vector<tipb::FieldType> & result_field_types_,
     const String & req_id)
     : mpp_tunnel_set(mpp_tunnel_set_)
@@ -228,23 +228,23 @@ void MPPTunnelSetWriterBase::fineGrainedShuffleWrite(
     updatePartitionWriterMetrics(packet_bytes, mpp_tunnel_set->isLocal(partition_id));
 }
 
-    void SyncMPPTunnelSetWriter::writeToTunnel(TrackedMppDataPacketPtr && data, size_t index)
-    {
-        mpp_tunnel_set->write(std::move(data), index);
-    }
+void SyncMPPTunnelSetWriter::writeToTunnel(TrackedMppDataPacketPtr && data, size_t index)
+{
+    mpp_tunnel_set->write(std::move(data), index);
+}
 
-    void SyncMPPTunnelSetWriter::writeToTunnel(tipb::SelectResponse & response, size_t index)
-    {
-        mpp_tunnel_set->write(response, index);
-    }
+void SyncMPPTunnelSetWriter::writeToTunnel(tipb::SelectResponse & response, size_t index)
+{
+    mpp_tunnel_set->write(response, index);
+}
 
-    void AsyncMPPTunnelSetWriter::writeToTunnel(TrackedMppDataPacketPtr && data, size_t index)
-    {
-        mpp_tunnel_set->nonBlockingWrite(std::move(data), index);
-    }
+void AsyncMPPTunnelSetWriter::writeToTunnel(TrackedMppDataPacketPtr && data, size_t index)
+{
+    mpp_tunnel_set->nonBlockingWrite(std::move(data), index);
+}
 
-    void AsyncMPPTunnelSetWriter::writeToTunnel(tipb::SelectResponse & response, size_t index)
-    {
-        mpp_tunnel_set->nonBlockingWrite(response, index);
-    }
+void AsyncMPPTunnelSetWriter::writeToTunnel(tipb::SelectResponse & response, size_t index)
+{
+    mpp_tunnel_set->nonBlockingWrite(response, index);
+}
 } // namespace DB

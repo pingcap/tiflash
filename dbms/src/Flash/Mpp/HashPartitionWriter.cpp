@@ -92,6 +92,12 @@ void HashPartitionWriter<ExchangeWriterPtr>::flush()
 }
 
 template <class ExchangeWriterPtr>
+bool HashPartitionWriter<ExchangeWriterPtr>::isReadyForWrite() const
+{
+    return writer->isReadyForWrite();
+}
+
+template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::writeImplV1(const Block & block)
 {
     size_t rows = block.rows();
@@ -237,5 +243,6 @@ void HashPartitionWriter<ExchangeWriterPtr>::writePartitionBlocks(std::vector<Bl
 }
 
 template class HashPartitionWriter<SyncMPPTunnelSetWriterPtr>;
+template class HashPartitionWriter<AsyncMPPTunnelSetWriterPtr>;
 
 } // namespace DB

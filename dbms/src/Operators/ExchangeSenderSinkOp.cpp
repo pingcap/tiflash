@@ -61,12 +61,12 @@ OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
 
 OperatorStatus ExchangeSenderSinkOp::prepareImpl()
 {
-    return OperatorStatus::NEED_INPUT;
+    return writer->isReadyForWrite() ? OperatorStatus::WAITING : OperatorStatus::NEED_INPUT;
 }
 
 OperatorStatus ExchangeSenderSinkOp::awaitImpl()
 {
-    return OperatorStatus::NEED_INPUT;
+    return writer->isReadyForWrite() ? OperatorStatus::WAITING : OperatorStatus::NEED_INPUT;
 }
 
 } // namespace DB

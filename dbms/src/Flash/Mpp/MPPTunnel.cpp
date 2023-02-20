@@ -44,6 +44,24 @@ String tunnelSenderModeToString(TunnelSenderMode mode)
         return "unknown";
     }
 }
+
+// Update metric for tunnel's response bytes
+void updateMetric(std::atomic<Int64> & data_size_in_queue, size_t pushed_data_size, TunnelSenderMode mode)
+{
+    switch (mode)
+    {
+    case TunnelSenderMode::LOCAL:
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_mpp_establish_conn_local).Increment(pushed_data_size);
+        break;
+    case TunnelSenderMode::ASYNC_GRPC:
+    case TunnelSenderMode::SYNC_GRPC:
+        GET_METRIC(tiflash_coprocessor_response_bytes, type_mpp_establish_conn).Increment(pushed_data_size);
+        break;
+    default:
+        throw DB::Exception("Illegal TunnelSenderMode");
+    }
+    MPPTunnelMetric::addDataSizeMetric(data_size_in_queue, pushed_data_size);
+}
 } // namespace
 
 MPPTunnel::MPPTunnel(
@@ -99,24 +117,6 @@ MPPTunnel::~MPPTunnel()
     LOG_TRACE(log, "destructed tunnel obj!");
 }
 
-// Update metric for tunnel's response bytes
-void MPPTunnel::updateMetric(std::atomic<Int64> & data_size_in_queue, size_t pushed_data_size, TunnelSenderMode mode)
-{
-    switch (mode)
-    {
-    case TunnelSenderMode::LOCAL:
-        GET_METRIC(tiflash_coprocessor_response_bytes, type_mpp_establish_conn_local).Increment(pushed_data_size);
-        break;
-    case TunnelSenderMode::ASYNC_GRPC:
-    case TunnelSenderMode::SYNC_GRPC:
-        GET_METRIC(tiflash_coprocessor_response_bytes, type_mpp_establish_conn).Increment(pushed_data_size);
-        break;
-    default:
-        throw DB::Exception("Illegal TunnelSenderMode");
-    }
-    MPPTunnelMetric::addDataSizeMetric(data_size_in_queue, pushed_data_size);
-}
-
 /// exit abnormally, such as being cancelled.
 void MPPTunnel::close(const String & reason, bool wait_sender_finish)
 {
@@ -149,6 +149,37 @@ void MPPTunnel::close(const String & reason, bool wait_sender_finish)
     }
     if (wait_sender_finish)
         waitForSenderFinish(false);
+}
+
+void MPPTunnel::write(TrackedMppDataPacketPtr && data)
+{
+    LOG_TRACE(log, "ready to write");
+    {
+        std::unique_lock lk(mu);
+        waitUntilConnectedOrFinished(lk);
+        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
+    }
+
+    auto pushed_data_size = data->getPacket().ByteSizeLong();
+    if (tunnel_sender->push(std::move(data)))
+    {
+        updateMetric(data_size_in_queue, pushed_data_size, mode);
+        updateConnProfileInfo(pushed_data_size);
+        return;
+    }
+    throw Exception(fmt::format("write to tunnel {} which is already closed, {}", tunnel_id, tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
+}
+
+void MPPTunnel::nonBlockingWrite(TrackedMppDataPacketPtr && data)
+{
+    auto pushed_data_size = data->getPacket().ByteSizeLong();
+    if (tunnel_sender->nonBlockingPush(std::move(data)))
+    {
+        updateMetric(data_size_in_queue, pushed_data_size, mode);
+        updateConnProfileInfo(pushed_data_size);
+        return;
+    }
+    throw Exception(fmt::format("write to tunnel {} which is already closed, {}", tunnel_id, tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
 }
 
 /// done normally and being called exactly once after writing all packets
@@ -306,14 +337,13 @@ bool MPPTunnel::isReadyForWrite() const
     case TunnelStatus::Unconnected:
         return false;
     case TunnelStatus::Connected:
-        break;
+        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
+        return tunnel_sender->isReadyForWrite();
     default:
         // For other cases, we should return immediately.
+        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         return true;
     }
-
-    RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
-    return tunnel_sender->isReadyForWrite();
 }
 
 StringRef MPPTunnel::statusToString()

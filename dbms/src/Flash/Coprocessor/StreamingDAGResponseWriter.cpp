@@ -69,6 +69,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::flush()
 }
 
 template <class StreamWriterPtr>
+bool StreamingDAGResponseWriter<StreamWriterPtr>::isReadyForWrite() const
+{
+    return writer->isReadyForWrite();
+}
+
+template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
@@ -142,4 +148,5 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 
 template class StreamingDAGResponseWriter<StreamWriterPtr>;
 template class StreamingDAGResponseWriter<SyncMPPTunnelSetWriterPtr>;
+template class StreamingDAGResponseWriter<AsyncMPPTunnelSetWriterPtr>;
 } // namespace DB
