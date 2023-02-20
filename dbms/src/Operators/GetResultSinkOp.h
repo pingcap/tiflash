@@ -20,17 +20,18 @@
 namespace DB
 {
 class PhysicalGetResultSink;
+using PhysicalGetResultSinkPtr = std::shared_ptr<PhysicalGetResultSink>;
 // The sink operator for getting the execution results.
-// Now it is used in unit tests.
 class GetResultSinkOp : public SinkOp
 {
 public:
     GetResultSinkOp(
         PipelineExecutorStatus & exec_status_,
-        PhysicalGetResultSink & physical_sink_)
+        const PhysicalGetResultSinkPtr & physical_sink_)
         : SinkOp(exec_status_)
         , physical_sink(physical_sink_)
     {
+        assert(physical_sink);
     }
 
     String getName() const override
@@ -38,9 +39,10 @@ public:
         return "GetResultSinkOp";
     }
 
+protected:
     OperatorStatus writeImpl(Block && block) override;
 
 private:
-    PhysicalGetResultSink & physical_sink;
+    PhysicalGetResultSinkPtr physical_sink;
 };
 } // namespace DB

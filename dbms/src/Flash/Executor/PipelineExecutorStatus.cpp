@@ -19,25 +19,51 @@ namespace DB
 {
 ExecutionResult PipelineExecutorStatus::toExecutionResult()
 {
-    auto get_err_msg = getErrMsg();
-    return get_err_msg.empty()
-        ? ExecutionResult::success()
-        : ExecutionResult::fail(get_err_msg);
+    std::lock_guard lock(mu);
+    return exception_ptr
+        ? ExecutionResult::fail(exception_ptr)
+        : ExecutionResult::success();
 }
 
-String PipelineExecutorStatus::getErrMsg()
+std::exception_ptr PipelineExecutorStatus::getExceptionPtr()
 {
     std::lock_guard lock(mu);
-    return err_msg;
+    return exception_ptr;
 }
 
-void PipelineExecutorStatus::onErrorOccurred(String && err_msg_)
+String PipelineExecutorStatus::getExceptionMsg()
 {
+    std::lock_guard lock(mu);
+    try
+    {
+        if (!exception_ptr)
+            return "";
+        std::rethrow_exception(exception_ptr);
+    }
+    catch (const DB::Exception & e)
+    {
+        return e.message();
+    }
+    catch (...)
+    {
+        return getCurrentExceptionMessage(false, true);
+    }
+}
+
+void PipelineExecutorStatus::onErrorOccurred(const String & err_msg)
+{
+    DB::Exception e(err_msg);
+    onErrorOccurred(std::make_exception_ptr(e));
+}
+
+void PipelineExecutorStatus::onErrorOccurred(const std::exception_ptr & exception_ptr_)
+{
+    assert(exception_ptr_ != nullptr);
     {
         std::lock_guard lock(mu);
-        if (!err_msg.empty())
+        if (exception_ptr != nullptr)
             return;
-        err_msg = err_msg_.empty() ? empty_err_msg : std::move(err_msg_);
+        exception_ptr = exception_ptr_;
     }
     cancel();
 }
