@@ -213,6 +213,8 @@ private:
     mutable std::mutex mu;
     // Used to hold objs pushed by `NonBlockingPush` that exceed the capacity.
     // pop/tryPop will try to push remaining_objs into the mpmc_queue when pop/tryPop.
+    // The size of the deque is less than or equal to the number of writing threads,
+    // because remaining_objs is only pushed when isFull return false.
     std::deque<T> remaining_objs;
     MPMCQueue<T> mpmc_queue;
 };
