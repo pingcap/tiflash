@@ -20,6 +20,7 @@
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTStorages.h>
+#include <TiDB/OwnerInfo.h>
 
 namespace DB
 {
@@ -47,6 +48,14 @@ struct TiFlashRaftConfig;
 // We define a shared ptr here, because TMTContext / SchemaSyncer / IndexReader all need to
 // `share` the resource of cluster.
 using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
+
+namespace Etcd
+{
+class Client;
+using ClientPtr = std::shared_ptr<Client>;
+} // namespace Etcd
+class OwnerManager;
+using OwnerManagerPtr = std::unique_ptr<OwnerManager>;
 
 class TMTContext : private boost::noncopyable
 {
@@ -93,6 +102,8 @@ public:
 
     pingcap::kv::Cluster * getKVCluster() { return cluster.get(); }
 
+    OwnerInfo getS3GCOwnerInfo() const;
+
     MPPTaskManagerPtr getMPPTaskManager();
 
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
@@ -112,8 +123,6 @@ public:
     bool checkTerminated(std::memory_order = std::memory_order_seq_cst) const;
     bool checkRunning(std::memory_order = std::memory_order_seq_cst) const;
 
-    const KVClusterPtr & getCluster() const { return cluster; }
-
     UInt64 batchReadIndexTimeout() const;
     // timeout for wait index (ms). "0" means wait infinitely
     UInt64 waitIndexTimeout() const;
@@ -129,6 +138,9 @@ private:
     GCManager gc_manager;
 
     KVClusterPtr cluster;
+    Etcd::ClientPtr etcd_client;
+
+    OwnerManagerPtr s3gc_owner;
 
     mutable std::mutex mutex;
 

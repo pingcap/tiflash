@@ -49,6 +49,8 @@ class Client
 public:
     static ClientPtr create(const pingcap::pd::ClientPtr & pd_client, const pingcap::ClusterConfig & config);
 
+    void update(const pingcap::ClusterConfig & new_config);
+
     std::tuple<String, grpc::Status> getFirstKey(const String & prefix);
 
     std::tuple<LeaseID, grpc::Status> leaseGrant(Int64 ttl);
@@ -83,8 +85,6 @@ private:
 
     std::chrono::seconds timeout;
 
-    Strings urls;
-
     pingcap::ClusterConfig config;
 
     std::mutex mtx_channel_map;
@@ -103,13 +103,16 @@ public:
         return lease_id;
     }
 
-    void setCanceled();
+    bool keepAliveOne();
+
     bool isCanceled() const;
 
     void cancel();
 
 private:
     explicit Session(Context & context, LeaseID l);
+
+    void setCanceled();
 
     friend class Client;
 
@@ -124,6 +127,8 @@ private:
     Context & global_ctx;
 
     BackgroundProcessingPool::TaskHandle keep_alive_handle;
+
+    LoggerPtr log;
 };
 
 

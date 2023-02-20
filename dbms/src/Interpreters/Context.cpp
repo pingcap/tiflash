@@ -66,6 +66,7 @@
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include <TiDB/OwnerManager.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
