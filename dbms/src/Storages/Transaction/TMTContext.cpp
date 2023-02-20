@@ -125,6 +125,19 @@ void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * pr
     }
 }
 
+void TMTContext::shutdown()
+{
+    if (s3gc_owner)
+    {
+        s3gc_owner->cancel();
+    }
+
+    if (background_service)
+    {
+        background_service->shutdown();
+    }
+}
+
 KVStorePtr & TMTContext::getKVStore()
 {
     return kvstore;

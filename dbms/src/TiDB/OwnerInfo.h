@@ -27,7 +27,7 @@ enum class OwnerType
     NotOwner,
 
     // Errors
-    // There is no leader
+    // There is no owner at the moment
     NoLeader,
     // Grpc error happens
     GrpcError,

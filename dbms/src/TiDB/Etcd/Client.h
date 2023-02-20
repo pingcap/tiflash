@@ -1,3 +1,17 @@
+// Copyright 2023 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Logger.h>
@@ -7,6 +21,7 @@
 #include <etcd/v3election.pb.h>
 
 #include <chrono>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -55,7 +70,7 @@ public:
 
     std::tuple<LeaseID, grpc::Status> leaseGrant(Int64 ttl);
 
-    SessionPtr createSession(Context & context, Int64 ttl);
+    SessionPtr createSession(grpc::ClientContext * grpc_context, Int64 ttl);
 
     grpc::Status leaseRevoke(LeaseID lease_id);
 
@@ -67,7 +82,8 @@ public:
     std::unique_ptr<grpc::ClientReader<v3electionpb::LeaderResponse>>
     observe(grpc::ClientContext * grpc_context, const String & name);
 
-    grpc::Status waitsUntilDeleted(grpc::ClientContext * grpc_context, const String & key);
+    std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::WatchRequest, etcdserverpb::WatchResponse>>
+    watch(grpc::ClientContext * grpc_context);
 
     std::tuple<mvccpb::KeyValue, grpc::Status> leader(const String & name);
 
@@ -96,8 +112,6 @@ private:
 class Session
 {
 public:
-    ~Session();
-
     LeaseID leaseID() const
     {
         return lease_id;
@@ -105,30 +119,20 @@ public:
 
     bool keepAliveOne();
 
-    bool isCanceled() const;
-
-    void cancel();
-
 private:
-    explicit Session(Context & context, LeaseID l);
-
-    void setCanceled();
+    using KeepAliveWriter = std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::LeaseKeepAliveRequest, etcdserverpb::LeaseKeepAliveResponse>>;
+    Session(LeaseID l, KeepAliveWriter && w)
+        : lease_id(l)
+        , writer(std::move(w))
+    {
+    }
 
     friend class Client;
 
 private:
-    std::mutex mtx;
-    std::atomic<LeaseID> lease_id{InvalidLeaseID};
+    LeaseID lease_id{InvalidLeaseID};
 
-    grpc::ClientContext grpc_context;
-    using KeepAliveWriter = std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::LeaseKeepAliveRequest, etcdserverpb::LeaseKeepAliveResponse>>;
     KeepAliveWriter writer;
-
-    Context & global_ctx;
-
-    BackgroundProcessingPool::TaskHandle keep_alive_handle;
-
-    LoggerPtr log;
 };
 
 

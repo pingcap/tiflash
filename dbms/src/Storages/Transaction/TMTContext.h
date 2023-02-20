@@ -106,6 +106,8 @@ public:
 
     MPPTaskManagerPtr getMPPTaskManager();
 
+    void shutdown();
+
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     const std::unordered_set<std::string> & getIgnoreDatabases() const;

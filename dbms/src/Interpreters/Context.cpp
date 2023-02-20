@@ -66,7 +66,6 @@
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
-#include <TiDB/OwnerManager.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
@@ -266,6 +265,11 @@ struct ContextShared
         if (ps_write)
         {
             ps_write->shutdown();
+        }
+
+        if (tmt_context)
+        {
+            tmt_context->shutdown();
         }
 
         /** At this point, some tables may have threads that block our mutex.

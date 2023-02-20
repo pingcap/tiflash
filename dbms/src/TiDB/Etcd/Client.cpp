@@ -1,3 +1,17 @@
+// Copyright 2023 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Common/ThreadFactory.h>
 #include <Interpreters/Context.h>
@@ -49,7 +63,6 @@ void Client::update(const pingcap::ClusterConfig & new_config)
         config = new_config;
         channel_map.clear();
     }
-
 }
 
 EtcdConnClientPtr Client::getOrCreateGRPCConn(const String & addr)
@@ -131,22 +144,17 @@ std::tuple<LeaseID, grpc::Status> Client::leaseGrant(Int64 ttl)
     return {resp.id(), status};
 }
 
-SessionPtr Client::createSession(Context & context, Int64 ttl)
+SessionPtr Client::createSession(grpc::ClientContext * grpc_context, Int64 ttl)
 {
     const auto & [lease_id, status] = leaseGrant(ttl);
     if (!status.ok())
+    {
+        LOG_ERROR(log, "etcd lease grant failed, code={} msg={}", status.error_code(), status.error_message());
         return {};
+    }
 
-    auto session = std::shared_ptr<Session>(new Session(context, lease_id));
-    session->writer = leaderClient()->lease_stub->LeaseKeepAlive(&session->grpc_context);
-    auto & bkg_pool = session->global_ctx.getBackgroundPool();
-    session->keep_alive_handle = bkg_pool.addTask(
-        [s = session] {
-           return s->keepAliveOne(); 
-        },
-        /*multi*/ false,
-        /*interval_ms*/ ttl * 1000 * 2 / 3);
-    return session;
+    auto writer = leaderClient()->lease_stub->LeaseKeepAlive(grpc_context);
+    return std::shared_ptr<Session>(new Session(lease_id, std::move(writer)));
 }
 
 grpc::Status Client::leaseRevoke(LeaseID lease_id)
@@ -199,34 +207,10 @@ Client::observe(grpc::ClientContext * grpc_context, const String & name)
     return leaderClient()->election_stub->Observe(grpc_context, req);
 }
 
-grpc::Status Client::waitsUntilDeleted(grpc::ClientContext * grpc_context, const String & key)
+std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::WatchRequest, etcdserverpb::WatchResponse>>
+Client::watch(grpc::ClientContext * grpc_context)
 {
-    auto rw = leaderClient()->watch_stub->Watch(grpc_context);
-
-    etcdserverpb::WatchRequest req;
-    req.mutable_create_request()->set_key(key);
-    bool ok = rw->Write(req);
-    if (!ok)
-        return rw->Finish();
-
-    bool done = false;
-    while (!done)
-    {
-        etcdserverpb::WatchResponse resp;
-        ok = rw->Read(&resp);
-        LOG_TRACE(Logger::get(), "watch key:{} ok:{} resp: {}", key, ok, resp.ShortDebugString());
-        if (!ok)
-            break;
-        for (const auto & event : resp.events())
-        {
-            if (event.type() == mvccpb::Event_EventType_DELETE)
-            {
-                done = true;
-                break;
-            }
-        }
-    }
-    return rw->Finish();
+    return leaderClient()->watch_stub->Watch(grpc_context);
 }
 
 std::tuple<mvccpb::KeyValue, grpc::Status> Client::leader(const String & name)
@@ -256,68 +240,26 @@ void Client::resign(const v3electionpb::LeaderKey & leader_key)
     RUNTIME_CHECK_MSG(status.ok(), "resign failed, code={} msg={}", status.error_code(), status.error_message());
 }
 
-Session::Session(Context & context, LeaseID l)
-    : lease_id(l)
-    , global_ctx(context.getGlobalContext())
-    , log(Logger::get(fmt::format("lease={:x}", lease_id)))
-{
-}
-
-Session::~Session()
-{
-    cancel();
-}
-
-void Session::setCanceled()
-{
-    lease_id = InvalidLeaseID;
-}
-
-bool Session::isCanceled() const
-{
-    return lease_id == InvalidLeaseID;
-}
-
 bool Session::keepAliveOne()
 {
-    const bool run_immediately = false; // always false
-    if (isCanceled())
-        return run_immediately;
-
     etcdserverpb::LeaseKeepAliveRequest req;
     req.set_id(lease_id);
     bool ok = writer->Write(req);
     if (!ok)
     {
         auto status = writer->Finish();
-        LOG_DEBUG(log, "keep alive write faile, finish. lease={:x} code={} msg={}", lease_id.load(), status.error_code(), status.error_message());
-        setCanceled();
-        return run_immediately;
+        LOG_DEBUG(Logger::get(), "keep alive write faile, finish. lease={:x} code={} msg={}", lease_id, status.error_code(), status.error_message());
+        return false;
     }
     etcdserverpb::LeaseKeepAliveResponse resp;
     ok = writer->Read(&resp);
     if (!ok)
     {
         auto status = writer->Finish();
-        LOG_DEBUG(log, "keep alive read faile, finish. lease={:x} code={} msg={}", lease_id.load(), status.error_code(), status.error_message());
-        setCanceled();
-        return run_immediately;
+        LOG_DEBUG(Logger::get(), "keep alive read faile, finish. lease={:x} code={} msg={}", lease_id, status.error_code(), status.error_message());
+        return false;
     }
-    return run_immediately;
-}
-
-void Session::cancel()
-{
-    std::lock_guard lk(mtx);
-    if (keep_alive_handle)
-    {
-        LOG_ERROR(Logger::get(), "canceling {:x}", lease_id.load());
-        grpc_context.TryCancel(); // cancel the keepalive streaming
-        global_ctx.getBackgroundPool().removeTask(keep_alive_handle);
-        keep_alive_handle = nullptr;
-        writer = nullptr;
-        lease_id = InvalidLeaseID;
-    }
+    return true;
 }
 
 } // namespace DB::Etcd
