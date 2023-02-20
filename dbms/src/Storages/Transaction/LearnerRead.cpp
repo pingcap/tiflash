@@ -97,6 +97,12 @@ struct UnavailableRegions : public LockWrap
         return ids.count(region_id);
     }
 
+    RegionID one()
+    {
+        auto lock = genLockGuard();
+        return *ids.begin();
+    }
+
 private:
     inline void doAdd(RegionID id) { ids.emplace(id); }
 
@@ -313,6 +319,7 @@ LearnerReadSnapshot doLearnerRead(
             }
             else if (resp.has_locked())
             {
+                LOG_DEBUG(log, "region is locked by read index {} lockinfo[{},{},{},{}]", region->id(), lock->key(), lock->primary_lock(), lock->lock_ttl(), lock->min_commit_ts());
                 unavailable_regions.setRegionLock(region_id, LockInfoPtr(resp.release_locked()));
             }
             else
@@ -392,7 +399,10 @@ LearnerReadSnapshot doLearnerRead(
 
                 std::visit(
                     variant_op::overloaded{
-                        [&](LockInfoPtr & lock) { unavailable_regions.setRegionLock(region->id(), std::move(lock)); },
+                        [&](LockInfoPtr & lock) {
+                            LOG_DEBUG(log, "region is locked by resolve {} lockinfo[{},{},{},{}]", region->id(), lock->key(), lock->primary_lock(), lock->lock_ttl(), lock->min_commit_ts());
+                            unavailable_regions.setRegionLock(region->id(), std::move(lock));
+                        },
                         [&](RegionException::RegionReadStatus & status) {
                             if (status != RegionException::RegionReadStatus::OK)
                             {
@@ -412,12 +422,19 @@ LearnerReadSnapshot doLearnerRead(
         }
         GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds()); // For DBaaS SLI
         auto wait_index_elapsed_ms = watch.elapsedMilliseconds();
+
+        FmtBuffer fmt_buf;
+        if (unavailable_regions.size())
+        {
+            fmt_buf.fmtAppend("(including {})", unavailable_regions.one());
+        }
         LOG_DEBUG(
             log,
-            "Finish wait index | resolve locks | check memory cache for {} regions, cost {}ms, {} unavailable regions",
+            "Finish wait index | resolve locks | check memory cache for {} regions, cost {}ms, {} unavailable regions{}",
             batch_read_index_req.size(),
             wait_index_elapsed_ms,
-            unavailable_regions.size());
+            unavailable_regions.size(),
+            fmt_buf.toString());
     };
 
     auto start_time = Clock::now();
