@@ -49,6 +49,11 @@ bool UniversalPageStorageService::gc()
 
 UniversalPageStorageService::~UniversalPageStorageService()
 {
+    shutdown();
+}
+
+void UniversalPageStorageService::shutdown()
+{
     if (gc_handle)
     {
         global_context.getBackgroundPool().removeTask(gc_handle);
