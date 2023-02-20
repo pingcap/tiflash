@@ -13,11 +13,9 @@
 // limitations under the License.
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <Columns/ColumnNullable.h>
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>

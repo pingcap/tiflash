@@ -150,7 +150,6 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
         DataTypePtr type = inferDataType4Literal(child);
         argument_types.push_back(type);
     }
-    // find common type
     DataTypePtr resolved_type = getLeastSupertype(argument_types);
     if (!removeNullable(resolved_type)->equals(*removeNullable(argument_types[0])))
     {
