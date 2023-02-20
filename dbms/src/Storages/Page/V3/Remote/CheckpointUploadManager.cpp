@@ -111,15 +111,20 @@ void CheckpointUploadManager::initStoreInfo(UInt64 actual_store_id)
     if (inited_from_s3)
         return;
 
+    do
     {
         std::unique_lock lock_init(mtx_store_init);
+        // Another thread has already init before this thread acquire lock
+        if (inited_from_s3)
+            break;
+
         // we need to restore the last_upload_sequence from S3
         const auto manifests = listManifest(*s3_client, s3_bucket, actual_store_id, log);
         last_upload_sequence = manifests.latest_upload_seq;
         store_id = actual_store_id;
         LOG_INFO(log, "restore the last upload sequence from S3, sequence={}", last_upload_sequence);
         inited_from_s3 = true;
-    }
+    } while (false);
     cv_init.notify_all();
 }
 
@@ -138,6 +143,10 @@ bool CheckpointUploadManager::createS3LockForWriteBatch(UniversalWriteBatch & wr
         case WriteBatchWriteType::PUT:
         {
             // apply a put/put external that is actually stored in S3 instead of local
+            // Note that origin `w.remote->data_file_id` store the S3 key name of
+            // CheckpointDataFile or StableFile.
+            // Here we will replace the name to be the S3LockFile key name for later
+            // manifest upload.
             if (!w.remote)
                 continue;
             auto res = S3::S3FilenameView::fromKey(*w.remote->data_file_id);
@@ -162,6 +171,10 @@ CheckpointUploadManager::createS3Lock(const S3::S3FilenameView & s3_file, UInt64
 {
     RUNTIME_CHECK(s3_file.isDataFile());
     bool s3_lock_created = false;
+
+    // To ensuring the lock files with `upload_seq` have been uploaded before the
+    // manifest with same `upload_seq` upload, acquire a lock to block manifest
+    // upload.
     std::shared_lock manifest_lock(mtx_checkpoint_manifest);
     const UInt64 upload_seq = last_upload_sequence + 1;
     const String lockkey = s3_file.getLockKey(lock_store_id, upload_seq);
@@ -187,12 +200,18 @@ CheckpointUploadManager::createS3Lock(const S3::S3FilenameView & s3_file, UInt64
     if (!s3_lock_created)
         return S3LockCreateResult{"", std::move(err_msg)};
 
+    // The related S3 data files in write batch is not applied into PageDirectory,
+    // but we need to ensure they exist in the next manifest file so that these
+    // S3 data files will not be deleted by the S3GCManager.
+    // Add the lock file key to `pre_locks_files` for manifest uploading.
     pre_locks_files.emplace(lockkey);
     return {lockkey, std::move(err_msg)};
 }
 
 void CheckpointUploadManager::cleanAppliedS3ExternalFiles(std::unordered_set<String> && applied_s3files)
 {
+    // After the entries applied into PageDirectory, manifest can get the S3 lock key
+    // from `VersionedPageEntries`, cleanup the pre lock files.
     std::shared_lock manifest_lock(mtx_checkpoint_manifest);
     for (const auto & file : applied_s3files)
     {
@@ -237,6 +256,8 @@ CheckpointUploadManager::dumpRemoteCheckpoint(DumpRemoteCheckpointOptions option
     {
         // Acquire as read lock, so that it won't block other thread from
         // creating new lock on S3 for a long time.
+        // Note that the S3 keyname must be decided by upload_sequence but not snapshot_sequence
+        // for correctness.
         std::shared_lock manifest_lock(mtx_checkpoint_manifest);
         upload_sequence = last_upload_sequence + 1;
 

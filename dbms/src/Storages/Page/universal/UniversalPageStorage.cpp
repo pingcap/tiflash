@@ -55,18 +55,10 @@ void UniversalPageStorage::restore()
                          .setBlobStore(*blob_store)
                          .create(storage_name, file_provider, delegator, PS::V3::WALConfig::from(config));
 
-    // TODO: only init storage->checkpoint_manager if need
+    // TODO: only init storage->checkpoint_manager when S3 is enabled
     {
         UInt64 store_id = 0;
         checkpoint_manager = PS::V3::CheckpointUploadManager::createForDebug(store_id, page_directory, blob_store);
-    }
-}
-
-void UniversalPageStorage::initStoreInfo(UInt64 store_id) const
-{
-    if (checkpoint_manager)
-    {
-        checkpoint_manager->initStoreInfo(store_id);
     }
 }
 
@@ -370,7 +362,8 @@ void UniversalPageStorage::checkpointImpl(std::shared_ptr<const PS::V3::Remote::
         return;
     }
 
-    initStoreInfo(writer_info->store_id());
+    // Ensure checkpoint manager is inited with store_id
+    checkpoint_manager->initStoreInfo(writer_info->store_id());
 
     LOG_INFO(log, "Start checkpoint, writer_store_id={}, remote_directory={}", writer_info->store_id(), remote_directory);
 

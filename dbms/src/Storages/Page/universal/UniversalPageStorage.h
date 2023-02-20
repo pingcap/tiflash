@@ -132,8 +132,6 @@ public:
 
     void restore();
 
-    void initStoreInfo(UInt64 store_id) const;
-
     SnapshotPtr getSnapshot(const String & tracing_id) const
     {
         return page_directory->createSnapshot(tracing_id);
