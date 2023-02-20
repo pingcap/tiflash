@@ -25,7 +25,7 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalAggregation.h>
-#include <Flash/Planner/Plans/PhysicalMergeAggregation.h>
+#include <Flash/Planner/Plans/PhysicalConvergentAggregation.h>
 #include <Flash/Planner/Plans/PhysicalPreAggregation.h>
 #include <Interpreters/Context.h>
 
@@ -183,14 +183,13 @@ void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)
     child->buildPipeline(pre_agg_builder);
     pre_agg_builder.build();
     // Final-agg pipeline.
-    auto merge_agg = std::make_shared<PhysicalMergeAggregation>(
+    auto convergent_agg = std::make_shared<PhysicalConvergentAggregation>(
         executor_id,
         schema,
         log->identifier(),
         agg_context,
-        expr_after_agg
-    );
-    builder.addPlanNode(merge_agg);
+        expr_after_agg);
+    builder.addPlanNode(convergent_agg);
 }
 
 void PhysicalAggregation::finalize(const Names & parent_require)

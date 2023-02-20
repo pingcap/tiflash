@@ -52,38 +52,7 @@ public:
         , agg_context(agg_context_)
     {}
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/) override
-    {
-        if (!before_agg_actions->getActions().empty())
-        {
-            group_builder.transform([&](auto & builder) {
-                builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, before_agg_actions, log->identifier()));
-            });
-        }
-
-        size_t build_index = 0;
-        group_builder.transform([&](auto & builder) {
-            builder.setSinkOp(std::make_unique<AggregateSinkOp>(group_builder.exec_status, build_index++, agg_context));
-        });
-
-        Block before_agg_header = group_builder.getCurrentHeader();
-        size_t concurrency = group_builder.concurrency;
-        AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
-        SpillConfig spill_config(context.getTemporaryPath(), fmt::format("{}_aggregation", log->identifier()), context.getSettingsRef().max_spilled_size_per_spill, context.getFileProvider());
-
-        auto params = AggregationInterpreterHelper::buildParams(
-            context,
-            before_agg_header,
-            concurrency,
-            concurrency,
-            aggregation_keys,
-            aggregation_collators,
-            aggregate_descriptions,
-            is_final_agg,
-            spill_config);
-
-        agg_context->init(params, concurrency);
-    }
+    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/) override;
 
 private:
     DISABLE_USELESS_FUNCTION_FOR_BREAKER

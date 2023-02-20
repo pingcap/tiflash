@@ -11,36 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-#pragma once
-
-#include <Operators/AggregateContext.h>
-#include <Operators/Operator.h>
+#include <Operators/AggregateConvergentSourceOp.h>
 
 namespace DB
 {
-class AggregateSinkOp : public SinkOp
+OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
 {
-public:
-    AggregateSinkOp(
-        PipelineExecutorStatus & exec_status_,
-        size_t index_,
-        AggregateContextPtr agg_context_)
-        : SinkOp(exec_status_)
-        , index(index_)
-        , agg_context(agg_context_)
+    if (!inited)
     {
+        agg_context->initConvergent();
+        inited = true;
     }
 
-    String getName() const override
-    {
-        return "AggregateSinkOp";
-    }
+    agg_context->read(block);
+    return OperatorStatus::HAS_OUTPUT;
+}
 
-    OperatorStatus writeImpl(Block && block) override;
-
-private:
-    size_t index{};
-    AggregateContextPtr agg_context;
-};
 } // namespace DB

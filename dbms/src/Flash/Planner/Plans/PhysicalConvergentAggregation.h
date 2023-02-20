@@ -19,15 +19,15 @@
 #include <Flash/Planner/Plans/PipelineBreakerHelper.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Operators/AggregateContext.h>
-#include <Operators/AggregateMergeSourceOp.h>
+#include <Operators/AggregateConvergentSourceOp.h>
 #include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
-class PhysicalMergeAggregation : public PhysicalLeaf
+class PhysicalConvergentAggregation : public PhysicalLeaf
 {
 public:
-    PhysicalMergeAggregation(
+    PhysicalConvergentAggregation(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
@@ -38,24 +38,7 @@ public:
         , aggregate_context(aggregate_context_)
     {}
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency) override
-    {
-        group_builder.init(concurrency);
-
-        group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::make_unique<AggregateMergeSourceOp>(
-                group_builder.exec_status,
-                aggregate_context,
-                log->identifier()));
-        });
-
-        if (!expr_after_agg->getActions().empty())
-        {
-            group_builder.transform([&](auto & builder) {
-                builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, expr_after_agg, log->identifier()));
-            });
-        }
-    }
+    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency) override;
 
 private:
     DISABLE_USELESS_FUNCTION_FOR_BREAKER

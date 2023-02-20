@@ -19,10 +19,10 @@
 
 namespace DB
 {
-class AggregateMergeSourceOp : public SourceOp
+class AggregateConvergentSourceOp : public SourceOp
 {
 public:
-    AggregateMergeSourceOp(
+    AggregateConvergentSourceOp(
         PipelineExecutorStatus & exec_status_,
         const AggregateContextPtr & agg_context_,
         const String & req_id)
@@ -35,21 +35,11 @@ public:
 
     String getName() const override
     {
-        return "AggregateMergeSourceOp";
+        return "AggregateConvergentSourceOp";
     }
 
 protected:
-    OperatorStatus readImpl(Block & block) override
-    {
-        if (!inited)
-        {
-            agg_context->initMerge();
-            inited = true;
-        }
-
-        agg_context->read(block);
-        return OperatorStatus::HAS_OUTPUT;
-    }
+    OperatorStatus readImpl(Block & block) override;
 
 private:
     AggregateContextPtr agg_context;

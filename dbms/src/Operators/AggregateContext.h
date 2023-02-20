@@ -53,72 +53,13 @@ public:
     {
     }
 
-    void init(const Aggregator::Params & params, size_t max_threads_)
-    {
-        max_threads = max_threads_;
-        std::cout << "max_thread: " << max_threads << std::endl;
-        many_data.reserve(max_threads);
-        threads_data.reserve(max_threads);
-        for (size_t i = 0; i < max_threads; ++i)
-        {
-            threads_data.emplace_back(params.keys_size, params.aggregates_size);
-            many_data.emplace_back(std::make_shared<AggregatedDataVariants>());
-        }
+    void init(const Aggregator::Params & params, size_t max_threads_);
 
-        aggregator = std::make_unique<Aggregator>(params, log->identifier());
-        aggregator->initThresholdByAggregatedDataVariantsSize(many_data.size());
-        LOG_TRACE(log, "Aggregate Context inited");
-    }
+    void executeOnBlock(size_t task_index, const Block & block);
 
-    void executeOnBlock(size_t task_index, const Block & block)
-    {
-        aggregator->executeOnBlock(block, *many_data[task_index], threads_data[task_index].key_columns, threads_data[task_index].aggregate_columns);
-        threads_data[task_index].src_bytes += block.bytes();
-        threads_data[task_index].src_rows += block.rows();
-    }
+    void initConvergent();
 
-    void initMerge()
-    {
-        std::unique_lock lock(mu);
-        if (inited)
-        {
-            return;
-        }
-
-        auto merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, is_final, max_threads);
-        if (!merging_buckets)
-        {
-            impl = std::make_unique<NullBlockInputStream>(aggregator->getHeader(is_final));
-        }
-        else
-        {
-            RUNTIME_CHECK(merging_buckets->getConcurrency() > 0);
-            if (merging_buckets->getConcurrency() > 1)
-            {
-                BlockInputStreams merging_streams;
-                for (size_t i = 0; i < merging_buckets->getConcurrency(); ++i)
-                    merging_streams.push_back(
-                        std::make_shared<MergingAndConvertingBlockInputStream>(merging_buckets, i, log->identifier()));
-                impl = std::make_unique<UnionBlockInputStream<>>(
-                    merging_streams,
-                    BlockInputStreams{},
-                    max_threads,
-                    log->identifier());
-            }
-            else
-            {
-                impl = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
-            }
-        }
-        inited = true;
-    }
-
-    void read(Block & block)
-    {
-        std::unique_lock lock(mu);
-        RUNTIME_CHECK(inited == true);
-        block = impl->read();
-    }
+    void read(Block & block);
 
     Block getHeader() const
     {
