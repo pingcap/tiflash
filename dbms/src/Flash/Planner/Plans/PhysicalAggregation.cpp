@@ -29,9 +29,6 @@
 #include <Flash/Planner/Plans/PhysicalPreAggregation.h>
 #include <Interpreters/Context.h>
 
-#include <cassert>
-#include <memory>
-
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalAggregation::build(

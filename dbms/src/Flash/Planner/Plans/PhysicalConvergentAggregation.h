@@ -33,7 +33,7 @@ public:
         const String & req_id,
         const AggregateContextPtr & aggregate_context_,
         const ExpressionActionsPtr & expr_after_agg_)
-        : PhysicalLeaf(executor_id_, PlanType::MergeAggregation, schema_, req_id)
+        : PhysicalLeaf(executor_id_, PlanType::ConvergentAggregation, schema_, req_id)
         , expr_after_agg(expr_after_agg_)
         , aggregate_context(aggregate_context_)
     {}

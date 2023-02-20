@@ -20,8 +20,6 @@
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/Operator.h>
-
-#include <memory>
 #include <mutex>
 
 namespace DB

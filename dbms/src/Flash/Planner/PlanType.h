@@ -37,7 +37,7 @@ struct PlanType
         MockTableScan = 12,
         Join = 13,
         PreAggregation = 14,
-        MergeAggregation = 15,
+        ConvergentAggregation = 15,
         GetResult = 16,
     };
     PlanTypeEnum enum_value;
