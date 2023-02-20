@@ -1,3 +1,13 @@
+~test_suite_name: SimplePipeline
+~result_index: 0
+~result:
+pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Filter|selection_1 -> Projection|project_2 -> Limit|limit_3 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_4
+@
+~test_suite_name: SimplePipeline
+~result_index: 1
+~result:
+pipeline#0: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator
+@
 ~test_suite_name: StrangeQuery
 ~result_index: 0
 ~result:

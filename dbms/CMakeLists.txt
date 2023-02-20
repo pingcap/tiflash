@@ -103,6 +103,7 @@ add_headers_and_sources(dbms src/Storages/Page/V3/PageDirectory)
 add_headers_and_sources(dbms src/Storages/Page/V3/Blob)
 add_headers_and_sources(dbms src/Storages/Page/V3/Universal)
 add_headers_and_sources(dbms src/Storages/Page/)
+add_headers_and_sources(dbms src/Storages/S3)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Flash/Coprocessor)
@@ -225,6 +226,7 @@ target_link_libraries (dbms
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
     absl::synchronization
+    tiflash_contrib::aws_s3
 )
 
 # always add GmSSL include dir to the include path for static analysis

@@ -20,6 +20,8 @@ compile_commands.json
 *.logrt
 
 /build
+/build-debug
+/build-release
 /docs/en_single_page/
 /docs/ru_single_page/
 /docs/venv/
