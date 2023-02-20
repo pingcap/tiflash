@@ -30,20 +30,21 @@
 namespace CurrentMetrics
 {
 extern const Metric DT_SnapshotOfReadRaw;
+extern const Metric DT_SnapshotOfBitmapFilter;
 } // namespace CurrentMetrics
 
-namespace DB
-{
-namespace DM
+namespace DB::DM
 {
 extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
                                     const String & parent_path);
+}
 
-namespace tests
+namespace DB::DM::tests
 {
+
 void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
 {
     {
@@ -600,6 +601,91 @@ PageIdU64 SegmentTestBasic::getRandomSegmentId() // Complexity is O(n)
     return segment_id;
 }
 
+size_t SegmentTestBasic::getPageNumAfterGC(StorageType type, NamespaceId ns_id) const
+{
+    if (storage_pool->uni_ps)
+    {
+        storage_pool->uni_ps->gc(/* not_skip */ true);
+        return storage_pool->uni_ps->getNumberOfPages(UniversalPageIdFormat::toFullPrefix(type, ns_id));
+    }
+    else
+    {
+        assert(storage_pool->log_storage_v3 != nullptr || storage_pool->log_storage_v2 != nullptr);
+        switch (type)
+        {
+        case StorageType::Log:
+            if (storage_pool->log_storage_v3)
+            {
+                storage_pool->log_storage_v3->gc(/* not_skip */ true);
+                return storage_pool->log_storage_v3->getNumberOfPages();
+            }
+            else
+            {
+                storage_pool->log_storage_v2->gc(/* not_skip */ true);
+                return storage_pool->log_storage_v2->getNumberOfPages();
+            }
+            break;
+        case StorageType::Data:
+            if (storage_pool->data_storage_v3)
+            {
+                storage_pool->data_storage_v3->gc(/* not_skip */ true);
+                return storage_pool->data_storage_v3->getNumberOfPages();
+            }
+            else
+            {
+                storage_pool->data_storage_v2->gc(/* not_skip */ true);
+                return storage_pool->data_storage_v2->getNumberOfPages();
+            }
+            break;
+        default:
+            throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+        }
+    }
+}
+
+std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsWithoutGC(NamespaceId ns_id) const
+{
+    if (storage_pool->uni_ps)
+    {
+        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id)));
+    }
+    else
+    {
+        assert(storage_pool->data_storage_v3 != nullptr || storage_pool->data_storage_v2 != nullptr);
+        if (storage_pool->data_storage_v3)
+        {
+            return storage_pool->data_storage_v3->getAliveExternalPageIds(ns_id);
+        }
+        else
+        {
+            return storage_pool->data_storage_v2->getAliveExternalPageIds(ns_id);
+        }
+    }
+}
+
+std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceId ns_id) const
+{
+    if (storage_pool->uni_ps)
+    {
+        storage_pool->uni_ps->gc(/* not_skip */ true);
+        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id)));
+    }
+    else
+    {
+        assert(storage_pool->data_storage_v3 != nullptr || storage_pool->data_storage_v2 != nullptr);
+        if (storage_pool->data_storage_v3)
+        {
+            storage_pool->data_storage_v3->gc(/* not_skip */ true);
+            return storage_pool->data_storage_v3->getAliveExternalPageIds(ns_id);
+        }
+        else
+        {
+            storage_pool->data_storage_v2->gc(/* not_skip */ true);
+            return storage_pool->data_storage_v2->getAliveExternalPageIds(ns_id);
+        }
+    }
+}
+
 SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings)
 {
     TiFlashStorageTestBasic::reload(std::move(db_settings));
@@ -639,6 +725,105 @@ void SegmentTestBasic::printFinishedOperations() const
         LOG_INFO(logger, "{}: {}", name, n);
     }
     LOG_INFO(logger, "======= End Finished Operations Statistics =======");
+}
+
+
+Block mergeSegmentRowIds(std::vector<Block> && blocks)
+{
+    auto accumulated_block = std::move(blocks[0]);
+    RUNTIME_CHECK(accumulated_block.segmentRowIdCol() != nullptr);
+    for (size_t block_idx = 1; block_idx < blocks.size(); ++block_idx)
+    {
+        auto block = std::move(blocks[block_idx]);
+        auto accu_row_id_col = accumulated_block.segmentRowIdCol();
+        auto row_id_col = block.segmentRowIdCol();
+        RUNTIME_CHECK(row_id_col != nullptr);
+        auto mut_col = (*std::move(accu_row_id_col)).mutate();
+        mut_col->insertRangeFrom(*row_id_col, 0, row_id_col->size());
+        accumulated_block.setSegmentRowIdCol(std::move(mut_col));
+    }
+    return accumulated_block;
+}
+
+RowKeyRange SegmentTestBasic::buildRowKeyRange(Int64 begin, Int64 end)
+{
+    HandleRange range(begin, end);
+    return RowKeyRange::fromHandleRange(range);
+}
+
+std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(PageIdU64 segment_id)
+{
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments[segment_id];
+    auto snapshot = segment->createSnapshot(
+        *dm_context,
+        /* for_update */ false,
+        CurrentMetrics::DT_SnapshotOfBitmapFilter);
+    RUNTIME_CHECK(snapshot != nullptr);
+    return {segment, snapshot};
+}
+std::vector<Block> SegmentTestBasic::readSegment(PageIdU64 segment_id, bool need_row_id, const RowKeyRanges & ranges)
+{
+    auto [segment, snapshot] = getSegmentForRead(segment_id);
+    ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
+                                     getVersionColumnDefine()};
+    auto stream = segment->getInputStreamModeNormal(
+        *dm_context,
+        columns_to_read,
+        snapshot,
+        ranges.empty() ? RowKeyRanges{segment->getRowKeyRange()} : ranges,
+        nullptr,
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE,
+        need_row_id);
+    std::vector<Block> blks;
+    for (auto blk = stream->read(); blk; blk = stream->read())
+    {
+        blks.push_back(blk);
+    }
+    return blks;
+}
+
+ColumnPtr SegmentTestBasic::getSegmentRowId(PageIdU64 segment_id, const RowKeyRanges & ranges)
+{
+    LOG_INFO(logger_op, "getSegmentRowId, segment_id={}", segment_id);
+    auto blks = readSegment(segment_id, true, ranges);
+    if (blks.empty())
+    {
+        return nullptr;
+    }
+    else
+    {
+        auto block = mergeSegmentRowIds(std::move(blks));
+        RUNTIME_CHECK(!block.has(EXTRA_HANDLE_COLUMN_NAME));
+        RUNTIME_CHECK(block.segmentRowIdCol() != nullptr);
+        return block.segmentRowIdCol();
+    }
+}
+
+ColumnPtr SegmentTestBasic::getSegmentHandle(PageIdU64 segment_id, const RowKeyRanges & ranges)
+{
+    LOG_INFO(logger_op, "getSegmentHandle, segment_id={}", segment_id);
+    auto blks = readSegment(segment_id, false, ranges);
+    if (blks.empty())
+    {
+        return nullptr;
+    }
+    else
+    {
+        auto block = vstackBlocks(std::move(blks));
+        RUNTIME_CHECK(block.has(EXTRA_HANDLE_COLUMN_NAME));
+        RUNTIME_CHECK(block.segmentRowIdCol() == nullptr);
+        return block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+    }
+}
+
+void SegmentTestBasic::writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end)
+{
+    auto range = buildRowKeyRange(begin, end);
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments[segment_id];
+    RUNTIME_CHECK(segment->write(*dm_context, range));
 }
 
 class SegmentFrameworkTest : public SegmentTestBasic
@@ -746,6 +931,4 @@ try
 CATCH
 
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM::tests

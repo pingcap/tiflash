@@ -17,10 +17,13 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
+#include <Operators/ExpressionTransformOp.h>
+#include <Operators/TopNTransformOp.h>
 
 namespace DB
 {
@@ -63,6 +66,19 @@ void PhysicalTopN::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & c
     executeExpression(pipeline, before_sort_actions, log, "before TopN");
 
     orderStreams(pipeline, max_streams, order_descr, limit, false, context, log);
+}
+
+void PhysicalTopN::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
+{
+    if (!before_sort_actions->getActions().empty())
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, before_sort_actions, log->identifier()));
+        });
+    }
+    group_builder.transform([&](auto & builder) {
+        builder.appendTransformOp(std::make_unique<TopNTransformOp>(group_builder.exec_status, order_descr, limit, context.getSettingsRef().max_block_size, log->identifier()));
+    });
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)
