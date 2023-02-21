@@ -38,7 +38,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
     , file_provider(file_provider_)
     , write_limiter(write_limiter_)
     // Create a new file is necessarily here. Because it will create encryption info for the whole DMFile.
-    , file(createFile())
+    , meta_file(createMetaFile())
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
@@ -52,7 +52,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
     }
 }
 
-DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createFile()
+DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaFile()
 {
     if (dmfile->useMetaV2())
     {
@@ -170,18 +170,18 @@ void DMFileWriter::finalizeMetaV1()
     const auto & pack_stats = dmfile->getPackStats();
     for (const auto & pack_stat : pack_stats)
     {
-        writePODBinary(pack_stat, *file);
+        writePODBinary(pack_stat, *meta_file);
     }
-    file->sync();
-    file.reset();
+    meta_file->sync();
+    meta_file.reset();
     dmfile->finalizeForFolderMode(file_provider, write_limiter);
 }
 
 void DMFileWriter::finalizeMetaV2()
 {
-    dmfile->finalizeMetaV2(*file);
-    file->sync();
-    file.reset();
+    dmfile->finalizeMetaV2(*meta_file);
+    meta_file->sync();
+    meta_file.reset();
     dmfile->finalizeDirName();
 }
 

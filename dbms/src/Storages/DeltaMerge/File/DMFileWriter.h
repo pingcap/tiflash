@@ -159,7 +159,7 @@ private:
     /// FileNameBase -> Stream.
     void addStreams(ColId col_id, DataTypePtr type, bool do_index);
 
-    WriteBufferFromFileBasePtr createFile();
+    WriteBufferFromFileBasePtr createMetaFile();
     WriteBufferFromFileBasePtr createMetaV2File();
     WriteBufferFromFileBasePtr createPackStatsFile();
     void finalizeMetaV1();
@@ -175,9 +175,9 @@ private:
     FileProviderPtr file_provider;
     WriteLimiterPtr write_limiter;
 
-    // If dmfile->useMetaV2() is true, `file` is for metav2,
-    // else `file` is for pack stats.
-    WriteBufferFromFileBasePtr file;
+    // If dmfile->useMetaV2() is true, `meta_file` is for metav2,
+    // else `meta_file` is for pack stats.
+    WriteBufferFromFileBasePtr meta_file;
 
     // use to avoid count data written in index file for empty dmfile
     bool is_empty_file = true;
