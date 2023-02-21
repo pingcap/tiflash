@@ -41,7 +41,7 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
     handle = background_pool.addTask(
         [&, this] {
             auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
-            std::shared_lock<std::shared_mutex> lock(ks_map_mutex);
+            std::unique_lock<std::shared_mutex> lock(ks_map_mutex);
 
             // Add new sync schema task for new keyspace.
             for (auto const iter: keyspaces)
