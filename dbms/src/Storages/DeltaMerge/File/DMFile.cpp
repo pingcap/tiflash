@@ -759,8 +759,11 @@ void DMFile::initializeIndices()
 
 DMFile::MetaBlockHandle DMFile::writeSLPackStatToBuffer(WriteBuffer & buffer)
 {
-    auto [offset, size] = writePackStatToBuffer(buffer);
-    return MetaBlockHandle{offset, size};
+    auto offset = buffer.count();
+    const char * data = reinterpret_cast<const char *>(&pack_stats[0]);
+    size_t size = pack_stats.size() * sizeof(PackStat);
+    writeString(data, size, buffer);
+    return MetaBlockHandle{offset, buffer.count() - offset};
 }
 
 DMFile::MetaBlockHandle DMFile::writeSLPackPropertyToBuffer(WriteBuffer & buffer)
