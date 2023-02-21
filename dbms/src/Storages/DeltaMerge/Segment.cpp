@@ -2297,28 +2297,28 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(const DMContext & dm_context,
 namespace
 {
 
-struct PackInfo
+struct Range
 {
     UInt64 offset;
     UInt64 rows;
 
-    PackInfo(UInt64 offset_, UInt64 rows_)
+    Range(UInt64 offset_, UInt64 rows_)
         : offset(offset_)
         , rows(rows_)
     {}
 };
 
-std::pair<std::vector<PackInfo>, std::vector<IdSetPtr>> parseDMFilePackInfo(const DMFiles & dmfiles,
-                                                                            const DMContext & dm_context,
-                                                                            const RowKeyRanges & read_ranges,
-                                                                            const RSOperatorPtr & filter,
-                                                                            UInt64 max_version)
+std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(const DMFiles & dmfiles,
+                                                                         const DMContext & dm_context,
+                                                                         const RowKeyRanges & read_ranges,
+                                                                         const RSOperatorPtr & filter,
+                                                                         UInt64 max_version)
 {
     // Packs that all rows compliant with MVCC filter and RowKey filter requirements.
     // For building bitmap filter, we don't need to read these packs,
     // just set corresponding positions in the bitmap to true.
     // So we record the offset and rows of these packs and merge continuous ranges.
-    std::vector<PackInfo> pack_infos;
+    std::vector<Range> skipped_ranges;
     // Packs that some rows compliant with MVCC filter and RowKey filter requirements.
     // We need to read these packs and do RowKey filter and MVCC filter for them.
     std::vector<IdSetPtr> some_packs_sets;
@@ -2365,13 +2365,15 @@ std::pair<std::vector<PackInfo>, std::vector<IdSetPtr>> parseDMFilePackInfo(cons
                 continue;
             }
 
+            // When this pack is next to the previous pack, we merge them.
+            // Otherwise, we record the previous continuous packs and start a new one.
             if (offset + rows == preceded_rows - pack_stat.rows)
             {
                 rows += pack_stat.rows;
             }
             else
             {
-                pack_infos.emplace_back(offset, rows);
+                skipped_ranges.emplace_back(offset, rows);
                 offset = preceded_rows - pack_stat.rows;
                 rows = pack_stat.rows;
             }
@@ -2380,9 +2382,9 @@ std::pair<std::vector<PackInfo>, std::vector<IdSetPtr>> parseDMFilePackInfo(cons
         some_packs_sets.push_back(some_packs_set);
     }
     if (rows > 0)
-        pack_infos.emplace_back(offset, rows);
+        skipped_ranges.emplace_back(offset, rows);
 
-    return {pack_infos, some_packs_sets};
+    return {skipped_ranges, some_packs_sets};
 }
 
 } // namespace
@@ -2398,26 +2400,30 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
     const auto & dmfiles = segment_snap->stable->getDMFiles();
     RUNTIME_CHECK(!dmfiles.empty());
 
-    auto [all_packs, some_packs] = parseDMFilePackInfo(dmfiles, dm_context, read_ranges, filter, max_version);
+    auto [skipped_ranges, some_packs_sets] = parseDMFilePackInfo(dmfiles, dm_context, read_ranges, filter, max_version);
 
-    if (all_packs.size() == 1 && all_packs[0].offset == 0 && all_packs[0].rows == segment_snap->stable->getDMFilesRows())
+    if (skipped_ranges.size() == 1 && skipped_ranges[0].offset == 0 && skipped_ranges[0].rows == segment_snap->stable->getDMFilesRows())
     {
         LOG_DEBUG(log, "all match, total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
         return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ true);
     }
 
     auto bitmap_filter = std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ false);
-    for (const auto & pack : all_packs)
+    for (const auto & pack : skipped_ranges)
     {
         bitmap_filter->set(pack.offset, pack.rows);
     }
 
-    size_t some_packs_count = 0;
-    for (const auto & some_packs_set : some_packs)
+    bool has_some_packs = false;
+    for (const auto & some_packs_set : some_packs_sets)
     {
-        some_packs_count += some_packs_set->size();
+        if (!some_packs_set->empty())
+        {
+            has_some_packs = true;
+            break;
+        }
     }
-    if (some_packs_count <= 0)
+    if (!has_some_packs)
     {
         return bitmap_filter;
     }
@@ -2436,7 +2442,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
                                                                       /*enable_handle_clean_read*/ false,
                                                                       /*is_fast_scan*/ false,
                                                                       /*enable_del_clean_read*/ false,
-                                                                      /*read_packs*/ some_packs,
+                                                                      /*read_packs*/ some_packs_sets,
                                                                       /*need_row_id*/ true);
     stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, read_ranges, 0);
     const ColumnDefines read_columns{
@@ -2449,7 +2455,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
         is_common_handle,
         dm_context.tracing_id);
     bitmap_filter->set(stream);
-    LOG_DEBUG(log, "some_packs={}, total_rows={}, cost={}ms", some_packs_count, segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
+    LOG_DEBUG(log, "total_rows={}, cost={}ms", segment_snap->stable->getDMFilesRows(), sw.elapsedMilliseconds());
     return bitmap_filter;
 }
 
