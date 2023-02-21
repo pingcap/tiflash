@@ -377,8 +377,8 @@ public:
             writer,
             batch_send_min_limit,
             *dag_context_ptr,
-            MPPDataPacketVersion::MPPDataPacketV0,
-            tipb::CompressionMode::NONE,
+            MPPDataPacketVersion::MPPDataPacketV1,
+            tipb::CompressionMode::FAST,
             false);
 
         // 2. encode all blocks
