@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
@@ -71,7 +72,14 @@ int main(int argc, char ** argv)
         server_info.cpu_info.logical_cores,
         DB::tests::TiFlashTestEnv::getGlobalContext().getSettingsRef().dt_read_thread_count_scale);
     DB::DM::SegmentReadTaskScheduler::instance();
-    DB::S3::ClientFactory::instance().init(/*enable_s3_log*/ false);
+
+    auto s3config = DB::StorageS3Config{
+        .endpoint = "",
+        .bucket = "",
+        .access_key_id = "",
+        .secret_access_key = "",
+    };
+    DB::S3::ClientFactory::instance().init(s3config);
 
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
-#include <Flash/Management/S3Lock.h>
+#include <Flash/Disaggregated/S3LockService.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <aws/core/client/ClientConfiguration.h>
@@ -25,7 +25,7 @@
 
 #include <fstream>
 
-namespace DB::Management::tests
+namespace DB::S3::tests
 {
 
 class S3LockServiceTest
@@ -34,15 +34,10 @@ class S3LockServiceTest
 public:
     void SetUp() override
     {
-        Aws::Client::ClientConfiguration client_config;
         auto & client_factory = DB::S3::ClientFactory::instance();
-        client_config.endpointOverride = "172.16.5.85:9000";
-        client_config.scheme = Aws::Http::Scheme::HTTP;
-        client_config.verifySSL = false;
-        Aws::Auth::AWSCredentials cred("minioadmin", "minioadmin");
-        s3_lock_service = std::make_unique<Management::S3LockService>(*db_context, bucket_name, client_config, cred);
+        s3_lock_service = std::make_unique<DB::S3::S3LockService>(*db_context);
         log = Logger::get();
-        s3_client = client_factory.create("172.16.5.85:9000", Aws::Http::Scheme::HTTP, false, "minioadmin", "minioadmin");
+        s3_client = client_factory.createWithBucket();
         setDataFiles();
     }
 
@@ -55,7 +50,7 @@ public:
         for (size_t i = 1; i <= 5; ++i)
         {
             auto dm_file_name = fmt::format("/s{}/stable/t_{}/dmf_{}", store_id, physical_table_id, dm_file_id);
-            DB::S3::uploadFile(*s3_client, bucket_name, tmp_file_name, dm_file_name);
+            DB::S3::uploadFile(*s3_client, tmp_file_name, s3_client->bucket(), dm_file_name);
             ++dm_file_id;
         }
         std::remove(tmp_file_name);
@@ -69,14 +64,13 @@ public:
             --dm_file_id;
             auto dm_file_name = fmt::format("/s{}/stable/t_{}/dmf_{}", store_id, physical_table_id, dm_file_id);
 
-            DB::S3::deletaFile(*s3_client, bucket_name, dm_file_name);
+            DB::S3::deleteObject(*s3_client, s3_client->bucket(), dm_file_name);
         }
     }
 
 protected:
-    const String bucket_name = "qiuyang";
-    std::unique_ptr<Aws::S3::S3Client> s3_client;
-    std::unique_ptr<Management::S3LockService> s3_lock_service;
+    std::unique_ptr<S3::TiFlashS3Client> s3_client;
+    std::unique_ptr<DB::S3::S3LockService> s3_lock_service;
     const UInt64 store_id = 1;
     const UInt64 physical_table_id = 1;
     UInt64 dm_file_id = 1;
@@ -99,9 +93,9 @@ try
     auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
     ASSERT_TRUE(status_code.ok());
-    ASSERT_TRUE(DB::S3::objectExists(*s3_client, bucket_name, lock_file_name));
+    ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_file_name));
 
-    DB::S3::deletaFile(*s3_client, bucket_name, lock_file_name);
+    DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_file_name);
 }
 CATCH
 
@@ -119,9 +113,9 @@ try
     auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
     ASSERT_TRUE(status_code.ok());
-    ASSERT_TRUE(DB::S3::objectExists(*s3_client, bucket_name, delete_file_name));
+    ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), delete_file_name));
 
-    DB::S3::deletaFile(*s3_client, bucket_name, delete_file_name);
+    DB::S3::deleteObject(*s3_client, s3_client->bucket(), delete_file_name);
 }
 CATCH
 
@@ -142,7 +136,7 @@ try
         auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
-        ASSERT_TRUE(DB::S3::objectExists(*s3_client, bucket_name, delete_file_name));
+        ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), delete_file_name));
     }
 
     // Try add lock file, should fail
@@ -158,10 +152,10 @@ try
         ASSERT_TRUE(status_code.ok());
         ASSERT_TRUE(!response.is_success());
         ASSERT_TRUE(response.error().has_err_data_file_is_deleted());
-        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, bucket_name, lock_file_name));
+        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_file_name));
     }
 
-    DB::S3::deletaFile(*s3_client, bucket_name, delete_file_name);
+    DB::S3::deleteObject(*s3_client, s3_client->bucket(), delete_file_name);
 }
 CATCH
 
@@ -184,7 +178,7 @@ try
         auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
-        ASSERT_TRUE(DB::S3::objectExists(*s3_client, bucket_name, lock_file_name));
+        ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_file_name));
     }
 
     // Try add delete mark, should fail
@@ -199,10 +193,10 @@ try
         ASSERT_TRUE(status_code.ok());
         ASSERT_TRUE(!response.is_success());
         ASSERT_TRUE(response.error().has_err_data_file_is_locked());
-        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, bucket_name, delete_file_name));
+        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, s3_client->bucket(), delete_file_name));
     }
 
-    DB::S3::deletaFile(*s3_client, bucket_name, lock_file_name);
+    DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_file_name);
 }
 CATCH
 
@@ -226,7 +220,7 @@ try
         ASSERT_TRUE(status_code.ok());
         ASSERT_TRUE(!response.is_success());
         ASSERT_TRUE(response.error().has_err_data_file_is_missing());
-        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, bucket_name, lock_file_name));
+        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_file_name));
     }
 }
 CATCH
@@ -251,9 +245,9 @@ try
 
             ASSERT_TRUE(status_code.ok());
             ASSERT_TRUE(response.is_success());
-            ASSERT_TRUE(DB::S3::objectExists(*s3_client, bucket_name, lock_file_name));
+            ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_file_name));
 
-            DB::S3::deletaFile(*s3_client, bucket_name, lock_file_name);
+            DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_file_name);
         }
     };
 
@@ -284,7 +278,7 @@ try
         auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
-        ASSERT_TRUE(DB::S3::objectExists(*s3_client, bucket_name, delete_file_name));
+        ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), delete_file_name));
     };
 
     std::vector<std::thread> threads;
@@ -299,7 +293,7 @@ try
         thread.join();
     }
 
-    DB::S3::deletaFile(*s3_client, bucket_name, delete_file_name);
+    DB::S3::deleteObject(*s3_client, s3_client->bucket(), delete_file_name);
 }
 CATCH
 
@@ -359,13 +353,13 @@ try
         String delete_file_name = fmt::format("/s{}/stable/{}.del", store_id, data_file_name);
 
         // Either lock or delete file should exist
-        if (DB::S3::objectExists(*s3_client, bucket_name, delete_file_name))
+        if (DB::S3::objectExists(*s3_client, s3_client->bucket(), delete_file_name))
         {
-            DB::S3::deletaFile(*s3_client, bucket_name, delete_file_name);
+            DB::S3::deleteObject(*s3_client, s3_client->bucket(), delete_file_name);
         }
-        else if (DB::S3::objectExists(*s3_client, bucket_name, lock_file_name))
+        else if (DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_file_name))
         {
-            DB::S3::deletaFile(*s3_client, bucket_name, lock_file_name);
+            DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_file_name);
         }
         else
         {

@@ -21,6 +21,7 @@
 #include <Common/setThreadName.h>
 #include <Debug/MockStorage.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
 #include <Flash/Management/ManualCompact.h>
@@ -75,14 +76,7 @@ void FlashService::init(Context & context_)
         context->getGlobalContext().getSettingsRef());
 
     // hack
-    Aws::Client::ClientConfiguration client_config;
-    client_config.endpointOverride = "172.16.5.85:9000";
-    client_config.scheme = Aws::Http::Scheme::HTTP;
-    client_config.verifySSL = false;
-    credentials.SetAWSAccessKeyId("minioadmin");
-    credentials.SetAWSSecretKey("minioadmin");
-
-    s3_lock_service = std::make_unique<Management::S3LockService>(context->getGlobalContext(), bucket_name, client_config, credentials);
+    s3_lock_service = std::make_unique<S3::S3LockService>(*context);
 
     auto settings = context->getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;

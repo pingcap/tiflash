@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "S3Lock.h"
-
+#include <Flash/Disaggregated/S3LockService.h>
+#include <Flash/ServiceUtils.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <aws/s3/model/GetObjectRequest.h>
@@ -21,100 +21,89 @@
 #include <aws/s3/model/PutObjectRequest.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
-#include <grpcpp/client_context.h>
-#include <pingcap/kv/Rpc.h>
-#include <pingcap/kv/internal/conn.h>
 
 #include <ext/scope_guard.h>
 
 
-namespace pingcap::kv
-{
-// The rpc trait
-template <>
-struct RpcTypeTraits<disaggregated::TryAddLockRequest>
-{
-    using RequestType = disaggregated::TryAddLockRequest;
-    using ResultType = disaggregated::TryAddLockResponse;
-    static const char * err_msg() { return "tryAddLock Failed"; } // NOLINT(readability-identifier-naming)
-    static ::grpc::Status doRPCCall(
-        grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client,
-        const RequestType & req,
-        ResultType * res)
-    {
-        return client->stub->tryAddLock(context, req, res);
-    }
-};
-
-template <>
-struct RpcTypeTraits<disaggregated::TryMarkDeleteRequest>
-{
-    using RequestType = disaggregated::TryMarkDeleteRequest;
-    using ResultType = disaggregated::TryMarkDeleteResponse;
-    static const char * err_msg() { return "tryMarkDelete Failed"; } // NOLINT(readability-identifier-naming)
-    static ::grpc::Status doRPCCall(
-        grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client,
-        const RequestType & req,
-        ResultType * res)
-    {
-        return client->stub->tryMarkDelete(context, req, res);
-    }
-};
-
-} // namespace pingcap::kv
-
-
-namespace DB::Management
+namespace DB::S3
 {
 
-std::pair<bool, std::optional<disaggregated::S3LockError>> S3LockClient::sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq)
+
+S3LockService::S3LockService(Context & context_)
+    : context(context_.getGlobalContext())
+    , s3_client(S3::ClientFactory::instance().createWithBucket())
+    , log(Logger::get())
 {
-    auto req = std::make_shared<disaggregated::TryAddLockRequest>();
-    req->set_ori_data_file(ori_data_file);
-    req->set_ori_store_id(ori_store_id);
-    req->set_lock_store_id(lock_store_id);
-    req->set_upload_seq(upload_seq);
-
-    auto res = std::make_shared<disaggregated::TryAddLockResponse>();
-    auto call = pingcap::kv::RpcCall<disaggregated::TryAddLockRequest>(req);
-    auto * cluster = context.getTMTContext().getKVCluster();
-    LOG_DEBUG(log, "Send TryAddLock request, address={} req={}", address, req->DebugString());
-    cluster->rpc_client->sendRequest(address, call, timeout);
-    const auto & resp = call.getResp();
-    LOG_DEBUG(log, "Received TryAddLock response, resp={}", resp->DebugString());
-    if (resp->has_error())
-    {
-        LOG_ERROR(log, "TryMarkDelete get resp with error={}", resp->error().DebugString());
-        return {false, resp->error()};
-    }
-
-    return {resp->is_success(), std::nullopt};
+    UNUSED(context);
 }
 
-std::pair<bool, std::optional<disaggregated::S3LockError>> S3LockClient::sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id)
+grpc::Status S3LockService::tryAddLock(const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response)
 {
-    auto req = std::make_shared<disaggregated::TryMarkDeleteRequest>();
-    req->set_ori_data_file(ori_data_file);
-    req->set_ori_store_id(ori_store_id);
-
-    auto res = std::make_shared<disaggregated::TryMarkDeleteResponse>();
-    auto call = pingcap::kv::RpcCall<disaggregated::TryMarkDeleteRequest>(req);
-    auto * cluster = context.getTMTContext().getKVCluster();
-    LOG_DEBUG(log, "Send TryMarkDelete request, address={} req={}", address, req->DebugString());
-    cluster->rpc_client->sendRequest(address, call, timeout);
-    const auto & resp = call.getResp();
-    LOG_DEBUG(log, "Received TryMarkDelete response, resp={}", resp->DebugString());
-    if (resp->has_error())
+    try
     {
-        LOG_ERROR(log, "TryMarkDelete get resp with error={}", resp->error().DebugString());
-        return {false, resp->error()};
+        response->set_is_success(tryAddLockImpl(request->ori_data_file(), request->ori_store_id(), request->lock_store_id(), request->upload_seq(), response));
+        return grpc::Status::OK;
     }
-
-    return {resp->is_success(), std::nullopt};
+    catch (const TiFlashException & e)
+    {
+        LOG_ERROR(log, "TiFlash Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.standardText());
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        return grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(log, "KV Client Exception: {}", e.message());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.message());
+    }
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(log, "std exception: {}", e.what());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "other exception");
+        return grpc::Status(grpc::StatusCode::INTERNAL, "other exception");
+    }
 }
 
+grpc::Status S3LockService::tryMarkDelete(const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response)
+{
+    try
+    {
+        response->set_is_success(tryMarkDeleteImpl(request->ori_data_file(), request->ori_store_id(), response));
+        return grpc::Status::OK;
+    }
+    catch (const TiFlashException & e)
+    {
+        LOG_ERROR(log, "TiFlash Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.standardText());
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        return grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(log, "KV Client Exception: {}", e.message());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.message());
+    }
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(log, "std exception: {}", e.what());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "other exception");
+        return grpc::Status(grpc::StatusCode::INTERNAL, "other exception");
+    }
+}
 
 bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq, disaggregated::TryAddLockResponse * response)
 {
@@ -156,23 +145,23 @@ bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_stor
     });
 
     // make sure data file exists
-    if (!DB::S3::objectExists(*s3_client, bucket_name, data_file_name))
+    if (!DB::S3::objectExists(*s3_client, s3_client->bucket(), data_file_name))
     {
         response->mutable_error()->mutable_err_data_file_is_missing();
         return false;
     }
 
     // make sure data file is not mark as deleted
-    if (DB::S3::objectExists(*s3_client, bucket_name, delete_file_name))
+    if (DB::S3::objectExists(*s3_client, s3_client->bucket(), delete_file_name))
     {
         response->mutable_error()->mutable_err_data_file_is_deleted();
         return false;
     }
 
-    // upload lock file
     try
     {
-        DB::S3::uploadFile(*s3_client, bucket_name, tmp_empty_file, lock_file_name);
+        // upload lock file
+        DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), lock_file_name);
     }
     catch (...)
     {
@@ -222,8 +211,17 @@ bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, dis
         }
     });
 
+    bool has_any_lock = false;
     // make sure data file has not been locked
-    if (DB::S3::getListPrefixSize(*s3_client, bucket_name, lock_file_name_prefix) > 0)
+    DB::S3::listPrefix(*s3_client, s3_client->bucket(), lock_file_name_prefix, "", [&has_any_lock](const auto & result) -> S3::PageResult {
+        const auto & contents = result.GetContents();
+        has_any_lock = !contents.empty();
+        return S3::PageResult{
+            .num_keys = contents.size(),
+            .more = false, // do not need more result
+        };
+    });
+    if (has_any_lock)
     {
         response->mutable_error()->mutable_err_data_file_is_locked();
         return false;
@@ -232,7 +230,7 @@ bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, dis
     // upload delete file
     try
     {
-        DB::S3::uploadFile(*s3_client, bucket_name, tmp_empty_file, delete_file_name);
+        DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), delete_file_name);
     }
     catch (...)
     {
@@ -243,4 +241,4 @@ bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, dis
     return true;
 }
 
-} // namespace DB::Management
+} // namespace DB::S3
