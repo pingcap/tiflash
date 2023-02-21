@@ -19,6 +19,7 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/Message.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/defines.h> // THREAD_SANITIZER
 #include <common/logger_useful.h>
 
 namespace DB
@@ -26,6 +27,7 @@ namespace DB
 namespace tests
 {
 
+#if !defined(THREAD_SANITIZER) // Poco::Logger::root().setChannel is not thread safe
 class LogMacroTest : public testing::Test
 {
 public:
@@ -79,6 +81,7 @@ TEST_F(LogMacroTest, PureMessage)
         channel->getLastMessage().getText().substr(32), // length of timestamp is 32
         R"raw( [INFO] [gtest_logger.cpp:76] ["some arbitrary message {"] [thread_id=1])raw");
 }
+#endif
 
 TEST(LogIdTest, Basic)
 {

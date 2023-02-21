@@ -119,6 +119,9 @@ public:
     ColumnFileSchemaPtr find(const Digest & digest);
 
     ColumnFileSchemaPtr getOrCreate(const Block & block);
+
+private:
+    NO_SANITIZE_THREAD bool cleanExpiredSchemas();
 };
 
 std::shared_ptr<DB::DM::SharedBlockSchemas> getSharedBlockSchemas(const DMContext & context);
