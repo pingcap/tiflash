@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Columns/ColumnsCommon.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Core/Block.h>
@@ -33,8 +34,6 @@
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefinesBase.h>
-
-#include "Columns/ColumnsCommon.h"
 
 namespace DB
 {

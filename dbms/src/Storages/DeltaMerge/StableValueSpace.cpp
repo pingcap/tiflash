@@ -262,7 +262,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             context.getReadLimiter(),
             context.scan_context,
             context.tracing_id);
-        const auto & use_packs = pack_filter.getUsePacksConst();
+        const auto & use_packs = pack_filter.getUsePacks();
         size_t new_pack_properties_index = 0;
         bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
@@ -404,7 +404,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
             context.scan_context,
             context.tracing_id);
         const auto & pack_stats = f->getPackStats();
-        const auto & use_packs = filter.getUsePacksConst();
+        const auto & use_packs = filter.getUsePacks();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
             if (use_packs[i])

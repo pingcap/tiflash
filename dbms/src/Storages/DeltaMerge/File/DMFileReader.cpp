@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnsCommon.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
@@ -29,8 +30,6 @@
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
-
-#include "Columns/ColumnsCommon.h"
 
 namespace CurrentMetrics
 {
@@ -93,7 +92,7 @@ DMFileReader::Stream::Stream(
     size_t buffer_size = 0;
     size_t estimated_size = 0;
 
-    const auto & use_packs = reader.pack_filter.getUsePacksConst();
+    const auto & use_packs = reader.pack_filter.getUsePacks();
     if (!reader.dmfile->configuration)
     {
         for (size_t i = 0; i < packs;)
@@ -245,13 +244,13 @@ DMFileReader::DMFileReader(
 bool DMFileReader::shouldSeek(size_t pack_id)
 {
     // If current pack is the first one, or we just finished reading the last pack, then no need to seek.
-    return pack_id != 0 && !pack_filter.getUsePacksConst()[pack_id - 1];
+    return pack_id != 0 && !pack_filter.getUsePacks()[pack_id - 1];
 }
 
 bool DMFileReader::getSkippedRows(size_t & skip_rows)
 {
     skip_rows = 0;
-    const auto & use_packs = pack_filter.getUsePacksConst();
+    const auto & use_packs = pack_filter.getUsePacks();
     const auto & pack_stats = dmfile->getPackStats();
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
@@ -400,7 +399,7 @@ Block DMFileReader::read()
 
     getSkippedRows(skip_rows);
 
-    const auto & use_packs = pack_filter.getUsePacksConst();
+    const auto & use_packs = pack_filter.getUsePacks();
     if (next_pack_id >= use_packs.size())
         return {};
     // Find max continuing rows we can read.

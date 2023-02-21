@@ -62,7 +62,7 @@ public:
     }
 
     inline const std::vector<RSResult> & getHandleRes() const { return handle_res; }
-    inline const std::vector<UInt8> & getUsePacksConst() const { return use_packs; }
+    inline const std::vector<UInt8> & getUsePacks() const { return use_packs; }
     inline std::vector<UInt8> & getUsePacks() { return use_packs; }
 
     Handle getMinHandle(size_t pack_id)
