@@ -66,14 +66,13 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createFile()
 
 DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaV2File()
 {
-    return createWriteBufferFromFileBaseByFileProvider(
+    return std::make_unique<WriteBufferFromFileProvider>(
         file_provider,
         dmfile->metav2Path(),
         dmfile->encryptionMetav2Path(),
         /*create_new_encryption_info*/ true,
         write_limiter,
-        DMFile::meta_checksum_algorithm,
-        DMFile::meta_checksum_frame_length);
+        DMFile::meta_buffer_size);
 }
 
 DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()

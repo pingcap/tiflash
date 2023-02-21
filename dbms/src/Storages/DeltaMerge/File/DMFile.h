@@ -178,12 +178,10 @@ public:
 
     struct MetaFooter
     {
-        UInt64 meta_fromat_version;
-        UInt64 storage_format_version;
-        UInt64 checksum_frame_length;
-        UInt64 checksum_algorithm;
+        UInt64 checksum_frame_length = 0;
+        UInt64 checksum_algorithm = 0;
     };
-    static_assert(std::is_standard_layout_v<MetaFooter> && sizeof(MetaFooter) == sizeof(UInt64) * 4);
+    static_assert(std::is_standard_layout_v<MetaFooter> && sizeof(MetaFooter) == sizeof(UInt64) * 2);
 
     struct MetaPackInfo
     {
@@ -427,22 +425,19 @@ public:
     void initializeIndices();
 
     /* New metadata file format:
-     * |PackStats|PackProperties|ColumnStats|PackStatsHandle|PackPropertiesHandle|ColumnStatsHandle|MetaFooter|
-     * 
-     * `MetaFooter` is saved at the end of the file, with fixed length and version information. If the format of 
-     * the meta file is modified, the version information needs to be updated, and the content is parsed according to the version number.
-     *
+     * |Pack Stats|Pack Properties|Column Stats|Pack Stats Handle|Pack Properties Handle|Column Stats Handle|DMFile Version|Checksum|MetaFooter|
+     * |----------------------------------------Checksum include-----------------------------------------------------------|
+     * `MetaFooter` is saved at the end of the file, with fixed length, it contains checksum algorithm and checksum frame length.
+     * First, read `MetaFooter` and `Checksum`, and check data integrity.
+     * Second, parse handle and parse corresponding data.
      * `PackStatsHandle`, `PackPropertiesHandle` and `ColumnStatsHandle` are offset and size of `PackStats`, `PackProperties` and `ColumnStats`.
      */
-    // Use a fixed checksums algorithm and checksum frame length for meta file.
-    // We don't use `dmfile.configuration` because the information of configuration will store in meta file.
-    // Size of meta is about 10~20KB, 64KB is large enough.
-    static constexpr size_t meta_checksum_frame_length = 64 * 1024;
-    static constexpr DB::ChecksumAlgo meta_checksum_algorithm = DB::ChecksumAlgo::XXH3;
+    // Meta data is small and 64KB is enough.
+    static constexpr size_t meta_buffer_size = 64 * 1024;
     void finalizeMetaV2(WriteBuffer & buffer);
-    MetaBlockHandle writeSLPackStatToBuffer(WriteBuffer & buffer);
-    MetaBlockHandle writeSLPackPropertyToBuffer(WriteBuffer & buffer);
-    MetaBlockHandle writeColumnStatToBuffer(WriteBuffer & buffer);
+    MetaBlockHandle writeSLPackStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest);
+    MetaBlockHandle writeSLPackPropertyToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest);
+    MetaBlockHandle writeColumnStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest);
     std::vector<char> readMetaV2(const FileProviderPtr & file_provider);
     void parseMetaV2(std::string_view buffer);
     void parseColumnStat(std::string_view buffer);
