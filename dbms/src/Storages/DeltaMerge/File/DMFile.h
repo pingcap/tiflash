@@ -220,6 +220,8 @@ public:
     // `PackProperties` is similar to `PackStats` except it uses protobuf to do serialization
     using PackProperties = dtpb::PackProperties;
 
+    // `use_meta_v2_` is used for tests.
+    // Normally, we use STORAGE_FORMAT_CURRENT to determine whether use meta v2.
     static DMFilePtr
     create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, bool use_meta_v2_ = false);
 
