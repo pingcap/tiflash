@@ -45,55 +45,9 @@ public:
     }
 
 protected:
-    OperatorStatus readImpl(Block & block) override
-    {
-        auto await_status = awaitImpl();
-        if (await_status == OperatorStatus::HAS_OUTPUT)
-        {
-            std::swap(block, block_queue.front());
-            block_queue.pop();
-            return OperatorStatus::HAS_OUTPUT;
-        }
-        return await_status;
-    }
+    OperatorStatus readImpl(Block & block) override;
 
-    OperatorStatus awaitImpl() override
-    {
-        if (!block_queue.empty())
-            return OperatorStatus::HAS_OUTPUT;
-        while (true)
-        {
-            if (remote_reader->receive(recv_msg, stream_id))
-            {
-                if (recv_msg->chunks.empty())
-                    return OperatorStatus::FINISHED;
-                auto result = remote_reader->toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
-                recv_msg.reset();
-                if (result.meet_error)
-                {
-                    LOG_WARNING(log, "remote reader meets error: {}", result.error_msg);
-                    throw Exception(result.error_msg);
-                }
-
-                if (result.resp != nullptr && result.resp->has_error())
-                {
-                    LOG_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
-                    throw Exception(result.resp->error().DebugString());
-                }
-
-                auto decode_detail = result.decode_detail;
-                total_rows += decode_detail.rows;
-                LOG_TRACE(
-                    log,
-                    "recv {} rows from remote for {}, total recv row num: {}",
-                    decode_detail.rows,
-                    result.req_info,
-                    total_rows);
-                return OperatorStatus::HAS_OUTPUT;
-            }
-            // else continue
-        }
-    }
+    OperatorStatus awaitImpl() override;
 
 private:
     std::shared_ptr<ExchangeReceiver> remote_reader;
@@ -101,7 +55,6 @@ private:
     uint64_t total_rows{};
     std::queue<Block> block_queue;
     std::shared_ptr<ReceivedMessage> recv_msg;
-
 
     size_t stream_id;
     const LoggerPtr log;
