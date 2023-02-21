@@ -106,10 +106,10 @@ public:
     {
         {
             std::unique_lock<std::mutex> lock(mu);
-            pop_times++;
+            ++pop_times;
             while (queue.empty() && !done)
             {
-                pop_empty_times++;
+                ++pop_empty_times;
                 reader_cv.wait(lock);
             }
             if (queue.empty())
@@ -137,7 +137,7 @@ public:
     {
         {
             std::unique_lock<std::mutex> lock(mu);
-            pop_times++;
+            ++pop_times;
             if (queue.empty())
             {
                 if (done)
@@ -146,7 +146,7 @@ public:
                 }
                 else
                 {
-                    pop_empty_times++;
+                    ++pop_empty_times;
                     return false;
                 }
             }

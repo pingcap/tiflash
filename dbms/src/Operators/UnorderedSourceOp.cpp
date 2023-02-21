@@ -37,17 +37,20 @@ OperatorStatus UnorderedSourceOp::awaitImpl()
 {
     if (t_block.has_value())
         return OperatorStatus::HAS_OUTPUT;
-    Block res;
-    if (!task_pool->tryPopBlock(res))
-        return OperatorStatus::WAITING;
-    if (res)
+    while (true)
     {
-        if (res.rows() == 0)
+        Block res;
+        if (!task_pool->tryPopBlock(res))
             return OperatorStatus::WAITING;
-        t_block = std::move(res);
-        return OperatorStatus::HAS_OUTPUT;
+        if (res)
+        {
+            if (res.rows() == 0)
+                continue;
+            t_block = std::move(res);
+            return OperatorStatus::HAS_OUTPUT;
+        }
+        else
+            return OperatorStatus::FINISHED;
     }
-    else
-        return OperatorStatus::FINISHED;
 }
 } // namespace DB

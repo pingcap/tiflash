@@ -36,8 +36,6 @@ public:
         , task_pool(task_pool_)
         , action(header, extra_table_id_index, physical_table_id)
         , log(Logger::get(req_id))
-        , ref_no(0)
-        , task_pool_added(false)
     {
         setHeader(toEmptyBlock(columns_to_read_));
         if (extra_table_id_index != InvalidColumnID)
@@ -63,7 +61,6 @@ public:
     void addReadTaskPoolToScheduler()
     {
         std::call_once(task_pool->addToSchedulerFlag(), [&]() { DM::SegmentReadTaskScheduler::instance().add(task_pool); });
-        task_pool_added = true;
     }
 
 private:
@@ -73,6 +70,5 @@ private:
 
     const LoggerPtr log;
     int64_t ref_no;
-    bool task_pool_added;
 };
 } // namespace DB
