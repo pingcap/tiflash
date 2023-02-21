@@ -15,8 +15,15 @@
 #include <Common/Stopwatch.h>
 #include <Core/SpillHandler.h>
 
+#include "Common/FailPoint.h"
+
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_during_spill[];
+} // namespace FailPoints
+
 SpillHandler::SpillWriter::SpillWriter(const FileProviderPtr & file_provider, const String & file_name, bool append_write, const Block & header, size_t spill_version)
     : file_buf(file_provider, file_name, EncryptionPath(file_name, ""), true, nullptr, DBMS_DEFAULT_BUFFER_SIZE, append_write ? O_APPEND | O_WRONLY : -1)
     , compressed_buf(file_buf)
@@ -79,6 +86,9 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
         RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
         auto block_size = blocks.size();
         LOG_INFO(spiller->logger, "Spilling {} blocks data into temporary file {}", block_size, current_spill_file_name);
+
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_spill);
+
         size_t total_rows = 0;
         size_t rows_in_file = 0;
         size_t bytes_in_file = 0;

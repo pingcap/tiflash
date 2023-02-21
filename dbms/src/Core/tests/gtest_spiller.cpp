@@ -138,6 +138,24 @@ catch (Exception & e)
     GTEST_ASSERT_EQ(e.message(), "Check partition_id < partition_num failed: test: partition id 30 exceeds partition num 20.");
 }
 
+TEST_F(SpillerTest, ExceptionDuringSpill)
+try
+{
+    FailPointHelper::enableFailPoint("exception_during_spill");
+    Spiller spiller(*spill_config_ptr, false, 1, spiller_test_header, logger);
+    try
+    {
+        spiller.spillBlocks(generateBlocks(10), 0);
+        GTEST_FAIL();
+    }
+    catch (Exception & e)
+    {
+        GTEST_ASSERT_EQ(std::strstr(e.message().c_str(), "exception_during_spill") != nullptr, true);
+        GTEST_ASSERT_EQ(spiller.hasSpilledData(), false);
+    }
+}
+CATCH
+
 TEST_F(SpillerTest, SpillAfterFinish)
 try
 {

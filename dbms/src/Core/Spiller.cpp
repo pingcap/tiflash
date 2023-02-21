@@ -82,15 +82,15 @@ std::vector<Block> readDataForSpill(IBlockInputStream & from, size_t bytes_thres
 
     while (Block block = from.read())
     {
-        if (is_cancelled())
-            break;
+        if unlikely (is_cancelled())
+            return {};
         ret.push_back(block);
         current_return_size += ret.back().estimateBytesForSpill();
         if (bytes_threshold > 0 && current_return_size >= bytes_threshold)
             break;
     }
 
-    if (is_cancelled())
+    if unlikely (is_cancelled())
         return {};
 
     return ret;
