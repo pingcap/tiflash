@@ -23,7 +23,7 @@ OperatorStatus UnorderedSourceOp::readImpl(Block & block)
     {
         std::swap(block, t_block.value());
         t_block.reset();
-        return action.transform(block) ? OperatorStatus::HAS_OUTPUT :OperatorStatus::FINISHED;
+        return action.transform(block) ? OperatorStatus::HAS_OUTPUT : OperatorStatus::FINISHED;
     }
     return await_status;
 }
