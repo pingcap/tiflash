@@ -17,10 +17,12 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Interpreters/Context.h>
+#include <Operators/ExchangeReceiverSourceOp.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <fmt/format.h>
 
@@ -85,6 +87,18 @@ void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline,
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }
+}
+
+void PhysicalExchangeReceiver::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency)
+{
+    const bool enable_fine_grained_shuffle = enableFineGrainedShuffle(mpp_exchange_receiver->getFineGrainedShuffleStreamCount());
+    RUNTIME_CHECK(!enable_fine_grained_shuffle);
+
+    group_builder.init(concurrency);
+    size_t index = 0;
+    group_builder.transform([&](auto & builder) {
+        builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(group_builder.exec_status, mpp_exchange_receiver, index++, log->identifier()));
+    });
 }
 
 void PhysicalExchangeReceiver::finalize(const Names & parent_require)

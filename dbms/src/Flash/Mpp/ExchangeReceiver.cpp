@@ -736,6 +736,46 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
 }
 
 template <typename RPCContext>
+bool ExchangeReceiverBase<RPCContext>::receive(std::shared_ptr<ReceivedMessage> recv_msg, size_t stream_id)
+{
+    RUNTIME_CHECK(stream_id <= msg_channels.size());
+    auto res = msg_channels[stream_id]->tryPop(recv_msg);
+    switch (res)
+    {
+    case MPMCQueueResult::EMPTY:
+        return false;
+    case MPMCQueueResult::OK:
+    {
+        RUNTIME_CHECK(recv_msg != nullptr);
+        if (unlikely(recv_msg->error_ptr != nullptr))
+            throw Exception(recv_msg->error_ptr->msg());
+
+        if (recv_msg->chunks.empty())
+        {
+            recv_msg.reset();
+            return false;
+        }
+        ExchangeReceiverMetric::subDataSizeMetric(data_size_in_queue, recv_msg->packet->getPacket().ByteSizeLong());
+        return true;
+    }
+    default:
+    {
+        std::lock_guard lock(mu);
+        if (unlikely(this->state != DB::ExchangeReceiverState::NORMAL))
+        {
+            throw Exception(DB::constructStatusString(this->state, this->err_msg));
+        }
+        else
+        {
+            /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
+            return true;
+        }
+    }
+    }
+}
+
+
+template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
     std::queue<Block> & block_queue,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)

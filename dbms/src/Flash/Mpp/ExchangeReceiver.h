@@ -111,6 +111,9 @@ public:
         size_t stream_id,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
+    // async get next recv_msg
+    bool receive(std::shared_ptr<ReceivedMessage> recv_msg, size_t stream_id);
+
     const DAGSchema & getOutputSchema() const { return schema; }
     size_t getSourceNum() const { return source_num; }
     uint64_t getFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle_flag ? output_stream_count : 0; }
@@ -118,6 +121,12 @@ public:
     std::vector<MsgChannelPtr> & getMsgChannels() { return msg_channels; }
     MemoryTracker * getMemoryTracker() const { return mem_tracker.get(); }
     std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
+
+    ExchangeReceiverResult toDecodeResult(
+        std::queue<Block> & block_queue,
+        const Block & header,
+        const std::shared_ptr<ReceivedMessage> & recv_msg,
+        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
 private:
     std::shared_ptr<MemoryTracker> mem_tracker;
@@ -152,12 +161,6 @@ private:
 
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
-
-    ExchangeReceiverResult toDecodeResult(
-        std::queue<Block> & block_queue,
-        const Block & header,
-        const std::shared_ptr<ReceivedMessage> & recv_msg,
-        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
 private:
     void prepareMsgChannels();
