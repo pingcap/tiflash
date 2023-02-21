@@ -162,7 +162,7 @@ static void BroadcastOrPassThroughWriteImpl(
             {
                 local_cnt++;
                 if (local_cnt == local_tunnel_cnt)
-                    tunnels[i]->write(std::move(tracked_packet));
+                    tunnels[i]->write(TrackedMppDataPacketPtr(tracked_packet));
                 else
                     tunnels[i]->write(tracked_packet->copy());
             }
@@ -170,7 +170,7 @@ static void BroadcastOrPassThroughWriteImpl(
             {
                 remote_cnt++;
                 if (remote_cnt == remote_tunnel_cnt)
-                    tunnels[i]->write(std::move(compressed_tracked_packet));
+                    tunnels[i]->write(TrackedMppDataPacketPtr(compressed_tracked_packet));
                 else
                     tunnels[i]->write(compressed_tracked_packet->copy());
             }
