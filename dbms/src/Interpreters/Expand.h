@@ -114,9 +114,11 @@ public:
 
     const GroupingColumnNames & getGroupSetColumnNamesByOffset(size_t offset) const;
 
-    std::set<String> getAllGroupSetColumnNames() const;
+    const std::set<String> & getAllGroupSetColumnNames() const;
 
     String getGroupingSetsDes() const;
+
+    void collectNameSet();
 
     static const String grouping_identifier_column_name;
 
@@ -124,5 +126,6 @@ public:
 
 private:
     GroupingSets group_sets_names;
+    std::set<String> name_set;
 };
 } // namespace DB

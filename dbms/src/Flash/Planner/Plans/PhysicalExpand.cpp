@@ -62,7 +62,7 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     {
         expand_output_columns.emplace_back(one.name, expand_action.expand->isInGroupSetColumn(one.name) ? makeNullable(one.type) : one.type);
     }
-    expand_output_columns.emplace_back(expand_action.expand->grouping_identifier_column_name, expand_action.expand->grouping_identifier_column_type);
+    expand_output_columns.emplace_back(Expand::grouping_identifier_column_name, Expand::grouping_identifier_column_type);
 
     auto physical_expand = std::make_shared<PhysicalExpand>(
         executor_id,
@@ -70,8 +70,7 @@ PhysicalPlanNodePtr PhysicalExpand::build(
         log->identifier(),
         child,
         expand_action.expand,
-        before_expand_actions,
-        Block(expand_output_columns));
+        before_expand_actions);
 
     return physical_expand;
 }
@@ -103,11 +102,18 @@ void PhysicalExpand::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
 void PhysicalExpand::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
+    Names required_output = parent_require;
+    required_output.emplace_back(Expand::grouping_identifier_column_name);
+    expand_actions->finalize(required_output);
+
+    // do the child finalize before require column changed after expand_action finalization.
     child->finalize(expand_actions->getRequiredColumns());
+    FinalizeHelper::prependProjectInputIfNeed(expand_actions, child->getSampleBlock().columns());
+    FinalizeHelper::checkSampleBlockContainsParentRequire(getSampleBlock(), parent_require);
 }
 
 const Block & PhysicalExpand::getSampleBlock() const
 {
-    return sample_block;
+    return expand_actions->getSampleBlock();
 }
 } // namespace DB

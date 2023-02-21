@@ -48,6 +48,12 @@ Names ExpressionAction::getNeededColumns() const
     for (const auto & column : projections)
         res.push_back(column.first);
 
+    if (expand)
+    {
+        for (const auto & column : expand->getAllGroupSetColumnNames())
+            res.push_back(column);
+    }
+
     if (!source_name.empty())
         res.push_back(source_name);
 

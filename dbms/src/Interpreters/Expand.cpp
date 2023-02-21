@@ -34,7 +34,9 @@ void convertColumnToNullable(ColumnWithTypeAndName & column)
 
 Expand::Expand(const DB::GroupingSets & gss)
     : group_sets_names(gss)
-{}
+{
+    collectNameSet();
+}
 
 String Expand::getGroupingSetsDes() const
 {
@@ -92,11 +94,6 @@ void Expand::replicateAndFillNull(Block & block) const
     // reserve N times of current block rows size.
     grouping_id_column_data.reserve(block.rows() * replicate_times_for_one_row);
 
-    // prepare added mutable grouping id column.
-    MutableColumns added_grouping_id_column;
-    added_grouping_id_column.reserve(1);
-    added_grouping_id_column.push_back(grouping_id_column->getPtr());
-
     for (size_t i = 0; i < origin_rows; ++i)
     {
         current_offset += replicate_times_for_one_row;
@@ -107,7 +104,7 @@ void Expand::replicateAndFillNull(Block & block) const
         {
             // start from 1.
             Field grouping_id = j + 1;
-            added_grouping_id_column[0]->insert(grouping_id);
+            grouping_id_column->insert(grouping_id);
         }
     }
 
@@ -123,10 +120,10 @@ void Expand::replicateAndFillNull(Block & block) const
                 block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->convertToFullColumnIfConst();
 
             // for every existing column, if the column is a grouping set column, make it nullable.
-            if (isInGroupSetColumn(block.safeGetByPosition(i).name) && !block.safeGetByPosition(i).column->isColumnNullable())
-            {
+            auto & column = block.safeGetByPosition(i);
+            if (isInGroupSetColumn(column.name) && !column.column->isColumnNullable())
                 convertColumnToNullable(block.getByPosition(i));
-            }
+
             if (!offsets_to_replicate->empty())
                 // replicate it.
                 block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(*offsets_to_replicate);
@@ -188,26 +185,16 @@ void Expand::replicateAndFillNull(Block & block) const
         }
         // finish of adjustment for one grouping set columns. (by now one column for one grouping set).
     }
-    block.insert(ColumnWithTypeAndName(std::move(added_grouping_id_column[0]), std::make_shared<DataTypeUInt64>(), std::move("groupingID")));
+    block.insert(ColumnWithTypeAndName(std::move(grouping_id_column), grouping_identifier_column_type, grouping_identifier_column_name));
     // return input from block.
 }
 
 bool Expand::isInGroupSetColumn(String name) const
 {
-    for (const auto & it1 : group_sets_names)
+    for (const auto & it1 : name_set)
     {
-        // for every grouping set.
-        for (const auto & it2 : it1)
-        {
-            // for every grouping exprs
-            for (const auto & it3 : it2)
-            {
-                if (it3 == name)
-                {
-                    return true;
-                }
-            }
-        }
+        if (it1 == name)
+            return true;
     }
     return false;
 }
@@ -218,9 +205,13 @@ const GroupingColumnNames & Expand::getGroupSetColumnNamesByOffset(size_t offset
     return group_sets_names[offset][0];
 }
 
-std::set<String> Expand::getAllGroupSetColumnNames() const
+const std::set<String> & Expand::getAllGroupSetColumnNames() const
 {
-    std::set<String> name_set;
+    return name_set;
+}
+
+void Expand::collectNameSet()
+{
     for (const auto & it1 : group_sets_names)
     {
         // for every grouping set.
@@ -233,7 +224,6 @@ std::set<String> Expand::getAllGroupSetColumnNames() const
             }
         }
     }
-    return name_set;
 }
 
 const std::string Expand::grouping_identifier_column_name = "groupingID";
