@@ -19,6 +19,7 @@
 #include <common/types.h>
 
 #include <condition_variable>
+#include <string_view>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -50,49 +51,76 @@ using LeaderKey = v3electionpb::LeaderKey;
 } // namespace Etcd
 
 class OwnerManager;
-using OwnerManagerPtr = std::unique_ptr<OwnerManager>;
+// Now owner manager is created in TMTContext, but
+// used in S3LockService. It is hard to find out
+// which will be shutdown first. So use shared_ptr now.
+using OwnerManagerPtr = std::shared_ptr<OwnerManager>;
 
 
 class OwnerManager
 {
 public:
+    static constexpr Int64 DefaultOwnerTTL = 60;
+
     static OwnerManagerPtr
     createS3GCOwner(
         Context & context,
         std::string_view id,
         const Etcd::ClientPtr & client,
-        Int64 owner_ttl = 60);
+        Int64 owner_ttl = DefaultOwnerTTL);
 
-    OwnerManager(
-        Context & context,
-        std::string_view campaign_name_,
-        std::string_view id_,
-        const Etcd::ClientPtr & client_,
-        Int64 owner_ttl = 60);
+    static OwnerManagerPtr
+    createMockOwner(std::string_view id);
 
-    ~OwnerManager();
+    virtual ~OwnerManager() = default;
 
     // start a thread to campaign owner
-    void campaignOwner();
+    virtual void campaignOwner() = 0;
 
-    bool isOwner();
+    // Quick check whether this node is owner or not
+    virtual bool isOwner() = 0;
 
     // Return the owner info.
     // If this node is not the owner, it will try
     // to get the owner id from etcd.
-    OwnerInfo getOwnerID();
+    virtual OwnerInfo getOwnerID() = 0;
 
     // If this node is the owner, resign, start a new
     // campaign and return true.
     // Return false if this node is not the owner.
-    bool resignOwner();
+    virtual bool resignOwner() = 0;
 
     // cancel the campaign and waits till the camaign thread exit
-    void cancel();
+    virtual void cancel() = 0;
 
     // Set a callback after being owner. Set it before `campaignOwner`.
     // Export for testing
-    void setBeOwnerHook(std::function<void()> && hook)
+    virtual void setBeOwnerHook(std::function<void()> && hook) = 0;
+};
+
+class EtcdOwnerManager : public OwnerManager
+{
+public:
+    EtcdOwnerManager(
+        Context & context,
+        std::string_view campaign_name_,
+        std::string_view id_,
+        const Etcd::ClientPtr & client_,
+        Int64 owner_ttl);
+
+    ~EtcdOwnerManager() override;
+
+    void campaignOwner() override;
+
+    bool isOwner() override;
+
+    OwnerInfo getOwnerID() override;
+
+    bool resignOwner() override;
+
+    void cancel() override;
+
+    void setBeOwnerHook(std::function<void()> && hook) override
     {
         be_owner = hook;
     }

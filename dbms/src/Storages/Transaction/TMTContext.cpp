@@ -221,18 +221,9 @@ pingcap::pd::ClientPtr TMTContext::getPDClient() const
     return cluster->pd_client;
 }
 
-OwnerInfo TMTContext::getS3GCOwnerInfo() const
+OwnerManagerPtr TMTContext::getS3GCOwnerManager()
 {
-    if (s3gc_owner)
-    {
-        return s3gc_owner->getOwnerID();
-    }
-
-    // just for test
-    LOG_INFO(Logger::get(), "getting S3GC owner info with mocked result");
-    return OwnerInfo{
-        .status = OwnerType::IsOwner,
-    };
+    return s3gc_owner;
 }
 
 MPPTaskManagerPtr TMTContext::getMPPTaskManager()

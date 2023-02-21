@@ -20,8 +20,6 @@
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTStorages.h>
-#include <TiDB/OwnerInfo.h>
-#include <TiDB/OwnerManager.h>
 
 namespace DB
 {
@@ -55,19 +53,21 @@ namespace Etcd
 class Client;
 using ClientPtr = std::shared_ptr<Client>;
 } // namespace Etcd
+class OwnerManager;
+using OwnerManagerPtr = std::shared_ptr<OwnerManager>;
 
 class TMTContext : private boost::noncopyable
 {
 public:
     enum class StoreStatus : uint8_t
     {
-        _MIN = 0,
+        _MIN = 0, // NOLINT(bugprone-reserved-identifier)
         Idle,
         Ready,
         Running,
         Stopping,
         Terminated,
-        _MAX,
+        _MAX, // NOLINT(bugprone-reserved-identifier)
     };
 
 public:
@@ -101,7 +101,7 @@ public:
 
     pingcap::kv::Cluster * getKVCluster() { return cluster.get(); }
 
-    OwnerInfo getS3GCOwnerInfo() const;
+    OwnerManagerPtr getS3GCOwnerManager();
 
     MPPTaskManagerPtr getMPPTaskManager();
 

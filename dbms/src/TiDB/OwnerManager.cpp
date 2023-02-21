@@ -1,4 +1,3 @@
-
 // Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,6 +17,7 @@
 #include <Common/ThreadFactory.h>
 #include <Interpreters/Context.h>
 #include <TiDB/Etcd/Client.h>
+#include <TiDB/MockOwnerManager.h>
 #include <TiDB/OwnerInfo.h>
 #include <TiDB/OwnerManager.h>
 #include <common/logger_useful.h>
@@ -29,6 +29,7 @@
 #include <limits>
 #include <magic_enum.hpp>
 #include <mutex>
+#include <string_view>
 #include <thread>
 
 #ifdef __clang__
@@ -47,6 +48,11 @@ namespace DB
 
 static constexpr std::string_view S3GCOwnerKey = "/tiflash/s3gc/owner";
 
+OwnerManagerPtr OwnerManager::createMockOwner(std::string_view id)
+{
+    return std::make_shared<MockOwnerManager>(id);
+}
+
 OwnerManagerPtr
 OwnerManager::createS3GCOwner(
     Context & context,
@@ -54,10 +60,10 @@ OwnerManager::createS3GCOwner(
     const Etcd::ClientPtr & client,
     Int64 owner_ttl)
 {
-    return std::make_unique<OwnerManager>(context, S3GCOwnerKey, id, client, owner_ttl);
+    return std::make_shared<EtcdOwnerManager>(context, S3GCOwnerKey, id, client, owner_ttl);
 }
 
-OwnerManager::OwnerManager(
+EtcdOwnerManager::EtcdOwnerManager(
     Context & context,
     std::string_view campaign_name_,
     std::string_view id_,
@@ -72,12 +78,12 @@ OwnerManager::OwnerManager(
 {
 }
 
-OwnerManager::~OwnerManager()
+EtcdOwnerManager::~EtcdOwnerManager()
 {
     cancel();
 }
 
-void OwnerManager::cancel()
+void EtcdOwnerManager::cancel()
 {
     {
         std::unique_lock lk(mtx_camaign);
@@ -106,7 +112,7 @@ void OwnerManager::cancel()
     }
 }
 
-void OwnerManager::campaignOwner()
+void EtcdOwnerManager::campaignOwner()
 {
     {
         std::unique_lock lk(mtx_camaign);
@@ -132,7 +138,7 @@ void OwnerManager::campaignOwner()
 }
 
 std::pair<bool, Etcd::SessionPtr>
-OwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
+EtcdOwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
 {
     bool run_next_campaign = true;
     std::unique_lock lk(mtx_camaign);
@@ -184,7 +190,7 @@ OwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
     return {run_next_campaign, old_session};
 }
 
-void OwnerManager::camaignLoop(Etcd::SessionPtr session)
+void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
 {
     try
     {
@@ -255,7 +261,7 @@ void OwnerManager::camaignLoop(Etcd::SessionPtr session)
     }
 }
 
-void OwnerManager::toBeOwner(Etcd::LeaderKey && leader_key)
+void EtcdOwnerManager::toBeOwner(Etcd::LeaderKey && leader_key)
 {
     RUNTIME_CHECK(!leader_key.name().empty(), leader_key.ShortDebugString());
 
@@ -268,7 +274,7 @@ void OwnerManager::toBeOwner(Etcd::LeaderKey && leader_key)
         be_owner();
 }
 
-void OwnerManager::watchOwner(const String & owner_key, grpc::ClientContext * watch_ctx)
+void EtcdOwnerManager::watchOwner(const String & owner_key, grpc::ClientContext * watch_ctx)
 {
     try
     {
@@ -321,7 +327,7 @@ void OwnerManager::watchOwner(const String & owner_key, grpc::ClientContext * wa
     }
 }
 
-std::optional<String> OwnerManager::getOwnerKey(const String & expect_id)
+std::optional<String> EtcdOwnerManager::getOwnerKey(const String & expect_id)
 {
     const auto & [kv, status] = client->leader(campaign_name);
     if (!status.ok())
@@ -340,19 +346,19 @@ std::optional<String> OwnerManager::getOwnerKey(const String & expect_id)
     return kv.key();
 }
 
-bool OwnerManager::isOwner()
+bool EtcdOwnerManager::isOwner()
 {
     std::lock_guard lk(mtx_leader);
     return !leader.name().empty();
 }
 
-void OwnerManager::retireOwner()
+void EtcdOwnerManager::retireOwner()
 {
     std::lock_guard lk(mtx_leader);
     leader.Clear();
 }
 
-bool OwnerManager::resignOwner()
+bool EtcdOwnerManager::resignOwner()
 {
     std::lock_guard lk(mtx_leader);
     // this node is not the owner, can not resign
@@ -373,7 +379,7 @@ static constexpr std::chrono::milliseconds RetryInterval(200);
 static constexpr Int64 ErrorLogInterval = 15;
 } // namespace session
 
-Etcd::SessionPtr OwnerManager::createEtcdSessionWithRetry(Int64 max_retry)
+Etcd::SessionPtr EtcdOwnerManager::createEtcdSessionWithRetry(Int64 max_retry)
 {
     for (Int64 i = 0; i < max_retry; ++i)
     {
@@ -387,7 +393,7 @@ Etcd::SessionPtr OwnerManager::createEtcdSessionWithRetry(Int64 max_retry)
     return {};
 }
 
-Etcd::SessionPtr OwnerManager::createEtcdSession()
+Etcd::SessionPtr EtcdOwnerManager::createEtcdSession()
 {
     auto & bkg_pool = global_ctx.getBackgroundPool();
     if (keep_alive_handle)
@@ -419,7 +425,7 @@ Etcd::SessionPtr OwnerManager::createEtcdSession()
     return session;
 }
 
-void OwnerManager::revokeEtcdSession(Etcd::LeaseID lease_id)
+void EtcdOwnerManager::revokeEtcdSession(Etcd::LeaseID lease_id)
 {
     // revoke the session lease
     // if revoke takes longer than the ttl, lease is expired anyway. it is safe to ignore error here.
@@ -427,7 +433,7 @@ void OwnerManager::revokeEtcdSession(Etcd::LeaseID lease_id)
     LOG_INFO(log, "revoke session, code={} msg={}", status.error_code(), status.error_message());
 }
 
-OwnerInfo OwnerManager::getOwnerID()
+OwnerInfo EtcdOwnerManager::getOwnerID()
 {
     if (isOwner())
     {
@@ -454,4 +460,5 @@ OwnerInfo OwnerManager::getOwnerID()
         .owner_id = val,
     };
 }
+
 } // namespace DB
