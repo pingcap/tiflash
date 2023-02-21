@@ -122,39 +122,70 @@ static inline void updatePartitionWriterMetrics(CompressionMethod method, size_t
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWriteImpl(TrackedMppDataPacketPtr && tracked_packet, bool is_broadcast)
+static inline bool IsLocalTunnel(const std::shared_ptr<Tunnel> & tunnel)
 {
-    if (!tracked_packet)
-        return;
-    auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
-    checkPacketSize(packet_bytes);
-    // TODO avoid copy packet for broadcast.
-    for (size_t i = 1; i < tunnels.size(); ++i)
-        tunnels[i]->write(tracked_packet->copy());
-    tunnels[0]->write(std::move(tracked_packet));
-    {
-        size_t data_bytes = 0;
-        size_t local_data_bytes = 0;
-        {
-            auto tunnel_cnt = tunnels.size();
-            const size_t local_tunnel_cnt = std::accumulate(tunnels.begin(), tunnels.end(), 0, [](auto res, auto && tunnel) {
-                return res + tunnel->isLocal();
-            });
-            data_bytes = packet_bytes * tunnel_cnt;
-            local_data_bytes = packet_bytes * local_tunnel_cnt;
-        }
-        size_t remote_data_bytes = data_bytes - local_data_bytes;
+    return tunnel->isLocal();
+}
 
-        if (is_broadcast)
+template <typename Tunnel>
+void BroadcastOrPassThroughWriteImpl(
+    std::vector<std::shared_ptr<Tunnel>> & tunnels,
+    size_t local_tunnel_cnt, // can be 0 for PassThrough writer
+    size_t original_data_packet_size,
+    bool is_broadcast,
+    TrackedMppDataPacketPtr && tracked_packet,
+    TrackedMppDataPacketPtr && compressed_tracked_packet,
+    CompressionMethod compression_method)
+{
+    const size_t remote_tunnel_cnt = tunnels.size() - local_tunnel_cnt;
+    auto tracked_packet_bytes = tracked_packet ? tracked_packet->getPacket().ByteSizeLong() : 0;
+    auto compressed_tracked_packet_bytes = compressed_tracked_packet ? compressed_tracked_packet->getPacket().ByteSizeLong() : 0;
+    checkPacketSize(tracked_packet_bytes);
+    checkPacketSize(compressed_tracked_packet_bytes);
+
+    // TODO avoid copy packet for broadcast.
+
+    if (!compressed_tracked_packet)
+    {
+        original_data_packet_size = tracked_packet_bytes;
+        compressed_tracked_packet_bytes = tracked_packet_bytes;
+
+        for (size_t i = 1; i < tunnels.size(); ++i)
+            tunnels[i]->write(tracked_packet->copy());
+        tunnels[0]->write(std::move(tracked_packet));
+    }
+    else
+    {
+        for (size_t i = 0, local_cnt = 0, remote_cnt = 0; i < tunnels.size(); ++i)
         {
-            UPDATE_EXCHANGE_MATRIC(broadcast, CompressionMethod::NONE, local_data_bytes, local_data_bytes, true);
-            UPDATE_EXCHANGE_MATRIC(broadcast, CompressionMethod::NONE, remote_data_bytes, remote_data_bytes, false);
+            if (IsLocalTunnel(tunnels[i]))
+            {
+                local_cnt++;
+                if (local_cnt == local_tunnel_cnt)
+                    tunnels[i]->write(std::move(tracked_packet));
+                else
+                    tunnels[i]->write(tracked_packet->copy());
+            }
+            else
+            {
+                remote_cnt++;
+                if (remote_cnt == remote_tunnel_cnt)
+                    tunnels[i]->write(std::move(compressed_tracked_packet));
+                else
+                    tunnels[i]->write(compressed_tracked_packet->copy());
+            }
         }
-        else
-        {
-            UPDATE_EXCHANGE_MATRIC(passthrough, CompressionMethod::NONE, local_data_bytes, local_data_bytes, true);
-            UPDATE_EXCHANGE_MATRIC(passthrough, CompressionMethod::NONE, remote_data_bytes, remote_data_bytes, false);
-        }
+    }
+
+    if (is_broadcast)
+    {
+        UPDATE_EXCHANGE_MATRIC(broadcast, CompressionMethod::NONE, local_tunnel_cnt * original_data_packet_size, local_tunnel_cnt * original_data_packet_size, true);
+        UPDATE_EXCHANGE_MATRIC(broadcast, compression_method, remote_tunnel_cnt * original_data_packet_size, remote_tunnel_cnt * compressed_tracked_packet_bytes, false);
+    }
+    else
+    {
+        UPDATE_EXCHANGE_MATRIC(passthrough, CompressionMethod::NONE, local_tunnel_cnt * original_data_packet_size, local_tunnel_cnt * original_data_packet_size, true);
+        UPDATE_EXCHANGE_MATRIC(passthrough, compression_method, remote_tunnel_cnt * original_data_packet_size, remote_tunnel_cnt * compressed_tracked_packet_bytes, false);
     }
 }
 
@@ -165,7 +196,18 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool
     auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
     if (!tracked_packet)
         return;
-    broadcastOrPassThroughWriteImpl(std::move(tracked_packet), is_broadcast);
+    const size_t local_tunnel_cnt = std::accumulate(tunnels.begin(), tunnels.end(), 0, [](auto res, auto && tunnel) {
+        return res + tunnel->isLocal();
+    });
+
+    BroadcastOrPassThroughWriteImpl(
+        tunnels,
+        local_tunnel_cnt,
+        0,
+        is_broadcast,
+        std::move(tracked_packet),
+        nullptr,
+        CompressionMethod::NONE);
 }
 
 template <typename Tunnel>
@@ -178,7 +220,6 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPD
     const size_t local_tunnel_cnt = std::accumulate(tunnels.begin(), tunnels.end(), 0, [](auto res, auto && tunnel) {
         return res + tunnel->isLocal();
     });
-    const size_t remote_tunnel_cnt = getPartitionNum() - local_tunnel_cnt;
 
     size_t original_size = 0;
     // encode by method NONE
@@ -188,7 +229,14 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPD
     // Only if all tunnels are local mode or compression method is NONE
     if (local_tunnel_cnt == getPartitionNum() || compression_method == CompressionMethod::NONE)
     {
-        return broadcastOrPassThroughWriteImpl(std::move(local_tunnel_tracked_packet), is_broadcast);
+        return BroadcastOrPassThroughWriteImpl(
+            tunnels,
+            local_tunnel_cnt,
+            0,
+            is_broadcast,
+            std::move(local_tunnel_tracked_packet),
+            nullptr,
+            CompressionMethod::NONE);
     }
     assert(local_tunnel_tracked_packet->getPacket().chunks_size() == 1);
 
@@ -203,40 +251,15 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPD
 
         remote_tunnel_tracked_packet->addChunk(std::move(compressed_buffer));
     }
-    auto local_packet_bytes = local_tunnel_tracked_packet->getPacket().ByteSizeLong();
-    checkPacketSize(local_packet_bytes);
-    auto remote_packet_bytes = remote_tunnel_tracked_packet->getPacket().ByteSizeLong();
-    checkPacketSize(remote_packet_bytes);
 
-    for (size_t i = 0, local_cnt = 0, remote_cnt = 0; i < tunnels.size(); ++i)
-    {
-        if (isLocal(i))
-        {
-            local_cnt++;
-            if (local_cnt == local_tunnel_cnt)
-                tunnels[i]->write(std::move(local_tunnel_tracked_packet));
-            else
-                tunnels[i]->write(local_tunnel_tracked_packet->copy());
-        }
-        else
-        {
-            remote_cnt++;
-            if (remote_cnt == remote_tunnel_cnt)
-                tunnels[i]->write(std::move(remote_tunnel_tracked_packet));
-            else
-                tunnels[i]->write(remote_tunnel_tracked_packet->copy());
-        }
-    }
-    if (is_broadcast)
-    {
-        UPDATE_EXCHANGE_MATRIC(broadcast, CompressionMethod::NONE, local_tunnel_cnt * original_size, local_tunnel_cnt * local_packet_bytes, true);
-        UPDATE_EXCHANGE_MATRIC(broadcast, compression_method, remote_tunnel_cnt * original_size, remote_tunnel_cnt * remote_packet_bytes, false);
-    }
-    else
-    {
-        UPDATE_EXCHANGE_MATRIC(passthrough, CompressionMethod::NONE, local_tunnel_cnt * original_size, local_tunnel_cnt * local_packet_bytes, true);
-        UPDATE_EXCHANGE_MATRIC(passthrough, compression_method, remote_tunnel_cnt * original_size, remote_tunnel_cnt * remote_packet_bytes, false);
-    }
+    return BroadcastOrPassThroughWriteImpl(
+        tunnels,
+        local_tunnel_cnt,
+        original_size,
+        is_broadcast,
+        std::move(local_tunnel_tracked_packet),
+        std::move(remote_tunnel_tracked_packet),
+        compression_method);
 }
 
 template <typename Tunnel>
@@ -383,7 +406,7 @@ template <typename Tunnel>
 bool MPPTunnelSetBase<Tunnel>::isLocal(size_t index) const
 {
     assert(getPartitionNum() > index);
-    return getTunnels()[index]->isLocal();
+    return IsLocalTunnel(getTunnels()[index]);
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
