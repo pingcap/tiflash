@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/FormatVersion.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
@@ -60,9 +61,17 @@ static inline std::optional<DMChecksumConfig> createConfiguration(DMFileMode mod
     return (mode != DMFileMode::DirectoryLegacy ? std::make_optional<DMChecksumConfig>() : std::nullopt);
 }
 
-static inline bool useMetaV2(DMFileMode mode)
+inline static DMFileFormat::Version modeToVersion(DMFileMode mode)
 {
-    return mode == DMFileMode::DirectoryMetaV2;
+    switch (mode)
+    {
+    case DMFileMode::DirectoryLegacy:
+        return DMFileFormat::V1;
+    case DMFileMode::DirectoryChecksum:
+        return DMFileFormat::V2;
+    case DMFileMode::DirectoryMetaV2:
+        return DMFileFormat::V3;
+    }
 }
 
 using DMFileBlockOutputStreamPtr = std::shared_ptr<DMFileBlockOutputStream>;
@@ -88,7 +97,7 @@ public:
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFileTest", false));
         storage_pool = std::make_unique<StoragePool>(*db_context, /*ns_id*/ 100, *path_pool, "test.t1");
-        dm_file = DMFile::create(1, parent_path, std::move(configuration), useMetaV2(mode));
+        dm_file = DMFile::create(1, parent_path, std::move(configuration), modeToVersion(mode));
         table_columns = std::make_shared<ColumnDefines>();
         column_cache = std::make_shared<ColumnCache>();
 
@@ -272,6 +281,8 @@ try
     };
 
     auto check_meta = [&](const DMFilePtr & dmfile1, const DMFilePtr & dmfile2) {
+        ASSERT_FALSE(dmfile1->useMetaV2());
+        ASSERT_TRUE(dmfile2->useMetaV2());
         check_pack_stats(dmfile1, dmfile2);
         check_pack_properties(dmfile1, dmfile2);
         check_column_stats(dmfile1, dmfile2);
@@ -298,7 +309,7 @@ try
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
         auto mode = DMFileMode::DirectoryChecksum;
         auto configuration = createConfiguration(mode);
-        dmfile1 = DMFile::create(1, parent_path, std::move(configuration), /*use_meta_v2*/ false);
+        dmfile1 = DMFile::create(1, parent_path, std::move(configuration), DMFileFormat::V2);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile1, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
@@ -310,7 +321,7 @@ try
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
         auto mode = DMFileMode::DirectoryMetaV2;
         auto configuration = createConfiguration(mode);
-        dmfile2 = DMFile::create(1, parent_path, std::move(configuration), /*use_meta_v2*/ true);
+        dmfile2 = DMFile::create(2, parent_path, std::move(configuration), DMFileFormat::V3);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile2, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
@@ -339,7 +350,7 @@ try
     auto mode = GetParam();
     auto configuration = createConfiguration(mode);
 
-    dm_file = DMFile::create(id, parent_path, std::move(configuration), useMetaV2(mode));
+    dm_file = DMFile::create(id, parent_path, std::move(configuration), modeToVersion(mode));
     // Right after created, the fil is not abled to GC and it is ignored by `listAllInPath`
     EXPECT_FALSE(dm_file->canGC());
     DMFile::ListOptions options;
@@ -1011,7 +1022,7 @@ public:
 
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
         storage_pool = std::make_unique<StoragePool>(*db_context, table_id, *path_pool, "test.t1");
-        dm_file = DMFile::create(0, path, std::move(configuration), useMetaV2(mode));
+        dm_file = DMFile::create(0, path, std::move(configuration), modeToVersion(mode));
         table_columns = std::make_shared<ColumnDefines>();
         column_cache = std::make_shared<ColumnCache>();
 

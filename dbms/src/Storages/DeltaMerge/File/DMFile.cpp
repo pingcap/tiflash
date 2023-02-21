@@ -102,7 +102,7 @@ String DMFile::ngcPath() const
     return getNGCPath(parent_path, file_id, status);
 }
 
-DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration, bool use_meta_v2_)
+DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration, DMFileFormat::Version version)
 {
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(new DMFile(file_id,
@@ -110,7 +110,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigura
                                     parent_path,
                                     Status::WRITABLE,
                                     std::move(configuration),
-                                    /*use_meta_v2*/ STORAGE_FORMAT_CURRENT.dm_file == DMFileFormat::V3 || use_meta_v2_));
+                                    version));
 
     auto path = new_dmfile->path();
     Poco::File file(path);
@@ -509,10 +509,12 @@ void DMFile::readConfiguration(const FileProviderPtr & file_provider)
         auto file = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
         auto stream = InputStreamWrapper{file};
         configuration.emplace(stream);
+        version = DMFileFormat::V2;
     }
     else
     {
         configuration.reset();
+        version = DMFileFormat::V1;
     }
 }
 
@@ -816,7 +818,7 @@ void DMFile::finalizeMetaV2(WriteBuffer & buffer)
     writePODBinary(pack_stats_handle, buffer);
     writePODBinary(pack_properties_handle, buffer);
     writePODBinary(column_stats_handle, buffer);
-    writeIntBinary(STORAGE_FORMAT_CURRENT.dm_file, buffer);
+    writeIntBinary(version, buffer);
 
     if (digest)
     {
@@ -887,7 +889,7 @@ void DMFile::parseMetaV2(std::string_view buffer)
     }
 
     ptr = ptr - sizeof(DMFileFormat::Version);
-    [[maybe_unused]] auto dmfile_version = *(reinterpret_cast<const DMFileFormat::Version *>(ptr));
+    version = *(reinterpret_cast<const DMFileFormat::Version *>(ptr));
 
     {
         ptr = ptr - sizeof(MetaBlockHandle);
@@ -905,7 +907,6 @@ void DMFile::parseMetaV2(std::string_view buffer)
         const auto * handle = reinterpret_cast<const MetaBlockHandle *>(ptr);
         parsePackStat(buffer.substr(handle->offset, handle->size));
     }
-    use_meta_v2 = true;
 }
 
 void DMFile::parseColumnStat(std::string_view buffer)

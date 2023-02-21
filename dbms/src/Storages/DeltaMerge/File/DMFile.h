@@ -221,7 +221,7 @@ public:
     // `use_meta_v2_` is used for tests.
     // Normally, we use STORAGE_FORMAT_CURRENT to determine whether use meta v2.
     static DMFilePtr
-    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, bool use_meta_v2_ = false);
+    create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, DMFileFormat::Version = STORAGE_FORMAT_CURRENT.dm_file);
 
     static DMFilePtr restore(
         const FileProviderPtr & file_provider,
@@ -335,14 +335,14 @@ public:
            String parent_path_,
            Status status_,
            DMConfigurationOpt configuration_ = std::nullopt,
-           bool use_meta_v2_ = false)
+           DMFileFormat::Version version_ = STORAGE_FORMAT_CURRENT.dm_file)
         : file_id(file_id_)
         , page_id(page_id_)
         , parent_path(std::move(parent_path_))
         , status(status_)
         , configuration(std::move(configuration_))
         , log(Logger::get())
-        , use_meta_v2(use_meta_v2_)
+        , version(version_)
     {
     }
 
@@ -444,7 +444,7 @@ public:
     void parsePackProperty(std::string_view buffer);
     void parsePackStat(std::string_view buffer);
     void finalizeDirName();
-    bool useMetaV2() const { return use_meta_v2; }
+    bool useMetaV2() const { return version == DMFileFormat::V3; }
 
 private:
     // The id to construct the file path on disk.
@@ -463,7 +463,7 @@ private:
 
     LoggerPtr log;
 
-    bool use_meta_v2;
+    DMFileFormat::Version version;
 
     friend class DMFileWriter;
     friend class DMFileReader;
