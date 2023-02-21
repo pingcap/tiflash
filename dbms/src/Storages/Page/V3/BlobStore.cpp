@@ -24,7 +24,11 @@
 #include <Common/formatReadable.h>
 #include <Poco/File.h>
 #include <Storages/Page/FileUsage.h>
+<<<<<<< HEAD
 #include <Storages/Page/PageDefines.h>
+=======
+#include <Storages/Page/V3/Blob/GCInfo.h>
+>>>>>>> 44de4b57f3 (*: Refine some logging level (#6844))
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -36,6 +40,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
 #include <iterator>
+#include <magic_enum.hpp>
 #include <mutex>
 #include <unordered_map>
 
@@ -720,10 +725,17 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
         PageMap page_map;
         for (const auto & [page_id_v3, entry] : entries)
         {
+<<<<<<< HEAD
             (void)entry;
             LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
             Page page(page_id_v3);
             page_map.emplace(page_id_v3.low, page);
+=======
+            // Unexpected behavior but do no harm
+            LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, toDebugString(entry));
+            Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
+            page_map.emplace(Trait::PageIdTrait::getPageMapKey(page_id_v3), page);
+>>>>>>> 44de4b57f3 (*: Refine some logging level (#6844))
         }
         return page_map;
     }
@@ -808,8 +820,14 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
     if (buf_size == 0)
     {
+<<<<<<< HEAD
         LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
         Page page(page_id_v3);
+=======
+        // Unexpected behavior but do no harm
+        LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, toDebugString(entry));
+        Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
+>>>>>>> 44de4b57f3 (*: Refine some logging level (#6844))
         return page;
     }
 
@@ -869,6 +887,7 @@ BlobFilePtr BlobStore::read(const PageIdV3Internal & page_id_v3, BlobFileId blob
 }
 
 
+<<<<<<< HEAD
 struct BlobStoreGCInfo
 {
     String toString() const
@@ -960,6 +979,10 @@ private:
 };
 
 std::vector<BlobFileId> BlobStore::getGCStats()
+=======
+template <typename Trait>
+std::vector<BlobFileId> BlobStore<Trait>::getGCStats()
+>>>>>>> 44de4b57f3 (*: Refine some logging level (#6844))
 {
     // Get a copy of stats map to avoid the big lock on stats map
     const auto stats_list = blob_stats.getStats();
@@ -992,10 +1015,10 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             }
 
             auto lock = stat->lock();
-            auto right_margin = stat->smap->getUsedBoundary();
+            auto right_boundary = stat->smap->getUsedBoundary();
 
             // Avoid divide by zero
-            if (right_margin == 0)
+            if (right_boundary == 0)
             {
                 // Note `stat->sm_total_size` isn't strictly the same as the actual size of underlying BlobFile after restart tiflash,
                 // because some entry may be deleted but the actual disk space is not reclaimed in previous run.
@@ -1006,23 +1029,23 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 // So we need truncate current blob, and let it be reused.
                 auto blobfile = getBlobFile(stat->id);
                 LOG_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
-                blobfile->truncate(right_margin);
-                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
-                stat->sm_total_size = right_margin;
+                blobfile->truncate(right_boundary);
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_boundary, stat->sm_valid_rate);
+                stat->sm_total_size = right_boundary;
                 continue;
             }
 
-            stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_margin;
+            stat->sm_valid_rate = stat->sm_valid_size * 1.0 / right_boundary;
 
             if (stat->sm_valid_rate > 1.0)
             {
                 LOG_ERROR(
                     log,
-                    "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right margin is {} [blob_id={}]",
+                    "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right boundary is {} [blob_id={}]",
                     stat->sm_valid_rate,
                     stat->sm_total_size,
                     stat->sm_valid_size,
-                    right_margin,
+                    right_boundary,
                     stat->id);
                 assert(false);
                 continue;
@@ -1041,23 +1064,23 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             else
             {
                 blobstore_gc_info.appendToNoNeedGCBlob(stat->id, stat->sm_valid_rate);
-                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, no need to GC", stat->id, stat->sm_valid_rate);
+                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, unchange", stat->id, stat->sm_valid_rate);
             }
 
-            if (right_margin != stat->sm_total_size)
+            if (right_boundary != stat->sm_total_size)
             {
                 auto blobfile = getBlobFile(stat->id);
-                LOG_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
-                blobfile->truncate(right_margin);
-                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
+                LOG_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_boundary);
+                blobfile->truncate(right_boundary);
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_boundary, stat->sm_valid_rate);
 
-                stat->sm_total_size = right_margin;
+                stat->sm_total_size = right_boundary;
                 stat->sm_valid_rate = stat->sm_valid_size * 1.0 / stat->sm_total_size;
             }
         }
     }
 
-    LOG_INFO(log, "BlobStore gc get status done. gc info: {}", blobstore_gc_info.toString());
+    LOG_IMPL(log, blobstore_gc_info.getLoggingLevel(), "BlobStore gc get status done. blob_ids details {}", blobstore_gc_info.toString());
 
     return blob_need_gc;
 }

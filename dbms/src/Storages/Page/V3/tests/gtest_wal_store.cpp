@@ -699,7 +699,12 @@ try
         snap_edit.varEntry(buildV3Id(TEST_NAMESPACE_ID, d_10000(rd)), PageVersion(345, 22), entry, 1);
     }
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
+<<<<<<< HEAD
     bool done = wal->saveSnapshot(std::move(file_snap), ser::serializeTo(snap_edit), snap_edit.size());
+=======
+    file_snap.num_records = snap_edit.size();
+    bool done = wal->saveSnapshot(std::move(file_snap), u128::Serializer::serializeTo(snap_edit));
+>>>>>>> 44de4b57f3 (*: Refine some logging level (#6844))
     ASSERT_TRUE(done);
     wal.reset();
     reader.reset();
@@ -781,7 +786,12 @@ TEST_P(WALStoreTest, GetFileSnapshot)
 
         // empty
         PageEntriesEdit snap_edit;
+<<<<<<< HEAD
         bool done = wal->saveSnapshot(std::move(files), ser::serializeTo(snap_edit), snap_edit.size());
+=======
+        files.num_records = snap_edit.size();
+        bool done = wal->saveSnapshot(std::move(files), u128::Serializer::serializeTo(snap_edit));
+>>>>>>> 44de4b57f3 (*: Refine some logging level (#6844))
         ASSERT_TRUE(done);
         ASSERT_EQ(getNumLogFiles(), 1);
     }

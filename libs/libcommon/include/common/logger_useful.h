@@ -16,7 +16,6 @@
 
 /// Macros for convenient usage of Poco logger.
 
-#include <Poco/Logger.h>
 #include <common/MacroUtils.h>
 #include <fmt/compile.h>
 #include <fmt/format.h>
@@ -26,6 +25,18 @@
 #define QUERY_PREVIEW_LENGTH 160
 #endif
 
+<<<<<<< HEAD
+=======
+namespace DB
+{
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
+
+/// Tracing logs are filtered by SourceFilterChannel.
+inline constexpr auto tracing_log_source = "mpp_task_tracing";
+} // namespace DB
+
+>>>>>>> 44de4b57f3 (*: Refine some logging level (#6844))
 namespace LogFmtDetails
 {
 // https://stackoverflow.com/questions/8487986/file-macro-shows-full-path/54335644#54335644

@@ -71,7 +71,7 @@ bool isReservedDatabase(Context & context, const String & database_name)
 }
 
 
-inline void setAlterCommandColumn(Poco::Logger * log, AlterCommand & command, const ColumnInfo & column_info)
+inline void setAlterCommandColumn(const LoggerPtr & log, AlterCommand & command, const ColumnInfo & column_info)
 {
     command.column_name = column_info.name;
     command.column_id = column_info.id;
@@ -147,7 +147,7 @@ bool typeDiffers(const TiDB::ColumnInfo & a, const TiDB::ColumnInfo & b)
 /// In other words, table info and storage structure (altered by applied alter commands) are always identical,
 /// and intermediate failure won't hide the outstanding alter commands.
 inline SchemaChanges detectSchemaChanges(
-    Poco::Logger * log,
+    const LoggerPtr & log,
     const TableInfo & table_info,
     const TableInfo & orig_table_info)
 {
@@ -1004,7 +1004,7 @@ String createTableStmt(
     const DBInfo & db_info,
     const TableInfo & table_info,
     const SchemaNameMapper & name_mapper,
-    Poco::Logger * log)
+    const LoggerPtr & log)
 {
     LOG_DEBUG(log, "Analyzing table info : {}", table_info.serialize());
     auto [columns, pks] = parseColumnsFromTableInfo(table_info);

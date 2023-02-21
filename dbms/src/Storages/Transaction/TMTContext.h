@@ -110,7 +110,6 @@ public:
 
     const KVClusterPtr & getCluster() const { return cluster; }
 
-    UInt64 replicaReadMaxThread() const;
     UInt64 batchReadIndexTimeout() const;
     // timeout for wait index (ms). "0" means wait infinitely
     UInt64 waitIndexTimeout() const;
@@ -137,7 +136,6 @@ private:
 
     ::TiDB::StorageEngine engine;
 
-    std::atomic_uint64_t replica_read_max_thread;
     std::atomic_uint64_t batch_read_index_timeout_ms;
     std::atomic_uint64_t wait_index_timeout_ms;
     std::atomic_uint64_t read_index_worker_tick_ms;

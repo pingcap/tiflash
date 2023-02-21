@@ -78,7 +78,6 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
               context.getSettingsRef().task_scheduler_thread_hard_limit,
               context.getSettingsRef().task_scheduler_active_set_soft_limit)))
     , engine(raft_config.engine)
-    , replica_read_max_thread(1)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
     , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
@@ -194,7 +193,6 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
     static constexpr const char * COMPACT_LOG_MIN_ROWS = "flash.compact_log_min_rows";
     static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";
-    static constexpr const char * REPLICA_READ_MAX_THREAD = "flash.replica_read_max_thread";
     static constexpr const char * BATCH_READ_INDEX_TIMEOUT_MS = "flash.batch_read_index_timeout_ms";
     static constexpr const char * WAIT_INDEX_TIMEOUT_MS = "flash.wait_index_timeout_ms";
     static constexpr const char * WAIT_REGION_READY_TIMEOUT_SEC = "flash.wait_region_ready_timeout_sec";
@@ -205,7 +203,6 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
                                             std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 40 * 1024), 1),
                                             std::max(config.getUInt64(COMPACT_LOG_MIN_BYTES, 32 * 1024 * 1024), 1));
     {
-        replica_read_max_thread = std::max(config.getUInt64(REPLICA_READ_MAX_THREAD, 1), 1);
         batch_read_index_timeout_ms = config.getUInt64(BATCH_READ_INDEX_TIMEOUT_MS, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
         wait_index_timeout_ms = config.getUInt64(WAIT_INDEX_TIMEOUT_MS, DEFAULT_WAIT_INDEX_TIMEOUT_MS);
         wait_region_ready_timeout_sec = ({
@@ -217,9 +214,8 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     }
     {
         LOG_INFO(
-            &Poco::Logger::root(),
-            "read-index max thread num: {}, timeout: {}ms; wait-index timeout: {}ms; wait-region-ready timeout: {}s; read-index-worker-tick: {}ms",
-            replicaReadMaxThread(),
+            Logger::get(),
+            "read-index timeout: {}ms; wait-index timeout: {}ms; wait-region-ready timeout: {}s; read-index-worker-tick: {}ms",
             batchReadIndexTimeout(),
             waitIndexTimeout(),
             waitRegionReadyTimeout(),
@@ -252,10 +248,6 @@ void TMTContext::setStatusTerminated()
     store_status = StoreStatus::Terminated;
 }
 
-UInt64 TMTContext::replicaReadMaxThread() const
-{
-    return replica_read_max_thread.load(std::memory_order_relaxed);
-}
 UInt64 TMTContext::batchReadIndexTimeout() const
 {
     return batch_read_index_timeout_ms.load(std::memory_order_relaxed);

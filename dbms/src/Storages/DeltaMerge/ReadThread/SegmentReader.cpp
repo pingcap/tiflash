@@ -42,9 +42,8 @@ public:
 
     ~SegmentReader()
     {
-        LOG_DEBUG(log, "Stop begin");
         t.join();
-        LOG_DEBUG(log, "Stop end");
+        LOG_DEBUG(log, "Stopped");
     }
 
     std::thread::id getId() const

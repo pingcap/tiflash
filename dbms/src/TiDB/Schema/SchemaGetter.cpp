@@ -176,6 +176,39 @@ void SchemaDiff::deserialize(const String & data)
             AffectedOption affected_option(affected_opt_json);
             affected_opts.emplace_back(affected_option);
         }
+<<<<<<< HEAD
+=======
+        auto obj = result.extract<Poco::JSON::Object::Ptr>();
+        version = obj->getValue<Int64>("version");
+        type = static_cast<SchemaActionType>(obj->getValue<Int32>("type"));
+        schema_id = obj->getValue<Int64>("schema_id");
+        table_id = obj->getValue<Int64>("table_id");
+
+        old_table_id = obj->getValue<Int64>("old_table_id");
+        old_schema_id = obj->getValue<Int64>("old_schema_id");
+
+        if (obj->has("regenerate_schema_map"))
+        {
+            regenerate_schema_map = obj->getValue<bool>("regenerate_schema_map");
+        }
+
+        affected_opts.clear();
+        auto affected_arr = obj->getArray("affected_options");
+        if (!affected_arr.isNull())
+        {
+            for (size_t i = 0; i < affected_arr->size(); i++)
+            {
+                auto affected_opt_json = affected_arr->getObject(i);
+                AffectedOption affected_option(affected_opt_json);
+                affected_opts.emplace_back(affected_option);
+            }
+        }
+    }
+    catch (...)
+    {
+        LOG_INFO(Logger::get(), "failed to deserialize {}", data);
+        throw;
+>>>>>>> 44de4b57f3 (*: Refine some logging level (#6844))
     }
 }
 

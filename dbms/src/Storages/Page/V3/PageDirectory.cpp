@@ -1474,6 +1474,8 @@ bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const W
     assert(!files_snap.persisted_log_files.empty()); // should not be empty
     auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
     auto identifier = fmt::format("{}.dump_{}", wal->name(), log_num);
+
+    Stopwatch watch;
     auto snapshot_reader = wal->createReaderForFiles(identifier, files_snap.persisted_log_files, read_limiter);
     PageDirectoryFactory factory;
     // we just use the `collapsed_dir` to dump edit of the snapshot, should never call functions like `apply` that
@@ -1484,7 +1486,13 @@ bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const W
         /* wal */ nullptr);
     // The records persisted in `files_snap` is older than or equal to all records in `edit`
     auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
+<<<<<<< HEAD
     bool done_any_io = wal->saveSnapshot(std::move(files_snap), ser::serializeTo(edit_from_disk), edit_from_disk.size(), write_limiter);
+=======
+    files_snap.num_records = edit_from_disk.size();
+    files_snap.read_elapsed_ms = watch.elapsedMilliseconds();
+    bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), write_limiter);
+>>>>>>> 44de4b57f3 (*: Refine some logging level (#6844))
     return done_any_io;
 }
 
@@ -1602,22 +1610,23 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries)
         }
     }
 
-    LOG_INFO(log, "After MVCC gc in memory [lowest_seq={}] "
-                  "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
-                  "[total_deref_counter={}] [all_del_entries={}]. "
-                  "Still exist [snapshot_nums={}], [page_nums={}]. "
-                  "Longest alive snapshot: [longest_alive_snapshot_time={}] "
-                  "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
-             lowest_seq,
-             invalid_snapshot_nums,
-             invalid_page_nums,
-             total_deref_counter,
-             all_del_entries.size(),
-             valid_snapshot_nums,
-             valid_page_nums,
-             longest_alive_snapshot_time,
-             longest_alive_snapshot_seq,
-             stale_snapshot_nums);
+    LOG_DEBUG(log,
+              "After MVCC gc in memory [lowest_seq={}] "
+              "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
+              "[total_deref_counter={}] [all_del_entries={}]. "
+              "Still exist [snapshot_nums={}], [page_nums={}]. "
+              "Longest alive snapshot: [longest_alive_snapshot_time={}] "
+              "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
+              lowest_seq,
+              invalid_snapshot_nums,
+              invalid_page_nums,
+              total_deref_counter,
+              all_del_entries.size(),
+              valid_snapshot_nums,
+              valid_page_nums,
+              longest_alive_snapshot_time,
+              longest_alive_snapshot_seq,
+              stale_snapshot_nums);
 
     return all_del_entries;
 }
