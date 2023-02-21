@@ -251,9 +251,9 @@ size_t ColumnAggregateFunction::allocatedBytes() const
 size_t ColumnAggregateFunction::estimateByteSizeForSpill() const
 {
     static const std::unordered_set<String> trivial_agg_func_name{"sum", "min", "max", "count", "avg", "first_row", "any"};
-    size_t res = func->sizeOfData() * size();
     if (trivial_agg_func_name.find(func->getName()) != trivial_agg_func_name.end())
     {
+        size_t res = func->sizeOfData() * size();
         /// For trivial agg, we can estimate each element's size as `func->sizeofData()`, and
         /// if the result is String, use `APPROX_STRING_SIZE` as the average size of the String
         if (removeNullable(func->getReturnType())->isString())
