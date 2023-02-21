@@ -166,9 +166,21 @@ struct MockExchangeWriter
             original_size);
         checker(tracked_packet, part_id);
     }
-    void broadcastOrPassThroughWrite(Blocks & blocks)
+    void broadcastOrPassThroughWrite(Blocks & blocks, bool)
     {
         checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), 0);
+    }
+    void broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method, bool is_broadcast = false)
+    {
+        if (version == MPPDataPacketV0)
+            return broadcastOrPassThroughWrite(blocks, is_broadcast);
+
+        size_t original_size{};
+        auto && packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
+        if (!packet)
+            return;
+
+        checker(packet, 0);
     }
     void partitionWrite(Blocks & blocks, uint16_t part_id)
     {
@@ -509,7 +521,11 @@ try
     auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         batch_send_min_limit,
-        *dag_context_ptr);
+        *dag_context_ptr,
+        MPPDataPacketVersion::MPPDataPacketV0,
+        tipb::CompressionMode::NONE,
+        false);
+
     for (const auto & block : blocks)
         dag_writer->write(block);
     dag_writer->flush();

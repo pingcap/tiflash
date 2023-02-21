@@ -63,49 +63,62 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
     tunnels.back()->write(serializePacket(response));
 }
 
-static inline void updatePartitionWriterMetrics(size_t packet_bytes, bool is_local)
-{
-    // statistic
-    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original).Increment(packet_bytes);
-    // compression method is always NONE
-    if (is_local)
-        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_compression_local).Increment(packet_bytes);
-    else
-        GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_compression_remote).Increment(packet_bytes);
-}
 
-static inline void updatePartitionWriterMetrics(CompressionMethod method, size_t original_size, size_t sz, bool is_local)
-{
-    // statistic
-    GET_METRIC(tiflash_exchange_data_bytes, type_hash_original).Increment(original_size);
+#define UPDATE_EXCHANGE_MATRIC_IMPL(type, compress, value, ...)                                                        \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        GET_METRIC(tiflash_exchange_data_bytes, type_##type##_##compress##_compression##__VA_ARGS__).Increment(value); \
+    } while (false)
+#define UPDATE_EXCHANGE_MATRIC_NONE_COMPRESS_LOCAL(type, value) UPDATE_EXCHANGE_MATRIC_IMPL(type, none, value, _local)
+#define UPDATE_EXCHANGE_MATRIC_NONE_COMPRESS_REMOTE(type, value) UPDATE_EXCHANGE_MATRIC_IMPL(type, none, value, _remote)
+#define UPDATE_EXCHANGE_MATRIC_NONE_COMPRESS(type, is_local, value)     \
+    do                                                                  \
+    {                                                                   \
+        if (is_local)                                                   \
+        {                                                               \
+            UPDATE_EXCHANGE_MATRIC_NONE_COMPRESS_LOCAL(type, (value));  \
+        }                                                               \
+        else                                                            \
+        {                                                               \
+            UPDATE_EXCHANGE_MATRIC_NONE_COMPRESS_REMOTE(type, (value)); \
+        }                                                               \
+    } while (false)
+#define UPDATE_EXCHANGE_MATRIC_LZ4_COMPRESS(type, value) UPDATE_EXCHANGE_MATRIC_IMPL(type, lz4, value)
+#define UPDATE_EXCHANGE_MATRIC_ZSTD_COMPRESS(type, value) UPDATE_EXCHANGE_MATRIC_IMPL(type, zstd, value)
+#define UPDATE_EXCHANGE_MATRIC_ORIGINAL(type, value)                                      \
+    do                                                                                    \
+    {                                                                                     \
+        GET_METRIC(tiflash_exchange_data_bytes, type_##type##_original).Increment(value); \
+    } while (false)
+#define UPDATE_EXCHANGE_MATRIC(type, compress_method, original_size, compressed_size, is_local) \
+    do                                                                                          \
+    {                                                                                           \
+        UPDATE_EXCHANGE_MATRIC_ORIGINAL(type, original_size);                                   \
+        switch (compress_method)                                                                \
+        {                                                                                       \
+        case CompressionMethod::NONE:                                                           \
+        {                                                                                       \
+            UPDATE_EXCHANGE_MATRIC_NONE_COMPRESS(type, is_local, compressed_size);              \
+            break;                                                                              \
+        }                                                                                       \
+        case CompressionMethod::LZ4:                                                            \
+        {                                                                                       \
+            UPDATE_EXCHANGE_MATRIC_LZ4_COMPRESS(type, compressed_size);                         \
+            break;                                                                              \
+        }                                                                                       \
+        case CompressionMethod::ZSTD:                                                           \
+        {                                                                                       \
+            UPDATE_EXCHANGE_MATRIC_ZSTD_COMPRESS(type, compressed_size);                        \
+            break;                                                                              \
+        }                                                                                       \
+        default:                                                                                \
+            break;                                                                              \
+        }                                                                                       \
+    } while (false)
 
-    switch (method)
-    {
-    case CompressionMethod::NONE:
-    {
-        if (is_local)
-        {
-            GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_compression_local).Increment(sz);
-        }
-        else
-        {
-            GET_METRIC(tiflash_exchange_data_bytes, type_hash_none_compression_remote).Increment(sz);
-        }
-        break;
-    }
-    case CompressionMethod::LZ4:
-    {
-        GET_METRIC(tiflash_exchange_data_bytes, type_hash_lz4_compression).Increment(sz);
-        break;
-    }
-    case CompressionMethod::ZSTD:
-    {
-        GET_METRIC(tiflash_exchange_data_bytes, type_hash_zstd_compression).Increment(sz);
-        break;
-    }
-    default:
-        break;
-    }
+static inline void updatePartitionWriterMetrics(CompressionMethod method, size_t original_size, size_t compressed_size, bool is_local)
+{
+    UPDATE_EXCHANGE_MATRIC(hash, method, original_size, compressed_size, is_local);
 }
 
 template <typename Tunnel>
@@ -130,17 +143,17 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWriteImpl(TrackedMppDataPac
             data_bytes = packet_bytes * tunnel_cnt;
             local_data_bytes = packet_bytes * local_tunnel_cnt;
         }
+        size_t remote_data_bytes = data_bytes - local_data_bytes;
+
         if (is_broadcast)
         {
-            GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_original).Increment(data_bytes);
-            GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_none_compression_local).Increment(local_data_bytes);
-            GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_none_compression_remote).Increment(data_bytes - local_data_bytes);
+            UPDATE_EXCHANGE_MATRIC(broadcast, CompressionMethod::NONE, local_data_bytes, local_data_bytes, true);
+            UPDATE_EXCHANGE_MATRIC(broadcast, CompressionMethod::NONE, remote_data_bytes, remote_data_bytes, false);
         }
         else
         {
-            GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_original).Increment(data_bytes);
-            GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_none_compression_local).Increment(local_data_bytes);
-            GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_none_compression_remote).Increment(data_bytes - local_data_bytes);
+            UPDATE_EXCHANGE_MATRIC(passthrough, CompressionMethod::NONE, local_data_bytes, local_data_bytes, true);
+            UPDATE_EXCHANGE_MATRIC(passthrough, CompressionMethod::NONE, remote_data_bytes, remote_data_bytes, false);
         }
     }
 }
@@ -186,6 +199,8 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPD
     auto && remote_tunnel_tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
     {
         auto && compressed_buffer = CHBlockChunkCodecV1::encode({&chunk[1], chunk.size() - 1}, compression_method);
+        assert(!compressed_buffer.empty());
+
         remote_tunnel_tracked_packet->addChunk(std::move(compressed_buffer));
     }
     auto local_packet_bytes = local_tunnel_tracked_packet->getPacket().ByteSizeLong();
@@ -212,46 +227,15 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPD
                 tunnels[i]->write(remote_tunnel_tracked_packet->copy());
         }
     }
+    if (is_broadcast)
     {
-        auto total_original_size = tunnels.size() * original_size;
-        if (is_broadcast)
-        {
-            GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_original).Increment(total_original_size);
-            GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_none_compression_local).Increment(local_tunnel_cnt * local_packet_bytes);
-        }
-        else
-        {
-            GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_original).Increment(total_original_size);
-            GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_none_compression_local).Increment(local_tunnel_cnt * local_packet_bytes);
-        }
+        UPDATE_EXCHANGE_MATRIC(broadcast, CompressionMethod::NONE, local_tunnel_cnt * original_size, local_tunnel_cnt * local_packet_bytes, true);
+        UPDATE_EXCHANGE_MATRIC(broadcast, compression_method, remote_tunnel_cnt * original_size, remote_tunnel_cnt * remote_packet_bytes, false);
     }
+    else
     {
-        switch (compression_method)
-        {
-        case CompressionMethod::NONE:
-        {
-            // should not reach here
-            break;
-        }
-        case CompressionMethod::LZ4:
-        {
-            if (is_broadcast)
-                GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_lz4_compression).Increment(remote_tunnel_cnt * remote_packet_bytes);
-            else
-                GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_lz4_compression).Increment(remote_tunnel_cnt * remote_packet_bytes);
-            break;
-        }
-        case CompressionMethod::ZSTD:
-        {
-            if (is_broadcast)
-                GET_METRIC(tiflash_exchange_data_bytes, type_broadcast_zstd_compression).Increment(remote_tunnel_cnt * remote_packet_bytes);
-            else
-                GET_METRIC(tiflash_exchange_data_bytes, type_passthrough_zstd_compression).Increment(remote_tunnel_cnt * remote_packet_bytes);
-            break;
-        }
-        default:
-            break;
-        }
+        UPDATE_EXCHANGE_MATRIC(passthrough, CompressionMethod::NONE, local_tunnel_cnt * original_size, local_tunnel_cnt * local_packet_bytes, true);
+        UPDATE_EXCHANGE_MATRIC(passthrough, compression_method, remote_tunnel_cnt * original_size, remote_tunnel_cnt * remote_packet_bytes, false);
     }
 }
 
@@ -264,7 +248,7 @@ void MPPTunnelSetBase<Tunnel>::partitionWrite(Blocks & blocks, int16_t partition
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
     tunnels[partition_id]->write(std::move(tracked_packet));
-    updatePartitionWriterMetrics(packet_bytes, isLocal(partition_id));
+    updatePartitionWriterMetrics(CompressionMethod::NONE, packet_bytes, packet_bytes, isLocal(partition_id));
 }
 
 template <typename Tunnel>
@@ -351,7 +335,7 @@ void MPPTunnelSetBase<Tunnel>::fineGrainedShuffleWrite(
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
     tunnels[partition_id]->write(std::move(tracked_packet));
-    updatePartitionWriterMetrics(packet_bytes, isLocal(partition_id));
+    updatePartitionWriterMetrics(CompressionMethod::NONE, packet_bytes, packet_bytes, isLocal(partition_id));
 }
 
 template <typename Tunnel>
