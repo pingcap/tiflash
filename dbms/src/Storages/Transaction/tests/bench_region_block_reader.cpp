@@ -19,7 +19,6 @@
 #include <gtest/gtest.h>
 
 #include "RowCodecTestUtils.h"
-#include "Storages/Transaction/Types.h"
 
 using TableInfo = TiDB::TableInfo;
 namespace DB::tests
