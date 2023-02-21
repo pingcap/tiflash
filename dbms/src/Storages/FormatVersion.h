@@ -39,6 +39,7 @@ using Version = UInt32;
 inline static constexpr Version V0 = 0;
 inline static constexpr Version V1 = 1; // Add column stats
 inline static constexpr Version V2 = 2; // Add checksum and configuration
+inline static constexpr Version V3 = 3; // Use Meta V2
 } // namespace DMFileFormat
 
 namespace StableFormat

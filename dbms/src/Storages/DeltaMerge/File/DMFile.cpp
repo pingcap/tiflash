@@ -110,7 +110,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigura
                                     parent_path,
                                     Status::WRITABLE,
                                     std::move(configuration),
-                                    /*use_meta_v2*/ STORAGE_FORMAT_CURRENT.identifier == 5 || use_meta_v2_));
+                                    /*use_meta_v2*/ STORAGE_FORMAT_CURRENT.dm_file == DMFileFormat::V3 || use_meta_v2_));
 
     auto path = new_dmfile->path();
     Poco::File file(path);

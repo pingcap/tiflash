@@ -58,7 +58,7 @@ void init(WorkloadOptions & opts)
     }
     TiFlashTestEnv::setupLogger(opts.log_level, log_ofs);
     opts.initFailpoints();
-    DB::STORAGE_FORMAT_CURRENT.identifier = 5; // metav2 is used forcibly.
+    DB::STORAGE_FORMAT_CURRENT.dm_file = DB::DMFileFormat::V3; // metav2 is used forcibly for test.
 }
 
 void outputResultHeader()
