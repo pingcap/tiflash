@@ -23,12 +23,7 @@ OperatorStatus UnorderedSourceOp::readImpl(Block & block)
     {
         std::swap(block, t_block.value());
         t_block.reset();
-        if (action.transform(block))
-        {
-            return OperatorStatus::HAS_OUTPUT;
-        }
-        else
-            return OperatorStatus::FINISHED;
+        return action.transform(block) ? OperatorStatus::HAS_OUTPUT :OperatorStatus::FINISHED;
     }
     return await_status;
 }
@@ -44,9 +39,9 @@ OperatorStatus UnorderedSourceOp::awaitImpl()
             return OperatorStatus::WAITING;
         if (res)
         {
-            if (res.rows() == 0)
+            if (unlikely(res.rows() == 0))
                 continue;
-            t_block = std::move(res);
+            t_block.emplace(std::move(res));
             return OperatorStatus::HAS_OUTPUT;
         }
         else

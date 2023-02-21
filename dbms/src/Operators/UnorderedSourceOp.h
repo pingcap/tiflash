@@ -54,10 +54,11 @@ public:
         return "UnorderedSourceOp";
     }
 
+protected:
     OperatorStatus readImpl(Block & block) override;
-
     OperatorStatus awaitImpl() override;
 
+private:
     void addReadTaskPoolToScheduler()
     {
         std::call_once(task_pool->addToSchedulerFlag(), [&]() { DM::SegmentReadTaskScheduler::instance().add(task_pool); });
