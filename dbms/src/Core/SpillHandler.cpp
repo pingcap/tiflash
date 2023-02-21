@@ -52,6 +52,8 @@ void SpillHandler::SpillWriter::write(const Block & block)
 SpillHandler::SpillHandler(Spiller * spiller_, size_t partition_id_)
     : spiller(spiller_)
     , partition_id(partition_id_)
+    , current_spilled_file_index(-1)
+    , current_append_write(false)
 {
     setUpNextSpilledFile();
 }
