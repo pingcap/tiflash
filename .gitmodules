@@ -46,46 +46,46 @@
 	url = https://github.com/jemalloc/jemalloc.git
 [submodule "contrib/mimalloc"]
 	path = contrib/mimalloc
-	url = https://github.com/microsoft/mimalloc
+	url = https://github.com/microsoft/mimalloc.git
 [submodule "contrib/libunwind"]
 	path = contrib/libunwind
-	url = https://github.com/libunwind/libunwind
+	url = https://github.com/libunwind/libunwind.git
 [submodule "contrib/fmtlib"]
 	path = contrib/fmtlib
 	url = https://github.com/fmtlib/fmt.git
 [submodule "contrib/xxHash"]
 	path = contrib/xxHash
-	url = https://github.com/Cyan4973/xxHash
+	url = https://github.com/Cyan4973/xxHash.git
 [submodule "contrib/benchmark"]
 	path = contrib/benchmark
-	url = https://github.com/google/benchmark
+	url = https://github.com/google/benchmark.git
 [submodule "contrib/protobuf"]
 	path = contrib/protobuf
-	url = https://github.com/protocolbuffers/protobuf
+	url = https://github.com/protocolbuffers/protobuf.git
 [submodule "contrib/abseil-cpp"]
 	path = contrib/abseil-cpp
-	url = https://github.com/abseil/abseil-cpp
+	url = https://github.com/abseil/abseil-cpp.git
 [submodule "contrib/grpc"]
 	path = contrib/grpc
-	url = https://github.com/grpc/grpc
+	url = https://github.com/grpc/grpc.git
 	# ignore dirty status since we apply a patch to
 	# suppress a verbose logging
 	ignore = dirty
 [submodule "contrib/boringssl"]
 	path = contrib/boringssl
-	url = https://github.com/google/boringssl
+	url = https://github.com/google/boringssl.git
 [submodule "contrib/curl"]
 	path = contrib/curl
-	url = https://github.com/curl/curl
+	url = https://github.com/curl/curl.git
 [submodule "contrib/zlib-ng"]
 	path = contrib/zlib-ng
-	url = https://github.com/zlib-ng/zlib-ng
+	url = https://github.com/zlib-ng/zlib-ng.git
 [submodule "contrib/cpu_features"]
 	path = contrib/cpu_features
-	url = https://github.com/google/cpu_features
+	url = https://github.com/google/cpu_features.git
 [submodule "contrib/arm-optimized-routines"]
 	path = contrib/arm-optimized-routines
-	url = https://github.com/ARM-software/optimized-routines
+	url = https://github.com/ARM-software/optimized-routines.git
 [submodule "contrib/magic_enum"]
 	path = contrib/magic_enum
 	url = https://github.com/Neargye/magic_enum.git
