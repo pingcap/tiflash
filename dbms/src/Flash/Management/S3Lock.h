@@ -45,8 +45,12 @@ public:
 
         void lock()
         {
-            ++ref_count;
             file_mutex.lock();
+        }
+
+        void addRefCount()
+        {
+            ++ref_count;
         }
 
         void unlock()

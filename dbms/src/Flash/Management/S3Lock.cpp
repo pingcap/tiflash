@@ -142,9 +142,10 @@ bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_stor
             it = file_latch_map.emplace(data_file_name, std::make_shared<DataFileMutex>()).first;
         }
         file_lock = it->second;
-        file_lock->lock();
+        file_lock->addRefCount();
     }
 
+    file_lock->lock();
     SCOPE_EXIT({
         file_lock->unlock();
         std::unique_lock lock(file_latch_map_mutex);
@@ -208,9 +209,10 @@ bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, dis
             it = file_latch_map.emplace(data_file_name, std::make_shared<DataFileMutex>()).first;
         }
         file_lock = it->second;
-        file_lock->lock();
+        file_lock->addRefCount();
     }
 
+    file_lock->lock();
     SCOPE_EXIT({
         file_lock->unlock();
         std::unique_lock lock(file_latch_map_mutex);
