@@ -88,14 +88,14 @@ protected:
 TEST_F(S3LockServiceTest, SingleTryAddLockRequest)
 try
 {
-    auto request = ::kvrpcpb::TryAddLockRequest();
+    auto request = ::disaggregated::TryAddLockRequest();
     String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, dm_file_id - 1);
     String lock_file_name = fmt::format("/s{}/lock/{}.lock_{}_{}", store_id, data_file_name, lock_store_id, upload_seq);
     request.set_ori_store_id(store_id);
     request.set_ori_data_file(data_file_name);
     request.set_upload_seq(upload_seq);
     request.set_lock_store_id(lock_store_id);
-    auto response = ::kvrpcpb::TryAddLockResponse();
+    auto response = ::disaggregated::TryAddLockResponse();
     auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
     ASSERT_TRUE(status_code.ok());
@@ -109,13 +109,13 @@ CATCH
 TEST_F(S3LockServiceTest, SingleTryMarkDeleteTest)
 try
 {
-    auto request = ::kvrpcpb::TryMarkDeleteRequest();
+    auto request = ::disaggregated::TryMarkDeleteRequest();
     String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, dm_file_id - 1);
     String delete_file_name = fmt::format("/s{}/stable/{}.del", store_id, data_file_name);
 
     request.set_ori_store_id(store_id);
     request.set_ori_data_file(data_file_name);
-    auto response = ::kvrpcpb::TryMarkDeleteResponse();
+    auto response = ::disaggregated::TryMarkDeleteResponse();
     auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
     ASSERT_TRUE(status_code.ok());
@@ -134,11 +134,11 @@ try
 
     // Add delete file first
     {
-        auto request = ::kvrpcpb::TryMarkDeleteRequest();
+        auto request = ::disaggregated::TryMarkDeleteRequest();
 
         request.set_ori_store_id(store_id);
         request.set_ori_data_file(data_file_name);
-        auto response = ::kvrpcpb::TryMarkDeleteResponse();
+        auto response = ::disaggregated::TryMarkDeleteResponse();
         auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
@@ -147,12 +147,12 @@ try
 
     // Try add lock file, should fail
     {
-        auto request = ::kvrpcpb::TryAddLockRequest();
+        auto request = ::disaggregated::TryAddLockRequest();
         request.set_ori_store_id(store_id);
         request.set_ori_data_file(data_file_name);
         request.set_upload_seq(upload_seq);
         request.set_lock_store_id(lock_store_id);
-        auto response = ::kvrpcpb::TryAddLockResponse();
+        auto response = ::disaggregated::TryAddLockResponse();
         auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
@@ -174,13 +174,13 @@ try
 
     // Add lock file first
     {
-        auto request = ::kvrpcpb::TryAddLockRequest();
+        auto request = ::disaggregated::TryAddLockRequest();
 
         request.set_ori_store_id(store_id);
         request.set_ori_data_file(data_file_name);
         request.set_upload_seq(upload_seq);
         request.set_lock_store_id(lock_store_id);
-        auto response = ::kvrpcpb::TryAddLockResponse();
+        auto response = ::disaggregated::TryAddLockResponse();
         auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
@@ -189,11 +189,11 @@ try
 
     // Try add delete mark, should fail
     {
-        auto request = ::kvrpcpb::TryMarkDeleteRequest();
+        auto request = ::disaggregated::TryMarkDeleteRequest();
 
         request.set_ori_store_id(store_id);
         request.set_ori_data_file(data_file_name);
-        auto response = ::kvrpcpb::TryMarkDeleteResponse();
+        auto response = ::disaggregated::TryMarkDeleteResponse();
         auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
@@ -214,13 +214,13 @@ try
 
     // Try add lock file, data file is not exist, should fail
     {
-        auto request = ::kvrpcpb::TryAddLockRequest();
+        auto request = ::disaggregated::TryAddLockRequest();
 
         request.set_ori_store_id(store_id);
         request.set_ori_data_file(data_file_name);
         request.set_upload_seq(upload_seq);
         request.set_lock_store_id(lock_store_id);
-        auto response = ::kvrpcpb::TryAddLockResponse();
+        auto response = ::disaggregated::TryAddLockResponse();
         auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
@@ -240,13 +240,13 @@ try
 
         // Try add lock file simultaneously, should success
         {
-            auto request = ::kvrpcpb::TryAddLockRequest();
+            auto request = ::disaggregated::TryAddLockRequest();
 
             request.set_ori_store_id(store_id);
             request.set_ori_data_file(data_file_name);
             request.set_upload_seq(upload_seq);
             request.set_lock_store_id(lock_id);
-            auto response = ::kvrpcpb::TryAddLockResponse();
+            auto response = ::disaggregated::TryAddLockResponse();
             auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
             ASSERT_TRUE(status_code.ok());
@@ -277,10 +277,10 @@ try
     String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, dm_file_id - 1);
     String delete_file_name = fmt::format("/s{}/stable/{}.del", store_id, data_file_name);
     auto job = [&]() -> void {
-        auto request = ::kvrpcpb::TryMarkDeleteRequest();
+        auto request = ::disaggregated::TryMarkDeleteRequest();
         request.set_ori_store_id(store_id);
         request.set_ori_data_file(data_file_name);
-        auto response = ::kvrpcpb::TryMarkDeleteResponse();
+        auto response = ::disaggregated::TryMarkDeleteResponse();
         auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
@@ -311,13 +311,13 @@ try
         String lock_file_name = fmt::format("/s{}/lock/{}.lock_{}_{}", store_id, data_file_name, lock_store_id, upload_seq);
 
         {
-            auto request = ::kvrpcpb::TryAddLockRequest();
+            auto request = ::disaggregated::TryAddLockRequest();
 
             request.set_ori_store_id(store_id);
             request.set_ori_data_file(data_file_name);
             request.set_upload_seq(upload_seq);
             request.set_lock_store_id(lock_store_id);
-            auto response = ::kvrpcpb::TryAddLockResponse();
+            auto response = ::disaggregated::TryAddLockResponse();
             auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
             ASSERT_TRUE(status_code.ok());
@@ -327,10 +327,10 @@ try
     auto delete_job = [&](size_t file_id) -> void {
         String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, file_id);
         String delete_file_name = fmt::format("/s{}/stable/{}.del", store_id, data_file_name);
-        auto request = ::kvrpcpb::TryMarkDeleteRequest();
+        auto request = ::disaggregated::TryMarkDeleteRequest();
         request.set_ori_store_id(store_id);
         request.set_ori_data_file(data_file_name);
-        auto response = ::kvrpcpb::TryMarkDeleteResponse();
+        auto response = ::disaggregated::TryMarkDeleteResponse();
         auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
         ASSERT_TRUE(status_code.ok());

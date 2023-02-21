@@ -20,8 +20,8 @@
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/s3/S3Client.h>
 #include <common/types.h>
+#include <disaggregated.pb.h>
 #include <grpcpp/support/status.h>
-#include <kvrpcpb.pb.h>
 
 #include <fstream>
 #include <mutex>
@@ -98,7 +98,7 @@ public:
         std::remove(tmp_empty_file);
     }
 
-    grpc::Status tryAddLock(const kvrpcpb::TryAddLockRequest * request, kvrpcpb::TryAddLockResponse * response)
+    grpc::Status tryAddLock(const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response)
     try
     {
         response->set_is_success(tryAddLockImpl(request->ori_data_file(), request->ori_store_id(), request->lock_store_id(), request->upload_seq(), response));
@@ -115,7 +115,7 @@ public:
         return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
     }
 
-    grpc::Status tryMarkDelete(const kvrpcpb::TryMarkDeleteRequest * request, kvrpcpb::TryMarkDeleteResponse * response)
+    grpc::Status tryMarkDelete(const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response)
     try
     {
         response->set_is_success(tryMarkDeleteImpl(request->ori_data_file(), request->ori_store_id(), response));
@@ -133,9 +133,9 @@ public:
     }
 
 private:
-    bool tryAddLockImpl(const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq, kvrpcpb::TryAddLockResponse * response);
+    bool tryAddLockImpl(const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq, disaggregated::TryAddLockResponse * response);
 
-    bool tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, kvrpcpb::TryMarkDeleteResponse * response);
+    bool tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, disaggregated::TryMarkDeleteResponse * response);
 };
 
 class S3LockClient
@@ -150,9 +150,9 @@ public:
         , log(Logger::get())
     {}
 
-    std::pair<bool, std::optional<kvrpcpb::S3LockError>> sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq);
+    std::pair<bool, std::optional<disaggregated::S3LockError>> sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq);
 
-    std::pair<bool, std::optional<kvrpcpb::S3LockError>> sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id);
+    std::pair<bool, std::optional<disaggregated::S3LockError>> sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id);
 };
 
 } // namespace DB::Management

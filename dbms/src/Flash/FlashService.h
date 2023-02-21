@@ -86,8 +86,8 @@ public:
     grpc::Status FetchDisaggregatedPages(grpc::ServerContext * grpc_context, const mpp::FetchDisaggregatedPagesRequest * request, grpc::ServerWriter<::mpp::PagesPacket> * sync_writer) override;
 
     // For S3 Lock Service
-    grpc::Status tryAddLock(grpc::ServerContext * /*context*/, const kvrpcpb::TryAddLockRequest * request, kvrpcpb::TryAddLockResponse * response) override;
-    grpc::Status tryMarkDelete(grpc::ServerContext * /*context*/, const kvrpcpb::TryMarkDeleteRequest * request, kvrpcpb::TryMarkDeleteResponse * response) override;
+    grpc::Status tryAddLock(grpc::ServerContext * /*context*/, const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response) override;
+    grpc::Status tryMarkDelete(grpc::ServerContext * /*context*/, const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response) override;
 
     void setMockStorage(MockStorage & mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
