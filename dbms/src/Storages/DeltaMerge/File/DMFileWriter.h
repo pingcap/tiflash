@@ -162,7 +162,7 @@ private:
     WriteBufferFromFileBasePtr createFile();
     WriteBufferFromFileBasePtr createMetaV2File();
     WriteBufferFromFileBasePtr createPackStatsFile();
-    void finalizeMeta();
+    void finalizeMetaV1();
     void finalizeMetaV2();
 
 private:

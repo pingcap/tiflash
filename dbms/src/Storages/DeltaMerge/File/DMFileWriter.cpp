@@ -156,15 +156,16 @@ void DMFileWriter::finalize()
     }
     if (dmfile->useMetaV2())
     {
+        // Some fields of ColumnStat is set in `finalizeColumn`, must call finalizeMetaV2 after all column finalized
         finalizeMetaV2();
     }
     else
     {
-        finalizeMeta();
+        finalizeMetaV1();
     }
 }
 
-void DMFileWriter::finalizeMeta()
+void DMFileWriter::finalizeMetaV1()
 {
     const auto & pack_stats = dmfile->getPackStats();
     for (const auto & pack_stat : pack_stats)
