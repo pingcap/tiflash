@@ -35,25 +35,15 @@ using PageDataPacket = mpp::PagesPacket;
 using TrackedPageDataPacketPtr = std::shared_ptr<PageDataPacket>;
 using TrackedPageDataPacketPtrs = std::vector<TrackedPageDataPacketPtr>;
 
-class ExchangePagePacketReader
+class FetchPagesStreamReader
 {
 public:
-    virtual ~ExchangePagePacketReader() = default;
+    virtual ~FetchPagesStreamReader() = default;
     virtual bool read(TrackedPageDataPacketPtr & packet) = 0;
     virtual grpc::Status finish() = 0;
     virtual void cancel(const String & reason) = 0;
 };
-using ExchangePagePacketReaderPtr = std::shared_ptr<ExchangePagePacketReader>;
-
-class AsyncExchangePagePacketReader
-{
-public:
-    virtual ~AsyncExchangePagePacketReader() = default;
-    virtual void init(UnaryCallback<bool> * callback) = 0;
-    virtual void read(TrackedPageDataPacketPtr & packet, UnaryCallback<bool> * callback) = 0;
-    virtual void finish(::grpc::Status & status, UnaryCallback<bool> * callback) = 0;
-};
-using AsyncExchangePagePacketReaderPtr = std::shared_ptr<AsyncExchangePagePacketReader>;
+using FetchPagesStreamReaderPtr = std::shared_ptr<FetchPagesStreamReader>;
 
 struct FetchPagesRequest
 {
@@ -78,8 +68,7 @@ class GRPCPagesReceiverContext
 public:
     using Status = grpc::Status;
     using Request = FetchPagesRequest;
-    using Reader = ExchangePagePacketReader;
-    using AsyncReader = AsyncExchangePagePacketReader;
+    using Reader = FetchPagesStreamReader;
 
     GRPCPagesReceiverContext(
         const DM::RemoteReadTaskPtr & remote_read_tasks,
@@ -90,13 +79,7 @@ public:
 
     bool supportAsync(const Request & request) const;
 
-    ExchangePagePacketReaderPtr makeReader(const Request & request) const;
-
-    void makeAsyncReader(
-        const Request & request,
-        AsyncExchangePagePacketReaderPtr & reader,
-        grpc::CompletionQueue * cq,
-        UnaryCallback<bool> * callback) const;
+    FetchPagesStreamReaderPtr makeReader(const Request & request) const;
 
     static Status getStatusOK()
     {
@@ -112,8 +95,6 @@ public:
     void finishTaskEstablish(const Request & req, bool meet_error);
 
     void finishTaskReceive(const DM::RemoteSegmentReadTaskPtr & seg_task);
-
-    void finishAllReceivingTasks(const String & err_msg);
 
 private:
     DM::RemoteReadTaskPtr remote_read_tasks;

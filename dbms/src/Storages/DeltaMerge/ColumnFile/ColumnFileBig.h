@@ -108,7 +108,7 @@ public:
                                                                 TableID ns_id,
                                                                 WriteBatches & wbs);
 
-    dtpb::ColumnFileRemote serializeToRemoteProtocol() const override
+    dtpb::ColumnFileRemote serializeToRemoteProtocol(IColumnFileSetStorageReaderPtr) const override
     {
         dtpb::ColumnFileRemote ret;
         ret.mutable_big()->set_file_id(file->fileId());

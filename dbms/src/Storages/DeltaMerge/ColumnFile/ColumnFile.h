@@ -156,7 +156,7 @@ public:
 
     virtual String toString() const = 0;
 
-    virtual dtpb::ColumnFileRemote serializeToRemoteProtocol() const
+    virtual dtpb::ColumnFileRemote serializeToRemoteProtocol(IColumnFileSetStorageReaderPtr) const
     {
         RUNTIME_CHECK_MSG(false, "Current ColumnFile cannot be serialized to remote protocol, type={}", magic_enum::enum_name(getType()));
     }

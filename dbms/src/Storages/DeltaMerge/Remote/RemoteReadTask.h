@@ -185,11 +185,6 @@ public:
         const String & address,
         const LoggerPtr & log);
 
-    // The page ids that is absent from local cache
-    const std::vector<UInt64> & pendingPageIds() const { return pending_page_ids; }
-
-    size_t totalCFTinys() const { return total_num_cftiny; }
-
     RowKeyRanges getReadRanges() const { return read_ranges; }
 
     BlockInputStreamPtr getInputStream(
@@ -200,11 +195,15 @@ public:
         size_t expected_block_size);
 
     void addPendingMsg() { num_msg_to_consume += 1; }
+
+    /// Returns true if there are more pending messages.
     bool addConsumedMsg()
     {
         num_msg_consumed += 1;
+        RUNTIME_CHECK(num_msg_consumed <= num_msg_to_consume);
+
         // return there are more pending msg or not
-        return num_msg_consumed == num_msg_to_consume;
+        return num_msg_consumed < num_msg_to_consume;
     }
 
     void receivePage(dtpb::RemotePage && remote_page);
@@ -228,20 +227,23 @@ public:
         UInt64 segment_id_,
         String address_);
 
+    void initDeltaStorage(Remote::LocalPageCacheGuardPtr pages_guard);
+
 public:
     SegmentReadTaskState state = SegmentReadTaskState::Init;
+
     const DisaggregatedTaskId snapshot_id;
     const UInt64 store_id;
     const TableID table_id;
     const UInt64 segment_id;
     const String address;
 
-private:
-    Remote::LocalPageCachePtr page_cache;
-    Remote::LocalPageCacheGuardPtr pages_guard;
+    std::vector<UInt64> delta_persisted_page_ids;
+    std::vector<size_t> delta_persisted_page_sizes;
 
-    // The snapshot of reading ids acquired from write node
-    std::vector<UInt64> delta_page_ids;
+    Remote::LocalPageCachePtr page_cache;
+
+private:
     std::vector<UInt64> stable_files;
 
     DMContextPtr dm_context;
@@ -250,12 +252,12 @@ private:
     SegmentSnapshotPtr segment_snap;
 
     // The page ids need to fetch from write node
-    std::vector<UInt64> pending_page_ids;
-    size_t total_num_cftiny;
+    // std::vector<UInt64> pending_page_ids;
+    //    size_t total_num_cftiny;
 
 public:
-    std::atomic<size_t> num_msg_to_consume;
-    std::atomic<size_t> num_msg_consumed;
+    std::atomic<size_t> num_msg_to_consume = 0;
+    std::atomic<size_t> num_msg_consumed = 0;
 
 private:
     std::mutex mtx_queue;

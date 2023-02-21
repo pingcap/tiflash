@@ -204,11 +204,11 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
                     LOG_DEBUG(
                         log,
-                        "Building RemoteTableReadTask, store={} addr={} task_id={} segments={}",
+                        "Building RemoteTableReadTask, store={} addr={} segments_n={} task_id={}",
                         resp->store_id(),
                         req->address(),
-                        task_id,
-                        table.segments().size());
+                        table.segments().size(),
+                        task_id);
 
                     remote_tasks[idx] = DM::RemoteTableReadTask::buildFrom(
                         db_context,
@@ -220,12 +220,12 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
                     LOG_DEBUG(
                         log,
-                        "Build RemoteTableReadTask finished, elapsed={}s store={} addr={} task_id={} segments={}",
+                        "Build RemoteTableReadTask finished, elapsed={}s store={} addr={} segments_n={} task_id={}",
                         watch_table.elapsedSeconds(),
                         resp->store_id(),
                         req->address(),
-                        task_id,
-                        table.segments().size());
+                        table.segments().size(),
+                        task_id);
                 }
                 // TODO: update region cache by `resp->retry_regions`
                 this_elapse_ms = watch.elapsedMillisecondsFromLastTime();
@@ -239,7 +239,7 @@ DM::RemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
     const auto avg_establish_rpc_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.establish_rpc_ms; }) / summaries.size();
     const auto avg_build_remote_task_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.build_remote_task_ms; }) / summaries.size();
-    LOG_INFO(log, "establish disaggregated task rpc cost {:.2f}ms, build remote tasks cost {:.2f}ms", avg_establish_rpc_ms, avg_build_remote_task_ms);
+    LOG_DEBUG(log, "Establish disaggregated task rpc cost {:.2f}ms, build remote tasks cost {:.2f}ms", avg_establish_rpc_ms, avg_build_remote_task_ms);
 
     return read_task;
 }
@@ -284,7 +284,8 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     size_t num_streams,
     DAGPipeline & pipeline)
 {
-    LOG_DEBUG(log, "build streams with {} segment tasks, num_streams={}", remote_read_tasks->numSegments(), num_streams);
+    LOG_DEBUG(log, "Start building RemoteSegmentInputStreams, segments_n={}, streams_n={}", remote_read_tasks->numSegments(), num_streams);
+
     const auto & executor_id = table_scan.getTableScanExecutorID();
     // Build a PageReceiver to fetch the pages from all write nodes
     auto * kv_cluster = db_context.getTMTContext().getKVCluster();

@@ -16,6 +16,8 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Disaggregated/GRPCPageReceiverContext.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
+#include <Storages/DeltaMerge/Remote/LocalPageCache.h>
+#include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RemoteReadTask.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/completion_queue.h>
@@ -58,13 +60,13 @@ namespace DB
 {
 namespace
 {
-struct GrpcExchangePacketReader : public ExchangePagePacketReader
+struct GrpcFetchPagesStreamReader : public FetchPagesStreamReader
 {
     std::shared_ptr<pingcap::kv::RpcCall<mpp::FetchDisaggregatedPagesRequest>> call;
     grpc::ClientContext client_context;
     std::unique_ptr<grpc::ClientReader<mpp::PagesPacket>> reader;
 
-    explicit GrpcExchangePacketReader(const FetchPagesRequest & req)
+    explicit GrpcFetchPagesStreamReader(const FetchPagesRequest & req)
     {
         call = std::make_shared<pingcap::kv::RpcCall<mpp::FetchDisaggregatedPagesRequest>>(req.req);
     }
@@ -80,48 +82,6 @@ struct GrpcExchangePacketReader : public ExchangePagePacketReader
     }
 
     void cancel(const String &) override {}
-};
-
-struct AsyncGrpcExchangePacketReader : public AsyncExchangePagePacketReader
-{
-    pingcap::kv::Cluster * cluster;
-    const FetchPagesRequest & request;
-    pingcap::kv::RpcCall<mpp::FetchDisaggregatedPagesRequest> call;
-    grpc::ClientContext client_context;
-    grpc::CompletionQueue * cq; // won't be null
-    std::unique_ptr<grpc::ClientAsyncReader<::mpp::PagesPacket>> reader;
-
-    AsyncGrpcExchangePacketReader(
-        pingcap::kv::Cluster * cluster_,
-        grpc::CompletionQueue * cq_,
-        const FetchPagesRequest & req_)
-        : cluster(cluster_)
-        , request(req_)
-        , call(req_.req)
-        , cq(cq_)
-    {
-        assert(cq != nullptr);
-    }
-
-    void init(UnaryCallback<bool> * callback) override
-    {
-        reader = cluster->rpc_client->sendStreamRequestAsync(
-            request.req->address(),
-            &client_context,
-            call,
-            *cq,
-            callback);
-    }
-
-    void read(TrackedPageDataPacketPtr & packet, UnaryCallback<bool> * callback) override
-    {
-        reader->Read(packet.get(), callback);
-    }
-
-    void finish(::grpc::Status & status, UnaryCallback<bool> * callback) override
-    {
-        reader->Finish(&status, callback);
-    }
 };
 
 } // namespace
@@ -149,9 +109,27 @@ FetchPagesRequest::FetchPagesRequest(DM::RemoteSegmentReadTaskPtr seg_task_)
     *req->mutable_meta() = seg_task->snapshot_id.toMeta();
     req->set_table_id(seg_task->table_id);
     req->set_segment_id(seg_task->segment_id);
-    for (auto page_id : seg_task->pendingPageIds())
+
     {
-        req->add_pages(page_id);
+        std::vector<DM::Remote::PageOID> persisted_oids;
+        persisted_oids.reserve(seg_task->delta_persisted_page_ids.size());
+        for (const auto & page_id : seg_task->delta_persisted_page_ids)
+        {
+            auto page_oid = DM::Remote::PageOID{
+                .write_node_id = seg_task->store_id,
+                .table_id = seg_task->table_id,
+                .page_id = page_id,
+            };
+            persisted_oids.emplace_back(page_oid);
+        }
+
+        auto occupy_result = seg_task->page_cache->occupySpace(persisted_oids, seg_task->delta_persisted_page_sizes);
+        for (auto page_id : occupy_result.pages_not_in_cache)
+            req->add_pages(page_id.page_id);
+
+        LOG_INFO(Logger::get(), "FetchPagesRequest: pages_not_in_cache={}", occupy_result.pages_not_in_cache);
+
+        seg_task->initDeltaStorage(occupy_result.pages_guard);
     }
 }
 
@@ -171,11 +149,6 @@ void GRPCPagesReceiverContext::finishTaskReceive(const DM::RemoteSegmentReadTask
     remote_read_tasks->updateTaskState(seg_task, DM::SegmentReadTaskState::DataReady, false);
 }
 
-void GRPCPagesReceiverContext::finishAllReceivingTasks(const String & err_msg)
-{
-    remote_read_tasks->allDataReceive(err_msg);
-}
-
 void GRPCPagesReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr /*log*/)
 {
     // TODO cancel
@@ -186,24 +159,14 @@ bool GRPCPagesReceiverContext::supportAsync(const Request & /*request*/) const
     return enable_async_grpc;
 }
 
-ExchangePagePacketReaderPtr GRPCPagesReceiverContext::makeReader(const Request & request) const
+FetchPagesStreamReaderPtr GRPCPagesReceiverContext::makeReader(const Request & request) const
 {
-    auto reader = std::make_shared<GrpcExchangePacketReader>(request);
+    auto reader = std::make_shared<GrpcFetchPagesStreamReader>(request);
     reader->reader = cluster->rpc_client->sendStreamRequest(
         request.req->address(),
         &reader->client_context,
         *reader->call);
     return reader;
-}
-
-void GRPCPagesReceiverContext::makeAsyncReader(
-    const Request & request,
-    AsyncExchangePagePacketReaderPtr & reader,
-    grpc::CompletionQueue * cq,
-    UnaryCallback<bool> * callback) const
-{
-    reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, cq, request);
-    reader->init(callback);
 }
 
 String FetchPagesRequest::debugString() const

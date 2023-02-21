@@ -36,12 +36,21 @@ LocalPageCache::LocalPageCache(const Context & global_context_)
 {
     RUNTIME_CHECK(storage != nullptr);
 
-    // Initially all PS entries are evictable.
-    storage->traverseEntries([&](UniversalPageId page_id, DB::PageEntry entry) {
-        evictable_keys.put(page_id, entry.size);
-    });
+    if (max_size > 0)
+    {
+        // Initially all PS entries are evictable.
+        storage->traverseEntries([&](UniversalPageId page_id, DB::PageEntry entry) {
+            evictable_keys.put(page_id, entry.size);
+        });
 
-    LOG_DEBUG(log, "Initialized LRU from existing PS, lru_stats={}", evictable_keys.statistics());
+        std::unique_lock lock(mu);
+        LOG_DEBUG(log, "Initialized LRU from existing PS, stats={}", statistics(lock));
+    }
+    else
+    {
+        LOG_WARNING(log, "Max capacity is not configured for page cache. This may cause disk being filled quickly. "
+                         "Set local_page_cache_max_size to limit the capacity of the page cache.");
+    }
 }
 
 void LocalPageCache::write(
@@ -50,8 +59,10 @@ void LocalPageCache::write(
     PageSize size,
     PageFieldSizes && field_sizes)
 {
+    auto key = buildCacheId(oid);
+
+    if (max_size > 0)
     {
-        auto key = buildCacheId(oid);
         std::unique_lock lock(mu);
         RUNTIME_CHECK_MSG(
             occupied_keys.find(key) != occupied_keys.end(),
@@ -66,8 +77,7 @@ void LocalPageCache::write(
     }
 
     UniversalWriteBatch cache_wb;
-    auto cache_id = buildCacheId(oid);
-    cache_wb.putPage(cache_id, 0, read_buffer, size, field_sizes);
+    cache_wb.putPage(key, 0, read_buffer, size, field_sizes);
     storage->write(std::move(cache_wb));
 }
 
@@ -75,6 +85,7 @@ Page LocalPageCache::getPage(const PageOID & oid, const PageStorage::FieldIndice
 {
     auto key = buildCacheId(oid);
 
+    if (max_size > 0)
     {
         std::unique_lock lock(mu);
         RUNTIME_CHECK_MSG(

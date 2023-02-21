@@ -99,7 +99,7 @@ Block ColumnFileInMemory::readDataForFlush() const
     return cache_block.cloneWithColumns(std::move(columns));
 }
 
-dtpb::ColumnFileRemote ColumnFileInMemory::serializeToRemoteProtocol() const
+dtpb::ColumnFileRemote ColumnFileInMemory::serializeToRemoteProtocol(IColumnFileSetStorageReaderPtr) const
 {
     dtpb::ColumnFileRemote ret;
     auto * remote_in_memory = ret.mutable_in_memory();

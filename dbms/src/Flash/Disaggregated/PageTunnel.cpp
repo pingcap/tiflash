@@ -54,7 +54,8 @@ mpp::PagesPacket PageTunnel::readPacket()
     auto persisted_cf = seg_task->read_snapshot->delta->getPersistedFileSetSnapshot();
     for (const auto page_id : read_page_ids)
     {
-        auto page = persisted_cf->getStorage()->readForColumnFileTiny(page_id);
+        RUNTIME_CHECK(persisted_cf->storage != nullptr);
+        auto page = persisted_cf->storage->readForColumnFileTiny(page_id);
         dtpb::RemotePage remote_page;
         remote_page.set_page_id(page_id);
         remote_page.mutable_data()->assign(page.data.begin(), page.data.end());

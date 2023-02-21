@@ -41,14 +41,8 @@ ColumnFileSetSnapshotPtr ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
     Int64 table_id,
     const RowKeyRange & segment_range)
 {
-    IColumnFileSetStorageReaderPtr base_storage = std::make_shared<RemoteColumnFileSetStorage>(
-        remote_manager,
-        remote_write_node_id,
-        table_id);
-
-    auto log = Logger::get();
-
-    auto ret = std::make_shared<ColumnFileSetSnapshot>(base_storage);
+    auto empty_storage = std::make_shared<DummyColumnFileSetStorage>();
+    auto ret = std::make_shared<ColumnFileSetSnapshot>(empty_storage);
     ret->is_common_handle = segment_range.is_common_handle;
     ret->rowkey_column_size = segment_range.rowkey_column_size;
     ret->column_files.reserve(proto.size());
@@ -56,16 +50,7 @@ ColumnFileSetSnapshotPtr ColumnFileSetSnapshot::deserializeFromRemoteProtocol(
     {
         if (remote_column_file.has_tiny())
         {
-            auto tiny_file = remote_column_file.tiny();
-            auto page_oid = Remote::PageOID{
-                .write_node_id = remote_write_node_id,
-                .table_id = table_id,
-                .page_id = tiny_file.page_id(),
-            };
-            ret->column_files.push_back(ColumnFileTiny::deserializeFromRemoteProtocol(
-                tiny_file,
-                page_oid,
-                remote_manager->getPageCache()));
+            ret->column_files.push_back(ColumnFileTiny::deserializeFromRemoteProtocol(remote_column_file.tiny()));
         }
         else if (remote_column_file.has_delete_range())
         {

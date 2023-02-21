@@ -137,8 +137,16 @@ void PageReceiverBase<RPCContext>::setUpConnection()
     // TODO: support async
     for (size_t index = 0; index < source_num; ++index)
     {
-        thread_manager->schedule(true, "Receiver", [this] {
-            readLoop();
+        thread_manager->schedule(true, "Receiver", [this, index] {
+            try
+            {
+                readLoop();
+            }
+            catch (...)
+            {
+                auto ex = getCurrentExceptionMessage(true);
+                LOG_ERROR(Logger::get(), "Receiver thread #{} read loop meet exception and exited, ex={}", index, ex);
+            }
         });
         ++thread_count;
     }
@@ -176,6 +184,8 @@ PageReceiverResult PageReceiverBase<RPCContext>::nextResult(
         return PageReceiverResult::newEOF(PageReceiverBase<RPCContext>::name);
     }
 
+    LOG_DEBUG(Logger::get(), "Page receiver start processing received page, seg_id={}", recv_msg->seg_task->segment_id);
+
     assert(recv_msg != nullptr);
     if (unlikely(recv_msg->error_ptr != nullptr))
         return PageReceiverResult::newError(recv_msg->req_info, recv_msg->error_ptr->msg());
@@ -195,7 +205,7 @@ PageReceiverResult PageReceiverBase<RPCContext>::toDecodeResult(
     result.decode_detail = decodeChunks(recv_msg, decoder_ptr);
     auto has_pending_msg = recv_msg->seg_task->addConsumedMsg();
     LOG_DEBUG(exc_log,
-              "seg: {} state: {} received: {} pending: {}",
+              "seg: {} state: {} received: {} total: {}",
               recv_msg->seg_task->segment_id,
               magic_enum::enum_name(recv_msg->seg_task->state),
               recv_msg->seg_task->num_msg_consumed,
@@ -203,6 +213,7 @@ PageReceiverResult PageReceiverBase<RPCContext>::toDecodeResult(
     if (recv_msg->seg_task->state == DM::SegmentReadTaskState::Receiving
         && !has_pending_msg)
     {
+        LOG_INFO(Logger::get(), "finishTaskReceive for seg {}", recv_msg->seg_task->segment_id);
         rpc_context->finishTaskReceive(recv_msg->seg_task);
     }
     return result;
@@ -281,12 +292,15 @@ void PageReceiverBase<RPCContext>::readLoop()
         }
         rpc_context->finishTaskEstablish(req, meet_error);
     }
+
     connectionDone(meet_error, local_err_msg, exc_log);
 }
 
 template <typename RPCContext>
 std::tuple<bool, String> PageReceiverBase<RPCContext>::taskReadLoop(const Request & req)
 {
+    LOG_INFO(Logger::get(), "PageReceiver start sending FetchPages request, seg_id={} pages={}", req.seg_task->segment_id, req.seg_task->delta_persisted_page_ids.size());
+
     auto status = RPCContext::getStatusOK();
     bool meet_error = false;
     String local_err_msg;
@@ -330,6 +344,9 @@ std::tuple<bool, String> PageReceiverBase<RPCContext>::taskReadLoop(const Reques
             //           packet->pages_size(),
             //           msg_channel->size());
         }
+
+        LOG_INFO(Logger::get(), "PageReceiver finished receiving FetchPages stream, seg_id={}", req.seg_task->segment_id);
+
         // if meet error, such as decode packet fails, it will not retry.
         if (meet_error)
         {

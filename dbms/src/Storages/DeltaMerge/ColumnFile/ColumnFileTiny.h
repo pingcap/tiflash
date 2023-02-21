@@ -42,6 +42,8 @@ private:
     /// The id of data page which stores the data of this column file.
     PageId data_page_id;
 
+    size_t data_page_size = 0; // Only available when using deserializeFromRemoteProtocol.
+
     /// The members below are not serialized.
 
     /// The cache data in memory.
@@ -117,14 +119,13 @@ public:
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    dtpb::ColumnFileRemote serializeToRemoteProtocol() const override;
+    dtpb::ColumnFileRemote serializeToRemoteProtocol(IColumnFileSetStorageReaderPtr) const override;
 
-    static std::shared_ptr<ColumnFileTiny> deserializeFromRemoteProtocol(
-        const dtpb::ColumnFileTiny & proto,
-        const Remote::PageOID & oid,
-        const Remote::LocalPageCachePtr & page_cache);
+    static std::shared_ptr<ColumnFileTiny> deserializeFromRemoteProtocol(const dtpb::ColumnFileTiny & proto);
 
     PageId getDataPageId() const { return data_page_id; }
+
+    PageId getDataPageSize() const { return data_page_size; }
 
     Block readBlockForMinorCompaction(const PageReader & reader) const;
 

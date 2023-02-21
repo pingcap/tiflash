@@ -27,8 +27,15 @@ class IColumnFileSetStorageReader
 public:
     virtual ~IColumnFileSetStorageReader() = default;
 
+    /// TODO: Unify these interfaces to be a reader mode.
+
+    /// Read some fields from the page. Used when reading from Column File.
     virtual Page readForColumnFileTiny(const PageStorage::PageReadFields &) const = 0;
 
+    virtual size_t getColumnFileTinySerializedSize(PageId) const = 0;
+
+    /// Read the whole page. Used when Write Node pass data to Read Node.
+    /// TODO: Remove this. Actually ColumnFile does not need this interface...
     virtual Page readForColumnFileTiny(PageId) const = 0;
 };
 
@@ -54,6 +61,11 @@ public:
         return page_map[fields.first];
     }
 
+    size_t getColumnFileTinySerializedSize(PageId page_id) const override
+    {
+        return storage_snap->log_reader.getPageEntry(page_id).size;
+    }
+
     Page readForColumnFileTiny(PageId page_id) const override
     {
         auto page = storage_snap->log_reader.read(page_id);
@@ -61,27 +73,54 @@ public:
     }
 };
 
+class DummyColumnFileSetStorage : public IColumnFileSetStorageReader
+{
+public:
+    Page readForColumnFileTiny(
+        const PageStorage::PageReadFields &) const override
+    {
+        RUNTIME_CHECK_MSG(false, "DummyColumnFileSetStorage cannot read");
+    }
+
+    size_t getColumnFileTinySerializedSize(PageId) const override
+    {
+        RUNTIME_CHECK_MSG(false, "DummyColumnFileSetStorage cannot read");
+    }
+
+    Page readForColumnFileTiny(PageId) const override
+    {
+        RUNTIME_CHECK_MSG(false, "DummyColumnFileSetStorage cannot read");
+    }
+};
+
 class RemoteColumnFileSetStorage : public IColumnFileSetStorageReader
 {
 private:
     Remote::LocalPageCachePtr page_cache;
-    // TODO: Keep a snapshot of page_cache here.
+    Remote::LocalPageCacheGuardPtr pages_guard; // Only keep for maintaining lifetime for related keys
 
     UInt64 write_node_id;
     Int64 table_id;
 
 public:
     explicit RemoteColumnFileSetStorage(
-        Remote::ManagerPtr remote_manager,
+        Remote::LocalPageCachePtr page_cache_,
+        Remote::LocalPageCacheGuardPtr guard,
         UInt64 write_node_id_,
         Int64 table_id_)
-        : page_cache(remote_manager->getPageCache())
+        : page_cache(page_cache_)
+        , pages_guard(guard)
         , write_node_id(write_node_id_)
         , table_id(table_id_)
     {}
 
     Page readForColumnFileTiny(
         const PageStorage::PageReadFields & fields) const override;
+
+    size_t getColumnFileTinySerializedSize(PageId) const override
+    {
+        RUNTIME_CHECK(false);
+    }
 
     Page readForColumnFileTiny(PageId) const override
     {

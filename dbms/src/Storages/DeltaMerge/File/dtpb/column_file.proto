@@ -42,11 +42,13 @@ message ColumnFileInMemory {
 
 message ColumnFileTiny {
     uint64 page_id = 1;
-    // serialized schema
-    bytes schema = 2;
+    uint64 page_size = 2;
 
-    uint64 rows = 3;
-    uint64 bytes = 4;
+    // serialized schema
+    bytes schema = 3;
+
+    uint64 rows = 4;
+    uint64 bytes = 5;
 }
 message ColumnFileBig {
     uint64 page_id = 1;

@@ -38,10 +38,19 @@ PageDownloader::PageDownloader(
         for (size_t index = 0; index < threads_num; ++index)
         {
             auto task = std::make_shared<std::packaged_task<void()>>([this, index] {
-                persistLoop(index);
+                try
+                {
+                    persistLoop(index);
+                }
+                catch (...)
+                {
+                    auto ex = getCurrentExceptionMessage(true);
+                    LOG_ERROR(Logger::get(), "Persist thread #{} read loop meet exception and exited, ex={}", index, ex);
+                }
             });
             persist_threads.emplace_back(task->get_future());
 
+            // TODO: Do not schedule on IOThreadPool.
             IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
         }
     }
@@ -69,8 +78,7 @@ PageDownloader::~PageDownloader()
 
 void PageDownloader::persistLoop(size_t idx)
 {
-    LoggerPtr log = exc_log->getChild(fmt::format("persist{}", idx));
-
+    LoggerPtr log = exc_log->getChild(fmt::format("PersistThread_{}", idx));
 
     bool meet_error = false;
     String local_err_msg;
@@ -79,9 +87,13 @@ void PageDownloader::persistLoop(size_t idx)
     {
         try
         {
+            LOG_INFO(Logger::get(), "Persist thread begin consumeOneResult");
+
             // no more results
             if (!consumeOneResult(log))
                 break;
+
+            LOG_INFO(Logger::get(), "Persist thread finish consumeOneResult");
         }
         catch (...)
         {
@@ -90,7 +102,13 @@ void PageDownloader::persistLoop(size_t idx)
         }
     }
 
+    LOG_INFO(Logger::get(), "Persist thread inner loop finished");
+
+    LOG_INFO(Logger::get(), "Persist thread begin calling downloadDone");
+
     downloadDone(meet_error, local_err_msg, log);
+
+    LOG_INFO(Logger::get(), "Persist thread finish calling downloadDone");
 
     // try to do some preparation for speed up reading
     size_t num_prepared = 0;
@@ -99,6 +117,8 @@ void PageDownloader::persistLoop(size_t idx)
     {
         while (true)
         {
+            LOG_INFO(Logger::get(), "Persist thread begin prepare");
+
             auto seg_task = remote_read_tasks->nextTaskForPrepare();
             if (!seg_task)
                 break;
@@ -110,8 +130,12 @@ void PageDownloader::persistLoop(size_t idx)
             LOG_DEBUG(log, "segment prepare done, segment_id={}", seg_task->segment_id);
             // update the state
             remote_read_tasks->updateTaskState(seg_task, DM::SegmentReadTaskState::DataReadyAndPrepared, false);
+
+            LOG_INFO(Logger::get(), "Persist thread finish prepare");
         }
     }
+
+    LOG_INFO(Logger::get(), "Persist thread inner loop 2 finished");
 
     remote_read_tasks->wakeAll();
 

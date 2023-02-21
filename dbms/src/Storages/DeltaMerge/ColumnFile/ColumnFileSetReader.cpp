@@ -82,14 +82,14 @@ ColumnFileSetReader::ColumnFileSetReader(
     , col_defs(col_defs_)
     , segment_range(segment_range_)
 {
-    auto storage = snapshot->getStorage();
+    RUNTIME_CHECK(snapshot->storage != nullptr);
     size_t total_rows = 0;
     for (auto & f : snapshot->getColumnFiles())
     {
         total_rows += f->getRows();
         column_file_rows.push_back(f->getRows());
         column_file_rows_end.push_back(total_rows);
-        column_file_readers.push_back(f->getReader(context, storage, col_defs));
+        column_file_readers.push_back(f->getReader(context, snapshot->storage, col_defs));
     }
 }
 
@@ -101,14 +101,14 @@ ColumnFileSetReader::ColumnFileSetReader(
     , col_defs(col_defs_)
     , segment_range(segment_range_)
 {
-    auto storage = snapshot->getStorage();
+    RUNTIME_CHECK(snapshot->storage != nullptr);
     size_t total_rows = 0;
     for (auto & f : snapshot->getColumnFiles())
     {
         total_rows += f->getRows();
         column_file_rows.push_back(f->getRows());
         column_file_rows_end.push_back(total_rows);
-        column_file_readers.push_back(f->getReader(storage, col_defs));
+        column_file_readers.push_back(f->getReader(snapshot->storage, col_defs));
     }
 }
 

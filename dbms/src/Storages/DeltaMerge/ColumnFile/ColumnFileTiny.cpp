@@ -150,13 +150,14 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::deserializeMetadata
     return {std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id), std::move(schema)};
 }
 
-dtpb::ColumnFileRemote ColumnFileTiny::serializeToRemoteProtocol() const
+dtpb::ColumnFileRemote ColumnFileTiny::serializeToRemoteProtocol(IColumnFileSetStorageReaderPtr storage) const
 {
     // FIXME: Different dt_compression_method between Read Node and Write Node will lead to surprising results.
 
     dtpb::ColumnFileRemote ret;
     auto * remote_tiny = ret.mutable_tiny();
     remote_tiny->set_page_id(data_page_id);
+    remote_tiny->set_page_size(storage->getColumnFileTinySerializedSize(data_page_id));
     {
         auto wb = WriteBufferFromString(*remote_tiny->mutable_schema());
         serializeSchema(wb, schema);
@@ -167,17 +168,8 @@ dtpb::ColumnFileRemote ColumnFileTiny::serializeToRemoteProtocol() const
     return ret;
 }
 
-std::shared_ptr<ColumnFileTiny> ColumnFileTiny::deserializeFromRemoteProtocol(
-    const dtpb::ColumnFileTiny & proto,
-    const Remote::PageOID & oid,
-    const Remote::LocalPageCachePtr & /*page_cache*/)
+std::shared_ptr<ColumnFileTiny> ColumnFileTiny::deserializeFromRemoteProtocol(const dtpb::ColumnFileTiny & proto)
 {
-    RUNTIME_CHECK(oid.page_id == proto.page_id());
-
-    // LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileTiny from remote, page_oid={} rows={}", oid, proto.rows());
-
-    // page_cache->ensurePagesReady({oid});
-
     BlockPtr schema;
     {
         auto read_buf = ReadBufferFromString(proto.schema());
@@ -186,7 +178,10 @@ std::shared_ptr<ColumnFileTiny> ColumnFileTiny::deserializeFromRemoteProtocol(
 
     // TODO: Currently building the Tiny does not rely on oid. oid is required when reading.
     //       This might not be a correct design.
-    return std::make_shared<ColumnFileTiny>(schema, proto.rows(), proto.bytes(), proto.page_id());
+    auto cf = std::make_shared<ColumnFileTiny>(schema, proto.rows(), proto.bytes(), proto.page_id());
+    cf->data_page_size = proto.page_size();
+
+    return cf;
 }
 
 Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & reader) const

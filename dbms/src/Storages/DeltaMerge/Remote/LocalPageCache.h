@@ -65,7 +65,7 @@ public:
     String statistics() const
     {
         return fmt::format(
-            "<n={} size={} max_size={}>",
+            "<total_n={} total_size={} max_size={}>",
             index.size(),
             current_total_size,
             max_size);
@@ -92,7 +92,7 @@ public:
             queue.splice(queue.end(), queue, item.queue_iter);
         }
 
-        LOG_DEBUG(log, "LRU put {} size={} stats={}", key, size, statistics());
+        LOG_TRACE(log, "LRU put {} size={} lru={}", key, size, statistics());
 
         return inserted;
     }
@@ -104,8 +104,10 @@ public:
         if (it == index.end())
             return false;
 
+        current_total_size -= it->second.size;
         queue.erase(it->second.queue_iter);
         index.erase(it);
+
         return true;
     }
 
@@ -123,36 +125,33 @@ public:
             RUNTIME_CHECK(it != index.end());
 
             evicted.emplace_back(key);
-            LOG_DEBUG(log, "LRU evict {} size={}", key, it->second.size);
+            LOG_TRACE(log, "LRU evict, key={} size={}", key, it->second.size);
 
             current_total_size -= it->second.size;
             queue.pop_front();
             index.erase(it);
         }
 
-        LOG_DEBUG(log, "LRU evict finished, stats={}", statistics());
+        LOG_DEBUG(log, "LRU evict finished, lru={}", statistics());
 
-        checkIntegrity();
+#ifndef NDEBUG
+        // Integrity check: verify `total_size` is correct.
+        {
+            size_t total_size = 0;
+
+            RUNTIME_CHECK(queue.size() == index.size(), queue.size(), index.size());
+
+            for (const auto & key : queue)
+            {
+                const auto it = index.find(key);
+                RUNTIME_CHECK(it != index.end());
+                total_size += it->second.size;
+            }
+            RUNTIME_CHECK(total_size == current_total_size, total_size, current_total_size);
+        }
+#endif
 
         return evicted;
-    }
-
-private:
-    void checkIntegrity()
-    {
-#ifndef NDEBUG
-        size_t total_size = 0;
-
-        RUNTIME_CHECK(queue.size() == index.size(), queue.size(), index.size());
-
-        for (const auto & key : queue)
-        {
-            const auto it = index.find(key);
-            RUNTIME_CHECK(it != index.end());
-            total_size += it->second.size;
-        }
-        RUNTIME_CHECK(total_size == current_total_size, total_size, current_total_size);
-#endif
     }
 
 private:
@@ -172,6 +171,16 @@ class LocalPageCache
     friend LocalPageCacheGuard;
 
 private:
+    String statistics(std::unique_lock<std::mutex> &) const
+    {
+        return fmt::format(
+            "<occupied=<total_n={} total_size={} max_size={}> evictable={}>",
+            occupied_keys.size(),
+            occupied_size,
+            max_size,
+            evictable_keys.statistics());
+    }
+
     void evictFromStorage(std::unique_lock<std::mutex> &)
     {
         // Note: Not all keys in the `evictable_keys` will be evicted.
@@ -201,10 +210,17 @@ private:
     void guard(
         std::unique_lock<std::mutex> & lock,
         const std::vector<UniversalPageId> keys,
-        const std::vector<size_t> sizes)
+        const std::vector<size_t> sizes,
+        uint64_t guard_debug_id)
     {
+        RUNTIME_CHECK(max_size > 0);
+
         RUNTIME_CHECK(keys.size() == sizes.size(), keys.size(), sizes.size());
         const size_t n = keys.size();
+
+        size_t newly_occupied_n = 0; // Only for debug output
+        size_t newly_occupied_size = 0; // Only for debug output
+        size_t total_keys_size = 0; // Only for debug output
 
         for (size_t i = 0; i < n; ++i)
         {
@@ -212,12 +228,23 @@ private:
             auto & info = place_result.first->second;
             bool inserted = place_result.second;
 
+            total_keys_size += sizes[i];
+
             if (inserted)
             {
+                newly_occupied_n += 1;
+                newly_occupied_size += sizes[i];
                 occupied_size += sizes[i];
 
                 info.size = sizes[i];
                 info.alive_guards = 1;
+
+                LOG_TRACE(
+                    log,
+                    "Occupy: key={} size={} stats={}",
+                    keys[i],
+                    sizes[i],
+                    statistics(lock));
 
                 // Keep these keys not evictable.
                 // Only necessary when keys are added to the `occupied_keys` for the first time.
@@ -230,12 +257,27 @@ private:
             }
         }
 
+        LOG_DEBUG(
+            log,
+            "Guard keys, guard={} size={}(n={}) newly_occupied_size={}(n={}) stats={}",
+            guard_debug_id,
+            total_keys_size,
+            keys.size(),
+            newly_occupied_size,
+            newly_occupied_n,
+            statistics(lock));
+
         evictFromStorage(lock);
     }
 
-    void unguard(const std::vector<UniversalPageId> keys)
+    void unguard(const std::vector<UniversalPageId> keys, uint64_t guard_debug_id)
     {
+        RUNTIME_CHECK(max_size > 0);
+
         std::unique_lock lock(mu);
+
+        size_t released_occupied_n = 0; // Only for debug output
+        size_t released_occupied_size = 0; // Only for debug output
 
         for (const auto & key : keys)
         {
@@ -250,11 +292,23 @@ private:
             {
                 size_t size = it->second.size;
 
+                released_occupied_n += 1;
+                released_occupied_size += size;
+
                 evictable_keys.put(key, size);
                 occupied_keys.erase(it);
                 occupied_size -= size;
             }
         }
+
+        LOG_DEBUG(
+            log,
+            "Unguard keys, guard={} n={} released_occupied_size={}(n={}) stats={}",
+            guard_debug_id,
+            keys.size(),
+            released_occupied_size,
+            released_occupied_n,
+            statistics(lock));
 
         evictFromStorage(lock);
 
@@ -285,38 +339,90 @@ public:
         for (const auto & page : pages)
             keys.emplace_back(buildCacheId(page));
 
-        std::unique_lock lock(mu);
-        size_t new_occupy_size = 0;
-        for (size_t i = 0; i < n; ++i)
-        {
-            auto it = occupied_keys.find(keys[i]);
-            if (it == occupied_keys.end())
-                new_occupy_size += page_sizes[i];
-        }
+        LocalPageCacheGuardPtr guard{};
 
-        if (new_occupy_size > max_size)
-            throw Exception(fmt::format("Occupy space failed, max_size={} new_occupy_size={}", max_size, new_occupy_size));
-
-        if (occupied_size + new_occupy_size > max_size)
+        if (max_size > 0)
         {
-            // There are too many occupies, wait...
-            cv.wait(lock, [&] {
-                new_occupy_size = 0;
+            std::unique_lock lock(mu);
+
+            size_t need_occupy_size = 0;
+            auto update_need_occupy_size = [&] {
+                need_occupy_size = 0;
                 for (size_t i = 0; i < n; ++i)
                 {
                     auto it = occupied_keys.find(keys[i]);
                     if (it == occupied_keys.end())
-                        new_occupy_size += page_sizes[i];
+                        need_occupy_size += page_sizes[i];
                 }
-                bool stop_waiting = occupied_size + new_occupy_size <= max_size;
-                return stop_waiting;
-            });
+            };
+
+            update_need_occupy_size();
+            if (need_occupy_size > max_size)
+                throw Exception(fmt::format("Occupy space failed, max_size={} need_occupy_size={}", max_size, need_occupy_size));
+
+            if (occupied_size + need_occupy_size > max_size)
+            {
+                LOG_WARNING(
+                    log,
+                    "Start waiting because local page cache space is insufficient to contain living query data, "
+                    "need_occupy_size={} all_keys_n={} stats={}",
+                    need_occupy_size,
+                    n,
+                    statistics(lock));
+
+                Stopwatch watch;
+
+                // There are too many occupies, wait...
+                while (true)
+                {
+                    using namespace std::chrono_literals;
+
+                    auto cv_status = cv.wait_for(lock, 30s);
+                    if (cv_status == std::cv_status::timeout)
+                        LOG_WARNING(
+                            log,
+                            "Still waiting local page cache to release space, elapsed={}s need_occupy_size={} all_keys_n={} stats={}",
+                            watch.elapsedSeconds(),
+                            need_occupy_size,
+                            n,
+                            statistics(lock));
+
+                    // Some keys may be occupied, so that need_occupy_size may be changed.
+                    update_need_occupy_size();
+                    bool stop_waiting = occupied_size + need_occupy_size <= max_size;
+                    if (stop_waiting)
+                        break;
+                }
+
+                LOG_WARNING(
+                    log,
+                    "Finished waiting local page cache to release space, elapsed={}s need_occupy_size={} all_keys_n={} stats={}",
+                    watch.elapsedSeconds(),
+                    need_occupy_size,
+                    n,
+                    statistics(lock));
+            }
+            else
+            {
+                LOG_DEBUG(
+                    log,
+                    "Occupy space without waiting, need_occupy_size={} all_keys_n={} stats={}",
+                    need_occupy_size,
+                    n,
+                    statistics(lock));
+            }
+
+            // Guard keys first, then check existence. In this way, these keys will not be
+            // evicted after the check.
+            auto this_ptr = shared_from_this();
+            guard = std::make_shared<LocalPageCacheGuard>(this_ptr, lock, keys, page_sizes);
         }
-
-        auto this_ptr = shared_from_this();
-        auto guard = std::make_shared<LocalPageCacheGuard>(this_ptr, lock, keys, page_sizes);
-
-        lock.release();
+        else
+        {
+            // When max_size == 0, let's keep guard == nullptr, so that no keys in the LRU will be
+            // touched.
+            RUNTIME_CHECK(guard == nullptr);
+        }
 
         auto snapshot = storage->getSnapshot("LocalPageCache.occupySpace");
         std::vector<PageOID> missing_ids;
@@ -378,20 +484,24 @@ public:
         const std::vector<size_t> sizes)
         : parent(parent_)
         , keys(keys_)
+        , debug_id(global_id_seq.fetch_add(1, std::memory_order_seq_cst))
     {
         // Note: It is safe when a key occur multiple times in the `keys`,
         // as long as our `addPins` and `removePins` are matched.
-        parent->guard(lock, keys, sizes);
+        parent->guard(lock, keys, sizes, debug_id);
     }
 
     ~LocalPageCacheGuard()
     {
-        parent->unguard(keys);
+        parent->unguard(keys, debug_id);
     }
 
 private:
     const std::shared_ptr<LocalPageCache> parent;
     const std::vector<UniversalPageId> keys;
+    const uint64_t debug_id; // Only for debug output
+
+    inline static std::atomic<uint64_t> global_id_seq{1};
 };
 
 

@@ -66,7 +66,7 @@ public:
 
     static ColumnFilePersistedPtr deserializeMetadata(ReadBuffer & buf);
 
-    dtpb::ColumnFileRemote serializeToRemoteProtocol() const override
+    dtpb::ColumnFileRemote serializeToRemoteProtocol(IColumnFileSetStorageReaderPtr) const override
     {
         dtpb::ColumnFileRemote ret;
         auto * remote_del = ret.mutable_delete_range();

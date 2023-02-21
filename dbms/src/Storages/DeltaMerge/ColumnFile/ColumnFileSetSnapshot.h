@@ -62,8 +62,6 @@ class ColumnFileSetSnapshot : public std::enable_shared_from_this<ColumnFileSetS
     friend class ColumnFilePersistedSet;
 
 private:
-    IColumnFileSetStorageReaderPtr storage;
-
     ColumnFiles column_files;
     size_t rows = 0;
     size_t bytes = 0;
@@ -73,8 +71,14 @@ private:
     size_t rowkey_column_size = 1;
 
 public:
-    explicit ColumnFileSetSnapshot(const IColumnFileSetStorageReaderPtr & storage_)
-        : storage{storage_}
+    /// This field is writeable intentionally. It allows us to build a snapshot first,
+    /// then change how these data can be read later.
+    /// In disaggregated mode, we first restore the snapshot from remote proto without a specific storage,
+    /// and then assign the storage according to the data in the snapshot.
+    IColumnFileSetStorageReaderPtr storage = nullptr;
+
+    ColumnFileSetSnapshot(IColumnFileSetStorageReaderPtr storage_)
+        : storage(storage_)
     {}
 
     ColumnFileSetSnapshotPtr clone()
@@ -99,14 +103,12 @@ public:
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getStorage() const { return storage; }
-
     google::protobuf::RepeatedPtrField<dtpb::ColumnFileRemote> serializeToRemoteProtocol() const
     {
         google::protobuf::RepeatedPtrField<dtpb::ColumnFileRemote> ret;
         ret.Reserve(column_files.size());
         for (const auto & file : column_files)
-            ret.Add(file->serializeToRemoteProtocol());
+            ret.Add(file->serializeToRemoteProtocol(storage));
         return ret;
     }
 
