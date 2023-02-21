@@ -42,8 +42,10 @@ struct AsyncWaker
         // multi notifiers single receiver model. use another flag to avoid waiting endlessly.
         mutable std::atomic_bool is_awake{false};
 
-        // usually sender invoke `wake`, receiver invoke `blockedWaitFor`
+        // usually sender invoke `wake`, receiver invoke `blockedWaitUtil`
+        // NOT thread safe
         Status blockedWaitUtil(const SteadyClock::time_point &) override;
+        // thread safe
         void wake() override;
 
         ~Notifier() override = default;

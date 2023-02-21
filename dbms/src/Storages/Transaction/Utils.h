@@ -69,13 +69,11 @@ struct AsyncNotifier
         Timeout,
         Normal,
     };
-    // NOT thread safe
-    Status blockedWaitFor(const std::chrono::milliseconds & t)
+    virtual Status blockedWaitFor(const std::chrono::milliseconds & duration)
     {
-        return blockedWaitUtil(SteadyClock::now() + t);
+        return blockedWaitUtil(SteadyClock::now() + duration);
     }
     virtual Status blockedWaitUtil(const SteadyClock::time_point &) = 0;
-    // thread safe
     virtual void wake() = 0;
     virtual ~AsyncNotifier() = default;
 };
