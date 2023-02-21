@@ -105,8 +105,6 @@ protected:
     bool enable_async_grpc_client = false;
 
     std::unique_ptr<Management::ManualCompactManager> manual_compact_manager;
-    std::unordered_map<String, Management::S3LockService::DataFileMutexPtr> file_latch_map;
-    std::mutex file_latch_map_mutex;
     // TODO: make them configurable
     const String bucket_name = "qiuyang";
     Aws::Client::ClientConfiguration client_config;

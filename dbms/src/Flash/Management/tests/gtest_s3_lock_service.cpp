@@ -40,7 +40,7 @@ public:
         client_config.scheme = Aws::Http::Scheme::HTTP;
         client_config.verifySSL = false;
         Aws::Auth::AWSCredentials cred("minioadmin", "minioadmin");
-        s3_lock_service = std::make_unique<Management::S3LockService>(*db_context, file_latch_map, file_latch_map_mutex, bucket_name, client_config, cred);
+        s3_lock_service = std::make_unique<Management::S3LockService>(*db_context, bucket_name, client_config, cred);
         log = Logger::get();
         s3_client = client_factory.create("172.16.5.85:9000", Aws::Http::Scheme::HTTP, false, "minioadmin", "minioadmin");
         setDataFiles();
@@ -74,8 +74,6 @@ public:
     }
 
 protected:
-    std::unordered_map<String, Management::S3LockService::DataFileMutexPtr> file_latch_map;
-    std::mutex file_latch_map_mutex;
     const String bucket_name = "qiuyang";
     std::unique_ptr<Aws::S3::S3Client> s3_client;
     std::unique_ptr<Management::S3LockService> s3_lock_service;

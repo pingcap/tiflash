@@ -85,7 +85,7 @@ void FlashService::init(Context & context_)
     credentials.SetAWSAccessKeyId("minioadmin");
     credentials.SetAWSSecretKey("minioadmin");
 
-    s3_lock_service = std::make_unique<Management::S3LockService>(context->getGlobalContext(), file_latch_map, file_latch_map_mutex, bucket_name, client_config, credentials);
+    s3_lock_service = std::make_unique<Management::S3LockService>(context->getGlobalContext(), bucket_name, client_config, credentials);
 
     auto settings = context->getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;

@@ -66,8 +66,8 @@ public:
 private:
     Context & context;
 
-    std::unordered_map<String, DataFileMutexPtr> & file_latch_map;
-    std::mutex & file_latch_map_mutex;
+    std::unordered_map<String, DataFileMutexPtr> file_latch_map;
+    std::mutex file_latch_map_mutex;
 
     const String bucket_name;
     const std::unique_ptr<Aws::S3::S3Client> s3_client;
@@ -76,14 +76,10 @@ private:
 
 public:
     S3LockService(Context & context_,
-                  std::unordered_map<String, DataFileMutexPtr> & file_latch_map_,
-                  std::mutex & file_latch_map_mutex_,
                   const String bucket_name_,
                   const Aws::Client::ClientConfiguration & client_config_,
                   const Aws::Auth::AWSCredentials & credentials_)
         : context(context_)
-        , file_latch_map(file_latch_map_)
-        , file_latch_map_mutex(file_latch_map_mutex_)
         , bucket_name(bucket_name_)
         , s3_client(std::make_unique<Aws::S3::S3Client>(
               credentials_,
