@@ -49,11 +49,11 @@ PhysicalPlanNodePtr PhysicalExpand::build(
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr before_expand_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
-    ExpressionActionsPtr expand_actions_itself = PhysicalPlanHelper::newActions(child->getSampleBlock());
 
     auto grouping_sets = analyzer.buildExpandGroupingColumns(expand, before_expand_actions);
     auto expand_action = ExpressionAction::expandSource(grouping_sets);
-    expand_actions_itself->add(expand_action);
+    // include expand action itself.
+    before_expand_actions->add(expand_action);
 
     // construct sample block.
     NamesAndTypes expand_output_columns;
@@ -70,7 +70,7 @@ PhysicalPlanNodePtr PhysicalExpand::build(
         log->identifier(),
         child,
         expand_action.expand,
-        expand_actions_itself,
+        before_expand_actions,
         Block(expand_output_columns));
 
     return physical_expand;
@@ -79,11 +79,7 @@ PhysicalPlanNodePtr PhysicalExpand::build(
 
 void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
 {
-    String expand_extra_info = fmt::format("expand, expand_executor_id = {}", execId());
-    FmtBuffer fb;
-    fb.append(": grouping set ");
-    shared_expand->getGroupingSetsDes(fb);
-    expand_extra_info.append(fb.toString());
+    String expand_extra_info = fmt::format("expand, expand_executor_id = {}: grouping set {}", execId(), shared_expand->getGroupingSetsDes());
     child_pipeline.transform([&](auto & stream) {
         stream = std::make_shared<ExpressionBlockInputStream>(stream, expand_actions, log->identifier());
         stream->setExtraInfo(expand_extra_info);
@@ -107,22 +103,7 @@ void PhysicalExpand::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
 void PhysicalExpand::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
-    Names required_output;
-    required_output.reserve(shared_expand->getGroupSetNum()); // grouping set column should be existed in the child output schema.
-    auto name_set = shared_expand->getAllGroupSetColumnNames();
-    // append parent_require column it may expect self-filled groupingID.
-    for (const auto & one : parent_require)
-    {
-        if (one != Expand::grouping_identifier_column_name)
-        {
-            name_set.insert(one);
-        }
-    }
-    for (const auto & grouping_name : name_set)
-    {
-        required_output.emplace_back(grouping_name);
-    }
-    child->finalize(required_output);
+    child->finalize(expand_actions->getRequiredColumns());
 }
 
 const Block & PhysicalExpand::getSampleBlock() const

@@ -822,10 +822,6 @@ GroupingSets DAGExpressionAnalyzer::buildExpandGroupingColumns(
             group_exprs_columns.reserve(group_exprs.grouping_expr().size());
             for (const auto & group_expr : group_exprs.grouping_expr())
             {
-                if (group_expr.tp() != tipb::ColumnRef)
-                {
-                    throw TiFlashException("grouping sets expression should be column expr", Errors::Coprocessor::BadRequest);
-                }
                 String cp_name = getActions(group_expr, actions);
                 // tidb expression computation is based on column index offset child's chunk schema, change to ck block column name here.
                 group_exprs_columns.emplace_back(cp_name);

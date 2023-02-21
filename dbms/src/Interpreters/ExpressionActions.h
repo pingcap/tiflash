@@ -18,7 +18,6 @@
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/Names.h>
 #include <Interpreters/Expand.h>
-#include <Interpreters/Settings.h>
 #include <Storages/Transaction/Collator.h>
 
 #include <unordered_map>

@@ -116,7 +116,7 @@ public:
 
     std::set<String> getAllGroupSetColumnNames() const;
 
-    void getGroupingSetsDes(FmtBuffer & buffer) const;
+    String getGroupingSetsDes() const;
 
     static const String grouping_identifier_column_name;
 

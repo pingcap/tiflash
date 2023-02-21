@@ -78,9 +78,11 @@ struct AnalysisResult
     ExpressionActionsPtr before_where;
     ExpressionActionsPtr before_aggregation;
     ExpressionActionsPtr before_having;
-    ExpressionActionsPtr before_order_and_select;
-    ExpressionActionsPtr final_projection;
+    // ExpressionActionsPtr before_order_and_select;
+    ExpressionActionsPtr before_order;
     ExpressionActionsPtr before_expand;
+    ExpressionActionsPtr before_select;
+    ExpressionActionsPtr final_projection;
 
     String filter_column_name;
     String having_column_name;
@@ -137,24 +139,18 @@ AnalysisResult analyzeExpressions(
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeTopN)
     {
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
+        res.before_order = chain.getLastActions();
+        chain.addStep();
     }
 
     if (query_block.expand)
     {
-        chain.addStep();
         res.before_expand = analyzer.appendExpand(query_block.expand->expand(), chain);
+        chain.addStep();
     }
 
     const auto & dag_context = *context.getDAGContext();
     // Append final project results if needed.
-    if (query_block.isRootQueryBlock())
-    {
-        std::cout << "Wocao1" << std::endl;
-    }
-    else
-    {
-        std::cout << "Wocao2" << std::endl;
-    }
     final_project = query_block.isRootQueryBlock()
         ? analyzer.appendFinalProjectForRootQueryBlock(
             chain,
@@ -166,7 +162,7 @@ AnalysisResult analyzeExpressions(
             chain,
             query_block.qb_column_prefix);
 
-    res.before_order_and_select = chain.getLastActions();
+    res.before_select = chain.getLastActions();
 
     chain.finalize();
     chain.clear();
@@ -684,9 +680,9 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         executeWhere(pipeline, res.before_having, res.having_column_name, "execute having");
         recordProfileStreams(pipeline, query_block.having_name);
     }
-    if (res.before_order_and_select)
+    if (res.before_order)
     {
-        executeExpression(pipeline, res.before_order_and_select, log, "before order and select");
+        executeExpression(pipeline, res.before_order, log, "before order");
     }
 
     if (!res.order_columns.empty())
@@ -710,6 +706,11 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         executeExpand(pipeline, res.before_expand);
         recordProfileStreams(pipeline, query_block.expand_name);
+    }
+
+    if (res.before_select)
+    {
+        executeExpression(pipeline, res.before_select, log, "before select");
     }
 
     // execute final project action

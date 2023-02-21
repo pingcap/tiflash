@@ -14,16 +14,15 @@
 
 #include <Columns/ColumnNullable.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Expand.h>
 #include <tipb/executor.pb.h>
 
-#include "DataTypes/DataTypesNumber.h"
-
 namespace DB
 {
 
-namespace /// anonymous namespace for storing private function utils.
+namespace
 {
 void convertColumnToNullable(ColumnWithTypeAndName & column)
 {
@@ -37,8 +36,9 @@ Expand::Expand(const DB::GroupingSets & gss)
     : group_sets_names(gss)
 {}
 
-void Expand::getGroupingSetsDes(FmtBuffer & buffer) const
+String Expand::getGroupingSetsDes() const
 {
+    FmtBuffer buffer;
     buffer.append("[");
     for (const auto & grouping_set : group_sets_names)
     {
@@ -52,6 +52,7 @@ void Expand::getGroupingSetsDes(FmtBuffer & buffer) const
         buffer.append("}");
     }
     buffer.append("]");
+    return buffer.toString();
 }
 
 /// for cases like: select count(distinct a), count(distinct b) from t;
