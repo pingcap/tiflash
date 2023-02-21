@@ -19,6 +19,8 @@
 
 #include <boost/noncopyable.hpp>
 #include <memory>
+#include <shared_mutex>
+#include <unordered_map>
 
 namespace Poco
 {
@@ -61,6 +63,9 @@ private:
 
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle handle;
+
+    mutable std::shared_mutex ks_map_mutex;
+    std::unordered_map<KeyspaceID, BackgroundProcessingPool::TaskHandle> ks_handle_map;
 
     Poco::Logger * log;
 };
