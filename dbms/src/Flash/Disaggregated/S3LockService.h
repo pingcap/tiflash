@@ -81,7 +81,7 @@ public:
     };
 
 private:
-    Context & context;
+    TMTContext & tmt;
 
     std::unordered_map<String, DataFileMutexPtr> file_latch_map;
     std::mutex file_latch_map_mutex;
@@ -91,9 +91,9 @@ private:
     LoggerPtr log;
 
 private:
-    bool tryAddLockImpl(const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq, disaggregated::TryAddLockResponse * response);
+    bool tryAddLockImpl(const String & data_file_key, UInt64 lock_store_id, UInt64 lock_seq, disaggregated::TryAddLockResponse * response);
 
-    bool tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, disaggregated::TryMarkDeleteResponse * response);
+    bool tryMarkDeleteImpl(const String & data_file_key, disaggregated::TryMarkDeleteResponse * response);
 };
 
 

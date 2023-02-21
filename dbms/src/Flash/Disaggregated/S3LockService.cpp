@@ -15,10 +15,12 @@
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/ServiceUtils.h>
 #include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3Filename.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
+#include <common/defines.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 
@@ -30,18 +32,18 @@ namespace DB::S3
 
 
 S3LockService::S3LockService(Context & context_)
-    : context(context_.getGlobalContext())
+    : tmt(context_.getGlobalContext().getTMTContext())
     , s3_client(S3::ClientFactory::instance().createWithBucket())
     , log(Logger::get())
 {
-    UNUSED(context);
+    UNUSED(tmt);
 }
 
 grpc::Status S3LockService::tryAddLock(const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response)
 {
     try
     {
-        response->set_is_success(tryAddLockImpl(request->ori_data_file(), request->ori_store_id(), request->lock_store_id(), request->upload_seq(), response));
+        response->set_is_success(tryAddLockImpl(request->ori_data_file(), request->lock_store_id(), request->upload_seq(), response));
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)
@@ -75,7 +77,7 @@ grpc::Status S3LockService::tryMarkDelete(const disaggregated::TryMarkDeleteRequ
 {
     try
     {
-        response->set_is_success(tryMarkDeleteImpl(request->ori_data_file(), request->ori_store_id(), response));
+        response->set_is_success(tryMarkDeleteImpl(request->ori_data_file(), response));
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)
@@ -105,30 +107,22 @@ grpc::Status S3LockService::tryMarkDelete(const disaggregated::TryMarkDeleteRequ
     }
 }
 
-bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq, disaggregated::TryAddLockResponse * response)
+bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_store_id, UInt64 lock_seq, disaggregated::TryAddLockResponse * response)
 {
-    if (ori_data_file.empty())
+    if (data_file_key.empty())
         return false;
 
-    String data_file_name;
-    if (ori_data_file[0] == 't')
-        data_file_name = fmt::format("/s{}/stable/{}", ori_store_id, ori_data_file);
-    else if (ori_data_file[0] == 'd')
-        data_file_name = fmt::format("/s{}/data/{}", ori_store_id, ori_data_file);
-    else
-        return false;
-
-    String delete_file_name = fmt::format("{}.del", data_file_name);
-    String lock_file_name = fmt::format("/s{}/lock/{}.lock_{}_{}", ori_store_id, ori_data_file, lock_store_id, upload_seq);
+    const S3FilenameView key_view = S3FilenameView::fromKey(data_file_key);
+    RUNTIME_CHECK(key_view.isDataFile(), data_file_key);
 
     // Get the lock of the file
     DataFileMutexPtr file_lock;
     {
         std::unique_lock lock(file_latch_map_mutex);
-        auto it = file_latch_map.find(data_file_name);
+        auto it = file_latch_map.find(data_file_key);
         if (it == file_latch_map.end())
         {
-            it = file_latch_map.emplace(data_file_name, std::make_shared<DataFileMutex>()).first;
+            it = file_latch_map.emplace(data_file_key, std::make_shared<DataFileMutex>()).first;
         }
         file_lock = it->second;
         file_lock->addRefCount();
@@ -140,19 +134,20 @@ bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_stor
         std::unique_lock lock(file_latch_map_mutex);
         if (file_lock->getRefCount() == 0)
         {
-            file_latch_map.erase(data_file_name);
+            file_latch_map.erase(data_file_key);
         }
     });
 
     // make sure data file exists
-    if (!DB::S3::objectExists(*s3_client, s3_client->bucket(), data_file_name))
+    if (!DB::S3::objectExists(*s3_client, s3_client->bucket(), data_file_key))
     {
         response->mutable_error()->mutable_err_data_file_is_missing();
         return false;
     }
 
     // make sure data file is not mark as deleted
-    if (DB::S3::objectExists(*s3_client, s3_client->bucket(), delete_file_name))
+    const auto delmark_key = key_view.getDelMarkKey();
+    if (DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key))
     {
         response->mutable_error()->mutable_err_data_file_is_deleted();
         return false;
@@ -161,7 +156,8 @@ bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_stor
     try
     {
         // upload lock file
-        DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), lock_file_name);
+        const auto lock_key = key_view.getLockKey(lock_store_id, lock_seq);
+        DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), lock_key);
     }
     catch (...)
     {
@@ -172,30 +168,22 @@ bool S3LockService::tryAddLockImpl(const String & ori_data_file, UInt32 ori_stor
     return true;
 }
 
-bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, disaggregated::TryMarkDeleteResponse * response)
+bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregated::TryMarkDeleteResponse * response)
 {
-    if (data_file.empty())
+    if (data_file_key.empty())
         return false;
 
-    String data_file_name;
-    if (data_file[0] == 't')
-        data_file_name = fmt::format("/s{}/stable/{}", ori_store_id, data_file);
-    else if (data_file[0] == 'd')
-        data_file_name = fmt::format("/s{}/data/{}", ori_store_id, data_file);
-    else
-        return false;
-
-    String lock_file_name_prefix = fmt::format("/s{}/lock/{}.", ori_store_id, data_file);
-    String delete_file_name = fmt::format("{}.del", data_file_name);
+    const S3FilenameView key_view = S3FilenameView::fromKey(data_file_key);
+    RUNTIME_CHECK(key_view.isDataFile(), data_file_key);
 
     // Get the lock of the file
     DataFileMutexPtr file_lock;
     {
         std::unique_lock lock(file_latch_map_mutex);
-        auto it = file_latch_map.find(data_file_name);
+        auto it = file_latch_map.find(data_file_key);
         if (it == file_latch_map.end())
         {
-            it = file_latch_map.emplace(data_file_name, std::make_shared<DataFileMutex>()).first;
+            it = file_latch_map.emplace(data_file_key, std::make_shared<DataFileMutex>()).first;
         }
         file_lock = it->second;
         file_lock->addRefCount();
@@ -207,13 +195,14 @@ bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, dis
         std::unique_lock lock(file_latch_map_mutex);
         if (file_lock->getRefCount() == 0)
         {
-            file_latch_map.erase(data_file_name);
+            file_latch_map.erase(data_file_key);
         }
     });
 
+    const auto lock_prefix = key_view.getLockPrefix();
     bool has_any_lock = false;
     // make sure data file has not been locked
-    DB::S3::listPrefix(*s3_client, s3_client->bucket(), lock_file_name_prefix, "", [&has_any_lock](const auto & result) -> S3::PageResult {
+    DB::S3::listPrefix(*s3_client, s3_client->bucket(), lock_prefix, "", [&has_any_lock](const auto & result) -> S3::PageResult {
         const auto & contents = result.GetContents();
         has_any_lock = !contents.empty();
         return S3::PageResult{
@@ -230,7 +219,7 @@ bool S3LockService::tryMarkDeleteImpl(String data_file, UInt64 ori_store_id, dis
     // upload delete file
     try
     {
-        DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), delete_file_name);
+        DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), lock_prefix);
     }
     catch (...)
     {
