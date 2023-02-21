@@ -534,6 +534,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::AddTablePartition:
     case SchemaActionType::DropTablePartition:
     case SchemaActionType::TruncateTablePartition:
+    case SchemaActionType::ActionReorganizePartition:
     {
         applyPartitionDiff(db_info, diff.table_id);
         break;

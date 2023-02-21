@@ -17,27 +17,30 @@
 #include <Common/Exception.h>
 #include <common/types.h>
 
+#include <exception>
+
 namespace DB
 {
 struct ExecutionResult
 {
     bool is_success;
-    String err_msg;
+    std::exception_ptr exception;
 
     void verify()
     {
-        RUNTIME_CHECK(is_success, err_msg);
+        if (unlikely(!is_success))
+            std::rethrow_exception(exception);
     }
 
     static ExecutionResult success()
     {
-        return {true, ""};
+        return {true, nullptr};
     }
 
-    static ExecutionResult fail(const String & err_msg)
+    static ExecutionResult fail(const std::exception_ptr & exception)
     {
-        RUNTIME_CHECK(!err_msg.empty());
-        return {false, err_msg};
+        RUNTIME_CHECK(exception != nullptr);
+        return {false, exception};
     }
 };
 } // namespace DB
