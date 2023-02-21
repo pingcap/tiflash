@@ -38,6 +38,7 @@ public:
     bool gc();
     UniversalPageStoragePtr getUniversalPageStorage() const { return uni_page_storage; }
     ~UniversalPageStorageService();
+    void shutdown();
 
 private:
     explicit UniversalPageStorageService(Context & global_context_)

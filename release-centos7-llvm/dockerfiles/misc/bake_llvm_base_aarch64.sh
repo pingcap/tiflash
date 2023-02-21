@@ -41,7 +41,7 @@ function bake_llvm_base_aarch64() {
 
     # OpenSSL
     source $SCRIPTPATH/install_openssl.sh
-    install_openssl "1_1_1l"
+    install_openssl "1_1_1t"
     export OPENSSL_ROOT_DIR="/usr/local/opt/openssl"
 
     # Go
