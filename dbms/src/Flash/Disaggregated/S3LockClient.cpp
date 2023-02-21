@@ -55,49 +55,53 @@ S3LockClient::S3LockClient(Context & context_)
     UNUSED(context);
 }
 
-std::pair<bool, std::optional<disaggregated::S3LockError>> S3LockClient::sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq)
+std::pair<bool, std::optional<disaggregated::S3LockResult>>
+S3LockClient::sendTryAddLockRequest(
+    String address,
+    int timeout,
+    const String & ori_data_file,
+    UInt32 lock_store_id,
+    UInt32 lock_seq)
 {
     auto req = std::make_shared<disaggregated::TryAddLockRequest>();
-    req->set_ori_data_file(ori_data_file);
-    req->set_ori_store_id(ori_store_id);
+    req->set_data_file_key(ori_data_file);
     req->set_lock_store_id(lock_store_id);
-    req->set_upload_seq(upload_seq);
+    req->set_lock_seq(lock_seq);
 
     auto res = std::make_shared<disaggregated::TryAddLockResponse>();
     auto call = pingcap::kv::RpcCall<disaggregated::TryAddLockRequest>(req);
     auto * cluster = context.getTMTContext().getKVCluster();
-    LOG_DEBUG(log, "Send TryAddLock request, address={} req={}", address, req->DebugString());
+    LOG_DEBUG(log, "Send TryAddLock request, address={} req={}", address, req->ShortDebugString());
     cluster->rpc_client->sendRequest(address, call, timeout);
     const auto & resp = call.getResp();
-    LOG_DEBUG(log, "Received TryAddLock response, resp={}", resp->DebugString());
-    if (resp->has_error())
+    LOG_DEBUG(log, "Received TryAddLock response, resp={}", resp->ShortDebugString());
+    if (!resp->result().has_success())
     {
-        LOG_ERROR(log, "TryMarkDelete get resp with error={}", resp->error().DebugString());
-        return {false, resp->error()};
+        LOG_ERROR(log, "TryMarkDelete get resp with error={}", resp->result().ShortDebugString());
+        return {false, resp->result()};
     }
 
-    return {resp->is_success(), std::nullopt};
+    return {resp->result().has_success(), std::nullopt};
 }
 
-std::pair<bool, std::optional<disaggregated::S3LockError>> S3LockClient::sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id)
+std::pair<bool, std::optional<disaggregated::S3LockResult>> S3LockClient::sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file)
 {
     auto req = std::make_shared<disaggregated::TryMarkDeleteRequest>();
-    req->set_ori_data_file(ori_data_file);
-    req->set_ori_store_id(ori_store_id);
+    req->set_data_file_key(ori_data_file);
 
     auto res = std::make_shared<disaggregated::TryMarkDeleteResponse>();
     auto call = pingcap::kv::RpcCall<disaggregated::TryMarkDeleteRequest>(req);
     auto * cluster = context.getTMTContext().getKVCluster();
-    LOG_DEBUG(log, "Send TryMarkDelete request, address={} req={}", address, req->DebugString());
+    LOG_DEBUG(log, "Send TryMarkDelete request, address={} req={}", address, req->ShortDebugString());
     cluster->rpc_client->sendRequest(address, call, timeout);
     const auto & resp = call.getResp();
-    LOG_DEBUG(log, "Received TryMarkDelete response, resp={}", resp->DebugString());
-    if (resp->has_error())
+    LOG_DEBUG(log, "Received TryMarkDelete response, resp={}", resp->ShortDebugString());
+    if (resp->result().has_success())
     {
-        LOG_ERROR(log, "TryMarkDelete get resp with error={}", resp->error().DebugString());
-        return {false, resp->error()};
+        LOG_ERROR(log, "TryMarkDelete get resp with error={}", resp->result().ShortDebugString());
+        return {false, resp->result()};
     }
 
-    return {resp->is_success(), std::nullopt};
+    return {resp->result().has_success(), std::nullopt};
 }
 } // namespace DB::S3

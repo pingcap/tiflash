@@ -13,17 +13,20 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
+#include <Common/typeid_cast.h>
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3Filename.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
+#include <TiDB/MockOwnerManager.h>
+#include <TiDB/OwnerManager.h>
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <common/types.h>
 #include <fmt/core.h>
 #include <gtest/gtest.h>
-
-#include <fstream>
 
 namespace DB::S3::tests
 {
@@ -34,26 +37,29 @@ class S3LockServiceTest
 public:
     void SetUp() override
     {
-        auto & client_factory = DB::S3::ClientFactory::instance();
-        s3_lock_service = std::make_unique<DB::S3::S3LockService>(*db_context);
+        db_context = std::make_unique<Context>(DB::tests::TiFlashTestEnv::getContext());
         log = Logger::get();
+
+        auto & client_factory = DB::S3::ClientFactory::instance();
+
+        owner_manager.reset(typeid_cast<MockOwnerManager *>(OwnerManager::createMockOwner("owner_0").get()));
+        owner_manager->campaignOwner();
+
+        s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager, client_factory.createWithBucket());
+
         s3_client = client_factory.createWithBucket();
-        setDataFiles();
+        createS3DataFiles();
     }
 
-    void setDataFiles()
+    void createS3DataFiles()
     {
-        const char * tmp_file_name = "tmp_file";
-        std::ofstream tmp_file(tmp_file_name);
-        tmp_file.close();
         // create 5 data files
         for (size_t i = 1; i <= 5; ++i)
         {
-            auto dm_file_name = fmt::format("/s{}/stable/t_{}/dmf_{}", store_id, physical_table_id, dm_file_id);
-            DB::S3::uploadFile(*s3_client, tmp_file_name, s3_client->bucket(), dm_file_name);
+            auto data_filename = S3Filename::fromDMFileOID(DMFileOID{.write_node_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
+            DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), data_filename.toFullKey());
             ++dm_file_id;
         }
-        std::remove(tmp_file_name);
     }
 
     void TearDown() override
@@ -62,19 +68,26 @@ public:
         while (dm_file_id > 0)
         {
             --dm_file_id;
-            auto dm_file_name = fmt::format("/s{}/stable/t_{}/dmf_{}", store_id, physical_table_id, dm_file_id);
-
-            DB::S3::deleteObject(*s3_client, s3_client->bucket(), dm_file_name);
+            auto data_filename = S3Filename::fromDMFileOID(DMFileOID{.write_node_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
+            DB::S3::deleteObject(*s3_client, s3_client->bucket(), data_filename.toFullKey());
         }
     }
 
+    S3Filename getDataFilename(std::optional<UInt64> get_fid = std::nullopt)
+    {
+        auto file_id = get_fid.has_value() ? get_fid.value() : dm_file_id - 1; // the last uploaded dmfile id
+        return S3Filename::fromDMFileOID(DMFileOID{.write_node_id = store_id, .table_id = physical_table_id, .file_id = file_id});
+    }
+
 protected:
-    std::unique_ptr<S3::TiFlashS3Client> s3_client;
+    std::shared_ptr<MockOwnerManager> owner_manager;
     std::unique_ptr<DB::S3::S3LockService> s3_lock_service;
+
+    std::unique_ptr<S3::TiFlashS3Client> s3_client;
     const UInt64 store_id = 1;
-    const UInt64 physical_table_id = 1;
+    const Int64 physical_table_id = 1;
     UInt64 dm_file_id = 1;
-    UInt64 upload_seq = 0;
+    UInt64 lock_seq = 0;
     const UInt64 lock_store_id = 2;
     LoggerPtr log;
 };
@@ -82,20 +95,22 @@ protected:
 TEST_F(S3LockServiceTest, SingleTryAddLockRequest)
 try
 {
+    auto data_filename = getDataFilename();
+    auto data_file_key = data_filename.toFullKey();
+    auto lock_key = data_filename.toView().getLockKey(lock_store_id, lock_seq);
+
     auto request = ::disaggregated::TryAddLockRequest();
-    String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, dm_file_id - 1);
-    String lock_file_name = fmt::format("/s{}/lock/{}.lock_{}_{}", store_id, data_file_name, lock_store_id, upload_seq);
-    request.set_ori_store_id(store_id);
-    request.set_ori_data_file(data_file_name);
-    request.set_upload_seq(upload_seq);
+    request.set_data_file_key(data_file_key);
     request.set_lock_store_id(lock_store_id);
+    request.set_lock_seq(lock_seq);
     auto response = ::disaggregated::TryAddLockResponse();
     auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
-    ASSERT_TRUE(status_code.ok());
-    ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_file_name));
+    ASSERT_TRUE(status_code.ok()) << status_code.error_message();
+    ASSERT_TRUE(response.result().has_success()) << response.ShortDebugString();
+    ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_key));
 
-    DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_file_name);
+    DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_key);
 }
 CATCH
 
@@ -103,124 +118,122 @@ CATCH
 TEST_F(S3LockServiceTest, SingleTryMarkDeleteTest)
 try
 {
-    auto request = ::disaggregated::TryMarkDeleteRequest();
-    String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, dm_file_id - 1);
-    String delete_file_name = fmt::format("/s{}/stable/{}.del", store_id, data_file_name);
+    auto data_filename = getDataFilename();
+    auto data_file_key = data_filename.toFullKey();
+    auto delmark_key = data_filename.toView().getDelMarkKey();
 
-    request.set_ori_store_id(store_id);
-    request.set_ori_data_file(data_file_name);
+    auto request = ::disaggregated::TryMarkDeleteRequest();
+    request.set_data_file_key(data_file_key);
     auto response = ::disaggregated::TryMarkDeleteResponse();
     auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
-    ASSERT_TRUE(status_code.ok());
-    ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), delete_file_name));
+    ASSERT_TRUE(status_code.ok()) << status_code.error_message();
+    ASSERT_TRUE(response.result().has_success()) << response.ShortDebugString();
+    ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key));
 
-    DB::S3::deleteObject(*s3_client, s3_client->bucket(), delete_file_name);
+    DB::S3::deleteObject(*s3_client, s3_client->bucket(), delmark_key);
 }
 CATCH
 
 TEST_F(S3LockServiceTest, SingleTryAddLockRequestWithDeleteFileTest)
 try
 {
-    String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, dm_file_id - 1);
-    String delete_file_name = fmt::format("/s{}/stable/{}.del", store_id, data_file_name);
-    String lock_file_name = fmt::format("/s{}/lock/{}.lock_{}_{}", store_id, data_file_name, lock_store_id, upload_seq);
+    auto data_filename = getDataFilename();
+    auto data_file_key = data_filename.toFullKey();
+    auto delmark_key = data_filename.toView().getDelMarkKey();
+    auto lock_key = data_filename.toView().getLockKey(lock_store_id, lock_seq);
 
     // Add delete file first
     {
         auto request = ::disaggregated::TryMarkDeleteRequest();
-
-        request.set_ori_store_id(store_id);
-        request.set_ori_data_file(data_file_name);
+        request.set_data_file_key(data_file_key);
         auto response = ::disaggregated::TryMarkDeleteResponse();
         auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
-        ASSERT_TRUE(status_code.ok());
-        ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), delete_file_name));
+        ASSERT_TRUE(status_code.ok()) << status_code.error_message();
+        ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key));
     }
 
     // Try add lock file, should fail
     {
         auto request = ::disaggregated::TryAddLockRequest();
-        request.set_ori_store_id(store_id);
-        request.set_ori_data_file(data_file_name);
-        request.set_upload_seq(upload_seq);
+        request.set_data_file_key(data_file_key);
+        request.set_lock_seq(lock_seq);
         request.set_lock_store_id(lock_store_id);
         auto response = ::disaggregated::TryAddLockResponse();
         auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
-        ASSERT_TRUE(!response.is_success());
-        ASSERT_TRUE(response.error().has_err_data_file_is_deleted());
-        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_file_name));
+        ASSERT_TRUE(!response.result().has_success()) << response.ShortDebugString();
+        ASSERT_TRUE(response.result().has_conflict()) << response.ShortDebugString();
+        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_key));
     }
 
-    DB::S3::deleteObject(*s3_client, s3_client->bucket(), delete_file_name);
+    DB::S3::deleteObject(*s3_client, s3_client->bucket(), delmark_key);
 }
 CATCH
 
 TEST_F(S3LockServiceTest, SingleTryMarkDeleteRequestWithLockFileTest)
 try
 {
-    String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, dm_file_id - 1);
-    String delete_file_name = fmt::format("/s{}/stable/{}.del", store_id, data_file_name);
-    String lock_file_name = fmt::format("/s{}/lock/{}.lock_{}_{}", store_id, data_file_name, lock_store_id, upload_seq);
+    auto data_filename = getDataFilename();
+    auto data_file_key = data_filename.toFullKey();
+    auto delmark_key = data_filename.toView().getDelMarkKey();
+    auto lock_key = data_filename.toView().getLockKey(lock_store_id, lock_seq);
 
     // Add lock file first
     {
         auto request = ::disaggregated::TryAddLockRequest();
 
-        request.set_ori_store_id(store_id);
-        request.set_ori_data_file(data_file_name);
-        request.set_upload_seq(upload_seq);
+        request.set_data_file_key(data_file_key);
         request.set_lock_store_id(lock_store_id);
+        request.set_lock_seq(lock_seq);
         auto response = ::disaggregated::TryAddLockResponse();
         auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
-        ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_file_name));
+        ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_key));
     }
 
     // Try add delete mark, should fail
     {
         auto request = ::disaggregated::TryMarkDeleteRequest();
 
-        request.set_ori_store_id(store_id);
-        request.set_ori_data_file(data_file_name);
+        request.set_data_file_key(data_file_key);
         auto response = ::disaggregated::TryMarkDeleteResponse();
         auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
-        ASSERT_TRUE(!response.is_success());
-        ASSERT_TRUE(response.error().has_err_data_file_is_locked());
-        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, s3_client->bucket(), delete_file_name));
+        ASSERT_TRUE(!response.result().has_success()) << response.ShortDebugString();
+        ASSERT_TRUE(response.result().has_conflict()) << response.ShortDebugString();
+        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key));
     }
 
-    DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_file_name);
+    DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_key);
 }
 CATCH
 
 TEST_F(S3LockServiceTest, SingleTryAddLockRequestWithDataFileLostTest)
 try
 {
-    String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, dm_file_id);
-    String lock_file_name = fmt::format("/s{}/lock/{}.lock_{}_{}", store_id, data_file_name, lock_store_id, upload_seq);
+    auto data_filename = getDataFilename(dm_file_id); // not created dmfile key
+    auto data_file_key = data_filename.toFullKey();
+    auto lock_key = data_filename.toView().getLockKey(lock_store_id, lock_seq);
 
     // Try add lock file, data file is not exist, should fail
     {
         auto request = ::disaggregated::TryAddLockRequest();
 
-        request.set_ori_store_id(store_id);
-        request.set_ori_data_file(data_file_name);
-        request.set_upload_seq(upload_seq);
+        request.set_data_file_key(data_file_key);
+        request.set_lock_seq(lock_seq);
         request.set_lock_store_id(lock_store_id);
         auto response = ::disaggregated::TryAddLockResponse();
         auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
-        ASSERT_TRUE(!response.is_success());
-        ASSERT_TRUE(response.error().has_err_data_file_is_missing());
-        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_file_name));
+        ASSERT_TRUE(!response.result().has_success()) << response.ShortDebugString();
+        ASSERT_TRUE(response.result().has_conflict()) << response.ShortDebugString();
+        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_key));
     }
 }
 CATCH
@@ -228,26 +241,26 @@ CATCH
 TEST_F(S3LockServiceTest, MultipleTryAddLockRequest)
 try
 {
-    auto job = [&](size_t lock_id) -> void {
-        String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, dm_file_id - 1);
-        String lock_file_name = fmt::format("/s{}/lock/{}.lock_{}_{}", store_id, data_file_name, lock_id, upload_seq);
+    auto job = [&](size_t store_id) -> void {
+        auto data_filename = getDataFilename();
+        auto data_file_key = data_filename.toFullKey();
 
         // Try add lock file simultaneously, should success
         {
-            auto request = ::disaggregated::TryAddLockRequest();
+            auto lock_key = data_filename.toView().getLockKey(store_id, lock_seq);
 
-            request.set_ori_store_id(store_id);
-            request.set_ori_data_file(data_file_name);
-            request.set_upload_seq(upload_seq);
-            request.set_lock_store_id(lock_id);
+            auto request = ::disaggregated::TryAddLockRequest();
+            request.set_data_file_key(data_file_key);
+            request.set_lock_store_id(store_id);
+            request.set_lock_seq(lock_seq);
             auto response = ::disaggregated::TryAddLockResponse();
             auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
             ASSERT_TRUE(status_code.ok());
-            ASSERT_TRUE(response.is_success());
-            ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_file_name));
+            ASSERT_TRUE(response.result().has_success()) << response.ShortDebugString();
+            ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_key));
 
-            DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_file_name);
+            DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_key);
         }
     };
 
@@ -256,7 +269,7 @@ try
     threads.reserve(thread_num);
     for (size_t i = 0; i < thread_num; ++i)
     {
-        threads.emplace_back(job, i);
+        threads.emplace_back(job, /*store_id*/ 40 + i);
     }
     for (auto & thread : threads)
     {
@@ -268,17 +281,18 @@ CATCH
 TEST_F(S3LockServiceTest, MultipleTryMarkDeleteRequest)
 try
 {
-    String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, dm_file_id - 1);
-    String delete_file_name = fmt::format("/s{}/stable/{}.del", store_id, data_file_name);
+    auto data_filename = getDataFilename();
+    auto data_file_key = data_filename.toFullKey();
+    auto delmark_key = data_filename.toView().getDelMarkKey();
+
     auto job = [&]() -> void {
         auto request = ::disaggregated::TryMarkDeleteRequest();
-        request.set_ori_store_id(store_id);
-        request.set_ori_data_file(data_file_name);
+        request.set_data_file_key(data_file_key);
         auto response = ::disaggregated::TryMarkDeleteResponse();
         auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
-        ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), delete_file_name));
+        ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key));
     };
 
     std::vector<std::thread> threads;
@@ -293,7 +307,7 @@ try
         thread.join();
     }
 
-    DB::S3::deleteObject(*s3_client, s3_client->bucket(), delete_file_name);
+    DB::S3::deleteObject(*s3_client, s3_client->bucket(), delmark_key);
 }
 CATCH
 
@@ -301,33 +315,31 @@ TEST_F(S3LockServiceTest, MultipleMixRequest)
 try
 {
     auto lock_job = [&](size_t file_id) -> void {
-        String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, file_id);
-        String lock_file_name = fmt::format("/s{}/lock/{}.lock_{}_{}", store_id, data_file_name, lock_store_id, upload_seq);
+        auto data_filename = getDataFilename(file_id);
+        auto data_file_key = data_filename.toFullKey();
+        auto lock_key = data_filename.toView().getLockKey(lock_store_id, lock_seq);
 
-        {
-            auto request = ::disaggregated::TryAddLockRequest();
+        auto request = ::disaggregated::TryAddLockRequest();
+        request.set_data_file_key(data_file_key);
+        request.set_lock_seq(lock_seq);
+        request.set_lock_store_id(lock_store_id);
 
-            request.set_ori_store_id(store_id);
-            request.set_ori_data_file(data_file_name);
-            request.set_upload_seq(upload_seq);
-            request.set_lock_store_id(lock_store_id);
-            auto response = ::disaggregated::TryAddLockResponse();
-            auto status_code = s3_lock_service->tryAddLock(&request, &response);
-
-            ASSERT_TRUE(status_code.ok());
-        }
+        auto response = ::disaggregated::TryAddLockResponse();
+        auto status_code = s3_lock_service->tryAddLock(&request, &response);
+        ASSERT_TRUE(status_code.ok());
     };
 
     auto delete_job = [&](size_t file_id) -> void {
-        String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, file_id);
-        String delete_file_name = fmt::format("/s{}/stable/{}.del", store_id, data_file_name);
+        auto data_filename = getDataFilename(file_id);
+        auto data_file_key = data_filename.toFullKey();
+        auto delmark_key = data_filename.toView().getDelMarkKey();
+
         auto request = ::disaggregated::TryMarkDeleteRequest();
-        request.set_ori_store_id(store_id);
-        request.set_ori_data_file(data_file_name);
+        request.set_data_file_key(data_file_key);
+
         auto response = ::disaggregated::TryMarkDeleteResponse();
         auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
-
-        ASSERT_TRUE(status_code.ok());
+        ASSERT_TRUE(status_code.ok()) << status_code.error_message();
     };
 
     std::vector<std::thread> threads;
@@ -348,25 +360,26 @@ try
 
     for (size_t i = 1; i < dm_file_id; ++i)
     {
-        String data_file_name = fmt::format("t_{}/dmf_{}", physical_table_id, i);
-        String lock_file_name = fmt::format("/s{}/lock/{}.lock_{}_{}", store_id, data_file_name, lock_store_id, upload_seq);
-        String delete_file_name = fmt::format("/s{}/stable/{}.del", store_id, data_file_name);
+        auto data_filename = getDataFilename(i);
+        auto data_file_key = data_filename.toFullKey();
+        auto lock_key = data_filename.toView().getLockKey(lock_store_id, lock_seq);
+        auto delmark_key = data_filename.toView().getDelMarkKey();
 
         // Either lock or delete file should exist
-        if (DB::S3::objectExists(*s3_client, s3_client->bucket(), delete_file_name))
+        if (DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key))
         {
-            DB::S3::deleteObject(*s3_client, s3_client->bucket(), delete_file_name);
+            DB::S3::deleteObject(*s3_client, s3_client->bucket(), delmark_key);
         }
-        else if (DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_file_name))
+        else if (DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_key))
         {
-            DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_file_name);
+            DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_key);
         }
         else
         {
-            ASSERT_TRUE(false);
+            ASSERT_TRUE(false) << fmt::format("none of delmark or lock exist! data_key={} delmark={} lock={}", data_file_key, delmark_key, lock_key);
         }
     }
 }
 CATCH
 
-} // namespace DB::Management::tests
+} // namespace DB::S3::tests

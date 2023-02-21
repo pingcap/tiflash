@@ -17,6 +17,7 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TiDB/OwnerInfo.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
@@ -25,6 +26,7 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
+#include <magic_enum.hpp>
 
 
 namespace DB::S3
@@ -32,18 +34,24 @@ namespace DB::S3
 
 
 S3LockService::S3LockService(Context & context_)
-    : tmt(context_.getGlobalContext().getTMTContext())
-    , s3_client(S3::ClientFactory::instance().createWithBucket())
+    : S3LockService(
+        context_.getGlobalContext().getTMTContext().getS3GCOwnerManager(),
+        S3::ClientFactory::instance().createWithBucket())
+{
+}
+
+S3LockService::S3LockService(OwnerManagerPtr owner_mgr_, std::unique_ptr<TiFlashS3Client> && s3_cli_)
+    : gc_owner(std::move(owner_mgr_))
+    , s3_client(std::move(s3_cli_))
     , log(Logger::get())
 {
-    UNUSED(tmt);
 }
 
 grpc::Status S3LockService::tryAddLock(const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response)
 {
     try
     {
-        response->set_is_success(tryAddLockImpl(request->ori_data_file(), request->lock_store_id(), request->upload_seq(), response));
+        tryAddLockImpl(request->data_file_key(), request->lock_store_id(), request->lock_seq(), response);
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)
@@ -77,7 +85,7 @@ grpc::Status S3LockService::tryMarkDelete(const disaggregated::TryMarkDeleteRequ
 {
     try
     {
-        response->set_is_success(tryMarkDeleteImpl(request->ori_data_file(), response));
+        tryMarkDeleteImpl(request->data_file_key(), response);
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)
@@ -107,6 +115,51 @@ grpc::Status S3LockService::tryMarkDelete(const disaggregated::TryMarkDeleteRequ
     }
 }
 
+template <typename Resp>
+bool S3LockService::setOwnerChanged(Resp * response)
+{
+    // return the owner info to client retry
+    const auto owner_info = gc_owner->getOwnerID();
+    switch (owner_info.status)
+    {
+    case DB::OwnerType::IsOwner:
+    case DB::OwnerType::NotOwner:
+    {
+        auto * not_owner = response->mutable_result()->mutable_not_owner();
+        not_owner->set_owner_id(owner_info.owner_id);
+        break;
+    }
+    case DB::OwnerType::NoLeader:
+    {
+        auto * conflict = response->mutable_result()->mutable_conflict();
+        conflict->set_reason(fmt::format("no available gc owner"));
+        break;
+    }
+    case DB::OwnerType::GrpcError:
+    {
+        auto * conflict = response->mutable_result()->mutable_conflict();
+        conflict->set_reason(fmt::format("get gc owner error, {}", owner_info.errMsg()));
+        break;
+    }
+    }
+    return false;
+}
+
+S3LockService::DataFileMutexPtr
+S3LockService::getDataFileLatch(const String & data_file_key)
+{
+    std::unique_lock lock(file_latch_map_mutex);
+    auto it = file_latch_map.find(data_file_key);
+    if (it == file_latch_map.end())
+    {
+        it = file_latch_map.emplace(data_file_key, std::make_shared<DataFileMutex>()).first;
+    }
+    auto file_latch = it->second;
+    // must add ref count under the protection of `file_latch_map_mutex`
+    file_latch->addRefCount();
+    return file_latch;
+}
+
 bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_store_id, UInt64 lock_seq, disaggregated::TryAddLockResponse * response)
 {
     if (data_file_key.empty())
@@ -115,24 +168,19 @@ bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_sto
     const S3FilenameView key_view = S3FilenameView::fromKey(data_file_key);
     RUNTIME_CHECK(key_view.isDataFile(), data_file_key);
 
-    // Get the lock of the file
-    DataFileMutexPtr file_lock;
+    if (!gc_owner->isOwner())
     {
-        std::unique_lock lock(file_latch_map_mutex);
-        auto it = file_latch_map.find(data_file_key);
-        if (it == file_latch_map.end())
-        {
-            it = file_latch_map.emplace(data_file_key, std::make_shared<DataFileMutex>()).first;
-        }
-        file_lock = it->second;
-        file_lock->addRefCount();
+        return setOwnerChanged(response);
     }
 
-    file_lock->lock();
+    // Get the latch of the file, with ref count added
+    auto file_lock = getDataFileLatch(data_file_key);
+    file_lock->lock(); // prevent other request on the same key
     SCOPE_EXIT({
         file_lock->unlock();
         std::unique_lock lock(file_latch_map_mutex);
-        if (file_lock->getRefCount() == 0)
+        // currently no request for the same key, release
+        if (file_lock->decreaseRefCount() == 0)
         {
             file_latch_map.erase(data_file_key);
         }
@@ -141,7 +189,8 @@ bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_sto
     // make sure data file exists
     if (!DB::S3::objectExists(*s3_client, s3_client->bucket(), data_file_key))
     {
-        response->mutable_error()->mutable_err_data_file_is_missing();
+        auto * e = response->mutable_result()->mutable_conflict();
+        e->set_reason(fmt::format("data file not exist, key={}", data_file_key));
         return false;
     }
 
@@ -149,84 +198,89 @@ bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_sto
     const auto delmark_key = key_view.getDelMarkKey();
     if (DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key))
     {
-        response->mutable_error()->mutable_err_data_file_is_deleted();
+        auto * e = response->mutable_result()->mutable_conflict();
+        e->set_reason(fmt::format("data file is mark deleted, key={} delmark={}", data_file_key, delmark_key));
         return false;
     }
 
-    try
+    // Check whether this node is owner again before uploading lock file
+    if (!gc_owner->isOwner())
     {
-        // upload lock file
-        const auto lock_key = key_view.getLockKey(lock_store_id, lock_seq);
-        DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), lock_key);
+        return setOwnerChanged(response);
     }
-    catch (...)
-    {
-        response->mutable_error()->mutable_err_add_lock_file_fail();
-        return false;
-    }
+    const auto lock_key = key_view.getLockKey(lock_store_id, lock_seq);
+    // upload lock file
+    DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), lock_key);
 
+    response->mutable_result()->mutable_success();
     return true;
+}
+
+std::optional<String> S3LockService::anyLockExist(const String & lock_prefix) const
+{
+    std::optional<String> lock_key;
+    DB::S3::listPrefix(
+        *s3_client,
+        s3_client->bucket(),
+        lock_prefix,
+        "",
+        [&lock_key](const Aws::S3::Model::ListObjectsV2Result & result) -> S3::PageResult {
+            const auto & contents = result.GetContents();
+            if (!contents.empty())
+            {
+                lock_key = contents.front().GetKey();
+            }
+            return S3::PageResult{
+                .num_keys = contents.size(),
+                .more = false, // do not need more result
+            };
+        });
+    return lock_key;
 }
 
 bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregated::TryMarkDeleteResponse * response)
 {
-    if (data_file_key.empty())
-        return false;
-
     const S3FilenameView key_view = S3FilenameView::fromKey(data_file_key);
     RUNTIME_CHECK(key_view.isDataFile(), data_file_key);
 
-    // Get the lock of the file
-    DataFileMutexPtr file_lock;
+    if (!gc_owner->isOwner())
     {
-        std::unique_lock lock(file_latch_map_mutex);
-        auto it = file_latch_map.find(data_file_key);
-        if (it == file_latch_map.end())
-        {
-            it = file_latch_map.emplace(data_file_key, std::make_shared<DataFileMutex>()).first;
-        }
-        file_lock = it->second;
-        file_lock->addRefCount();
+        return setOwnerChanged(response);
     }
 
-    file_lock->lock();
+    // Get the latch of the file, with ref count added
+    auto file_lock = getDataFileLatch(data_file_key);
+    file_lock->lock(); // prevent other request on the same key
     SCOPE_EXIT({
         file_lock->unlock();
         std::unique_lock lock(file_latch_map_mutex);
-        if (file_lock->getRefCount() == 0)
+        // currently no request for the same key, release
+        if (file_lock->decreaseRefCount() == 0)
         {
             file_latch_map.erase(data_file_key);
         }
     });
 
-    const auto lock_prefix = key_view.getLockPrefix();
-    bool has_any_lock = false;
     // make sure data file has not been locked
-    DB::S3::listPrefix(*s3_client, s3_client->bucket(), lock_prefix, "", [&has_any_lock](const auto & result) -> S3::PageResult {
-        const auto & contents = result.GetContents();
-        has_any_lock = !contents.empty();
-        return S3::PageResult{
-            .num_keys = contents.size(),
-            .more = false, // do not need more result
-        };
-    });
-    if (has_any_lock)
+    const auto lock_prefix = key_view.getLockPrefix();
+    std::optional<String> lock_key = anyLockExist(lock_prefix);
+    if (lock_key)
     {
-        response->mutable_error()->mutable_err_data_file_is_locked();
+        auto * e = response->mutable_result()->mutable_conflict();
+        e->set_reason(fmt::format("data file is locked, key={} lock_by={}", data_file_key, lock_key.value()));
         return false;
     }
 
-    // upload delete file
-    try
+    // Check whether this node is owner again before marking delete
+    if (!gc_owner->isOwner())
     {
-        DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), lock_prefix);
+        return setOwnerChanged(response);
     }
-    catch (...)
-    {
-        response->mutable_error()->mutable_err_add_delete_file_fail();
-        return false;
-    }
+    // upload delete mark
+    const auto delmark_key = key_view.getDelMarkKey();
+    DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), delmark_key);
 
+    response->mutable_result()->mutable_success();
     return true;
 }
 

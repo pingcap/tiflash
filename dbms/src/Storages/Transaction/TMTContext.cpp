@@ -129,6 +129,8 @@ void TMTContext::shutdown()
 {
     if (s3gc_owner)
     {
+        // stop the campaign loop, so the S3LockService will
+        // let client retry
         s3gc_owner->cancel();
         s3gc_owner = nullptr;
     }

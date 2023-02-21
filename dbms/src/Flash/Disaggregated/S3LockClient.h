@@ -22,11 +22,11 @@ private:
 public:
     explicit S3LockClient(Context & context_);
 
-    std::pair<bool, std::optional<disaggregated::S3LockError>>
-    sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id, UInt32 lock_store_id, UInt32 upload_seq);
+    std::pair<bool, std::optional<disaggregated::S3LockResult>>
+    sendTryAddLockRequest(String address, int timeout, const String & ori_data_file, UInt32 lock_store_id, UInt32 lock_seq);
 
-    std::pair<bool, std::optional<disaggregated::S3LockError>>
-    sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file, UInt32 ori_store_id);
+    std::pair<bool, std::optional<disaggregated::S3LockResult>>
+    sendTryMarkDeleteRequest(String address, int timeout, const String & ori_data_file);
 };
 
 } // namespace DB::S3

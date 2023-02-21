@@ -74,10 +74,10 @@ int main(int argc, char ** argv)
     DB::DM::SegmentReadTaskScheduler::instance();
 
     auto s3config = DB::StorageS3Config{
-        .endpoint = "",
-        .bucket = "",
-        .access_key_id = "",
-        .secret_access_key = "",
+        .endpoint = "http://172.16.5.85:9000",
+        .bucket = "jayson",
+        .access_key_id = "minioadmin",
+        .secret_access_key = "minioadmin",
     };
     DB::S3::ClientFactory::instance().init(s3config);
 

@@ -17,11 +17,12 @@
 #include <Common/Logger.h>
 #include <Interpreters/Context.h>
 #include <Storages/S3/S3Common.h>
+#include <TiDB/OwnerManager.h>
 #include <common/types.h>
 #include <disaggregated.pb.h>
 #include <grpcpp/support/status.h>
 
-#include <fstream>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 
@@ -43,6 +44,8 @@ class S3LockService final : private boost::noncopyable
 public:
     explicit S3LockService(Context & context_);
 
+    S3LockService(OwnerManagerPtr owner_mgr_, std::unique_ptr<TiFlashS3Client> && s3_cli_);
+
     ~S3LockService() = default;
 
     grpc::Status tryAddLock(const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response);
@@ -50,7 +53,7 @@ public:
 
     grpc::Status tryMarkDelete(const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response);
 
-public:
+private:
     struct DataFileMutex;
     using DataFileMutexPtr = std::shared_ptr<DataFileMutex>;
     struct DataFileMutex
@@ -63,29 +66,34 @@ public:
             file_mutex.lock();
         }
 
+        void unlock()
+        {
+            file_mutex.unlock();
+        }
+
+        // must be protected by the mutex on the whole map
         void addRefCount()
         {
             ++ref_count;
         }
 
-        void unlock()
+        // must be protected by the mutex on the whole map
+        UInt32 decreaseRefCount()
         {
-            file_mutex.unlock();
             --ref_count;
-        }
-
-        UInt32 getRefCount() const
-        {
             return ref_count;
         }
     };
 
-private:
-    TMTContext & tmt;
+    DataFileMutexPtr getDataFileLatch(const String & data_file_key);
 
+    std::optional<String> anyLockExist(const String & lock_prefix) const;
+
+private:
     std::unordered_map<String, DataFileMutexPtr> file_latch_map;
     std::mutex file_latch_map_mutex;
 
+    OwnerManagerPtr gc_owner;
     const std::unique_ptr<TiFlashS3Client> s3_client;
 
     LoggerPtr log;
@@ -94,6 +102,9 @@ private:
     bool tryAddLockImpl(const String & data_file_key, UInt64 lock_store_id, UInt64 lock_seq, disaggregated::TryAddLockResponse * response);
 
     bool tryMarkDeleteImpl(const String & data_file_key, disaggregated::TryMarkDeleteResponse * response);
+
+    template <typename Resp>
+    bool setOwnerChanged(Resp * response);
 };
 
 
