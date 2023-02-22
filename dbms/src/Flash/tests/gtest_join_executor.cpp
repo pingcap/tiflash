@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnNullable.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <Functions/FunctionHelpers.h>
 
 #include <ext/enumerate.h>
 #include <tuple>
@@ -869,9 +871,60 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, NullAwareLeftSemiJoin)
+template <tipb::JoinType JOIN_TYPE>
+ColumnsWithTypeAndName genNullAwareJoinResult(const ColumnsWithTypeAndName & left, const ColumnWithTypeAndName & left_semi_ans)
+{
+    static_assert(JOIN_TYPE == tipb::JoinType::TypeLeftOuterSemiJoin || JOIN_TYPE == tipb::JoinType::TypeAntiLeftOuterSemiJoin
+                    || JOIN_TYPE == tipb::JoinType::TypeAntiSemiJoin);
+
+    ColumnsWithTypeAndName res = left;
+    if constexpr (JOIN_TYPE == tipb::JoinType::TypeLeftOuterSemiJoin)
+    {
+        res.emplace_back(left_semi_ans);
+    }
+    else if constexpr (JOIN_TYPE == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
+    {
+        auto new_column = left_semi_ans.column->cloneEmpty();
+        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(left_semi_ans.column.get());
+        const auto & nested_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
+        for (size_t i = 0; i < nullable_column->size(); ++i)
+        {
+            if (nullable_column->isNullAt(i))
+                new_column->insert(FIELD_NULL);
+            else if (nested_column_data[i])
+                new_column->insert(FIELD_INT8_0);
+            else
+                new_column->insert(FIELD_INT8_1);
+        }
+        auto anti_left_semi_ans = left_semi_ans.cloneEmpty();
+        anti_left_semi_ans.column = std::move(new_column);
+
+        res.emplace_back(anti_left_semi_ans);
+    }
+    else if constexpr (JOIN_TYPE == tipb::JoinType::TypeAntiSemiJoin)
+    {
+        IColumn::Filter filter(left_semi_ans.column->size());
+        const auto * nullable_column = checkAndGetColumn<ColumnNullable>(left_semi_ans.column.get());
+        const auto & nested_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
+        for (size_t i = 0; i < nullable_column->size(); ++i)
+        {
+            if (nullable_column->isNullAt(i))
+                filter[i] = 0;
+            else if (nested_column_data[i])
+                filter[i] = 0;
+            else
+                filter[i] = 1;
+        }
+        for (size_t i = 0; i < res.size(); ++i)
+            res[i].column = res[i].column->filter(filter, -1);
+    }
+    return res;
+}
+
+TEST_F(JoinExecutorTestRunner, NullAwareSemiJoin)
 try
 {
+    using tipb::JoinType;
     // One join key + no other condition
     // left table + right table + result column
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t1 = {
@@ -898,12 +951,12 @@ try
 
     for (const auto & [left, right, res] : t1)
     {
-        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}}, right);
+        context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}}, right);
 
-        auto request = context.scan("null_aware_left_semi", "t")
-                           .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeLeftOuterSemiJoin,
+        auto request = context.scan("null_aware_semi", "t")
+                           .join(context.scan("null_aware_semi", "s"),
+                                 JoinType::TypeLeftOuterSemiJoin,
                                  {},
                                  {},
                                  {},
@@ -912,11 +965,33 @@ try
                                  0,
                                  {col("a")})
                            .build(context);
+        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeLeftOuterSemiJoin>(left, res));
 
-        ColumnsWithTypeAndName ans = left;
-        ans.emplace_back(res);
+        request = context.scan("null_aware_semi", "t")
+                           .join(context.scan("null_aware_semi", "s"),
+                                 JoinType::TypeAntiLeftOuterSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 0,
+                                 {col("a")})
+                           .build(context);
+        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiLeftOuterSemiJoin>(left, res));
 
-        executeAndAssertColumnsEqual(request, ans);
+        request = context.scan("null_aware_semi", "t")
+                      .join(context.scan("null_aware_semi", "s"),
+                            JoinType::TypeAntiSemiJoin,
+                            {},
+                            {},
+                            {},
+                            {},
+                            {},
+                            0,
+                            {col("a")})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiSemiJoin>(left, res));
     }
 
     // One join key + other condition
@@ -950,11 +1025,11 @@ try
 
     for (const auto & [left, right, res] : t2)
     {
-        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
+        context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
 
-        auto request = context.scan("null_aware_left_semi", "t")
-                           .join(context.scan("null_aware_left_semi", "s"),
+        auto request = context.scan("null_aware_semi", "t")
+                           .join(context.scan("null_aware_semi", "s"),
                                  tipb::JoinType::TypeLeftOuterSemiJoin,
                                  {},
                                  {},
@@ -964,11 +1039,33 @@ try
                                  0,
                                  {col("a")})
                            .build(context);
+        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeLeftOuterSemiJoin>(left, res));
 
-        ColumnsWithTypeAndName ans = left;
-        ans.emplace_back(res);
+        request = context.scan("null_aware_semi", "t")
+                           .join(context.scan("null_aware_semi", "s"),
+                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {gt(col("c"), col("b"))},
+                                 {},
+                                 0,
+                                 {col("a")})
+                           .build(context);
+        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiLeftOuterSemiJoin>(left, res));
 
-        executeAndAssertColumnsEqual(request, ans);
+        request = context.scan("null_aware_semi", "t")
+                      .join(context.scan("null_aware_semi", "s"),
+                            tipb::JoinType::TypeAntiSemiJoin,
+                            {},
+                            {},
+                            {},
+                            {gt(col("c"), col("b"))},
+                            {},
+                            0,
+                            {col("a")})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiSemiJoin>(left, res));
     }
 
     // two join keys + no other condition
@@ -993,11 +1090,11 @@ try
 
     for (const auto & [left, right, res] : t3)
     {
-        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, right);
+        context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, right);
 
-        auto request = context.scan("null_aware_left_semi", "t")
-                           .join(context.scan("null_aware_left_semi", "s"),
+        auto request = context.scan("null_aware_semi", "t")
+                           .join(context.scan("null_aware_semi", "s"),
                                  tipb::JoinType::TypeLeftOuterSemiJoin,
                                  {},
                                  {},
@@ -1007,11 +1104,33 @@ try
                                  0,
                                  {col("a"), col("b")})
                            .build(context);
+        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeLeftOuterSemiJoin>(left, res));
 
-        ColumnsWithTypeAndName ans = left;
-        ans.emplace_back(res);
+        request = context.scan("null_aware_semi", "t")
+                      .join(context.scan("null_aware_semi", "s"),
+                            tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+                            {},
+                            {},
+                            {},
+                            {},
+                            {},
+                            0,
+                            {col("a"), col("b")})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiLeftOuterSemiJoin>(left, res));
 
-        executeAndAssertColumnsEqual(request, ans);
+        request = context.scan("null_aware_semi", "t")
+                      .join(context.scan("null_aware_semi", "s"),
+                            tipb::JoinType::TypeAntiSemiJoin,
+                            {},
+                            {},
+                            {},
+                            {},
+                            {},
+                            0,
+                            {col("a"), col("b")})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiSemiJoin>(left, res));
     }
 
     // two join keys + other condition
@@ -1036,11 +1155,11 @@ try
 
     for (const auto & [left, right, res] : t4)
     {
-        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}}, right);
+        context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}}, right);
 
-        auto request = context.scan("null_aware_left_semi", "t")
-                           .join(context.scan("null_aware_left_semi", "s"),
+        auto request = context.scan("null_aware_semi", "t")
+                           .join(context.scan("null_aware_semi", "s"),
                                  tipb::JoinType::TypeLeftOuterSemiJoin,
                                  {},
                                  {},
@@ -1050,394 +1169,38 @@ try
                                  0,
                                  {col("a"), col("b")})
                            .build(context);
+        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeLeftOuterSemiJoin>(left, res));
 
-        ColumnsWithTypeAndName ans = left;
-        ans.emplace_back(res);
+        request = context.scan("null_aware_semi", "t")
+                      .join(context.scan("null_aware_semi", "s"),
+                            tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+                            {},
+                            {},
+                            {},
+                            {gt(col("d"), col("c"))},
+                            {},
+                            0,
+                            {col("a"), col("b")})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiLeftOuterSemiJoin>(left, res));
 
-        executeAndAssertColumnsEqual(request, ans);
+        request = context.scan("null_aware_semi", "t")
+                      .join(context.scan("null_aware_semi", "s"),
+                            tipb::JoinType::TypeAntiSemiJoin,
+                            {},
+                            {},
+                            {},
+                            {gt(col("d"), col("c"))},
+                            {},
+                            0,
+                            {col("a"), col("b")})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiSemiJoin>(left, res));
+
     }
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, NullAwareLeftAntiSemiJoin)
-try
-{
-    // One join key + no other condition
-    // left table + right table + result column
-    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t1 = {
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {6, 7, 8, 9, 10})},
-            toNullableVec<Int8>({1, 1, 1, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, 8, 9, 10})},
-            toNullableVec<Int8>({0, 0, {}, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, {}, 5})},
-            {toNullableVec<Int32>("a", {1, {}, 3, 4, {}})},
-            toNullableVec<Int8>({0, {}, 0, {}, {}}),
-        }};
-
-    for (const auto & [left, right, res] : t1)
-    {
-        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}}, right);
-
-        auto request = context.scan("null_aware_left_semi", "t")
-                           .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin,
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 0,
-                                 {col("a")})
-                           .build(context);
-
-        ColumnsWithTypeAndName ans = left;
-        ans.emplace_back(res);
-
-        executeAndAssertColumnsEqual(request, ans);
-    }
-
-    // One join key + other condition
-    // left table + right table + result column
-    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t2 = {
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {2, 2, 2, 2, 2})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            toNullableVec<Int8>({1, 1, 1, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {6, 7, 8, 9, 10}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({1, 1, 1, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("b", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 8, 9, 10}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({0, 0, {}, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, {}, 5}), toNullableVec<Int32>("b", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, {}, 3, 4, {}}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({0, {}, 0, {}, {}}),
-        }};
-
-    for (const auto & [left, right, res] : t2)
-    {
-        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
-
-        auto request = context.scan("null_aware_left_semi", "t")
-                           .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin,
-                                 {},
-                                 {},
-                                 {},
-                                 {gt(col("c"), col("b"))},
-                                 {},
-                                 0,
-                                 {col("a")})
-                           .build(context);
-
-        ColumnsWithTypeAndName ans = left;
-        ans.emplace_back(res);
-
-        executeAndAssertColumnsEqual(request, ans);
-    }
-
-    // two join keys + no other condition
-    // left table + right table + result column
-    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t3 = {
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {6, 7, 8, 9, 10})},
-            toNullableVec<Int8>({1, 1, 1, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {1, {}, 3, {}, 4, 4}), toNullableVec<Int32>("b", {1, 2, {}, 4, {}, 4})},
-            toNullableVec<Int8>({0, {}, {}, 0, 1}),
-        },
-    };
-
-    for (const auto & [left, right, res] : t3)
-    {
-        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, right);
-
-        auto request = context.scan("null_aware_left_semi", "t")
-                           .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin,
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 0,
-                                 {col("a"), col("b")})
-                           .build(context);
-
-        ColumnsWithTypeAndName ans = left;
-        ans.emplace_back(res);
-
-        executeAndAssertColumnsEqual(request, ans);
-    }
-
-    // two join keys + other condition
-    // left table + right table + result column
-    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t4 = {
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {6, 7, 8, 9, 10}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({1, 1, 1, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, {}, 3, {}, 4, 4}), toNullableVec<Int32>("b", {1, 2, {}, 4, {}, 4}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({0, {}, {}, 0, 1}),
-        },
-    };
-
-    for (const auto & [left, right, res] : t4)
-    {
-        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}}, right);
-
-        auto request = context.scan("null_aware_left_semi", "t")
-                           .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin,
-                                 {},
-                                 {},
-                                 {},
-                                 {gt(col("d"), col("c"))},
-                                 {},
-                                 0,
-                                 {col("a"), col("b")})
-                           .build(context);
-
-        ColumnsWithTypeAndName ans = left;
-        ans.emplace_back(res);
-
-        executeAndAssertColumnsEqual(request, ans);
-    }
-}
-CATCH
-
-TEST_F(JoinExecutorTestRunner, NullAwareAntiSemiJoin)
-try
-{
-    // One join key + no other condition
-    // left table + right table + result column
-    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t1 = {
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {6, 7, 8, 9, 10})},
-            toNullableVec<Int8>({1, 1, 1, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, 8, 9, 10})},
-            toNullableVec<Int8>({0, 0, {}, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, {}, 5})},
-            {toNullableVec<Int32>("a", {1, {}, 3, 4, {}})},
-            toNullableVec<Int8>({0, {}, 0, {}, {}}),
-        }};
-
-    for (const auto & [left, right, res] : t1)
-    {
-        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}}, right);
-
-        auto request = context.scan("null_aware_left_semi", "t")
-                           .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiSemiJoin,
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 0,
-                                 {col("a")})
-                           .build(context);
-
-        ColumnsWithTypeAndName ans = left;
-        ans.emplace_back(res);
-
-        executeAndAssertColumnsEqual(request, ans);
-    }
-
-    // One join key + other condition
-    // left table + right table + result column
-    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t2 = {
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {2, 2, 2, 2, 2})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            toNullableVec<Int8>({1, 1, 1, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {6, 7, 8, 9, 10}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({1, 1, 1, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("b", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 8, 9, 10}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({0, 0, {}, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, {}, 5}), toNullableVec<Int32>("b", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, {}, 3, 4, {}}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({0, {}, 0, {}, {}}),
-        }};
-
-    for (const auto & [left, right, res] : t2)
-    {
-        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
-
-        auto request = context.scan("null_aware_left_semi", "t")
-                           .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiSemiJoin,
-                                 {},
-                                 {},
-                                 {},
-                                 {gt(col("c"), col("b"))},
-                                 {},
-                                 0,
-                                 {col("a")})
-                           .build(context);
-
-        ColumnsWithTypeAndName ans = left;
-        ans.emplace_back(res);
-
-        executeAndAssertColumnsEqual(request, ans);
-    }
-
-    // two join keys + no other condition
-    // left table + right table + result column
-    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t3 = {
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {6, 7, 8, 9, 10})},
-            toNullableVec<Int8>({1, 1, 1, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
-            {toNullableVec<Int32>("a", {1, {}, 3, {}, 4, 4}), toNullableVec<Int32>("b", {1, 2, {}, 4, {}, 4})},
-            toNullableVec<Int8>({0, {}, {}, 0, 1}),
-        },
-    };
-
-    for (const auto & [left, right, res] : t3)
-    {
-        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, right);
-
-        auto request = context.scan("null_aware_left_semi", "t")
-                           .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiSemiJoin,
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 0,
-                                 {col("a"), col("b")})
-                           .build(context);
-
-        ColumnsWithTypeAndName ans = left;
-        ans.emplace_back(res);
-
-        executeAndAssertColumnsEqual(request, ans);
-    }
-
-    // two join keys + other condition
-    // left table + right table + result column
-    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t4 = {
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({0, 0, 0, 0, 0}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {6, 7, 8, 9, 10}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({1, 1, 1, 1, 1}),
-        },
-        {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {1, {}, 3, {}, 4, 4}), toNullableVec<Int32>("b", {1, 2, {}, 4, {}, 4}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2, 2})},
-            toNullableVec<Int8>({0, {}, {}, 0, 1}),
-        },
-    };
-
-    for (const auto & [left, right, res] : t4)
-    {
-        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}}, right);
-
-        auto request = context.scan("null_aware_left_semi", "t")
-                           .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiSemiJoin,
-                                 {},
-                                 {},
-                                 {},
-                                 {gt(col("d"), col("c"))},
-                                 {},
-                                 0,
-                                 {col("a"), col("b")})
-                           .build(context);
-
-        ColumnsWithTypeAndName ans = left;
-        ans.emplace_back(res);
-
-        executeAndAssertColumnsEqual(request, ans);
-    }
-}
-CATCH
 
 } // namespace tests
 } // namespace DB
