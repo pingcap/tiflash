@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 
+#include <condition_variable>
 #include <deque>
 #include <mutex>
 

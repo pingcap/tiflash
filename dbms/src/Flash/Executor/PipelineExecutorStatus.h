@@ -17,6 +17,7 @@
 #include <Flash/Executor/ExecutionResult.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <exception>
 #include <mutex>
 

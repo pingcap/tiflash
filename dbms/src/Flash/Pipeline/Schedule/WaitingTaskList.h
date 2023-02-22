@@ -16,6 +16,7 @@
 
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
+#include <condition_variable>
 #include <list>
 #include <mutex>
 

@@ -18,6 +18,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <tuple>
 
 
 namespace detail
