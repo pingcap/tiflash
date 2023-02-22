@@ -131,12 +131,12 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
 
 void SpillHandler::finish()
 {
+    /// it is guaranteed that once current_spilled_file_index >= 0, at least one block is written
     if (likely(current_spilled_file_index >= 0))
     {
         if (writer != nullptr)
         {
-            auto spill_details = writer->finishWrite();
-            spilled_files[current_spilled_file_index]->updateSpillDetails(spill_details);
+            spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
             auto current_spill_details = spilled_files[current_spilled_file_index]->getSpillDetails();
             if (!spiller->enable_append_write || isSpilledFileFull(current_spill_details.rows, current_spill_details.data_bytes_uncompressed))
             {
@@ -144,56 +144,39 @@ void SpillHandler::finish()
                 spilled_files[current_spilled_file_index]->markFull();
             }
         }
-        else
-        {
-            /// writer == nullptr means no write to current file
-            if (!current_append_write)
-            {
-                /// if current_append_write is true, we still need to put the original file back, so can not discard the file here
-                --current_spilled_file_index;
-                spilled_files.pop_back();
-            }
-        }
 
-        if (current_spilled_file_index >= 0)
+        auto gen_spill_detail_info = [&]() {
+            SpillDetails details{0, 0, 0};
+            for (Int64 i = 0; i <= current_spilled_file_index; i++)
+                details.merge(spilled_files[i]->getSpillDetails());
+            details.subtract(prev_spill_details);
+            return fmt::format("Commit spilled data, details: spill {} rows in {:.3f} sec,"
+                               " {:.3f} MiB uncompressed, {:.3f} MiB compressed, {:.3f} uncompressed bytes per row, {:.3f} compressed bytes per row, "
+                               "compression rate: {:.3f} ({:.3f} rows/sec., {:.3f} MiB/sec. uncompressed, {:.3f} MiB/sec. compressed)",
+                               details.rows,
+                               time_cost,
+                               (details.data_bytes_uncompressed / 1048576.0),
+                               (details.data_bytes_compressed / 1048576.0),
+                               (details.data_bytes_uncompressed / static_cast<double>(details.rows)),
+                               (details.data_bytes_compressed / static_cast<double>(details.rows)),
+                               (details.data_bytes_uncompressed / static_cast<double>(details.data_bytes_compressed)),
+                               (details.rows / time_cost),
+                               (details.data_bytes_uncompressed / time_cost / 1048576.0),
+                               (details.data_bytes_compressed / time_cost / 1048576.0));
+        };
+        LOG_DEBUG(spiller->logger, gen_spill_detail_info());
+        std::unique_lock lock(spiller->spilled_files[partition_id]->spilled_files_mutex);
+        for (auto & spilled_file : spilled_files)
         {
-            auto gen_spill_detail_info = [&]() {
-                SpillDetails details{0, 0, 0};
-                for (Int64 i = 0; i <= current_spilled_file_index; i++)
-                    details.merge(spilled_files[i]->getSpillDetails());
-                details.subtract(prev_spill_details);
-                return fmt::format("Commit spilled data, details: spill {} rows in {:.3f} sec,"
-                                   " {:.3f} MiB uncompressed, {:.3f} MiB compressed, {:.3f} uncompressed bytes per row, {:.3f} compressed bytes per row, "
-                                   "compression rate: {:.3f} ({:.3f} rows/sec., {:.3f} MiB/sec. uncompressed, {:.3f} MiB/sec. compressed)",
-                                   details.rows,
-                                   time_cost,
-                                   (details.data_bytes_uncompressed / 1048576.0),
-                                   (details.data_bytes_compressed / 1048576.0),
-                                   (details.data_bytes_uncompressed / static_cast<double>(details.rows)),
-                                   (details.data_bytes_compressed / static_cast<double>(details.rows)),
-                                   (details.data_bytes_uncompressed / static_cast<double>(details.data_bytes_compressed)),
-                                   (details.rows / time_cost),
-                                   (details.data_bytes_uncompressed / time_cost / 1048576.0),
-                                   (details.data_bytes_compressed / time_cost / 1048576.0));
-            };
-            LOG_DEBUG(spiller->logger, gen_spill_detail_info());
-            std::unique_lock lock(spiller->spilled_files[partition_id]->spilled_files_mutex);
-            for (auto & spilled_file : spilled_files)
-            {
-                if (!spilled_file->isFull())
-                    spiller->spilled_files[partition_id]->mutable_spilled_files.push_back(std::move(spilled_file));
-                else
-                    spiller->spilled_files[partition_id]->immutable_spilled_files.push_back(std::move(spilled_file));
-            }
-            spilled_files.clear();
-            spiller->has_spilled_data = true;
-            current_spilled_file_index = -1;
-            RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
+            if (!spilled_file->isFull())
+                spiller->spilled_files[partition_id]->mutable_spilled_files.push_back(std::move(spilled_file));
+            else
+                spiller->spilled_files[partition_id]->immutable_spilled_files.push_back(std::move(spilled_file));
         }
-        else
-        {
-            assert(spilled_files.empty());
-        }
+        spilled_files.clear();
+        spiller->has_spilled_data = true;
+        current_spilled_file_index = -1;
+        RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
     }
 }
 
