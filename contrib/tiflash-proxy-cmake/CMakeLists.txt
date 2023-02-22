@@ -11,8 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# TODO: set default to false
-option(ENABLE_UNI_PS_FFI "Enable write proxy data to uni ps" ON)
+option(ENABLE_UNI_PS_FFI "Enable write proxy data to uni ps" OFF)
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG" OR SAN_DEBUG)
     set(_TIFLASH_PROXY_BUILD_PROFILE "debug")
