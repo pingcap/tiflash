@@ -70,9 +70,9 @@ public:
 
     void TearDown() override;
 
-    static void startServers();
+    void startServers();
 
-    static void startServers(size_t server_num_);
+    void startServers(size_t server_num_);
     static size_t serverNum();
 
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.

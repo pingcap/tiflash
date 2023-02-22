@@ -102,10 +102,20 @@ public:
 };
 
 
+#define WRAP_FOR_SERVER_TEST_BEGIN                 \
+    std::vector<bool> pipeline_bools{false, true}; \
+    for (auto enable_pipeline : pipeline_bools)    \
+    {                                              \
+        enablePipeline(enable_pipeline);
+
+#define WRAP_FOR_SERVER_TEST_END \
+    }
+
 TEST_F(ComputeServerRunner, runAggTasks)
 try
 {
     startServers(4);
+    WRAP_FOR_SERVER_TEST_BEGIN
     {
         std::vector<String> expected_strings = {
             R"(exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}
@@ -179,6 +189,7 @@ exchange_sender_3 | type:PassThrough, {<0, Long>}
             ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
         }
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
@@ -186,6 +197,7 @@ TEST_F(ComputeServerRunner, runJoinTasks)
 try
 {
     startServers(3);
+    WRAP_FOR_SERVER_TEST_BEGIN
     {
         auto expected_cols = {
             toNullableVec<String>({{}, "banana", "banana"}),
@@ -249,6 +261,7 @@ try
             ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
         }
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
@@ -256,6 +269,7 @@ TEST_F(ComputeServerRunner, runJoinThenAggTasks)
 try
 {
     startServers(3);
+    WRAP_FOR_SERVER_TEST_BEGIN
     {
         std::vector<String> expected_strings = {
             R"(exchange_sender_10 | type:Hash, {<0, String>}
@@ -343,6 +357,7 @@ try
             ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
         }
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
@@ -359,6 +374,7 @@ try
     std::vector<String> max_cols{"s1", "s2", "s3", "s4", "s5"};
     for (size_t i = 0; i < 1; ++i)
     {
+        WRAP_FOR_SERVER_TEST_BEGIN
         {
             auto request = context
                                .scan("test_db", "test_table_2")
@@ -389,6 +405,7 @@ try
                 toNullableVec<Int32>({{1}})};
             ASSERT_COLUMNS_EQ_UR(expected_cols, buildAndExecuteMPPTasks(request));
         }
+        WRAP_FOR_SERVER_TEST_END
     }
 }
 CATCH
@@ -397,6 +414,7 @@ TEST_F(ComputeServerRunner, cancelAggTasks)
 try
 {
     startServers(4);
+    WRAP_FOR_SERVER_TEST_BEGIN
     {
         auto [query_id, res] = prepareMPPStreams(context
                                                      .scan("test_db", "test_table_1")
@@ -406,6 +424,7 @@ try
         MockComputeServerManager::instance().cancelQuery(query_id);
         EXPECT_TRUE(assertQueryCancelled(query_id));
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
@@ -413,6 +432,7 @@ TEST_F(ComputeServerRunner, cancelJoinTasks)
 try
 {
     startServers(4);
+    WRAP_FOR_SERVER_TEST_BEGIN
     {
         auto [query_id, res] = prepareMPPStreams(context
                                                      .scan("test_db", "l_table")
@@ -421,6 +441,7 @@ try
         MockComputeServerManager::instance().cancelQuery(query_id);
         EXPECT_TRUE(assertQueryCancelled(query_id));
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
@@ -428,6 +449,7 @@ TEST_F(ComputeServerRunner, cancelJoinThenAggTasks)
 try
 {
     startServers(4);
+    WRAP_FOR_SERVER_TEST_BEGIN
     {
         auto [query_id, _] = prepareMPPStreams(context
                                                    .scan("test_db", "l_table")
@@ -438,6 +460,7 @@ try
         MockComputeServerManager::instance().cancelQuery(query_id);
         EXPECT_TRUE(assertQueryCancelled(query_id));
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
@@ -445,6 +468,7 @@ TEST_F(ComputeServerRunner, multipleQuery)
 try
 {
     startServers(4);
+    WRAP_FOR_SERVER_TEST_BEGIN
     {
         auto [query_id1, res1] = prepareMPPStreams(context
                                                        .scan("test_db", "l_table")
@@ -481,6 +505,7 @@ try
             EXPECT_TRUE(assertQueryCancelled(query_id));
         }
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
@@ -489,6 +514,7 @@ try
 {
     // In coprocessor test, we only need to start 1 server.
     startServers(1);
+    WRAP_FOR_SERVER_TEST_BEGIN
     {
         auto request = context
                            .scan("test_db", "l_table")
@@ -499,6 +525,7 @@ try
             toNullableVec<String>({{"apple", {}, "banana"}})};
         ASSERT_COLUMNS_EQ_UR(expected_cols, executeCoprocessorTask(request));
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
@@ -520,6 +547,7 @@ try
     constexpr uint64_t enable = 8;
     constexpr uint64_t disable = 0;
 
+    WRAP_FOR_SERVER_TEST_BEGIN
     for (auto join_type : join_types)
     {
         std::cout << "JoinType: " << static_cast<int>(join_type) << std::endl;
@@ -538,6 +566,7 @@ try
         const auto actual_cols = executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
         ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
@@ -548,6 +577,7 @@ try
     // fine-grained shuffle is enabled.
     constexpr uint64_t enable = 8;
     constexpr uint64_t disable = 0;
+    WRAP_FOR_SERVER_TEST_BEGIN
     {
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
         auto request = context
@@ -562,8 +592,12 @@ try
         const auto actual_cols = executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
         ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
+
+#undef WRAP_FOR_SERVER_TEST_BEGIN
+#undef WRAP_FOR_SERVER_TEST_END
 
 } // namespace tests
 } // namespace DB
