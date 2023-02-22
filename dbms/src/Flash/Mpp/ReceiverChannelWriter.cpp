@@ -39,9 +39,9 @@ inline void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]]
 
 bool ReceiverChannelWriter::writeFineGrain(
     WriteToChannelFunc write_func,
-    size_t source_index, 
-    const TrackedMppDataPacketPtr & tracked_packet, 
-    const mpp::Error * error_ptr, 
+    size_t source_index,
+    const TrackedMppDataPacketPtr & tracked_packet,
+    const mpp::Error * error_ptr,
     const String * resp_ptr)
 {
     bool success = true;
@@ -97,7 +97,7 @@ bool ReceiverChannelWriter::writeFineGrain(
 
 bool ReceiverChannelWriter::writeNonFineGrain(
     WriteToChannelFunc write_func,
-    size_t source_index, 
+    size_t source_index,
     const TrackedMppDataPacketPtr & tracked_packet,
     const mpp::Error * error_ptr,
     const String * resp_ptr)
@@ -125,13 +125,13 @@ bool ReceiverChannelWriter::writeNonFineGrain(
     return success;
 }
 
-    bool ReceiverChannelWriter::isReadyForWrite() const
+bool ReceiverChannelWriter::isReadyForWrite() const
+{
+    for (const auto & msg_channel : *msg_channels)
     {
-        for (const auto & msg_channel : *msg_channels)
-        {
-            if (msg_channel->isFull())
-                return false;
-        }
-        return true;
+        if (msg_channel->isFull())
+            return false;
     }
+    return true;
+}
 } // namespace DB

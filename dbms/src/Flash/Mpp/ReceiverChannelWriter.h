@@ -124,12 +124,12 @@ public:
 
         WriteToChannelFunc write_func;
         if constexpr (non_blocking)
-            write_func = [&](size_t i, ReceivedMessagePtr && recv_msg) { 
-                return (*msg_channels)[i]->nonBlockingPush(std::move(recv_msg)); 
+            write_func = [&](size_t i, ReceivedMessagePtr && recv_msg) {
+                return (*msg_channels)[i]->nonBlockingPush(std::move(recv_msg));
             };
         else
             write_func = [&](size_t i, ReceivedMessagePtr && recv_msg) {
-                return (*msg_channels)[i]->push(std::move(recv_msg)); 
+                return (*msg_channels)[i]->push(std::move(recv_msg));
             };
 
         bool success;
@@ -152,15 +152,15 @@ private:
 
     bool writeFineGrain(
         WriteToChannelFunc write_func,
-        size_t source_index, 
-        const TrackedMppDataPacketPtr & tracked_packet, 
-        const mpp::Error * error_ptr, 
+        size_t source_index,
+        const TrackedMppDataPacketPtr & tracked_packet,
+        const mpp::Error * error_ptr,
         const String * resp_ptr);
     bool writeNonFineGrain(
         WriteToChannelFunc write_func,
-        size_t source_index, 
-        const TrackedMppDataPacketPtr & tracked_packet, 
-        const mpp::Error * error_ptr, 
+        size_t source_index,
+        const TrackedMppDataPacketPtr & tracked_packet,
+        const mpp::Error * error_ptr,
         const String * resp_ptr);
 
     std::atomic<Int64> * data_size_in_queue;

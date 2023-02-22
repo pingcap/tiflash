@@ -31,7 +31,7 @@ public:
     virtual void prepare(const Block &){};
     virtual void write(const Block & block) = 0;
 
-    // For async writer, `isReadyForWrite` need to be called before calling `write`. 
+    // For async writer, `isReadyForWrite` need to be called before calling `write`.
     // ```
     // while (!isReadyForWrite()) {}
     // write(block);

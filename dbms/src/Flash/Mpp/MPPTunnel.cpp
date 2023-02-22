@@ -19,6 +19,7 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
+
 #include <magic_enum.hpp>
 
 namespace DB
