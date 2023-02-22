@@ -240,8 +240,10 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 {
     size_t bytes_written = 0;
     size_t data_bytes = 0;
-    size_t index_bytes = 0;
     size_t mark_bytes = 0;
+    size_t nullmap_data_bytes = 0;
+    size_t nullmap_mark_bytes = 0;
+    size_t index_bytes = 0;
 #ifndef NDEBUG
     auto examine_buffer_size = [](auto & buf, auto & fp) {
         if (!fp.isEncryptionEnabled())
@@ -253,7 +255,16 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         }
     };
 #endif
-
+    auto is_nullmap_stream = [](const IDataType::SubstreamPath & substream) {
+        for (const auto & s : substream)
+        {
+            if (s.type == IDataType::Substream::NullMap)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
     auto callback = [&](const IDataType::SubstreamPath & substream) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream);
         auto & stream = column_streams.at(stream_name);
@@ -263,8 +274,16 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         examine_buffer_size(*stream->plain_file, *this->file_provider);
 #endif
         bytes_written += stream->getWrittenBytes();
-        data_bytes = stream->plain_file->getMaterializedBytes();
-        mark_bytes = stream->mark_file->getMaterializedBytes();
+        if (is_nullmap_stream(substream))
+        {
+            nullmap_data_bytes = stream->plain_file->getMaterializedBytes();
+            nullmap_mark_bytes = stream->mark_file->getMaterializedBytes();
+        }
+        else
+        {
+            data_bytes = stream->plain_file->getMaterializedBytes();
+            mark_bytes = stream->mark_file->getMaterializedBytes();
+        }
         if (stream->minmaxes)
         {
             if (!dmfile->configuration)
@@ -313,8 +332,10 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     auto & col_stat = dmfile->column_stats.at(col_id);
     col_stat.serialized_bytes = bytes_written;
     col_stat.data_bytes = data_bytes;
-    col_stat.index_bytes = index_bytes;
     col_stat.mark_bytes = mark_bytes;
+    col_stat.nullmap_data_bytes = nullmap_data_bytes;
+    col_stat.nullmap_mark_bytes = nullmap_mark_bytes;
+    col_stat.index_bytes = index_bytes;
 }
 
 } // namespace DM

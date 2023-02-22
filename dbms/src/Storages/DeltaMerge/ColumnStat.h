@@ -33,8 +33,10 @@ struct ColumnStat
 
     // These members are only useful when using metav2
     size_t data_bytes = 0;
-    size_t index_bytes = 0;
     size_t mark_bytes = 0;
+    size_t nullmap_data_bytes = 0;
+    size_t nullmap_mark_bytes = 0;
+    size_t index_bytes = 0;
     void serializeToBuffer(WriteBuffer & buf) const
     {
         writeIntBinary(col_id, buf);
@@ -42,8 +44,10 @@ struct ColumnStat
         writeFloatBinary(avg_size, buf);
         writeIntBinary(serialized_bytes, buf);
         writeIntBinary(data_bytes, buf);
-        writeIntBinary(index_bytes, buf);
         writeIntBinary(mark_bytes, buf);
+        writeIntBinary(nullmap_data_bytes, buf);
+        writeIntBinary(nullmap_mark_bytes, buf);
+        writeIntBinary(index_bytes, buf);
     }
 
     void parseFromBuffer(ReadBuffer & buf)
@@ -55,8 +59,10 @@ struct ColumnStat
         readFloatBinary(avg_size, buf);
         readIntBinary(serialized_bytes, buf);
         readIntBinary(data_bytes, buf);
-        readIntBinary(index_bytes, buf);
         readIntBinary(mark_bytes, buf);
+        readIntBinary(nullmap_data_bytes, buf);
+        readIntBinary(nullmap_mark_bytes, buf);
+        readIntBinary(index_bytes, buf);
     }
 };
 

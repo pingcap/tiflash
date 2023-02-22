@@ -268,8 +268,16 @@ try
             ASSERT_EQ(col_stat1.type->getName(), col_stat2.type->getName());
             ASSERT_EQ(col_stat1.serialized_bytes, col_stat2.serialized_bytes);
 
-            ASSERT_EQ(col_stat2.serialized_bytes, col_stat2.data_bytes + col_stat2.index_bytes + col_stat2.mark_bytes)
-                << col_stat2.data_bytes << col_stat2.index_bytes << col_stat2.mark_bytes;
+            ASSERT_EQ(col_stat2.serialized_bytes,
+                      col_stat2.data_bytes + col_stat2.mark_bytes + col_stat2.nullmap_data_bytes + col_stat2.nullmap_mark_bytes + col_stat2.index_bytes)
+                << fmt::format("data_bytes={} mark_bytes={} nullmap_data_bytes={} nullmap_mark_bytes={} index_bytes={} col_id={} type={}",
+                               col_stat2.data_bytes,
+                               col_stat2.mark_bytes,
+                               col_stat2.nullmap_data_bytes,
+                               col_stat2.nullmap_mark_bytes,
+                               col_stat2.index_bytes,
+                               col_stat2.col_id,
+                               col_stat2.type->getName());
 
             ASSERT_EQ(dmfile1->colDataSize(col_def.id), dmfile2->colDataSize(col_def.id));
             ASSERT_EQ(dmfile1->isColIndexExist(col_def.id), dmfile2->isColIndexExist(col_def.id));
@@ -288,7 +296,26 @@ try
         check_column_stats(dmfile1, dmfile2);
     };
 
+    auto add_nullable_columns = [](Block & block, size_t beg, size_t end) {
+        auto num_rows = end - beg;
+        std::vector<UInt64> data(num_rows);
+        std::iota(data.begin(), data.end(), beg);
+        std::vector<Int32> null_map(num_rows, 0);
+        block.insert(DB::tests::createNullableColumn<UInt64>(
+            data,
+            null_map,
+            "Nullable(UInt64)",
+            3));
+    };
+
+    auto prepare_block = [&](size_t beg, size_t end) {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false);
+        add_nullable_columns(block, beg, end);
+        return block;
+    };
+
     auto cols = DMTestEnv::getDefaultColumns();
+    cols->emplace_back(ColumnDefine{3, "Nullable(UInt64)", DataTypeFactory::instance().get("Nullable(UInt64)")});
 
     const size_t num_rows_write = 128;
 
@@ -305,8 +332,8 @@ try
     block_propertys.push_back(block_property2);
     DMFilePtr dmfile1, dmfile2;
     {
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        Block block1 = prepare_block(0, num_rows_write / 2);
+        Block block2 = prepare_block(num_rows_write / 2, num_rows_write);
         auto mode = DMFileMode::DirectoryChecksum;
         auto configuration = createConfiguration(mode);
         dmfile1 = DMFile::create(1, parent_path, std::move(configuration), DMFileFormat::V2);
@@ -317,8 +344,8 @@ try
         stream->writeSuffix();
     }
     {
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        Block block1 = prepare_block(0, num_rows_write / 2);
+        Block block2 = prepare_block(num_rows_write / 2, num_rows_write);
         auto mode = DMFileMode::DirectoryMetaV2;
         auto configuration = createConfiguration(mode);
         dmfile2 = DMFile::create(2, parent_path, std::move(configuration), DMFileFormat::V3);
