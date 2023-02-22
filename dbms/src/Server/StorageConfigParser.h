@@ -93,6 +93,17 @@ public:
     bool operator==(const StorageIORateLimitConfig & config) const;
 };
 
+struct StorageS3Config
+{
+    String endpoint;
+    String bucket;
+    String access_key_id;
+    String secret_access_key;
+
+    void parse(const String & content, const LoggerPtr & log);
+    bool isS3Enabled() const;
+};
+
 struct TiFlashStorageConfig
 {
 public:
@@ -104,6 +115,8 @@ public:
 
     UInt64 format_version = 0;
     bool lazily_init_store = true;
+
+    StorageS3Config s3_config;
 
 public:
     TiFlashStorageConfig() = default;

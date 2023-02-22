@@ -34,6 +34,7 @@ public:
         return "BlockInputStreamSourceOp";
     }
 
+protected:
     OperatorStatus readImpl(Block & block) override;
 
 private:

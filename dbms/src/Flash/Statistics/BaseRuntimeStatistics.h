@@ -12,29 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#pragma once
+
+#include <common/types.h>
 
 namespace DB
 {
-DAGBlockOutputStream::DAGBlockOutputStream(Block && header_, std::unique_ptr<DAGResponseWriter> response_writer_)
-    : header(std::move(header_))
-    , response_writer(std::move(response_writer_))
-{}
-
-void DAGBlockOutputStream::writePrefix()
+struct BlockStreamProfileInfo;
+struct BaseRuntimeStatistics
 {
-    response_writer->prepare(header);
-}
+    size_t rows = 0;
+    size_t blocks = 0;
+    size_t bytes = 0;
 
-void DAGBlockOutputStream::write(const Block & block)
-{
-    response_writer->write(block);
-}
+    UInt64 execution_time_ns = 0;
 
-void DAGBlockOutputStream::writeSuffix()
-{
-    // todo error handle
-    response_writer->flush();
-}
-
+    void append(const BlockStreamProfileInfo &);
+};
 } // namespace DB

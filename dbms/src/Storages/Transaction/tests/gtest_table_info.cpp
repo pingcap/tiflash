@@ -31,7 +31,7 @@ using DBInfo = TiDB::DBInfo;
 namespace DB
 {
 
-String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, const SchemaNameMapper & name_mapper, Poco::Logger * log);
+String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, const SchemaNameMapper & name_mapper, const LoggerPtr & log);
 
 namespace tests
 {
@@ -111,7 +111,7 @@ struct StmtCase
         // generate create statement with db_info and table_info
         auto verify_stmt = [&](TiDB::StorageEngine engine_type) {
             table_info.engine_type = engine_type;
-            String stmt = createTableStmt(db_info, table_info, MockSchemaNameMapper(), &Poco::Logger::get("TiDBTableInfo_test"));
+            String stmt = createTableStmt(db_info, table_info, MockSchemaNameMapper(), Logger::get());
             ASSERT_EQ(stmt, create_stmt_dm) << "Table info create statement (DT) mismatch:\n" + stmt + "\n" + create_stmt_dm;
 
 

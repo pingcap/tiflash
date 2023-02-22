@@ -12,26 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <TableFunctions/ITableFunction.h>
-
+#include <DataStreams/BlockStreamProfileInfo.h>
+#include <Flash/Statistics/BaseRuntimeStatistics.h>
 
 namespace DB
 {
-/* merge (db_name, tables_regexp) - creates a temporary StorageMerge.
- * The structure of the table is taken from the first table that came up, suitable for regexp.
- * If there is no such table, an exception is thrown.
- */
-class TableFunctionMerge : public ITableFunction
+void BaseRuntimeStatistics::append(const BlockStreamProfileInfo & profile_info)
 {
-public:
-    static constexpr auto name = "merge";
-    std::string getName() const override { return name; }
-
-private:
-    StoragePtr executeImpl(const ASTPtr & ast_function, const Context & context) const override;
-};
-
-
+    rows += profile_info.rows;
+    blocks += profile_info.blocks;
+    bytes += profile_info.bytes;
+    execution_time_ns = std::max(execution_time_ns, profile_info.execution_time);
+}
 } // namespace DB
