@@ -26,6 +26,6 @@ There are two benefits of TiFlash to support stale read:
   - An id incremented in TiDB local memory: local_query_id.
   - ETCD guarantees a globally unique serverID for each TiDB server: server_id.
   
-    And The MinTSOScheduler will schedule MPP queries [sorted by query_ts](https://github.com/pingcap/tiflash/blob/e732eaba68e309a0aec0e443c7f1a0e9368731b3/dbms/src/Flash/Mpp/MPPTaskId.cpp#L27) in most cases.
+    And The MinTSOScheduler will schedule MPP queries [in the order of query_ts](https://github.com/pingcap/tiflash/blob/e732eaba68e309a0aec0e443c7f1a0e9368731b3/dbms/src/Flash/Mpp/MPPTaskId.cpp#L27) in most cases.
 1. TiDB client-go supports to get and cache the min_safe_ts from TiFlash stores.
    client-go will query and cache min_safe_ts from all TiKV and TiFlash stores for all of their local regions periodically. When users use [TIDB_BOUNDED_STALENES](https://docs.pingcap.com/tidb/dev/as-of-timestamp#syntax) or [tidb_read_staleness](https://docs.pingcap.com/tidb/dev/tidb-read-staleness) to specify the stale read time range, TiDB will get min_safe_ts from the client-go cache, and generate the start_ts of the query based on min_safe_ts.
