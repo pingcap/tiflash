@@ -36,7 +36,9 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int CANNOT_READ_ALL_DATA;
-}
+extern const int CORRUPTED_DATA;
+extern const int INCORRECT_DATA;
+} // namespace ErrorCodes
 
 namespace FailPoints
 {
@@ -101,14 +103,15 @@ String DMFile::ngcPath() const
     return getNGCPath(parent_path, file_id, status);
 }
 
-DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration)
+DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration, DMFileFormat::Version version)
 {
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(new DMFile(file_id,
                                     file_id,
                                     parent_path,
                                     Status::WRITABLE,
-                                    std::move(configuration)));
+                                    std::move(configuration),
+                                    version));
 
     auto path = new_dmfile->path();
     Poco::File file(path);
@@ -146,7 +149,12 @@ DMFilePtr DMFile::restore(
         page_id,
         parent_path,
         Status::READABLE));
-    if (!read_meta_mode.isNone())
+    if (Poco::File meta_file(dmfile->metav2Path()); meta_file.exists())
+    {
+        auto s = dmfile->readMetaV2(file_provider);
+        dmfile->parseMetaV2(std::string_view(s.data(), s.size()));
+    }
+    else if (!read_meta_mode.isNone())
     {
         dmfile->readConfiguration(file_provider);
         dmfile->readMetadata(file_provider, read_meta_mode);
@@ -166,7 +174,53 @@ String DMFile::colMarkCacheKey(const FileNameBase & file_name_base) const
 
 bool DMFile::isColIndexExist(const ColId & col_id) const
 {
-    return column_indices.count(col_id) != 0;
+    if (useMetaV2())
+    {
+        auto itr = column_stats.find(col_id);
+        return itr != column_stats.end() && itr->second.index_bytes > 0;
+    }
+    else
+    {
+        return column_indices.count(col_id) != 0;
+    }
+}
+
+size_t DMFile::colIndexSize(ColId id)
+{
+    if (useMetaV2())
+    {
+        if (auto itr = column_stats.find(id); itr != column_stats.end() && itr->second.index_bytes > 0)
+        {
+            return itr->second.index_bytes;
+        }
+        else
+        {
+            throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Index of {} not exist", id);
+        }
+    }
+    else
+    {
+        return colIndexSizeByName(getFileNameBase(id));
+    }
+}
+
+size_t DMFile::colDataSize(ColId id)
+{
+    if (useMetaV2())
+    {
+        if (auto itr = column_stats.find(id); itr != column_stats.end())
+        {
+            return itr->second.data_bytes;
+        }
+        else
+        {
+            throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Data of {} not exist", id);
+        }
+    }
+    else
+    {
+        return colDataSizeByName(getFileNameBase(id));
+    }
 }
 
 String DMFile::encryptionBasePath() const
@@ -208,6 +262,11 @@ EncryptionPath DMFile::encryptionPackPropertyPath() const
 EncryptionPath DMFile::encryptionConfigurationPath() const
 {
     return EncryptionPath(encryptionBasePath(), configurationFileName());
+}
+
+EncryptionPath DMFile::encryptionMetav2Path() const
+{
+    return EncryptionPath(encryptionBasePath(), metav2FileName());
 }
 
 String DMFile::colDataFileName(const FileNameBase & file_name_base)
@@ -451,13 +510,14 @@ void DMFile::readConfiguration(const FileProviderPtr & file_provider)
         auto file = openForRead(file_provider, configurationPath(), encryptionConfigurationPath(), DBMS_DEFAULT_BUFFER_SIZE);
         auto stream = InputStreamWrapper{file};
         configuration.emplace(stream);
+        version = DMFileFormat::V2;
     }
     else
     {
         configuration.reset();
+        version = DMFileFormat::V1;
     }
 }
-
 
 void DMFile::readPackProperty(const FileProviderPtr & file_provider, const MetaPackInfo & meta_pack_info)
 {
@@ -701,5 +761,214 @@ void DMFile::initializeIndices()
     }
 }
 
+DMFile::MetaBlockHandle DMFile::writeSLPackStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest)
+{
+    auto offset = buffer.count();
+    const char * data = reinterpret_cast<const char *>(&pack_stats[0]);
+    size_t size = pack_stats.size() * sizeof(PackStat);
+    if (digest)
+    {
+        digest->update(data, size);
+    }
+    writeString(data, size, buffer);
+    return MetaBlockHandle{MetaBlockType::PackStat, offset, buffer.count() - offset};
+}
+
+DMFile::MetaBlockHandle DMFile::writeSLPackPropertyToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest)
+{
+    auto offset = buffer.count();
+    for (const auto & pb : pack_properties.property())
+    {
+        PackProperty tmp{pb};
+        const char * data = reinterpret_cast<const char *>(&tmp);
+        size_t size = sizeof(PackProperty);
+        if (digest)
+        {
+            digest->update(data, size);
+        }
+        writeString(data, size, buffer);
+    }
+    return MetaBlockHandle{MetaBlockType::PackProperty, offset, buffer.count() - offset};
+}
+
+DMFile::MetaBlockHandle DMFile::writeColumnStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest)
+{
+    auto offset = buffer.count();
+    writeIntBinary(column_stats.size(), buffer);
+    for (const auto & [id, stat] : column_stats)
+    {
+        auto tmp_buffer = WriteBufferFromOwnString{};
+        stat.serializeToBuffer(tmp_buffer);
+        auto serialized = tmp_buffer.releaseStr();
+        if (digest)
+        {
+            digest->update(serialized.data(), serialized.length());
+        }
+        writeString(serialized.data(), serialized.size(), buffer);
+    }
+    return MetaBlockHandle{MetaBlockType::ColumnStat, offset, buffer.count() - offset};
+}
+
+void DMFile::finalizeMetaV2(WriteBuffer & buffer)
+{
+    auto digest = configuration ? configuration->createUnifiedDigest() : nullptr;
+    auto pack_stats_handle = writeSLPackStatToBuffer(buffer, digest);
+    auto pack_properties_handle = writeSLPackPropertyToBuffer(buffer, digest);
+    auto column_stats_handle = writeColumnStatToBuffer(buffer, digest);
+
+    writePODBinary(pack_stats_handle, buffer);
+    writePODBinary(pack_properties_handle, buffer);
+    writePODBinary(column_stats_handle, buffer);
+    UInt64 meta_block_handle_count = 3;
+    writeIntBinary(meta_block_handle_count, buffer);
+    writeIntBinary(version, buffer);
+
+    if (digest)
+    {
+        digest->update(reinterpret_cast<const char *>(&pack_stats_handle), sizeof(MetaBlockHandle));
+        digest->update(reinterpret_cast<const char *>(&pack_properties_handle), sizeof(MetaBlockHandle));
+        digest->update(reinterpret_cast<const char *>(&column_stats_handle), sizeof(MetaBlockHandle));
+        digest->update(reinterpret_cast<const char *>(&meta_block_handle_count), sizeof(UInt64));
+        digest->update(reinterpret_cast<const char *>(&version), sizeof(DMFileFormat::Version));
+
+        auto checksum_result = digest->raw();
+        writeString(checksum_result.data(), checksum_result.size(), buffer);
+    }
+
+    MetaFooter footer{};
+    if (configuration)
+    {
+        footer.checksum_algorithm = static_cast<UInt64>(configuration->getChecksumAlgorithm());
+        footer.checksum_frame_length = configuration->getChecksumFrameLength();
+    }
+    writePODBinary(footer, buffer);
+}
+
+std::vector<char> DMFile::readMetaV2(const FileProviderPtr & file_provider)
+{
+    auto rbuf = openForRead(file_provider, metav2Path(), encryptionMetav2Path(), meta_buffer_size);
+    std::vector<char> buf(meta_buffer_size);
+    size_t read_bytes = 0;
+    for (;;)
+    {
+        read_bytes += rbuf.readBig(buf.data() + read_bytes, meta_buffer_size);
+        if (likely(read_bytes < buf.size()))
+        {
+            break;
+        }
+        LOG_WARNING(log, "{}'s size is larger than {}", metav2Path(), buf.size());
+        buf.resize(buf.size() + meta_buffer_size);
+    }
+    buf.resize(read_bytes);
+    return buf;
+}
+
+void DMFile::parseMetaV2(std::string_view buffer)
+{
+    // MetaFooter
+    const auto * footer = reinterpret_cast<const MetaFooter *>(buffer.data() + buffer.size() - sizeof(MetaFooter));
+    if (footer->checksum_algorithm != 0 && footer->checksum_frame_length != 0)
+    {
+        configuration = DMChecksumConfig{/*embedded_checksum*/ {}, footer->checksum_frame_length, static_cast<ChecksumAlgo>(footer->checksum_algorithm)};
+    }
+    else
+    {
+        configuration.reset();
+    }
+
+    const auto * ptr = reinterpret_cast<const char *>(footer);
+
+    // Checksum
+    if (configuration)
+    {
+        auto digest = configuration->createUnifiedDigest();
+        auto hash_size = digest->hashSize();
+        ptr = ptr - hash_size;
+        digest->update(buffer.data(), buffer.size() - sizeof(MetaFooter) - hash_size);
+        if (unlikely(digest->compareRaw(ptr)))
+        {
+            LOG_ERROR(log, "{} checksum invalid", metav2Path());
+            throw Exception(ErrorCodes::CORRUPTED_DATA, "{} checksum invalid", metav2Path());
+        }
+    }
+
+    ptr = ptr - sizeof(DMFileFormat::Version);
+    version = *(reinterpret_cast<const DMFileFormat::Version *>(ptr));
+
+    ptr = ptr - sizeof(UInt64);
+    auto meta_block_handle_count = *(reinterpret_cast<const UInt64 *>(ptr));
+
+    for (UInt64 i = 0; i < meta_block_handle_count; ++i)
+    {
+        ptr = ptr - sizeof(MetaBlockHandle);
+        const auto * handle = reinterpret_cast<const MetaBlockHandle *>(ptr);
+        switch (handle->type)
+        {
+        case MetaBlockType::ColumnStat:
+            parseColumnStat(buffer.substr(handle->offset, handle->size));
+            break;
+        case MetaBlockType::PackProperty:
+            parsePackProperty(buffer.substr(handle->offset, handle->size));
+            break;
+        case MetaBlockType::PackStat:
+            parsePackStat(buffer.substr(handle->offset, handle->size));
+            break;
+        default:
+            throw Exception(ErrorCodes::INCORRECT_DATA, "MetaBlockType {} is not recognized", magic_enum::enum_name(handle->type));
+        }
+    }
+}
+
+void DMFile::parseColumnStat(std::string_view buffer)
+{
+    ReadBufferFromString rbuf(buffer);
+    size_t count;
+    readIntBinary(count, rbuf);
+    column_stats.reserve(count);
+    for (size_t i = 0; i < count; ++i)
+    {
+        ColumnStat stat;
+        stat.parseFromBuffer(rbuf);
+        column_stats.emplace(stat.col_id, std::move(stat));
+    }
+}
+
+void DMFile::parsePackProperty(std::string_view buffer)
+{
+    const auto * pp = reinterpret_cast<const PackProperty *>(buffer.data());
+    auto count = buffer.size() / sizeof(PackProperty);
+    pack_properties.mutable_property()->Reserve(count);
+    for (size_t i = 0; i < count; ++i)
+    {
+        pp[i].toProtobuf(pack_properties.add_property());
+    }
+}
+
+void DMFile::parsePackStat(std::string_view buffer)
+{
+    auto count = buffer.size() / sizeof(PackStat);
+    pack_stats.resize(count);
+    memcpy(reinterpret_cast<char *>(pack_stats.data()), buffer.data(), buffer.size());
+}
+
+void DMFile::finalizeDirName()
+{
+    RUNTIME_CHECK_MSG(status == Status::WRITING, "FileId={} Expected WRITING status, but {}", file_id, statusString(status));
+    Poco::File old_file(path());
+    setStatus(Status::READABLE);
+    auto new_path = path();
+    Poco::File file(new_path);
+    if (file.exists())
+    {
+        LOG_WARNING(log, "Existing dmfile, removing: {}", new_path);
+        const String deleted_path = getPathByStatus(parent_path, file_id, Status::DROPPED);
+        // no need to delete the encryption info associated with the dmfile path here.
+        // because this dmfile path is still a valid path and no obsolete encryption info will be left.
+        file.renameTo(deleted_path);
+        file.remove(true);
+        LOG_WARNING(log, "Existing dmfile, removed: {}", deleted_path);
+    }
+    old_file.renameTo(new_path);
+}
 } // namespace DM
 } // namespace DB

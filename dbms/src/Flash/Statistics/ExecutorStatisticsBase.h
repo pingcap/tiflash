@@ -14,24 +14,13 @@
 
 #pragma once
 
+#include <Flash/Statistics/BaseRuntimeStatistics.h>
 #include <common/types.h>
 
 #include <memory>
 
 namespace DB
 {
-struct BlockStreamProfileInfo;
-struct BaseRuntimeStatistics
-{
-    size_t rows = 0;
-    size_t blocks = 0;
-    size_t bytes = 0;
-
-    UInt64 execution_time_ns = 0;
-
-    void append(const BlockStreamProfileInfo &);
-};
-
 class ExecutorStatisticsBase
 {
 public:
