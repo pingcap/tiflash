@@ -29,7 +29,6 @@ class MutexLockWrap
 public:
     using Mutex = std::mutex;
 
-protected:
     std::lock_guard<Mutex> genLockGuard() const
     {
         return std::lock_guard(mutex());
@@ -61,7 +60,6 @@ class SharedMutexLockWrap
 public:
     using Mutex = std::shared_mutex;
 
-protected:
     std::shared_lock<Mutex> genSharedLock() const
     {
         return std::shared_lock(mutex());
@@ -88,7 +86,6 @@ class MutexCondVarWrap : public MutexLockWrap
 public:
     using CondVar = std::condition_variable;
 
-protected:
     CondVar & condVar() const { return cv(); }
 
 private:

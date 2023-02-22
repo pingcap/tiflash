@@ -540,6 +540,8 @@ extern size_t CompressionEncode(
 
 CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(std::string_view str, CompressionMethod compression_method)
 {
+    assert(compression_method != CompressionMethod::NONE);
+
     String compressed_buffer;
     size_t compressed_size = CompressionEncode(str, CompressionSettings(compression_method), compressed_buffer);
     compressed_buffer.resize(compressed_size);

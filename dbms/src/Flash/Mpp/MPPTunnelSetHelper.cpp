@@ -165,18 +165,20 @@ TrackedMppDataPacketPtr ToFineGrainedPacketV0(
 }
 
 TrackedMppDataPacketPtr ToCompressedPacket(
-    const TrackedMppDataPacketPtr & source_tracked_packet,
+    const TrackedMppDataPacketPtr & uncompressed_source,
     MPPDataPacketVersion version,
     CompressionMethod method)
 {
-    assert(source_tracked_packet);
-    assert(source_tracked_packet->getPacket().chunks_size() == 1);
-
-    const auto & chunk = source_tracked_packet->getPacket().chunks(0);
-    assert(static_cast<CompressionMethodByte>(chunk[0]) == CompressionMethodByte::NONE);
+    assert(uncompressed_source);
+    for ([[maybe_unused]] const auto & chunk : uncompressed_source->getPacket().chunks())
+    {
+        assert(chunk.empty());
+        assert(static_cast<CompressionMethodByte>(chunk[0]) == CompressionMethodByte::NONE);
+    }
 
     // re-encode by specified compression method
     auto remote_tunnel_tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
+    for (const auto & chunk : uncompressed_source->getPacket().chunks())
     {
         auto && compressed_buffer = CHBlockChunkCodecV1::encode({&chunk[1], chunk.size() - 1}, method);
         assert(!compressed_buffer.empty());
