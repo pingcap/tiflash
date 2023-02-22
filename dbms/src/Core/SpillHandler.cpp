@@ -94,7 +94,7 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
         size_t bytes_in_file = 0;
         for (const auto & block : blocks)
         {
-            if (unlikely(!block))
+            if (unlikely(!block || block.rows() == 0))
                 continue;
             if (unlikely(writer == nullptr))
             {
