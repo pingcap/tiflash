@@ -928,9 +928,9 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
             extractAllKeyNullMap(key_columns, all_key_null_map_holder, all_key_null_map);
             if (all_key_null_map)
             {
-                for (size_t i = 0, size = all_key_null_map->size(); i < size; ++i)
+                for (UInt8 is_null : *all_key_null_map)
                 {
-                    if ((*all_key_null_map)[i])
+                    if (is_null)
                     {
                         has_all_key_null_row.store(true, std::memory_order_release);
                         break;
@@ -2072,7 +2072,8 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         {
             if ((*filter_null_map)[i])
             {
-                // Filter out by left_conditions.
+                /// Filter out by left_conditions so the result set is empty.
+                /// Like (1,2) in ().
                 res.emplace_back(i, false, NullAwareSemiJoinStep::DONE, nullptr);
                 if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
                     res.back().setResult(false, false);
@@ -2089,19 +2090,18 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                 {
                     if (key_columns.size() == 1 || has_all_key_null_row || (all_key_null_map && (*all_key_null_map)[i]))
                     {
-                        /// The result is NULL if
-                        /// 1. key column size is 1.
-                        /// 2. right table has a all-key-null row.
-                        /// 3. this row is all-key-null.
+                        /// The result is NULL if and only if
+                        ///   1. key column size is 1, i.e. (null) in (1,2).
+                        ///   2. right table has a all-key-null row, i.e. (1,null) in ((2,2),(null,null)).
+                        ///   3. this row is all-key-null, i.e. (null,null) in ((1,1),(2,2)).
                         res.emplace_back(i, true, NullAwareSemiJoinStep::DONE, nullptr);
                         res.back().setResult(true, false);
+                        continue;
                     }
                 }
-                else
-                {
-                    res.emplace_back(i, true, NullAwareSemiJoinStep::CHECK_NULL_LIST, nullptr);
-                    res_list.push_back(&res.back());
-                }
+                /// Check null list first to increase the possibility of getting the NULL result.
+                res.emplace_back(i, true, NullAwareSemiJoinStep::CHECK_NULL_LIST, nullptr);
+                res_list.push_back(&res.back());
                 continue;
             }
         }
@@ -2130,6 +2130,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             if (STRICTNESS == ASTTableJoin::Strictness::Any)
             {
                 /// If strictness is any, we get the result.
+                /// I.e. (1,2) in ((1,2),(1,3),(null,3))
                 res.emplace_back(i, false, NullAwareSemiJoinStep::DONE, nullptr);
                 if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
                     res.back().setResult(false, true);
@@ -2138,7 +2139,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             }
             else
             {
-                /// Else the other condition must be checked for these matched row(s).
+                /// Else the other condition must be checked for these matched right row(s).
                 auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
                 res.emplace_back(i, false, NullAwareSemiJoinStep::CHECK_OTHER_COND, static_cast<const void *>(map_it));
                 res_list.push_back(&res.back());
@@ -2152,6 +2153,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                 if (has_all_key_null_row)
                 {
                     /// If right table has a all-key-null row, the result is NULL.
+                    /// I.e. (1) in (null) or (1,2) in ((1,3),(null,null)).
                     res.emplace_back(i, false, NullAwareSemiJoinStep::DONE, nullptr);
                     res.back().setResult(true, false);
                     continue;
@@ -2159,6 +2161,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                 if (key_columns.size() == 1)
                 {
                     /// If key size is 1 and all key in right table row is not NULL, we get the result.
+                    /// I.e. (1) in (1,2,3,4,5).
                     if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
                         res.back().setResult(false, false);
                     else
@@ -2166,9 +2169,10 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                     continue;
                 }
                 /// Then key size is greater than 2 and right table has no all-key-null row, we must
-                /// compare them one by one.
+                /// compare the rows one by one.
+                /// I.e. (1,2) in ((1,3),(1,null),(null,2)).
             }
-            /// Check null list first to increase the possibility of getting the NULL result.
+            /// Check null list first to speed up getting the NULL result.
             res.emplace_back(i, false, NullAwareSemiJoinStep::CHECK_NULL_LIST, nullptr);
             res_list.push_back(&res.back());
         }

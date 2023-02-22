@@ -91,10 +91,12 @@ void NullAwareSemiJoinResult::checkExprResult(ConstNullMapPtr eq_null_map, size_
 
     for (size_t i = offset_begin; i < offset_end; i++)
     {
-        // Only care about null map because if the equal expr can be true, the result
-        // should be known during probing hash table, not here.
+        /// Only care about null map because if the equal expr can be true, the result
+        /// should be known during probing hash table, not here.
         if ((*eq_null_map)[i])
         {
+            /// equal expr is NULL, the result is NULL.
+            /// I.e. (1,2) in ((1,null)) or (1,2) in ((null,2)) or (1,null) in ((1,2)).
             setResult(true, false);
             return;
         }
@@ -113,12 +115,14 @@ void NullAwareSemiJoinResult::checkExprResult(ConstNullMapPtr eq_null_map, const
 
     for (size_t i = offset_begin; i < offset_end; i++)
     {
-        if (other_null_map && (*other_null_map)[i])
+        if ((other_null_map && (*other_null_map)[i]) || !other_column[i])
+        {
+            /// If other expr is NULL or 0, this right row does not contain in the result set.
             continue;
-        if (!other_column[i])
-            continue;
+        }
         if constexpr (STEP == NullAwareSemiJoinStep::CHECK_OTHER_COND)
         {
+            /// other expr is true, so we get the result for this row that has matched right row(s).
             if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
                 setResult(false, true);
             else
@@ -127,6 +131,8 @@ void NullAwareSemiJoinResult::checkExprResult(ConstNullMapPtr eq_null_map, const
         }
         if ((*eq_null_map)[i])
         {
+            /// other expr is true and equal expr is NULL, the result is NULL.
+            /// I.e. (1,2) in ((1,null)) or (1,2) in ((null,2)) or (1,null) in ((1,2)).
             setResult(true, false);
             return;
         }
@@ -152,15 +158,18 @@ void NullAwareSemiJoinResult::checkStepEnd()
     {
         if (has_null_join_key)
         {
-            // If it has null join key, the next step is to check all block in right table.
-            // Although there are some repeated rows in null list that have already been checked,
-            // the implementation of checking all blocks is likely to be more efficient than iterating
-            // the hash table and copy them one by one to the block.
+            /// If it has null join key, the next step is to check all block in right table.
+            /// Although there are some repeated rows in null list that have already been checked,
+            /// the implementation of checking all blocks is likely to be more efficient than iterating
+            /// the hash table and copy them one by one to the block.
             step = NullAwareSemiJoinStep::CHECK_ALL_BLOCKS;
             step_end = false;
         }
         else
         {
+            /// If it doesn't have null join key, we can get the result after checking all right rows
+            /// with null join key.
+            /// I.e. (1,2) in () or (1,2) in ((1,3),(2,2),(2,null),(null,1)).
             if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
                 setResult(false, false);
             else
@@ -169,10 +178,8 @@ void NullAwareSemiJoinResult::checkStepEnd()
     }
     else if constexpr (STEP == NullAwareSemiJoinStep::CHECK_ALL_BLOCKS)
     {
-        if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-            setResult(false, false);
-        else
-            setResult(false, true);
+        /// If step is CHECK_ALL_BLOCKS, step end is checked by outside.
+        RUNTIME_CHECK_MSG(false, "Step of CHECK_ALL_BLOCKS should not have a true step_end");
     }
 }
 
@@ -217,6 +224,7 @@ void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<Nul
 {
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
     {
+        /// Step of CHECK_OTHER_COND only exist when strictness is all.
         std::list<NullAwareSemiJoinResult *> next_step_res_list;
         runStep<NullAwareSemiJoinStep::CHECK_OTHER_COND>(res_list, next_step_res_list);
         res_list.swap(next_step_res_list);
@@ -264,10 +272,10 @@ void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NullAw
         MutableColumns columns(block_columns);
         for (size_t i = 0; i < block_columns; ++i)
         {
-            // Reuse the column to avoid memory allocation.
-            // Correctness depends on the fact that equal and other condition expressions do not
-            // removed any column, namely, the columns will not out of order.
-            // TODO: Maybe we can reuse the memory of new columns added from expressions?
+            /// Reuse the column to avoid memory allocation.
+            /// Correctness depends on the fact that equal and other condition expressions do not
+            /// removed any column, namely, the columns will not out of order.
+            /// TODO: Maybe we can reuse the memory of new columns added from expressions?
             columns[i] = exec_block.safeGetByPosition(i).column->assumeMutable();
             columns[i]->popBack(columns[i]->size());
         }
@@ -289,9 +297,9 @@ void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NullAw
                 break;
         }
 
-        // Move the columns to exec_block.
-        // Note that this can remove the new columns that are added in the last loop
-        // from equal and other condition expressions.
+        /// Move the columns to exec_block.
+        /// Note that this can remove the new columns that are added in the last loop
+        /// from equal and other condition expressions.
         exec_block = block.cloneWithColumns(std::move(columns));
 
         checkAllExprResult<STEP>(
@@ -340,8 +348,8 @@ void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::runStepAllBlocks(std::li
         }
         if (res->getStep() != NullAwareSemiJoinStep::DONE)
         {
-            // After iterating to the end of right blocks, the result is not null.
-            // So the result should be false for (left)semi join, true for anti semi join.
+            /// After iterating to the end of right blocks, the result is not null.
+            /// I.e. (1,null) in () or (1,null,2) in ((2,null,2),(1,null,3),(null,1,4)).
             if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
                 res->setResult(false, false);
             else
@@ -378,7 +386,7 @@ void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(Block
     }
     else
     {
-        // If STEP is CHECK_OTHER_COND, other condition must exist so STRICTNESS must be all.
+        /// If STEP is CHECK_OTHER_COND, other condition must exist so STRICTNESS must be all.
         static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
     }
 
