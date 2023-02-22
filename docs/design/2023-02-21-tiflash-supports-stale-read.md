@@ -10,7 +10,7 @@ This proposal aims to make TiFlash support Stale Read.
 
 Currently TiKV has already supported [stale read](https://docs.pingcap.com/tidb/dev/stale-read), but TiFlash does not.
 There are two benefits of TiFlash to support stale read:
-- Eliminates the read/wait index duration during read processing. The small queries should run faster.
+- Reduces the read/wait index duration during reading. Small queries can run faster.
 - Avoid calling read_index API of TiKV leaders, to reduce the impact of OLTP workloads.
 
 ## Goals
