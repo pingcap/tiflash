@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Interpreters/Context.h>
+#include <Debug/MockServerInfo.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
@@ -35,6 +35,8 @@ class IServer;
 class IAsyncCallData;
 class EstablishCallData;
 class MockStorage;
+class Context;
+using ContextPtr = std::shared_ptr<Context>;
 using MockMPPServerInfo = tests::MockMPPServerInfo;
 
 namespace Management

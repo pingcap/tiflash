@@ -25,6 +25,26 @@
 namespace DB::S3
 {
 
+class TiFlashS3Client : public Aws::S3::S3Client
+{
+public:
+    // Usually one tiflash instance only need access one bucket.
+    // Store the bucket name to simpilfy some param passing.
+
+    TiFlashS3Client(
+        const String & bucket_name_,
+        const Aws::Auth::AWSCredentials & credentials,
+        const Aws::Client::ClientConfiguration & clientConfiguration,
+        Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy signPayloads,
+        bool useVirtualAddressing);
+
+    const String & bucket() { return bucket_name; }
+
+private:
+    const String bucket_name;
+};
+
+
 class ClientFactory
 {
 public:
@@ -35,6 +55,8 @@ public:
     void init(const StorageS3Config & config_);
     void shutdown();
     std::unique_ptr<Aws::S3::S3Client> create() const;
+
+    std::unique_ptr<TiFlashS3Client> createWithBucket() const;
 
     static std::unique_ptr<Aws::S3::S3Client> create(
         const String & endpoint,
@@ -71,7 +93,34 @@ bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const
 
 void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
 
+void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, const String & key);
+
 void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
 
+struct PageResult
+{
+    size_t num_keys;
+    // true - continue to call next `LIST` when available
+    // false - stop `LIST`
+    bool more;
+};
+void listPrefix(
+    const Aws::S3::S3Client & client,
+    const String & bucket,
+    const String & prefix,
+    const String & delimiter,
+    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
+
+std::unordered_map<String, size_t> listPrefixWithSize(const Aws::S3::S3Client & client, const String & bucket, const String & prefix);
+
+
+std::pair<bool, Aws::Utils::DateTime> tryGetObjectModifiedTime(
+    const Aws::S3::S3Client & client,
+    const String & bucket,
+    const String & key);
+
+void deleteObject(const Aws::S3::S3Client & client, const String & bucket, const String & key);
+
 std::unordered_map<String, size_t> listPrefix(const Aws::S3::S3Client & client, const String & bucket, const String & prefix);
+
 } // namespace DB::S3
