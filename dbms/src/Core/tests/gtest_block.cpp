@@ -68,11 +68,15 @@ try
     {
         auto agg_data_type = DataTypeFactory::instance().get(fmt::format("AggregateFunction(Min, {})", types[i]));
         auto agg_column = agg_data_type->createColumn();
+        auto agg_func = typeid_cast<ColumnAggregateFunction *>(agg_column.get())->getAggregateFunction();
+        auto size_of_aggregate_states = agg_func->sizeOfData();
+        auto align_aggregate_states = agg_func->alignOfData();
         typeid_cast<ColumnAggregateFunction *>(agg_column.get())->addArena(pool);
         for (size_t j = 0; j < 10; ++j)
         {
-            auto * ptr = pool->alloc(data_size[i]);
-            agg_column->insertData(reinterpret_cast<const char *>(&ptr), data_size[i]);
+            auto * aggregate_data = pool->alignedAlloc(size_of_aggregate_states, align_aggregate_states);
+            agg_func->create(aggregate_data);
+            agg_column->insertData(reinterpret_cast<const char *>(&aggregate_data), data_size[i]);
         }
         ColumnsWithTypeAndName columns;
         columns.emplace_back(std::move(agg_column), agg_data_type);
@@ -85,11 +89,15 @@ try
     {
         auto agg_data_type = DataTypeFactory::instance().get(fmt::format("AggregateFunction(uniqExact, {})", types[i]));
         auto agg_column = agg_data_type->createColumn();
+        auto agg_func = typeid_cast<ColumnAggregateFunction *>(agg_column.get())->getAggregateFunction();
         typeid_cast<ColumnAggregateFunction *>(agg_column.get())->addArena(pool);
+        auto size_of_aggregate_states = agg_func->sizeOfData();
+        auto align_aggregate_states = agg_func->alignOfData();
         for (size_t j = 0; j < 10; ++j)
         {
-            auto * ptr = pool->alloc(data_size[i]);
-            agg_column->insertData(reinterpret_cast<const char *>(&ptr), data_size[i]);
+            auto * aggregate_data = pool->alignedAlloc(size_of_aggregate_states, align_aggregate_states);
+            agg_func->create(aggregate_data);
+            agg_column->insertData(reinterpret_cast<const char *>(&aggregate_data), data_size[i]);
         }
         ColumnsWithTypeAndName columns;
         columns.emplace_back(std::move(agg_column), agg_data_type);
