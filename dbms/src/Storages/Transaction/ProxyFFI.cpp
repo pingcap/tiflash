@@ -266,10 +266,10 @@ RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView 
             UniversalPageId(start_page_id.data, start_page_id.len),
             UniversalPageId(end_page_id.data, end_page_id.len),
             checker);
-        auto * data = static_cast<char *>(malloc(pages.size() * sizeof(PageAndCppStrWithView)));
+        auto * data = static_cast<PageAndCppStrWithView *>(malloc(pages.size() * sizeof(PageAndCppStrWithView))); // NOLINT(cppcoreguidelines-no-malloc)
         for (size_t i = 0; i < pages.size(); i++)
         {
-            auto * target = reinterpret_cast<PageAndCppStrWithView *>(data) + i;
+            auto * target = data + i;
             auto * key_str = RawCppString::New(page_ids[i].data(), page_ids[i].size());
             new (target) PageAndCppStrWithView{
                 .page = GenRawCppPtr(pages[i], RawCppPtrTypeImpl::UniversalPage),
@@ -277,7 +277,7 @@ RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView 
                 .page_view = BaseBuffView{.data = pages[i]->data.begin(), .len = pages[i]->data.size()},
                 .key_view = BaseBuffView{.data = key_str->data(), .len = key_str->size()}};
         }
-        return RawCppPtrCarr{.inner = reinterpret_cast<PageAndCppStrWithView *>(data), .len = pages.size(), .type = static_cast<RawCppPtrType>(RawCppPtrTypeImpl::PageAndCppStr)};
+        return RawCppPtrCarr{.inner = data, .len = pages.size(), .type = static_cast<RawCppPtrType>(RawCppPtrTypeImpl::PageAndCppStr)};
     }
     catch (...)
     {
@@ -647,7 +647,7 @@ void GcRawCppPtrCArr(RawVoidPtr ptr, RawCppPtrType type, uint64_t len)
         {
         case RawCppPtrTypeImpl::PageAndCppStr:
         {
-            auto inner = reinterpret_cast<PageAndCppStrWithView *>(ptr);
+            auto * inner = reinterpret_cast<PageAndCppStrWithView *>(ptr);
             for (size_t i = 0; i < len; i++)
             {
                 GcRawCppPtr(inner[i].page.ptr, inner[i].page.type);
