@@ -14,7 +14,6 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <common/defines.h>
@@ -22,7 +21,6 @@
 
 #include <boost/core/noncopyable.hpp>
 #include <condition_variable>
-#include <mutex>
 
 namespace DB
 {
@@ -69,7 +67,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_after_drop_segment)                               \
     M(exception_between_schema_change_in_the_same_diff)           \
     M(force_ps_wal_compact)                                       \
-    M(pause_before_full_gc_prepare)
+    M(pause_before_full_gc_prepare)                               \
+    M(exception_during_spill)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \

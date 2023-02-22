@@ -64,8 +64,8 @@ try
     // don't use `executeAndAssertColumnsEqual` since it takes too long to run
     /// todo use ASSERT_COLUMNS_EQ_R once TiFlash support final TopN
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
-    /// enable spill and use small max_spilled_size_per_spill
-    context.context.setSetting("max_spilled_size_per_spill", Field(static_cast<UInt64>(total_data_size / 100)));
+    /// enable spill and use small max_cached_data_bytes_in_spiller
+    context.context.setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
 }
 CATCH
