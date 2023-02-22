@@ -19,7 +19,7 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
-
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -329,38 +329,19 @@ void MPPTunnel::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
 bool MPPTunnel::isReadyForWrite() const
 {
     std::unique_lock lk(mu);
-    // The timeout and cancel can be ignored here.
-    // - timeout: If a wait timeout occurs, there is a problem with the query and the pipeline task will be cancelled.
-    // - cancel: If MPPTunnel is cancelled, then the pipeline task is cancelled as well.
     switch (status)
     {
-    case TunnelStatus::Unconnected:
-        return false;
     case TunnelStatus::Connected:
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         return tunnel_sender->isReadyForWrite();
     default:
-        // For other cases, we should return immediately.
-        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
-        return true;
+        return false;
     }
 }
 
-StringRef MPPTunnel::statusToString()
+std::string_view MPPTunnel::statusToString()
 {
-    switch (status)
-    {
-    case TunnelStatus::Unconnected:
-        return "Unconnected";
-    case TunnelStatus::Connected:
-        return "Connected";
-    case TunnelStatus::WaitingForSenderFinish:
-        return "WaitingForSenderFinish";
-    case TunnelStatus::Finished:
-        return "Finished";
-    default:
-        RUNTIME_ASSERT(false, log, "Unknown TaskStatus {}", static_cast<Int32>(status));
-    }
+    return magic_enum::enum_name(status);
 }
 
 void TunnelSender::consumerFinish(const String & msg)

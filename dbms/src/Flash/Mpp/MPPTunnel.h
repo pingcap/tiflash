@@ -529,7 +529,7 @@ private:
         Finished // Final state, no more work to do
     };
 
-    StringRef statusToString();
+    std::string_view statusToString();
 
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
