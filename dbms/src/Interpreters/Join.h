@@ -326,6 +326,10 @@ private:
     String null_aware_eq_column;
     ExpressionActionsPtr null_aware_eq_ptr;
 
+    /// For null-aware semi join with no other condition.
+    /// Indicate if the right table is empty after filtering.
+    std::atomic<bool> right_table_is_empty{true};
+    /// Indicate if the right table has a all-key-null row after filtering.
     std::atomic<bool> has_all_key_null_row{false};
 
     ASTTableJoin::Strictness original_strictness;
@@ -346,7 +350,7 @@ private:
     /// For right/full join, including
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions
-    /// For null aware semi join family, including rows with NULL join keys.
+    /// For null-aware semi join family, including rows with NULL join keys.
     std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.

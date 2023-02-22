@@ -925,9 +925,19 @@ TEST_F(JoinExecutorTestRunner, NullAwareSemiJoin)
 try
 {
     using tipb::JoinType;
-    // One join key + no other condition
-    // left table + right table + result column
+    /// One join key + no other condition.
+    /// left table + right table + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t1 = {
+        {
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
+            {toNullableVec<Int32>("a", {})},
+            toNullableVec<Int8>({0, 0, 0, 0, 0}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, {}, {}, 4, 5})},
+            {toNullableVec<Int32>("a", {})},
+            toNullableVec<Int8>({0, 0, 0, 0, 0}),
+        },
         {
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
@@ -994,8 +1004,8 @@ try
         executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiSemiJoin>(left, res));
     }
 
-    // One join key + other condition
-    // left table + right table + result column
+    /// One join key + other condition(c > b).
+    /// left table + right table + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t2 = {
         {
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 1, 1, 1, 1})},
@@ -1068,8 +1078,8 @@ try
         executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiSemiJoin>(left, res));
     }
 
-    // two join keys + no other condition
-    // left table + right table + result column
+    /// Two join keys + no other condition.
+    /// left table + right table + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t3 = {
         {
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
@@ -1133,8 +1143,8 @@ try
         executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiSemiJoin>(left, res));
     }
 
-    // two join keys + other condition
-    // left table + right table + result column
+    /// Two join keys + other condition(d > c).
+    /// left table + right table + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t4 = {
         {
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
@@ -1197,6 +1207,8 @@ try
                       .build(context);
         executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiSemiJoin>(left, res));
     }
+
+    // TODO: add left and right condition cases.
 }
 CATCH
 
