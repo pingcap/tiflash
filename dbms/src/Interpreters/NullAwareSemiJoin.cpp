@@ -305,7 +305,7 @@ void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NullAw
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
 void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::runStepAllBlocks(std::list<NullAwareSemiJoinResult *> & res_list)
 {
-    // Should always empty, just for sanity check.
+    // Should always be empty, just for sanity check.
     std::list<NullAwareSemiJoinResult *> next_res_list;
     std::vector<size_t> offsets(1);
     while (!res_list.empty())

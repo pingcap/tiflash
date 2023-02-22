@@ -894,21 +894,22 @@ try
             {toNullableVec<Int32>("a", {1, 2, 3, {}, 5})},
             {toNullableVec<Int32>("a", {1, {}, 3, 4, {}})},
             toNullableVec<Int8>({1, {}, 1, {}, {}}),
-        }
-    };
+        }};
 
     for (const auto & [left, right, res] : t1)
     {
-        context.addMockTable("null_aware_left_semi", "t",
-                             {{"a", TiDB::TP::TypeLong}},
-                             left);
-        context.addMockTable("null_aware_left_semi", "s",
-                             {{"a", TiDB::TP::TypeLong}},
-                             right);
+        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("null_aware_left_semi", "t")
                            .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {}, {}, 0,
+                                 tipb::JoinType::TypeLeftOuterSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 0,
                                  {col("a")})
                            .build(context);
 
@@ -945,21 +946,22 @@ try
             {toNullableVec<Int32>("a", {1, 2, 3, {}, 5}), toNullableVec<Int32>("b", {1, 1, 1, 1, 1})},
             {toNullableVec<Int32>("a", {1, {}, 3, 4, {}}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
             toNullableVec<Int8>({1, {}, 1, {}, {}}),
-        }
-    };
+        }};
 
     for (const auto & [left, right, res] : t2)
     {
-        context.addMockTable("null_aware_left_semi", "t",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-                             left);
-        context.addMockTable("null_aware_left_semi", "s",
-                             {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-                             right);
+        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("null_aware_left_semi", "t")
                            .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {gt(col("c"), col("b"))}, {}, 0,
+                                 tipb::JoinType::TypeLeftOuterSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {gt(col("c"), col("b"))},
+                                 {},
+                                 0,
                                  {col("a")})
                            .build(context);
 
@@ -991,16 +993,18 @@ try
 
     for (const auto & [left, right, res] : t3)
     {
-        context.addMockTable("null_aware_left_semi", "t",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-                             left);
-        context.addMockTable("null_aware_left_semi", "s",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-                             right);
+        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("null_aware_left_semi", "t")
                            .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {}, {}, 0,
+                                 tipb::JoinType::TypeLeftOuterSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 0,
                                  {col("a"), col("b")})
                            .build(context);
 
@@ -1032,16 +1036,18 @@ try
 
     for (const auto & [left, right, res] : t4)
     {
-        context.addMockTable("null_aware_left_semi", "t",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-                             left);
-        context.addMockTable("null_aware_left_semi", "s",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}},
-                             right);
+        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("null_aware_left_semi", "t")
                            .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {gt(col("d"), col("c"))}, {}, 0,
+                                 tipb::JoinType::TypeLeftOuterSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {gt(col("d"), col("c"))},
+                                 {},
+                                 0,
                                  {col("a"), col("b")})
                            .build(context);
 
@@ -1078,21 +1084,22 @@ try
             {toNullableVec<Int32>("a", {1, 2, 3, {}, 5})},
             {toNullableVec<Int32>("a", {1, {}, 3, 4, {}})},
             toNullableVec<Int8>({0, {}, 0, {}, {}}),
-        }
-    };
+        }};
 
     for (const auto & [left, right, res] : t1)
     {
-        context.addMockTable("null_aware_left_semi", "t",
-                             {{"a", TiDB::TP::TypeLong}},
-                             left);
-        context.addMockTable("null_aware_left_semi", "s",
-                             {{"a", TiDB::TP::TypeLong}},
-                             right);
+        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("null_aware_left_semi", "t")
                            .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {}, {}, 0,
+                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 0,
                                  {col("a")})
                            .build(context);
 
@@ -1129,21 +1136,22 @@ try
             {toNullableVec<Int32>("a", {1, 2, 3, {}, 5}), toNullableVec<Int32>("b", {1, 1, 1, 1, 1})},
             {toNullableVec<Int32>("a", {1, {}, 3, 4, {}}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
             toNullableVec<Int8>({0, {}, 0, {}, {}}),
-        }
-    };
+        }};
 
     for (const auto & [left, right, res] : t2)
     {
-        context.addMockTable("null_aware_left_semi", "t",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-                             left);
-        context.addMockTable("null_aware_left_semi", "s",
-                             {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-                             right);
+        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("null_aware_left_semi", "t")
                            .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {gt(col("c"), col("b"))}, {}, 0,
+                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {gt(col("c"), col("b"))},
+                                 {},
+                                 0,
                                  {col("a")})
                            .build(context);
 
@@ -1175,16 +1183,18 @@ try
 
     for (const auto & [left, right, res] : t3)
     {
-        context.addMockTable("null_aware_left_semi", "t",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-                             left);
-        context.addMockTable("null_aware_left_semi", "s",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-                             right);
+        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("null_aware_left_semi", "t")
                            .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {}, {}, 0,
+                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 0,
                                  {col("a"), col("b")})
                            .build(context);
 
@@ -1216,16 +1226,18 @@ try
 
     for (const auto & [left, right, res] : t4)
     {
-        context.addMockTable("null_aware_left_semi", "t",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-                             left);
-        context.addMockTable("null_aware_left_semi", "s",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}},
-                             right);
+        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("null_aware_left_semi", "t")
                            .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {gt(col("d"), col("c"))}, {}, 0,
+                                 tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {gt(col("d"), col("c"))},
+                                 {},
+                                 0,
                                  {col("a"), col("b")})
                            .build(context);
 
@@ -1262,21 +1274,22 @@ try
             {toNullableVec<Int32>("a", {1, 2, 3, {}, 5})},
             {toNullableVec<Int32>("a", {1, {}, 3, 4, {}})},
             toNullableVec<Int8>({0, {}, 0, {}, {}}),
-        }
-    };
+        }};
 
     for (const auto & [left, right, res] : t1)
     {
-        context.addMockTable("null_aware_left_semi", "t",
-                             {{"a", TiDB::TP::TypeLong}},
-                             left);
-        context.addMockTable("null_aware_left_semi", "s",
-                             {{"a", TiDB::TP::TypeLong}},
-                             right);
+        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("null_aware_left_semi", "t")
                            .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {}, {}, 0,
+                                 tipb::JoinType::TypeAntiSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 0,
                                  {col("a")})
                            .build(context);
 
@@ -1313,21 +1326,22 @@ try
             {toNullableVec<Int32>("a", {1, 2, 3, {}, 5}), toNullableVec<Int32>("b", {1, 1, 1, 1, 1})},
             {toNullableVec<Int32>("a", {1, {}, 3, 4, {}}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
             toNullableVec<Int8>({0, {}, 0, {}, {}}),
-        }
-    };
+        }};
 
     for (const auto & [left, right, res] : t2)
     {
-        context.addMockTable("null_aware_left_semi", "t",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-                             left);
-        context.addMockTable("null_aware_left_semi", "s",
-                             {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-                             right);
+        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("null_aware_left_semi", "t")
                            .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {gt(col("c"), col("b"))}, {}, 0,
+                                 tipb::JoinType::TypeAntiSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {gt(col("c"), col("b"))},
+                                 {},
+                                 0,
                                  {col("a")})
                            .build(context);
 
@@ -1359,16 +1373,18 @@ try
 
     for (const auto & [left, right, res] : t3)
     {
-        context.addMockTable("null_aware_left_semi", "t",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-                             left);
-        context.addMockTable("null_aware_left_semi", "s",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-                             right);
+        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("null_aware_left_semi", "t")
                            .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {}, {}, 0,
+                                 tipb::JoinType::TypeAntiSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 {},
+                                 0,
                                  {col("a"), col("b")})
                            .build(context);
 
@@ -1400,16 +1416,18 @@ try
 
     for (const auto & [left, right, res] : t4)
     {
-        context.addMockTable("null_aware_left_semi", "t",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-                             left);
-        context.addMockTable("null_aware_left_semi", "s",
-                             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}},
-                             right);
+        context.addMockTable("null_aware_left_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_left_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}}, right);
 
         auto request = context.scan("null_aware_left_semi", "t")
                            .join(context.scan("null_aware_left_semi", "s"),
-                                 tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {gt(col("d"), col("c"))}, {}, 0,
+                                 tipb::JoinType::TypeAntiSemiJoin,
+                                 {},
+                                 {},
+                                 {},
+                                 {gt(col("d"), col("c"))},
+                                 {},
+                                 0,
                                  {col("a"), col("b")})
                            .build(context);
 
