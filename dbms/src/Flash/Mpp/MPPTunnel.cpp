@@ -339,7 +339,7 @@ bool MPPTunnel::isReadyForWrite() const
         return tunnel_sender->isReadyForWrite();
     default:
         // Returns true directly for TunnelStatus::WaitingForSenderFinish and TunnelStatus::Finished,
-        // Then an exception will be thrown in `MPPTunnel::nonBlockingWrite`.
+        // and then an exception will be thrown in `MPPTunnel::nonBlockingWrite`.
         return true;
     }
 }
