@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Core/SpillHandler.h>
-
-#include "Common/FailPoint.h"
 
 namespace DB
 {
@@ -54,13 +53,12 @@ SpillHandler::SpillHandler(Spiller * spiller_, size_t partition_id_)
     , partition_id(partition_id_)
     , current_spilled_file_index(-1)
     , current_append_write(false)
-{
-    setUpNextSpilledFile();
-}
+    , writer(nullptr)
+{}
 
-void SpillHandler::setUpNextSpilledFile()
+std::pair<size_t, size_t> SpillHandler::setUpNextSpilledFile()
 {
-    writer = nullptr;
+    assert(writer = nullptr);
     auto [spilled_file, append_write] = spiller->getOrCreateSpilledFile(partition_id);
     if (append_write)
         prev_spill_details.merge(spilled_file->getSpillDetails());
@@ -68,6 +66,8 @@ void SpillHandler::setUpNextSpilledFile()
     current_append_write = append_write;
     spilled_files.push_back(std::move(spilled_file));
     current_spilled_file_index = spilled_files.size() - 1;
+    writer = std::make_unique<SpillWriter>(spiller->config.file_provider, current_spill_file_name, current_append_write, spiller->input_schema, spiller->spill_version);
+    return std::make_pair(spilled_files[current_spilled_file_index]->getSpillDetails().rows, spilled_files[current_spilled_file_index]->getSpillDetails().data_bytes_uncompressed);
 }
 
 bool SpillHandler::isSpilledFileFull(UInt64 spilled_rows, UInt64 spilled_bytes)
@@ -98,9 +98,7 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
         {
             if (unlikely(writer == nullptr))
             {
-                writer = std::make_unique<SpillWriter>(spiller->config.file_provider, current_spill_file_name, current_append_write, blocks[0].cloneEmpty(), spiller->spill_version);
-                rows_in_file = spilled_files[current_spilled_file_index]->getSpillDetails().rows;
-                bytes_in_file = spilled_files[current_spilled_file_index]->getSpillDetails().data_bytes_uncompressed;
+                std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();
             }
             auto rows = block.rows();
             total_rows += rows;
@@ -111,7 +109,7 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
             {
                 spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
                 spilled_files[current_spilled_file_index]->markFull();
-                setUpNextSpilledFile();
+                writer = nullptr;
             }
         }
         double cost = watch.elapsedSeconds();
@@ -152,7 +150,7 @@ void SpillHandler::finish()
             if (!current_append_write)
             {
                 /// if current_append_write is true, we still need to put the original file back, so can not discard the file here
-                current_spilled_file_index--;
+                --current_spilled_file_index;
                 spilled_files.pop_back();
             }
         }

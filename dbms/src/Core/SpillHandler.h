@@ -36,7 +36,7 @@ public:
     void finish();
 
 private:
-    void setUpNextSpilledFile();
+    std::pair<size_t, size_t> setUpNextSpilledFile();
     bool isSpilledFileFull(UInt64 spilled_rows, UInt64 spilled_bytes);
     class SpillWriter
     {

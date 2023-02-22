@@ -84,7 +84,7 @@ std::vector<Block> readDataForSpill(IBlockInputStream & from, size_t bytes_thres
     {
         if unlikely (is_cancelled())
             return {};
-        ret.push_back(block);
+        ret.push_back(std::move(block));
         current_return_size += ret.back().estimateBytesForSpill();
         if (bytes_threshold > 0 && current_return_size >= bytes_threshold)
             break;
@@ -198,6 +198,7 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
     {
         std::vector<std::vector<SpilledFileInfo>> file_infos(spill_file_read_stream_num);
         restore_stream_read_rows.resize(spill_file_read_stream_num, 0);
+        // todo balance based on SpilledRows
         for (size_t i = 0; i < partition_spilled_files.size(); ++i)
         {
             auto & file = partition_spilled_files[i];
@@ -214,7 +215,7 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
                 ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos[i]), input_schema, config.file_provider, spill_version));
         }
     }
-    for (size_t i = 0; i < spill_file_read_stream_num; i++)
+    for (size_t i = 0; i < spill_file_read_stream_num; ++i)
         LOG_TRACE(logger, "Restore {} rows from {}-th stream", restore_stream_read_rows[i], i);
     LOG_INFO(logger, "Will restore {} rows from {} files of size {:.3f} MiB compressed, {:.3f} MiB uncompressed using {} streams.", details.rows, spilled_files[partition_id]->immutable_spilled_files.size(), (details.data_bytes_compressed / 1048576.0), (details.data_bytes_uncompressed / 1048576.0), ret.size());
     if (release_spilled_file_on_restore)
@@ -227,7 +228,7 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
     if (append_dummy_read_stream)
     {
         /// if append_dummy_read_stream = true, make sure at least `max_stream_size`'s streams are returned, will be used in join
-        for (UInt64 i = ret.size(); i < max_stream_size; i++)
+        for (UInt64 i = ret.size(); i < max_stream_size; ++i)
             ret.push_back(std::make_shared<NullBlockInputStream>(input_schema));
     }
     return ret;
