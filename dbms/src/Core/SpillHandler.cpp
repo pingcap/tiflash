@@ -75,8 +75,7 @@ bool SpillHandler::isSpilledFileFull(UInt64 spilled_rows, UInt64 spilled_bytes)
 
 void SpillHandler::spillBlocks(const Blocks & blocks)
 {
-    ///  todo 1. set max_file_size and spill to new file if needed
-    ///   2. check the disk usage
+    ///  todo check the disk usage
     if (unlikely(blocks.empty()))
         return;
     RUNTIME_CHECK_MSG(current_spilled_file_index != INVALID_CURRENT_SPILLED_FILE_INDEX, "{}: spill after the spill handler meeting error or finished.", spiller->config.spill_id);
