@@ -64,7 +64,8 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
                 SortStatistics,
                 TableScanStatistics,
                 TopNStatistics,
-                WindowStatistics>(executor_id, &executor))
+                WindowStatistics,
+                ExpandStatistics>(executor_id, &executor))
         {
             throw TiFlashException(
                 fmt::format("Unknown executor type, executor_id: {}", executor_id),
