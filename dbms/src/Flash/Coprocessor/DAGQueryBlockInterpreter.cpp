@@ -75,7 +75,6 @@ struct AnalysisResult
     ExpressionActionsPtr before_where;
     ExpressionActionsPtr before_aggregation;
     ExpressionActionsPtr before_having;
-    // ExpressionActionsPtr before_order_and_select;
     ExpressionActionsPtr before_order;
     ExpressionActionsPtr before_expand;
     ExpressionActionsPtr before_select;

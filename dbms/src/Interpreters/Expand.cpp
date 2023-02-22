@@ -94,7 +94,6 @@ void Expand::replicateAndFillNull(Block & block) const
     // reserve N times of current block rows size.
     grouping_id_column_data.resize(origin_rows * replicate_times_for_one_row);
 
-    // manipulate the data directly to avoid the virtual function overheads.
     size_t grouping_id_column_index = 0;
     for (size_t i = 0; i < origin_rows; ++i)
     {
@@ -105,9 +104,7 @@ void Expand::replicateAndFillNull(Block & block) const
         for (UInt64 j = 0; j < replicate_times_for_one_row; ++j)
         {
             // start from 1.
-            auto grouping_id = j + 1;
-            grouping_id_column_data[grouping_id_column_index] = grouping_id;
-            ++grouping_id_column_index;
+            grouping_id_column_data[grouping_id_column_index++] = j + 1;
         }
     }
 

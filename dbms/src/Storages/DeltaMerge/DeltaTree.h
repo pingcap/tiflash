@@ -892,8 +892,14 @@ private:
     }
 
 public:
-    DeltaTree() { init(std::make_shared<ValueSpace>()); }
-    explicit DeltaTree(const ValueSpacePtr & insert_value_space_) { init(insert_value_space_); }
+    DeltaTree()
+    {
+        init(std::make_shared<ValueSpace>());
+    }
+    explicit DeltaTree(const ValueSpacePtr & insert_value_space_)
+    {
+        init(insert_value_space_);
+    }
     DeltaTree(const Self & o);
 
     DeltaTree & operator=(const Self & o)
@@ -954,10 +960,19 @@ public:
         check(root, true);
     }
 
-    size_t getBytes() { return bytes; }
+    size_t getBytes()
+    {
+        return bytes;
+    }
 
-    size_t getHeight() const { return height; }
-    EntryIterator begin() const { return EntryIterator(left_leaf, 0, 0); }
+    size_t getHeight() const
+    {
+        return height;
+    }
+    EntryIterator begin() const
+    {
+        return EntryIterator(left_leaf, 0, 0);
+    }
     EntryIterator end() const
     {
         Int64 delta = isLeaf(root) ? as(Leaf, root)->getDelta() : as(Intern, root)->getDelta();
@@ -971,11 +986,23 @@ public:
         return std::make_shared<DTEntriesCopy<M, F, S, CopyAllocator>>(left_leaf, num_entries, delta);
     }
 
-    CompactedEntriesPtr getCompactedEntries() { return std::make_shared<CompactedEntries>(begin(), end(), num_entries); }
+    CompactedEntriesPtr getCompactedEntries()
+    {
+        return std::make_shared<CompactedEntries>(begin(), end(), num_entries);
+    }
 
-    size_t numEntries() const { return num_entries; }
-    size_t numInserts() const { return num_inserts; }
-    size_t numDeletes() const { return num_deletes; }
+    size_t numEntries() const
+    {
+        return num_entries;
+    }
+    size_t numInserts() const
+    {
+        return num_inserts;
+    }
+    size_t numDeletes() const
+    {
+        return num_deletes;
+    }
 
     void addDelete(UInt64 rid);
     void addInsert(UInt64 rid, UInt64 tuple_id);
