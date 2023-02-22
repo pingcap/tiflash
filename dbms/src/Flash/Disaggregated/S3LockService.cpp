@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -119,29 +119,7 @@ template <typename Resp>
 bool S3LockService::setOwnerChanged(Resp * response)
 {
     // return the owner info to client retry
-    const auto owner_info = gc_owner->getOwnerID();
-    switch (owner_info.status)
-    {
-    case DB::OwnerType::IsOwner:
-    case DB::OwnerType::NotOwner:
-    {
-        auto * not_owner = response->mutable_result()->mutable_not_owner();
-        not_owner->set_owner_id(owner_info.owner_id);
-        break;
-    }
-    case DB::OwnerType::NoLeader:
-    {
-        auto * conflict = response->mutable_result()->mutable_conflict();
-        conflict->set_reason(fmt::format("no available gc owner"));
-        break;
-    }
-    case DB::OwnerType::GrpcError:
-    {
-        auto * conflict = response->mutable_result()->mutable_conflict();
-        conflict->set_reason(fmt::format("get gc owner error, {}", owner_info.errMsg()));
-        break;
-    }
-    }
+    response->mutable_result()->mutable_not_owner();
     return false;
 }
 
@@ -170,7 +148,9 @@ bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_sto
 
     if (!gc_owner->isOwner())
     {
-        return setOwnerChanged(response);
+        // client should retry
+        response->mutable_result()->mutable_not_owner();
+        return false;
     }
 
     // Get the latch of the file, with ref count added
@@ -206,7 +186,9 @@ bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_sto
     // Check whether this node is owner again before uploading lock file
     if (!gc_owner->isOwner())
     {
-        return setOwnerChanged(response);
+        // client should retry
+        response->mutable_result()->mutable_not_owner();
+        return false;
     }
     const auto lock_key = key_view.getLockKey(lock_store_id, lock_seq);
     // upload lock file
@@ -245,7 +227,9 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
 
     if (!gc_owner->isOwner())
     {
-        return setOwnerChanged(response);
+        // client should retry
+        response->mutable_result()->mutable_not_owner();
+        return false;
     }
 
     // Get the latch of the file, with ref count added
@@ -274,7 +258,9 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
     // Check whether this node is owner again before marking delete
     if (!gc_owner->isOwner())
     {
-        return setOwnerChanged(response);
+        // client should retry
+        response->mutable_result()->mutable_not_owner();
+        return false;
     }
     // upload delete mark
     const auto delmark_key = key_view.getDelMarkKey();

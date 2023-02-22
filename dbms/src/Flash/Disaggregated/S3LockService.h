@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,6 @@
 #include <Storages/S3/S3Common.h>
 #include <TiDB/OwnerManager.h>
 #include <common/types.h>
-#include <disaggregated.pb.h>
-#include <grpcpp/support/status.h>
 
 #include <memory>
 #include <mutex>
@@ -32,8 +30,8 @@
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
+#include <grpcpp/support/status.h>
 #include <kvproto/disaggregated.pb.h>
-#include <kvproto/kvrpcpb.pb.h>
 #pragma GCC diagnostic pop
 
 namespace DB::S3
