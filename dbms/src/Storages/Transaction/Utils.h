@@ -24,6 +24,26 @@ namespace DB
 using SteadyClock = std::chrono::steady_clock;
 static constexpr size_t CPU_CACHE_LINE_SIZE = 64;
 
+template <typename Base, size_t alignment>
+struct AlignedStruct
+{
+    template <typename... Args>
+    explicit AlignedStruct(Args &&... args)
+        : inner{std::forward<Args>(args)...}
+    {}
+
+    Base & base() { return inner; }
+    const Base & base() const { return inner; }
+    Base * operator->() { return &inner; }
+    const Base * operator->() const { return &inner; }
+    Base & operator*() { return inner; }
+    const Base & operator*() const { return inner; }
+
+    // Wrapped with struct to guarantee that it is aligned to `alignment`
+    // DO NOT need padding byte
+    alignas(alignment) Base inner;
+};
+
 class MutexLockWrap
 {
 public:
@@ -31,28 +51,21 @@ public:
 
     std::lock_guard<Mutex> genLockGuard() const
     {
-        return std::lock_guard(mutex());
+        return std::lock_guard(*mutex);
     }
 
     std::unique_lock<Mutex> tryToLock() const
     {
-        return std::unique_lock(mutex(), std::try_to_lock);
+        return std::unique_lock(*mutex, std::try_to_lock);
     }
 
     std::unique_lock<Mutex> genUniqueLock() const
     {
-        return std::unique_lock(mutex());
+        return std::unique_lock(*mutex);
     }
 
 private:
-    Mutex & mutex() const
-    {
-        return impl;
-    }
-    struct alignas(CPU_CACHE_LINE_SIZE) Impl : Mutex
-    {
-    };
-    mutable Impl impl;
+    mutable AlignedStruct<Mutex, CPU_CACHE_LINE_SIZE> mutex;
 };
 
 class SharedMutexLockWrap
@@ -62,23 +75,16 @@ public:
 
     std::shared_lock<Mutex> genSharedLock() const
     {
-        return std::shared_lock(mutex());
+        return std::shared_lock(*mutex);
     }
 
     std::unique_lock<Mutex> genUniqueLock() const
     {
-        return std::unique_lock(mutex());
+        return std::unique_lock(*mutex);
     }
 
 private:
-    Mutex & mutex() const
-    {
-        return impl;
-    }
-    struct alignas(CPU_CACHE_LINE_SIZE) Impl : Mutex
-    {
-    };
-    mutable Impl impl;
+    mutable AlignedStruct<Mutex, CPU_CACHE_LINE_SIZE> mutex;
 };
 
 class MutexCondVarWrap : public MutexLockWrap
@@ -86,17 +92,10 @@ class MutexCondVarWrap : public MutexLockWrap
 public:
     using CondVar = std::condition_variable;
 
-    CondVar & condVar() const { return cv(); }
+    CondVar & condVar() const { return *cv; }
 
 private:
-    CondVar & cv() const
-    {
-        return impl;
-    }
-    struct alignas(CPU_CACHE_LINE_SIZE) Impl : CondVar
-    {
-    };
-    mutable Impl impl;
+    mutable AlignedStruct<CondVar, CPU_CACHE_LINE_SIZE> cv;
 };
 
 

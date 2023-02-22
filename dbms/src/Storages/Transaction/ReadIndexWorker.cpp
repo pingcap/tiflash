@@ -72,17 +72,17 @@ AsyncNotifier::Status AsyncWaker::Notifier::blockedWaitUtil(const SteadyClock::t
     // if flag from false to false, wait for notification.
     // if flag from true to false, do nothing.
     auto res = AsyncNotifier::Status::Normal;
-    if (!is_awake.exchange(false, std::memory_order_acq_rel))
+    if (!is_awake->exchange(false, std::memory_order_acq_rel))
     {
         {
             auto lock = genUniqueLock();
-            if (!is_awake.load(std::memory_order_acquire))
+            if (!is_awake->load(std::memory_order_acquire))
             {
                 if (condVar().wait_until(lock, time_point) == std::cv_status::timeout)
                     res = AsyncNotifier::Status::Timeout;
             }
         }
-        is_awake.store(false, std::memory_order_release);
+        is_awake->store(false, std::memory_order_release);
     }
     return res;
 }
@@ -91,9 +91,9 @@ void AsyncWaker::Notifier::wake()
 {
     // if flag from false -> true, then wake up.
     // if flag from true -> true, do nothing.
-    if (is_awake.load(std::memory_order_acquire))
+    if (is_awake->load(std::memory_order_acquire))
         return;
-    if (!is_awake.exchange(true, std::memory_order_acq_rel))
+    if (!is_awake->exchange(true, std::memory_order_acq_rel))
     {
         // wake up notifier
         auto _ = genLockGuard();

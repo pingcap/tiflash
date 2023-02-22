@@ -47,14 +47,8 @@ struct AsyncWaker
         ~Notifier() override = default;
 
     private:
-        struct alignas(CPU_CACHE_LINE_SIZE) IsAwake : std::atomic_bool
-        {
-        };
         // multi notifiers single receiver model. use another flag to avoid waiting endlessly.
-        mutable struct IsAwake is_awake
-        {
-            false
-        };
+        AlignedStruct<std::atomic_bool, CPU_CACHE_LINE_SIZE> is_awake{false};
     };
     using NotifierPtr = std::shared_ptr<Notifier>;
 
