@@ -55,7 +55,7 @@ SharedBlockSchemas::SharedBlockSchemas(DB::Context & context)
                 ++iter;
             }
         }
-        return true;
+        return false;
     },
                                      /*multi*/ false,
                                      /*interval_ms*/ 60000);
