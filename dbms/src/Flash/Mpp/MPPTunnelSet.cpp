@@ -122,9 +122,9 @@ static inline void updatePartitionWriterMetrics(CompressionMethod method, size_t
 }
 
 template <typename Tunnel>
-static inline bool IsLocalTunnel(const Tunnel & tunnel)
+static inline bool IsLocalTunnel(const std::shared_ptr<Tunnel> & tunnel)
 {
-    return tunnel.isLocal();
+    return tunnel->isLocal();
 }
 
 template <typename Tunnel>
@@ -158,21 +158,21 @@ static void BroadcastOrPassThroughWriteImpl(
     {
         for (size_t i = 0, local_cnt = 0, remote_cnt = 0; i < tunnels.size(); ++i)
         {
-            if (IsLocalTunnel(*tunnels[i]))
+            if (IsLocalTunnel(tunnels[i]))
             {
                 local_cnt++;
                 if (local_cnt == local_tunnel_cnt)
-                    tunnels[i]->write(TrackedMppDataPacketPtr(tracked_packet));
+                    tunnels[i]->write(std::move(tracked_packet));
                 else
-                    tunnels[i]->write(tracked_packet->copy());
+                    tunnels[i]->write(tracked_packet->copy()); // NOLINT
             }
             else
             {
                 remote_cnt++;
                 if (remote_cnt == remote_tunnel_cnt)
-                    tunnels[i]->write(TrackedMppDataPacketPtr(compressed_tracked_packet));
+                    tunnels[i]->write(std::move(compressed_tracked_packet));
                 else
-                    tunnels[i]->write(compressed_tracked_packet->copy());
+                    tunnels[i]->write(compressed_tracked_packet->copy()); // NOLINT
             }
         }
     }
@@ -257,7 +257,7 @@ void MPPTunnelSetBase<Tunnel>::partitionWrite(Blocks & blocks, int16_t partition
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
     tunnels[partition_id]->write(std::move(tracked_packet));
-    updatePartitionWriterMetrics(CompressionMethod::NONE, packet_bytes, packet_bytes, isLocal(partition_id));
+    updatePartitionWriterMetrics(CompressionMethod::NONE, packet_bytes, packet_bytes, IsLocalTunnel(tunnels[partition_id]));
 }
 
 template <typename Tunnel>
@@ -270,7 +270,7 @@ void MPPTunnelSetBase<Tunnel>::partitionWrite(
 {
     assert(version > MPPDataPacketV0);
 
-    bool is_local = isLocal(partition_id);
+    bool is_local = IsLocalTunnel(tunnels[partition_id]);
     compression_method = is_local ? CompressionMethod::NONE : compression_method;
 
     size_t original_size = 0;
@@ -298,7 +298,7 @@ void MPPTunnelSetBase<Tunnel>::fineGrainedShuffleWrite(
     if (version == MPPDataPacketV0)
         return fineGrainedShuffleWrite(header, scattered, bucket_idx, fine_grained_shuffle_stream_count, num_columns, partition_id);
 
-    bool is_local = isLocal(partition_id);
+    bool is_local = IsLocalTunnel(tunnels[partition_id]);
     compression_method = is_local ? CompressionMethod::NONE : compression_method;
 
     size_t original_size = 0;
@@ -344,7 +344,7 @@ void MPPTunnelSetBase<Tunnel>::fineGrainedShuffleWrite(
     auto packet_bytes = tracked_packet->getPacket().ByteSizeLong();
     checkPacketSize(packet_bytes);
     tunnels[partition_id]->write(std::move(tracked_packet));
-    updatePartitionWriterMetrics(CompressionMethod::NONE, packet_bytes, packet_bytes, isLocal(partition_id));
+    updatePartitionWriterMetrics(CompressionMethod::NONE, packet_bytes, packet_bytes, IsLocalTunnel(tunnels[partition_id]));
 }
 
 template <typename Tunnel>
@@ -386,13 +386,6 @@ typename MPPTunnelSetBase<Tunnel>::TunnelPtr MPPTunnelSetBase<Tunnel>::getTunnel
         return nullptr;
     }
     return tunnels[it->second];
-}
-
-template <typename Tunnel>
-bool MPPTunnelSetBase<Tunnel>::isLocal(size_t index) const
-{
-    assert(getPartitionNum() > index);
-    return IsLocalTunnel(*getTunnels()[index]);
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
