@@ -921,6 +921,23 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     {
         /// Use another null_map to record the filtered rows.
         recordFilteredRows(block, right_filter_column, filter_null_map_holder, filter_null_map);
+        if (strictness == ASTTableJoin::Strictness::Any || !has_all_key_null_row.load(std::memory_order_acquire))
+        {
+            ColumnPtr all_key_null_map_holder;
+            ConstNullMapPtr all_key_null_map{};
+            extractAllKeyNullMap(key_columns, all_key_null_map_holder, all_key_null_map);
+            if (all_key_null_map)
+            {
+                for (size_t i = 0, size = all_key_null_map->size(); i < size; ++i)
+                {
+                    if ((*all_key_null_map)[i])
+                    {
+                        has_all_key_null_row.store(true, std::memory_order_release);
+                        break;
+                    }
+                }
+            }
+        }
     }
     else
     {
@@ -2030,7 +2047,9 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const Sizes & key_sizes,
     const ConstNullMapPtr & null_map,
     const ConstNullMapPtr & filter_null_map,
-    const TiDB::TiDBCollators & collators)
+    const ConstNullMapPtr & all_key_null_map,
+    const TiDB::TiDBCollators & collators,
+    bool has_all_key_null_row)
 {
     static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                   || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
@@ -2066,9 +2085,23 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         {
             if ((*null_map)[i])
             {
-                /// TODO: fast path, if all null and STRICTNESS is any and the result set is not empty, the result should be null.
-                res.emplace_back(i, true, NullAwareSemiJoinStep::CHECK_NULL_LIST, nullptr);
-                res_list.push_back(&res.back());
+                if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+                {
+                    if (key_columns.size() == 1 || has_all_key_null_row || (all_key_null_map && (*all_key_null_map)[i]))
+                    {
+                        /// The result is NULL if
+                        /// 1. key column size is 1.
+                        /// 2. right table has a all-key-null row.
+                        /// 3. this row is all-key-null.
+                        res.emplace_back(i, true, NullAwareSemiJoinStep::DONE, nullptr);
+                        res.back().setResult(true, false);
+                    }
+                }
+                else
+                {
+                    res.emplace_back(i, true, NullAwareSemiJoinStep::CHECK_NULL_LIST, nullptr);
+                    res_list.push_back(&res.back());
+                }
                 continue;
             }
         }
@@ -2093,8 +2126,10 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         auto it = segment_size > 0 ? internal_map.find(key, hash_value) : internal_map.find(key);
         if (it != internal_map.end())
         {
+            /// Find the matched row(s).
             if (STRICTNESS == ASTTableJoin::Strictness::Any)
             {
+                /// If strictness is any, we get the result.
                 res.emplace_back(i, false, NullAwareSemiJoinStep::DONE, nullptr);
                 if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
                     res.back().setResult(false, true);
@@ -2103,6 +2138,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             }
             else
             {
+                /// Else the other condition must be checked for these matched row(s).
                 auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
                 res.emplace_back(i, false, NullAwareSemiJoinStep::CHECK_OTHER_COND, static_cast<const void *>(map_it));
                 res_list.push_back(&res.back());
@@ -2110,6 +2146,29 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         }
         else
         {
+            /// Not find the matched row.
+            if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+            {
+                if (has_all_key_null_row)
+                {
+                    /// If right table has a all-key-null row, the result is NULL.
+                    res.emplace_back(i, false, NullAwareSemiJoinStep::DONE, nullptr);
+                    res.back().setResult(true, false);
+                    continue;
+                }
+                if (key_columns.size() == 1)
+                {
+                    /// If key size is 1 and all key in right table row is not NULL, we get the result.
+                    if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
+                        res.back().setResult(false, false);
+                    else
+                        res.back().setResult(false, true);
+                    continue;
+                }
+                /// Then key size is greater than 2 and right table has no all-key-null row, we must
+                /// compare them one by one.
+            }
+            /// Check null list first to increase the possibility of getting the NULL result.
             res.emplace_back(i, false, NullAwareSemiJoinStep::CHECK_NULL_LIST, nullptr);
             res_list.push_back(&res.back());
         }
@@ -2199,15 +2258,17 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const BlocksList & right_blocks,
     const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists,
     size_t max_block_size,
-    String other_filter_column,
-    ExpressionActionsPtr other_condition_ptr,
-    String null_aware_eq_column,
-    ExpressionActionsPtr null_aware_eq_ptr,
+    const String & other_filter_column,
+    const ExpressionActionsPtr & other_condition_ptr,
+    const String & null_aware_eq_column,
+    const ExpressionActionsPtr & null_aware_eq_ptr,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
-    ConstNullMapPtr null_map,
-    ConstNullMapPtr filter_null_map,
-    const TiDB::TiDBCollators & collators)
+    const ConstNullMapPtr & null_map,
+    const ConstNullMapPtr & filter_null_map,
+    const ConstNullMapPtr & all_key_null_map,
+    const TiDB::TiDBCollators & collators,
+    bool has_all_key_null_row)
 {
 #define impl(has_null_map, has_filter_null_map)                                                          \
     joinBlockImplNullAwareInternal<KIND, STRICTNESS, KeyGetter, Map, has_null_map, has_filter_null_map>( \
@@ -2225,7 +2286,9 @@ void NO_INLINE joinBlockImplNullAwareCast(
         key_sizes,                                                                                       \
         null_map,                                                                                        \
         filter_null_map,                                                                                 \
-        collators);
+        all_key_null_map,                                                                                \
+        collators,                                                                                       \
+        has_all_key_null_row);
 
     if (null_map)
     {
@@ -2279,6 +2342,9 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
     ColumnPtr filter_null_map_holder;
     ConstNullMapPtr filter_null_map{};
     recordFilteredRows(block, left_filter_column, filter_null_map_holder, filter_null_map);
+    ColumnPtr all_key_null_map_holder;
+    ConstNullMapPtr all_key_null_map{};
+    extractAllKeyNullMap(key_columns, all_key_null_map_holder, all_key_null_map);
 
     size_t existing_columns = block.columns();
 
@@ -2311,7 +2377,9 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             key_sizes,                                                                                                                                  \
             null_map,                                                                                                                                   \
             filter_null_map,                                                                                                                            \
-            collators);                                                                                                                                 \
+            all_key_null_map,                                                                                                                           \
+            collators,                                                                                                                                  \
+            has_all_key_null_row.load(std::memory_order_relaxed));                                                                                      \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M

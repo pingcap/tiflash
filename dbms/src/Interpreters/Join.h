@@ -314,7 +314,6 @@ private:
     bool meet_error = false;
     String error_message;
 
-private:
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
@@ -326,6 +325,8 @@ private:
 
     String null_aware_eq_column;
     ExpressionActionsPtr null_aware_eq_ptr;
+
+    std::atomic<bool> has_all_key_null_row{false};
 
     ASTTableJoin::Strictness original_strictness;
     size_t max_block_size;
