@@ -157,7 +157,7 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
     {
         std::unique_lock lk(mu);
         waitUntilConnectedOrFinished(lk);
-        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel which is already closed.");
+        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
     }
 
     auto pushed_data_size = data->getPacket().ByteSizeLong();
@@ -167,7 +167,7 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
         updateConnProfileInfo(pushed_data_size);
         return;
     }
-    throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
+    throw Exception(fmt::format("write to tunnel {} which is already closed, {}", tunnel_id, tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
 }
 
 /// done normally and being called exactly once after writing all packets
@@ -179,7 +179,7 @@ void MPPTunnel::writeDone()
         /// make sure to finish the tunnel after it is connected
         waitUntilConnectedOrFinished(lk);
         if (tunnel_sender == nullptr)
-            throw Exception(fmt::format("write to tunnel which is already closed."));
+            throw Exception(fmt::format("write to tunnel {} which is already closed.", tunnel_id));
     }
     tunnel_sender->finish();
     waitForSenderFinish(/*allow_throw=*/true);
@@ -208,8 +208,8 @@ void MPPTunnel::connectLocalV2(size_t source_index, LocalRequestHandler & local_
 {
     {
         std::unique_lock lk(mu);
-        RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
-        RUNTIME_CHECK_MSG(mode == TunnelSenderMode::LOCAL, "This should be a local tunnel");
+        RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, fmt::format("MPPTunnel {} has connected or finished: {}", tunnel_id, statusToString()));
+        RUNTIME_CHECK_MSG(mode == TunnelSenderMode::LOCAL, "{} should be a local tunnel", tunnel_id);
 
         LOG_TRACE(log, "ready to connect local tunnel version 2");
         if (is_fine_grained)
@@ -233,7 +233,7 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
 {
     {
         std::unique_lock lk(mu);
-        RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, "MPPTunnel has connected or finished: {}", statusToString());
+        RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, "MPPTunnel {} has connected or finished: {}", tunnel_id, statusToString());
 
         LOG_TRACE(log, "ready to connect async");
         RUNTIME_ASSERT(mode == TunnelSenderMode::ASYNC_GRPC, log, "mode {} is not async grpc in connectAsync", magic_enum::enum_name(mode));
@@ -283,7 +283,7 @@ void MPPTunnel::waitForSenderFinish(bool allow_throw)
         status = TunnelStatus::Finished;
     }
     if (allow_throw && !err_msg.empty())
-        throw Exception("Consumer exits unexpected, " + err_msg);
+        throw Exception(fmt::format("{}: consumer exits unexpected, error message: {} ", tunnel_id, err_msg));
     LOG_TRACE(log, "end wait for consumer finish!");
 }
 
@@ -311,7 +311,7 @@ void MPPTunnel::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
         LOG_TRACE(log, "end waitUntilConnectedOrFinished");
     }
     if (status == TunnelStatus::Unconnected)
-        throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");
+        throw Exception(fmt::format("MPPTunnel {} can not be connected because MPPTask is cancelled", tunnel_id));
 }
 
 StringRef MPPTunnel::statusToString()
@@ -399,7 +399,7 @@ void MPPTunnel::connectLocalV1(PacketWriter * writer)
     {
         std::unique_lock lk(mu);
         if (status != TunnelStatus::Unconnected)
-            throw Exception(fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
+            throw Exception(fmt::format("MPPTunnel {} has connected or finished: {}", tunnel_id, statusToString()));
 
         LOG_TRACE(log, "ready to connect local tunnel version 1");
 

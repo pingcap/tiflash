@@ -685,5 +685,54 @@ try
 }
 CATCH
 
+TEST_F(MPMCQueueTest, AuxiliaryMemoryBound)
+try
+{
+    /// case 1: no auxiliary memory usage bound
+    size_t max_size = 10;
+    MPMCQueue<Int64> queue(max_size);
+    for (size_t i = 0; i < max_size; i++)
+        ASSERT_TRUE(queue.tryPush(i) == MPMCQueueResult::OK);
+    ASSERT_TRUE(queue.tryPush(max_size) == MPMCQueueResult::FULL);
+
+    /// case 2: less auxiliary memory bound than the capacity bound
+    size_t actual_max_size = 5;
+    Int64 auxiliary_memory_bound = sizeof(Int64) * actual_max_size;
+    MPMCQueue<Int64> queue_1(max_size, auxiliary_memory_bound, [](const Int64 &) { return sizeof(Int64); });
+    for (size_t i = 0; i < actual_max_size; i++)
+        ASSERT_TRUE(queue_1.tryPush(i) == MPMCQueueResult::OK);
+    ASSERT_TRUE(queue_1.tryPush(actual_max_size) == MPMCQueueResult::FULL);
+    Int64 value;
+    /// after pop one element, the queue can be pushed again
+    ASSERT_TRUE(queue_1.tryPop(value) == MPMCQueueResult::OK);
+    ASSERT_TRUE(queue_1.tryPush(actual_max_size) == MPMCQueueResult::OK);
+
+    /// case 3: less capacity bound than the auxiliary memory bound
+    auxiliary_memory_bound = sizeof(Int64) * (max_size * 10);
+    MPMCQueue<Int64> queue_2(max_size, auxiliary_memory_bound, [](const Int64 &) { return sizeof(Int64); });
+    for (size_t i = 0; i < max_size; i++)
+        ASSERT_TRUE(queue_2.tryPush(i) == MPMCQueueResult::OK);
+    ASSERT_TRUE(queue_2.tryPush(max_size) == MPMCQueueResult::FULL);
+
+    /// case 4, auxiliary memory bound <= 0 means unbounded for auxiliary memory usage
+    MPMCQueue<Int64> queue_3(max_size, 0, [](const Int64 &) { return 1024 * 1024; });
+    for (size_t i = 0; i < max_size; i++)
+        ASSERT_TRUE(queue_3.tryPush(i) == MPMCQueueResult::OK);
+    ASSERT_TRUE(queue_3.tryPush(max_size) == MPMCQueueResult::FULL);
+    MPMCQueue<Int64> queue_4(max_size, -1, [](const Int64 &) { return 1024 * 1024; });
+    for (size_t i = 0; i < max_size; i++)
+        ASSERT_TRUE(queue_4.tryPush(i) == MPMCQueueResult::OK);
+    ASSERT_TRUE(queue_4.tryPush(max_size) == MPMCQueueResult::FULL);
+
+    /// case 5 even if the element's auxiliary memory is out of bound, at least one element can be pushed
+    MPMCQueue<Int64> queue_5(max_size, 1, [](const Int64 &) { return 10; });
+    ASSERT_TRUE(queue_5.tryPush(1) == MPMCQueueResult::OK);
+    ASSERT_TRUE(queue_5.tryPush(2) == MPMCQueueResult::FULL);
+    ASSERT_TRUE(queue_5.tryPop(value) == MPMCQueueResult::OK);
+    ASSERT_TRUE(queue_5.tryPop(value) == MPMCQueueResult::EMPTY);
+    ASSERT_TRUE(queue_5.tryPush(1) == MPMCQueueResult::OK);
+}
+CATCH
+
 } // namespace
 } // namespace DB::tests

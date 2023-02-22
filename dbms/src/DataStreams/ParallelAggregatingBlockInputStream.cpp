@@ -16,7 +16,10 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
+#include <DataStreams/MergingAndConvertingBlockInputStream.h>
+#include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
 
 namespace DB
 {
@@ -81,7 +84,26 @@ Block ParallelAggregatingBlockInputStream::readImpl()
         {
             /** If all partially-aggregated data is in RAM, then merge them in parallel, also in RAM.
                 */
-            impl = aggregator.mergeAndConvertToBlocks(many_data, final, max_threads);
+            auto merging_buckets = aggregator.mergeAndConvertToBlocks(many_data, final, max_threads);
+            if (!merging_buckets)
+            {
+                impl = std::make_unique<NullBlockInputStream>(aggregator.getHeader(final));
+            }
+            else
+            {
+                RUNTIME_CHECK(merging_buckets->getConcurrency() > 0);
+                if (merging_buckets->getConcurrency() > 1)
+                {
+                    BlockInputStreams merging_streams;
+                    for (size_t i = 0; i < merging_buckets->getConcurrency(); ++i)
+                        merging_streams.push_back(std::make_shared<MergingAndConvertingBlockInputStream>(merging_buckets, i, log->identifier()));
+                    impl = std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, log->identifier());
+                }
+                else
+                {
+                    impl = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
+                }
+            }
         }
         else
         {
@@ -115,8 +137,7 @@ void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t
         block,
         *parent.many_data[thread_num],
         parent.threads_data[thread_num].key_columns,
-        parent.threads_data[thread_num].aggregate_columns,
-        parent.threads_data[thread_num].local_delta_memory);
+        parent.threads_data[thread_num].aggregate_columns);
 
     parent.threads_data[thread_num].src_rows += block.rows();
     parent.threads_data[thread_num].src_bytes += block.bytes();
@@ -173,6 +194,7 @@ void ParallelAggregatingBlockInputStream::execute()
 
     for (size_t i = 0; i < max_threads; ++i)
         threads_data.emplace_back(keys_size, aggregates_size);
+    aggregator.initThresholdByAggregatedDataVariantsSize(many_data.size());
 
     LOG_TRACE(log, "Aggregating");
 
@@ -226,13 +248,23 @@ void ParallelAggregatingBlockInputStream::execute()
             children.at(0)->getHeader(),
             *many_data[0],
             threads_data[0].key_columns,
-            threads_data[0].aggregate_columns,
-            threads_data[0].local_delta_memory);
+            threads_data[0].aggregate_columns);
 }
 
 void ParallelAggregatingBlockInputStream::appendInfo(FmtBuffer & buffer) const
 {
     buffer.fmtAppend(", max_threads: {}, final: {}", max_threads, final ? "true" : "false");
+}
+
+uint64_t ParallelAggregatingBlockInputStream::collectCPUTimeNsImpl(bool is_thread_runner)
+{
+    uint64_t cpu_time_ns = impl ? impl->collectCPUTimeNs(is_thread_runner) : 0;
+    // Each of ParallelAggregatingBlockInputStream's children is a thread-runner.
+    forEachChild([&](IBlockInputStream & child) {
+        cpu_time_ns += child.collectCPUTimeNs(true);
+        return false;
+    });
+    return cpu_time_ns;
 }
 
 } // namespace DB

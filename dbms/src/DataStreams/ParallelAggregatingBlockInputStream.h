@@ -60,6 +60,7 @@ protected:
     Block readImpl() override;
     void appendInfo(FmtBuffer & buffer) const override;
 
+    uint64_t collectCPUTimeNsImpl(bool is_thread_runner) override;
 
 private:
     const LoggerPtr log;
@@ -83,7 +84,6 @@ private:
     {
         size_t src_rows = 0;
         size_t src_bytes = 0;
-        Int64 local_delta_memory = 0;
 
         ColumnRawPtrs key_columns;
         Aggregator::AggregateColumns aggregate_columns;

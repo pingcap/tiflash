@@ -44,12 +44,30 @@ private:
     using Writes = std::vector<Write>;
 
 public:
-    UniversalWriteBatch() = default;
-
-    UniversalWriteBatch(UniversalWriteBatch && rhs)
-        : writes(std::move(rhs.writes))
-        , total_data_size(rhs.total_data_size)
+    explicit UniversalWriteBatch(String prefix_ = "")
+        : prefix(std::move(prefix_))
     {}
+
+    void putPage(PageIdU64 page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
+    {
+        putPage(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag, read_buffer, size, data_sizes);
+    }
+
+    void putExternal(PageIdU64 page_id, UInt64 tag)
+    {
+        putExternal(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag);
+    }
+
+    // Add RefPage{ref_id} -> Page{page_id}
+    void putRefPage(PageIdU64 ref_id, PageIdU64 page_id)
+    {
+        putRefPage(UniversalPageIdFormat::toFullPageId(prefix, ref_id), UniversalPageIdFormat::toFullPageId(prefix, page_id));
+    }
+
+    void delPage(PageIdU64 page_id)
+    {
+        delPage(UniversalPageIdFormat::toFullPageId(prefix, page_id));
+    }
 
     void putPage(const UniversalPageId & page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
@@ -61,17 +79,14 @@ public:
             offsets.emplace_back(off, 0);
             off += data_sz;
         }
-        if (unlikely(!data_sizes.empty() && off != size))
-        {
-            throw Exception(fmt::format(
-                                "Try to put Page with fields, but page size and fields total size not match "
-                                "[page_id={}] [num_fields={}] [page_size={}] [all_fields_size={}]",
-                                page_id,
-                                data_sizes.size(),
-                                size,
-                                off),
-                            ErrorCodes::LOGICAL_ERROR);
-        }
+
+        RUNTIME_CHECK_MSG(data_sizes.empty() || off == size,
+                          "Try to put Page with fields, but page size and fields total size not match "
+                          "[page_id={}] [num_fields={}] [page_size={}] [all_fields_size={}]",
+                          page_id,
+                          data_sizes.size(),
+                          size,
+                          off);
 
         Write w{WriteBatchWriteType::PUT, page_id, tag, read_buffer, size, "", std::move(offsets)};
         total_data_size += size;
@@ -113,7 +128,7 @@ public:
     {
         return writes;
     }
-    Writes & getWrites()
+    Writes & getMutWrites()
     {
         return writes;
     }
@@ -124,12 +139,6 @@ public:
         for (const auto & w : writes)
             count += (w.type == WriteBatchWriteType::PUT);
         return count;
-    }
-
-    void swap(UniversalWriteBatch & o)
-    {
-        writes.swap(o.writes);
-        std::swap(o.total_data_size, total_data_size);
     }
 
     void merge(UniversalWriteBatch & rhs)
@@ -186,7 +195,21 @@ public:
         return fmt_buffer.toString();
     }
 
+    UniversalWriteBatch(UniversalWriteBatch && rhs)
+        : prefix(std::move(rhs.prefix))
+        , writes(std::move(rhs.writes))
+        , total_data_size(rhs.total_data_size)
+    {}
+
+    void swap(UniversalWriteBatch & o)
+    {
+        prefix.swap(o.prefix);
+        writes.swap(o.writes);
+        std::swap(o.total_data_size, total_data_size);
+    }
+
 private:
+    String prefix;
     Writes writes;
     size_t total_data_size = 0;
 };

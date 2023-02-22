@@ -91,14 +91,16 @@ MockColumnInfoVec MockStorage::getTableSchema(const String & name)
 }
 
 /// for delta merge
-void MockStorage::addTableSchemaForDeltaMerge(const String & name, const MockColumnInfoVec & columnInfos)
+Int64 MockStorage::addTableSchemaForDeltaMerge(const String & name, const MockColumnInfoVec & columnInfos)
 {
-    name_to_id_map_for_delta_merge[name] = MockTableIdGenerator::instance().nextTableId();
+    auto table_id = MockTableIdGenerator::instance().nextTableId();
+    name_to_id_map_for_delta_merge[name] = table_id;
     table_schema_for_delta_merge[getTableIdForDeltaMerge(name)] = columnInfos;
     addTableInfoForDeltaMerge(name, columnInfos);
+    return table_id;
 }
 
-void MockStorage::addTableDataForDeltaMerge(Context & context, const String & name, ColumnsWithTypeAndName & columns)
+Int64 MockStorage::addTableDataForDeltaMerge(Context & context, const String & name, ColumnsWithTypeAndName & columns)
 {
     auto table_id = getTableIdForDeltaMerge(name);
     addNamesAndTypesForDeltaMerge(table_id, columns);
@@ -136,6 +138,7 @@ void MockStorage::addTableDataForDeltaMerge(Context & context, const String & na
         output->write(insert_block);
         output->writeSuffix();
     }
+    return table_id;
 }
 
 BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int64 table_id, const FilterConditions * filter_conditions)

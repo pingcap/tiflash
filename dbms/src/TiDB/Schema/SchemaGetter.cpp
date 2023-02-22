@@ -191,7 +191,7 @@ void SchemaDiff::deserialize(const String & data)
     }
     catch (...)
     {
-        LOG_INFO(&Poco::Logger::get("SchemaDiff"), "failed to deserialize {}", data);
+        LOG_INFO(Logger::get(), "failed to deserialize {}", data);
         throw;
     }
 }

@@ -59,12 +59,16 @@ public:
 
     int estimateNewThreadCount() override;
 
+    RU collectRequestUnit() override;
+
+    Block getSampleBlock() const override;
+
+    BaseRuntimeStatistics getRuntimeStatistics() const override;
+
 protected:
-    ExecutionResult execute(ResultHandler result_handler) override;
+    ExecutionResult execute(ResultHandler && result_handler) override;
 
 private:
-    Context & context;
-
     PipelinePtr root_pipeline;
 
     PipelineExecutorStatus status;

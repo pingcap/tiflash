@@ -14,6 +14,8 @@
 
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
+#include <DataStreams/MergingAndConvertingBlockInputStream.h>
+#include <DataStreams/NullBlockInputStream.h>
 
 namespace DB
 {
@@ -34,13 +36,23 @@ Block AggregatingBlockInputStream::readImpl()
             return this->isCancelled();
         };
         aggregator.setCancellationHook(hook);
+        aggregator.initThresholdByAggregatedDataVariantsSize(1);
 
         aggregator.execute(children.back(), *data_variants);
 
         if (!aggregator.hasSpilledData())
         {
             ManyAggregatedDataVariants many_data{data_variants};
-            impl = aggregator.mergeAndConvertToBlocks(many_data, final, 1);
+            auto merging_buckets = aggregator.mergeAndConvertToBlocks(many_data, final, 1);
+            if (!merging_buckets)
+            {
+                impl = std::make_unique<NullBlockInputStream>(aggregator.getHeader(final));
+            }
+            else
+            {
+                RUNTIME_CHECK(1 == merging_buckets->getConcurrency());
+                impl = std::make_unique<MergingAndConvertingBlockInputStream>(merging_buckets, 0, log->identifier());
+            }
         }
         else
         {

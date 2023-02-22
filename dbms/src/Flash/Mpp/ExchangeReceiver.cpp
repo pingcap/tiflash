@@ -411,9 +411,9 @@ void ExchangeReceiverBase<RPCContext>::prepareMsgChannels()
 {
     if (enable_fine_grained_shuffle_flag)
         for (size_t i = 0; i < output_stream_count; ++i)
-            msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+            msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
     else
-        msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+        msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
 }
 
 template <typename RPCContext>
@@ -834,6 +834,7 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
     const LoggerPtr & log)
 {
     Int32 copy_live_connections;
+    String first_err_msg = local_err_msg;
     {
         std::lock_guard lock(mu);
 
@@ -843,29 +844,39 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
                 state = ExchangeReceiverState::ERROR;
             if (err_msg.empty())
                 err_msg = local_err_msg;
+            else
+                first_err_msg = err_msg;
         }
 
         copy_live_connections = --live_connections;
     }
 
-    LOG_DEBUG(
-        log,
-        "connection end. meet error: {}, err msg: {}, current alive connections: {}",
-        meet_error,
-        local_err_msg,
-        copy_live_connections);
-
+    if (meet_error)
+    {
+        LOG_WARNING(
+            log,
+            "connection end. meet error: {}, err msg: {}, current alive connections: {}",
+            meet_error,
+            local_err_msg,
+            copy_live_connections);
+    }
+    else
+    {
+        LOG_DEBUG(
+            log,
+            "connection end. Current alive connections: {}",
+            copy_live_connections);
+    }
+    assert(copy_live_connections >= 0);
     if (copy_live_connections == 0)
     {
         LOG_DEBUG(log, "All threads end in ExchangeReceiver");
         cv.notify_all();
     }
-    else if (copy_live_connections < 0)
-        throw Exception("alive_connection_num should not be less than 0!");
 
     if (meet_error || copy_live_connections == 0)
     {
-        LOG_INFO(exc_log, "receiver channels finished");
+        LOG_INFO(exc_log, "receiver channels finished, meet error: {}, error message: {}", meet_error, first_err_msg);
         finishAllMsgChannels();
     }
 }

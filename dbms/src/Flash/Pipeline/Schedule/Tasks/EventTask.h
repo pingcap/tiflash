@@ -66,7 +66,7 @@ private:
         {
             finalize();
             assert(event);
-            exec_status.onErrorOccurred(getCurrentExceptionMessage(true, true));
+            exec_status.onErrorOccurred(std::current_exception());
             return ExecTaskStatus::ERROR;
         }
     }
