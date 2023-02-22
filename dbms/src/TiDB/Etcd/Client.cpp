@@ -20,6 +20,7 @@
 #include <etcd/rpc.pb.h>
 #include <etcd/v3election.grpc.pb.h>
 #include <etcd/v3election.pb.h>
+#include <fmt/chrono.h>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -143,6 +144,7 @@ std::tuple<LeaseID, grpc::Status> Client::leaseGrant(Int64 ttl)
 
 SessionPtr Client::createSession(grpc::ClientContext * grpc_context, Int64 ttl)
 {
+    auto first_deadline = std::chrono::system_clock::now() + std::chrono::seconds(ttl);
     const auto & [lease_id, status] = leaseGrant(ttl);
     if (!status.ok())
     {
@@ -150,8 +152,15 @@ SessionPtr Client::createSession(grpc::ClientContext * grpc_context, Int64 ttl)
         return {};
     }
 
+    // the timeout for first keep alive
+    grpc_context->set_deadline(std::chrono::system_clock::now() + timeout);
     auto writer = leaderClient()->lease_stub->LeaseKeepAlive(grpc_context);
-    return std::shared_ptr<Session>(new Session(lease_id, std::move(writer)));
+    auto session = std::shared_ptr<Session>(new Session(lease_id, first_deadline, std::move(writer)));
+    if (session->keepAliveOne())
+    {
+        return session;
+    }
+    return nullptr;
 }
 
 grpc::Status Client::leaseRevoke(LeaseID lease_id)
@@ -215,6 +224,12 @@ grpc::Status Client::resign(const v3electionpb::LeaderKey & leader_key)
     return status;
 }
 
+bool Session::isValid() const
+{
+    TimePoint now = std::chrono::system_clock::now();
+    return now < lease_deadline;
+}
+
 bool Session::keepAliveOne()
 {
     etcdserverpb::LeaseKeepAliveRequest req;
@@ -223,17 +238,27 @@ bool Session::keepAliveOne()
     if (!ok)
     {
         auto status = writer->Finish();
-        LOG_DEBUG(Logger::get(), "keep alive write faile, finish. lease={:x} code={} msg={}", lease_id, status.error_code(), status.error_message());
+        LOG_INFO(log, "keep alive write fail, code={} msg={}", status.error_code(), status.error_message());
         return false;
     }
     etcdserverpb::LeaseKeepAliveResponse resp;
+    TimePoint next_timepoint = std::chrono::system_clock::now();
     ok = writer->Read(&resp);
     if (!ok)
     {
         auto status = writer->Finish();
-        LOG_DEBUG(Logger::get(), "keep alive read faile, finish. lease={:x} code={} msg={}", lease_id, status.error_code(), status.error_message());
+        LOG_INFO(log, "keep alive read fail, code={} msg={}", status.error_code(), status.error_message());
         return false;
     }
+
+    // the lease is not valid anymore
+    if (resp.ttl() <= 0)
+    {
+        LOG_DEBUG(log, "keep alive fail, ttl={}", resp.ttl());
+        return false;
+    }
+    lease_deadline = next_timepoint + std::chrono::seconds(resp.ttl());
+    LOG_DEBUG(log, "keep alive update deadline, ttl={} lease_deadline={:%Y-%m-%d %H:%M:%S}", resp.ttl(), lease_deadline);
     return true;
 }
 

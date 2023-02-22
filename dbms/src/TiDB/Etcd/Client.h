@@ -106,14 +106,25 @@ public:
         return lease_id;
     }
 
+    // Send one rpc LeaseKeepAliveRequest to etcd for
+    // keeping the lease valid. Note that it could be blocked
+    // cause by network issue.
+    // Returning false means the lease is not valid anymore.
     bool keepAliveOne();
+
+    // Check whether the lease exceed its expected deadline.
+    // Returing false means the lease is not valid anymore.
+    bool isValid() const;
 
 private:
     using KeepAliveWriter = std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::LeaseKeepAliveRequest, etcdserverpb::LeaseKeepAliveResponse>>;
+    using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
 
-    Session(LeaseID l, KeepAliveWriter && w)
+    Session(LeaseID l, TimePoint first_deadline, KeepAliveWriter && w)
         : lease_id(l)
+        , lease_deadline(first_deadline)
         , writer(std::move(w))
+        , log(Logger::get(fmt::format("lease={:x}", lease_id)))
     {
     }
 
@@ -121,8 +132,11 @@ private:
 
 private:
     LeaseID lease_id{InvalidLeaseID};
+    TimePoint lease_deadline;
 
     KeepAliveWriter writer;
+
+    LoggerPtr log;
 };
 
 

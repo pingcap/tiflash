@@ -80,10 +80,15 @@ EtcdOwnerManager::EtcdOwnerManager(
 
 EtcdOwnerManager::~EtcdOwnerManager()
 {
-    cancel();
+    cancelImpl(); // avoid calling virtual method inside dctor
 }
 
 void EtcdOwnerManager::cancel()
+{
+    cancelImpl();
+}
+
+void EtcdOwnerManager::cancelImpl()
 {
     {
         std::unique_lock lk(mtx_camaign);
@@ -91,11 +96,16 @@ void EtcdOwnerManager::cancel()
     }
     cv_camaign.notify_all();
 
+    auto & bkg_pool = global_ctx.getBackgroundPool();
     if (keep_alive_handle)
     {
-        auto & bkg_pool = global_ctx.getBackgroundPool();
         bkg_pool.removeTask(keep_alive_handle);
         keep_alive_handle = nullptr;
+    }
+    if (session_check_handle)
+    {
+        bkg_pool.removeTask(session_check_handle);
+        session_check_handle = nullptr;
     }
     if (th_camaign.joinable())
     {
@@ -106,6 +116,7 @@ void EtcdOwnerManager::cancel()
         th_watch_owner.join();
     }
 
+    assert(state == State::CancelByCaller); // should not be overwrite
     {
         std::unique_lock lk(mtx_camaign);
         state = State::CancelDone;
@@ -170,7 +181,7 @@ EtcdOwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
     {
         // try next campaign with new etcd session
         state = State::Normal;
-        lk.unlock();
+        lk.unlock(); // unlock for network request
 
         LOG_INFO(log, "etcd session is expired, create a new one");
         auto old_lease_id = old_session->leaseID();
@@ -181,13 +192,27 @@ EtcdOwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
             LOG_INFO(log, "break campaign loop, create session failed");
             revokeEtcdSession(old_lease_id); // try revoke old lease id
 
-            lk.lock();
             run_next_campaign = false;
         }
         break;
     }
     }
     return {run_next_campaign, old_session};
+}
+
+void EtcdOwnerManager::tryChangeState(State coming_state)
+{
+    std::unique_lock lk(mtx_camaign);
+    // The campaign is cancel by caller, it will cause
+    // - leader key deleted in watch thread
+    // - etcd lease expired in etcd
+    // Do not overwrite `CancelByCaller` because the
+    // next campaign need to be stop.
+    if (state != State::CancelByCaller)
+    {
+        // ok to set the state
+        state = coming_state;
+    }
 }
 
 void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
@@ -279,14 +304,7 @@ void EtcdOwnerManager::watchOwner(const String & owner_key, grpc::ClientContext 
     try
     {
         SCOPE_EXIT({
-            {
-                std::unique_lock lk(mtx_camaign);
-                // do not overwrite cancel by caller
-                if (state != State::CancelByCaller)
-                {
-                    state = State::CancelByKeyDeleted;
-                }
-            }
+            tryChangeState(State::CancelByKeyDeleted);
             // notify the campaign thread to start a new election
             cv_camaign.notify_all();
         });
@@ -396,6 +414,11 @@ Etcd::SessionPtr EtcdOwnerManager::createEtcdSessionWithRetry(Int64 max_retry)
 Etcd::SessionPtr EtcdOwnerManager::createEtcdSession()
 {
     auto & bkg_pool = global_ctx.getBackgroundPool();
+    if (session_check_handle)
+    {
+        bkg_pool.removeTask(session_check_handle);
+        session_check_handle = nullptr;
+    }
     if (keep_alive_handle)
     {
         bkg_pool.removeTask(keep_alive_handle);
@@ -407,14 +430,7 @@ Etcd::SessionPtr EtcdOwnerManager::createEtcdSession()
         [this, s = session] {
             if (!s->keepAliveOne())
             {
-                {
-                    std::unique_lock lk(mtx_camaign);
-                    // do not overwrite cancel by caller
-                    if (state != State::CancelByCaller)
-                    {
-                        state = State::CancelByLeaseInvalid;
-                    }
-                }
+                tryChangeState(State::CancelByLeaseInvalid);
                 // notify the campaign thread to start a new election
                 cv_camaign.notify_all();
             }
@@ -422,6 +438,17 @@ Etcd::SessionPtr EtcdOwnerManager::createEtcdSession()
         },
         /*multi*/ false,
         /*interval_ms*/ leader_ttl * 1000 * 2 / 3);
+    session_check_handle = bkg_pool.addTask(
+        [this, s = session] {
+            if (s->isValid())
+                return false;
+            tryChangeState(State::CancelByLeaseInvalid);
+            // notify the campaign thread to start a new election
+            cv_camaign.notify_all();
+            return false;
+        },
+        /*multi*/ false,
+        /*interval_ms*/ 5 * 1000);
     return session;
 }
 

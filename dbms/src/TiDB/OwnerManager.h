@@ -126,30 +126,11 @@ public:
     }
 
 private:
-    std::pair<bool, Etcd::SessionPtr> runNextCampaign(Etcd::SessionPtr && old_session);
-    void camaignLoop(Etcd::SessionPtr session);
-
-    std::optional<String> getOwnerKey(const String & expect_id);
-
-    void toBeOwner(Etcd::LeaderKey && leader_key);
-
-    void watchOwner(const String & owner_key, grpc::ClientContext * watch_ctx);
-
-    void retireOwner();
-
-    Etcd::SessionPtr createEtcdSessionWithRetry(Int64 max_retry);
-    Etcd::SessionPtr createEtcdSession();
-    void revokeEtcdSession(Etcd::LeaseID lease_id);
-
-private:
-    const String campaign_name;
-    const String id;
-    Etcd::ClientPtr client;
-    const Int64 leader_ttl;
-
     enum class State
     {
+        // inited but campaign is not running
         Init,
+        // campaign is running
         Normal,
         // owner key deleted, retry
         CancelByKeyDeleted,
@@ -162,18 +143,60 @@ private:
         CancelDone,
     };
 
+    void cancelImpl();
+
+    std::pair<bool, Etcd::SessionPtr> runNextCampaign(Etcd::SessionPtr && old_session);
+
+    // handle state change when
+    // - watch key is deleted
+    // - etcd lease revoke
+    void tryChangeState(State coming_state);
+
+    void camaignLoop(Etcd::SessionPtr session);
+
+    // get the owner key from etcd and check whether the owner value is `expect_id`
+    std::optional<String> getOwnerKey(const String & expect_id);
+
+    void toBeOwner(Etcd::LeaderKey && leader_key);
+
+    // waits until owner key get expired and deleted
+    void watchOwner(const String & owner_key, grpc::ClientContext * watch_ctx);
+
+    void retireOwner();
+
+    // create an etcd lease and keep the lease valid
+    Etcd::SessionPtr createEtcdSessionWithRetry(Int64 max_retry);
+    Etcd::SessionPtr createEtcdSession();
+
+    // revoke the etcd lease
+    void revokeEtcdSession(Etcd::LeaseID lease_id);
+
+private:
+    const String campaign_name;
+    const String id;
+    Etcd::ClientPtr client;
+    const Int64 leader_ttl;
+
     std::mutex mtx_camaign;
     State state = State::Init;
     std::condition_variable cv_camaign;
+    // A thread for running camaign logic
     std::thread th_camaign;
-
+    // A thread to watch whether the owner key's delete
     std::thread th_watch_owner;
+
+    // Keep etcd lease valid
     grpc::ClientContext keep_alive_ctx;
+    // A task to send lease keep alive
     BackgroundProcessingPool::TaskHandle keep_alive_handle{nullptr};
+    // A task to check lease is valid or not, cause `keep_alive_handle`
+    // could be blocked for network issue.
+    BackgroundProcessingPool::TaskHandle session_check_handle{nullptr};
 
     std::mutex mtx_leader;
     Etcd::LeaderKey leader;
 
+    // a hook function for test
     std::function<void()> be_owner;
 
     Context & global_ctx;
