@@ -46,7 +46,7 @@ SharedBlockSchemas::SharedBlockSchemas(DB::Context & context)
         std::lock_guard<std::mutex> lock(mutex);
         for (auto iter = column_file_schemas.begin(); iter != column_file_schemas.end();)
         {
-            if (iter->second.expired())
+            if (auto schema = iter->second.lock(); !schema)
             {
                 iter = column_file_schemas.erase(iter);
             }
