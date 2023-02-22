@@ -23,7 +23,6 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
-#include <shared_mutex>
 #include <unordered_map>
 
 #ifdef __clang__
@@ -56,11 +55,17 @@ using SessionPtr = std::shared_ptr<Session>;
 class Client
 {
 public:
-    static ClientPtr create(const pingcap::pd::ClientPtr & pd_client, const pingcap::ClusterConfig & config);
+    // Create an etcd client with pd client
+    // default timeout is 2 seconds (the same as pd client)
+    static ClientPtr create(
+        const pingcap::pd::ClientPtr & pd_client,
+        const pingcap::ClusterConfig & config,
+        Int64 timeout_s = 2);
 
+    // update TLS related
     void update(const pingcap::ClusterConfig & new_config);
 
-    std::tuple<String, grpc::Status> getFirstKey(const String & prefix);
+    std::tuple<String, grpc::Status> getFirstCreateKey(const String & prefix);
 
     std::tuple<LeaseID, grpc::Status> leaseGrant(Int64 ttl);
 

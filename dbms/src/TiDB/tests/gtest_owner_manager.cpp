@@ -24,13 +24,28 @@
 #include <pingcap/pd/IClient.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <condition_variable>
 #include <magic_enum.hpp>
 #include <mutex>
 #include <thread>
 
+namespace DB::Etcd
+{
+extern String getPrefix(String key);
+}
+
 namespace DB::tests
 {
+
+TEST(EtcdClientTest, ScanRangeEnd)
+{
+    const String inf("\x00", 1);
+    EXPECT_EQ(DB::Etcd::getPrefix("\x01"), "\x02");
+    EXPECT_EQ(DB::Etcd::getPrefix("aa"), "ab");
+    EXPECT_EQ(DB::Etcd::getPrefix("a\xff"), "b");
+    EXPECT_EQ(DB::Etcd::getPrefix("\xff\xff"), inf);
+}
 
 TEST(OwnerManagerTest, BeOwner)
 try
@@ -42,6 +57,8 @@ try
         LOG_INFO(Logger::get(), "{}.{} is skipped because env ETCD_ENDPOINT not set", t->test_case_name(), t->name());
         return;
     }
+
+    using namespace std::chrono_literals;
 
     auto ctx = TiFlashTestEnv::getContext();
     pingcap::ClusterConfig config;
@@ -65,7 +82,6 @@ try
     });
 
     owner0->campaignOwner();
-
     {
         std::unique_lock lk(mtx);
         cv.wait(lk, [&] { return become_owner; });
@@ -78,6 +94,16 @@ try
         EXPECT_EQ(owner_id.owner_id, id);
     }
 
+    LOG_INFO(Logger::get(), "test wait for 2 ttl");
+    std::this_thread::sleep_for(std::chrono::seconds(OwnerManager::DefaultOwnerTTL * 2));
+    ASSERT_TRUE(owner0->isOwner());
+    {
+        auto owner_id = owner0->getOwnerID();
+        EXPECT_EQ(owner_id.status, OwnerType::IsOwner);
+        EXPECT_EQ(owner_id.owner_id, id);
+    }
+    LOG_INFO(Logger::get(), "test wait for 2 ttl passed");
+
     const String new_id = "owner_1";
     auto owner1 = OwnerManager::createS3GCOwner(ctx, new_id, etcd_client);
     owner_info = owner1->getOwnerID();
@@ -85,7 +111,6 @@ try
     EXPECT_EQ(owner_info.owner_id, id);
     owner1->campaignOwner();
 
-    using namespace std::chrono_literals;
     {
         std::this_thread::sleep_for(5s);
 

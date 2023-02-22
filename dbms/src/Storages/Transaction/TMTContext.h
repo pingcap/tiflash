@@ -101,7 +101,7 @@ public:
 
     pingcap::kv::Cluster * getKVCluster() { return cluster.get(); }
 
-    OwnerManagerPtr getS3GCOwnerManager();
+    const OwnerManagerPtr & getS3GCOwnerManager() const;
 
     MPPTaskManagerPtr getMPPTaskManager();
 

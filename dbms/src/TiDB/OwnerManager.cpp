@@ -92,7 +92,7 @@ void EtcdOwnerManager::cancelImpl()
 {
     {
         std::unique_lock lk(mtx_camaign);
-        state = State::CancelByCaller;
+        state = State::CancelByStop;
     }
     cv_camaign.notify_all();
 
@@ -116,7 +116,7 @@ void EtcdOwnerManager::cancelImpl()
         th_watch_owner.join();
     }
 
-    assert(state == State::CancelByCaller); // should not be overwrite
+    assert(state == State::CancelByStop); // should not be overwrite
     {
         std::unique_lock lk(mtx_camaign);
         state = State::CancelDone;
@@ -161,7 +161,7 @@ EtcdOwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
 
     case State::Normal:
         break;
-    case State::CancelByCaller:
+    case State::CancelByStop:
     {
         // Caller cancel the campaign, maybe program is exiting
         run_next_campaign = false;
@@ -206,9 +206,9 @@ void EtcdOwnerManager::tryChangeState(State coming_state)
     // The campaign is cancel by caller, it will cause
     // - leader key deleted in watch thread
     // - etcd lease expired in etcd
-    // Do not overwrite `CancelByCaller` because the
+    // Do not overwrite `CancelByStop` because the
     // next campaign need to be stop.
-    if (state != State::CancelByCaller)
+    if (state != State::CancelByStop)
     {
         // ok to set the state
         state = coming_state;
@@ -316,7 +316,8 @@ void EtcdOwnerManager::watchOwner(const String & owner_key, grpc::ClientContext 
         bool ok = rw->Write(req);
         if (!ok)
         {
-            rw->Finish();
+            auto s = rw->Finish();
+            LOG_DEBUG(log, "watch finish, code={} msg={}", s.error_code(), s.error_message());
             return;
         }
 
@@ -325,23 +326,33 @@ void EtcdOwnerManager::watchOwner(const String & owner_key, grpc::ClientContext 
         {
             etcdserverpb::WatchResponse resp;
             ok = rw->Read(&resp);
-            LOG_TRACE(log, "watch key:{} ok:{} resp: {}", owner_key, ok, resp.ShortDebugString());
+            LOG_TRACE(log, "watch key={} ok={} resp={}", owner_key, ok, resp.ShortDebugString());
             if (!ok)
+            {
+                LOG_INFO(log, "watcher is closed");
                 break;
+            }
+            if (resp.canceled())
+            {
+                LOG_INFO(log, "watch cancel");
+                break;
+            }
             for (const auto & event : resp.events())
             {
                 if (event.type() == mvccpb::Event_EventType_DELETE)
                 {
+                    LOG_INFO(log, "watch failed, owner key is deleted");
                     key_deleted = true;
                     break;
                 }
             }
-        }
-        rw->Finish();
+        } // loop until key deleted or failed
+        auto s = rw->Finish();
+        LOG_DEBUG(log, "watch finish, code={} msg={}", s.error_code(), s.error_message());
     }
     catch (...)
     {
-        tryLogCurrentException("OwnerManager::watchOwner");
+        tryLogCurrentException(log, "OwnerManager::watchOwner");
     }
 }
 
@@ -471,7 +482,7 @@ OwnerInfo EtcdOwnerManager::getOwnerID()
     }
 
     // This node is not the owner, get the owner id from etcd
-    const auto & [val, status] = client->getFirstKey(campaign_name);
+    const auto & [val, status] = client->getFirstCreateKey(campaign_name);
     if (!status.ok())
         return OwnerInfo{
             .status = OwnerType::GrpcError,

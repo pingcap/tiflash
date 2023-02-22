@@ -136,8 +136,10 @@ private:
         CancelByKeyDeleted,
         // lease expired, retry
         CancelByLeaseInvalid,
-        // cancel by another methd, won't retry
-        CancelByCaller,
+        // cancel by `cancel()` method, won't retry
+        // after all sub tasks end, the state will
+        // be changed to `CancelDone`.
+        CancelByStop,
         // cancelled and all sub tasks end.
         // Can call `campaignOwner` again.
         CancelDone,
@@ -180,6 +182,7 @@ private:
     std::mutex mtx_camaign;
     State state = State::Init;
     std::condition_variable cv_camaign;
+
     // A thread for running camaign logic
     std::thread th_camaign;
     // A thread to watch whether the owner key's delete
@@ -187,7 +190,7 @@ private:
 
     // Keep etcd lease valid
     grpc::ClientContext keep_alive_ctx;
-    // A task to send lease keep alive
+    // A task to send lease keep alive, send lease keep alive every 2/3 ttl
     BackgroundProcessingPool::TaskHandle keep_alive_handle{nullptr};
     // A task to check lease is valid or not, cause `keep_alive_handle`
     // could be blocked for network issue.

@@ -36,15 +36,14 @@
 
 #include <chrono>
 #include <mutex>
-#include <shared_mutex>
 
 namespace DB::Etcd
 {
-ClientPtr Client::create(const pingcap::pd::ClientPtr & pd_client, const pingcap::ClusterConfig & config)
+ClientPtr Client::create(const pingcap::pd::ClientPtr & pd_client, const pingcap::ClusterConfig & config, Int64 timeout_s)
 {
     auto etcd_client = std::make_shared<Client>();
     etcd_client->pd_client = pd_client;
-    etcd_client->timeout = std::chrono::seconds(2);
+    etcd_client->timeout = std::chrono::seconds(timeout_s);
     etcd_client->config = config;
     etcd_client->log = Logger::get();
 
@@ -82,40 +81,48 @@ EtcdConnClientPtr Client::leaderClient()
     return getOrCreateGRPCConn(leader_url);
 }
 
-String getPrefix(const String & key)
+// Get the RangeRequest.range_end for "--prefix"
+// etcdserverpb/rpc.proto
+// range_end is the upper bound on the requested range [key, range_end).
+// If range_end is '\0', the range is all keys >= key.
+// If range_end is key plus one (e.g., "aa"+1 == "ab", "a\xff"+1 == "b"),
+// then the range request gets all keys prefixed with key.
+// If both key and range_end are '\0', then the range request returns all keys.
+String getPrefix(String key)
 {
-    String end_key(key);
-    std::string_view end(end_key);
-    for (size_t i = end.size() - 1; i >= 0; i--)
+    assert(!key.empty());
+    std::string_view end(key);
+    for (Int64 i = end.size() - 1; i >= 0; i--)
     {
         auto ch = static_cast<UInt8>(end[i]);
-        if (ch < 0xff)
+        if (ch == 0xff)
         {
-            end_key[i] = ch + 1;
-            end = end.substr(0, i + 1);
-            return String(end);
+            continue;
         }
+        // plus one to the first ch != 0xff
+        key[i] = ch + 1;
+        end = end.substr(0, i + 1);
+        return String(end);
     }
     // next prefix does not exist (e.g., 0xffff)
     // default to the end
     return String("\x00", 1);
 }
 
-std::tuple<String, grpc::Status> Client::getFirstKey(const String & prefix)
+std::tuple<String, grpc::Status> Client::getFirstCreateKey(const String & prefix)
 {
     etcdserverpb::RangeRequest req;
-    req.set_key(prefix);
     // get the key with the oldest creation revision in the request range
+    req.set_key(prefix);
+    req.set_range_end(getPrefix(prefix));
+    req.set_limit(1);
     req.set_sort_target(etcdserverpb::RangeRequest_SortTarget_CREATE);
     req.set_sort_order(etcdserverpb::RangeRequest_SortOrder_ASCEND);
-    req.set_limit(1);
-    req.set_range_end(getPrefix(prefix));
 
     grpc::ClientContext context;
     context.set_deadline(std::chrono::system_clock::now() + timeout);
 
     etcdserverpb::RangeResponse resp;
-
     auto status = leaderClient()->kv_stub->Range(&context, req, &resp);
     if (!status.ok())
         return {"", status};
@@ -152,8 +159,6 @@ SessionPtr Client::createSession(grpc::ClientContext * grpc_context, Int64 ttl)
         return {};
     }
 
-    // the timeout for first keep alive
-    grpc_context->set_deadline(std::chrono::system_clock::now() + timeout);
     auto writer = leaderClient()->lease_stub->LeaseKeepAlive(grpc_context);
     auto session = std::shared_ptr<Session>(new Session(lease_id, first_deadline, std::move(writer)));
     if (session->keepAliveOne())

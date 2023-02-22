@@ -221,7 +221,7 @@ pingcap::pd::ClientPtr TMTContext::getPDClient() const
     return cluster->pd_client;
 }
 
-OwnerManagerPtr TMTContext::getS3GCOwnerManager()
+const OwnerManagerPtr & TMTContext::getS3GCOwnerManager() const
 {
     return s3gc_owner;
 }
