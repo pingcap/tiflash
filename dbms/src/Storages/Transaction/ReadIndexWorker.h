@@ -36,12 +36,8 @@ class ReadIndexTest;
 struct AsyncWaker
 {
     struct Notifier final : AsyncNotifier
-        , MutexLockWrap
+        , MutexCondVarWrap
     {
-        mutable std::condition_variable cv;
-        // multi notifiers single receiver model. use another flag to avoid waiting endlessly.
-        mutable std::atomic_bool is_awake{false};
-
         // usually sender invoke `wake`, receiver invoke `blockedWaitUtil`
         // NOT thread safe
         Status blockedWaitUtil(const SteadyClock::time_point &) override;
@@ -49,6 +45,16 @@ struct AsyncWaker
         void wake() override;
 
         ~Notifier() override = default;
+
+    private:
+        struct alignas(CPU_CACHE_LINE_SIZE) IsAwake : std::atomic_bool
+        {
+        };
+        // multi notifiers single receiver model. use another flag to avoid waiting endlessly.
+        mutable struct IsAwake is_awake
+        {
+            false
+        };
     };
     using NotifierPtr = std::shared_ptr<Notifier>;
 

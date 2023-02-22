@@ -22,45 +22,86 @@
 namespace DB
 {
 using SteadyClock = std::chrono::steady_clock;
+static constexpr size_t CPU_CACHE_LINE_SIZE = 64;
 
 class MutexLockWrap
 {
 public:
-    std::lock_guard<std::mutex> genLockGuard() const
+    using Mutex = std::mutex;
+
+protected:
+    std::lock_guard<Mutex> genLockGuard() const
     {
-        return std::lock_guard(mutex);
+        return std::lock_guard(mutex());
     }
 
-    std::unique_lock<std::mutex> tryToLock() const
+    std::unique_lock<Mutex> tryToLock() const
     {
-        return std::unique_lock(mutex, std::try_to_lock);
+        return std::unique_lock(mutex(), std::try_to_lock);
     }
 
-    std::unique_lock<std::mutex> genUniqueLock() const
+    std::unique_lock<Mutex> genUniqueLock() const
     {
-        return std::unique_lock(mutex);
+        return std::unique_lock(mutex());
     }
 
 private:
-    mutable std::mutex mutex;
+    Mutex & mutex() const
+    {
+        return impl;
+    }
+    struct alignas(CPU_CACHE_LINE_SIZE) Impl : Mutex
+    {
+    };
+    mutable Impl impl;
 };
 
 class SharedMutexLockWrap
 {
 public:
-    std::shared_lock<std::shared_mutex> genReadLockGuard() const
+    using Mutex = std::shared_mutex;
+
+protected:
+    std::shared_lock<Mutex> genSharedLock() const
     {
-        return std::shared_lock(shared_mutex);
+        return std::shared_lock(mutex());
     }
 
-    std::unique_lock<std::shared_mutex> genWriteLockGuard() const
+    std::unique_lock<Mutex> genUniqueLock() const
     {
-        return std::unique_lock(shared_mutex);
+        return std::unique_lock(mutex());
     }
 
 private:
-    mutable std::shared_mutex shared_mutex;
+    Mutex & mutex() const
+    {
+        return impl;
+    }
+    struct alignas(CPU_CACHE_LINE_SIZE) Impl : Mutex
+    {
+    };
+    mutable Impl impl;
 };
+
+class MutexCondVarWrap : public MutexLockWrap
+{
+public:
+    using CondVar = std::condition_variable;
+
+protected:
+    CondVar & condVar() const { return cv(); }
+
+private:
+    CondVar & cv() const
+    {
+        return impl;
+    }
+    struct alignas(CPU_CACHE_LINE_SIZE) Impl : CondVar
+    {
+    };
+    mutable Impl impl;
+};
+
 
 struct AsyncNotifier
 {

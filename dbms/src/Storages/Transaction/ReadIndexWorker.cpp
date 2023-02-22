@@ -78,7 +78,7 @@ AsyncNotifier::Status AsyncWaker::Notifier::blockedWaitUtil(const SteadyClock::t
             auto lock = genUniqueLock();
             if (!is_awake.load(std::memory_order_acquire))
             {
-                if (cv.wait_until(lock, time_point) == std::cv_status::timeout)
+                if (condVar().wait_until(lock, time_point) == std::cv_status::timeout)
                     res = AsyncNotifier::Status::Timeout;
             }
         }
@@ -97,7 +97,7 @@ void AsyncWaker::Notifier::wake()
     {
         // wake up notifier
         auto _ = genLockGuard();
-        cv.notify_one();
+        condVar().notify_one();
     }
 }
 
@@ -652,7 +652,7 @@ ReadIndexFuturePtr ReadIndexDataNode::insertTask(const kvrpcpb::ReadIndexRequest
 
 ReadIndexDataNodePtr ReadIndexWorker::DataMap::upsertDataNode(RegionID region_id) const
 {
-    auto _ = genWriteLockGuard();
+    auto _ = genUniqueLock();
 
     TEST_LOG_FMT("upsertDataNode for region {}", region_id);
 
@@ -664,7 +664,7 @@ ReadIndexDataNodePtr ReadIndexWorker::DataMap::upsertDataNode(RegionID region_id
 
 ReadIndexDataNodePtr ReadIndexWorker::DataMap::tryGetDataNode(RegionID region_id) const
 {
-    auto _ = genReadLockGuard();
+    auto _ = genSharedLock();
     if (auto it = region_map.find(region_id); it != region_map.end())
     {
         return it->second;
@@ -681,13 +681,13 @@ ReadIndexDataNodePtr ReadIndexWorker::DataMap::getDataNode(RegionID region_id) c
 
 void ReadIndexWorker::DataMap::invoke(std::function<void(std::unordered_map<RegionID, ReadIndexDataNodePtr> &)> && cb)
 {
-    auto _ = genWriteLockGuard();
+    auto _ = genUniqueLock();
     cb(region_map);
 }
 
 void ReadIndexWorker::DataMap::removeRegion(RegionID region_id)
 {
-    auto _ = genWriteLockGuard();
+    auto _ = genUniqueLock();
     region_map.erase(region_id);
 }
 
