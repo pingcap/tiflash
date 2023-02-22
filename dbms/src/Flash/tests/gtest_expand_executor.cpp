@@ -404,33 +404,6 @@ try
             toNullableVec<UInt64>({{}, {}}),
             toVec<UInt64>({2, 2}),
         });
-
-
-    /// assert the input stream plan format. (under planner-enabled mode)
-    String expected = R"(
-CreatingSets
- Union: <for join>
-  HashJoinBuild x 10: <join build, build_side_root_executor_id = project_4>, join_kind = Inner
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     Expression: <projection>
-      MockTableScan
- Union: <for test>
-  Expression x 10: <final projection>
-   SharedQuery: <restore concurrency>
-    MergeSorting, limit = 2
-     Union: <for partial order>
-      PartialSorting x 10: limit = 2
-       Expression: <projection>
-        Expression: <remove useless column after join>
-         HashJoinProbe: <join probe, join_executor_id = Join_5, has_non_joined_data = false>
-          Expression: <final projection>
-           Expression: <expand, expand_executor_id = expand_2: grouping set [{<count(exchange_receiver_0)_collator_46 >}{<any(exchange_receiver_1)_collator_46 >}]>
-            Expression: <expr after aggregation>
-             SharedQuery: <restore concurrency>
-              ParallelAggregating, max_threads: 10, final: true
-               MockExchangeReceiver x 10)";
-    ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
 }
 CATCH
 

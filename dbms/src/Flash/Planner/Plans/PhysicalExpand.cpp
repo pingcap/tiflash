@@ -39,8 +39,6 @@ PhysicalPlanNodePtr PhysicalExpand::build(
 {
     assert(child);
 
-    child->finalize();
-
     if (unlikely(expand.grouping_sets().empty()))
     {
         //should not reach here
@@ -55,7 +53,6 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     // include expand action itself.
     before_expand_actions->add(expand_action);
 
-    // construct sample block.
     NamesAndTypes expand_output_columns;
     auto child_header = child->getSchema();
     for (const auto & one : child_header)
@@ -87,7 +84,6 @@ void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
 
 void PhysicalExpand::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context &, size_t)
 {
-    auto input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, expand_actions, log->identifier()));
     });
@@ -106,7 +102,6 @@ void PhysicalExpand::finalize(const Names & parent_require)
     required_output.emplace_back(Expand::grouping_identifier_column_name);
     expand_actions->finalize(required_output);
 
-    // do the child finalize before require column changed after expand_action finalization.
     child->finalize(expand_actions->getRequiredColumns());
     FinalizeHelper::prependProjectInputIfNeed(expand_actions, child->getSampleBlock().columns());
     FinalizeHelper::checkSampleBlockContainsParentRequire(getSampleBlock(), parent_require);

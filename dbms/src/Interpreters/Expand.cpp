@@ -92,8 +92,10 @@ void Expand::replicateAndFillNull(Block & block) const
     auto grouping_id_column = ColumnUInt64::create();
     auto & grouping_id_column_data = grouping_id_column->getData();
     // reserve N times of current block rows size.
-    grouping_id_column_data.reserve(block.rows() * replicate_times_for_one_row);
+    grouping_id_column_data.resize(origin_rows * replicate_times_for_one_row);
 
+    // manipulate the data directly to avoid the virtual function overheads.
+    size_t grouping_id_column_index = 0;
     for (size_t i = 0; i < origin_rows; ++i)
     {
         current_offset += replicate_times_for_one_row;
@@ -103,8 +105,9 @@ void Expand::replicateAndFillNull(Block & block) const
         for (UInt64 j = 0; j < replicate_times_for_one_row; ++j)
         {
             // start from 1.
-            Field grouping_id = j + 1;
-            grouping_id_column->insert(grouping_id);
+            auto grouping_id = j + 1;
+            grouping_id_column_data[grouping_id_column_index] = grouping_id;
+            ++grouping_id_column_index;
         }
     }
 
@@ -125,8 +128,7 @@ void Expand::replicateAndFillNull(Block & block) const
                 convertColumnToNullable(block.getByPosition(i));
 
             if (!offsets_to_replicate->empty())
-                // replicate it.
-                block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(*offsets_to_replicate);
+                column.column = column.column->replicate(*offsets_to_replicate);
         }
     }
 
@@ -191,12 +193,7 @@ void Expand::replicateAndFillNull(Block & block) const
 
 bool Expand::isInGroupSetColumn(String name) const
 {
-    for (const auto & it1 : name_set)
-    {
-        if (it1 == name)
-            return true;
-    }
-    return false;
+    return name_set.find(name) != name_set.end();
 }
 
 const GroupingColumnNames & Expand::getGroupSetColumnNamesByOffset(size_t offset) const

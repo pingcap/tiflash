@@ -332,7 +332,8 @@ try
                                                                 })
                        .build(context);
     {
-        String expected = "expand_1 | expanded_by: [<{<0, String>}><{<1, String>}>]\n table_scan_0 | {<0, String>, <1, String>}";
+        String expected = "expand_1 | expanded_by: [<{<0, String>}><{<1, String>}>]\n"
+                          " table_scan_0 | {<0, String>, <1, String>}";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
     request = context.receive("sender_1").expand(MockVVecColumnNameVec{
@@ -345,7 +346,8 @@ try
                                                  })
                   .build(context);
     {
-        String expected = "expand_1 | expanded_by: [<{<0, String>}><{<1, String>}>]\n exchange_receiver_0 | type:PassThrough, {<0, String>, <1, String>, <2, String>}";
+        String expected = "expand_1 | expanded_by: [<{<0, String>}><{<1, String>}>]\n"
+                          " exchange_receiver_0 | type:PassThrough, {<0, String>, <1, String>, <2, String>}";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
 }

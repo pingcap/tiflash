@@ -76,7 +76,7 @@ try
         ASSERT_EQ(block.getColumnsWithTypeAndName()[4].name, "groupingID");
         // assert the block size is equal to origin rows * grouping set num.
         auto expand_rows = block.rows();
-        auto grouping_set_num = expand.getGroupSetNum();
+        auto grouping_set_num = 2;
         ASSERT_EQ(origin_rows * grouping_set_num, expand_rows); // 6
         // assert grouping set column are nullable.
         ASSERT_EQ(block.getColumns()[0].get()->isColumnNullable(), true);
@@ -186,7 +186,7 @@ try
         ASSERT_EQ(block.getColumnsWithTypeAndName()[4].name, "groupingID");
         // assert the block size is equal to origin rows * grouping set num.
         auto expand_rows = block.rows();
-        auto grouping_set_num = expand.getGroupSetNum();
+        auto grouping_set_num = 2;
         ASSERT_EQ(origin_rows * grouping_set_num, expand_rows); // 6
         // assert grouping set column are nullable.
         ASSERT_EQ(block.getColumns()[0].get()->isColumnNullable(), false);
@@ -283,7 +283,7 @@ try
         ASSERT_EQ(block.getColumnsWithTypeAndName()[4].name, "groupingID");
         // assert the block size is equal to origin rows * grouping set num.
         auto expand_rows = block.rows();
-        auto grouping_set_num = expand.getGroupSetNum();
+        auto grouping_set_num = 3;
         ASSERT_EQ(origin_rows * grouping_set_num, expand_rows); // 9
         // assert grouping set column are nullable.
         ASSERT_EQ(block.getColumns()[0].get()->isColumnNullable(), false);
@@ -392,7 +392,7 @@ try
         ASSERT_EQ(block.getColumnsWithTypeAndName()[4].name, "groupingID");
         // assert the block size is equal to origin rows * grouping set num.
         auto expand_rows = block.rows();
-        auto grouping_set_num = expand.getGroupSetNum();
+        auto grouping_set_num = 3;
         ASSERT_EQ(origin_rows, 0);
         ASSERT_EQ(origin_rows * grouping_set_num, expand_rows); // 0
         // assert grouping set column are nullable.

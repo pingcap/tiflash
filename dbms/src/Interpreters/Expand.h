@@ -108,23 +108,23 @@ public:
     // to illustrate what group this row is targeted for.
     void replicateAndFillNull(Block & block) const;
 
-    size_t getGroupSetNum() const { return group_sets_names.size(); }
-
     bool isInGroupSetColumn(String name) const;
-
-    const GroupingColumnNames & getGroupSetColumnNamesByOffset(size_t offset) const;
 
     const std::set<String> & getAllGroupSetColumnNames() const;
 
     String getGroupingSetsDes() const;
-
-    void collectNameSet();
 
     static const String grouping_identifier_column_name;
 
     static const DataTypePtr grouping_identifier_column_type;
 
 private:
+    void collectNameSet();
+
+    size_t getGroupSetNum() const { return group_sets_names.size(); }
+
+    const GroupingColumnNames & getGroupSetColumnNamesByOffset(size_t offset) const;
+
     GroupingSets group_sets_names;
     std::set<String> name_set;
 };

@@ -96,7 +96,6 @@ public:
 
     /// For EXPAND.
     std::shared_ptr<const Expand> expand;
-    NamesAndTypesList columns_added_by_expand;
 
     /// If result_name_ == "", as name "function_name(arguments separated by commas) is used".
     static ExpressionAction applyFunction(
