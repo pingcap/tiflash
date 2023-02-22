@@ -26,7 +26,7 @@ namespace DB
 /// Transform 64-byte mask to 64-bit mask.
 inline UInt64 ToBits64(const Int8 * bytes64)
 {
-#if defined(__AVX2__)
+#if defined(__AVX2__) && defined(TIFLASH_ENABLE_AVX_SUPPORT)
     const auto check_block = _mm256_setzero_si256();
     uint64_t mask0 = mem_utils::details::get_block32_cmp_eq_mask(bytes64, check_block);
     uint64_t mask1 = mem_utils::details::get_block32_cmp_eq_mask(bytes64 + mem_utils::details::BLOCK32_SIZE, check_block);
@@ -47,7 +47,7 @@ inline UInt64 ToBits64(const Int8 * bytes64)
 ALWAYS_INLINE inline static size_t
 CountBytesInFilter(const UInt8 * filt, size_t start, size_t end)
 {
-#if defined(__AVX2__)
+#if defined(__AVX2__) && defined(TIFLASH_ENABLE_AVX_SUPPORT)
     size_t size = end - start;
     auto zero_cnt = mem_utils::details::avx2_byte_count(reinterpret_cast<const char *>(filt + start), size, 0);
     return size - zero_cnt;

@@ -36,6 +36,10 @@ constexpr bool tiflash_use_avx2_compile_flag = false;
 #define ASSERT_USE_AVX2_COMPILE_FLAG \
     static_assert(tiflash_use_avx2_compile_flag, __FILE__ " need compile flag `-mavx2`");
 
+#else
+
+#include <cstring>
+
 #endif
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
