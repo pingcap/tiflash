@@ -21,7 +21,7 @@ There are two benefits of TiFlash to support stale read:
 ## Design
 1. Check the [safe ts](https://github.com/pingcap/tiflash/blob/e732eaba68e309a0aec0e443c7f1a0e9368731b3/dbms/src/Storages/Transaction/RegionTable.cpp#L508) before read_index, if the stale read requirements are met (safe ts > read tso), read_index can be skipped.
 2. The assumption of the current MPP framework is that start_ts is globally unique and increasing in most cases. But in stale read scenarios, users can specify the timestamp, so the start_ts of different MPP queries issued by TiDB may be repeated. So the MPP framework needs to be modified.
-   The current MPP framework uses start_ts as the identifier of query. We need to use a global unique query_id to replace it. The query_id consists of three parts of ids：
+   Specifically, we need to use a globally unique query_id to replace start_ts as the identifier of MPP queries. The query_id consists of three parts of ids:
   - The local time of TiDB when the query is initiated: query_ts.
   - An id incremented in TiDB local memory: local_query_id.
   - ETCD guarantees a globally unique serverID for each TiDB server: server_id.
