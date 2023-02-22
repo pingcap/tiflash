@@ -56,10 +56,10 @@ private:
     size_t partition_id;
     Int64 current_spilled_file_index;
     String current_spill_file_name;
-    bool current_append_write;
     std::unique_ptr<SpillWriter> writer;
     double time_cost = 0;
     SpillDetails prev_spill_details;
+    static const Int64 INVALID_CURRENT_SPILLED_FILE_INDEX = -10;
 };
 
 } // namespace DB

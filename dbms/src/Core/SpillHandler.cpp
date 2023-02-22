@@ -52,21 +52,19 @@ SpillHandler::SpillHandler(Spiller * spiller_, size_t partition_id_)
     : spiller(spiller_)
     , partition_id(partition_id_)
     , current_spilled_file_index(-1)
-    , current_append_write(false)
     , writer(nullptr)
 {}
 
 std::pair<size_t, size_t> SpillHandler::setUpNextSpilledFile()
 {
-    assert(writer = nullptr);
+    assert(writer == nullptr);
     auto [spilled_file, append_write] = spiller->getOrCreateSpilledFile(partition_id);
     if (append_write)
         prev_spill_details.merge(spilled_file->getSpillDetails());
     current_spill_file_name = spilled_file->path();
-    current_append_write = append_write;
     spilled_files.push_back(std::move(spilled_file));
     current_spilled_file_index = spilled_files.size() - 1;
-    writer = std::make_unique<SpillWriter>(spiller->config.file_provider, current_spill_file_name, current_append_write, spiller->input_schema, spiller->spill_version);
+    writer = std::make_unique<SpillWriter>(spiller->config.file_provider, current_spill_file_name, append_write, spiller->input_schema, spiller->spill_version);
     return std::make_pair(spilled_files[current_spilled_file_index]->getSpillDetails().rows, spilled_files[current_spilled_file_index]->getSpillDetails().data_bytes_uncompressed);
 }
 
@@ -81,7 +79,7 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
     ///   2. check the disk usage
     if (unlikely(blocks.empty()))
         return;
-    RUNTIME_CHECK_MSG(current_spilled_file_index >= 0, "{}: spill after the spill handler meeting error or finished.", spiller->config.spill_id);
+    RUNTIME_CHECK_MSG(current_spilled_file_index != INVALID_CURRENT_SPILLED_FILE_INDEX, "{}: spill after the spill handler meeting error or finished.", spiller->config.spill_id);
     try
     {
         Stopwatch watch;
@@ -96,6 +94,8 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
         size_t bytes_in_file = 0;
         for (const auto & block : blocks)
         {
+            if (unlikely(!block))
+                continue;
             if (unlikely(writer == nullptr))
             {
                 std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();
@@ -115,7 +115,7 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
         double cost = watch.elapsedSeconds();
         time_cost += cost;
         LOG_INFO(spiller->logger, "Spilled {} rows from {} blocks into temporary file, time cost: {:.3f} sec.", total_rows, block_size, cost);
-        RUNTIME_CHECK_MSG(current_spilled_file_index >= 0, "{}: spill after the spill handler is finished.", spiller->config.spill_id);
+        RUNTIME_CHECK_MSG(current_spilled_file_index != INVALID_CURRENT_SPILLED_FILE_INDEX, "{}: spill after the spill handler is finished.", spiller->config.spill_id);
         RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
         return;
     }
@@ -124,14 +124,14 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
         /// mark the spill handler invalid
         writer = nullptr;
         spilled_files.clear();
-        current_spilled_file_index = -1;
+        current_spilled_file_index = INVALID_CURRENT_SPILLED_FILE_INDEX;
         throw Exception(fmt::format("Failed to spill blocks to disk for file {}, error: {}", current_spill_file_name, getCurrentExceptionMessage(false, false)));
     }
 }
 
 void SpillHandler::finish()
 {
-    /// it is guaranteed that once current_spilled_file_index >= 0, at least one block is written
+    /// it is guaranteed that once current_spilled_file_index >= 0, at least one block is written to spilled_files[current_spilled_file_index]
     if (likely(current_spilled_file_index >= 0))
     {
         if (writer != nullptr)
@@ -175,7 +175,7 @@ void SpillHandler::finish()
         }
         spilled_files.clear();
         spiller->has_spilled_data = true;
-        current_spilled_file_index = -1;
+        current_spilled_file_index = INVALID_CURRENT_SPILLED_FILE_INDEX;
         RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
     }
 }
