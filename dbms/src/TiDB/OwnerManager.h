@@ -56,6 +56,11 @@ class OwnerManager;
 // which will be shutdown first. So use shared_ptr now.
 using OwnerManagerPtr = std::shared_ptr<OwnerManager>;
 
+namespace tests
+{
+class OwnerManagerTest;
+}
+
 
 class OwnerManager
 {
@@ -125,7 +130,8 @@ public:
         be_owner = hook;
     }
 
-private:
+    friend class tests::OwnerManagerTest;
+
     enum class State
     {
         // inited but campaign is not running
@@ -145,6 +151,7 @@ private:
         CancelDone,
     };
 
+private:
     void cancelImpl();
 
     std::pair<bool, Etcd::SessionPtr> runNextCampaign(Etcd::SessionPtr && old_session);
@@ -189,7 +196,7 @@ private:
     std::thread th_watch_owner;
 
     // Keep etcd lease valid
-    grpc::ClientContext keep_alive_ctx;
+    std::unique_ptr<grpc::ClientContext> keep_alive_ctx;
     // A task to send lease keep alive, send lease keep alive every 2/3 ttl
     BackgroundProcessingPool::TaskHandle keep_alive_handle{nullptr};
     // A task to check lease is valid or not, cause `keep_alive_handle`

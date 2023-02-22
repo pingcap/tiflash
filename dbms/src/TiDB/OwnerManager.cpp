@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/ThreadFactory.h>
 #include <Interpreters/Context.h>
@@ -22,12 +23,14 @@
 #include <TiDB/OwnerManager.h>
 #include <common/logger_useful.h>
 #include <etcd/v3election.grpc.pb.h>
+#include <fiu.h>
 
 #include <chrono>
 #include <condition_variable>
 #include <ext/scope_guard.h>
 #include <limits>
 #include <magic_enum.hpp>
+#include <memory>
 #include <mutex>
 #include <string_view>
 #include <thread>
@@ -45,6 +48,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_owner_mgr_state[];
+} // namespace FailPoints
 
 static constexpr std::string_view S3GCOwnerKey = "/tiflash/s3gc/owner";
 
@@ -100,12 +107,13 @@ void EtcdOwnerManager::cancelImpl()
     if (keep_alive_handle)
     {
         bkg_pool.removeTask(keep_alive_handle);
-        keep_alive_handle = nullptr;
+        keep_alive_handle.reset();
+        keep_alive_ctx.reset();
     }
     if (session_check_handle)
     {
         bkg_pool.removeTask(session_check_handle);
-        session_check_handle = nullptr;
+        session_check_handle.reset();
     }
     if (th_camaign.joinable())
     {
@@ -153,17 +161,23 @@ EtcdOwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
 {
     bool run_next_campaign = true;
     std::unique_lock lk(mtx_camaign);
+
+    fiu_do_on(FailPoints::force_owner_mgr_state, {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_owner_mgr_state); v)
+        {
+            auto s = std::any_cast<EtcdOwnerManager::State>(v.value());
+            LOG_WARNING(log, "state change by failpoint {} -> {}", magic_enum::enum_name(state), magic_enum::enum_name(s));
+            state = s;
+        }
+    });
+
     switch (state)
     {
-    case State::Init:
-    case State::CancelDone:
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "unexpected state: {}", magic_enum::enum_name(state));
-
     case State::Normal:
         break;
     case State::CancelByStop:
     {
-        // Caller cancel the campaign, maybe program is exiting
+        // the campaign is stopping, maybe program is exiting
         run_next_campaign = false;
         lk.unlock();
 
@@ -196,6 +210,9 @@ EtcdOwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
         }
         break;
     }
+    case State::Init:
+    case State::CancelDone:
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "unexpected state: {}", magic_enum::enum_name(state));
     }
     return {run_next_campaign, old_session};
 }
@@ -203,11 +220,10 @@ EtcdOwnerManager::runNextCampaign(Etcd::SessionPtr && old_session)
 void EtcdOwnerManager::tryChangeState(State coming_state)
 {
     std::unique_lock lk(mtx_camaign);
-    // The campaign is cancel by caller, it will cause
+    // The campaign is stopping, it will cause
     // - leader key deleted in watch thread
-    // - etcd lease expired in etcd
-    // Do not overwrite `CancelByStop` because the
-    // next campaign need to be stop.
+    // - etcd lease expired in keepalive task
+    // Do not overwrite `CancelByStop` because the next campaign is expected to be stopped.
     if (state != State::CancelByStop)
     {
         // ok to set the state
@@ -428,15 +444,17 @@ Etcd::SessionPtr EtcdOwnerManager::createEtcdSession()
     if (session_check_handle)
     {
         bkg_pool.removeTask(session_check_handle);
-        session_check_handle = nullptr;
+        session_check_handle.reset();
     }
     if (keep_alive_handle)
     {
         bkg_pool.removeTask(keep_alive_handle);
-        keep_alive_handle = nullptr;
+        keep_alive_handle.reset();
+        keep_alive_ctx.reset();
     }
 
-    auto session = client->createSession(&keep_alive_ctx, leader_ttl);
+    keep_alive_ctx = std::make_unique<grpc::ClientContext>();
+    auto session = client->createSession(keep_alive_ctx.get(), leader_ttl);
     keep_alive_handle = bkg_pool.addTask(
         [this, s = session] {
             if (!s->keepAliveOne())

@@ -38,7 +38,8 @@ struct OwnerInfo
     // This node is owner or not
     OwnerType status = OwnerType::NoLeader;
     // The id of owner. Usually it is the service url.
-    // When status is
+    // When status is `IsOwner`/`NotOwner`, return the owner_id.
+    // When status is `GrpcError`, reuse this field to return the error message.
     String owner_id;
 
     const String & errMsg() const
