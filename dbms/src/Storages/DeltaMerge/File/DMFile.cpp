@@ -37,6 +37,7 @@ namespace ErrorCodes
 {
 extern const int CANNOT_READ_ALL_DATA;
 extern const int CORRUPTED_DATA;
+extern const int INCORRECT_DATA;
 } // namespace ErrorCodes
 
 namespace FailPoints
@@ -770,7 +771,7 @@ DMFile::MetaBlockHandle DMFile::writeSLPackStatToBuffer(WriteBuffer & buffer, DB
         digest->update(data, size);
     }
     writeString(data, size, buffer);
-    return MetaBlockHandle{offset, buffer.count() - offset};
+    return MetaBlockHandle{MetaBlockType::PackStat, offset, buffer.count() - offset};
 }
 
 DMFile::MetaBlockHandle DMFile::writeSLPackPropertyToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest)
@@ -787,7 +788,7 @@ DMFile::MetaBlockHandle DMFile::writeSLPackPropertyToBuffer(WriteBuffer & buffer
         }
         writeString(data, size, buffer);
     }
-    return MetaBlockHandle{offset, buffer.count() - offset};
+    return MetaBlockHandle{MetaBlockType::PackProperty, offset, buffer.count() - offset};
 }
 
 DMFile::MetaBlockHandle DMFile::writeColumnStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest)
@@ -805,7 +806,7 @@ DMFile::MetaBlockHandle DMFile::writeColumnStatToBuffer(WriteBuffer & buffer, DB
         }
         writeString(serialized.data(), serialized.size(), buffer);
     }
-    return MetaBlockHandle{offset, buffer.count() - offset};
+    return MetaBlockHandle{MetaBlockType::ColumnStat, offset, buffer.count() - offset};
 }
 
 void DMFile::finalizeMetaV2(WriteBuffer & buffer)
@@ -818,6 +819,8 @@ void DMFile::finalizeMetaV2(WriteBuffer & buffer)
     writePODBinary(pack_stats_handle, buffer);
     writePODBinary(pack_properties_handle, buffer);
     writePODBinary(column_stats_handle, buffer);
+    UInt64 meta_block_handle_count = 3;
+    writeIntBinary(meta_block_handle_count, buffer);
     writeIntBinary(version, buffer);
 
     if (digest)
@@ -825,7 +828,8 @@ void DMFile::finalizeMetaV2(WriteBuffer & buffer)
         digest->update(reinterpret_cast<const char *>(&pack_stats_handle), sizeof(MetaBlockHandle));
         digest->update(reinterpret_cast<const char *>(&pack_properties_handle), sizeof(MetaBlockHandle));
         digest->update(reinterpret_cast<const char *>(&column_stats_handle), sizeof(MetaBlockHandle));
-        digest->update(reinterpret_cast<const char *>(&STORAGE_FORMAT_CURRENT.dm_file), sizeof(DMFileFormat::Version));
+        digest->update(reinterpret_cast<const char *>(&meta_block_handle_count), sizeof(UInt64));
+        digest->update(reinterpret_cast<const char *>(&version), sizeof(DMFileFormat::Version));
 
         auto checksum_result = digest->raw();
         writeString(checksum_result.data(), checksum_result.size(), buffer);
@@ -891,21 +895,27 @@ void DMFile::parseMetaV2(std::string_view buffer)
     ptr = ptr - sizeof(DMFileFormat::Version);
     version = *(reinterpret_cast<const DMFileFormat::Version *>(ptr));
 
-    {
-        ptr = ptr - sizeof(MetaBlockHandle);
-        const auto * handle = reinterpret_cast<const MetaBlockHandle *>(ptr);
-        parseColumnStat(buffer.substr(handle->offset, handle->size));
-    }
+    ptr = ptr - sizeof(UInt64);
+    auto meta_block_handle_count = *(reinterpret_cast<const UInt64 *>(ptr));
 
+    for (UInt64 i = 0; i < meta_block_handle_count; ++i)
     {
         ptr = ptr - sizeof(MetaBlockHandle);
         const auto * handle = reinterpret_cast<const MetaBlockHandle *>(ptr);
-        parsePackProperty(buffer.substr(handle->offset, handle->size));
-    }
-    {
-        ptr = ptr - sizeof(MetaBlockHandle);
-        const auto * handle = reinterpret_cast<const MetaBlockHandle *>(ptr);
-        parsePackStat(buffer.substr(handle->offset, handle->size));
+        switch (handle->type)
+        {
+        case MetaBlockType::ColumnStat:
+            parseColumnStat(buffer.substr(handle->offset, handle->size));
+            break;
+        case MetaBlockType::PackProperty:
+            parsePackProperty(buffer.substr(handle->offset, handle->size));
+            break;
+        case MetaBlockType::PackStat:
+            parsePackStat(buffer.substr(handle->offset, handle->size));
+            break;
+        default:
+            throw Exception(ErrorCodes::INCORRECT_DATA, "MetaBlockType {} is not recognized", magic_enum::enum_name(handle->type));
+        }
     }
 }
 

@@ -169,12 +169,19 @@ public:
     };
     static_assert(std::is_standard_layout_v<PackProperty>);
 
+    enum class MetaBlockType : UInt64
+    {
+        PackStat = 0,
+        PackProperty,
+        ColumnStat,
+    };
     struct MetaBlockHandle
     {
+        MetaBlockType type;
         UInt64 offset;
         UInt64 size;
     };
-    static_assert(std::is_standard_layout_v<MetaBlockHandle> && sizeof(MetaBlockHandle) == sizeof(UInt64) * 2);
+    static_assert(std::is_standard_layout_v<MetaBlockHandle> && sizeof(MetaBlockHandle) == sizeof(UInt64) * 3);
 
     struct MetaFooter
     {
@@ -218,7 +225,7 @@ public:
     // `PackProperties` is similar to `PackStats` except it uses protobuf to do serialization
     using PackProperties = dtpb::PackProperties;
 
-    // `use_meta_v2_` is used for tests.
+
     // Normally, we use STORAGE_FORMAT_CURRENT to determine whether use meta v2.
     static DMFilePtr
     create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration = std::nullopt, DMFileFormat::Version = STORAGE_FORMAT_CURRENT.dm_file);
@@ -425,8 +432,8 @@ public:
     void initializeIndices();
 
     /* New metadata file format:
-     * |Pack Stats|Pack Properties|Column Stats|Pack Stats Handle|Pack Properties Handle|Column Stats Handle|DMFile Version|Checksum|MetaFooter|
-     * |----------------------------------------Checksum include-----------------------------------------------------------|
+     * |Pack Stats|Pack Properties|Column Stats|Pack Stats Handle|Pack Properties Handle|Column Stats Handle|Meta Block Handle Count|DMFile Version|Checksum|MetaFooter|
+     * |----------------------------------------Checksum include-----------------------------------------------------------------------------------|
      * `MetaFooter` is saved at the end of the file, with fixed length, it contains checksum algorithm and checksum frame length.
      * First, read `MetaFooter` and `Checksum`, and check data integrity.
      * Second, parse handle and parse corresponding data.
