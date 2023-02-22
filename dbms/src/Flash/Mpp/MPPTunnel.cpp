@@ -332,11 +332,15 @@ bool MPPTunnel::isReadyForWrite() const
     std::unique_lock lk(mu);
     switch (status)
     {
+    case TunnelStatus::Unconnected:
+        return false;
     case TunnelStatus::Connected:
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         return tunnel_sender->isReadyForWrite();
     default:
-        return false;
+        // Returns true directly for TunnelStatus::WaitingForSenderFinish and TunnelStatus::Finished,
+        // Then an exception will be thrown in `MPPTunnel::nonBlockingWrite`.
+        return true;
     }
 }
 
