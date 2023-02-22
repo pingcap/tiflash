@@ -16,7 +16,7 @@ There are two benefits of TiFlash to support stale read:
 ## Goals
 
 1. TiFlash supports stale read, including [AS OF TIMESTAMP](https://docs.pingcap.com/tidb/dev/as-of-timestamp), [TIDB_BOUNDED_STALENES](https://docs.pingcap.com/tidb/dev/as-of-timestamp#syntax), [tidb_read_staleness](https://docs.pingcap.com/tidb/dev/tidb-read-staleness), [tidb_external_ts](https://docs.pingcap.com/tidb/dev/tidb-external-ts).
-2. Since TiFlash MPP may involve the computation of all TiFlash nodes, it does not support [using stale read to read TiFlash data nearby](https://docs.pingcap.com/tidb/dev/three-dc-local-read).
+2. Since TiFlash MPP may involve the computation among all TiFlash nodes, supporting [using stale read to read TiFlash data nearby](https://docs.pingcap.com/tidb/dev/three-dc-local-read) is not the goal of this RFC.
 
 ## Design
 1. Check the [safe ts](https://github.com/pingcap/tiflash/blob/e732eaba68e309a0aec0e443c7f1a0e9368731b3/dbms/src/Storages/Transaction/RegionTable.cpp#L508) before read_index, if the stale read requirements are met (safe ts > read tso), read_index can be skipped.
