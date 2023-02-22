@@ -476,10 +476,13 @@ public:
     // write a single packet to the tunnel's send queue, it will block if tunnel is not ready.
     void write(TrackedMppDataPacketPtr && data);
 
-    // write a single packet to the tunnel's send queue, need to call isReadForWrite first.
+    // nonBlockingWrite write a single packet to the tunnel's send queue without blocking,
+    // and need to call isReadForWrite first.
+    // ```
+    // while (!isReadyForWrite()) {}
+    // nonBlockingWrite(std::move(data));
+    // ```
     void nonBlockingWrite(TrackedMppDataPacketPtr && data);
-
-    // Used by `nonBlockingWrite` to check the mpptunnel if ready for write.
     bool isReadyForWrite() const;
 
     // finish the writing, and wait until the sender finishes.

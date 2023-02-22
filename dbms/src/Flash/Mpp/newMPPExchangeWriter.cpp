@@ -25,7 +25,7 @@ namespace DB
 namespace
 {
 template <typename ExchangeWriterPtr>
-std::unique_ptr<DAGResponseWriter> doNewMPPExchangeWriter(
+std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
     const ExchangeWriterPtr & writer,
     const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & partition_col_collators,
@@ -123,7 +123,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     if (is_async)
     {
         auto writer = std::make_shared<AsyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
-        return doNewMPPExchangeWriter(
+        return buildMPPExchangeWriter(
             writer,
             partition_col_ids,
             partition_col_collators,
@@ -140,7 +140,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     else
     {
         auto writer = std::make_shared<SyncMPPTunnelSetWriter>(dag_context.tunnel_set, dag_context.result_field_types, req_id);
-        return doNewMPPExchangeWriter(
+        return buildMPPExchangeWriter(
             writer,
             partition_col_ids,
             partition_col_collators,

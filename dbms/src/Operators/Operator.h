@@ -57,8 +57,8 @@ public:
     virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
 
     // These two methods are used to set state, log and etc, and should not perform calculation logic, and no errors are expected.
-    virtual void operatePrefix() {}
-    virtual void operateSuffix() {}
+    virtual void operatePrefix() noexcept {}
+    virtual void operateSuffix() noexcept {}
 
     virtual String getName() const = 0;
 
