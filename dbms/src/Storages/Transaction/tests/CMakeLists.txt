@@ -25,6 +25,6 @@ grep_gtest_sources (${TiFlash_SOURCE_DIR}/dbms/src/Storages/Transaction/tests gt
 
 add_executable (gtests_tmt EXCLUDE_FROM_ALL ${gtests_tmt_sources})
 target_include_directories (gtests_tmt BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
-target_link_libraries (gtests_tmt gtest_main dbms clickhouse_functions)
+target_link_libraries (gtests_tmt gtest_main dbms tiflash_functions)
 target_compile_options (gtests_tmt PRIVATE -Wno-unknown-pragmas)
 add_check (gtests_tmt)

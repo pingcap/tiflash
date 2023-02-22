@@ -48,8 +48,8 @@ Usage: <path> <mode>
 
 void printPageEntry(const DB::PageIdU64 pid, const DB::PageEntry & entry)
 {
-    printf("\tpid:%9lld\t\t"
-           "%9llu\t%9u\t%9u\t%9llu\t%9llu\t%016llx\n",
+    printf("\tpid:%9ld\t\t"
+           "%9lu\t%9u\t%9lu\t%9lu\t%9lu\t%016lu\n",
            pid, //
            entry.file_id,
            entry.level,
@@ -245,7 +245,7 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
             auto sequence = reader->writeBatchSequence();
             for (const auto & record : edit.getRecords())
             {
-                printf("%s\tseq: %9llu\t", page_file.toString().c_str(), sequence);
+                printf("%s\tseq: %9lu\t", page_file.toString().c_str(), sequence);
                 switch (record.type)
                 {
                 case DB::WriteBatchWriteType::PUT_EXTERNAL:
@@ -260,13 +260,13 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
                 case DB::WriteBatchWriteType::DEL:
-                    printf("DEL\t%lld\t%llu\t%u\n", //
+                    printf("DEL\t%ld\t%lu\t%u\n", //
                            record.page_id,
                            page_file.getFileId(),
                            page_file.getLevel());
                     break;
                 case DB::WriteBatchWriteType::REF:
-                    printf("REF\t%lld\t%lld\t\t%llu\t%u\n", //
+                    printf("REF\t%ld\t%ld\t\t%lu\t%u\n", //
                            record.page_id,
                            record.ori_page_id,
                            page_file.getFileId(),
