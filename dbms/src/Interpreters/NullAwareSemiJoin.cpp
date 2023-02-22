@@ -280,14 +280,10 @@ void NullAwareSemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NullAw
         {
             size_t prev_offset = current_offset;
             res->fillRightColumns<KIND, STRICTNESS, Mapped, STEP>(columns, left_columns, right_columns, null_lists, current_offset, max_pace);
-            // TODO: optimize performance.
+
             for (size_t i = 0; i < left_columns; ++i)
-            {
-                for (size_t j = prev_offset; j < current_offset; ++j)
-                {
-                    columns[i]->insertFrom(*block.getByPosition(i).column.get(), res->getRowNum());
-                }
-            }
+                columns[i]->insertManyFrom(*block.getByPosition(i).column.get(), res->getRowNum(), current_offset - prev_offset);
+
             offsets.push_back(current_offset);
             if (current_offset >= max_block_size)
                 break;
