@@ -282,6 +282,15 @@ size_t Block::bytes() const
     return res;
 }
 
+size_t Block::estimateBytesForSpill() const
+{
+    size_t res = 0;
+    for (const auto & elem : data)
+        res += elem.column->estimateByteSizeForSpill();
+
+    return res;
+}
+
 size_t Block::bytes(size_t offset, size_t limit) const
 {
     size_t res = 0;

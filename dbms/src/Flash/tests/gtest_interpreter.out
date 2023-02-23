@@ -7,7 +7,7 @@ Union: <for test>
    MergeSorting, limit = 10
     Union: <for partial order>
      PartialSorting x 10: limit = 10
-      Expression: <before order and select>
+      Expression: <before order>
        Filter: <execute having>
         SharedQuery: <restore concurrency>
          ParallelAggregating, max_threads: 10, final: true
@@ -20,11 +20,11 @@ Union: <for test>
 ~result:
 Union: <for test>
  SharedQuery x 10: <restore concurrency>
-  Limit, limit = 10
-   Union: <for partial limit>
-    Limit x 10, limit = 10
-     Expression: <final projection>
-      Expression: <before order and select>
+  Expression: <final projection>
+   Expression: <before select>
+    Limit, limit = 10
+     Union: <for partial limit>
+      Limit x 10, limit = 10
        Filter: <execute having>
         SharedQuery: <restore concurrency>
          ParallelAggregating, max_threads: 10, final: true
@@ -84,13 +84,13 @@ Union: <for test>
 ~result:
 Union: <for test>
  SharedQuery x 10: <restore concurrency>
-  Limit, limit = 10
-   Union: <for partial limit>
-    Limit x 10, limit = 10
-     Expression: <final projection>
+  Expression: <final projection>
+   Limit, limit = 10
+    Union: <for partial limit>
+     Limit x 10, limit = 10
       Expression: <projection>
        Expression: <final projection>
-        Expression: <before order and select>
+        Expression: <before select>
          Filter: <execute where>
           Expression: <projection>
            Expression: <final projection>
@@ -138,7 +138,7 @@ Union: <for test>
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <before order and select>
+  Expression: <before select>
    SharedQuery: <restore concurrency>
     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      Expression: <final projection>
@@ -153,7 +153,7 @@ Union: <for test>
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <before order and select>
+  Expression: <before select>
    Expression: <projection>
     Expression: <final projection>
      SharedQuery: <restore concurrency>
@@ -170,7 +170,7 @@ Union: <for test>
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <before order and select>
+  Expression: <before select>
    Expression: <projection>
     Expression: <final projection>
      SharedQuery: <restore concurrency>
@@ -191,7 +191,7 @@ Union: <for test>
 ~result:
 Union: <for test>
  Expression x 8: <final projection>
-  Expression: <before order and select>
+  Expression: <before select>
    Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
     Expression: <final projection>
      MergeSorting: <enable fine grained shuffle>, limit = 0
@@ -215,7 +215,7 @@ Union: <for test>
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <before order and select>
+  Expression: <before select>
    SharedQuery: <restore concurrency>
     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      Expression: <final projection>
@@ -423,11 +423,11 @@ CreatingSets
  Union: <for test>
   MockExchangeSender x 20
    SharedQuery: <restore concurrency>
-    Limit, limit = 10
-     Union: <for partial limit>
-      Limit x 20, limit = 10
-       Expression: <final projection>
-        Expression: <before order and select>
+    Expression: <final projection>
+     Expression: <before select>
+      Limit, limit = 10
+       Union: <for partial limit>
+        Limit x 20, limit = 10
          SharedQuery: <restore concurrency>
           ParallelAggregating, max_threads: 20, final: true
            Expression x 20: <remove useless column after join>
@@ -439,8 +439,8 @@ CreatingSets
 ~test_suite_name: ListBase
 ~result_index: 0
 ~result:
-Limit, limit = 10
- Expression: <final projection>
+Expression: <final projection>
+ Limit, limit = 10
   Aggregating
    Expression: <before aggregation>
     Filter: <execute where>
@@ -460,4 +460,31 @@ Union: <for test>
         Expression x 20: <before aggregation>
          Filter: <execute where>
           MockTableScan
+@
+~test_suite_name: ExpandPlan
+~result_index: 0
+~result:
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = project_4>, join_kind = Inner
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     Expression: <projection>
+      Expression: <final projection>
+       MockTableScan
+ Union: <for test>
+  SharedQuery x 10: <restore concurrency>
+   Expression: <final projection>
+    MergeSorting, limit = 2
+     Union: <for partial order>
+      PartialSorting x 10: limit = 2
+       Expression: <projection>
+        Expression: <final projection>
+         Expression: <remove useless column after join>
+          HashJoinProbe: <join probe, join_executor_id = Join_5, has_non_joined_data = false>
+           Expression: <final projection>
+            Expression: <expand: grouping set [{<count(exchange_receiver_0)_collator_46 >}{<any(exchange_receiver_1)_collator_46 >}]>
+             SharedQuery: <restore concurrency>
+              ParallelAggregating, max_threads: 10, final: true
+               MockExchangeReceiver x 10
 @
