@@ -61,7 +61,8 @@ namespace DB
         F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}), F(type_exchange_sender, {"type", "exchange_sender"}),                     \
         F(type_exchange_receiver, {"type", "exchange_receiver"}), F(type_projection, {"type", "projection"}),                                       \
         F(type_partition_ts, {"type", "partition_table_scan"}),                                                                                     \
-        F(type_window, {"type", "window"}), F(type_window_sort, {"type", "window_sort"}))                                                           \
+        F(type_window, {"type", "window"}), F(type_window_sort, {"type", "window_sort"}),                                                           \
+        F(type_expand, {"type", "expand"}))                                                                                                         \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                            \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                   \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}),                                                                               \
@@ -281,7 +282,7 @@ namespace DB
         F(type_current_size, {{"type", "current_size"}}),                                                                                           \
         F(type_still_used_when_evict, {{"type", "type_still_used_when_evict"}}),                                                                    \
         F(type_miss_count, {{"type", "type_miss_count"}}),                                                                                          \
-        F(type_hit_count, {{"type", "type_hit_count"}})) \
+        F(type_hit_count, {{"type", "type_hit_count"}}))
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
