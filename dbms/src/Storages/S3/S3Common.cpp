@@ -326,7 +326,7 @@ void listPrefix(
     const Aws::S3::S3Client & client,
     const String & bucket,
     const String & prefix,
-    std::string_view  delimiter,
+    std::string_view delimiter,
     std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager)
 {
     Stopwatch sw;

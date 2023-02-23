@@ -38,18 +38,41 @@ const static re2::RE2 rgx_lock_suffix(".lock_s(?P<lock_store_id>[0-9]+)_(?P<lock
 const static re2::RE2 rgx_store_prefix("^s(?P<store_id>[0-9]+)/$");
 const static re2::RE2 rgx_data_or_manifest("^s(?P<store_id>[0-9]+)/(data|manifest)/(?P<data_subpath>.+)$");
 const static re2::RE2 rgx_subpath_manifest("mf_(?P<upload_seq>[0-9]+)");
+
 constexpr static std::string_view DELMARK_SUFFIX = ".del";
+
+// clang-format off
+
+constexpr static std::string_view fmt_store_prefix     = "s{store_id}/";
+constexpr static std::string_view fmt_manifest_prefix  = "s{store_id}/manifest/";
+constexpr static std::string_view fmt_manifest         = "s{store_id}/manifest/{subpath}";
+constexpr static std::string_view fmt_subpath_manifest                       = "mf_{seq}";
+
+constexpr static std::string_view fmt_datafile_prefix  = "s{store_id}/data/";
+constexpr static std::string_view fmt_data_file        = "s{store_id}/data/{subpath}";
+constexpr static std::string_view fmt_subpath_checkpoint_data            = "dat_{seq}_{index}";
+constexpr static std::string_view fmt_subpath_dtfile                     = "t_{table_id}/dmf_{id}";
+constexpr static std::string_view fmt_subpath_keyspace_dtfile            = "ks_{keyspace}_t_{table_id}/dmf_{id}";
+
+// lock prefix for all stores
+constexpr static std::string_view fmt_lock_prefix = "lock/";
+// lock prefix for a specific data file
+constexpr static std::string_view fmt_lock_datafile_prefix = "lock/s{store_id}/{subpath}.lock_";
+constexpr static std::string_view fmt_lock_file = "lock/s{store_id}/{subpath}.lock_s{lock_store}_{lock_seq}";
+
+// clang-format on
+
 
 String toFullKey(const S3FilenameType type, const StoreID store_id, const std::string_view data_subpath)
 {
     switch (type)
     {
     case S3FilenameType::DataFile:
-        return fmt::format("s{}/data/{}", store_id, data_subpath);
+        return fmt::format(fmt_data_file, fmt::arg("store_id", store_id), fmt::arg("subpath", data_subpath));
     case S3FilenameType::CheckpointManifest:
-        return fmt::format("s{}/manifest/{}", store_id, data_subpath);
+        return fmt::format(fmt_manifest, fmt::arg("store_id", store_id), fmt::arg("subpath", data_subpath));
     case S3FilenameType::StorePrefix:
-        return fmt::format("s{}/", store_id);
+        return fmt::format(fmt_store_prefix, fmt::arg("store_id", store_id));
     default:
         throw Exception(fmt::format("Not support type! type={}", magic_enum::enum_name(type)));
     }
@@ -71,18 +94,18 @@ String S3Filename::toFullKey() const
 String S3Filename::toManifestPrefix() const
 {
     RUNTIME_CHECK(type == S3FilenameType::StorePrefix);
-    return details::toFullKey(type, store_id, data_subpath) + "manifest/";
+    return fmt::format(details::fmt_manifest_prefix, fmt::arg("store_id", store_id));
 }
 
 String S3Filename::toDataPrefix() const
 {
     RUNTIME_CHECK(type == S3FilenameType::StorePrefix);
-    return details::toFullKey(type, store_id, data_subpath) + "data/";
+    return fmt::format(details::fmt_datafile_prefix, fmt::arg("store_id", store_id));
 }
 
 String S3Filename::getLockPrefix()
 {
-    return "lock/";
+    return String(details::fmt_lock_prefix);
 }
 
 S3FilenameView S3FilenameView::fromKey(const std::string_view fullpath)
@@ -170,13 +193,18 @@ S3FilenameView S3FilenameView::fromStoreKeyPrefix(const std::string_view prefix)
 String S3FilenameView::getLockPrefix() const
 {
     RUNTIME_CHECK(isDataFile());
-    return fmt::format("lock/s{}/{}.lock_", store_id, data_subpath);
+    return fmt::format(details::fmt_lock_datafile_prefix, fmt::arg("store_id", store_id), fmt::arg("subpath", data_subpath));
 }
 
 String S3FilenameView::getLockKey(StoreID lock_store_id, UInt64 lock_seq) const
 {
     RUNTIME_CHECK(isDataFile());
-    return fmt::format("lock/s{}/{}.lock_s{}_{}", store_id, data_subpath, lock_store_id, lock_seq);
+    return fmt::format(
+        details::fmt_lock_file,
+        fmt::arg("store_id", store_id),
+        fmt::arg("subpath", data_subpath),
+        fmt::arg("lock_store", lock_store_id),
+        fmt::arg("lock_seq", lock_seq));
 }
 
 String S3FilenameView::getDelMarkKey() const
@@ -184,7 +212,7 @@ String S3FilenameView::getDelMarkKey() const
     switch (type)
     {
     case S3FilenameType::DataFile:
-        return fmt::format("s{}/data/{}{}", store_id, data_subpath, details::DELMARK_SUFFIX);
+        return fmt::format(details::fmt_data_file, fmt::arg("store_id", store_id), fmt::arg("subpath", data_subpath)) + String(details::DELMARK_SUFFIX);
     default:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unsupport type: {}", magic_enum::enum_name(type));
     }
@@ -255,10 +283,12 @@ S3Filename S3Filename::fromStoreId(StoreID store_id)
 
 S3Filename S3Filename::fromDMFileOID(const DMFileOID & oid)
 {
+    // TODO: adapt with keyspace
+    UNUSED(details::fmt_subpath_keyspace_dtfile);
     return S3Filename{
         .type = S3FilenameType::DataFile,
         .store_id = oid.store_id,
-        .data_subpath = fmt::format("t_{}/dmf_{}", oid.table_id, oid.file_id),
+        .data_subpath = fmt::format(details::fmt_subpath_dtfile, fmt::arg("table_id", oid.table_id), fmt::arg("id", oid.file_id)),
     };
 }
 
@@ -267,7 +297,7 @@ S3Filename S3Filename::newCheckpointData(StoreID store_id, UInt64 upload_seq, UI
     return S3Filename{
         .type = S3FilenameType::DataFile,
         .store_id = store_id,
-        .data_subpath = fmt::format("dat_{}_{}", upload_seq, file_idx),
+        .data_subpath = fmt::format(details::fmt_subpath_checkpoint_data, fmt::arg("seq", upload_seq), fmt::arg("index", file_idx)),
     };
 }
 
@@ -276,7 +306,7 @@ S3Filename S3Filename::newCheckpointManifest(StoreID store_id, UInt64 upload_seq
     return S3Filename{
         .type = S3FilenameType::CheckpointManifest,
         .store_id = store_id,
-        .data_subpath = fmt::format("mf_{}", upload_seq),
+        .data_subpath = fmt::format(details::fmt_subpath_manifest, fmt::arg("seq", upload_seq)),
     };
 }
 

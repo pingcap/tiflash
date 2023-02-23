@@ -56,7 +56,7 @@ enum class S3FilenameType
 /// DataFile are also stored with a store_id prefix: "s${store_id}/data/${data_subpath}"
 /// - for CheckpointDataFile, data_subpath is "dat_${upload_seq}_{dat_index}"
 /// - for StableDTFile, data_subpath is "t_${table_id}/dmf_${dmf_id}"
-/// - for StableDTFile under keyspace, data_subpath is "ks_${ks_id}_t${table_id}/dmf_${dmf_id}"
+/// - for StableDTFile under keyspace, data_subpath is "ks_${ks_id}_t_${table_id}/dmf_${dmf_id}"
 /// However, thus DataFile is generated and upload to S3 by the ${store_id}, it could be shared
 /// by multiple TiFlash instances. We need LockFile to specify the DataFile is being used.
 ///
