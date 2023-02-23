@@ -61,7 +61,8 @@ namespace DB
         F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}), F(type_exchange_sender, {"type", "exchange_sender"}),                     \
         F(type_exchange_receiver, {"type", "exchange_receiver"}), F(type_projection, {"type", "projection"}),                                       \
         F(type_partition_ts, {"type", "partition_table_scan"}),                                                                                     \
-        F(type_window, {"type", "window"}), F(type_window_sort, {"type", "window_sort"}))                                                           \
+        F(type_window, {"type", "window"}), F(type_window_sort, {"type", "window_sort"}),                                                           \
+        F(type_expand, {"type", "expand"}))                                                                                                         \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                            \
         F(type_cop, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                   \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}),                                                                               \
@@ -276,7 +277,8 @@ namespace DB
     M(tiflash_compute_request_unit, "Request Unit used by tiflash compute", Counter,                                                                \
         F(type_mpp, {{"type", "mpp"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
         F(type_cop, {{"type", "cop"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
-        F(type_batch, {{"type", "batch"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()})) \
+        F(type_batch, {{"type", "batch"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}))
+
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

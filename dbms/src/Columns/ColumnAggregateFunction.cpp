@@ -14,11 +14,15 @@
 
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <Columns/ColumnAggregateFunction.h>
+#include <Columns/ColumnString.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Functions/FunctionHelpers.h>
 #include <IO/WriteBufferFromArena.h>
 #include <fmt/format.h>
 
@@ -242,6 +246,26 @@ size_t ColumnAggregateFunction::allocatedBytes() const
         res += arena->size();
 
     return res;
+}
+
+size_t ColumnAggregateFunction::estimateByteSizeForSpill() const
+{
+    static const std::unordered_set<String> trivial_agg_func_name{"sum", "min", "max", "count", "avg", "first_row", "any"};
+    if (trivial_agg_func_name.find(func->getName()) != trivial_agg_func_name.end())
+    {
+        size_t res = func->sizeOfData() * size();
+        /// For trivial agg, we can estimate each element's size as `func->sizeofData()`, and
+        /// if the result is String, use `APPROX_STRING_SIZE` as the average size of the String
+        if (removeNullable(func->getReturnType())->isString())
+            res += size() * ColumnString::APPROX_STRING_SIZE;
+        return res;
+    }
+    else
+    {
+        /// For non-trivial agg like uniqXXX/group_concat, can't estimate the memory usage, so just return byteSize(),
+        /// it will highly overestimates size of a column if it was produced in AggregatingBlockInputStream (it contains size of other columns)
+        return byteSize();
+    }
 }
 
 MutableColumnPtr ColumnAggregateFunction::cloneEmpty() const

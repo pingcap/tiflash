@@ -44,7 +44,8 @@ bool isRecognizable(const DB::DM::DMFile & file, const std::string & target)
         || file.configurationFileName() == target
         || file.packPropertyFileName() == target
         || needFrameMigration(file, target)
-        || isIgnoredInMigration(file, target);
+        || isIgnoredInMigration(file, target)
+        || file.metav2FileName() == target;
 }
 
 namespace bpo = boost::program_options;
