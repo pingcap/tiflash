@@ -94,7 +94,7 @@ elseif (ARCH_AMD64)
     # and note that the compile will succeed even if the host machine does not support the instruction set
     # so we do not set the flags to avoid core dump in old machines
     option (TIFLASH_ENABLE_AVX_SUPPORT "Use AVX/AVX2 instructions on x86_64" ON)
-    option (TIFLASH_ENABLE_AVX512_SUPPORT "Use AVX512 instructions on x86_64" ON)
+    option (TIFLASH_ENABLE_AVX512_SUPPORT "Use AVX512 instructions on x86_64" OFF)
     
     # `haswell` was released since 2013 with cpu feature avx2, bmi2. It's a practical arch for optimizer
     option (TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT "Use instructions based on architecture `haswell` on x86_64" ON)
