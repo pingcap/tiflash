@@ -133,7 +133,7 @@ TEST(S3FilenameTest, StableFile)
     auto view = S3FilenameView::fromKey(fullkey);
     check(view);
 
-    DMFileOID oid{.write_node_id = test_store_id, .table_id = 44, .file_id = 57};
+    DMFileOID oid{.store_id = test_store_id, .table_id = 44, .file_id = 57};
     auto r = S3Filename::fromDMFileOID(oid);
     ASSERT_EQ(r.toFullKey(), fullkey);
     check(r.toView());

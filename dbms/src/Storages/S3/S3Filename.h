@@ -160,6 +160,6 @@ struct fmt::formatter<DB::S3::DMFileOID>
     template <typename FormatContext>
     auto format(const DB::S3::DMFileOID & value, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(ctx.out(), "{}_{}_{}", value.write_node_id, value.table_id, value.file_id);
+        return format_to(ctx.out(), "{}_{}_{}", value.store_id, value.table_id, value.file_id);
     }
 };

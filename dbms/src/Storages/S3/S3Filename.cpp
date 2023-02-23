@@ -29,6 +29,17 @@ namespace DB::S3
 
 namespace details
 {
+
+/// parsing LockFile
+const static re2::RE2 rgx_lock("^lock/s(?P<store_id>[0-9]+)/(?P<data_subpath>.+)$");
+const static re2::RE2 rgx_lock_suffix(".lock_s(?P<lock_store_id>[0-9]+)_(?P<lock_seq>[0-9]+)");
+
+/// parsing CheckpointManifest or DataFile
+const static re2::RE2 rgx_store_prefix("^s(?P<store_id>[0-9]+)/$");
+const static re2::RE2 rgx_data_or_manifest("^s(?P<store_id>[0-9]+)/(data|manifest)/(?P<data_subpath>.+)$");
+const static re2::RE2 rgx_subpath_manifest("mf_(?P<upload_seq>[0-9]+)");
+constexpr static std::string_view DELMARK_SUFFIX = ".del";
+
 String toFullKey(const S3FilenameType type, const StoreID store_id, const std::string_view data_subpath)
 {
     switch (type)
@@ -45,7 +56,6 @@ String toFullKey(const S3FilenameType type, const StoreID store_id, const std::s
     __builtin_unreachable();
 }
 
-static constexpr std::string_view DELMARK_SUFFIX = ".del";
 } // namespace details
 
 String S3FilenameView::toFullKey() const
@@ -80,11 +90,10 @@ S3FilenameView S3FilenameView::fromKey(const std::string_view fullpath)
     S3FilenameView res{.type = S3FilenameType::Invalid};
     re2::StringPiece fullpath_sp{fullpath.data(), fullpath.size()};
     re2::StringPiece type_view, datafile_path;
-    // lock/s${store_id}/${datafile_path}.lock_s${lock_store_id}_${lock_seq}
+    // lock/s${store_id}/${data_subpath}.lock_s${lock_store_id}_${lock_seq}
     if (startsWith(fullpath, "lock/"))
     {
-        const static re2::RE2 rgx_lock_pattern("^lock/s([0-9]+)/(.+)$");
-        if (!re2::RE2::FullMatch(fullpath_sp, rgx_lock_pattern, &res.store_id, &datafile_path))
+        if (!re2::RE2::FullMatch(fullpath_sp, details::rgx_lock, &res.store_id, &datafile_path))
             return res;
 
         const auto lock_start_npos = datafile_path.find(".lock_");
@@ -94,6 +103,7 @@ S3FilenameView S3FilenameView::fromKey(const std::string_view fullpath)
             return res;
         }
 
+        // ${data_subpath}.lock_s${lock_store_id}_${lock_seq}
         if (datafile_path.starts_with("dat_") || datafile_path.starts_with("t_") || datafile_path.starts_with("ks_"))
             res.type = S3FilenameType::LockFile;
         else
@@ -101,15 +111,15 @@ S3FilenameView S3FilenameView::fromKey(const std::string_view fullpath)
             res.type = S3FilenameType::Invalid;
             return res;
         }
+        // .lock_s${lock_store_id}_${lock_seq}
         res.lock_suffix = std::string_view(datafile_path.begin() + lock_start_npos, datafile_path.size() - lock_start_npos);
         datafile_path.remove_suffix(res.lock_suffix.size());
         res.data_subpath = std::string_view(datafile_path.data(), datafile_path.size());
         return res;
     }
 
-    const static re2::RE2 rgx_data_or_manifest_pattern("^s([0-9]+)/(data|manifest)/(.+)$");
-    if (!re2::RE2::FullMatch(fullpath_sp, rgx_data_or_manifest_pattern, &res.store_id, &type_view, &datafile_path))
-        return res;
+    if (!re2::RE2::FullMatch(fullpath_sp, details::rgx_data_or_manifest, &res.store_id, &type_view, &datafile_path))
+        return res; // invalid
 
     if (type_view == "manifest")
         res.type = S3FilenameType::CheckpointManifest;
@@ -131,6 +141,7 @@ S3FilenameView S3FilenameView::fromKey(const std::string_view fullpath)
             else if (datafile_path.starts_with("t_") || datafile_path.starts_with("ks_"))
             {
                 // "t_${table_id}/dmf_${id}"
+                // "ks_${table_id}/dmf_${id}"
                 res.type = S3FilenameType::DataFile;
             }
             else
@@ -145,10 +156,9 @@ S3FilenameView S3FilenameView::fromKey(const std::string_view fullpath)
 
 S3FilenameView S3FilenameView::fromStoreKeyPrefix(const std::string_view prefix)
 {
-    const static re2::RE2 rgx_pattern("^s([0-9]+)/$");
     S3FilenameView res{.type = S3FilenameType::Invalid};
     re2::StringPiece prefix_sp{prefix.data(), prefix.size()};
-    if (!re2::RE2::FullMatch(prefix_sp, rgx_pattern, &res.store_id))
+    if (!re2::RE2::FullMatch(prefix_sp, details::rgx_store_prefix, &res.store_id))
         return res;
 
     res.type = S3FilenameType::StorePrefix;
@@ -189,8 +199,7 @@ UInt64 S3FilenameView::getUploadSequence() const
     case S3FilenameType::CheckpointManifest:
     {
         re2::StringPiece path_sp{data_subpath.data(), data_subpath.size()};
-        static const re2::RE2 pattern("mf_([0-9]+)");
-        if (!re2::RE2::FullMatch(path_sp, pattern, &upload_seq))
+        if (!re2::RE2::FullMatch(path_sp, details::rgx_subpath_manifest, &upload_seq))
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid {}, path={}", magic_enum::enum_name(type), data_subpath);
         return upload_seq;
     }
@@ -224,8 +233,7 @@ S3FilenameView::LockInfo S3FilenameView::getLockInfo() const
     {
         RUNTIME_CHECK(!lock_suffix.empty());
         re2::StringPiece lock_suffix_sp{lock_suffix.data(), lock_suffix.size()};
-        static const re2::RE2 pattern(".lock_s([0-9]+)_([0-9]+)");
-        if (!re2::RE2::FullMatch(lock_suffix_sp, pattern, &lock_info.store_id, &lock_info.sequence))
+        if (!re2::RE2::FullMatch(lock_suffix_sp, details::rgx_lock_suffix, &lock_info.store_id, &lock_info.sequence))
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid {}, lock_suffix={}", magic_enum::enum_name(type), lock_suffix);
         return lock_info;
     }
