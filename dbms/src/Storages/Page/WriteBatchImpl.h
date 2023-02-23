@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <IO/ReadBuffer.h>
+#include <IO/ReadBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
 
@@ -108,6 +108,12 @@ public:
         Write w{WriteBatchWriteType::PUT, page_id, tag, read_buffer, size, 0, std::move(offsets), 0, 0, {}};
         total_data_size += size;
         writes.emplace_back(std::move(w));
+    }
+
+    void putPage(PageIdU64 page_id, UInt64 tag, std::string_view data)
+    {
+        auto buffer_ptr = std::make_shared<ReadBufferFromOwnString>(data);
+        putPage(page_id, tag, buffer_ptr, data.size());
     }
 
     void putExternal(PageIdU64 page_id, UInt64 tag)

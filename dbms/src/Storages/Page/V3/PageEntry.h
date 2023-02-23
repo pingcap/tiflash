@@ -79,25 +79,30 @@ using PageEntriesV3 = std::vector<PageEntryV3>;
 using PageIDAndEntryV3 = std::pair<PageIdV3Internal, PageEntryV3>;
 using PageIDAndEntriesV3 = std::vector<PageIDAndEntryV3>;
 
-
-inline String toDebugString(const PageEntryV3 & entry)
-{
-    FmtBuffer fmt_buf;
-    fmt_buf.joinStr(
-        entry.field_offsets.begin(),
-        entry.field_offsets.end(),
-        [](const auto & offset_checksum, FmtBuffer & fb) {
-            fb.fmtAppend("{}", offset_checksum.first);
-        },
-        ",");
-    return fmt::format("PageEntryV3{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets: [{}]}}",
-                       entry.file_id,
-                       entry.offset,
-                       entry.size,
-                       entry.checksum,
-                       entry.tag,
-                       fmt_buf.toString());
-}
-
 } // namespace PS::V3
 } // namespace DB
+
+template <>
+struct fmt::formatter<DB::PS::V3::PageEntryV3>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::PageEntryV3 & entry, FormatContext & ctx) const
+    {
+        using namespace DB;
+
+        FmtBuffer fmt_buf;
+        fmt_buf.joinStr(
+            entry.field_offsets.begin(),
+            entry.field_offsets.end(),
+            [](const auto & offset_checksum, FmtBuffer & fb) {
+                fb.fmtAppend("{}", offset_checksum.first);
+            },
+            ",");
+        return format_to(ctx.out(), "PageEntryV3{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets: [{}]}}", entry.file_id, entry.offset, entry.size, entry.checksum, entry.tag, fmt_buf.toString());
+    }
+};

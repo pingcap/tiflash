@@ -19,7 +19,6 @@
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
-#include <Storages/PathPool.h>
 #include <common/types.h>
 
 namespace DB::PS::V3

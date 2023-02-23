@@ -19,7 +19,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/DeltaMerge/StoragePool_fwd.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 namespace DB
@@ -127,7 +127,8 @@ public:
     ColumnFilePersisted * tryToColumnFilePersisted();
 
     virtual ColumnFileReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;
+    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const
+        = 0;
 
     /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
     /// been persisted in the disk and their data will be immutable.
