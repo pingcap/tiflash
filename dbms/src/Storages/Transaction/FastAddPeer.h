@@ -74,6 +74,6 @@ protected:
 
 // pair<can_retry, remote_meta>
 std::pair<bool, std::optional<RemoteMeta>> selectRemotePeer(Context & context, UniversalPageStoragePtr page_storage, uint64_t current_store_id, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper = nullptr);
-std::string composeOutputDirectory(const std::string & remote_dir, uint64_t store_id, const std::string & storage_name);
+std::string composeManifestDirectory(const std::string & remote_dir, uint64_t store_id, const std::string & storage_name);
 std::optional<RemoteMeta> fetchRemotePeerMeta(Context & context, const std::string & output_directory, const std::string & checkpoint_data_dir, uint64_t store_id, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper = nullptr);
 } // namespace DB

@@ -37,7 +37,7 @@ public:
         createIfNotExist(path);
         file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        page_storage = UniversalPageStorage::create("test.t", delegator, config, file_provider);
+        page_storage = UniversalPageStorage::create("test.t", delegator, config, "", file_provider);
         page_storage->restore();
 
         for (size_t i = 0; i < buf_sz; ++i)
@@ -52,7 +52,7 @@ public:
     {
         auto path = getTemporaryPath();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        auto storage = UniversalPageStorage::create("test.t", delegator, config_, file_provider);
+        auto storage = UniversalPageStorage::create("test.t", delegator, config_, "", file_provider);
         storage->restore();
         return storage;
     }

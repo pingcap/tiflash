@@ -16,7 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/V3/Remote/Proto/manifest_file.pb.h>
+#include <Storages/Page/V3/Remote/RemoteDataInfo.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -28,47 +28,6 @@ extern const int CHECKSUM_DOESNT_MATCH;
 } // namespace ErrorCodes
 namespace PS::V3
 {
-
-struct RemoteDataLocation
-{
-    // This struct is highly coupled with manifest_file.proto -> EditEntry.
-
-    std::shared_ptr<const std::string> data_file_id;
-
-    uint64_t offset_in_file;
-    uint64_t size_in_file;
-
-    Remote::EntryDataLocation toRemote() const
-    {
-        Remote::EntryDataLocation remote_val;
-        remote_val.set_data_file_id(*data_file_id);
-        remote_val.set_offset_in_file(offset_in_file);
-        remote_val.set_size_in_file(size_in_file);
-        return remote_val;
-    }
-
-    static RemoteDataLocation fromRemote(const Remote::EntryDataLocation & remote_rec)
-    {
-        RemoteDataLocation val;
-        // TODO: This does not share the same memory for identical data files, wasting memory usage.
-        val.data_file_id = std::make_shared<std::string>(remote_rec.data_file_id());
-        val.offset_in_file = remote_rec.offset_in_file();
-        val.size_in_file = remote_rec.size_in_file();
-        return val;
-    }
-};
-
-struct RemoteDataInfo
-{
-    RemoteDataLocation data_location;
-
-    /**
-     * Whether the PageEntry's local BlobData has been reclaimed.
-     * If the data is reclaimed, you can only read out its data from the remote.
-     */
-    bool is_local_data_reclaimed = false;
-};
-
 struct PageEntryV3
 {
 public:
@@ -94,7 +53,10 @@ public:
         return size + padded_size;
     }
 
-    inline bool isValid() const { return file_id != INVALID_BLOBFILE_ID; }
+    inline bool isValid() const
+    {
+        return file_id != INVALID_BLOBFILE_ID || remote_info.has_value();
+    }
 
     size_t getFieldSize(size_t index) const
     {

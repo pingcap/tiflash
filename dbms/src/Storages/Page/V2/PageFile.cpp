@@ -122,6 +122,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         case WriteBatchWriteType::PUT_EXTERNAL:
             throw Exception("Should not serialize with `PUT_EXTERNAL`");
             break;
+        case WriteBatchWriteType::PUT_REMOTE:
+            throw Exception("", ErrorCodes::LOGICAL_ERROR);
         }
     }
 
@@ -233,6 +235,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
             edit.ref(write.page_id, write.ori_page_id);
             break;
+        case WriteBatchWriteType::PUT_REMOTE:
+            throw Exception("", ErrorCodes::LOGICAL_ERROR);
         }
     }
 
@@ -438,6 +442,8 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
             pos += sizeof(PageId);
             break;
         }
+        case WriteBatchWriteType::PUT_REMOTE:
+            throw Exception("", ErrorCodes::LOGICAL_ERROR);
         }
     }
 
@@ -685,6 +691,8 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
             curr_edit.ref(ref_id, page_id);
             break;
         }
+        case WriteBatchWriteType::PUT_REMOTE:
+            throw Exception("", ErrorCodes::LOGICAL_ERROR);
         }
     }
     // move `pos` over the checksum of WriteBatch

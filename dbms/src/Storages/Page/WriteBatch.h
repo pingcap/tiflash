@@ -18,6 +18,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/Remote/RemoteDataInfo.h>
 
 #include <vector>
 
@@ -42,6 +43,8 @@ enum class WriteBatchWriteType : UInt8
     // In V2, it is the same as `PUT`; In V3, we treated it as a different type from `PUT`
     // to get its lifetime management correct.
     PUT_EXTERNAL = 4,
+
+    PUT_REMOTE = 5,
 };
 
 class WriteBatch : private boost::noncopyable
@@ -71,6 +74,8 @@ private:
         UInt64 page_offset;
         UInt64 page_checksum;
         PageFileIdAndLevel target_file_id;
+
+        std::optional<PS::V3::RemoteDataLocation> remote_data_location = std::nullopt;
     };
     using Writes = std::vector<Write>;
 
@@ -120,6 +125,12 @@ public:
     {
         auto buffer_ptr = std::make_shared<ReadBufferFromOwnString>(data);
         putPage(page_id, tag, buffer_ptr, data.size());
+    }
+
+    void putRemotePage(PageId page_id, UInt64 tag, const PS::V3::RemoteDataLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums = {})
+    {
+        Write w{WriteBatchWriteType::PUT_REMOTE, page_id, tag, nullptr, /* size */ 0, 0, std::move(offset_and_checksums), 0, 0, {}, data_location};
+        writes.emplace_back(std::move(w));
     }
 
     void putExternal(PageId page_id, UInt64 tag)

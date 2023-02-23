@@ -18,8 +18,6 @@ class CheckpointPageManager
 {
 public:
     static UniversalPageStoragePtr createTempPageStorage(Context & context, const String & checkpoint_manifest_path, const String & data_dir);
-
-    static std::tuple<ReadBufferPtr, size_t, PageFieldSizes> getReadBuffer(const Page & page, const String & data_dir);
 };
 
 } // namespace DB::PS::V3

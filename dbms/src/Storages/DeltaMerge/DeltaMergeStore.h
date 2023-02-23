@@ -306,6 +306,7 @@ public:
     bool ingestSegmentIntoSegmentUsingSplit(
         DMContext & dm_context,
         const SegmentPtr & segment,
+        const RowKeyRange & ingest_range,
         const SegmentPtr & target_segment);
 
     void ingestSegmentFromCheckpointPath(const DMContextPtr & dm_context, //

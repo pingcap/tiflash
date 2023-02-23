@@ -72,8 +72,9 @@ using ChecksumClass = Digest::CRC64;
   *********************/
 
 template <typename Trait>
-BlobStore<Trait>::BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobConfig & config_)
+BlobStore<Trait>::BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobConfig & config_, const String & remote_dir)
     : delegator(std::move(delegator_))
+    , remote_page_reader(remote_dir.empty() ? nullptr : std::make_shared<RemotePageReader>(remote_dir))
     , file_provider(file_provider_)
     , config(config_)
     , log(Logger::get(storage_name))
@@ -238,6 +239,7 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
             edit.putExternal(wb.getFullPageId(write.page_id));
             break;
         case WriteBatchWriteType::UPSERT:
+        case WriteBatchWriteType::PUT_REMOTE:
             throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }
     }
@@ -262,6 +264,24 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
         {
             switch (write.type)
             {
+            case WriteBatchWriteType::PUT_REMOTE:
+            {
+                PageEntryV3 entry;
+                entry.file_id = INVALID_BLOBFILE_ID;
+                entry.size = write.remote_data_location->size_in_file;
+                entry.tag = write.tag;
+                entry.remote_info = RemoteDataInfo{
+                    .data_location = *write.remote_data_location,
+                    .is_local_data_reclaimed = true,
+                };
+                if (!write.offsets.empty())
+                {
+                    // we can swap from WriteBatch instead of copying
+                    entry.field_offsets.swap(write.offsets);
+                }
+                edit.put(wb.getFullPageId(write.page_id), entry);
+                break;
+            }
             case WriteBatchWriteType::DEL:
             {
                 edit.del(wb.getFullPageId(write.page_id));
@@ -363,6 +383,24 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
             edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
+        case WriteBatchWriteType::PUT_REMOTE:
+        {
+            PageEntryV3 entry;
+            entry.file_id = INVALID_BLOBFILE_ID;
+            entry.size = write.remote_data_location->size_in_file;
+            entry.tag = write.tag;
+            entry.remote_info = RemoteDataInfo{
+                .data_location = *write.remote_data_location,
+                .is_local_data_reclaimed = true,
+            };
+            if (!write.offsets.empty())
+            {
+                // we can swap from WriteBatch instead of copying
+                entry.field_offsets.swap(write.offsets);
+            }
+            edit.put(wb.getFullPageId(write.page_id), entry);
+            break;
+        }
         case WriteBatchWriteType::DEL:
         {
             edit.del(wb.getFullPageId(write.page_id));
@@ -421,7 +459,7 @@ void BlobStore<Trait>::remove(const PageEntriesV3 & del_entries)
     {
         blob_updated.insert(entry.file_id);
         // External page size is 0
-        if (entry.size == 0)
+        if (entry.size == 0 || entry.file_id == INVALID_BLOBFILE_ID)
         {
             continue;
         }
@@ -580,8 +618,15 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::FieldReadInfos & 
     // allocate data_buf that can hold all pages with specify fields
 
     size_t buf_size = 0;
+    bool has_remote_data = false;
     for (auto & [page_id, entry, fields] : to_read)
     {
+        const auto & remote_info = entry.remote_info;
+        if (remote_info.has_value() && remote_info->is_local_data_reclaimed)
+        {
+            has_remote_data = true;
+            continue;
+        }
         (void)page_id;
         // Sort fields to get better read on disk
         std::sort(fields.begin(), fields.end());
@@ -592,7 +637,7 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::FieldReadInfos & 
     }
 
     // Read with `FieldReadInfos`, buf_size must not be 0.
-    if (buf_size == 0)
+    if (buf_size == 0 && !has_remote_data)
     {
         throw Exception("Reading with fields but entry size is 0.", ErrorCodes::LOGICAL_ERROR);
     }
@@ -608,52 +653,59 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::FieldReadInfos & 
     for (const auto & [page_id_v3, entry, fields] : to_read)
     {
         size_t read_size_this_entry = 0;
-        char * write_offset = pos;
-        for (const auto field_index : fields)
-        {
-            // TODO: Continuously fields can read by one system call.
-            const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
-            const auto size_to_read = end_offset - beg_offset;
-            auto blob_file = read(page_id_v3, entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
-            fields_offset_in_page.emplace(field_index, read_size_this_entry);
-
-            if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
-            {
-                const auto expect_checksum = entry.field_offsets[field_index].second;
-                ChecksumClass digest;
-                digest.update(write_offset, size_to_read);
-                auto field_checksum = digest.checksum();
-                if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
-                {
-                    throw Exception(
-                        fmt::format("Reading with fields meet checksum not match "
-                                    "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
-                                    "[field_index={}] [field_offset={}] [field_size={}] "
-                                    "[entry={}] [file={}]",
-                                    page_id_v3,
-                                    expect_checksum,
-                                    field_checksum,
-                                    field_index,
-                                    beg_offset,
-                                    size_to_read,
-                                    entry.toDebugString(),
-                                    blob_file->getPath()),
-                        ErrorCodes::CHECKSUM_DOESNT_MATCH);
-                }
-            }
-
-            read_size_this_entry += size_to_read;
-            write_offset += size_to_read;
-        }
-
+        const auto & remote_info = entry.remote_info;
         Page page;
-        page.data = ByteBuffer(pos, write_offset);
-        page.mem_holder = mem_holder;
-        page.field_offsets.swap(fields_offset_in_page);
-        fields_offset_in_page.clear();
-        page_map.emplace(ExternalIdTrait::getPageMapKey(page_id_v3), std::move(page));
+        if (remote_info.has_value() && remote_info->is_local_data_reclaimed)
+        {
+            page = remote_page_reader->read(remote_info->data_location, entry, fields);
+        }
+        else
+        {
+            char * write_offset = pos;
+            for (const auto field_index : fields)
+            {
+                // TODO: Continuously fields can read by one system call.
+                const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
+                const auto size_to_read = end_offset - beg_offset;
+                auto blob_file = read(page_id_v3, entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
+                fields_offset_in_page.emplace(field_index, read_size_this_entry);
 
-        pos = write_offset;
+                if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
+                {
+                    const auto expect_checksum = entry.field_offsets[field_index].second;
+                    ChecksumClass digest;
+                    digest.update(write_offset, size_to_read);
+                    auto field_checksum = digest.checksum();
+                    if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
+                    {
+                        throw Exception(
+                            fmt::format("Reading with fields meet checksum not match "
+                                        "[page_id={}] [expected=0x{:X}] [actual=0x{:X}] "
+                                        "[field_index={}] [field_offset={}] [field_size={}] "
+                                        "[entry={}] [file={}]",
+                                        page_id_v3,
+                                        expect_checksum,
+                                        field_checksum,
+                                        field_index,
+                                        beg_offset,
+                                        size_to_read,
+                                        entry.toDebugString(),
+                                        blob_file->getPath()),
+                            ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                    }
+                }
+
+                read_size_this_entry += size_to_read;
+                write_offset += size_to_read;
+            }
+            page.data = ByteBuffer(pos, write_offset);
+            page.mem_holder = mem_holder;
+            page.field_offsets.swap(fields_offset_in_page);
+            fields_offset_in_page.clear();
+
+            pos = write_offset;
+        }
+        page_map.emplace(ExternalIdTrait::getPageMapKey(page_id_v3), std::move(page));
     }
 
     if (unlikely(pos != data_buf + buf_size))
@@ -730,15 +782,23 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::PageIdAndEntries 
             }
         }
 
+        const auto & remote_info = entry.remote_info;
         Page page;
-        page.data = ByteBuffer(pos, pos + entry.size);
-        page.mem_holder = mem_holder;
-
-        // Calculate the field_offsets from page entry
-        for (size_t index = 0; index < entry.field_offsets.size(); index++)
+        if (remote_info.has_value() && remote_info->is_local_data_reclaimed)
         {
-            const auto offset = entry.field_offsets[index].first;
-            page.field_offsets.emplace(index, offset);
+            page = remote_page_reader->read(remote_info->data_location, entry);
+        }
+        else
+        {
+            page.data = ByteBuffer(pos, pos + entry.size);
+            page.mem_holder = mem_holder;
+
+            // Calculate the field_offsets from page entry
+            for (size_t index = 0; index < entry.field_offsets.size(); index++)
+            {
+                const auto offset = entry.field_offsets[index].first;
+                page.field_offsets.emplace(index, offset);
+            }
         }
 
         page_map.emplace(ExternalIdTrait::getPageMapKey(page_id_v3), std::move(page));
@@ -760,10 +820,22 @@ Page BlobStore<Trait>::read(const typename Trait::PageIdAndEntry & id_entry, con
 {
     const auto & [page_id_v3, entry] = id_entry;
     const size_t buf_size = entry.size;
+    const auto & remote_info = id_entry.second.remote_info;
 
-    if (!entry.isValid())
+    if (!entry.isValid() && !remote_info.has_value())
     {
         return Page::invalidPage();
+    }
+
+    if (remote_info.has_value() && remote_info->is_local_data_reclaimed)
+    {
+        // TODO: write page into local blob_store for later read
+        LOG_DEBUG(log, fmt::format("begin to read from remote {} size {} offset {} entry {}",
+                                   *(remote_info->data_location.data_file_id),
+                                   remote_info->data_location.size_in_file,
+                                   remote_info->data_location.offset_in_file,
+                                   entry.toDebugString()));
+        return remote_page_reader->read(remote_info->data_location, entry);
     }
 
     // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.

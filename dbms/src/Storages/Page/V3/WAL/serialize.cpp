@@ -53,6 +53,19 @@ inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf)
         writeIntBinary(off, buf);
         writeIntBinary(checksum, buf);
     }
+    if (entry.remote_info.has_value())
+    {
+        writeIntBinary(static_cast<UInt64>(1), buf);
+        writeIntBinary(entry.remote_info->is_local_data_reclaimed, buf);
+        writeIntBinary(entry.remote_info->data_location.offset_in_file, buf);
+        writeIntBinary(entry.remote_info->data_location.size_in_file, buf);
+        writeIntBinary(entry.remote_info->data_location.store_id, buf);
+        writeStringBinary(*(entry.remote_info->data_location.data_file_id), buf);
+    }
+    else
+    {
+        writeIntBinary(static_cast<UInt64>(0), buf);
+    }
 }
 
 inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry)
@@ -78,6 +91,20 @@ inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry)
             readIntBinary(field_checksum, buf);
             entry.field_offsets.emplace_back(field_offset, field_checksum);
         }
+    }
+    UInt64 has_remote_info;
+    readIntBinary(has_remote_info, buf);
+    if (has_remote_info)
+    {
+        RemoteDataInfo remote_info;
+        readIntBinary(remote_info.is_local_data_reclaimed, buf);
+        readIntBinary(remote_info.data_location.offset_in_file, buf);
+        readIntBinary(remote_info.data_location.size_in_file, buf);
+        readIntBinary(remote_info.data_location.store_id, buf);
+        String data_file_id;
+        readStringBinary(data_file_id, buf);
+        remote_info.data_location.data_file_id = std::make_shared<String>(data_file_id);
+        entry.remote_info = remote_info;
     }
 }
 

@@ -121,6 +121,7 @@ public:
         auto remote_source = TiFlashTestEnv::getTemporaryPath(TRACING_NAME) + "/";
         TiFlashTestEnv::tryRemovePath(remote_source, true);
         TiFlashTestEnv::getGlobalContext().setRemoteDataServiceSource(remote_source);
+        TiFlashTestEnv::getGlobalContext().initializeWriteNodePageStorage(TiFlashTestEnv::getGlobalContext().getPathPool(), TiFlashTestEnv::getGlobalContext().getFileProvider());
         if (!TiFlashTestEnv::getGlobalContext().getReadNodePageStorage())
         {
             TiFlashTestEnv::getGlobalContext().initializeReadNodePageStorage(TiFlashTestEnv::getGlobalContext().getPathPool(), TiFlashTestEnv::getGlobalContext().getFileProvider());

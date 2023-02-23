@@ -47,6 +47,7 @@ message EntryDataLocation {
 
     uint64 offset_in_file = 2;
     uint64 size_in_file = 3;
+    uint64 store_id = 4;
 }
 
 message EditRecord {
