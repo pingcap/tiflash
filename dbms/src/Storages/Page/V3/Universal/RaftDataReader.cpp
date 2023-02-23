@@ -20,7 +20,7 @@ namespace DB
 // But we don't want to scan data unrelated to raft.
 // We notice that all raft related key start with the byte `0x01`,
 // so we will manually set an end value `0x02` when proxy pass an empty end key for range scan.
-char RaftDataReader::raft_data_end_key[1] = {2};
+char RaftDataReader::raft_data_end_key[1] = {0x02};
 
 Page RaftDataReader::read(const UniversalPageId & page_id)
 {
