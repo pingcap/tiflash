@@ -12,19 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Core/SpillHandler.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_during_spill[];
+} // namespace FailPoints
 
-SpillHandler::SpillWriter::SpillWriter(const FileProviderPtr & file_provider, const String & file_name, const Block & header, size_t spill_version)
-    : file_buf(file_provider, file_name, EncryptionPath(file_name, ""))
+SpillHandler::SpillWriter::SpillWriter(const FileProviderPtr & file_provider, const String & file_name, bool append_write, const Block & header, size_t spill_version)
+    : file_buf(file_provider, file_name, EncryptionPath(file_name, ""), true, nullptr, DBMS_DEFAULT_BUFFER_SIZE, append_write ? O_APPEND | O_WRONLY : -1)
     , compressed_buf(file_buf)
 {
-    /// note this implicitly assumes that a SpillWriter will always write to a new file,
-    /// if we support append write, don't need to write the spill version again
-    writeVarUInt(spill_version, compressed_buf);
+    if (!append_write)
+        writeVarUInt(spill_version, compressed_buf);
     out = std::make_unique<NativeBlockOutputStream>(compressed_buf, spill_version, header);
     out->writePrefix();
 }
@@ -44,43 +48,74 @@ void SpillHandler::SpillWriter::write(const Block & block)
     out->write(block);
 }
 
-SpillHandler::SpillHandler(Spiller * spiller_, std::unique_ptr<SpilledFile> && spilled_file, size_t partition_id_)
+SpillHandler::SpillHandler(Spiller * spiller_, size_t partition_id_)
     : spiller(spiller_)
     , partition_id(partition_id_)
+    , current_spilled_file_index(-1)
+    , writer(nullptr)
+{}
+
+std::pair<size_t, size_t> SpillHandler::setUpNextSpilledFile()
 {
+    assert(writer == nullptr);
+    auto [spilled_file, append_write] = spiller->getOrCreateSpilledFile(partition_id);
+    if (append_write)
+        prev_spill_details.merge(spilled_file->getSpillDetails());
     current_spill_file_name = spilled_file->path();
-    current_spilled_file_index = 0;
     spilled_files.push_back(std::move(spilled_file));
+    current_spilled_file_index = spilled_files.size() - 1;
+    writer = std::make_unique<SpillWriter>(spiller->config.file_provider, current_spill_file_name, append_write, spiller->input_schema, spiller->spill_version);
+    return std::make_pair(spilled_files[current_spilled_file_index]->getSpillDetails().rows, spilled_files[current_spilled_file_index]->getSpillDetails().data_bytes_uncompressed);
+}
+
+bool SpillHandler::isSpilledFileFull(UInt64 spilled_rows, UInt64 spilled_bytes)
+{
+    return (spiller->config.max_spilled_rows_per_file > 0 && spilled_rows >= spiller->config.max_spilled_rows_per_file) || (spiller->config.max_spilled_bytes_per_file > 0 && spilled_bytes >= spiller->config.max_spilled_bytes_per_file);
 }
 
 void SpillHandler::spillBlocks(const Blocks & blocks)
 {
-    ///  todo 1. set max_file_size and spill to new file if needed
-    ///   2. check the disk usage
+    ///  todo check the disk usage
     if (unlikely(blocks.empty()))
         return;
-    RUNTIME_CHECK_MSG(current_spilled_file_index >= 0, "{}: spill after the spill handler meeting error or finished.", spiller->config.spill_id);
+    RUNTIME_CHECK_MSG(current_spilled_file_index != INVALID_CURRENT_SPILLED_FILE_INDEX, "{}: spill after the spill handler meeting error or finished.", spiller->config.spill_id);
     try
     {
         Stopwatch watch;
-        RUNTIME_CHECK_MSG(spiller->spill_finished == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
-        LOG_INFO(spiller->logger, "Spilling {} blocks data into temporary file {}", blocks.size(), current_spill_file_name);
-        size_t spilled_data_size = 0;
-        if (unlikely(writer == nullptr))
-        {
-            writer = std::make_unique<SpillWriter>(spiller->config.file_provider, current_spill_file_name, blocks[0].cloneEmpty(), spiller->spill_version);
-        }
+        RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
+        auto block_size = blocks.size();
+        LOG_INFO(spiller->logger, "Spilling {} blocks data into temporary file {}", block_size, current_spill_file_name);
+
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_spill);
+
+        size_t total_rows = 0;
+        size_t rows_in_file = 0;
+        size_t bytes_in_file = 0;
         for (const auto & block : blocks)
         {
-            auto block_bytes_size = block.bytes();
+            if (unlikely(!block || block.rows() == 0))
+                continue;
+            if (unlikely(writer == nullptr))
+            {
+                std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();
+            }
+            auto rows = block.rows();
+            total_rows += rows;
+            rows_in_file += rows;
+            bytes_in_file += block.estimateBytesForSpill();
             writer->write(block);
-            spilled_data_size += block_bytes_size;
+            if (spiller->enable_append_write && isSpilledFileFull(rows_in_file, bytes_in_file))
+            {
+                spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
+                spilled_files[current_spilled_file_index]->markFull();
+                writer = nullptr;
+            }
         }
         double cost = watch.elapsedSeconds();
         time_cost += cost;
-        LOG_INFO(spiller->logger, "Finish Spilling data into temporary file {}, spilled data size: {}, time cost: {:.3f} sec.", current_spill_file_name, spilled_data_size, cost);
-        RUNTIME_CHECK_MSG(current_spilled_file_index >= 0, "{}: spill after the spill handler is finished.", spiller->config.spill_id);
-        RUNTIME_CHECK_MSG(spiller->spill_finished == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
+        LOG_INFO(spiller->logger, "Spilled {} rows from {} blocks into temporary file, time cost: {:.3f} sec.", total_rows, block_size, cost);
+        RUNTIME_CHECK_MSG(current_spilled_file_index != INVALID_CURRENT_SPILLED_FILE_INDEX, "{}: spill after the spill handler is finished.", spiller->config.spill_id);
+        RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
         return;
     }
     catch (...)
@@ -88,23 +123,33 @@ void SpillHandler::spillBlocks(const Blocks & blocks)
         /// mark the spill handler invalid
         writer = nullptr;
         spilled_files.clear();
-        current_spilled_file_index = -1;
+        current_spilled_file_index = INVALID_CURRENT_SPILLED_FILE_INDEX;
         throw Exception(fmt::format("Failed to spill blocks to disk for file {}, error: {}", current_spill_file_name, getCurrentExceptionMessage(false, false)));
     }
 }
 
 void SpillHandler::finish()
 {
-    if (likely(writer != nullptr))
+    /// it is guaranteed that once current_spilled_file_index >= 0, at least one block is written to spilled_files[current_spilled_file_index]
+    if (likely(current_spilled_file_index >= 0))
     {
-        auto spill_details = writer->finishWrite();
-        spilled_files[current_spilled_file_index]->updateSpillDetails(spill_details);
+        if (writer != nullptr)
+        {
+            spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
+            auto current_spill_details = spilled_files[current_spilled_file_index]->getSpillDetails();
+            if (!spiller->enable_append_write || isSpilledFileFull(current_spill_details.rows, current_spill_details.data_bytes_uncompressed))
+            {
+                /// always mark full if enable_append_write is false here, since if enable_append_write is false, all the files are treated as full file
+                spilled_files[current_spilled_file_index]->markFull();
+            }
+        }
 
         auto gen_spill_detail_info = [&]() {
             SpillDetails details{0, 0, 0};
             for (Int64 i = 0; i <= current_spilled_file_index; i++)
                 details.merge(spilled_files[i]->getSpillDetails());
-            return fmt::format("Spill {} rows in {:.3f} sec,"
+            details.subtract(prev_spill_details);
+            return fmt::format("Commit spilled data, details: spill {} rows in {:.3f} sec,"
                                " {:.3f} MiB uncompressed, {:.3f} MiB compressed, {:.3f} uncompressed bytes per row, {:.3f} compressed bytes per row, "
                                "compression rate: {:.3f} ({:.3f} rows/sec., {:.3f} MiB/sec. uncompressed, {:.3f} MiB/sec. compressed)",
                                details.rows,
@@ -121,10 +166,16 @@ void SpillHandler::finish()
         LOG_DEBUG(spiller->logger, gen_spill_detail_info());
         std::unique_lock lock(spiller->spilled_files[partition_id]->spilled_files_mutex);
         for (auto & spilled_file : spilled_files)
-            spiller->spilled_files[partition_id]->spilled_files.push_back(std::move(spilled_file));
+        {
+            if (!spilled_file->isFull())
+                spiller->spilled_files[partition_id]->mutable_spilled_files.push_back(std::move(spilled_file));
+            else
+                spiller->spilled_files[partition_id]->immutable_spilled_files.push_back(std::move(spilled_file));
+        }
         spilled_files.clear();
         spiller->has_spilled_data = true;
-        current_spilled_file_index = -1;
+        current_spilled_file_index = INVALID_CURRENT_SPILLED_FILE_INDEX;
+        RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
     }
 }
 

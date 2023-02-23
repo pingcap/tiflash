@@ -18,18 +18,22 @@
 
 namespace DB
 {
-
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 
 struct SpillConfig
 {
 public:
-    SpillConfig(const String & spill_dir_, const String & spill_id_, size_t max_spilled_size_per_spill_, const FileProviderPtr & file_provider_);
+    SpillConfig(const String & spill_dir_, const String & spill_id_, size_t max_cached_data_bytes_in_spiller_, size_t max_spilled_rows_per_file_, size_t max_spilled_bytes_per_file_, const FileProviderPtr & file_provider_);
     String spill_dir;
     String spill_id;
     String spill_id_as_file_name_prefix;
-    size_t max_spilled_size_per_spill;
+    /// soft limit of the max cached data bytes in spiller(used in Spiller::spillBlocksUsingBlockInputStream)
+    size_t max_cached_data_bytes_in_spiller;
+    /// soft limit of the max rows per spilled file
+    UInt64 max_spilled_rows_per_file;
+    /// soft limit of the max bytes per spilled file
+    UInt64 max_spilled_bytes_per_file;
     FileProviderPtr file_provider;
 };
 } // namespace DB

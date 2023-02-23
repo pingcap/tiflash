@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,8 @@ struct BinaryLeastBaseImpl<A, B, false>
     static Result apply(A a, B b)
     {
         /** gcc 4.9.2 successfully vectorizes a loop from this function. */
-        const Result tmp_a = static_cast<Result>(a); // NOLINT(bugprone-signed-char-misuse)
-        const Result tmp_b = static_cast<Result>(b); // NOLINT(bugprone-signed-char-misuse)
+        const auto tmp_a = static_cast<Result>(a); // NOLINT(bugprone-signed-char-misuse)
+        const auto tmp_b = static_cast<Result>(b); // NOLINT(bugprone-signed-char-misuse)
         return accurate::lessOp(tmp_a, tmp_b) ? tmp_a : tmp_b;
     }
     template <typename Result = ResultType>
@@ -50,8 +50,8 @@ struct BinaryLeastBaseImpl<A, B, true>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        const Result tmp_a = static_cast<Result>(a); // NOLINT(bugprone-signed-char-misuse)
-        const Result tmp_b = static_cast<Result>(b); // NOLINT(bugprone-signed-char-misuse)
+        const auto tmp_a = static_cast<Result>(a); // NOLINT(bugprone-signed-char-misuse)
+        const auto tmp_b = static_cast<Result>(b); // NOLINT(bugprone-signed-char-misuse)
         return tmp_a < tmp_b ? tmp_a : tmp_b;
     }
     template <typename Result = ResultType>
@@ -75,6 +75,7 @@ using FunctionTiDBLeast = FunctionVectorizedLeastGreatest<LeastImpl, FunctionBin
 void registerFunctionLeast(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTiDBLeast>();
+    factory.registerFunction<FunctionLeastGreatestString<true>>();
 }
 
 } // namespace DB

@@ -108,7 +108,6 @@ class ImitativeEnv
             /*main_data_paths*/ {path},
             /*latest_data_paths*/ {path},
             /*kvstore_paths*/ Strings{},
-            /*enable_raft_compatible_mode*/ true,
             global_context->getPathCapacity(),
             global_context->getFileProvider());
         TiFlashRaftConfig raft_config;

@@ -321,8 +321,9 @@ public:
 
     void assertNoErr(PipelineExecutorStatus & exec_status)
     {
-        auto err_msg = exec_status.getErrMsg();
-        ASSERT_TRUE(err_msg.empty()) << err_msg;
+        auto exception_ptr = exec_status.getExceptionPtr();
+        auto exception_msg = exec_status.getExceptionMsg();
+        ASSERT_TRUE(!exception_ptr) << exception_msg;
     }
 
 protected:
@@ -450,7 +451,7 @@ try
             on_err_event->schedule();
         }
         wait(exec_status);
-        auto err_msg = exec_status.getErrMsg();
+        auto err_msg = exec_status.getExceptionMsg();
         ASSERT_EQ(err_msg, OnErrEvent::err_msg) << err_msg;
         thread_manager->wait();
     };
@@ -496,8 +497,8 @@ try
 
         schedule(events);
         wait(exec_status);
-        auto err_msg = exec_status.getErrMsg();
-        ASSERT_TRUE(!err_msg.empty());
+        auto exception_ptr = exec_status.getExceptionPtr();
+        ASSERT_TRUE(exception_ptr);
     }
 }
 CATCH

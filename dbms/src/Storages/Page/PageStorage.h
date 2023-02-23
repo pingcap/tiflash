@@ -24,7 +24,7 @@
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/WALRecoveryMode.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchWrapper.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
@@ -51,19 +51,13 @@ class Context;
 class PageStorage;
 using PageStoragePtr = std::shared_ptr<PageStorage>;
 class RegionPersister;
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
-
-
-enum class PageStorageRunMode : UInt8
-{
-    ONLY_V2 = 1,
-    ONLY_V3 = 2,
-    MIX_MODE = 3,
-};
 
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageID. Store Page with the same PageID
@@ -234,10 +228,25 @@ class PageReader : private boost::noncopyable
 {
 public:
     /// Not snapshot read.
-    explicit PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, ReadLimiterPtr read_limiter_);
+    explicit PageReader(
+        const PageStorageRunMode & run_mode_,
+        StorageType tag_,
+        NamespaceId ns_id_,
+        PageStoragePtr storage_v2_,
+        PageStoragePtr storage_v3_,
+        UniversalPageStoragePtr uni_ps_,
+        ReadLimiterPtr read_limiter_);
 
     /// Snapshot read.
-    PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, PageStorage::SnapshotPtr snap_, ReadLimiterPtr read_limiter_);
+    PageReader(
+        const PageStorageRunMode & run_mode_,
+        StorageType tag_,
+        NamespaceId ns_id_,
+        PageStoragePtr storage_v2_,
+        PageStoragePtr storage_v3_,
+        UniversalPageStoragePtr uni_ps_,
+        PageStorage::SnapshotPtr snap_,
+        ReadLimiterPtr read_limiter_);
 
     ~PageReader();
 
@@ -269,14 +278,16 @@ using PageReaderPtr = std::shared_ptr<PageReader>;
 class PageWriter : private boost::noncopyable
 {
 public:
-    PageWriter(PageStorageRunMode run_mode_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_)
+    PageWriter(PageStorageRunMode run_mode_, StorageType tag_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, UniversalPageStoragePtr uni_ps_)
         : run_mode(run_mode_)
+        , tag(tag_)
         , storage_v2(storage_v2_)
         , storage_v3(storage_v3_)
+        , uni_ps(uni_ps_)
     {
     }
 
-    void write(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
+    void write(WriteBatchWrapper && write_batch, WriteLimiterPtr write_limiter) const;
 
     friend class RegionPersister;
 
@@ -291,6 +302,8 @@ private:
 #endif
     void writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
+    void writeIntoUni(UniversalWriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
+
     // A wrap of getSettings only used for `RegionPersister::gc`
     PageStorageConfig getSettings() const;
 
@@ -302,8 +315,10 @@ private:
 
 private:
     PageStorageRunMode run_mode;
+    StorageType tag;
     PageStoragePtr storage_v2;
     PageStoragePtr storage_v3;
+    UniversalPageStoragePtr uni_ps;
 };
 using PageWriterPtr = std::shared_ptr<PageWriter>;
 
