@@ -23,7 +23,6 @@
 #include <common/types.h>
 
 #include <boost/container_hash/hash_fwd.hpp>
-#include <memory>
 
 namespace std
 {

@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 
 #include <memory>
-
-#include "Common/TiFlashMetrics.h"
 
 namespace DB
 {
@@ -81,8 +80,8 @@ ColumnFileSchemaPtr SharedBlockSchemas::find(const Digest & digest)
     auto iter = column_file_schemas.find(digest);
     if (iter == column_file_schemas.end())
     {
-        return nullptr;
         GET_METRIC(tiflash_shared_block_schemas, type_miss_count).Increment();
+        return nullptr;
     }
 
     lru_queue.splice(lru_queue.end(), lru_queue, iter->second.queue_it);

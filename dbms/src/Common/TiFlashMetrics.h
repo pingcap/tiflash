@@ -279,8 +279,8 @@ namespace DB
         F(type_batch, {{"type", "batch"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()})) \
     M(tiflash_shared_block_schemas, "statistics about shared_block_schemas", Gauge,                                                                 \
         F(type_current_size, {{"type", "current_size"}}),                                                                                           \
-        F(type_still_used_when_evict, {{"type", "type_still_used_when_evict"}})                                                                     \
-        F(type_miss_count, {{"type", "type_miss_count"}})                                                                                           \
+        F(type_still_used_when_evict, {{"type", "type_still_used_when_evict"}}),                                                                    \
+        F(type_miss_count, {{"type", "type_miss_count"}}),                                                                                          \
         F(type_hit_count, {{"type", "type_hit_count"}})) \
 // clang-format on
 
