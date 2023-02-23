@@ -23,6 +23,7 @@
 #include <common/types.h>
 
 #include <boost/container_hash/hash_fwd.hpp>
+#include <memory>
 
 namespace std
 {
@@ -71,15 +72,39 @@ using ColumnFileSchemaPtr = std::shared_ptr<ColumnFileSchema>;
 class SharedBlockSchemas
 {
 private:
+    // we use LRU to store digest->weak_ptr<ColumnFileSchema>
+
     // we use sha256 to generate Digest for each ColumnFileSchema as the key of column_file_schemas,
     // to minimize the possibility of two different schemas having the same key in column_file_schemas.
-    // Besides, we use weak_ptr to ensure we can remove the ColumnFileSchema,
-    // when no one use it, to avoid too much memory usage.
-    LRUCache<Digest, std::weak_ptr<ColumnFileSchema>> column_file_schemas;
+
+    // Besides, we use weak_ptr to avoid extra memory usage when the ColumnFileSchema is not used by ColumnFiles.
+    // We can use weak_ptr to observe when the item is evicted by LRU, whether it still be used by ColumnFiles,
+    // to know whether the max_size is enough.
+
+    struct Holder;
+    using ColumnFileSchemaMap = std::unordered_map<Digest, Holder>;
+    using LRUQueue = std::list<Digest>;
+    using LRUQueueItr = typename LRUQueue::iterator;
+
+    struct Holder
+    {
+        std::weak_ptr<ColumnFileSchema> column_file_schema;
+        LRUQueueItr queue_it;
+    };
+
+private:
+    ColumnFileSchemaMap column_file_schemas;
+    LRUQueue lru_queue;
+
+    const size_t max_size;
+    std::mutex mutex;
+
+private:
+    void removeOverflow();
 
 public:
-    explicit SharedBlockSchemas(size_t max_size)
-        : column_file_schemas(max_size)
+    explicit SharedBlockSchemas(size_t max_size_)
+        : max_size(max_size_)
     {}
     ColumnFileSchemaPtr find(const Digest & digest);
 

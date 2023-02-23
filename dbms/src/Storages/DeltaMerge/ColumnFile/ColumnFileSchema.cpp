@@ -14,6 +14,10 @@
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 
+#include <memory>
+
+#include "Common/TiFlashMetrics.h"
+
 namespace DB
 {
 namespace DM
@@ -39,35 +43,81 @@ String ColumnFileSchema::toString() const
     return "{schema:" + (schema ? schema.dumpJsonStructure() : "none") + "}";
 }
 
+void SharedBlockSchemas::removeOverflow()
+{
+    size_t current_size = column_file_schemas.size();
+    while (current_size > max_size)
+    {
+        const auto & digest = lru_queue.front();
+
+        auto iter = column_file_schemas.find(digest);
+        if (iter == column_file_schemas.end())
+            throw Exception(String(__FUNCTION__) + " inconsistent", ErrorCodes::LOGICAL_ERROR);
+
+        const Holder & holder = iter->second;
+        if (auto p = holder.column_file_schema.lock(); p)
+        {
+            // If when the item is evicted, but the item is still be used by some ColumnFiles,
+            // we increment this metrics, to show maybe the max_size of SharedBlockSchemas is not enough now.
+            GET_METRIC(tiflash_shared_block_schemas, type_still_used_when_evict).Increment();
+        }
+
+        --current_size;
+        lru_queue.pop_front();
+        column_file_schemas.erase(iter);
+        GET_METRIC(tiflash_shared_block_schemas, type_current_size).Decrement();
+    }
+
+    if (current_size > (1ull << 63))
+    {
+        throw Exception(String(__FUNCTION__) + " inconsistent, current_size < 0", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+
 ColumnFileSchemaPtr SharedBlockSchemas::find(const Digest & digest)
 {
-    auto schema = column_file_schemas.get(digest);
-    if (schema)
-    {
-        return schema.get()->lock();
-    }
-    else
+    std::lock_guard lock(mutex);
+    auto iter = column_file_schemas.find(digest);
+    if (iter == column_file_schemas.end())
     {
         return nullptr;
+        GET_METRIC(tiflash_shared_block_schemas, type_miss_count).Increment();
     }
+
+    lru_queue.splice(lru_queue.end(), lru_queue, iter->second.queue_it);
+    GET_METRIC(tiflash_shared_block_schemas, type_hit_count).Increment();
+
+    return iter->second.column_file_schema.lock();
 }
 
 ColumnFileSchemaPtr SharedBlockSchemas::getOrCreate(const Block & block)
 {
     Digest digest = hashSchema(block);
 
-    auto schema_outer = column_file_schemas.get(digest);
-    if (schema_outer)
+    std::lock_guard lock(mutex);
+    auto iter = column_file_schemas.find(digest);
+    if (iter != column_file_schemas.end())
     {
-        auto schema = schema_outer.get()->lock();
-        if (schema)
+        if (auto schema = iter->second.column_file_schema.lock(); schema)
         {
+            GET_METRIC(tiflash_shared_block_schemas, type_hit_count).Increment();
+            lru_queue.splice(lru_queue.end(), lru_queue, iter->second.queue_it);
             return schema;
         }
     }
 
+    GET_METRIC(tiflash_shared_block_schemas, type_miss_count).Increment();
     auto schema = std::make_shared<ColumnFileSchema>(block);
-    column_file_schemas.set(digest, std::make_shared<std::weak_ptr<ColumnFileSchema>>(schema));
+    auto pair = column_file_schemas.emplace(std::piecewise_construct, std::forward_as_tuple(digest), std::forward_as_tuple());
+    auto & holder = pair.first->second;
+    holder.queue_it = lru_queue.insert(lru_queue.end(), digest);
+
+    holder.column_file_schema = schema;
+    GET_METRIC(tiflash_shared_block_schemas, type_current_size).Increment();
+
+    removeOverflow();
+
     return schema;
 }
 
