@@ -101,7 +101,7 @@ private:
     ReportCollector report;
     std::unique_ptr<LogWriter> writer;
     std::unique_ptr<LogReader> reader;
-    Poco::Logger * log;
+    LoggerPtr log;
 
 protected:
     String path;
@@ -115,7 +115,7 @@ protected:
 
 public:
     LogFileRWTest()
-        : log(&Poco::Logger::get("LogFileRWTest"))
+        : log(Logger::get())
         , recyclable_log(std::get<0>(GetParam()))
         , allow_retry_read(std::get<1>(GetParam()))
     {

@@ -12,29 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#include <DataStreams/BlockStreamProfileInfo.h>
+#include <Flash/Statistics/BaseRuntimeStatistics.h>
 
 namespace DB
 {
-DAGBlockOutputStream::DAGBlockOutputStream(Block && header_, std::unique_ptr<DAGResponseWriter> response_writer_)
-    : header(std::move(header_))
-    , response_writer(std::move(response_writer_))
-{}
-
-void DAGBlockOutputStream::writePrefix()
+void BaseRuntimeStatistics::append(const BlockStreamProfileInfo & profile_info)
 {
-    response_writer->prepare(header);
+    rows += profile_info.rows;
+    blocks += profile_info.blocks;
+    bytes += profile_info.bytes;
+    execution_time_ns = std::max(execution_time_ns, profile_info.execution_time);
 }
-
-void DAGBlockOutputStream::write(const Block & block)
-{
-    response_writer->write(block);
-}
-
-void DAGBlockOutputStream::writeSuffix()
-{
-    // todo error handle
-    response_writer->flush();
-}
-
 } // namespace DB
