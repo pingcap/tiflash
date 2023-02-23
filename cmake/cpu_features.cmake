@@ -99,8 +99,8 @@ elseif (ARCH_AMD64)
     # `haswell` was released since 2013 with cpu feature avx2, bmi2. It's a practical arch for optimizer
     option (TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT "Use instructions based on architecture `haswell` on x86_64" ON)
 
-    option (NO_SSE42_OR_HIGHER "Disable SSE42 or higher on x86_64 for maximum compatibility with older/embedded hardware." OFF)
-    if (NO_SSE42_OR_HIGHER)
+    option (NO_AVX_OR_HIGHER "Disable SSE42 or higher on x86_64 for maximum compatibility with older/embedded hardware." OFF)
+    if (NO_AVX_OR_HIGHER)
         SET(TIFLASH_ENABLE_AVX_SUPPORT OFF)
         SET(TIFLASH_ENABLE_AVX512_SUPPORT OFF)
         SET (TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT OFF)
