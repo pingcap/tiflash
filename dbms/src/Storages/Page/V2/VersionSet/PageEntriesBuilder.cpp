@@ -49,6 +49,9 @@ void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
         case WriteBatchWriteType::UPSERT:
             current_version->upsertPage(rec.page_id, rec.entry);
             break;
+        case WriteBatchWriteType::PUT_REMOTE:
+            throw Exception("", ErrorCodes::LOGICAL_ERROR);
+            break;
         }
     }
 }

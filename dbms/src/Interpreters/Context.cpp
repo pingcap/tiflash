@@ -1770,6 +1770,7 @@ void Context::initializeWriteNodePageStorage(const PathPool & path_pool, const F
         "write",
         path_pool.getPSDiskDelegatorGlobalMulti("write"),
         config,
+        config.ps_remote_directory,
         file_provider);
     shared->ps_write->restore();
     LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
@@ -1781,7 +1782,7 @@ void Context::initializeReadNodePageStorage(const PathPool & path_pool, const Fi
     RUNTIME_CHECK_MSG(shared->ps_read == nullptr, "UniversalPageStorage(ReadNode) has already been initialized");
 
     shared->ps_read = std::make_shared<UniversalPageStorageWrapper>(*this);
-    shared->ps_read->uni_page_storage = UniversalPageStorage::create("read", path_pool.getPSDiskDelegatorGlobalMulti("read"), {}, file_provider);
+    shared->ps_read->uni_page_storage = UniversalPageStorage::create("read", path_pool.getPSDiskDelegatorGlobalMulti("read"), {}, "", file_provider);
     shared->ps_read->restore();
     LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(ReadNode)");
 }

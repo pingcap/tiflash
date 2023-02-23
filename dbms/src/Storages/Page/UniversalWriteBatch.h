@@ -72,6 +72,8 @@ private:
         UInt64 page_offset;
         UInt64 page_checksum;
         PageFileIdAndLevel target_file_id;
+
+        std::optional<PS::V3::RemoteDataLocation> remote_data_location = std::nullopt;
     };
     using Writes = std::vector<Write>;
 
@@ -102,13 +104,14 @@ public:
                 .page_offset = w.page_offset,
                 .page_checksum = w.page_checksum,
                 .target_file_id = w.target_file_id,
+                .remote_data_location = w.remote_data_location,
             });
         }
         us_batch.total_data_size = batch.getTotalDataSize();
         return us_batch;
     }
 
-    void putPage(UniversalPageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
+    void putPage(const UniversalPageId & page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
         // Convert from data_sizes to the offset of each field
         PageFieldOffsetChecksums offsets;
@@ -135,13 +138,19 @@ public:
         writes.emplace_back(std::move(w));
     }
 
-    void putPage(UniversalPageId page_id, UInt64 tag, std::string_view data)
+    void putPage(const UniversalPageId & page_id, UInt64 tag, std::string_view data)
     {
         auto buffer_ptr = std::make_shared<ReadBufferFromOwnString>(data);
         putPage(page_id, tag, buffer_ptr, data.size());
     }
 
-    void putExternal(UniversalPageId page_id, UInt64 tag)
+    void putRemotePage(const UniversalPageId & page_id, UInt64 tag, const PS::V3::RemoteDataLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums = {})
+    {
+        Write w{WriteBatchWriteType::PUT_REMOTE, page_id, tag, nullptr, /* data_size */ 0, "", std::move(offset_and_checksums), 0, 0, {}, data_location};
+        writes.emplace_back(std::move(w));
+    }
+
+    void putExternal(const UniversalPageId & page_id, UInt64 tag)
     {
         // External page's data is not managed by PageStorage, which means data is empty.
         Write w{WriteBatchWriteType::PUT_EXTERNAL, page_id, tag, nullptr, 0, "", {}, 0, 0, {}};
@@ -149,13 +158,13 @@ public:
     }
 
     // Add RefPage{ref_id} -> Page{page_id}
-    void putRefPage(UniversalPageId ref_id, UniversalPageId page_id)
+    void putRefPage(const UniversalPageId & ref_id, const UniversalPageId & page_id)
     {
         Write w{WriteBatchWriteType::REF, ref_id, 0, nullptr, 0, page_id, {}, 0, 0, {}};
         writes.emplace_back(std::move(w));
     }
 
-    void delPage(UniversalPageId page_id)
+    void delPage(const UniversalPageId & page_id)
     {
         Write w{WriteBatchWriteType::DEL, page_id, 0, nullptr, 0, "", {}, 0, 0, {}};
         writes.emplace_back(std::move(w));

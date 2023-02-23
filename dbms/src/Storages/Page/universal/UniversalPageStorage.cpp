@@ -20,6 +20,7 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
 #include <Storages/Page/universal/UniversalPageStorage.h>
+#include <Storages/Page/universal/RemotePageReader.h>
 
 namespace DB
 {
@@ -28,6 +29,7 @@ UniversalPageStoragePtr UniversalPageStorage::create(
     String name,
     PSDiskDelegatorPtr delegator,
     const PageStorageConfig & config,
+    const String & remote_dir,
     const FileProviderPtr & file_provider)
 {
     UniversalPageStoragePtr storage = std::make_shared<UniversalPageStorage>(name, delegator, config, file_provider);
@@ -35,7 +37,8 @@ UniversalPageStoragePtr UniversalPageStorage::create(
         name,
         file_provider,
         delegator,
-        PS::V3::BlobConfig::from(config));
+        PS::V3::BlobConfig::from(config),
+        remote_dir);
     return storage;
 }
 
@@ -67,8 +70,8 @@ Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimit
         snapshot = this->getSnapshot("");
     }
 
-    auto page_entry = throw_on_not_exist ? page_directory->getByID(page_id, snapshot) : page_directory->getByIDOrNull(page_id, snapshot);
-    return blob_store->read(page_entry, read_limiter);
+    auto page_id_and_entry = throw_on_not_exist ? page_directory->getByID(page_id, snapshot) : page_directory->getByIDOrNull(page_id, snapshot);
+    return blob_store->read(page_id_and_entry, read_limiter);
 }
 
 UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
@@ -179,6 +182,26 @@ DB::PageEntry UniversalPageStorage::getEntry(const UniversalPageId & page_id, Sn
         entry_ret.checksum = entry.checksum;
 
         return entry_ret;
+    }
+    catch (DB::Exception & e)
+    {
+        LOG_WARNING(log, "{}", e.message());
+        return {.file_id = INVALID_BLOBFILE_ID}; // return invalid PageEntry
+    }
+}
+
+DB::PS::V3::PageEntryV3 UniversalPageStorage::getEntryV3(const UniversalPageId & page_id, SnapshotPtr snapshot)
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot("");
+    }
+
+    try
+    {
+        const auto & [id, entry] = page_directory->getByIDOrNull(page_id, snapshot);
+        (void)id;
+        return entry;
     }
     catch (DB::Exception & e)
     {

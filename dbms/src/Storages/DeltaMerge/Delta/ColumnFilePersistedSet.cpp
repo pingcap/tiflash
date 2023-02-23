@@ -108,26 +108,24 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restoreFromCheckpoint( //
     auto & storage_pool = context.storage_pool;
     auto target_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Meta), ns_id, id);
     auto meta_page = temp_ps->read(target_id);
-    auto [meta_buf, meta_buf_size, _] = PS::V3::CheckpointPageManager::getReadBuffer(meta_page, checkpoint_info.checkpoint_data_dir);
+    ReadBufferFromMemory meta_buf(meta_page.data.begin(), meta_page.data.size());
     auto column_files = deserializeSavedRemoteColumnFiles(
         context,
         segment_range,
-        *meta_buf,
+        meta_buf,
         temp_ps,
         checkpoint_info.checkpoint_store_id,
         ns_id,
         wbs);
-    RUNTIME_CHECK(meta_buf->count(), meta_buf_size);
     ColumnFilePersisteds new_column_files;
     for (auto & column_file : column_files)
     {
         if (auto * t = column_file->tryToTinyFile(); t)
         {
             auto target_cf_id = StorageReader::toFullUniversalPageId(getStoragePrefix(TableStorageTag::Log), ns_id, t->getDataPageId());
-            auto cf_page = temp_ps->read(target_cf_id);
-            auto [cf_buf, cf_buf_size, field_sizes] = PS::V3::CheckpointPageManager::getReadBuffer(cf_page, checkpoint_info.checkpoint_data_dir);
+            auto entry = temp_ps->getEntryV3(target_cf_id, nullptr);
             auto new_cf_id = storage_pool->newLogPageId();
-            wbs.log.putPage(new_cf_id, 0, cf_buf, cf_buf_size, field_sizes);
+            wbs.log.putRemotePage(new_cf_id, 0, entry.remote_info->data_location, std::move(entry.field_offsets));
             new_column_files.push_back(t->cloneWith(new_cf_id));
         }
         else if (auto * d = column_file->tryToDeleteRange(); d)

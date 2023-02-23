@@ -43,6 +43,11 @@ BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobConfig &
 
 void BlobStats::restoreByEntry(const PageEntryV3 & entry)
 {
+    const auto & remote_info = entry.remote_info;
+    if (remote_info.has_value() && remote_info->is_local_data_reclaimed)
+    {
+        return;
+    }
     auto stat = blobIdToStat(entry.file_id);
     stat->restoreSpaceMap(entry.offset, entry.getTotalSize());
 }

@@ -272,6 +272,8 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                            page_file.getFileId(),
                            page_file.getLevel());
                     break;
+                case DB::WriteBatchWriteType::PUT_REMOTE:
+                    break;
                 }
             }
         }

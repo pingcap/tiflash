@@ -82,7 +82,7 @@ std::string readData(const std::string & checkpoint_data_dir, const RemoteDataLo
     return ret;
 }
 
-UniversalPageStoragePtr reuseOrCreatePageStorage(Context & context, uint64_t store_id, uint64_t version, const std::string & optimal, const std::string & checkpoint_data_dir)
+UniversalPageStoragePtr reuseOrCreatePageStorage(Context & context, uint64_t store_id, uint64_t version, const std::string & optimal, const std::string & remote_dir)
 {
     UNUSED(store_id, version);
     auto * log = &Poco::Logger::get("fast add");
@@ -97,17 +97,18 @@ UniversalPageStoragePtr reuseOrCreatePageStorage(Context & context, uint64_t sto
     {
         LOG_DEBUG(log, "no cache found for remote ps [store_id={}] [version={}]", store_id, version);
     }
-    auto local_ps = PS::V3::CheckpointPageManager::createTempPageStorage(context, optimal, checkpoint_data_dir);
+    auto local_ps = PS::V3::CheckpointPageManager::createTempPageStorage(context, optimal, remote_dir);
     local_ps_cache.insert(store_id, version, local_ps);
     return local_ps;
 }
 
-std::optional<RemoteMeta> fetchRemotePeerMeta(Context & context, const std::string & output_directory, const std::string & checkpoint_data_dir, uint64_t store_id, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper)
+std::optional<RemoteMeta> fetchRemotePeerMeta(Context & context, const std::string & remote_dir, uint64_t store_id, const std::string & storage_name, uint64_t region_id, uint64_t new_peer_id, TiFlashRaftProxyHelper * proxy_helper)
 {
     UNUSED(new_peer_id);
     auto * log = &Poco::Logger::get("fast add");
 
-    Poco::DirectoryIterator it(output_directory);
+    auto manifest_dir = composeManifestDirectory(remote_dir, store_id, storage_name);
+    Poco::DirectoryIterator it(manifest_dir);
     Poco::DirectoryIterator end;
     std::string optimal;
     auto optimal_index = 0;
@@ -127,14 +128,14 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(Context & context, const std::stri
         ++it;
     }
 
-    LOG_DEBUG(log, "use optimal manifest {} checkpoint_data_dir {}", optimal, checkpoint_data_dir);
+    LOG_DEBUG(log, "use optimal manifest {}", optimal);
 
     if (optimal.empty())
     {
         return std::nullopt;
     }
 
-    auto local_ps = reuseOrCreatePageStorage(context, store_id, optimal_index, optimal, checkpoint_data_dir);
+    auto local_ps = reuseOrCreatePageStorage(context, store_id, optimal_index, optimal, remote_dir);
 
     RemoteMeta remote_meta;
     remote_meta.remote_store_id = store_id;
@@ -145,12 +146,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(Context & context, const std::stri
         auto page = local_ps->read(apply_state_key, nullptr, {}, /* throw_on_not_exist */ false);
         if (page.isValid())
         {
-            auto [buf, buf_size, _] = PS::V3::CheckpointPageManager::getReadBuffer(page, checkpoint_data_dir);
-            std::string value;
-            value.resize(buf_size);
-            auto n = buf->readBig(value.data(), buf_size);
-            RUNTIME_CHECK(n == buf_size);
-            remote_meta.apply_state.ParseFromArray(value.data(), value.size());
+            remote_meta.apply_state.ParseFromArray(page.data.begin(), page.data.size());
         }
         else
         {
@@ -163,12 +159,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(Context & context, const std::stri
         auto page = local_ps->read(region_state_key, nullptr, {}, /* throw_on_not_exist */ false);
         if (page.isValid())
         {
-            auto [buf, buf_size, _] = PS::V3::CheckpointPageManager::getReadBuffer(page, checkpoint_data_dir);
-            std::string value;
-            value.resize(buf_size);
-            auto n = buf->readBig(value.data(), buf_size);
-            RUNTIME_CHECK(n == buf_size);
-            remote_meta.region_state.ParseFromArray(value.data(), value.size());
+            remote_meta.region_state.ParseFromArray(page.data.begin(), page.data.size());
         }
         else
         {
@@ -181,9 +172,8 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(Context & context, const std::stri
         auto page = local_ps->read(region_key, nullptr, {}, /* throw_on_not_exist */ false);
         if (page.isValid())
         {
-            auto [buf, buf_size, _] = PS::V3::CheckpointPageManager::getReadBuffer(page, checkpoint_data_dir);
-            remote_meta.region = Region::deserialize(*buf, proxy_helper);
-            RUNTIME_CHECK(buf_size == buf->count());
+            ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+            remote_meta.region = Region::deserialize(buf, proxy_helper);
         }
         else
         {
@@ -195,7 +185,7 @@ std::optional<RemoteMeta> fetchRemotePeerMeta(Context & context, const std::stri
     return remote_meta;
 }
 
-std::string composeOutputDirectory(const std::string & remote_dir, uint64_t store_id, const std::string & storage_name)
+std::string composeManifestDirectory(const std::string & remote_dir, uint64_t store_id, const std::string & storage_name)
 {
     return fmt::format(
         "{}/store_{}/ps_{}_manifest/",
@@ -241,8 +231,7 @@ std::pair<bool, std::optional<RemoteMeta>> selectRemotePeer(Context & context, U
     {
         if (store_id == current_store_id)
             continue;
-        auto remote_manifest_directory = composeOutputDirectory(remote_dir, store_id, storage_name);
-        auto maybe_choice = fetchRemotePeerMeta(context, remote_manifest_directory, remote_dir, store_id, region_id, new_peer_id, proxy_helper);
+        auto maybe_choice = fetchRemotePeerMeta(context, remote_dir, store_id, storage_name, region_id, new_peer_id, proxy_helper);
         if (maybe_choice.has_value())
         {
             choices.push_back(std::move(maybe_choice.value()));
@@ -384,8 +373,9 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
         UniversalWriteBatch wb;
         RaftLogReader raft_log_reader(*local_ps);
         raft_log_reader.traverseRaftLogForRegion(region_id, [&](const UniversalPageId & page_id, const DB::Page & page) {
-            auto [buf, buf_size, _] = PS::V3::CheckpointPageManager::getReadBuffer(page, checkpoint_data_dir);
-            wb.putPage(page_id, 0, buf, buf_size);
+            MemoryWriteBuffer write_buf;
+            write_buf.write(page.data.begin(), page.data.size());
+            wb.putPage(page_id, 0, write_buf.tryGetReadBuffer(), page.data.size());
         });
         wn_ps->write(std::move(wb));
 

@@ -454,6 +454,7 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
             this->applyRef(rec);
             break;
         case WriteBatchWriteType::UPSERT:
+        case WriteBatchWriteType::PUT_REMOTE:
             throw Exception("WriteType::UPSERT should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
             break;
         }
@@ -594,6 +595,8 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
         case WriteBatchWriteType::UPSERT:
             current->upsertPage(rec.page_id, rec.entry);
             break;
+        case WriteBatchWriteType::PUT_REMOTE:
+            throw Exception("", ErrorCodes::LOGICAL_ERROR);
         }
     }
 }

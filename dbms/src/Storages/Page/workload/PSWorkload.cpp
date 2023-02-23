@@ -126,7 +126,7 @@ void StressWorkload::initPageStorage(DB::PageStorageConfig & config, String path
     }
     else if (options.running_ps_version == 4)
     {
-        uni_ps = DB::UniversalPageStorage::create("stress_test", delegator, config, file_provider);
+        uni_ps = DB::UniversalPageStorage::create("stress_test", delegator, config, "", file_provider);
     }
     else
     {

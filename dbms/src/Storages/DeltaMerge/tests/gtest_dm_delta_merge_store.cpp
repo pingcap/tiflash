@@ -2926,10 +2926,17 @@ try
         store->flushCache(*db_context, RowKeyRange::newAll(false, 1), true);
     }
 
+    // write ColumnFileTiny
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, 2 * num_rows_write, false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        store->flushCache(*db_context, RowKeyRange::newAll(false, 1), true);
+    }
+
     // dump checkpoint
     auto page_storage = db_context->getWriteNodePageStorage();
     auto writer_info = std::make_shared<WriterInfo>();
-    auto checkpoint_dir = getTemporaryPath() + "/";
+    auto checkpoint_dir = TiFlashTestEnv::getTemporaryPath(TRACING_NAME) + "/";
     page_storage->page_directory->dumpRemoteCheckpoint(PageDirectory<PageDirectoryTrait>::DumpRemoteCheckpointOptions<BlobStoreTrait>{
         .temp_directory = checkpoint_dir + "temp/",
         .remote_directory = checkpoint_dir,
@@ -3014,7 +3021,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write / 2);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write / 2 + num_rows_write);
     }
 }
 CATCH
@@ -3078,7 +3085,7 @@ try
     // dump checkpoint
     auto page_storage = db_context->getWriteNodePageStorage();
     auto writer_info = std::make_shared<WriterInfo>();
-    auto checkpoint_dir = getTemporaryPath() + "/";
+    auto checkpoint_dir = TiFlashTestEnv::getTemporaryPath(TRACING_NAME) + "/";
     page_storage->page_directory->dumpRemoteCheckpoint(PageDirectory<PageDirectoryTrait>::DumpRemoteCheckpointOptions<BlobStoreTrait>{
         .temp_directory = checkpoint_dir + "temp/",
         .remote_directory = checkpoint_dir,
