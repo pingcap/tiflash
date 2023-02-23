@@ -17,6 +17,7 @@
 #include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
@@ -549,12 +550,14 @@ private:
         connection_profile_info.packets += 1;
     }
 
+private:
     mutable std::mutex mu;
     std::condition_variable cv_for_status_changed;
 
     TunnelStatus status;
 
     std::chrono::seconds timeout;
+    mutable std::optional<Stopwatch> timeout_stopwatch;
 
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;

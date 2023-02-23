@@ -333,13 +333,24 @@ bool MPPTunnel::isReadyForWrite() const
     switch (status)
     {
     case TunnelStatus::Unconnected:
+    {
+        if (timeout.count() > 0)
+        {
+            fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, throw Exception(tunnel_id + " is timeout"););
+            if (unlikely(!timeout_stopwatch))
+                timeout_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
+            if (timeout_stopwatch->elapsedSeconds() > timeout.count())
+                throw Exception(tunnel_id + " is timeout");
+        }
         return false;
+    }
     case TunnelStatus::Connected:
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         return tunnel_sender->isReadyForWrite();
     default:
         // Returns true directly for TunnelStatus::WaitingForSenderFinish and TunnelStatus::Finished,
-        // and then an exception will be thrown in `MPPTunnel::nonBlockingWrite`.
+        // and then handled by `nonBlockingWrite`.
+        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
         return true;
     }
 }
