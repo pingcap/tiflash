@@ -3,16 +3,17 @@
 
 ## Solve what problem?
 
-The current TiFlash architecture is a typical shared nothing architecture, which brings some insurmountable drawbacks:
+The current TiFlash architecture is a typical shared nothing architecture, which brings some drawbacks:
 
 1. Storage and computation cannot be scaled separately
-2. The update operation and the read operation are loaded on the same node and affect each other, including IO, CPU and other systems scramble for resources. The task of AP query is usually heavy and has a high suddenness.
-3. Slow Scaling, including requesting and starting new nodes, data and load rebalancing
-4. The cost of small clusters is high. This needs to be solved fundamentally by using the scale effect after implementing the serverless form
+2. The update operation and the read operation are loaded on the same nodes and affect each other, including IO, CPU and other systems resources. The task of AP query is usually heavy and has a high suddenness.
+3. Slow down scaling. Scaling needs to do data synchronization between TiFlash nodes.
+4. The cost-efficiency is not optimal. For example, there are only queries at night, but we need to keep TiFlash instances around.
 
 
 ## Basic ideas
 ![](images/2023-02-23-cloud-native-architecture-1.png)
+
 We split TiFlash node into the following nodes:
 
 1. <b>Write Node (WN)</b> is responsible for storing raft logs, decoding the data, and writing it to memtable. The data written to disk by memtable will be uploaded to S3 for persistence. And it triggers remote compaction as appropriate. It also provides data shopshot information for query, such as data files involved in query.
