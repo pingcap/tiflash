@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/ThresholdUtils.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
+#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
@@ -22,6 +24,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
+
 
 namespace DB
 {
@@ -120,8 +123,8 @@ void orderStreams(
                 order_descr,
                 settings.max_block_size,
                 limit,
-                settings.max_bytes_before_external_sort,
-                SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_spilled_size_per_spill, context.getFileProvider()),
+                getAverageThreshold(settings.max_bytes_before_external_sort, pipeline.streams.size()),
+                SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
                 log->identifier());
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
@@ -139,7 +142,7 @@ void orderStreams(
             limit,
             settings.max_bytes_before_external_sort,
             // todo use identifier_executor_id as the spill id
-            SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_spilled_size_per_spill, context.getFileProvider()),
+            SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
             log->identifier());
     }
 }
@@ -185,17 +188,15 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilt
     chain.addStep();
 
     // remove useless tmp column and keep the schema of local streams and remote streams the same.
-    NamesWithAliases project_cols;
     for (const auto & col : analyzer.getCurrentInputColumns())
     {
         chain.getLastStep().required_output.push_back(col.name);
-        project_cols.emplace_back(col.name, col.name);
     }
-    chain.getLastActions()->add(ExpressionAction::project(project_cols));
     ExpressionActionsPtr project_after_where = chain.getLastActions();
     chain.finalize();
     chain.clear();
 
+    RUNTIME_CHECK(!project_after_where->getActions().empty());
     return {before_where, filter_column_name, project_after_where};
 }
 
@@ -218,6 +219,23 @@ void executePushedDownFilter(
         // after filter, do project action to keep the schema of local streams and remote streams the same.
         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
         stream->setExtraInfo("projection after push down filter");
+    }
+}
+
+void executeGeneratedColumnPlaceholder(
+    size_t remote_read_streams_start_index,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
+    LoggerPtr log,
+    DAGPipeline & pipeline)
+{
+    if (generated_column_infos.empty())
+        return;
+    assert(remote_read_streams_start_index <= pipeline.streams.size());
+    for (size_t i = 0; i < remote_read_streams_start_index; ++i)
+    {
+        auto & stream = pipeline.streams[i];
+        stream = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(stream, generated_column_infos, log->identifier());
+        stream->setExtraInfo("generated column placeholder above table scan");
     }
 }
 } // namespace DB

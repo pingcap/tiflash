@@ -111,6 +111,8 @@ public:
     /// Approximate number of bytes in memory - for profiling and limits.
     size_t bytes() const;
 
+    size_t estimateBytesForSpill() const;
+
     /// Approximate number of bytes between [offset, offset+limit) in memory - for profiling and limits.
     size_t bytes(size_t offset, size_t limit) const;
 
@@ -170,7 +172,11 @@ using Blocks = std::vector<Block>;
 using BlocksList = std::list<Block>;
 using BucketBlocksListMap = std::map<Int32, BlocksList>;
 
-Block mergeBlocks(Blocks && blocks);
+/// join blocks by columns
+Block hstackBlocks(Blocks && blocks, const Block & header);
+
+/// join blocks by rows
+Block vstackBlocks(Blocks && blocks);
 
 Block popBlocksListFront(BlocksList & blocks);
 

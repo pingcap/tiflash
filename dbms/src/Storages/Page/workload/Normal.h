@@ -53,7 +53,7 @@ public:
         // init all pages in PageStorage
         if (options.init_pages)
         {
-            static constexpr PageId MAX_PAGE_ID_DEFAULT = 1000;
+            static constexpr PageIdU64 MAX_PAGE_ID_DEFAULT = 1000;
             initPages(MAX_PAGE_ID_DEFAULT);
             LOG_INFO(StressEnv::logger, "All pages have been init.");
         }

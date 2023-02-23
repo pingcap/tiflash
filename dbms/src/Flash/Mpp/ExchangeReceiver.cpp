@@ -308,6 +308,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     const String & req_id,
     const String & executor_id,
     uint64_t fine_grained_shuffle_stream_count_,
+    Int32 local_tunnel_version_,
     const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
@@ -321,6 +322,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
+    , local_tunnel_version(local_tunnel_version_)
     , data_size_in_queue(0)
     , disaggregated_dispatch_reqs(disaggregated_dispatch_reqs_)
 {
@@ -409,9 +411,9 @@ void ExchangeReceiverBase<RPCContext>::prepareMsgChannels()
 {
     if (enable_fine_grained_shuffle_flag)
         for (size_t i = 0; i < output_stream_count; ++i)
-            msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+            msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
     else
-        msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+        msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
 }
 
 template <typename RPCContext>
@@ -452,39 +454,39 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
             async_requests.push_back(std::move(req));
         else if (req.is_local)
         {
-            String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
+            if (local_tunnel_version == 1)
+            {
+                setUpConnectionWithReadLoop(std::move(req));
+            }
+            else
+            {
+                LOG_INFO(exc_log, "refined local tunnel is enabled");
+                String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
 
-            LocalRequestHandler local_request_handler(
-                getMemoryTracker(),
-                [this](bool meet_error, const String & local_err_msg) {
-                    this->connectionDone(meet_error, local_err_msg, exc_log);
-                },
-                [this]() {
-                    this->connectionLocalDone();
-                },
-                [this]() {
-                    this->addLocalConnectionNum();
-                },
-                ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
+                LocalRequestHandler local_request_handler(
+                    getMemoryTracker(),
+                    [this](bool meet_error, const String & local_err_msg) {
+                        this->connectionDone(meet_error, local_err_msg, exc_log);
+                    },
+                    [this]() {
+                        this->connectionLocalDone();
+                    },
+                    [this]() {
+                        this->addLocalConnectionNum();
+                    },
+                    ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
 
-            rpc_context->establishMPPConnectionLocal(
-                req,
-                req.source_index,
-                local_request_handler,
-                enable_fine_grained_shuffle_flag);
-            --connection_uncreated_num;
+                rpc_context->establishMPPConnectionLocalV2(
+                    req,
+                    req.source_index,
+                    local_request_handler,
+                    enable_fine_grained_shuffle_flag);
+                --connection_uncreated_num;
+            }
         }
         else
         {
-            thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
-                if (enable_fine_grained_shuffle_flag)
-                    readLoop<true>(req);
-                else
-                    readLoop<false>(req);
-            });
-
-            ++thread_count;
-            --connection_uncreated_num;
+            setUpConnectionWithReadLoop(std::move(req));
         }
     }
 
@@ -502,6 +504,20 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         ++thread_count;
         connection_uncreated_num -= async_conn_num;
     }
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::setUpConnectionWithReadLoop(Request && req)
+{
+    thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
+        if (enable_fine_grained_shuffle_flag)
+            readLoop<true>(req);
+        else
+            readLoop<false>(req);
+    });
+
+    ++thread_count;
+    --connection_uncreated_num;
 }
 
 template <typename RPCContext>
@@ -565,10 +581,11 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
     try
     {
         auto status = RPCContext::getStatusOK();
-        ReceiverChannelWriter channel_writer(&msg_channels, req_info, log, &data_size_in_queue, ReceiverMode::Sync);
+        ReceiverMode recv_mode = req.is_local ? ReceiverMode::Local : ReceiverMode::Sync;
+        ReceiverChannelWriter channel_writer(&msg_channels, req_info, log, &data_size_in_queue, recv_mode);
         for (int i = 0; i < max_retry_times; ++i)
         {
-            auto reader = rpc_context->makeSyncReader(req);
+            auto reader = rpc_context->makeReader(req);
             bool has_data = false;
             for (;;)
             {
@@ -817,6 +834,7 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
     const LoggerPtr & log)
 {
     Int32 copy_live_connections;
+    String first_err_msg = local_err_msg;
     {
         std::lock_guard lock(mu);
 
@@ -826,29 +844,39 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
                 state = ExchangeReceiverState::ERROR;
             if (err_msg.empty())
                 err_msg = local_err_msg;
+            else
+                first_err_msg = err_msg;
         }
 
         copy_live_connections = --live_connections;
     }
 
-    LOG_DEBUG(
-        log,
-        "connection end. meet error: {}, err msg: {}, current alive connections: {}",
-        meet_error,
-        local_err_msg,
-        copy_live_connections);
-
+    if (meet_error)
+    {
+        LOG_WARNING(
+            log,
+            "connection end. meet error: {}, err msg: {}, current alive connections: {}",
+            meet_error,
+            local_err_msg,
+            copy_live_connections);
+    }
+    else
+    {
+        LOG_DEBUG(
+            log,
+            "connection end. Current alive connections: {}",
+            copy_live_connections);
+    }
+    assert(copy_live_connections >= 0);
     if (copy_live_connections == 0)
     {
         LOG_DEBUG(log, "All threads end in ExchangeReceiver");
         cv.notify_all();
     }
-    else if (copy_live_connections < 0)
-        throw Exception("alive_connection_num should not be less than 0!");
 
     if (meet_error || copy_live_connections == 0)
     {
-        LOG_INFO(exc_log, "receiver channels finished");
+        LOG_INFO(exc_log, "receiver channels finished, meet error: {}, error message: {}", meet_error, first_err_msg);
         finishAllMsgChannels();
     }
 }

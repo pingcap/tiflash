@@ -1,3 +1,13 @@
+~test_suite_name: SimplePipeline
+~result_index: 0
+~result:
+pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Filter|selection_1 -> Projection|project_2 -> Limit|limit_3 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_4
+@
+~test_suite_name: SimplePipeline
+~result_index: 1
+~result:
+pipeline#0: MockTableScan|table_scan_0 -> Projection|NonTiDBOperator
+@
 ~test_suite_name: StrangeQuery
 ~result_index: 0
 ~result:
@@ -11,21 +21,7 @@ pipeline#0: MockTableScan|table_scan_0 -> Limit|limit_1 -> Limit|limit_2 -> Limi
 ~test_suite_name: StrangeQuery
 ~result_index: 2
 ~result:
-Union: <for test>
- Expression x 10: <final projection>
-  SharedQuery: <restore concurrency>
-   MergeSorting, limit = 8
-    Union: <for partial order>
-     PartialSorting x 10: limit = 8
-      SharedQuery: <restore concurrency>
-       MergeSorting, limit = 9
-        Union: <for partial order>
-         PartialSorting x 10: limit = 9
-          SharedQuery: <restore concurrency>
-           MergeSorting, limit = 10
-            Union: <for partial order>
-             PartialSorting x 10: limit = 10
-              MockTableScan
+pipeline#0: MockTableScan|table_scan_0 -> TopN|topn_1 -> TopN|topn_2 -> TopN|topn_3 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: SingleQueryBlock
 ~result_index: 0
@@ -103,21 +99,12 @@ Union: <for test>
 ~test_suite_name: ParallelQuery
 ~result_index: 6
 ~result:
-Expression: <final projection>
- MergeSorting, limit = 10
-  PartialSorting: limit = 10
-   MockTableScan
+pipeline#0: MockTableScan|table_scan_0 -> TopN|topn_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 7
 ~result:
-Union: <for test>
- Expression x 5: <final projection>
-  SharedQuery: <restore concurrency>
-   MergeSorting, limit = 10
-    Union: <for partial order>
-     PartialSorting x 5: limit = 10
-      MockTableScan
+pipeline#0: MockTableScan|table_scan_0 -> TopN|topn_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 8
@@ -224,23 +211,12 @@ MockExchangeSender
 ~test_suite_name: ParallelQuery
 ~result_index: 18
 ~result:
-Union: <for test>
- MockExchangeSender x 10
-  Expression: <final projection>
-   SharedQuery: <restore concurrency>
-    MergeSorting, limit = 10
-     Union: <for partial order>
-      PartialSorting x 10: limit = 10
-       MockTableScan
+pipeline#0: MockTableScan|table_scan_0 -> TopN|topn_1 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_2
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 19
 ~result:
-MockExchangeSender
- Expression: <final projection>
-  MergeSorting, limit = 10
-   PartialSorting: limit = 10
-    MockTableScan
+pipeline#0: MockTableScan|table_scan_0 -> TopN|topn_1 -> Projection|NonTiDBOperator -> MockExchangeSender|exchange_sender_2
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 20
@@ -280,15 +256,7 @@ pipeline#0: MockTableScan|table_scan_0 -> Projection|project_1 -> Projection|pro
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 1
 ~result:
-Union: <for test>
- Expression x 10: <final projection>
-  Expression: <projection>
-   SharedQuery: <restore concurrency>
-    MergeSorting, limit = 10
-     Union: <for partial order>
-      PartialSorting x 10: limit = 10
-       Expression: <projection>
-        MockTableScan
+pipeline#0: MockTableScan|table_scan_0 -> Projection|project_1 -> TopN|topn_2 -> Projection|project_3 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: MultipleQueryBlockWithSource
 ~result_index: 2
@@ -393,13 +361,7 @@ Union: <for test>
 ~test_suite_name: FineGrainedShuffle
 ~result_index: 1
 ~result:
-Union: <for test>
- Expression x 10: <final projection>
-  SharedQuery: <restore concurrency>
-   MergeSorting, limit = 10
-    Union: <for partial order>
-     PartialSorting x 10: limit = 10
-      MockExchangeReceiver
+pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> TopN|topn_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: FineGrainedShuffle
 ~result_index: 2
@@ -417,13 +379,7 @@ Union: <for test>
 ~test_suite_name: FineGrainedShuffle
 ~result_index: 3
 ~result:
-Union: <for test>
- Expression x 10: <final projection>
-  SharedQuery: <restore concurrency>
-   MergeSorting, limit = 10
-    Union: <for partial order>
-     PartialSorting x 10: limit = 10
-      MockExchangeReceiver
+pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> TopN|topn_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: FineGrainedShuffleJoin
 ~result_index: 0
@@ -647,4 +603,31 @@ Union: <for test>
            Expression x 20: <before aggregation>
             Filter
              MockTableScan
+@
+~test_suite_name: ExpandPlan
+~result_index: 0
+~result:
+CreatingSets
+ Union: <for join>
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = project_4>, join_kind = Inner
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     Expression: <projection>
+      MockTableScan
+ Union: <for test>
+  Expression x 10: <final projection>
+   SharedQuery: <restore concurrency>
+    MergeSorting, limit = 2
+     Union: <for partial order>
+      PartialSorting x 10: limit = 2
+       Expression: <projection>
+        Expression: <remove useless column after join>
+         HashJoinProbe: <join probe, join_executor_id = Join_5, has_non_joined_data = false>
+          Expression: <final projection>
+           Expression: <expand, expand_executor_id = expand_2: grouping set [{<count(exchange_receiver_0)_collator_46 >}{<any(exchange_receiver_1)_collator_46 >}]>
+            Expression: <expr after aggregation>
+             SharedQuery: <restore concurrency>
+              ParallelAggregating, max_threads: 10, final: true
+               Expression x 10: <before aggregation>
+                MockExchangeReceiver
 @

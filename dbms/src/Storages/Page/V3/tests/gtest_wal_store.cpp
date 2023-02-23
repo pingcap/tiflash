@@ -15,9 +15,9 @@
 #include <Common/SyncPoint/Ctl.h>
 #include <Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -36,6 +36,8 @@
 
 namespace DB::PS::V3::tests
 {
+using u128::PageEntriesEdit;
+
 TEST(WALSeriTest, AllPuts)
 {
     PageEntryV3 entry_p1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
@@ -48,7 +50,7 @@ TEST(WALSeriTest, AllPuts)
     for (auto & rec : edit.getMutRecords())
         rec.version = ver20;
 
-    auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+    auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 2);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT);
@@ -74,7 +76,7 @@ try
     for (auto & rec : edit.getMutRecords())
         rec.version = ver21;
 
-    auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+    auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 6);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT);
@@ -118,7 +120,7 @@ TEST(WALSeriTest, Upserts)
     edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 3), ver21_1, entry_p3_2);
     edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 5), ver21_1, entry_p5_2);
 
-    auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+    auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 3);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::UPSERT);
@@ -148,7 +150,7 @@ TEST(WALSeriTest, RefExternalAndEntry)
         edit.varDel(buildV3Id(TEST_NAMESPACE_ID, 1), ver2_0);
         edit.varRef(buildV3Id(TEST_NAMESPACE_ID, 2), ver3_0, buildV3Id(TEST_NAMESPACE_ID, 1));
 
-        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
         ASSERT_EQ(deseri_edit.size(), 3);
         auto iter = deseri_edit.getRecords().begin();
         EXPECT_EQ(iter->type, EditRecordType::VAR_EXTERNAL);
@@ -173,7 +175,7 @@ TEST(WALSeriTest, RefExternalAndEntry)
         edit.varDel(buildV3Id(TEST_NAMESPACE_ID, 1), ver2_0);
         edit.varRef(buildV3Id(TEST_NAMESPACE_ID, 2), ver3_0, buildV3Id(TEST_NAMESPACE_ID, 1));
 
-        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        auto deseri_edit = DB::PS::V3::u128::Serializer::deserializeFrom(DB::PS::V3::u128::Serializer::serializeTo(edit));
         ASSERT_EQ(deseri_edit.size(), 3);
         auto iter = deseri_edit.getRecords().begin();
         EXPECT_EQ(iter->type, EditRecordType::VAR_ENTRY);
@@ -312,7 +314,7 @@ protected:
         {
             r.version = version;
         }
-        wal->apply(ser::serializeTo(edit));
+        wal->apply(u128::Serializer::serializeTo(edit));
     }
 
     static void rollToNewLogWriter(const WALStorePtr & wal)
@@ -454,7 +456,7 @@ try
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = ser::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
             num_applied_edit += 1;
         }
@@ -487,7 +489,7 @@ try
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = ser::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
             num_applied_edit += 1;
         }
@@ -507,7 +509,7 @@ try
         edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 3), ver21_1, entry_p3_2);
         edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 5), ver21_1, entry_p5_2);
         size_each_edit.emplace_back(edit.size());
-        wal->apply(ser::serializeTo(edit));
+        wal->apply(u128::Serializer::serializeTo(edit));
     }
 
     wal.reset();
@@ -522,7 +524,7 @@ try
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = ser::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
             num_applied_edit += 1;
         }
@@ -580,7 +582,7 @@ try
         edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 3), ver21_1, entry_p3_2);
         edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 5), ver21_1, entry_p5_2);
         size_each_edit.emplace_back(edit.size());
-        wal->apply(ser::serializeTo(edit));
+        wal->apply(u128::Serializer::serializeTo(edit));
     }
 
     wal.reset();
@@ -594,7 +596,7 @@ try
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = ser::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
             num_applied_edit += 1;
         }
@@ -614,7 +616,7 @@ try
                 break;
             }
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = ser::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
             num_applied_edit += 1;
         }
@@ -640,7 +642,7 @@ try
 
     // Stage 2. insert many edits
     constexpr size_t num_edits_test = 100000;
-    PageId page_id = 0;
+    PageIdU64 page_id = 0;
     std::vector<size_t> size_each_edit;
     size_each_edit.reserve(num_edits_test);
     PageVersion ver(/*seq*/ 32);
@@ -675,7 +677,7 @@ try
             // else it just run to the end of file.
             break;
         }
-        auto edit = ser::deserializeFrom(record.value());
+        auto edit = u128::Serializer::deserializeFrom(record.value());
         num_pages_read += edit.size();
         EXPECT_EQ(size_each_edit[num_edits_read], edit.size()) << fmt::format("at idx={}", num_edits_read);
         num_edits_read += 1;
@@ -699,7 +701,8 @@ try
         snap_edit.varEntry(buildV3Id(TEST_NAMESPACE_ID, d_10000(rd)), PageVersion(345, 22), entry, 1);
     }
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
-    bool done = wal->saveSnapshot(std::move(file_snap), ser::serializeTo(snap_edit), snap_edit.size());
+    file_snap.num_records = snap_edit.size();
+    bool done = wal->saveSnapshot(std::move(file_snap), u128::Serializer::serializeTo(snap_edit));
     ASSERT_TRUE(done);
     wal.reset();
     reader.reset();
@@ -717,7 +720,7 @@ try
             // else it just run to the end of file.
             break;
         }
-        auto edit = ser::deserializeFrom(record.value());
+        auto edit = u128::Serializer::deserializeFrom(record.value());
         num_pages_read += edit.size();
         num_edits_read += 1;
     }
@@ -767,7 +770,7 @@ TEST_P(WALStoreTest, GetFileSnapshot)
         // write new edit, new log file generated
         PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 100));
-        wal->apply(ser::serializeTo(edit));
+        wal->apply(u128::Serializer::serializeTo(edit));
     }
 
     {
@@ -781,7 +784,8 @@ TEST_P(WALStoreTest, GetFileSnapshot)
 
         // empty
         PageEntriesEdit snap_edit;
-        bool done = wal->saveSnapshot(std::move(files), ser::serializeTo(snap_edit), snap_edit.size());
+        files.num_records = snap_edit.size();
+        bool done = wal->saveSnapshot(std::move(files), u128::Serializer::serializeTo(snap_edit));
         ASSERT_TRUE(done);
         ASSERT_EQ(getNumLogFiles(), 1);
     }

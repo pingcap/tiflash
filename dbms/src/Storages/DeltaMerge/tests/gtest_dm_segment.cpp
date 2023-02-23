@@ -1037,7 +1037,7 @@ public:
         SegmentTest::SetUp();
     }
 
-    std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
+    std::pair<RowKeyRange, PageIdU64s> genDMFile(DMContext & context, const Block & block)
     {
         auto delegator = context.path_pool.getStableDiskDelegator();
         auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
@@ -1515,9 +1515,12 @@ try
         const auto & dmfile = dmfiles[0];
         auto file_path = dmfile->path();
         // check property file exists and then delete it
-        ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
-        Poco::File(file_path + "/property").remove();
-        ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
+        if (!dmfile->useMetaV2())
+        {
+            ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
+            Poco::File(file_path + "/property").remove();
+            ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
+        }
         // clear PackProperties to force it to calculate from scratch
         dmfile->getPackProperties().clear_property();
         ASSERT_EQ(dmfile->getPackProperties().property_size(), 0);

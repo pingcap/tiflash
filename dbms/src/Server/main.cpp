@@ -25,7 +25,7 @@
 #include <utility> /// pair
 #include <vector>
 
-#if ENABLE_CLICKHOUSE_SERVER
+#if ENABLE_TIFLASH_SERVER
 #include "Server.h"
 #endif
 #if ENABLE_TIFLASH_DTTOOL
@@ -44,10 +44,10 @@
 #include <Server/DTTool/DTTool.h>
 
 /// Universal executable for various clickhouse applications
-#if ENABLE_CLICKHOUSE_SERVER
+#if ENABLE_TIFLASH_SERVER
 int mainEntryClickHouseServer(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_CLIENT
+#if ENABLE_TIFLASH_CLIENT
 int mainEntryClickHouseClient(int argc, char ** argv);
 #endif
 
@@ -94,10 +94,10 @@ using MainFunc = int (*)(int, char **);
 
 /// Add an item here to register new application
 std::pair<const char *, MainFunc> clickhouse_applications[] = {
-#if ENABLE_CLICKHOUSE_CLIENT
+#if ENABLE_TIFLASH_CLIENT
     {"client", mainEntryClickHouseClient},
 #endif
-#if ENABLE_CLICKHOUSE_SERVER
+#if ENABLE_TIFLASH_SERVER
     {"server", mainEntryClickHouseServer},
 #endif
 #if ENABLE_TIFLASH_DTTOOL

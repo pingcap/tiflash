@@ -213,21 +213,8 @@ try
     ASSERT_EQ(segments.size(), 1);
 
     /// make sure all column file in delta value space is deleted
-    ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr || storage_pool->log_storage_v2 != nullptr);
-    if (storage_pool->log_storage_v3)
-    {
-        storage_pool->log_storage_v3->gc(/* not_skip */ true);
-        storage_pool->data_storage_v3->gc(/* not_skip */ true);
-        ASSERT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
-        ASSERT_EQ(storage_pool->data_storage_v3->getNumberOfPages(), 1);
-    }
-    if (storage_pool->log_storage_v2)
-    {
-        storage_pool->log_storage_v2->gc(/* not_skip */ true);
-        storage_pool->data_storage_v2->gc(/* not_skip */ true);
-        ASSERT_EQ(storage_pool->log_storage_v2->getNumberOfPages(), 0);
-        ASSERT_EQ(storage_pool->data_storage_v2->getNumberOfPages(), 1);
-    }
+    ASSERT_EQ(getPageNumAfterGC(StorageType::Log, NAMESPACE_ID), 0);
+    ASSERT_EQ(getPageNumAfterGC(StorageType::Data, NAMESPACE_ID), 1);
 }
 CATCH
 
@@ -243,7 +230,7 @@ try
 
         // Start a segment merge and suspend it before applyMerge
         auto sp_seg_split_apply = SyncPointCtl::enableInScope("before_Segment::applySplit");
-        PageId new_seg_id;
+        PageIdU64 new_seg_id;
         auto th_seg_split = std::async([&]() {
             auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Auto, /* check_rows */ false);
             ASSERT_TRUE(new_seg_id_opt.has_value());
@@ -273,21 +260,8 @@ try
     ASSERT_EQ(segments.size(), 1);
 
     /// make sure all column file in delta value space is deleted
-    ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr || storage_pool->log_storage_v2 != nullptr);
-    if (storage_pool->log_storage_v3)
-    {
-        storage_pool->log_storage_v3->gc(/* not_skip */ true);
-        storage_pool->data_storage_v3->gc(/* not_skip */ true);
-        ASSERT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
-        ASSERT_EQ(storage_pool->data_storage_v3->getNumberOfPages(), 1);
-    }
-    if (storage_pool->log_storage_v2)
-    {
-        storage_pool->log_storage_v2->gc(/* not_skip */ true);
-        storage_pool->data_storage_v2->gc(/* not_skip */ true);
-        ASSERT_EQ(storage_pool->log_storage_v2->getNumberOfPages(), 0);
-        ASSERT_EQ(storage_pool->data_storage_v2->getNumberOfPages(), 1);
-    }
+    ASSERT_EQ(getPageNumAfterGC(StorageType::Log, NAMESPACE_ID), 0);
+    ASSERT_EQ(getPageNumAfterGC(StorageType::Data, NAMESPACE_ID), 1);
 }
 CATCH
 
@@ -333,21 +307,8 @@ try
     ASSERT_EQ(segments.size(), 1);
 
     /// make sure all column file in delta value space is deleted
-    ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr || storage_pool->log_storage_v2 != nullptr);
-    if (storage_pool->log_storage_v3)
-    {
-        storage_pool->log_storage_v3->gc(/* not_skip */ true);
-        storage_pool->data_storage_v3->gc(/* not_skip */ true);
-        ASSERT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
-        ASSERT_EQ(storage_pool->data_storage_v3->getNumberOfPages(), 1);
-    }
-    if (storage_pool->log_storage_v2)
-    {
-        storage_pool->log_storage_v2->gc(/* not_skip */ true);
-        storage_pool->data_storage_v2->gc(/* not_skip */ true);
-        ASSERT_EQ(storage_pool->log_storage_v2->getNumberOfPages(), 0);
-        ASSERT_EQ(storage_pool->data_storage_v2->getNumberOfPages(), 1);
-    }
+    ASSERT_EQ(getPageNumAfterGC(StorageType::Log, NAMESPACE_ID), 0);
+    ASSERT_EQ(getPageNumAfterGC(StorageType::Data, NAMESPACE_ID), 1);
 }
 CATCH
 
@@ -570,23 +531,7 @@ try
 
     {
         /// make sure all column file in delta value space is deleted
-        ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr || storage_pool->log_storage_v2 != nullptr);
-        if (storage_pool->log_storage_v3)
-        {
-            storage_pool->log_storage_v3->gc(/* not_skip */ true);
-            storage_pool->data_storage_v3->gc(/* not_skip */ true);
-            EXPECT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
-        }
-        if (storage_pool->log_storage_v2)
-        {
-            storage_pool->log_storage_v2->gc(/* not_skip */ true);
-            storage_pool->data_storage_v2->gc(/* not_skip */ true);
-            EXPECT_EQ(storage_pool->log_storage_v2->getNumberOfPages(), 0);
-        }
-
-        const auto file_usage = storage_pool->log_storage_reader->getFileUsageStatistics();
-        LOG_DEBUG(log, "All delta-merged, log valid size on disk: {}", file_usage.total_valid_size);
-        EXPECT_EQ(file_usage.total_valid_size, 0);
+        ASSERT_EQ(getPageNumAfterGC(StorageType::Log, NAMESPACE_ID), 0);
     }
 }
 CATCH

@@ -92,18 +92,18 @@ protected:
         {0.25, &SegmentRandomizedTest::prepareReplaceDataSnapshot}};
 
     SegmentSnapshotPtr for_update_snapshot;
-    std::optional<PageId> for_update_snapshot_segment_id;
+    std::optional<PageIdU64> for_update_snapshot_segment_id;
     std::optional<size_t> for_update_snapshot_rows;
 
     /**
      * (-∞, rand_min). Hack: This segment is intentionally removed from the "segments" map to avoid being picked up.
      */
-    PageId outbound_left_seg{};
+    PageIdU64 outbound_left_seg{};
 
     /**
      * [rand_max, +∞). Hack: This segment is intentionally removed from the "segments" map to avoid being picked up.
      */
-    PageId outbound_right_seg{};
+    PageIdU64 outbound_right_seg{};
 
     void clearReplaceDataSnapshot()
     {
@@ -227,7 +227,7 @@ protected:
         if (segments.empty())
             return;
         clearReplaceDataSnapshot();
-        PageId random_segment_id = getRandomSegmentId();
+        PageIdU64 random_segment_id = getRandomSegmentId();
         LOG_DEBUG(logger, "start random merge delta, segment_id={} all_segments={}", random_segment_id, segments.size());
         mergeSegmentDelta(random_segment_id);
     }
@@ -236,7 +236,7 @@ protected:
     {
         if (segments.empty())
             return;
-        PageId random_segment_id = getRandomSegmentId();
+        PageIdU64 random_segment_id = getRandomSegmentId();
         LOG_DEBUG(logger, "start random flush cache, segment_id={} all_segments={}", random_segment_id, segments.size());
         flushSegmentCache(random_segment_id);
     }
@@ -304,14 +304,14 @@ protected:
         }
     }
 
-    std::vector<PageId> getRandomMergeableSegments()
+    std::vector<PageIdU64> getRandomMergeableSegments()
     {
         RUNTIME_CHECK(segments.size() >= 2, segments.size());
 
         // Merge 2~6 segments (at most 1/2 of all segments).
         auto max_merge_segments = std::uniform_int_distribution<int>{2, std::clamp(static_cast<int>(segments.size()) / 2, 2, 6)}(random);
 
-        std::vector<PageId> segments_id;
+        std::vector<PageIdU64> segments_id;
         segments_id.reserve(max_merge_segments);
 
         while (true)

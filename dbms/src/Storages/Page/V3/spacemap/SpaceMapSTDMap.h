@@ -166,7 +166,7 @@ protected:
 
         if (length > it->second || it->first + it->second < offset + length)
         {
-            LOG_WARNING(log, "Marked space used failed. [offset={}, size={}] is bigger than space [offset={},size={}]", offset, length, it->first, it->second);
+            LOG_WARNING(Logger::get(), "Marked space used failed. [offset={}, size={}] is bigger than space [offset={},size={}]", offset, length, it->first, it->second);
             return false;
         }
 
@@ -214,14 +214,14 @@ protected:
     {
         if (unlikely(free_map.empty()))
         {
-            LOG_ERROR(log, "Current space map is full");
+            LOG_ERROR(Logger::get(), "Current space map is full");
             return std::make_tuple(UINT64_MAX, 0, false);
         }
         RUNTIME_CHECK_MSG(!free_map_invert_index.empty(), "Invalid state: free_map is empty but invert index is not empty");
         auto iter = free_map_invert_index.lower_bound(size);
         if (unlikely(iter == free_map_invert_index.end()))
         {
-            LOG_ERROR(log, "Can't found any place to insert for size {}", size);
+            LOG_ERROR(Logger::get(), "Can't found any place to insert for size {}", size);
             return std::make_tuple(UINT64_MAX, free_map_invert_index.rbegin()->first, false);
         }
         auto length = iter->first;
@@ -276,7 +276,7 @@ protected:
             it_prev--;
             if (it_prev->first + it_prev->second > it->first)
             {
-                LOG_WARNING(log, "Marked space free failed. [offset={}, size={}], prev node is [offset={},size={}]", it->first, it->second, it_prev->first, it_prev->second);
+                LOG_WARNING(Logger::get(), "Marked space free failed. [offset={}, size={}], prev node is [offset={},size={}]", it->first, it->second, it_prev->first, it_prev->second);
                 free_map.erase(it);
                 deleteFromInvertIndex(length, offset);
                 return false;
@@ -288,7 +288,7 @@ protected:
         {
             if (it->first + it->second > it_next->first)
             {
-                LOG_WARNING(log, "Marked space free failed. [offset={}, size={}], next node is [offset={},size={}]", it->first, it->second, it_next->first, it_next->second);
+                LOG_WARNING(Logger::get(), "Marked space free failed. [offset={}, size={}], next node is [offset={},size={}]", it->first, it->second, it_next->first, it_next->second);
                 free_map.erase(it);
                 deleteFromInvertIndex(length, offset);
                 return false;

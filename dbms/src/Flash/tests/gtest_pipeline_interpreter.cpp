@@ -42,8 +42,29 @@ public:
         context.addExchangeReceiver("sender_1", {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
         context.addExchangeReceiver("sender_l", {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
         context.addExchangeReceiver("sender_r", {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addExchangeReceiver("exchange", {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
     }
 };
+
+TEST_F(PipelineInterpreterExecuteTest, SimplePipeline)
+try
+{
+    {
+        auto request = context.receive("exchange")
+                           .filter(eq(col("s1"), col("s2")))
+                           .project({concat(col("s1"), col("s2"))})
+                           .limit(1)
+                           .exchangeSender(tipb::Hash)
+                           .build(context);
+        runAndAssert(request, 1);
+    }
+
+    {
+        auto request = context.scan("test_db", "test_table").build(context);
+        runAndAssert(request, 1);
+    }
+}
+CATCH
 
 TEST_F(PipelineInterpreterExecuteTest, StrangeQuery)
 try
@@ -496,6 +517,30 @@ try
                            .topN("s2", false, 10)
                            .build(context, DAGRequestType::list);
         runAndAssert(request, 20);
+    }
+}
+CATCH
+
+TEST_F(PipelineInterpreterExecuteTest, ExpandPlan)
+try
+{
+    {
+        auto request = context
+                           .receive("sender_1")
+                           .aggregation({Count(col("s1"))}, {col("s2")})
+                           .expand(MockVVecColumnNameVec{
+                               MockVecColumnNameVec{
+                                   MockColumnNameVec{"count(s1)"},
+                               },
+                               MockVecColumnNameVec{
+                                   MockColumnNameVec{"s2"},
+                               },
+                           })
+                           .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
+                           .project({"count(s1)", "groupingID"})
+                           .topN({{"groupingID", true}}, 2)
+                           .build(context);
+        runAndAssert(request, 10);
     }
 }
 CATCH

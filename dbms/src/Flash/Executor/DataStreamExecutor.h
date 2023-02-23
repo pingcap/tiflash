@@ -14,21 +14,19 @@
 
 #pragma once
 
-#include <DataStreams/BlockIO.h>
-#include <DataStreams/IBlockInputStream.h>
 #include <Flash/Executor/QueryExecutor.h>
 
 namespace DB
 {
+class IBlockInputStream;
+using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
+
+struct BlockIO;
+
 class DataStreamExecutor : public QueryExecutor
 {
 public:
-    explicit DataStreamExecutor(const BlockIO & block_io)
-        : QueryExecutor(block_io.process_list_entry)
-        , data_stream(block_io.in)
-    {
-        assert(data_stream);
-    }
+    DataStreamExecutor(Context & context_, const BlockIO & block_io);
 
     String toString() const override;
 
@@ -36,10 +34,18 @@ public:
 
     int estimateNewThreadCount() override;
 
+    RU collectRequestUnit() override;
+
+    Block getSampleBlock() const override;
+
+    BaseRuntimeStatistics getRuntimeStatistics() const override;
+
 protected:
-    ExecutionResult execute(ResultHandler result_handler) override;
+    ExecutionResult execute(ResultHandler && result_handler) override;
 
 protected:
     BlockInputStreamPtr data_stream;
+    uint64_t thread_cnt_before_execute = 0;
+    uint64_t estimate_thread_cnt = 0;
 };
 } // namespace DB

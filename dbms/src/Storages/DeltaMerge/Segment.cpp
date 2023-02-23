@@ -167,13 +167,13 @@ StableValueSpacePtr createNewStable( //
     DMContext & context,
     const ColumnDefinesPtr & schema_snap,
     const BlockInputStreamPtr & input_stream,
-    PageId stable_id,
+    PageIdU64 stable_id,
     WriteBatches & wbs)
 {
     auto delegator = context.path_pool.getStableDiskDelegator();
     auto store_path = delegator.choosePath();
 
-    PageId dtfile_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    PageIdU64 dtfile_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path);
 
     auto stable = std::make_shared<StableValueSpace>(stable_id);
@@ -193,8 +193,8 @@ Segment::Segment( //
     const LoggerPtr & parent_log_,
     UInt64 epoch_,
     const RowKeyRange & rowkey_range_,
-    PageId segment_id_,
-    PageId next_segment_id_,
+    PageIdU64 segment_id_,
+    PageIdU64 next_segment_id_,
     const DeltaValueSpacePtr & delta_,
     const StableValueSpacePtr & stable_)
     : epoch(epoch_)
@@ -219,10 +219,10 @@ SegmentPtr Segment::newSegment( //
     DMContext & context,
     const ColumnDefinesPtr & schema,
     const RowKeyRange & range,
-    PageId segment_id,
-    PageId next_segment_id,
-    PageId delta_id,
-    PageId stable_id)
+    PageIdU64 segment_id,
+    PageIdU64 next_segment_id,
+    PageIdU64 delta_id,
+    PageIdU64 stable_id)
 {
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
 
@@ -247,8 +247,8 @@ SegmentPtr Segment::newSegment( //
     DMContext & context,
     const ColumnDefinesPtr & schema,
     const RowKeyRange & rowkey_range,
-    PageId segment_id,
-    PageId next_segment_id)
+    PageIdU64 segment_id,
+    PageIdU64 next_segment_id)
 {
     return newSegment(
         parent_log,
@@ -264,7 +264,7 @@ SegmentPtr Segment::newSegment( //
 SegmentPtr Segment::restoreSegment( //
     const LoggerPtr & parent_log,
     DMContext & context,
-    PageId segment_id)
+    PageIdU64 segment_id)
 {
     Page page = context.storage_pool.metaReader()->read(segment_id); // not limit restore
 
@@ -274,7 +274,7 @@ SegmentPtr Segment::restoreSegment( //
     readIntBinary(version, buf);
     UInt64 epoch;
     RowKeyRange rowkey_range;
-    PageId next_segment_id, delta_id, stable_id;
+    PageIdU64 next_segment_id, delta_id, stable_id;
 
     readIntBinary(epoch, buf);
 
@@ -308,7 +308,7 @@ SegmentPtr Segment::restoreSegment( //
     return segment;
 }
 
-void Segment::serialize(WriteBatch & wb)
+void Segment::serialize(WriteBatchWrapper & wb)
 {
     MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
     writeIntBinary(STORAGE_FORMAT_CURRENT.segment, buf);

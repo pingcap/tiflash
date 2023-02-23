@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -162,13 +162,13 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     {tipb::ScalarFuncSig::GreatestInt, "tidbGreatest"},
     {tipb::ScalarFuncSig::GreatestReal, "tidbGreatest"},
-    {tipb::ScalarFuncSig::GreatestString, "greatest"},
+    {tipb::ScalarFuncSig::GreatestString, "tidbGreatestString"},
     {tipb::ScalarFuncSig::GreatestDecimal, "greatest"},
     {tipb::ScalarFuncSig::GreatestTime, "greatest"},
 
     {tipb::ScalarFuncSig::LeastInt, "tidbLeast"},
     {tipb::ScalarFuncSig::LeastReal, "tidbLeast"},
-    {tipb::ScalarFuncSig::LeastString, "least"},
+    {tipb::ScalarFuncSig::LeastString, "tidbLeastString"},
     {tipb::ScalarFuncSig::LeastDecimal, "least"},
     {tipb::ScalarFuncSig::LeastTime, "least"},
 
@@ -424,12 +424,13 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::InetNtoa, "IPv4NumToString"},
     {tipb::ScalarFuncSig::Inet6Aton, "tiDBIPv6StringToNum"},
     {tipb::ScalarFuncSig::Inet6Ntoa, "tiDBIPv6NumToString"},
-    //{tipb::ScalarFuncSig::IsIPv4, "cast"},
+    {tipb::ScalarFuncSig::IsIPv4, "tiDBIsIPv4"},
     //{tipb::ScalarFuncSig::IsIPv4Compat, "cast"},
     //{tipb::ScalarFuncSig::IsIPv4Mapped, "cast"},
-    //{tipb::ScalarFuncSig::IsIPv6, "cast"},
+    {tipb::ScalarFuncSig::IsIPv6, "tiDBIsIPv6"},
     //{tipb::ScalarFuncSig::UUID, "cast"},
 
+    {tipb::ScalarFuncSig::IlikeSig, "ilike3Args"},
     {tipb::ScalarFuncSig::LikeSig, "like3Args"},
     {tipb::ScalarFuncSig::RegexpSig, "regexp"},
     {tipb::ScalarFuncSig::RegexpUTF8Sig, "regexp"},
@@ -1447,5 +1448,4 @@ tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
         throw Exception(fmt::format("Unsupported function {}", name));
     return func_name_sig_map[name];
 }
-
 } // namespace DB

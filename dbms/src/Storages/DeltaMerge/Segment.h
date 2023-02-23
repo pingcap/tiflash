@@ -27,7 +27,7 @@
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/WriteBatch.h>
 
 namespace DB::DM
@@ -119,8 +119,8 @@ public:
         const LoggerPtr & parent_log_,
         UInt64 epoch_,
         const RowKeyRange & rowkey_range_,
-        PageId segment_id_,
-        PageId next_segment_id_,
+        PageIdU64 segment_id_,
+        PageIdU64 next_segment_id_,
         const DeltaValueSpacePtr & delta_,
         const StableValueSpacePtr & stable_);
 
@@ -129,21 +129,21 @@ public:
         DMContext & context,
         const ColumnDefinesPtr & schema,
         const RowKeyRange & rowkey_range,
-        PageId segment_id,
-        PageId next_segment_id,
-        PageId delta_id,
-        PageId stable_id);
+        PageIdU64 segment_id,
+        PageIdU64 next_segment_id,
+        PageIdU64 delta_id,
+        PageIdU64 stable_id);
     static SegmentPtr newSegment(
         const LoggerPtr & parent_log,
         DMContext & context,
         const ColumnDefinesPtr & schema,
         const RowKeyRange & rowkey_range,
-        PageId segment_id,
-        PageId next_segment_id);
+        PageIdU64 segment_id,
+        PageIdU64 next_segment_id);
 
-    static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageId segment_id);
+    static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageIdU64 segment_id);
 
-    void serialize(WriteBatch & wb);
+    void serialize(WriteBatchWrapper & wb);
 
     /// Attach a new ColumnFile into the Segment. The ColumnFile will be added to MemFileSet and flushed to disk later.
     /// The block data of the passed in ColumnFile should be placed on disk before calling this function.
@@ -468,8 +468,8 @@ public:
     size_t getEstimatedRows() const { return delta->getRows() + stable->getRows(); }
     size_t getEstimatedBytes() const { return delta->getBytes() + stable->getBytes(); }
 
-    PageId segmentId() const { return segment_id; }
-    PageId nextSegmentId() const { return next_segment_id; }
+    PageIdU64 segmentId() const { return segment_id; }
+    PageIdU64 nextSegmentId() const { return next_segment_id; }
     UInt64 segmentEpoch() const { return epoch; };
 
     void check(DMContext & dm_context, const String & when) const;
@@ -644,8 +644,8 @@ private:
     RowKeyRange rowkey_range;
     bool is_common_handle;
     size_t rowkey_column_size;
-    const PageId segment_id;
-    const PageId next_segment_id;
+    const PageIdU64 segment_id;
+    const PageIdU64 next_segment_id;
 
     std::atomic<DB::Timestamp> last_check_gc_safe_point = 0;
 

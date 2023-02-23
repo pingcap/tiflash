@@ -39,12 +39,14 @@ public:
         return "FilterTransformOp";
     }
 
+protected:
     OperatorStatus transformImpl(Block & block) override;
 
     void transformHeaderImpl(Block & header_) override;
 
 private:
     FilterTransformAction filter_transform_action;
+    FilterPtr filter_ignored = nullptr;
     const LoggerPtr log;
 };
 } // namespace DB

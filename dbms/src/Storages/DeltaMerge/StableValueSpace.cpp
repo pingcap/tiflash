@@ -73,7 +73,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
     this->files = files_;
 }
 
-void StableValueSpace::saveMeta(WriteBatch & meta_wb)
+void StableValueSpace::saveMeta(WriteBatchWrapper & meta_wb)
 {
     MemoryWriteBuffer buf(0, 8192);
     writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);
@@ -87,7 +87,7 @@ void StableValueSpace::saveMeta(WriteBatch & meta_wb)
     meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
+StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
 {
     auto stable = std::make_shared<StableValueSpace>(id);
 

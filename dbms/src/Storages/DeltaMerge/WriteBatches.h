@@ -16,7 +16,7 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchWrapper.h>
 
 namespace DB
 {
@@ -25,16 +25,17 @@ namespace DM
 struct WriteBatches : private boost::noncopyable
 {
     NamespaceId ns_id;
-    WriteBatch log;
-    WriteBatch data;
-    WriteBatch meta;
+    PageStorageRunMode run_mode;
+    WriteBatchWrapper log;
+    WriteBatchWrapper data;
+    WriteBatchWrapper meta;
 
-    PageIds written_log;
-    PageIds written_data;
+    PageIdU64s written_log;
+    PageIdU64s written_data;
 
-    WriteBatch removed_log;
-    WriteBatch removed_data;
-    WriteBatch removed_meta;
+    WriteBatchWrapper removed_log;
+    WriteBatchWrapper removed_data;
+    WriteBatchWrapper removed_meta;
 
     StoragePool & storage_pool;
     bool should_roll_back = false;
@@ -43,22 +44,22 @@ struct WriteBatches : private boost::noncopyable
 
     explicit WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
         : ns_id(storage_pool_.getNamespaceId())
-        , log(ns_id)
-        , data(ns_id)
-        , meta(ns_id)
-        , removed_log(ns_id)
-        , removed_data(ns_id)
-        , removed_meta(ns_id)
+        , run_mode(storage_pool_.getPageStorageRunMode())
+        , log(run_mode, StorageType::Log, ns_id)
+        , data(run_mode, StorageType::Data, ns_id)
+        , meta(run_mode, StorageType::Meta, ns_id)
+        , removed_log(run_mode, StorageType::Log, ns_id)
+        , removed_data(run_mode, StorageType::Data, ns_id)
+        , removed_meta(run_mode, StorageType::Meta, ns_id)
         , storage_pool(storage_pool_)
         , write_limiter(write_limiter_)
-    {
-    }
+    {}
 
     ~WriteBatches()
     {
         if constexpr (DM_RUN_CHECK)
         {
-            auto check_empty = [&](const WriteBatch & wb, const String & name) {
+            auto check_empty = [&](const WriteBatchWrapper & wb, const String & name) {
                 if (!wb.empty())
                 {
                     StackTrace trace;
@@ -86,11 +87,9 @@ struct WriteBatches : private boost::noncopyable
 
     void writeLogAndData()
     {
-        PageIds log_write_pages, data_write_pages;
-
         if constexpr (DM_RUN_CHECK)
         {
-            auto check = [](const WriteBatch & wb, const String & what) {
+            auto check = [](const auto & wb, const String & what) {
                 if (wb.empty())
                     return;
                 for (const auto & w : wb.getWrites())
@@ -100,15 +99,43 @@ struct WriteBatches : private boost::noncopyable
                 }
                 LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
             };
-
-            check(log, "log");
-            check(data, "data");
+            switch (run_mode)
+            {
+            case PageStorageRunMode::UNI_PS:
+            {
+                check(log.getUniversalWriteBatch(), "log");
+                check(data.getUniversalWriteBatch(), "data");
+                break;
+            }
+            default:
+            {
+                check(log.getWriteBatch(), "log");
+                check(data.getWriteBatch(), "data");
+                break;
+            }
+            }
         }
 
-        for (auto & w : log.getWrites())
-            log_write_pages.push_back(w.page_id);
-        for (auto & w : data.getWrites())
-            data_write_pages.push_back(w.page_id);
+        PageIdU64s log_write_pages, data_write_pages;
+        switch (run_mode)
+        {
+        case PageStorageRunMode::UNI_PS:
+        {
+            for (const auto & w : log.getUniversalWriteBatch().getWrites())
+                log_write_pages.push_back(UniversalPageIdFormat::getU64ID(w.page_id));
+            for (const auto & w : data.getUniversalWriteBatch().getWrites())
+                data_write_pages.push_back(UniversalPageIdFormat::getU64ID(w.page_id));
+            break;
+        }
+        default:
+        {
+            for (const auto & w : log.getWriteBatch().getWrites())
+                log_write_pages.push_back(w.page_id);
+            for (const auto & w : data.getWriteBatch().getWrites())
+                data_write_pages.push_back(w.page_id);
+            break;
+        }
+        }
 
         storage_pool.logWriter()->write(std::move(log), write_limiter);
         storage_pool.dataWriter()->write(std::move(data), write_limiter);
@@ -124,16 +151,16 @@ struct WriteBatches : private boost::noncopyable
 
     void rollbackWrittenLogAndData()
     {
-        WriteBatch log_wb(ns_id);
+        WriteBatchWrapper log_wb(run_mode, StorageType::Log, ns_id);
         for (auto p : written_log)
             log_wb.delPage(p);
-        WriteBatch data_wb(ns_id);
+        WriteBatchWrapper data_wb(run_mode, StorageType::Data, ns_id);
         for (auto p : written_data)
             data_wb.delPage(p);
 
         if constexpr (DM_RUN_CHECK)
         {
-            auto check = [](const WriteBatch & wb, const String & what) {
+            auto check = [](const auto & wb, const String & what) {
                 if (wb.empty())
                     return;
                 for (const auto & w : wb.getWrites())
@@ -144,8 +171,21 @@ struct WriteBatches : private boost::noncopyable
                 LOG_TRACE(Logger::get(), "Rollback remove from {} : {}", what, wb.toString());
             };
 
-            check(log_wb, "log_wb");
-            check(data_wb, "data_wb");
+            switch (run_mode)
+            {
+            case PageStorageRunMode::UNI_PS:
+            {
+                check(log_wb.getUniversalWriteBatch(), "log_wb");
+                check(data_wb.getUniversalWriteBatch(), "data_wb");
+                break;
+            }
+            default:
+            {
+                check(log_wb.getWriteBatch(), "log_wb");
+                check(data_wb.getWriteBatch(), "data_wb");
+                break;
+            }
+            }
         }
 
         storage_pool.logWriter()->write(std::move(log_wb), write_limiter);
@@ -159,7 +199,7 @@ struct WriteBatches : private boost::noncopyable
     {
         if constexpr (DM_RUN_CHECK)
         {
-            auto check = [](const WriteBatch & wb, const String & what) {
+            auto check = [](const auto & wb, const String & what) {
                 if (wb.empty())
                     return;
                 for (const auto & w : wb.getWrites())
@@ -169,8 +209,19 @@ struct WriteBatches : private boost::noncopyable
                 }
                 LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
             };
-
-            check(meta, "meta");
+            switch (run_mode)
+            {
+            case PageStorageRunMode::UNI_PS:
+            {
+                check(meta.getUniversalWriteBatch(), "meta");
+                break;
+            }
+            default:
+            {
+                check(meta.getWriteBatch(), "meta");
+                break;
+            }
+            }
         }
 
         storage_pool.metaWriter()->write(std::move(meta), write_limiter);
@@ -181,7 +232,7 @@ struct WriteBatches : private boost::noncopyable
     {
         if constexpr (DM_RUN_CHECK)
         {
-            auto check = [](const WriteBatch & wb, const String & what) {
+            auto check = [](const auto & wb, const String & what) {
                 if (wb.empty())
                     return;
                 for (const auto & w : wb.getWrites())
@@ -192,9 +243,23 @@ struct WriteBatches : private boost::noncopyable
                 LOG_TRACE(Logger::get(), "Write into {} : {}", what, wb.toString());
             };
 
-            check(removed_log, "removed_log");
-            check(removed_data, "removed_data");
-            check(removed_meta, "removed_meta");
+            switch (run_mode)
+            {
+            case PageStorageRunMode::UNI_PS:
+            {
+                check(removed_log.getUniversalWriteBatch(), "removed_log");
+                check(removed_data.getUniversalWriteBatch(), "removed_data");
+                check(removed_meta.getUniversalWriteBatch(), "removed_meta");
+                break;
+            }
+            default:
+            {
+                check(removed_log.getWriteBatch(), "removed_log");
+                check(removed_data.getWriteBatch(), "removed_data");
+                check(removed_meta.getWriteBatch(), "removed_meta");
+                break;
+            }
+            }
         }
 
         storage_pool.logWriter()->write(std::move(removed_log), write_limiter);
