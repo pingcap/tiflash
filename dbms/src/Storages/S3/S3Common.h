@@ -108,7 +108,12 @@ void listPrefix(
     const Aws::S3::S3Client & client,
     const String & bucket,
     const String & prefix,
-    const String & delimiter,
+    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
+void listPrefix(
+    const Aws::S3::S3Client & client,
+    const String & bucket,
+    const String & prefix,
+    std::string_view delimiter,
     std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
 
 std::unordered_map<String, size_t> listPrefixWithSize(const Aws::S3::S3Client & client, const String & bucket, const String & prefix);
@@ -120,7 +125,5 @@ std::pair<bool, Aws::Utils::DateTime> tryGetObjectModifiedTime(
     const String & key);
 
 void deleteObject(const Aws::S3::S3Client & client, const String & bucket, const String & key);
-
-std::unordered_map<String, size_t> listPrefix(const Aws::S3::S3Client & client, const String & bucket, const String & prefix);
 
 } // namespace DB::S3

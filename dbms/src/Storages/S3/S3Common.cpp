@@ -314,7 +314,19 @@ void listPrefix(
     const Aws::S3::S3Client & client,
     const String & bucket,
     const String & prefix,
-    const String & delimiter,
+    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager)
+{
+    // Usually we don't need to set delimiter.
+    // Check the docs here for Delimiter && CommonPrefixes when you really need it.
+    // https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-prefixes.html
+    listPrefix(client, bucket, prefix, /*delimiter*/ "", pager);
+}
+
+void listPrefix(
+    const Aws::S3::S3Client & client,
+    const String & bucket,
+    const String & prefix,
+    std::string_view  delimiter,
     std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager)
 {
     Stopwatch sw;
@@ -322,7 +334,7 @@ void listPrefix(
     req.WithBucket(bucket).WithPrefix(prefix);
     if (!delimiter.empty())
     {
-        req.SetDelimiter(delimiter);
+        req.SetDelimiter(String(delimiter));
     }
 
     static auto log = Logger::get("S3ListPrefix");
