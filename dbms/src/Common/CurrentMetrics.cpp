@@ -60,6 +60,7 @@
     M(IOLimiterPendingFgWriteReq)               \
     M(IOLimiterPendingBgReadReq)                \
     M(IOLimiterPendingFgReadReq)                \
+    M(S3LockServiceNumLatches)                  \
     M(StoragePoolV2Only)                        \
     M(StoragePoolV3Only)                        \
     M(StoragePoolMixMode)                       \

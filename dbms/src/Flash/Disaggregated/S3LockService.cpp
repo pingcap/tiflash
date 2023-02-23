@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CurrentMetrics.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/ServiceUtils.h>
 #include <Storages/S3/S3Common.h>
@@ -28,6 +30,11 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 
+
+namespace CurrentMetrics
+{
+extern const Metric S3LockServiceNumLatches;
+}
 
 namespace DB::S3
 {
@@ -51,32 +58,47 @@ grpc::Status S3LockService::tryAddLock(const disaggregated::TryAddLockRequest * 
 {
     try
     {
+        Stopwatch watch;
+        SCOPE_EXIT({ GET_METRIC(tiflash_disaggregated_object_lock_request_duration_seconds, type_lock).Observe(watch.elapsedSeconds()); });
         tryAddLockImpl(request->data_file_key(), request->lock_store_id(), request->lock_seq(), response);
+        if (response->result().has_conflict())
+        {
+            GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_lock_conflict).Increment();
+        }
+        else if (response->result().has_not_owner())
+        {
+            GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_owner_changed).Increment();
+        }
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)
     {
         LOG_ERROR(log, "TiFlash Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_error).Increment();
         return grpc::Status(grpc::StatusCode::INTERNAL, e.standardText());
     }
     catch (const Exception & e)
     {
         LOG_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_error).Increment();
         return grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
     }
     catch (const pingcap::Exception & e)
     {
         LOG_ERROR(log, "KV Client Exception: {}", e.message());
+        GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_error).Increment();
         return grpc::Status(grpc::StatusCode::INTERNAL, e.message());
     }
     catch (const std::exception & e)
     {
         LOG_ERROR(log, "std exception: {}", e.what());
+        GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_error).Increment();
         return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
     }
     catch (...)
     {
         LOG_ERROR(log, "other exception");
+        GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_error).Increment();
         return grpc::Status(grpc::StatusCode::INTERNAL, "other exception");
     }
 }
@@ -85,32 +107,47 @@ grpc::Status S3LockService::tryMarkDelete(const disaggregated::TryMarkDeleteRequ
 {
     try
     {
+        Stopwatch watch;
+        SCOPE_EXIT({ GET_METRIC(tiflash_disaggregated_object_lock_request_duration_seconds, type_delete).Observe(watch.elapsedSeconds()); });
         tryMarkDeleteImpl(request->data_file_key(), response);
+        if (response->result().has_conflict())
+        {
+            GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_delete_conflict).Increment();
+        }
+        else if (response->result().has_not_owner())
+        {
+            GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_owner_changed).Increment();
+        }
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)
     {
         LOG_ERROR(log, "TiFlash Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_error).Increment();
         return grpc::Status(grpc::StatusCode::INTERNAL, e.standardText());
     }
     catch (const Exception & e)
     {
         LOG_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_error).Increment();
         return grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
     }
     catch (const pingcap::Exception & e)
     {
         LOG_ERROR(log, "KV Client Exception: {}", e.message());
+        GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_error).Increment();
         return grpc::Status(grpc::StatusCode::INTERNAL, e.message());
     }
     catch (const std::exception & e)
     {
         LOG_ERROR(log, "std exception: {}", e.what());
+        GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_error).Increment();
         return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
     }
     catch (...)
     {
         LOG_ERROR(log, "other exception");
+        GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_error).Increment();
         return grpc::Status(grpc::StatusCode::INTERNAL, "other exception");
     }
 }
@@ -123,6 +160,7 @@ S3LockService::getDataFileLatch(const String & data_file_key)
     if (it == file_latch_map.end())
     {
         it = file_latch_map.emplace(data_file_key, std::make_shared<DataFileMutex>()).first;
+        CurrentMetrics::add(CurrentMetrics::S3LockServiceNumLatches);
     }
     auto file_latch = it->second;
     // must add ref count under the protection of `file_latch_map_mutex`
@@ -130,11 +168,13 @@ S3LockService::getDataFileLatch(const String & data_file_key)
     return file_latch;
 }
 
-bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_store_id, UInt64 lock_seq, disaggregated::TryAddLockResponse * response)
+bool S3LockService::tryAddLockImpl(
+    const String & data_file_key,
+    UInt64 lock_store_id,
+    UInt64 lock_seq,
+    disaggregated::TryAddLockResponse * response)
 {
-    if (data_file_key.empty())
-        return false;
-
+    GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_lock).Increment();
     const S3FilenameView key_view = S3FilenameView::fromKey(data_file_key);
     RUNTIME_CHECK(key_view.isDataFile(), data_file_key);
 
@@ -155,6 +195,7 @@ bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_sto
         if (file_latch->decreaseRefCount() == 0)
         {
             file_latch_map.erase(data_file_key);
+            CurrentMetrics::sub(CurrentMetrics::S3LockServiceNumLatches);
         }
     });
 
@@ -163,6 +204,7 @@ bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_sto
     {
         auto * e = response->mutable_result()->mutable_conflict();
         e->set_reason(fmt::format("data file not exist, key={}", data_file_key));
+        LOG_INFO(log, "data file lock conflict: not exist, key={}", data_file_key);
         return false;
     }
 
@@ -172,6 +214,7 @@ bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_sto
     {
         auto * e = response->mutable_result()->mutable_conflict();
         e->set_reason(fmt::format("data file is mark deleted, key={} delmark={}", data_file_key, delmark_key));
+        LOG_INFO(log, "data file lock conflict: mark deleted, key={} delmark={}", data_file_key, delmark_key);
         return false;
     }
 
@@ -180,6 +223,7 @@ bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_sto
     {
         // client should retry
         response->mutable_result()->mutable_not_owner();
+        LOG_INFO(log, "data file lock conflict: owner changed, key={}", data_file_key);
         return false;
     }
     const auto lock_key = key_view.getLockKey(lock_store_id, lock_seq);
@@ -191,9 +235,11 @@ bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_sto
         // it is safe to return owner change and let the client retry.
         // the obsolete lock file will finally get removed in S3 GC.
         response->mutable_result()->mutable_not_owner();
+        LOG_INFO(log, "data file lock conflict: owner changed after lock added, key={} lock_key={}", data_file_key, lock_key);
         return false;
     }
 
+    LOG_INFO(log, "data file is locked, key={} lock_key={}", data_file_key, lock_key);
     response->mutable_result()->mutable_success();
     return true;
 }
@@ -242,6 +288,7 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
         if (file_latch->decreaseRefCount() == 0)
         {
             file_latch_map.erase(data_file_key);
+            CurrentMetrics::sub(CurrentMetrics::S3LockServiceNumLatches);
         }
     });
 
@@ -252,6 +299,7 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
     {
         auto * e = response->mutable_result()->mutable_conflict();
         e->set_reason(fmt::format("data file is locked, key={} lock_by={}", data_file_key, lock_key.value()));
+        LOG_INFO(log, "data file mark delete conflict: file is locked, key={} lock_by={}", data_file_key, lock_key.value());
         return false;
     }
 
@@ -260,6 +308,7 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
     {
         // client should retry
         response->mutable_result()->mutable_not_owner();
+        LOG_INFO(log, "data file mark delete conflict: owner changed, key={}", data_file_key);
         return false;
     }
     // upload delete mark
@@ -269,9 +318,11 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
     {
         // owner changed happens when delmark is uploading, can not
         // ensure whether this is safe or not.
-        LOG_ERROR(log, "owner changed when marking file deleted! key={} delmark={}", data_file_key, delmark_key);
+        LOG_ERROR(log, "data file mark delete conflict: owner changed when marking file deleted! key={} delmark={}", data_file_key, delmark_key);
+        GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_delete_risk).Increment();
     }
 
+    LOG_INFO(log, "data file is mark deleted, key={} delmark={}", data_file_key, delmark_key);
     response->mutable_result()->mutable_success();
     return true;
 }

@@ -56,7 +56,7 @@ public:
         // create 5 data files
         for (size_t i = 1; i <= 5; ++i)
         {
-            auto data_filename = S3Filename::fromDMFileOID(DMFileOID{.write_node_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
+            auto data_filename = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
             DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), data_filename.toFullKey());
             ++dm_file_id;
         }
@@ -68,7 +68,7 @@ public:
         while (dm_file_id > 0)
         {
             --dm_file_id;
-            auto data_filename = S3Filename::fromDMFileOID(DMFileOID{.write_node_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
+            auto data_filename = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
             DB::S3::deleteObject(*s3_client, s3_client->bucket(), data_filename.toFullKey());
         }
     }
@@ -76,7 +76,7 @@ public:
     S3Filename getDataFilename(std::optional<UInt64> get_fid = std::nullopt)
     {
         auto file_id = get_fid.has_value() ? get_fid.value() : dm_file_id - 1; // the last uploaded dmfile id
-        return S3Filename::fromDMFileOID(DMFileOID{.write_node_id = store_id, .table_id = physical_table_id, .file_id = file_id});
+        return S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = file_id});
     }
 
 protected:

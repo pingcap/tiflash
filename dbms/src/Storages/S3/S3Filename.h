@@ -27,7 +27,7 @@ namespace DB::S3
 struct DMFileOID
 {
     StoreID store_id = 0;
-    Int64 table_id = 0;
+    TableID table_id = 0;
     UInt64 file_id = 0;
 };
 
