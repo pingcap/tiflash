@@ -2360,7 +2360,7 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(const D
                 || pack_stat.not_clean > 0
                 || pack_filter.getMaxVersion(pack_id) > max_version)
             {
-                // We need to read this pack to do RowKey filter.
+                // We need to read this pack to do RowKey or MVCC filter.
                 some_packs_set->insert(pack_id);
                 continue;
             }
