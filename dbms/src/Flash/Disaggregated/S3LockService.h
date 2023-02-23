@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Interpreters/Context.h>
 #include <Storages/S3/S3Common.h>
 #include <TiDB/OwnerManager.h>
 #include <common/types.h>
@@ -34,9 +33,22 @@
 #include <kvproto/disaggregated.pb.h>
 #pragma GCC diagnostic pop
 
+namespace DB
+{
+class Context;
+}
+
 namespace DB::S3
 {
 
+// Disaggregated TiFlash could share the same S3 object by multiple TiFlash
+// instances. And a TiFlash instance claims the ownership of the S3 object
+// by "add lock".
+// The S3 GC will respect the lock and only "mark delete" when there is
+// no any lock on a given S3 object.
+//
+// This class provide atomic "add lock" and "mark deleted" service for a
+// given S3 object.
 class S3LockService final : private boost::noncopyable
 {
 public:
@@ -47,7 +59,6 @@ public:
     ~S3LockService() = default;
 
     grpc::Status tryAddLock(const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response);
-
 
     grpc::Status tryMarkDelete(const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response);
 
@@ -83,6 +94,10 @@ private:
         }
     };
 
+    bool tryAddLockImpl(const String & data_file_key, UInt64 lock_store_id, UInt64 lock_seq, disaggregated::TryAddLockResponse * response);
+
+    bool tryMarkDeleteImpl(const String & data_file_key, disaggregated::TryMarkDeleteResponse * response);
+
     DataFileMutexPtr getDataFileLatch(const String & data_file_key);
 
     std::optional<String> anyLockExist(const String & lock_prefix) const;
@@ -95,14 +110,6 @@ private:
     const std::unique_ptr<TiFlashS3Client> s3_client;
 
     LoggerPtr log;
-
-private:
-    bool tryAddLockImpl(const String & data_file_key, UInt64 lock_store_id, UInt64 lock_seq, disaggregated::TryAddLockResponse * response);
-
-    bool tryMarkDeleteImpl(const String & data_file_key, disaggregated::TryMarkDeleteResponse * response);
-
-    template <typename Resp>
-    bool setOwnerChanged(Resp * response);
 };
 
 

@@ -115,14 +115,6 @@ grpc::Status S3LockService::tryMarkDelete(const disaggregated::TryMarkDeleteRequ
     }
 }
 
-template <typename Resp>
-bool S3LockService::setOwnerChanged(Resp * response)
-{
-    // return the owner info to client retry
-    response->mutable_result()->mutable_not_owner();
-    return false;
-}
-
 S3LockService::DataFileMutexPtr
 S3LockService::getDataFileLatch(const String & data_file_key)
 {
@@ -154,13 +146,13 @@ bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_sto
     }
 
     // Get the latch of the file, with ref count added
-    auto file_lock = getDataFileLatch(data_file_key);
-    file_lock->lock(); // prevent other request on the same key
+    auto file_latch = getDataFileLatch(data_file_key);
+    file_latch->lock(); // prevent other request on the same key
     SCOPE_EXIT({
-        file_lock->unlock();
+        file_latch->unlock();
         std::unique_lock lock(file_latch_map_mutex);
         // currently no request for the same key, release
-        if (file_lock->decreaseRefCount() == 0)
+        if (file_latch->decreaseRefCount() == 0)
         {
             file_latch_map.erase(data_file_key);
         }
@@ -193,6 +185,14 @@ bool S3LockService::tryAddLockImpl(const String & data_file_key, UInt64 lock_sto
     const auto lock_key = key_view.getLockKey(lock_store_id, lock_seq);
     // upload lock file
     DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), lock_key);
+    if (!gc_owner->isOwner())
+    {
+        // altough the owner is changed after lock file is uploaded, but
+        // it is safe to return owner change and let the client retry.
+        // the obsolete lock file will finally get removed in S3 GC.
+        response->mutable_result()->mutable_not_owner();
+        return false;
+    }
 
     response->mutable_result()->mutable_success();
     return true;
@@ -233,13 +233,13 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
     }
 
     // Get the latch of the file, with ref count added
-    auto file_lock = getDataFileLatch(data_file_key);
-    file_lock->lock(); // prevent other request on the same key
+    auto file_latch = getDataFileLatch(data_file_key);
+    file_latch->lock(); // prevent other request on the same key
     SCOPE_EXIT({
-        file_lock->unlock();
+        file_latch->unlock();
         std::unique_lock lock(file_latch_map_mutex);
         // currently no request for the same key, release
-        if (file_lock->decreaseRefCount() == 0)
+        if (file_latch->decreaseRefCount() == 0)
         {
             file_latch_map.erase(data_file_key);
         }
@@ -265,6 +265,12 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
     // upload delete mark
     const auto delmark_key = key_view.getDelMarkKey();
     DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), delmark_key);
+    if (!gc_owner->isOwner())
+    {
+        // owner changed happens when delmark is uploading, can not
+        // ensure whether this is safe or not.
+        LOG_ERROR(log, "owner changed when marking file deleted! key={} delmark={}", data_file_key, delmark_key);
+    }
 
     response->mutable_result()->mutable_success();
     return true;
