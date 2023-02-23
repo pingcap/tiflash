@@ -29,7 +29,7 @@ namespace DB::S3
 
 namespace details
 {
-String toFullKey(const S3FilenameType type, const UInt64 store_id, const std::string_view data_subpath)
+String toFullKey(const S3FilenameType type, const StoreID store_id, const std::string_view data_subpath)
 {
     switch (type)
     {
@@ -163,7 +163,7 @@ String S3FilenameView::getLockPrefix() const
     return fmt::format("lock/s{}/{}.lock_", store_id, data_subpath);
 }
 
-String S3FilenameView::getLockKey(UInt64 lock_store_id, UInt64 lock_seq) const
+String S3FilenameView::getLockKey(StoreID lock_store_id, UInt64 lock_seq) const
 {
     RUNTIME_CHECK(isDataFile());
     return fmt::format("lock/s{}/{}.lock_s{}_{}", store_id, data_subpath, lock_store_id, lock_seq);
@@ -237,7 +237,7 @@ S3FilenameView::LockInfo S3FilenameView::getLockInfo() const
 
 //==== Generate S3 key from raw parts ====//
 
-S3Filename S3Filename::fromStoreId(UInt64 store_id)
+S3Filename S3Filename::fromStoreId(StoreID store_id)
 {
     return S3Filename{
         .type = S3FilenameType::StorePrefix,
@@ -249,12 +249,12 @@ S3Filename S3Filename::fromDMFileOID(const DMFileOID & oid)
 {
     return S3Filename{
         .type = S3FilenameType::DataFile,
-        .store_id = oid.write_node_id,
+        .store_id = oid.store_id,
         .data_subpath = fmt::format("t_{}/dmf_{}", oid.table_id, oid.file_id),
     };
 }
 
-S3Filename S3Filename::newCheckpointData(UInt64 store_id, UInt64 upload_seq, UInt64 file_idx)
+S3Filename S3Filename::newCheckpointData(StoreID store_id, UInt64 upload_seq, UInt64 file_idx)
 {
     return S3Filename{
         .type = S3FilenameType::DataFile,
@@ -263,7 +263,7 @@ S3Filename S3Filename::newCheckpointData(UInt64 store_id, UInt64 upload_seq, UIn
     };
 }
 
-S3Filename S3Filename::newCheckpointManifest(UInt64 store_id, UInt64 upload_seq)
+S3Filename S3Filename::newCheckpointManifest(StoreID store_id, UInt64 upload_seq)
 {
     return S3Filename{
         .type = S3FilenameType::CheckpointManifest,

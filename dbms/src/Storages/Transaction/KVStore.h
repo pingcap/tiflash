@@ -141,7 +141,7 @@ public:
     void setStore(metapb::Store);
 
     // May return 0 if uninitialized
-    uint64_t getStoreID(std::memory_order = std::memory_order_relaxed) const;
+    StoreID getStoreID(std::memory_order = std::memory_order_relaxed) const;
 
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const;
 

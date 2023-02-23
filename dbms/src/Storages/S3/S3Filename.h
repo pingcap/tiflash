@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/Transaction/Types.h>
 #include <common/defines.h>
 #include <common/types.h>
 #include <fmt/format.h>
@@ -25,7 +26,7 @@ namespace DB::S3
 
 struct DMFileOID
 {
-    UInt64 write_node_id = 0;
+    StoreID store_id = 0;
     Int64 table_id = 0;
     UInt64 file_id = 0;
 };
@@ -73,7 +74,7 @@ enum class S3FilenameType
 struct S3FilenameView
 {
     S3FilenameType type{S3FilenameType::Invalid};
-    UInt64 store_id{0};
+    StoreID store_id{0};
     std::string_view data_subpath;
     std::string_view lock_suffix;
 
@@ -85,7 +86,7 @@ struct S3FilenameView
     // Return the lock key prefix for finding any locks on this data file through `S3::LIST`
     String getLockPrefix() const;
     // Return the lock key for writing lock file on S3
-    String getLockKey(UInt64 lock_store_id, UInt64 lock_seq) const;
+    String getLockKey(StoreID lock_store_id, UInt64 lock_seq) const;
     // Return the delmark key for writing delmark file on S3
     String getDelMarkKey() const;
 
@@ -101,7 +102,7 @@ struct S3FilenameView
     ALWAYS_INLINE inline bool isLockFile() const { return type == S3FilenameType::LockFile; }
     struct LockInfo
     {
-        UInt64 store_id{0};
+        StoreID store_id{0};
         UInt64 sequence{0};
     };
     LockInfo getLockInfo() const;
@@ -123,13 +124,13 @@ public:
 struct S3Filename
 {
     S3FilenameType type{S3FilenameType::Invalid};
-    UInt64 store_id{0};
+    StoreID store_id{0};
     String data_subpath;
 
-    static S3Filename fromStoreId(UInt64 store_id);
+    static S3Filename fromStoreId(StoreID store_id);
     static S3Filename fromDMFileOID(const DMFileOID & oid);
-    static S3Filename newCheckpointData(UInt64 store_id, UInt64 upload_seq, UInt64 file_idx);
-    static S3Filename newCheckpointManifest(UInt64 store_id, UInt64 upload_seq);
+    static S3Filename newCheckpointData(StoreID store_id, UInt64 upload_seq, UInt64 file_idx);
+    static S3Filename newCheckpointManifest(StoreID store_id, UInt64 upload_seq);
 
     String toFullKey() const;
 
