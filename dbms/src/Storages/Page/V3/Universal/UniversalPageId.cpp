@@ -21,7 +21,7 @@ namespace DB::details
 String UniversalPageIdFormatHelper::format(const DB::UniversalPageId & value)
 {
     auto prefix = DB::UniversalPageIdFormat::getFullPrefix(value);
-    return fmt::format("{}.{}", Redact::keyToHexString(prefix.data(), prefix.size()), DB::UniversalPageIdFormat::getU64ID(value));
+    return fmt::format("0x{}.{}", Redact::keyToHexString(prefix.data(), prefix.size()), DB::UniversalPageIdFormat::getU64ID(value));
 }
 
 } // namespace DB::details

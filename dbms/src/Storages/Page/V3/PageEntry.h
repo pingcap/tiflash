@@ -103,6 +103,6 @@ struct fmt::formatter<DB::PS::V3::PageEntryV3>
                 fb.fmtAppend("{}", offset_checksum.first);
             },
             ",");
-        return format_to(ctx.out(), "PageEntryV3{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets: [{}]}}", entry.file_id, entry.offset, entry.size, entry.checksum, entry.tag, fmt_buf.toString());
+        return format_to(ctx.out(), "PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets: [{}]}}", entry.file_id, entry.offset, entry.size, entry.checksum, entry.tag, fmt_buf.toString());
     }
 };
