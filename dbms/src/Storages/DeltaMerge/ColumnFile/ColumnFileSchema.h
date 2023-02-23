@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include <Common/LRUCache.h>
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
@@ -74,15 +75,12 @@ private:
     // to minimize the possibility of two different schemas having the same key in column_file_schemas.
     // Besides, we use weak_ptr to ensure we can remove the ColumnFileSchema,
     // when no one use it, to avoid too much memory usage.
-    std::unordered_map<Digest, std::weak_ptr<ColumnFileSchema>> column_file_schemas;
-    std::mutex mutex;
-    BackgroundProcessingPool::TaskHandle handle;
-    BackgroundProcessingPool & background_pool;
+    LRUCache<Digest, std::weak_ptr<ColumnFileSchema>> column_file_schemas;
 
 public:
-    explicit SharedBlockSchemas(DB::Context & context);
-    ~SharedBlockSchemas();
-
+    explicit SharedBlockSchemas(size_t max_size)
+        : column_file_schemas(max_size)
+    {}
     ColumnFileSchemaPtr find(const Digest & digest);
 
     ColumnFileSchemaPtr getOrCreate(const Block & block);

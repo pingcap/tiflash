@@ -39,58 +39,36 @@ String ColumnFileSchema::toString() const
     return "{schema:" + (schema ? schema.dumpJsonStructure() : "none") + "}";
 }
 
-SharedBlockSchemas::SharedBlockSchemas(DB::Context & context)
-    : background_pool(context.getBackgroundPool())
-{
-    handle = background_pool.addTask([&, this] {
-        std::lock_guard<std::mutex> lock(mutex);
-        for (auto iter = column_file_schemas.begin(); iter != column_file_schemas.end();)
-        {
-            if (auto schema = iter->second.lock(); !schema)
-            {
-                iter = column_file_schemas.erase(iter);
-            }
-            else
-            {
-                ++iter;
-            }
-        }
-        return false;
-    },
-                                     /*multi*/ false,
-                                     /*interval_ms*/ 60000);
-}
-
-SharedBlockSchemas::~SharedBlockSchemas()
-{
-    if (handle)
-    {
-        background_pool.removeTask(handle);
-    }
-}
-
 ColumnFileSchemaPtr SharedBlockSchemas::find(const Digest & digest)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-    auto it = column_file_schemas.find(digest);
-    if (it == column_file_schemas.end())
+    auto schema = column_file_schemas.get(digest);
+    if (schema)
+    {
+        return schema.get()->lock();
+    }
+    else
+    {
         return nullptr;
-    return it->second.lock();
+    }
 }
 
 ColumnFileSchemaPtr SharedBlockSchemas::getOrCreate(const Block & block)
 {
     Digest digest = hashSchema(block);
-    std::lock_guard<std::mutex> lock(mutex);
-    auto it = column_file_schemas.find(digest);
-    if (it == column_file_schemas.end() || it->second.expired())
+
+    auto schema_outer = column_file_schemas.get(digest);
+    if (schema_outer)
     {
-        auto schema = std::make_shared<ColumnFileSchema>(block);
-        column_file_schemas.emplace(digest, schema);
-        return schema;
+        auto schema = schema_outer.get()->lock();
+        if (schema)
+        {
+            return schema;
+        }
     }
-    else
-        return it->second.lock();
+
+    auto schema = std::make_shared<ColumnFileSchema>(block);
+    column_file_schemas.set(digest, std::make_shared<std::weak_ptr<ColumnFileSchema>>(schema));
+    return schema;
 }
 
 std::shared_ptr<DB::DM::SharedBlockSchemas> getSharedBlockSchemas(const DMContext & context)
