@@ -22,27 +22,6 @@ ASSERT_USE_AVX2_COMPILE_FLAG
 
 namespace DB
 {
-#if defined(__AVX2__) || defined(__SSE2__)
-/// Transform 64-byte mask to 64-bit mask.
-inline UInt64 ToBits64(const Int8 * bytes64)
-{
-#if defined(__AVX2__)
-    const auto check_block = _mm256_setzero_si256();
-    uint64_t mask0 = mem_utils::details::get_block32_cmp_eq_mask(bytes64, check_block);
-    uint64_t mask1 = mem_utils::details::get_block32_cmp_eq_mask(bytes64 + mem_utils::details::BLOCK32_SIZE, check_block);
-    auto res = mask0 | (mask1 << mem_utils::details::BLOCK32_SIZE);
-    return ~res;
-#elif defined(__SSE2__)
-    const auto zero16 = _mm_setzero_si128();
-    UInt64 res
-        = static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64)), zero16)))
-        | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 16)), zero16))) << 16)
-        | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 32)), zero16))) << 32)
-        | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 48)), zero16))) << 48);
-    return ~res;
-#endif
-}
-#endif
 
 ALWAYS_INLINE inline static size_t
 CountBytesInFilter(const UInt8 * filt, size_t start, size_t end)
@@ -80,7 +59,7 @@ size_t countBytesInFilter(const IColumn::Filter & filt)
     return CountBytesInFilter(filt.data(), 0, filt.size());
 }
 
-static inline size_t CountBytesInFilterWithNull(const Int8 * p1, const Int8 * p2, size_t size)
+static inline size_t CountBytesInFilterWithNull(const UInt8 * p1, const UInt8 * p2, size_t size)
 {
     size_t count = 0;
     for (size_t i = 0; i < size; ++i)
@@ -99,8 +78,8 @@ static inline size_t CountBytesInFilterWithNull(const IColumn::Filter & filt, co
       * It would be better to use != 0, then this does not allow SSE2.
       */
 
-    const Int8 * p1 = reinterpret_cast<const Int8 *>(filt.data()) + start;
-    const Int8 * p2 = reinterpret_cast<const Int8 *>(null_map) + start;
+    const UInt8 * p1 = reinterpret_cast<const UInt8 *>(filt.data()) + start;
+    const UInt8 * p2 = reinterpret_cast<const UInt8 *>(null_map) + start;
     size_t size = end - start;
 
 #if defined(__SSE2__) || defined(__AVX2__)

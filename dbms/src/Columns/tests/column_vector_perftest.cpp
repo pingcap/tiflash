@@ -56,6 +56,18 @@ IColumn::Selector buildSelector(int num_rows, int num_columns)
     return selector;
 }
 
+IColumn::Filter buildFilter(int num_rows, int num_columns)
+{
+    std::mt19937 mt(rd());
+    std::uniform_int_distribution<int> dist;
+
+    IColumn::Filter filter;
+    filter.resize(num_rows);
+    for (int i = 0; i < num_rows; ++i)
+        filter[i] = dist(mt) % num_columns == 0;
+    return filter;
+}
+
 template <typename T>
 void testScatter(int num_rows, int num_columns, int seconds)
 {
@@ -88,6 +100,38 @@ void testScatter(int num_rows, int num_columns, int seconds)
         << std::endl;
 }
 
+template <typename T>
+void testFilter(int num_rows, int num_columns, int seconds)
+{
+    ColumnPtr src = buildColumn<T>(num_rows);
+    auto filter = buildFilter(num_rows, num_columns);
+
+    StopFlag stop_flag = false;
+    std::atomic<Int64> counter = 0;
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    auto filter_func = [&] {
+        while (!stop_flag.load(std::memory_order_relaxed))
+        {
+            src->filter(filter, -1);
+            counter.fetch_add(1, std::memory_order_relaxed);
+        }
+    };
+
+    std::thread t(filter_func);
+
+    std::this_thread::sleep_for(std::chrono::seconds(seconds));
+    stop_flag.store(true);
+    t.join();
+
+    auto cur = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cur - start);
+    std::cout
+        << fmt::format("Filter/s: {:<10}", counter.load() * 1000 / duration.count())
+        << std::endl;
+}
+
 } // namespace
 } // namespace DB::tests
 
@@ -105,15 +149,17 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
         std::unordered_map<String, TestHandler>>
         handlers = {
             {"int",
-             {{"scatter", DB::tests::testScatter<Int32>}}},
+             {{"scatter", DB::tests::testScatter<Int32>},
+              {"filter", DB::tests::testFilter<Int32>}}},
             {"int64",
-             {{"scatter", DB::tests::testScatter<Int64>}}}};
+             {{"scatter", DB::tests::testScatter<Int64>},
+              {"filter", DB::tests::testFilter<Int64>}}}};
 
     String type_name = argv[1];
     String method = argv[2];
-    int rows = argc >= 4 ? atoi(argv[3]) : 10000;
-    int columns = argc >= 5 ? atoi(argv[4]) : 5;
-    int seconds = argc >= 6 ? atoi(argv[5]) : 10;
+    int rows = argc >= 4 ? std::stoi(argv[3]) : 10000;
+    int columns = argc >= 5 ? std::stoi(argv[4]) : 5;
+    int seconds = argc >= 6 ? std::stoi(argv[5]) : 10;
 
     const auto & find_handler = [](const String & title, const String & name, const auto & handler_map) {
         auto it = handler_map.find(name);
