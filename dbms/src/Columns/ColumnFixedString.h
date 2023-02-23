@@ -98,11 +98,19 @@ public:
 
     void insertFrom(const IColumn & src_, size_t index) override;
 
+    void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
+
+    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override;
+
     void insertData(const char * pos, size_t length) override;
 
     void insertDefault() override
     {
         chars.resize_fill(chars.size() + n);
+    }
+    void insertManyDefaults(size_t length) override
+    {
+        chars.resize_fill(chars.size() + n * length);
     }
 
     void popBack(size_t elems) override
@@ -134,7 +142,7 @@ public:
 
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
 
-    ColumnPtr replicate(const Offsets & offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {

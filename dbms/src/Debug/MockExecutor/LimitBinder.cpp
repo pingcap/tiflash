@@ -14,6 +14,7 @@
 
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Debug/MockExecutor/LimitBinder.h>
+#include <Parsers/ASTLiteral.h>
 
 namespace DB::mock
 {

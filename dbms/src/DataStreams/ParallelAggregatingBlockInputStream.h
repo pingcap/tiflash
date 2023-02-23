@@ -16,7 +16,6 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
-#include <DataStreams/TemporaryFileStream.h>
 
 namespace DB
 {
@@ -36,7 +35,6 @@ public:
         const BlockInputStreams & inputs,
         const BlockInputStreams & additional_inputs_at_end,
         const Aggregator::Params & params_,
-        const FileProviderPtr & file_provider_,
         bool final_,
         size_t max_threads_,
         size_t temporary_data_merge_threads_,
@@ -62,13 +60,13 @@ protected:
     Block readImpl() override;
     void appendInfo(FmtBuffer & buffer) const override;
 
+    uint64_t collectCPUTimeNsImpl(bool is_thread_runner) override;
 
 private:
     const LoggerPtr log;
 
     Aggregator::Params params;
     Aggregator aggregator;
-    FileProviderPtr file_provider;
     bool final;
     size_t max_threads;
     size_t temporary_data_merge_threads;
@@ -76,16 +74,7 @@ private:
     size_t keys_size;
     size_t aggregates_size;
 
-    /** Used if there is a limit on the maximum number of rows in the aggregation,
-      *  and if group_by_overflow_mode == ANY.
-      * In this case, new keys are not added to the set, but aggregation is performed only by
-      *  keys that have already been added into the set.
-      */
-    bool no_more_keys = false;
-
     std::atomic<bool> executed{false};
-
-    TemporaryFileStreams temporary_inputs;
 
     ManyAggregatedDataVariants many_data;
     Exceptions exceptions;
@@ -95,7 +84,6 @@ private:
     {
         size_t src_rows = 0;
         size_t src_bytes = 0;
-        Int64 local_delta_memory = 0;
 
         ColumnRawPtrs key_columns;
         Aggregator::AggregateColumns aggregate_columns;

@@ -21,7 +21,7 @@
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V2/PageDefines.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/gc/LegacyCompactor.h>
 #include <Storages/Page/V2/gc/restoreFromCheckpoints.h>
@@ -32,7 +32,7 @@
 
 namespace DB::PS::V2::tests
 {
-TEST(LegacyCompactor_test, WriteMultipleBatchRead)
+TEST(LegacyCompactorTest, WriteMultipleBatchRead)
 try
 {
     PageStorageConfig config;
@@ -72,7 +72,7 @@ try
     // Restore a new version set with snapshot WriteBatch
     WriteBatch::SequenceID seq_write = 0x1234;
     {
-        auto snapshot = original_version.getSnapshot();
+        auto snapshot = original_version.getSnapshot("", nullptr);
         WriteBatch wb = LegacyCompactor::prepareCheckpointWriteBatch(snapshot, seq_write);
         EXPECT_EQ(wb.getSequence(), seq_write);
 
@@ -100,9 +100,9 @@ try
 
     // Compare the two versions above
     {
-        auto original_snapshot = original_version.getSnapshot();
+        auto original_snapshot = original_version.getSnapshot("", nullptr);
         const auto * original = original_snapshot->version();
-        auto restored_snapshot = version_restored_with_snapshot.getSnapshot();
+        auto restored_snapshot = version_restored_with_snapshot.getSnapshot("", nullptr);
         const auto * restored = restored_snapshot->version();
 
         auto original_normal_page_ids = original->validNormalPageIds();
@@ -166,14 +166,15 @@ try
 CATCH
 
 // TODO: enable this test
-TEST(LegacyCompactor_test, DISABLED_CompactAndRestore)
+TEST(LegacyCompactorTest, DISABLED_CompactAndRestore)
 try
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
     const FileProviderPtr file_provider = ctx.getFileProvider();
     StoragePathPool spool = ctx.getPathPool().withTable("test", "t", false);
     auto delegator = spool.getPSDiskDelegatorSingle("meta");
-    PageStorage storage("compact_test", delegator, PageStorageConfig{}, file_provider);
+    auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
+    PageStorage storage("compact_test", delegator, PageStorageConfig{}, file_provider, *bkg_pool);
 
     PageStorage::ListPageFilesOption opt;
     opt.ignore_checkpoint = false;
@@ -211,8 +212,8 @@ try
     (void)page_files_to_remove;
 
     {
-        auto s0 = compactor.version_set.getSnapshot();
-        auto s1 = vset_restored.getSnapshot();
+        auto s0 = compactor.version_set.getSnapshot("", nullptr);
+        auto s1 = vset_restored.getSnapshot("", nullptr);
         ASSERT_EQ(s0->version()->numPages(), s1->version()->numPages());
         ASSERT_EQ(s0->version()->numNormalPages(), s1->version()->numNormalPages());
 

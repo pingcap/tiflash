@@ -16,8 +16,9 @@
 
 #include <Common/nocopyable.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/types.h>
 #include <fmt/format.h>
@@ -91,7 +92,7 @@ struct fmt::formatter<DB::PS::V3::PageVersion>
 
 namespace DB::PS::V3
 {
-using VersionedEntry = std::pair<PageVersion, PageEntryV3>;
+using VersionedEntry = std::pair<PageVersion, PS::V3::PageEntryV3>;
 using VersionedEntries = std::vector<VersionedEntry>;
 
 enum class EditRecordType
@@ -138,8 +139,12 @@ inline const char * typeToString(EditRecordType t)
 }
 
 /// Page entries change to apply to PageDirectory
+template <typename PageIdType>
 class PageEntriesEdit
 {
+public:
+    using PageId = PageIdType;
+
 public:
     PageEntriesEdit() = default;
 
@@ -148,7 +153,7 @@ public:
         records.reserve(capacity);
     }
 
-    void put(PageIdV3Internal page_id, const PageEntryV3 & entry)
+    void put(const PageId & page_id, const PageEntryV3 & entry)
     {
         EditRecord record{};
         record.type = EditRecordType::PUT;
@@ -157,7 +162,7 @@ public:
         records.emplace_back(record);
     }
 
-    void putExternal(PageIdV3Internal page_id)
+    void putExternal(const PageId & page_id)
     {
         EditRecord record{};
         record.type = EditRecordType::PUT_EXTERNAL;
@@ -165,7 +170,7 @@ public:
         records.emplace_back(record);
     }
 
-    void upsertPage(PageIdV3Internal page_id, const PageVersion & ver, const PageEntryV3 & entry)
+    void upsertPage(const PageId & page_id, const PageVersion & ver, const PageEntryV3 & entry)
     {
         EditRecord record{};
         record.type = EditRecordType::UPSERT;
@@ -175,7 +180,7 @@ public:
         records.emplace_back(record);
     }
 
-    void del(PageIdV3Internal page_id)
+    void del(const PageId & page_id)
     {
         EditRecord record{};
         record.type = EditRecordType::DEL;
@@ -183,7 +188,7 @@ public:
         records.emplace_back(record);
     }
 
-    void ref(PageIdV3Internal ref_id, PageIdV3Internal page_id)
+    void ref(const PageId & ref_id, const PageId & page_id)
     {
         EditRecord record{};
         record.type = EditRecordType::REF;
@@ -192,7 +197,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varRef(PageIdV3Internal ref_id, const PageVersion & ver, PageIdV3Internal ori_page_id)
+    void varRef(const PageId & ref_id, const PageVersion & ver, const PageId & ori_page_id)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_REF;
@@ -202,7 +207,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varExternal(PageIdV3Internal page_id, const PageVersion & create_ver, Int64 being_ref_count)
+    void varExternal(const PageId & page_id, const PageVersion & create_ver, Int64 being_ref_count)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_EXTERNAL;
@@ -212,7 +217,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varEntry(PageIdV3Internal page_id, const PageVersion & ver, const PageEntryV3 & entry, Int64 being_ref_count)
+    void varEntry(const PageId & page_id, const PageVersion & ver, const PageEntryV3 & entry, Int64 being_ref_count)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_ENTRY;
@@ -223,7 +228,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varDel(PageIdV3Internal page_id, const PageVersion & delete_ver)
+    void varDel(const PageId & page_id, const PageVersion & delete_ver)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_DELETE;
@@ -240,20 +245,12 @@ public:
 
     struct EditRecord
     {
-        EditRecordType type;
-        PageIdV3Internal page_id;
-        PageIdV3Internal ori_page_id;
+        EditRecordType type{EditRecordType::DEL};
+        PageId page_id{};
+        PageId ori_page_id{};
         PageVersion version;
         PageEntryV3 entry;
-        Int64 being_ref_count;
-
-        EditRecord()
-            : type(EditRecordType::DEL)
-            , page_id(0)
-            , ori_page_id(0)
-            , version(0, 0)
-            , being_ref_count(1)
-        {}
+        Int64 being_ref_count{1};
     };
     using EditRecords = std::vector<EditRecord>;
 
@@ -299,4 +296,12 @@ public:
     }
 };
 
+namespace u128
+{
+using PageEntriesEdit = PageEntriesEdit<PageIdV3Internal>;
+}
+namespace universal
+{
+using PageEntriesEdit = PageEntriesEdit<UniversalPageId>;
+}
 } // namespace DB::PS::V3

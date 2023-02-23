@@ -55,7 +55,7 @@ private:
     template <typename... Ts>
     bool append(const String & executor_id, const tipb::Executor * executor)
     {
-        assert(res.find(executor_id) == res.end());
+        RUNTIME_CHECK(res.find(executor_id) == res.end());
         return (doAppend<Ts>(executor_id, executor) || ...);
     }
 };

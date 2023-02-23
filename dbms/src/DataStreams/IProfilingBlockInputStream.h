@@ -210,6 +210,8 @@ protected:
         children.push_back(child);
     }
 
+    uint64_t collectCPUTimeNsImpl(bool is_thread_runner) override;
+
 private:
     bool enabled_extremes = false;
 
@@ -242,7 +244,7 @@ private:
     /** Check limits and quotas.
       * But only those that can be checked within each separate stream.
       */
-    bool checkTimeLimit();
+    bool checkTimeLimit() const;
     void checkQuota(Block & block);
 
 

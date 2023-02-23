@@ -19,6 +19,7 @@
 #include <Common/Macros.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/TiFlashSecurity.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
 #include <Common/randomSeed.h>
@@ -26,6 +27,7 @@
 #include <DataStreams/FormatFactory.h>
 #include <Databases/IDatabase.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/MockStorage.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/RateLimiter.h>
@@ -48,13 +50,17 @@
 #include <Poco/Mutex.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
+#include <Server/RaftConfigParser.h>
+#include <Server/ServerInfo.h>
 #include <Storages/BackgroundProcessingPool.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -122,6 +128,7 @@ struct ContextShared
     mutable std::mutex embedded_dictionaries_mutex;
     mutable std::mutex external_dictionaries_mutex;
 
+    std::optional<ServerInfo> server_info;
     String path; /// Path to the primary data directory, with a slash at the end.
     String tmp_path; /// The path to the temporary files that occur when processing the request.
     String flags_path; /// Path to the directory with some control flags for server maintenance.
@@ -145,6 +152,7 @@ struct ContextShared
     ConfigurationPtr users_config; /// Config with the users, profiles and quotas sections.
     BackgroundProcessingPoolPtr background_pool; /// The thread pool for the background work performed by the tables.
     BackgroundProcessingPoolPtr blockable_background_pool; /// The thread pool for the blockable background work performed by the tables.
+    BackgroundProcessingPoolPtr ps_compact_background_pool; /// The thread pool for the background work performed by the ps v2.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
     size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
@@ -157,6 +165,12 @@ struct ContextShared
     IORateLimiter io_rate_limiter;
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
+
+    /// The PS instance available on Write Node.
+    UniversalPageStorageServicePtr ps_write;
+
+    TiFlashSecurityConfigPtr security_config;
+
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash
@@ -197,6 +211,8 @@ struct ContextShared
     pcg64 rng{randomSeed()};
 
     Context::ConfigReloadCallback config_reload_callback;
+
+    std::shared_ptr<DB::DM::SharedBlockSchemas> shared_block_schemas;
 
     explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
         : runtime_components_factory(std::move(runtime_components_factory_))
@@ -239,6 +255,18 @@ struct ContextShared
             return;
         shutdown_called = true;
 
+        if (global_storage_pool)
+        {
+            // shutdown the gc task of global storage pool before
+            // shutting down the tables.
+            global_storage_pool->shutdown();
+        }
+
+        if (ps_write)
+        {
+            ps_write->shutdown();
+        }
+
         /** At this point, some tables may have threads that block our mutex.
           * To complete them correctly, we will copy the current list of tables,
           *  and ask them all to finish their work.
@@ -279,6 +307,7 @@ Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime
     res.shared = std::make_shared<ContextShared>(runtime_components_factory);
     res.quota = std::make_shared<QuotaForIntervals>();
     res.timezone_info.init();
+    res.disaggregated_mode = DisaggregatedMode::None;
     return res;
 }
 
@@ -315,6 +344,14 @@ const ProcessList & Context::getProcessList() const
     return shared->process_list;
 }
 
+void Context::setServerInfo(const ServerInfo & server_info)
+{
+    shared->server_info = server_info;
+}
+const std::optional<ServerInfo> & Context::getServerInfo() const
+{
+    return shared->server_info;
+}
 
 Databases Context::getDatabases() const
 {
@@ -527,7 +564,6 @@ void Context::setPathPool(
     const Strings & main_data_paths,
     const Strings & latest_data_paths,
     const Strings & kvstore_paths,
-    bool enable_raft_compatible_mode,
     PathCapacityMetricsPtr global_capacity_,
     FileProviderPtr file_provider_)
 {
@@ -537,8 +573,7 @@ void Context::setPathPool(
         latest_data_paths,
         kvstore_paths,
         global_capacity_,
-        file_provider_,
-        enable_raft_compatible_mode);
+        file_provider_);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)
@@ -567,6 +602,20 @@ ConfigurationPtr Context::getUsersConfig()
 {
     auto lock = getLock();
     return shared->users_config;
+}
+
+void Context::setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log)
+{
+    LOG_INFO(log, "Setting secuirty config.");
+    auto lock = getLock();
+    shared->security_config = std::make_shared<TiFlashSecurityConfig>(log);
+    shared->security_config->init(config);
+}
+
+TiFlashSecurityConfigPtr Context::getSecurityConfig()
+{
+    auto lock = getLock();
+    return shared->security_config;
 }
 
 void Context::reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config)
@@ -1268,7 +1317,7 @@ void Context::setMarkCache(size_t cache_size_in_bytes)
     if (shared->mark_cache)
         throw Exception("Mark cache has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->mark_cache = std::make_shared<MarkCache>(cache_size_in_bytes, std::chrono::seconds(settings.mark_cache_min_lifetime));
+    shared->mark_cache = std::make_shared<MarkCache>(cache_size_in_bytes);
 }
 
 
@@ -1294,7 +1343,7 @@ void Context::setMinMaxIndexCache(size_t cache_size_in_bytes)
     if (shared->minmax_index_cache)
         throw Exception("Minmax index cache has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->minmax_index_cache = std::make_shared<DM::MinMaxIndexCache>(cache_size_in_bytes, std::chrono::seconds(settings.mark_cache_min_lifetime));
+    shared->minmax_index_cache = std::make_shared<DM::MinMaxIndexCache>(cache_size_in_bytes);
 }
 
 DM::MinMaxIndexCachePtr Context::getMinMaxIndexCache() const
@@ -1372,6 +1421,15 @@ BackgroundProcessingPool & Context::getBlockableBackgroundPool()
     // TODO: maybe a better name for the pool
     auto lock = getLock();
     return *shared->blockable_background_pool;
+}
+
+BackgroundProcessingPool & Context::getPSBackgroundPool()
+{
+    auto lock = getLock();
+    // use the same size as `background_pool_size`
+    if (!shared->ps_compact_background_pool)
+        shared->ps_compact_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size, "bg-page-");
+    return *shared->ps_compact_background_pool;
 }
 
 void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
@@ -1497,18 +1555,31 @@ static bool isPageStorageV2Existed(const PathPool & path_pool)
 
 static bool isPageStorageV3Existed(const PathPool & path_pool)
 {
+    const std::vector<String> path_prefixes = {
+        PathPool::log_path_prefix,
+        PathPool::data_path_prefix,
+        PathPool::meta_path_prefix,
+        PathPool::kvstore_path_prefix,
+    };
     for (const auto & path : path_pool.listGlobalPagePaths())
     {
-        Poco::File dir(path);
-        if (!dir.exists())
-            continue;
-
-        std::vector<std::string> files;
-        dir.list(files);
-        if (!files.empty())
+        for (const auto & path_prefix : path_prefixes)
         {
-            return true;
+            Poco::File dir(path + "/" + path_prefix);
+            if (dir.exists())
+                return true;
         }
+    }
+    return false;
+}
+
+static bool isWriteNodeUniPSExisted(const PathPool & path_pool)
+{
+    for (const auto & path : path_pool.listGlobalPagePaths())
+    {
+        Poco::File dir(path + "/" + PathPool::write_uni_path_prefix);
+        if (dir.exists())
+            return true;
     }
     return false;
 }
@@ -1529,19 +1600,34 @@ void Context::initializePageStorageMode(const PathPool & path_pool, UInt64 stora
     case PageFormat::V1:
     case PageFormat::V2:
     {
-        if (isPageStorageV3Existed(path_pool))
+        if (isPageStorageV3Existed(path_pool) || isWriteNodeUniPSExisted(path_pool))
         {
-            throw Exception("Invalid config `storage.format_version`, Current page V3 data exist. But using the PageFormat::V2."
+            throw Exception("Invalid config `storage.format_version`, newer format page data exist. But using the PageFormat::V2."
                             "If you are downgrading the format_version for this TiFlash node, you need to rebuild the data from scratch.",
                             ErrorCodes::LOGICAL_ERROR);
         }
-        // not exist V3
+        // not exist newer format page data
         shared->storage_run_mode = PageStorageRunMode::ONLY_V2;
         return;
     }
     case PageFormat::V3:
     {
+        if (isWriteNodeUniPSExisted(path_pool))
+        {
+            throw Exception("Invalid config `storage.format_version`, newer format page data exist. But using the PageFormat::V3."
+                            "If you are downgrading the format_version for this TiFlash node, you need to rebuild the data from scratch.",
+                            ErrorCodes::LOGICAL_ERROR);
+        }
         shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
+        return;
+    }
+    case PageFormat::V4:
+    {
+        if (isPageStorageV2Existed(path_pool) || isPageStorageV3Existed(path_pool))
+        {
+            throw Exception("Uni PS can only be enabled on a fresh start", ErrorCodes::LOGICAL_ERROR);
+        }
+        shared->storage_run_mode = PageStorageRunMode::UNI_PS;
         return;
     }
     default:
@@ -1565,14 +1651,15 @@ void Context::setPageStorageRunMode(PageStorageRunMode run_mode) const
 bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
 {
     auto lock = getLock();
-    if (shared->global_storage_pool)
-    {
-        // GlobalStoragePool may be initialized many times in some test cases for restore.
-        LOG_WARNING(shared->log, "GlobalStoragePool has already been initialized.");
-    }
     CurrentMetrics::set(CurrentMetrics::GlobalStorageRunMode, static_cast<UInt8>(shared->storage_run_mode));
     if (shared->storage_run_mode == PageStorageRunMode::MIX_MODE || shared->storage_run_mode == PageStorageRunMode::ONLY_V3)
     {
+        if (shared->global_storage_pool)
+        {
+            // GlobalStoragePool may be initialized many times in some test cases for restore.
+            LOG_WARNING(shared->log, "GlobalStoragePool has already been initialized.");
+            shared->global_storage_pool->shutdown();
+        }
         try
         {
             shared->global_storage_pool = std::make_shared<DM::GlobalStoragePool>(path_pool, *this, settings);
@@ -1596,6 +1683,52 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
 {
     auto lock = getLock();
     return shared->global_storage_pool;
+}
+
+void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)
+{
+    auto lock = getLock();
+    if (shared->storage_run_mode == PageStorageRunMode::UNI_PS)
+    {
+        if (shared->ps_write)
+        {
+            // GlobalStoragePool may be initialized many times in some test cases for restore.
+            LOG_WARNING(shared->log, "GlobalUniversalPageStorage(WriteNode) has already been initialized.");
+            shared->ps_write->shutdown();
+        }
+        try
+        {
+            PageStorageConfig config;
+            shared->ps_write = UniversalPageStorageService::create( //
+                *this,
+                "write",
+                path_pool.getPSDiskDelegatorGlobalMulti(PathPool::write_uni_path_prefix),
+                config);
+            LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            throw;
+        }
+    }
+    else
+    {
+        shared->ps_write = nullptr;
+    }
+}
+
+UniversalPageStoragePtr Context::getWriteNodePageStorage() const
+{
+    auto lock = getLock();
+    if (shared->ps_write)
+    {
+        return shared->ps_write->getUniversalPageStorage();
+    }
+    else
+    {
+        return nullptr;
+    }
 }
 
 UInt16 Context::getTCPPort() const
@@ -1796,13 +1929,23 @@ SharedQueriesPtr Context::getSharedQueries()
     return shared->shared_queries;
 }
 
+const std::shared_ptr<DB::DM::SharedBlockSchemas> & Context::getSharedBlockSchemas() const
+{
+    return shared->shared_block_schemas;
+}
+
+void Context::initializeSharedBlockSchemas()
+{
+    shared->shared_block_schemas = std::make_shared<DB::DM::SharedBlockSchemas>(*this);
+}
+
 size_t Context::getMaxStreams() const
 {
     size_t max_streams = settings.max_threads;
     bool is_cop_request = false;
     if (dag_context != nullptr)
     {
-        if (isExecutorTest())
+        if (isExecutorTest() || isInterpreterTest())
             max_streams = dag_context->initialize_concurrency;
         else if (!dag_context->isBatchCop() && !dag_context->isMPPTask())
         {
@@ -1810,8 +1953,6 @@ size_t Context::getMaxStreams() const
             max_streams = 1;
         }
     }
-    if (max_streams > 1)
-        max_streams *= settings.max_streams_to_max_threads_ratio;
     if (max_streams == 0)
         max_streams = 1;
     if (unlikely(max_streams != 1 && is_cop_request))
@@ -1850,6 +1991,16 @@ void Context::setExecutorTest()
     test_mode = executor_test;
 }
 
+bool Context::isInterpreterTest() const
+{
+    return test_mode == interpreter_test;
+}
+
+void Context::setInterpreterTest()
+{
+    test_mode = interpreter_test;
+}
+
 bool Context::isCopTest() const
 {
     return test_mode == cop_test;
@@ -1865,12 +2016,12 @@ bool Context::isTest() const
     return test_mode != non_test;
 }
 
-void Context::setMockStorage(MockStorage & mock_storage_)
+void Context::setMockStorage(MockStorage * mock_storage_)
 {
     mock_storage = mock_storage_;
 }
 
-MockStorage Context::mockStorage() const
+MockStorage * Context::mockStorage() const
 {
     return mock_storage;
 }

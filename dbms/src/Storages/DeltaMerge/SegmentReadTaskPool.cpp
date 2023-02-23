@@ -158,7 +158,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     BlockInputStreamPtr stream;
     auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
     stream = t->segment->getInputStream(read_mode, *dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, max_version, block_size);
-    LOG_DEBUG(log, "getInputStream succ, pool_id={} segment_id={}", pool_id, t->segment->segmentId());
+    LOG_DEBUG(log, "getInputStream succ, read_mode={}, pool_id={} segment_id={}", magic_enum::enum_name(read_mode), pool_id, t->segment->segmentId());
     return stream;
 }
 
@@ -205,7 +205,7 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
 {
     auto target = segments.end();
     std::lock_guard lock(mutex);
-    if (getFreeActiveSegmentCountUnlock() <= 0)
+    if (getFreeActiveSegmentsUnlock() <= 0)
     {
         return target;
     }
@@ -269,33 +269,29 @@ void SegmentReadTaskPool::pushBlock(Block && block)
     q.push(std::move(block), nullptr);
 }
 
-int64_t SegmentReadTaskPool::increaseUnorderedInputStreamRefCount()
+Int64 SegmentReadTaskPool::increaseUnorderedInputStreamRefCount()
 {
     return unordered_input_stream_ref_count.fetch_add(1, std::memory_order_relaxed);
 }
-int64_t SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
+Int64 SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
 {
     return unordered_input_stream_ref_count.fetch_sub(1, std::memory_order_relaxed);
 }
 
-int64_t SegmentReadTaskPool::getFreeBlockSlots() const
+Int64 SegmentReadTaskPool::getFreeBlockSlots() const
 {
-    auto block_slots = unordered_input_stream_ref_count.load(std::memory_order_relaxed);
-    if (block_slots < 3)
-    {
-        block_slots = 3;
-    }
-    return block_slots - blk_stat.pendingCount();
+    return block_slot_limit - blk_stat.pendingCount();
 }
 
-int64_t SegmentReadTaskPool::getFreeActiveSegmentCountUnlock()
+Int64 SegmentReadTaskPool::getFreeActiveSegments() const
 {
-    auto active_segment_limit = unordered_input_stream_ref_count.load(std::memory_order_relaxed);
-    if (active_segment_limit < 2)
-    {
-        active_segment_limit = 2;
-    }
-    return active_segment_limit - static_cast<int64_t>(active_segment_ids.size());
+    std::lock_guard lock(mutex);
+    return getFreeActiveSegmentsUnlock();
+}
+
+Int64 SegmentReadTaskPool::getFreeActiveSegmentsUnlock() const
+{
+    return active_segment_limit - static_cast<Int64>(active_segment_ids.size());
 }
 
 bool SegmentReadTaskPool::exceptionHappened() const

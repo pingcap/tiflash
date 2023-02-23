@@ -17,7 +17,7 @@
 #include <Core/Block.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/Names.h>
-#include <Interpreters/Settings.h>
+#include <Interpreters/Expand.h>
 #include <Storages/Transaction/Collator.h>
 
 #include <unordered_map>
@@ -35,6 +35,7 @@ using NameWithAlias = std::pair<std::string, std::string>;
 using NamesWithAliases = std::vector<NameWithAlias>;
 
 class Join;
+class Expand;
 
 class IFunctionBase;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
@@ -66,6 +67,8 @@ public:
 
         /// Reorder and rename the columns, delete the extra ones. The same column names are allowed in the result.
         PROJECT,
+
+        EXPAND,
     };
 
     Type type;
@@ -91,6 +94,9 @@ public:
     /// For PROJECT.
     NamesWithAliases projections;
 
+    /// For EXPAND.
+    std::shared_ptr<const Expand> expand;
+
     /// If result_name_ == "", as name "function_name(arguments separated by commas) is used".
     static ExpressionAction applyFunction(
         const FunctionBuilderPtr & function_,
@@ -104,6 +110,7 @@ public:
     static ExpressionAction project(const NamesWithAliases & projected_columns_);
     static ExpressionAction project(const Names & projected_columns_);
     static ExpressionAction ordinaryJoin(std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_);
+    static ExpressionAction expandSource(GroupingSets grouping_sets);
 
     /// Which columns necessary to perform this action.
     Names getNeededColumns() const;
@@ -126,25 +133,22 @@ class ExpressionActions
 public:
     using Actions = std::vector<ExpressionAction>;
 
-    ExpressionActions(const NamesAndTypesList & input_columns_, const Settings & settings_)
+    explicit ExpressionActions(const NamesAndTypesList & input_columns_)
         : input_columns(input_columns_)
-        , settings(settings_)
     {
         for (const auto & input_elem : input_columns)
             sample_block.insert(ColumnWithTypeAndName(nullptr, input_elem.type, input_elem.name));
     }
 
-    ExpressionActions(const NamesAndTypes & input_columns_, const Settings & settings_)
+    explicit ExpressionActions(const NamesAndTypes & input_columns_)
         : input_columns(input_columns_.cbegin(), input_columns_.cend())
-        , settings(settings_)
     {
         for (const auto & input_elem : input_columns)
             sample_block.insert(ColumnWithTypeAndName(nullptr, input_elem.type, input_elem.name));
     }
 
     /// For constant columns the columns themselves can be contained in `input_columns_`.
-    ExpressionActions(const ColumnsWithTypeAndName & input_columns_, const Settings & settings_)
-        : settings(settings_)
+    explicit ExpressionActions(const ColumnsWithTypeAndName & input_columns_)
     {
         for (const auto & input_elem : input_columns_)
         {
@@ -209,9 +213,6 @@ private:
     NamesAndTypesList input_columns;
     Actions actions;
     Block sample_block;
-    Settings settings;
-
-    void checkLimits(Block & block) const;
 
     void addImpl(ExpressionAction action, Names & new_names);
 };
@@ -243,7 +244,6 @@ struct ExpressionActionsChain
 
     using Steps = std::vector<Step>;
 
-    Settings settings;
     Steps steps;
 
     void addStep();

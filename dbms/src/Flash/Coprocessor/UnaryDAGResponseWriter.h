@@ -38,8 +38,7 @@ public:
         DAGContext & dag_context_);
 
     void write(const Block & block) override;
-    void flush() override {}
-    void finishWrite() override;
+    void flush() override;
     void encodeChunkToDAGResponse();
     void appendWarningsToDAGResponse();
 
@@ -47,7 +46,6 @@ private:
     tipb::SelectResponse * dag_response;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     Int64 current_records_num;
-    std::unordered_map<String, std::tuple<UInt64, UInt64, UInt64>> previous_execute_stats;
 };
 
 } // namespace DB

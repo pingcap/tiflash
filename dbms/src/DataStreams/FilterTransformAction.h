@@ -19,6 +19,9 @@
 
 namespace DB
 {
+
+using FilterPtr = IColumn::Filter *;
+
 struct FilterTransformAction
 {
 public:
@@ -29,7 +32,8 @@ public:
 
     bool alwaysFalse() const;
     // return false if all filter out.
-    bool transform(Block & block);
+    // if return_filter is true and all rows are passed, set res_filter = nullptr.
+    bool transform(Block & block, FilterPtr & res_filter, bool return_filter);
     Block getHeader() const;
     ExpressionActionsPtr getExperssion() const;
 
@@ -39,5 +43,8 @@ private:
     size_t filter_column;
 
     ConstantFilterDescription constant_filter_description;
+    IColumn::Filter * filter = nullptr;
+    ColumnPtr filter_holder;
 };
+
 } // namespace DB

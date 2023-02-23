@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -51,8 +52,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
+                                    const String & parent_path);
 namespace tests
 {
 class SegmentTest : public DB::base::TiFlashStorageTestBasic
@@ -1037,18 +1037,15 @@ public:
         SegmentTest::SetUp();
     }
 
-    std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
+    std::pair<RowKeyRange, PageIdU64s> genDMFile(DMContext & context, const Block & block)
     {
         auto delegator = context.path_pool.getStableDiskDelegator();
         auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto store_path = delegator.choosePath();
 
-        DMFileBlockOutputStream::Flags flags;
-        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
-
         auto dmfile
-            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, flags);
+            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path);
 
         delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
@@ -1086,12 +1083,11 @@ try
                 auto file_id = file_ids[0];
                 auto file_parent_path = delegate.getDTFilePath(file_id);
                 auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
-                auto column_file = std::make_shared<ColumnFileBig>(dmContext(), file, range);
                 WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
-                segment->ingestColumnFiles(dmContext(), range, {column_file}, false);
+                segment->ingestDataToDelta(dmContext(), range, {file}, false);
                 break;
             }
             default:
@@ -1519,9 +1515,12 @@ try
         const auto & dmfile = dmfiles[0];
         auto file_path = dmfile->path();
         // check property file exists and then delete it
-        ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
-        Poco::File(file_path + "/property").remove();
-        ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
+        if (!dmfile->useMetaV2())
+        {
+            ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
+            Poco::File(file_path + "/property").remove();
+            ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
+        }
         // clear PackProperties to force it to calculate from scratch
         dmfile->getPackProperties().clear_property();
         ASSERT_EQ(dmfile->getPackProperties().property_size(), 0);

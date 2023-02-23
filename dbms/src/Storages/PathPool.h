@@ -17,7 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <Core/Types.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 
 #include <mutex>
 #include <unordered_map>
@@ -56,14 +56,10 @@ public:
         const Strings & latest_data_paths,
         const Strings & kvstore_paths,
         PathCapacityMetricsPtr global_capacity_,
-        FileProviderPtr file_provider_,
-        bool enable_raft_compatible_mode_ = false);
+        FileProviderPtr file_provider_);
 
     // Constructor to create PathPool for one Storage
     StoragePathPool withTable(const String & database_, const String & table_, bool path_need_database_name_) const;
-
-    // TODO: remove this outdated code
-    bool isRaftCompatibleModeEnabled() const { return enable_raft_compatible_mode; }
 
     // Generate a delegator for managing the paths of `RegionPersister`.
     // Those paths are generated from `kvstore_paths`.
@@ -80,6 +76,12 @@ public:
     const Strings & listKVStorePaths() const { return kvstore_paths; }
 
     const Strings & listGlobalPagePaths() const { return global_page_paths; }
+
+    static const String log_path_prefix;
+    static const String data_path_prefix;
+    static const String meta_path_prefix;
+    static const String kvstore_path_prefix;
+    static const String write_uni_path_prefix;
 
 public:
     // A thread safe wrapper for storing a map of <page data file id, path index>
@@ -132,8 +134,6 @@ private:
     Strings latest_data_paths;
     Strings kvstore_paths;
     Strings global_page_paths;
-
-    bool enable_raft_compatible_mode;
 
     PathCapacityMetricsPtr global_capacity;
 
@@ -411,7 +411,7 @@ private:
     PathPool::PageFilePathMap page_path_map;
 };
 
-/// A class to manage paths for the specified storage.
+/// A class to manage paths for a specified physical table.
 class StoragePathPool
 {
 public:
@@ -447,6 +447,10 @@ public:
     void rename(const String & new_database, const String & new_table);
 
     void drop(bool recursive, bool must_success = true);
+
+    void shutdown() { shutdown_called.store(true); }
+
+    bool isShutdown() const { return shutdown_called.load(); }
 
     DISALLOW_COPY(StoragePathPool);
 
@@ -495,6 +499,8 @@ private:
     DMFilePathMap dt_file_path_map;
 
     bool path_need_database_name = false;
+
+    std::atomic<bool> shutdown_called;
 
     PathCapacityMetricsPtr global_capacity;
 

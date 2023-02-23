@@ -108,59 +108,6 @@ public:
     using StreamPtr = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
 
-    struct SingleFileStream
-    {
-        SingleFileStream(const DMFilePtr & dmfile,
-                         CompressionSettings compression_settings,
-                         size_t max_compress_block_size,
-                         const FileProviderPtr & file_provider,
-                         const WriteLimiterPtr & write_limiter_)
-            : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                                     dmfile->path(),
-                                                                     EncryptionPath(dmfile->encryptionBasePath(), ""),
-                                                                     true,
-                                                                     write_limiter_,
-                                                                     0,
-                                                                     0,
-                                                                     max_compress_block_size))
-            , plain_layer(*plain_file)
-            , compressed_buf(plain_layer, compression_settings)
-            , original_layer(compressed_buf)
-        {
-        }
-
-        void flushCompressedData()
-        {
-            original_layer.next();
-            compressed_buf.next();
-        }
-
-        void flush()
-        {
-            plain_layer.next();
-            plain_file->next();
-
-            plain_file->sync();
-        }
-
-        using ColumnMinMaxIndexs = std::unordered_map<String, MinMaxIndexPtr>;
-        ColumnMinMaxIndexs minmax_indexs;
-
-        using ColumnDataSizes = std::unordered_map<String, size_t>;
-        ColumnDataSizes column_data_sizes;
-
-        using MarkWithSizes = std::vector<MarkWithSizeInCompressedFile>;
-        using ColumnMarkWithSizes = std::unordered_map<String, MarkWithSizes>;
-        ColumnMarkWithSizes column_mark_with_sizes;
-
-        /// original_layer -> compressed_buf -> plain_layer -> plain_file
-        WriteBufferFromFileBasePtr plain_file;
-        HashingWriteBuffer plain_layer;
-        CompressedWriteBuffer<> compressed_buf;
-        HashingWriteBuffer original_layer;
-    };
-    using SingleFileStreamPtr = std::shared_ptr<SingleFileStream>;
-
     struct BlockProperty
     {
         size_t not_clean_rows;
@@ -169,47 +116,22 @@ public:
         size_t gc_hint_version;
     };
 
-    struct Flags
-    {
-    private:
-        static constexpr size_t IS_SINGLE_FILE = 0x01;
-
-        size_t value;
-
-    public:
-        Flags()
-            : value(0x0)
-        {}
-
-        inline void setSingleFile(bool v) { value = (v ? (value | IS_SINGLE_FILE) : (value & ~IS_SINGLE_FILE)); }
-        inline bool isSingleFile() const { return (value & IS_SINGLE_FILE); }
-    };
-
     struct Options
     {
         CompressionSettings compression_settings;
-        size_t min_compress_block_size;
-        size_t max_compress_block_size;
-        Flags flags;
+        size_t min_compress_block_size{};
+        size_t max_compress_block_size{};
 
         Options() = default;
 
-        Options(CompressionSettings compression_settings_, size_t min_compress_block_size_, size_t max_compress_block_size_, Flags flags_)
+        Options(CompressionSettings compression_settings_, size_t min_compress_block_size_, size_t max_compress_block_size_)
             : compression_settings(compression_settings_)
             , min_compress_block_size(min_compress_block_size_)
             , max_compress_block_size(max_compress_block_size_)
-            , flags(flags_)
         {
         }
 
-        Options(const Options & from, const DMFilePtr & file)
-            : compression_settings(from.compression_settings)
-            , min_compress_block_size(from.min_compress_block_size)
-            , max_compress_block_size(from.max_compress_block_size)
-            , flags(from.flags)
-        {
-            flags.setSingleFile(file->isSingleFileMode());
-        }
+        Options(const Options & from) = default;
     };
 
 
@@ -237,6 +159,12 @@ private:
     /// FileNameBase -> Stream.
     void addStreams(ColId col_id, DataTypePtr type, bool do_index);
 
+    WriteBufferFromFileBasePtr createMetaFile();
+    WriteBufferFromFileBasePtr createMetaV2File();
+    WriteBufferFromFileBasePtr createPackStatsFile();
+    void finalizeMetaV1();
+    void finalizeMetaV2();
+
 private:
     DMFilePtr dmfile;
     ColumnDefines write_columns;
@@ -244,12 +172,12 @@ private:
 
     ColumnStreams column_streams;
 
-    WriteBufferFromFileBasePtr pack_stat_file;
-
-    SingleFileStreamPtr single_file_stream;
-
     FileProviderPtr file_provider;
     WriteLimiterPtr write_limiter;
+
+    // If dmfile->useMetaV2() is true, `meta_file` is for metav2,
+    // else `meta_file` is for pack stats.
+    WriteBufferFromFileBasePtr meta_file;
 
     // use to avoid count data written in index file for empty dmfile
     bool is_empty_file = true;

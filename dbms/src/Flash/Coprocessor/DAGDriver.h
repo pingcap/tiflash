@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/RegionInfo.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
@@ -72,6 +73,6 @@ private:
 
     bool internal;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 } // namespace DB

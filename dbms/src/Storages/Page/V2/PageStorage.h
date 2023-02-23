@@ -15,9 +15,10 @@
 #pragma once
 
 #include <Interpreters/SettingsCommon.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V2/PageDefines.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/Page/WriteBatch.h>
@@ -89,8 +90,9 @@ public:
                 PSDiskDelegatorPtr delegator, //
                 const PageStorageConfig & config_,
                 const FileProviderPtr & file_provider_,
+                BackgroundProcessingPool & ver_compact_pool_,
                 bool no_more_insert_ = false);
-    ~PageStorage() override = default;
+    ~PageStorage() override { shutdown(); } // NOLINT(clang-analyzer-optin.cplusplus.VirtualCall)
 
     void restore() override;
 
@@ -127,6 +129,8 @@ public:
     void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
 
     bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
+
+    void shutdown() override;
 
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
@@ -238,6 +242,10 @@ private:
     template <typename SnapshotPtr>
     friend class DataCompactor;
 
+    // Try compact in memory versions.
+    // Return true if compact is executed.
+    bool compactInMemVersions();
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -271,6 +279,10 @@ private:
     ExternalPageCallbacks::ExternalPagesRemover external_pages_remover = nullptr;
 
     StatisticsInfo last_gc_statistics;
+
+    // background pool for running compact on `versioned_page_entries`
+    BackgroundProcessingPool & ver_compact_pool;
+    BackgroundProcessingPool::TaskHandle ver_compact_handle = nullptr;
 
     // true means this instance runs under mix mode
     bool no_more_insert = false;

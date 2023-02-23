@@ -53,7 +53,6 @@
 #include <Poco/String.h>
 #include <Poco/Util/Application.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/StorageJoin.h>
 #include <Storages/StorageMemory.h>
 #include <Storages/StorageSet.h>
 
@@ -485,7 +484,7 @@ void ExpressionAnalyzer::analyzeAggregation()
     if (select_query && (select_query->group_expression_list || select_query->having_expression))
         has_aggregation = true;
 
-    ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(source_columns, settings);
+    ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(source_columns);
 
     if (select_query)
     {
@@ -659,8 +658,6 @@ static std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
       */
     Context subquery_context = context;
     Settings subquery_settings = context.getSettings();
-    subquery_settings.max_result_rows = 0;
-    subquery_settings.max_result_bytes = 0;
     /// The calculation of `extremes` does not make sense and is not necessary (if you do it, then the `extremes` of the subquery can be taken instead of the whole query).
     subquery_settings.extremes = false;
     subquery_context.setSettings(subquery_settings);
@@ -1196,7 +1193,6 @@ void ExpressionAnalyzer::executeScalarSubqueriesImpl(ASTPtr & ast)
     {
         Context subquery_context = context;
         Settings subquery_settings = context.getSettings();
-        subquery_settings.max_result_rows = 1;
         subquery_settings.extremes = false;
         subquery_context.setSettings(subquery_settings);
 
@@ -1480,7 +1476,7 @@ void ExpressionAnalyzer::makeSetsForIndexImpl(const ASTPtr & node, const Block &
                 {
                     NamesAndTypesList temp_columns = source_columns;
                     temp_columns.insert(temp_columns.end(), columns_added_by_join.begin(), columns_added_by_join.end());
-                    ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(temp_columns, settings);
+                    ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(temp_columns);
                     getRootActions(func->arguments->children.at(0), true, false, temp_actions);
 
                     Block sample_block_with_calculated_columns = temp_actions->getSampleBlock();
@@ -1742,7 +1738,7 @@ struct ExpressionAnalyzer::ScopeStack
                 all_columns.push_back(col);
         }
 
-        stack.back().actions = std::make_shared<ExpressionActions>(all_columns, settings);
+        stack.back().actions = std::make_shared<ExpressionActions>(all_columns);
     }
 
     size_t getColumnLevel(const std::string & name)
@@ -2129,12 +2125,11 @@ void ExpressionAnalyzer::assertAggregation() const
         throw Exception("No aggregation", ErrorCodes::LOGICAL_ERROR);
 }
 
-void ExpressionAnalyzer::initChain(ExpressionActionsChain & chain, const NamesAndTypesList & columns) const
+void ExpressionAnalyzer::initChain(ExpressionActionsChain & chain, const NamesAndTypesList & columns)
 {
     if (chain.steps.empty())
     {
-        chain.settings = settings;
-        chain.steps.emplace_back(std::make_shared<ExpressionActions>(columns, settings));
+        chain.steps.emplace_back(std::make_shared<ExpressionActions>(columns));
     }
 }
 
@@ -2176,20 +2171,6 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
     {
         auto database_table = getDatabaseAndTableNameFromIdentifier(static_cast<const ASTIdentifier &>(*table_to_join.database_and_table_name));
         StoragePtr table = context.tryGetTable(database_table.first, database_table.second);
-
-        if (table)
-        {
-            auto * storage_join = dynamic_cast<StorageJoin *>(table.get());
-
-            if (storage_join)
-            {
-                storage_join->assertCompatible(join_params.kind, join_params.strictness);
-                /// TODO Check the set of keys.
-
-                JoinPtr & join = storage_join->getJoin();
-                subquery_for_set.join = join;
-            }
-        }
     }
 
     if (!subquery_for_set.join)
@@ -2197,10 +2178,11 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
         JoinPtr join = std::make_shared<Join>(
             join_key_names_left,
             join_key_names_right,
-            settings.join_use_nulls,
             join_params.kind,
             join_params.strictness,
-            /*req_id=*/"");
+            "" /*req_id=*/,
+            false /*enable_fine_grained_shuffle_*/,
+            0 /*fine_grained_shuffle_count_*/);
 
         Names required_joined_columns(join_key_names_right.begin(), join_key_names_right.end());
         for (const auto & name_type : columns_added_by_join)
@@ -2403,7 +2385,7 @@ void ExpressionAnalyzer::getActionsBeforeAggregation(const ASTPtr & ast, Express
 
 ExpressionActionsPtr ExpressionAnalyzer::getActions(bool project_result)
 {
-    ExpressionActionsPtr actions = std::make_shared<ExpressionActions>(source_columns, settings);
+    ExpressionActionsPtr actions = std::make_shared<ExpressionActions>(source_columns);
     NamesWithAliases result_columns;
     Names result_names;
 
@@ -2446,7 +2428,7 @@ ExpressionActionsPtr ExpressionAnalyzer::getActions(bool project_result)
 
 ExpressionActionsPtr ExpressionAnalyzer::getConstActions()
 {
-    ExpressionActionsPtr actions = std::make_shared<ExpressionActions>(NamesAndTypesList(), settings);
+    ExpressionActionsPtr actions = std::make_shared<ExpressionActions>(NamesAndTypesList());
 
     getRootActions(ast, true, true, actions);
 
@@ -2579,7 +2561,7 @@ void ExpressionAnalyzer::collectJoinedColumns(NameSet & joined_columns, NamesAnd
         {
             joined_columns.insert(col.name);
 
-            bool make_nullable = settings.join_use_nulls && (table_join.kind == ASTTableJoin::Kind::Left || table_join.kind == ASTTableJoin::Kind::Cross_Left || table_join.kind == ASTTableJoin::Kind::Full);
+            bool make_nullable = table_join.kind == ASTTableJoin::Kind::Left || table_join.kind == ASTTableJoin::Kind::Cross_Left || table_join.kind == ASTTableJoin::Kind::Full;
             joined_columns_name_type.emplace_back(col.name, make_nullable ? makeNullable(col.type) : col.type);
         }
     }

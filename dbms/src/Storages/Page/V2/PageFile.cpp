@@ -94,7 +94,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
     meta_write_bytes += sizeof(WBSize) + sizeof(PageFormat::Version) + sizeof(WriteBatch::SequenceID);
 
-    for (auto & write : wb.getWrites())
+    for (auto & write : wb.getMutWrites())
     {
         meta_write_bytes += sizeof(IsPut);
         // We don't serialize `PUT_EXTERNAL` for V2, just convert it to `PUT`
@@ -138,7 +138,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     PageUtil::put(meta_pos, wb.getSequence());
 
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
-    for (auto & write : wb.getWrites())
+    for (auto & write : wb.getMutWrites())
     {
         // We don't serialize `PUT_EXTERNAL` for V2, just convert it to `PUT`
         if (write.type == WriteBatchWriteType::PUT_EXTERNAL)
@@ -918,11 +918,18 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read, const ReadLimiterPtr 
             }
         }
 
-        Page page;
-        page.page_id = page_id;
+        Page page(page_id);
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
-        page_map.emplace(page_id, page);
+
+        // Calculate the field_offsets from page entry
+        for (size_t index = 0; index < entry.field_offsets.size(); index++)
+        {
+            const auto offset = entry.field_offsets[index].first;
+            page.field_offsets.emplace(index, offset);
+        }
+
+        page_map.emplace(page_id, std::move(page));
 
         pos += entry.size;
     }
@@ -1000,8 +1007,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const
             write_offset += size_to_read;
         }
 
-        Page page;
-        page.page_id = page_id;
+        Page page(page_id);
         page.data = ByteBuffer(pos, write_offset);
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
@@ -1035,7 +1041,6 @@ Page PageFile::Reader::read(FieldReadInfo & to_read, const ReadLimiterPtr & read
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
-    Page page_rc;
     std::set<FieldOffsetInsidePage> fields_offset_in_page;
 
     size_t read_size_this_entry = 0;
@@ -1072,8 +1077,7 @@ Page PageFile::Reader::read(FieldReadInfo & to_read, const ReadLimiterPtr & read
         }
     }
 
-    Page page;
-    page.page_id = to_read.page_id;
+    Page page(to_read.page_id);
     page.data = ByteBuffer(data_buf, write_offset);
     page.mem_holder = mem_holder;
     page.field_offsets.swap(fields_offset_in_page);

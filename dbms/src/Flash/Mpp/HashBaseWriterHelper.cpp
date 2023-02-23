@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 namespace DB::HashBaseWriterHelper
 {
@@ -41,44 +43,94 @@ std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t
     return dest_tbl_cols;
 }
 
+void fillSelector(size_t rows,
+                  const WeakHash32 & hash,
+                  uint32_t part_num,
+                  IColumn::Selector & selector)
+{
+    // fill selector array with most significant bits of hash values
+    const auto & hash_data = hash.getData();
+    selector.resize(rows);
+    for (size_t i = 0; i < rows; ++i)
+    {
+        /// Row from interval [(2^32 / part_num) * i, (2^32 / part_num) * (i + 1)) goes to partition with number i.
+        selector[i] = hash_data[i]; /// [0, 2^32)
+        selector[i] *= part_num; /// [0, part_num * 2^32), selector stores 64 bit values.
+        selector[i] >>= 32u; /// [0, part_num)
+    }
+}
+
+/// For FineGrainedShuffle, the selector algorithm should satisfy the requirement:
+//  the FineGrainedShuffleStreamIndex can be calculated using hash_data and fine_grained_shuffle_stream_count values, without the presence of part_num.
+void fillSelectorForFineGrainedShuffle(size_t rows,
+                                       const WeakHash32 & hash,
+                                       uint32_t part_num,
+                                       uint32_t fine_grained_shuffle_stream_count,
+                                       IColumn::Selector & selector)
+{
+    // fill selector array with most significant bits of hash values
+    const auto & hash_data = hash.getData();
+    selector.resize(rows);
+    for (size_t i = 0; i < rows; ++i)
+    {
+        /// Row from interval [(2^32 / part_num) * i, (2^32 / part_num) * (i + 1)) goes to partition with number i.
+        selector[i] = hash_data[i]; /// [0, 2^32)
+        selector[i] *= part_num; /// [0, part_num * 2^32), selector stores 64 bit values.
+        selector[i] >>= 32u; /// [0, part_num)
+        selector[i] = selector[i] * fine_grained_shuffle_stream_count + hash_data[i] % fine_grained_shuffle_stream_count; /// map to [0, part_num * fine_grained_shuffle_stream_count)
+    }
+}
+
 void computeHash(const Block & block,
-                 uint32_t num_bucket,
+                 const std::vector<Int64> & partition_col_ids,
                  const TiDB::TiDBCollators & collators,
                  std::vector<String> & partition_key_containers,
-                 const std::vector<Int64> & partition_col_ids,
-                 WeakHash32 & hash,
-                 IColumn::Selector & selector)
+                 WeakHash32 & hash)
 {
-    size_t num_rows = block.rows();
-    // compute hash values
+    size_t rows = block.rows();
+    if unlikely (rows == 0)
+        return;
+
+    hash.getData().resize(rows);
+    hash.reset(rows);
+    /// compute hash values
     for (size_t i = 0; i < partition_col_ids.size(); ++i)
     {
         const auto & column = block.getByPosition(partition_col_ids[i]).column;
         column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
     }
+}
 
-    // fill selector array with most significant bits of hash values
-    const auto & hash_data = hash.getData();
-    for (size_t i = 0; i < num_rows; ++i)
-    {
-        /// Row from interval [(2^32 / num_bucket) * i, (2^32 / num_bucket) * (i + 1)) goes to bucket with number i.
-        selector[i] = hash_data[i]; /// [0, 2^32)
-        selector[i] *= num_bucket; /// [0, num_bucket * 2^32), selector stores 64 bit values.
-        selector[i] >>= 32u; /// [0, num_bucket)
-    }
+void computeHash(size_t rows,
+                 const ColumnRawPtrs & key_columns,
+                 const TiDB::TiDBCollators & collators,
+                 std::vector<String> & partition_key_containers,
+                 WeakHash32 & hash)
+{
+    if unlikely (rows == 0)
+        return;
+
+    hash.getData().resize(rows);
+    hash.reset(rows);
+    for (size_t i = 0; i < key_columns.size(); i++)
+        key_columns[i]->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
 }
 
 void scatterColumns(const Block & input_block,
-                    uint32_t bucket_num,
+                    const std::vector<Int64> & partition_col_ids,
                     const TiDB::TiDBCollators & collators,
                     std::vector<String> & partition_key_containers,
-                    const std::vector<Int64> & partition_col_ids,
+                    uint32_t bucket_num,
                     std::vector<std::vector<MutableColumnPtr>> & result_columns)
 {
-    size_t rows = input_block.rows();
-    WeakHash32 hash(rows);
-    IColumn::Selector selector(rows);
-    computeHash(input_block, bucket_num, collators, partition_key_containers, partition_col_ids, hash, selector);
+    if unlikely (input_block.rows() == 0)
+        return;
+
+    WeakHash32 hash(0);
+    computeHash(input_block, partition_col_ids, collators, partition_key_containers, hash);
+
+    IColumn::Selector selector;
+    fillSelector(input_block.rows(), hash, bucket_num, selector);
 
     for (size_t col_id = 0; col_id < input_block.columns(); ++col_id)
     {
@@ -92,30 +144,24 @@ void scatterColumns(const Block & input_block,
     }
 }
 
-DB::TrackedMppDataPacketPtrs createPackets(size_t partition_num)
+void scatterColumnsForFineGrainedShuffle(const Block & block,
+                                         const std::vector<Int64> & partition_col_ids,
+                                         const TiDB::TiDBCollators & collators,
+                                         std::vector<String> & partition_key_containers,
+                                         uint32_t part_num,
+                                         uint32_t fine_grained_shuffle_stream_count,
+                                         WeakHash32 & hash,
+                                         IColumn::Selector & selector,
+                                         std::vector<IColumn::ScatterColumns> & scattered)
 {
-    DB::TrackedMppDataPacketPtrs tracked_packets;
-    tracked_packets.reserve(partition_num);
-    for (size_t i = 0; i < partition_num; ++i)
-        tracked_packets.emplace_back(std::make_shared<TrackedMppDataPacket>());
-    return tracked_packets;
-}
+    if unlikely (block.rows() == 0)
+        return;
 
-void scatterColumnsInplace(const Block & block,
-                           uint32_t bucket_num,
-                           const TiDB::TiDBCollators & collators,
-                           std::vector<String> & partition_key_containers,
-                           const std::vector<Int64> & partition_col_ids,
-                           WeakHash32 & hash,
-                           IColumn::Selector & selector,
-                           std::vector<IColumn::ScatterColumns> & scattered)
-{
-    size_t num_rows = block.rows();
     // compute hash values
-    hash.getData().resize(num_rows);
-    hash.reset(num_rows);
-    selector.resize(num_rows);
-    computeHash(block, bucket_num, collators, partition_key_containers, partition_col_ids, hash, selector);
+    computeHash(block, partition_col_ids, collators, partition_key_containers, hash);
+
+    /// fill selector using computed hash
+    fillSelectorForFineGrainedShuffle(block.rows(), hash, part_num, fine_grained_shuffle_stream_count, selector);
 
     // partition
     for (size_t i = 0; i < block.columns(); ++i)
@@ -123,6 +169,19 @@ void scatterColumnsInplace(const Block & block,
         const auto & column = block.getByPosition(i).column;
         column->scatterTo(scattered[i], selector);
     }
+}
+
+HashPartitionWriterHelperV1::HashPartitionWriterHelperV1(const std::vector<tipb::FieldType> & field_types)
+{
+    for (const auto & field_type : field_types)
+    {
+        expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
+    }
+}
+void HashPartitionWriterHelperV1::checkBlock(const Block & block) const
+{
+    DB::assertBlockSchema(expected_types, block, "HashPartitionWriterHelper");
+    block.checkNumberOfRows();
 }
 
 } // namespace DB::HashBaseWriterHelper

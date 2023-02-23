@@ -269,7 +269,7 @@ size_t Block::rows() const
         if (elem.column)
             return elem.column->size();
 
-    return 0;
+    return segment_row_id_col != nullptr ? segment_row_id_col->size() : 0;
 }
 
 
@@ -278,6 +278,15 @@ size_t Block::bytes() const
     size_t res = 0;
     for (const auto & elem : data)
         res += elem.column->byteSize();
+
+    return res;
+}
+
+size_t Block::estimateBytesForSpill() const
+{
+    size_t res = 0;
+    for (const auto & elem : data)
+        res += elem.column->estimateByteSizeForSpill();
 
     return res;
 }
@@ -514,6 +523,79 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
     return ReturnType(true);
 }
 
+/// join blocks by columns
+Block hstackBlocks(Blocks && blocks, const Block & header)
+{
+    if (blocks.empty())
+        return {};
+
+    Block res = header.cloneEmpty();
+
+    size_t num_rows = blocks.front().rows();
+    for (const auto & block : blocks)
+    {
+        RUNTIME_CHECK_MSG(block.rows() == num_rows, "Cannot hstack blocks with different number of rows");
+        for (const auto & elem : block)
+        {
+            res.getByName(elem.name).column = std::move(elem.column);
+        }
+    }
+
+    return res;
+}
+
+/// join blocks by rows
+Block vstackBlocks(Blocks && blocks)
+{
+    if (blocks.empty())
+    {
+        return {};
+    }
+
+    if (blocks.size() == 1)
+    {
+        return std::move(blocks[0]);
+    }
+
+    size_t result_rows = 0;
+    for (const auto & block : blocks)
+    {
+        result_rows += block.rows();
+    }
+
+    auto & first_block = blocks.front();
+    MutableColumns dst_columns(first_block.columns());
+
+    for (size_t i = 0; i < first_block.columns(); ++i)
+    {
+        dst_columns[i] = (*std::move(first_block.getByPosition(i).column)).mutate();
+        dst_columns[i]->reserve(result_rows);
+    }
+
+    for (size_t i = 1; i < blocks.size(); ++i)
+    {
+        if (likely(blocks[i].rows() > 0))
+        {
+            assert(blocksHaveEqualStructure(first_block, blocks[i]));
+            for (size_t idx = 0; idx < blocks[i].columns(); ++idx)
+            {
+                dst_columns[idx]->insertRangeFrom(*blocks[i].getByPosition(idx).column, 0, blocks[i].rows());
+            }
+        }
+    }
+    return first_block.cloneWithColumns(std::move(dst_columns));
+}
+
+Block popBlocksListFront(BlocksList & blocks)
+{
+    if (!blocks.empty())
+    {
+        Block out_block = blocks.front();
+        blocks.pop_front();
+        return out_block;
+    }
+    return {};
+}
 
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs)
 {

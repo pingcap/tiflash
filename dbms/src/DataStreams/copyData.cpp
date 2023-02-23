@@ -12,23 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
 
 
 namespace DB
 {
-
 namespace
 {
-
 bool isAtomicSet(std::atomic<bool> * val)
 {
     return ((val != nullptr) && val->load(std::memory_order_seq_cst));
 }
 
-}
+} // namespace
 
 template <typename TCancelCallback, typename TProgressCallback>
 void copyDataImpl(IBlockInputStream & from, IBlockOutputStream & to, TCancelCallback && is_cancelled, TProgressCallback && progress)
@@ -49,7 +47,7 @@ void copyDataImpl(IBlockInputStream & from, IBlockOutputStream & to, TCancelCall
         return;
 
     /// For outputting additional information in some formats.
-    if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(&from))
+    if (auto * input = dynamic_cast<IProfilingBlockInputStream *>(&from))
     {
         if (input->getProfileInfo().hasAppliedLimit())
             to.setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
@@ -70,24 +68,21 @@ inline void doNothing(const Block &) {}
 
 void copyData(IBlockInputStream & from, IBlockOutputStream & to, std::atomic<bool> * is_cancelled)
 {
-    auto is_cancelled_pred = [is_cancelled] ()
-    {
+    auto is_cancelled_pred = [is_cancelled]() {
         return isAtomicSet(is_cancelled);
     };
 
     copyDataImpl(from, to, is_cancelled_pred, doNothing);
 }
 
-
 void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled)
 {
     copyDataImpl(from, to, is_cancelled, doNothing);
 }
 
-void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled,
-              const std::function<void(const Block & block)> & progress)
+void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled, const std::function<void(const Block & block)> & progress)
 {
     copyDataImpl(from, to, is_cancelled, progress);
 }
 
-}
+} // namespace DB

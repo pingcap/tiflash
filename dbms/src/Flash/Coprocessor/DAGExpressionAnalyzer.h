@@ -19,14 +19,12 @@
 #include <tipb/executor.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/WindowDescription.h>
 #include <Storages/Transaction/TMTStorages.h>
 
@@ -42,6 +40,9 @@ enum class ExtraCastAfterTSMode
     AppendTimeZoneCast,
     AppendDurationCast
 };
+
+struct JoinKeyType;
+using JoinKeyTypes = std::vector<JoinKeyType>;
 
 class DAGExpressionAnalyzerHelper;
 /** Transforms an expression from DAG expression into a sequence of actions to execute it.
@@ -70,6 +71,10 @@ public:
         ExpressionActionsChain & chain,
         const std::vector<const tipb::Expr *> & conditions);
 
+    GroupingSets buildExpandGroupingColumns(const tipb::Expand & expand, const ExpressionActionsPtr & actions);
+
+    ExpressionActionsPtr appendExpand(const tipb::Expand & expand, ExpressionActionsChain & chain);
+
     NamesAndTypes buildWindowOrderColumns(const tipb::Sort & window_sort) const;
 
     std::vector<NameAndTypePair> appendOrderBy(
@@ -93,16 +98,9 @@ public:
     SortDescription getWindowSortDescription(
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items) const;
 
-    void initChain(
-        ExpressionActionsChain & chain,
-        const std::vector<NameAndTypePair> & columns) const;
+    void initChain(ExpressionActionsChain & chain) const;
 
     ExpressionActionsChain::Step & initAndGetLastStep(ExpressionActionsChain & chain) const;
-
-    void appendJoin(
-        ExpressionActionsChain & chain,
-        SubqueryForSet & join_query,
-        const NamesAndTypesList & columns_added_by_join) const;
 
     // Generate a project action for non-root DAGQueryBlock,
     // to keep the schema of Block and tidb-schema the same, and
@@ -157,7 +155,7 @@ public:
     bool appendJoinKeyAndJoinFilters(
         ExpressionActionsChain & chain,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
+        const JoinKeyTypes & join_key_types,
         Names & key_names,
         bool left,
         bool is_right_out_join,
@@ -260,7 +258,7 @@ private:
         const ExpressionActionsPtr & actions,
         const String & expr_name);
 
-    String appendCastIfNeeded(
+    String appendCastForFunctionExpr(
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions,
         const String & expr_name);
@@ -283,12 +281,12 @@ private:
     bool buildExtraCastsAfterTS(
         const ExpressionActionsPtr & actions,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const ::google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & table_scan_columns);
+        const ColumnInfos & table_scan_columns);
 
     std::pair<bool, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
+        const JoinKeyTypes & join_key_types,
         bool left,
         bool is_right_out_join);
 
@@ -337,7 +335,6 @@ private:
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
     const Context & context;
-    Settings settings;
 
     friend class DAGExpressionAnalyzerHelper;
 };

@@ -15,7 +15,6 @@
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
-#include <Storages/Page/V3/spacemap/SpaceMapRBTree.h>
 #include <Storages/Page/V3/spacemap/SpaceMapSTDMap.h>
 #include <common/likely.h>
 #include <limits.h>
@@ -36,9 +35,6 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
     SpaceMapPtr smap;
     switch (type)
     {
-    case SMAP64_RBTREE:
-        smap = RBTreeSpaceMap::create(start, end);
-        break;
     case SMAP64_STD_MAP:
         smap = STDMapSpaceMap::create(start, end);
         break;
@@ -61,7 +57,7 @@ bool SpaceMap::checkSpace(UInt64 offset, size_t size) const
 
 void SpaceMap::logDebugString()
 {
-    LOG_DEBUG(log, toDebugString());
+    LOG_DEBUG(Logger::get(), toDebugString());
 }
 
 bool SpaceMap::markFree(UInt64 offset, size_t length)
@@ -101,7 +97,6 @@ SpaceMap::SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_)
     : type(type_)
     , start(start_)
     , end(end_)
-    , log(&Poco::Logger::get("SpaceMap"))
 {
 }
 

@@ -71,7 +71,7 @@ bool isReservedDatabase(Context & context, const String & database_name)
 }
 
 
-inline void setAlterCommandColumn(Poco::Logger * log, AlterCommand & command, const ColumnInfo & column_info)
+inline void setAlterCommandColumn(const LoggerPtr & log, AlterCommand & command, const ColumnInfo & column_info)
 {
     command.column_name = column_info.name;
     command.column_id = column_info.id;
@@ -147,7 +147,7 @@ bool typeDiffers(const TiDB::ColumnInfo & a, const TiDB::ColumnInfo & b)
 /// In other words, table info and storage structure (altered by applied alter commands) are always identical,
 /// and intermediate failure won't hide the outstanding alter commands.
 inline SchemaChanges detectSchemaChanges(
-    Poco::Logger * log,
+    const LoggerPtr & log,
     const TableInfo & table_info,
     const TableInfo & orig_table_info)
 {
@@ -381,7 +381,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(const DBInfoPtr 
         /// And because storage_version <= global_version == query_version meet the criterion of serving the query, the query will be served. But query_version < actual "global_version" indicates that we use a newer schema to server an older query which may cause some inconsistency issue.
         /// So we update storage_version aggressively to prevent the above scenario happens.
         orig_table_info.schema_version = target_version;
-        auto alter_lock = storage->lockForAlter(getThreadName());
+        auto alter_lock = storage->lockForAlter(getThreadNameAndID());
         storage->alterFromTiDB(
             alter_lock,
             schema_change.first,
@@ -481,6 +481,11 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         return;
     }
 
+    if (diff.type == SchemaActionType::ActionFlashbackCluster)
+    {
+        return;
+    }
+
     auto db_info = getter.getDatabase(diff.schema_id);
     if (db_info == nullptr)
     {
@@ -529,6 +534,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::AddTablePartition:
     case SchemaActionType::DropTablePartition:
     case SchemaActionType::TruncateTablePartition:
+    case SchemaActionType::ActionReorganizePartition:
     {
         applyPartitionDiff(db_info, diff.table_id);
         break;
@@ -653,7 +659,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr
     }
 
     /// Apply new table info to logical table.
-    auto alter_lock = storage->lockForAlter(getThreadName());
+    auto alter_lock = storage->lockForAlter(getThreadNameAndID());
     storage->alterFromTiDB(alter_lock, AlterCommands{}, name_mapper.mapDatabaseName(*db_info), updated_table_info, name_mapper, context);
 
     LOG_INFO(log, "Applied partition changes {}", name_mapper.debugCanonicalName(*db_info, *table_info));
@@ -738,7 +744,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     ASTRenameQuery::Element elem{.from = std::move(from), .to = std::move(to), .tidb_display = std::move(display)};
     rename->elements.emplace_back(std::move(elem));
 
-    InterpreterRenameQuery(rename, context, getThreadName()).execute();
+    InterpreterRenameQuery(rename, context, getThreadNameAndID()).execute();
 
     LOG_INFO(
         log,
@@ -788,7 +794,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     auto orig_table_info = storage->getTableInfo();
     orig_table_info.partition = table_info->partition;
     {
-        auto alter_lock = storage->lockForAlter(getThreadName());
+        auto alter_lock = storage->lockForAlter(getThreadNameAndID());
         storage->alterFromTiDB(
             alter_lock,
             AlterCommands{},
@@ -810,7 +816,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     /// partition does not have explicit name, so use default name here
     orig_table_info.name = name_mapper.mapTableName(orig_table_info);
     {
-        auto alter_lock = storage->lockForAlter(getThreadName());
+        auto alter_lock = storage->lockForAlter(getThreadNameAndID());
         storage->alterFromTiDB(
             alter_lock,
             AlterCommands{},
@@ -839,7 +845,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     orig_table_info.is_partition_table = false;
     orig_table_info.name = table_info->name;
     {
-        auto alter_lock = storage->lockForAlter(getThreadName());
+        auto alter_lock = storage->lockForAlter(getThreadNameAndID());
         storage->alterFromTiDB(
             alter_lock,
             AlterCommands{},
@@ -1004,7 +1010,7 @@ String createTableStmt(
     const DBInfo & db_info,
     const TableInfo & table_info,
     const SchemaNameMapper & name_mapper,
-    Poco::Logger * log)
+    const LoggerPtr & log)
 {
     LOG_DEBUG(log, "Analyzing table info : {}", table_info.serialize());
     auto [columns, pks] = parseColumnsFromTableInfo(table_info);
@@ -1076,7 +1082,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(const DBInfoPtr
                 command.type = AlterCommand::RECOVER;
                 commands.emplace_back(std::move(command));
             }
-            auto alter_lock = storage->lockForAlter(getThreadName());
+            auto alter_lock = storage->lockForAlter(getThreadNameAndID());
             storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), *table_info, name_mapper, context);
             LOG_INFO(log, "Created table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
             return;
@@ -1164,7 +1170,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         command.tombstone = tmt_context.getPDClient()->getTS();
         commands.emplace_back(std::move(command));
     }
-    auto alter_lock = storage->lockForAlter(getThreadName());
+    auto alter_lock = storage->lockForAlter(getThreadNameAndID());
     storage->alterFromTiDB(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
     LOG_INFO(log, "Tombstoned table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
 }
@@ -1255,7 +1261,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnPhysicalTable(
     // Note that update replica info will update table info in table create statement by modifying
     // original table info with new replica info instead of using latest_table_info directly, so that
     // other changes (ALTER commands) won't be saved.
-    auto alter_lock = storage->lockForAlter(getThreadName());
+    auto alter_lock = storage->lockForAlter(getThreadNameAndID());
     storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), table_info, name_mapper, context);
     LOG_INFO(log, "Updated replica info for {}", name_mapper.debugCanonicalName(*db_info, table_info));
 }

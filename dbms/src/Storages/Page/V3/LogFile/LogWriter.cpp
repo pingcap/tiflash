@@ -150,7 +150,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
         catch (...)
         {
             auto message = getCurrentExceptionMessage(true);
-            LOG_FATAL(&Poco::Logger::get("LogWriter"), "Write physical record failed with message: {}", message);
+            LOG_FATAL(Logger::get(), "Write physical record failed with message: {}", message);
             std::terminate();
         }
         payload.ignore(fragment_length);

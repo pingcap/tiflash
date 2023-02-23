@@ -32,12 +32,9 @@ namespace DM
 class DMFileBlockOutputStream
 {
 public:
-    using Flags = DMFileWriter::Flags;
-
     DMFileBlockOutputStream(const Context & context,
                             const DMFilePtr & dmfile,
-                            const ColumnDefines & write_columns,
-                            const Flags flags = Flags())
+                            const ColumnDefines & write_columns)
         : writer(
             dmfile,
             write_columns,
@@ -46,8 +43,7 @@ public:
             DMFileWriter::Options{
                 CompressionSettings(context.getSettingsRef().dt_compression_method, context.getSettingsRef().dt_compression_level),
                 context.getSettingsRef().min_compress_block_size,
-                context.getSettingsRef().max_compress_block_size,
-                flags})
+                context.getSettingsRef().max_compress_block_size})
     {
     }
 

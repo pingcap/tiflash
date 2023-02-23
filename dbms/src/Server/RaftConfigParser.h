@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
@@ -23,7 +24,7 @@ namespace Poco
 class Logger;
 namespace Util
 {
-class LayeredConfiguration;
+class AbstractConfiguration;
 }
 } // namespace Poco
 
@@ -38,20 +39,15 @@ struct TiFlashRaftConfig
     // Actually it is "flash.service_addr"
     std::string flash_server_addr;
 
-    // Use PageStorage V1 for kvstore or not.
-    // TODO: remove this config
-    bool enable_compatible_mode = true;
-
     bool for_unit_test = false;
 
     static constexpr TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
     TiDB::StorageEngine engine = DEFAULT_ENGINE;
-    TiDB::SnapshotApplyMethod snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
 
 public:
     TiFlashRaftConfig() = default;
 
-    static TiFlashRaftConfig parseSettings(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
+    static TiFlashRaftConfig parseSettings(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
 };
 
 } // namespace DB

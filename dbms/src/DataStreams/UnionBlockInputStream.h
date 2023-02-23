@@ -255,6 +255,20 @@ protected:
             children[i]->readSuffix();
     }
 
+    uint64_t collectCPUTimeNsImpl(bool /*is_thread_runner*/) override
+    {
+        // `UnionBlockInputStream` does not count its own execute time,
+        // whether `UnionBlockInputStream` is `thread-runner` or not,
+        // because `UnionBlockInputStream` basically does not use cpu, only `condition_cv.wait`.
+        uint64_t cpu_time_ns = 0;
+        forEachChild([&](IBlockInputStream & child) {
+            // Each of `UnionBlockInputStream`'s children is a thread-runner.
+            cpu_time_ns += child.collectCPUTimeNs(true);
+            return false;
+        });
+        return cpu_time_ns;
+    }
+
 private:
     BlockExtraInfo doGetBlockExtraInfo() const
     {

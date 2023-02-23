@@ -137,6 +137,12 @@ public:
     /// Could be used to concatenate columns.
     virtual void insertRangeFrom(const IColumn & src, size_t start, size_t length) = 0;
 
+    /// Appends one element from other column with the same type multiple times.
+    virtual void insertManyFrom(const IColumn & src, size_t position, size_t length) = 0;
+
+    /// Appends disjunctive elements from other column with the same type.
+    virtual void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) = 0;
+
     /// Appends data located in specified memory chunk if it is possible (throws an exception if it cannot be implemented).
     /// Is used to optimize some computations (in aggregation, for example).
     /// Parameter length could be ignored if column values have fixed size.
@@ -163,6 +169,9 @@ public:
     /// Is used when there are need to increase column size, but inserting value doesn't make sense.
     /// For example, ColumnNullable(Nested) absolutely ignores values of nested column if it is marked as NULL.
     virtual void insertDefault() = 0;
+
+    /// Appends "default value" multiple times.
+    virtual void insertManyDefaults(size_t length) = 0;
 
     /** Removes last n elements.
       * Is used to support exeption-safety of several operations.
@@ -216,7 +225,7 @@ public:
       * Is used in WHERE and HAVING operations.
       * If result_size_hint > 0, then makes advance reserve(result_size_hint) for the result column;
       *  if 0, then don't makes reserve(),
-      *  otherwise (i.e. < 0), makes reserve() using size of source column.
+      *  otherwise (i.e. < 0), makes reserve() using size of filtered column.
       */
     using Filter = PaddedPODArray<UInt8>;
     virtual Ptr filter(const Filter & filt, ssize_t result_size_hint) const = 0;
@@ -262,7 +271,13 @@ public:
       */
     using Offset = UInt64;
     using Offsets = PaddedPODArray<Offset>;
-    virtual Ptr replicate(const Offsets & offsets) const = 0;
+
+    virtual Ptr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const = 0;
+
+    Ptr replicate(const Offsets & offsets) const
+    {
+        return replicateRange(0, offsets.size(), offsets);
+    }
 
     /** Split column to smaller columns. Each value goes to column index, selected by corresponding element of 'selector'.
       * Selector must contain values from 0 to num_columns - 1.
@@ -309,6 +324,9 @@ public:
 
     /// Size of column data in memory (may be approximate) - for profiling. Zero, if could not be determined.
     virtual size_t byteSize() const = 0;
+
+    /// Size of the column if it is spilled, the same as byteSize() except for ColumnAggregateFunction
+    virtual size_t estimateByteSizeForSpill() const { return byteSize(); }
 
     /// Size of column data between [offset, offset+limit) in memory (may be approximate) - for profiling.
     /// This method throws NOT_IMPLEMENTED exception if it is called with unimplemented subclass.

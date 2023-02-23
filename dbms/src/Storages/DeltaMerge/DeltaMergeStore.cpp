@@ -308,7 +308,7 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
     {
         std::unique_lock lock(read_write_mutex);
         auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-        std::stack<PageId> segment_ids;
+        std::stack<PageIdU64> segment_ids;
         while (segment_id != 0)
         {
             segment_ids.push(segment_id);
@@ -403,10 +403,11 @@ void DeltaMergeStore::shutdown()
         return;
 
     LOG_TRACE(log, "Shutdown DeltaMerge start");
-    // shutdown before unregister to avoid conflict between this thread and background gc thread on the `ExternalPagesCallbacks`
-    // because PageStorage V2 doesn't have any lock protection on the `ExternalPagesCallbacks`.(The order doesn't matter for V3)
+    // Must shutdown storage path pool to make sure the DMFile remove callbacks
+    // won't remove dmfiles unexpectly.
+    path_pool->shutdown();
+    // shutdown storage pool and clean up the local DMFile remove callbacks
     storage_pool->shutdown();
-    storage_pool->dataUnregisterExternalPagesCallbacks(storage_pool->getNamespaceId());
 
     background_pool.removeTask(background_task_handle);
     blockable_background_pool.removeTask(blockable_background_pool_handle);
@@ -415,7 +416,7 @@ void DeltaMergeStore::shutdown()
     LOG_TRACE(log, "Shutdown DeltaMerge end");
 }
 
-DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id)
+DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id, const ScanContextPtr & scan_context_)
 {
     std::shared_lock lock(read_write_mutex);
 
@@ -430,6 +431,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                is_common_handle,
                                rowkey_column_size,
                                db_settings,
+                               scan_context_,
                                tracing_id);
     return DMContextPtr(ctx);
 }
@@ -559,8 +561,15 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             // The [offset, rows - offset] can be exceeding the Segment's rowkey_range. Cut the range
             // to fit the segment.
             auto [cur_offset, cur_limit] = rowkey_range.getPosRange(handle_column, offset, rows - offset);
-            if (unlikely(cur_offset != offset))
-                throw Exception("cur_offset does not equal to offset", ErrorCodes::LOGICAL_ERROR);
+            RUNTIME_CHECK_MSG(cur_offset == offset && cur_limit != 0,
+                              "invalid cur_offset or cur_limit. is_common_handle={} start_key={} cur_offset={} cur_limit={} rows={} offset={} rowkey_range={}",
+                              is_common_handle,
+                              start_key.toRowKeyValue().toString(),
+                              cur_offset,
+                              cur_limit,
+                              rows,
+                              offset,
+                              rowkey_range.toDebugString());
 
             limit = cur_limit;
             auto alloc_bytes = block.bytes(offset, limit);
@@ -734,7 +743,7 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
     return true;
 }
 
-void DeltaMergeStore::mergeDeltaAll(const Context & context)
+bool DeltaMergeStore::mergeDeltaAll(const Context & context)
 {
     LOG_INFO(log, "Begin table mergeDeltaAll");
 
@@ -750,12 +759,15 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
         }
     }
 
+    bool all_succ = true;
     for (auto & segment : all_segments)
     {
-        segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual);
+        bool succ = segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual) != nullptr;
+        all_succ = all_succ && succ;
     }
 
-    LOG_INFO(log, "Finish table mergeDeltaAll");
+    LOG_INFO(log, "Finish table mergeDeltaAll: {}", all_succ);
+    return all_succ;
 }
 
 std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key)
@@ -913,7 +925,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         std::move(tasks),
         after_segment_read,
         req_info,
-        enable_read_thread);
+        enable_read_thread,
+        final_num_stream);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -948,6 +961,19 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     return res;
 }
 
+static inline ReadMode getReadMode(const Context & db_context, bool is_fast_scan, bool keep_order)
+{
+    if (is_fast_scan)
+    {
+        return ReadMode::Fast;
+    }
+    if (db_context.getSettingsRef().dt_enable_bitmap_filter && !keep_order)
+    {
+        return ReadMode::Bitmap;
+    }
+    return ReadMode::Normal;
+}
+
 BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const DB::Settings & db_settings,
                                         const ColumnDefines & columns_to_read,
@@ -960,10 +986,12 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         bool is_fast_scan,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
-                                        size_t extra_table_id_index)
+                                        size_t extra_table_id_index,
+                                        const ScanContextPtr & scan_context)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
-    auto dm_context = newDMContext(db_context, db_settings, tracing_id);
+    auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
+
     // If keep order is required, disable read thread.
     auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
@@ -992,11 +1020,12 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         filter,
         max_version,
         expected_block_size,
-        /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
+        getReadMode(db_context, is_fast_scan, keep_order),
         std::move(tasks),
         after_segment_read,
         log_tracing_id,
-        enable_read_thread);
+        enable_read_thread,
+        final_num_stream);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1173,7 +1202,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         || (segment_rows >= segment_limit_rows * 3 || segment_bytes >= segment_limit_bytes * 3);
 
     // Don't do compact on starting up.
-    bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 10;
+    bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 15;
 
     // Don't do background place index if we limit DeltaIndex cache.
     bool should_place_delta_index = !dm_context->db_context.isDeltaIndexLimited()

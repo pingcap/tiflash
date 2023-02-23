@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ public:
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                              {toNullableVec<String>("s1", {"banana", {}, "banana"}),
                               toNullableVec<String>("s2", {"apple", {}, "banana"})});
+
         context.addExchangeReceiver("exchange1",
                                     {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s1", {"banana", {}, "banana"}),
@@ -51,6 +52,19 @@ public:
                                  toNullableVec<Float64>("double_col", {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7}),
                                  toNullableVec<String>("string_col", {"", "a", "1", "0", "ab", "  ", "\t", "\n"}),
                              });
+
+        // with 200 rows.
+        std::vector<std::optional<TypeTraits<int>::FieldType>> key(200);
+        std::vector<std::optional<String>> value(200);
+        for (size_t i = 0; i < 200; ++i)
+        {
+            key[i] = i % 15;
+            value[i] = {fmt::format("val_{}", i)};
+        }
+        context.addMockTable(
+            {"test_db", "big_table"},
+            {{"key", TiDB::TP::TypeLong}, {"value", TiDB::TP::TypeString}},
+            {toNullableVec<Int32>("key", key), toNullableVec<String>("value", value)});
     }
 };
 
@@ -89,7 +103,7 @@ try
 }
 CATCH
 
-TEST_F(FilterExecutorTestRunner, and_or)
+TEST_F(FilterExecutorTestRunner, andOr)
 try
 {
     auto test_one = [&](const ASTPtr & condition, const ColumnsWithTypeAndName & expect_columns) {
@@ -251,7 +265,116 @@ try
 }
 CATCH
 
-/// TODO: more functions.
+TEST_F(FilterExecutorTestRunner, BigTable)
+try
+{
+    auto request = context
+                       .scan("test_db", "big_table")
+                       .filter(gt(col("key"), lit(Field(static_cast<UInt64>(7)))))
+                       .build(context);
+    auto expect = executeStreams(request, 1);
+    executeAndAssertColumnsEqual(request, expect);
+}
+CATCH
+
+TEST_F(FilterExecutorTestRunner, PushDownFilter)
+try
+{
+    context.mockStorage()->setUseDeltaMerge(true);
+    context.addMockDeltaMerge({"test_db", "test_table1"},
+                              {{"i1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeString}, {"b3", TiDB::TP::TypeTiny}},
+                              {toVec<Int64>("i1", {1, 2, 3}),
+                               toNullableVec<String>("s2", {"apple", {}, "banana"}),
+                               toVec<Int8>("b3", {true, false, true})});
+
+    // Do not support push down filter test for DAGQueryBlockInterpreter
+    enablePlanner(true);
+
+    auto request = context
+                       .scan("test_db", "test_table1")
+                       .filter(lt(col("i1"), lit(Field(static_cast<Int64>(2)))))
+                       .build(context);
+
+    {
+        String expected = R"(
+Expression: <final projection>
+ Expression: <projection after push down filter>
+  Filter: <push down filter>
+   DeltaMergeSegmentThread)";
+        executeInterpreterWithDeltaMerge(expected, request, 10);
+    }
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<Int64>({1}),
+         toNullableVec<String>({"apple"}),
+         toNullableVec<Int8>({true})});
+
+    request = context
+                  .scan("test_db", "test_table1")
+                  .filter(col("b3"))
+                  .build(context);
+
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<Int64>({1, 3}),
+         toNullableVec<String>({"apple", "banana"}),
+         toNullableVec<Int8>({true, true})});
+
+    request = context
+                  .scan("test_db", "test_table1")
+                  .filter(lt(col("i1"), lit(Field(static_cast<Int64>(3)))))
+                  .build(context);
+
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<Int64>({1, 2}),
+         toNullableVec<String>({"apple", {}}),
+         toNullableVec<Int8>({true, false})});
+
+    for (size_t i = 4; i < 10; ++i)
+    {
+        request = context
+                      .scan("test_db", "test_table1")
+                      .filter(lt(col("i1"), lit(Field(static_cast<Int64>(i)))))
+                      .build(context);
+
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int64>({1, 2, 3}),
+             toNullableVec<String>({"apple", {}, "banana"}),
+             toNullableVec<Int8>({true, false, true})});
+    }
+
+    for (size_t i = 0; i < 10; ++i)
+    {
+        request = context
+                      .scan("test_db", "test_table1")
+                      .filter(gt(col("i1"), lit(Field(static_cast<Int64>(-i)))))
+                      .build(context);
+
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int64>({1, 2, 3}),
+             toNullableVec<String>({"apple", {}, "banana"}),
+             toNullableVec<Int8>({true, false, true})});
+    }
+
+    for (size_t i = 0; i < 10; ++i)
+    {
+        request = context
+                      .scan("test_db", "test_table1")
+                      .filter(gt(col("i1"), lit(Field(static_cast<Int64>(-i)))))
+                      .project({col("i1")})
+                      .build(context);
+
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<Int64>({1, 2, 3})});
+    }
+
+    context.mockStorage()->setUseDeltaMerge(false);
+}
+CATCH
 
 } // namespace tests
 } // namespace DB

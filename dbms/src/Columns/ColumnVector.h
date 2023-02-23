@@ -220,6 +220,22 @@ public:
         data.push_back(static_cast<const Self &>(src).getData()[n]);
     }
 
+    void insertManyFrom(const IColumn & src, size_t position, size_t length) override
+    {
+        const auto & value = static_cast<const Self &>(src).getData()[position];
+        data.resize_fill(data.size() + length, value);
+    }
+
+    void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) override
+    {
+        const auto & src_container = static_cast<const Self &>(src).getData();
+        size_t old_size = data.size();
+        size_t to_add_size = position_vec.size();
+        data.resize(old_size + to_add_size);
+        for (size_t i = 0; i < to_add_size; ++i)
+            data[i + old_size] = src_container[position_vec[i]];
+    }
+
     void insertData(const char * pos, size_t /*length*/) override
     {
         data.push_back(*reinterpret_cast<const T *>(pos));
@@ -283,6 +299,11 @@ public:
     void insertDefault() override
     {
         data.push_back(T());
+    }
+
+    void insertManyDefaults(size_t length) override
+    {
+        data.resize_fill(data.size() + length, T());
     }
 
     void popBack(size_t n) override
@@ -366,7 +387,7 @@ public:
 
     ColumnPtr permute(const IColumn::Permutation & perm, size_t limit) const override;
 
-    ColumnPtr replicate(const IColumn::Offsets & offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
 
     void getExtremes(Field & min, Field & max) const override;
 

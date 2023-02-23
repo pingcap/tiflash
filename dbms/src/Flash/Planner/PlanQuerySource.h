@@ -14,12 +14,13 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IQuerySource.h>
 
 namespace DB
 {
+class DAGContext;
+
 class PlanQuerySource : public IQuerySource
 {
 public:
@@ -30,7 +31,7 @@ public:
     std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
 
     DAGContext & getDAGContext() const { return *context.getDAGContext(); }
-    const tipb::DAGRequest & getDAGRequest() const { return *getDAGContext().dag_request; }
+    const tipb::DAGRequest & getDAGRequest() const;
 
 private:
     Context & context;

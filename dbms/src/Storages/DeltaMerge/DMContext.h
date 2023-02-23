@@ -20,6 +20,9 @@
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/ScanContext.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -72,10 +75,6 @@ struct DMContext : private boost::noncopyable
     const size_t delta_small_column_file_bytes;
     // The expected stable pack rows.
     const size_t stable_pack_rows;
-    // The rows of segment to be regarded as small. Small segments will be merged.
-    const size_t small_segment_rows;
-    // The bytes of segment to be regarded as small. Small segments will be merged.
-    const size_t small_segment_bytes;
 
     // The number of points to check for calculating region split.
     const size_t region_split_check_points = 128;
@@ -88,6 +87,8 @@ struct DMContext : private boost::noncopyable
 
     String tracing_id;
 
+    ScanContextPtr scan_context;
+
 public:
     DMContext(const Context & db_context_,
               StoragePathPool & path_pool_,
@@ -97,6 +98,7 @@ public:
               bool is_common_handle_,
               size_t rowkey_column_size_,
               const DB::Settings & settings,
+              const ScanContextPtr & scan_context_ = std::make_shared<ScanContext>(),
               const String & tracing_id_ = "")
         : db_context(db_context_)
         , path_pool(path_pool_)
@@ -115,22 +117,21 @@ public:
         , delta_small_column_file_rows(settings.dt_segment_delta_small_column_file_rows)
         , delta_small_column_file_bytes(settings.dt_segment_delta_small_column_file_size)
         , stable_pack_rows(settings.dt_segment_stable_pack_rows)
-        , small_segment_rows(settings.dt_segment_limit_rows / 3)
-        , small_segment_bytes(settings.dt_segment_limit_size / 3)
         , enable_logical_split(settings.dt_enable_logical_split)
         , read_delta_only(settings.dt_read_delta_only)
         , read_stable_only(settings.dt_read_stable_only)
         , enable_relevant_place(settings.dt_enable_relevant_place)
         , enable_skippable_place(settings.dt_enable_skippable_place)
         , tracing_id(tracing_id_)
+        , scan_context(scan_context_)
     {
     }
 
     WriteLimiterPtr getWriteLimiter() const { return db_context.getWriteLimiter(); }
     ReadLimiterPtr getReadLimiter() const { return db_context.getReadLimiter(); }
-    DM::DMConfigurationOpt createChecksumConfig(bool is_single_file) const
+    DM::DMConfigurationOpt createChecksumConfig() const
     {
-        return DMChecksumConfig::fromDBContext(db_context, is_single_file);
+        return DMChecksumConfig::fromDBContext(db_context);
     }
 };
 

@@ -80,7 +80,7 @@ public:
     CoprocessorReader(
         const DAGSchema & schema_,
         pingcap::kv::Cluster * cluster,
-        std::vector<pingcap::coprocessor::copTask> tasks,
+        std::vector<pingcap::coprocessor::CopTask> tasks,
         bool has_enforce_encode_type_,
         int concurrency)
         : schema(schema_)
@@ -88,12 +88,18 @@ public:
         , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"))
         , collected(false)
         , concurrency_(concurrency)
-    {
-        resp_iter.open();
-    }
+    {}
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
+    // `open` will call the resp_iter's `open` to send coprocessor request.
+    void open()
+    {
+        resp_iter.open();
+        opened = true;
+    }
+
+    // `cancel` will call the resp_iter's `cancel` to abort the data receiving and prevent the next retry.
     void cancel() { resp_iter.cancel(); }
 
 
@@ -143,6 +149,8 @@ public:
     // stream_id, decoder_ptr are only meaningful for ExchagneReceiver.
     CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<CHBlockChunkDecodeAndSquash> & /*decoder_ptr*/)
     {
+        RUNTIME_CHECK(opened == true);
+
         auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())
             return {nullptr, true, result.error.message(), false};
@@ -176,25 +184,12 @@ public:
 
     size_t getSourceNum() const { return 1; }
 
-    int computeNewThreadCount() const { return concurrency_; }
-
-    void collectNewThreadCount(int & cnt)
-    {
-        if (!collected)
-        {
-            collected = true;
-            cnt += computeNewThreadCount();
-        }
-    }
-
-    void resetNewThreadCountCompute()
-    {
-        collected = false;
-    }
+    int getExternalThreadCnt() const { return concurrency_; }
 
     void close() {}
 
     bool collected = false;
     int concurrency_;
+    bool opened = false;
 };
 } // namespace DB

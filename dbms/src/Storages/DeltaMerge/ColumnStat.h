@@ -30,13 +30,47 @@ struct ColumnStat
     double avg_size;
     // The serialized size of the column data on disk.
     size_t serialized_bytes = 0;
+
+    // These members are only useful when using metav2
+    size_t data_bytes = 0;
+    size_t mark_bytes = 0;
+    size_t nullmap_data_bytes = 0;
+    size_t nullmap_mark_bytes = 0;
+    size_t index_bytes = 0;
+    void serializeToBuffer(WriteBuffer & buf) const
+    {
+        writeIntBinary(col_id, buf);
+        writeStringBinary(type->getName(), buf);
+        writeFloatBinary(avg_size, buf);
+        writeIntBinary(serialized_bytes, buf);
+        writeIntBinary(data_bytes, buf);
+        writeIntBinary(mark_bytes, buf);
+        writeIntBinary(nullmap_data_bytes, buf);
+        writeIntBinary(nullmap_mark_bytes, buf);
+        writeIntBinary(index_bytes, buf);
+    }
+
+    void parseFromBuffer(ReadBuffer & buf)
+    {
+        readIntBinary(col_id, buf);
+        String type_name;
+        readStringBinary(type_name, buf);
+        type = DataTypeFactory::instance().getOrSet(type_name);
+        readFloatBinary(avg_size, buf);
+        readIntBinary(serialized_bytes, buf);
+        readIntBinary(data_bytes, buf);
+        readIntBinary(mark_bytes, buf);
+        readIntBinary(nullmap_data_bytes, buf);
+        readIntBinary(nullmap_mark_bytes, buf);
+        readIntBinary(index_bytes, buf);
+    }
 };
 
 using ColumnStats = std::unordered_map<ColId, ColumnStat>;
 
 inline void readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadBuffer & buf)
 {
-    const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
+    DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
     size_t count;
     DB::assertString("Columns: ", buf);
@@ -61,7 +95,7 @@ inline void readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadB
         DB::readString(type_name, buf);
         DB::assertChar('\n', buf);
 
-        auto type = data_type_factory.get(type_name);
+        auto type = data_type_factory.getOrSet(type_name);
         column_sats.emplace(id, ColumnStat{id, type, avg_size, serialized_bytes});
     }
 }

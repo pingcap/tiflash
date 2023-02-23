@@ -356,7 +356,7 @@ int benchEntry(const std::vector<std::string> & opts)
         for (size_t i = 0; i < repeat; ++i)
         {
             using namespace std::chrono;
-            dmfile = DB::DM::DMFile::create(1, workdir, false, opt);
+            dmfile = DB::DM::DMFile::create(1, workdir, opt);
             auto start = high_resolution_clock::now();
             {
                 auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfile, *defines);
@@ -389,7 +389,7 @@ int benchEntry(const std::vector<std::string> & opts)
             auto start = high_resolution_clock::now();
             {
                 auto builder = DB::DM::DMFileBlockInputStreamBuilder(*db_context);
-                auto stream = builder.setColumnCache(std::make_shared<DB::DM::ColumnCache>()).build(dmfile, *defines, {DB::DM::RowKeyRange::newAll(false, 1)});
+                auto stream = builder.setColumnCache(std::make_shared<DB::DM::ColumnCache>()).build(dmfile, *defines, {DB::DM::RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
                 for (size_t j = 0; j < blocks.size(); ++j)
                 {
                     TIFLASH_NO_OPTIMIZE(stream->read());

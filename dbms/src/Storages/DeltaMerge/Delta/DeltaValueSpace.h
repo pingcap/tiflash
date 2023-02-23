@@ -31,13 +31,13 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 
 namespace DB
 {
 namespace DM
 {
-using GenPageId = std::function<PageId()>;
+using GenPageId = std::function<PageIdU64()>;
 class DeltaValueSpace;
 class DeltaValueSnapshot;
 
@@ -60,7 +60,7 @@ class DeltaValueSpace
     , private boost::noncopyable
 {
 public:
-    using Lock = std::unique_lock<std::mutex>;
+    using Lock = std::unique_lock<std::recursive_mutex>;
 
 private:
     /// column files in `persisted_file_set` are all persisted in disks and can be restored after restart.
@@ -94,18 +94,19 @@ private:
     DeltaIndexPtr delta_index;
 
     // Protects the operations in this instance.
-    mutable std::mutex mutex;
+    // It is a recursive_mutex because the lock may be also used by the parent segment as its update lock.
+    mutable std::recursive_mutex mutex;
 
     LoggerPtr log;
 
 public:
-    explicit DeltaValueSpace(PageId id_, const ColumnFilePersisteds & persisted_files = {}, const ColumnFiles & in_memory_files = {});
+    explicit DeltaValueSpace(PageIdU64 id_, const ColumnFilePersisteds & persisted_files = {}, const ColumnFiles & in_memory_files = {});
 
     explicit DeltaValueSpace(ColumnFilePersistedSetPtr && persisted_file_set_);
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
-    static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
+    static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageIdU64 id);
 
     /**
      * Resets the logger by using the one from the segment.
@@ -166,7 +167,7 @@ public:
         const RowKeyRange & target_range,
         WriteBatches & wbs) const;
 
-    PageId getId() const { return persisted_file_set->getId(); }
+    PageIdU64 getId() const { return persisted_file_set->getId(); }
 
     size_t getColumnFileCount() const { return persisted_file_set->getColumnFileCount() + mem_table_set->getColumnFileCount(); }
     size_t getRows(bool use_unsaved = true) const
@@ -398,7 +399,7 @@ public:
 
     // Use for DeltaMergeBlockInputStream to read delta rows, and merge with stable rows.
     // This method will check whether offset and limit are valid. It only return those valid rows.
-    size_t readRows(MutableColumns & output_cols, size_t offset, size_t limit, const RowKeyRange * range);
+    size_t readRows(MutableColumns & output_cols, size_t offset, size_t limit, const RowKeyRange * range, std::vector<UInt32> * row_ids = nullptr);
 
     // Get blocks or delete_ranges of `ExtraHandleColumn` and `VersionColumn`.
     // If there are continuous blocks, they will be squashed into one block.
@@ -419,6 +420,7 @@ private:
     ColumnFileSetInputStream persisted_files_input_stream;
 
     bool persisted_files_done = false;
+    size_t read_rows = 0;
 
 public:
     DeltaValueInputStream(const DMContext & context_,
@@ -433,6 +435,15 @@ public:
     Block getHeader() const override { return persisted_files_input_stream.getHeader(); }
 
     Block read() override
+    {
+        auto block = doRead();
+        block.setStartOffset(read_rows);
+        read_rows += block.rows();
+        return block;
+    }
+
+    // Read block from old to new.
+    Block doRead()
     {
         if (persisted_files_done)
             return mem_table_input_stream.read();

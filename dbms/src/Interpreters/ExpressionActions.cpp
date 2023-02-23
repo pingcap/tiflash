@@ -48,6 +48,12 @@ Names ExpressionAction::getNeededColumns() const
     for (const auto & column : projections)
         res.push_back(column.first);
 
+    if (expand)
+    {
+        for (const auto & column : expand->getAllGroupSetColumnNames())
+            res.push_back(column);
+    }
+
     if (!source_name.empty())
         res.push_back(source_name);
 
@@ -135,6 +141,13 @@ ExpressionAction ExpressionAction::ordinaryJoin(std::shared_ptr<const Join> join
     return a;
 }
 
+ExpressionAction ExpressionAction::expandSource(GroupingSets grouping_sets_)
+{
+    ExpressionAction a;
+    a.type = EXPAND;
+    a.expand = std::make_shared<Expand>(grouping_sets_);
+    return a;
+}
 
 void ExpressionAction::prepare(Block & sample_block)
 {
@@ -158,8 +171,6 @@ void ExpressionAction::prepare(Block & sample_block)
             if (!col || !col->isColumnConst())
                 all_const = false;
         }
-
-        ColumnPtr new_column;
 
         /// If all arguments are constants, and function is suitable to be executed in 'prepare' stage - execute function.
         if (all_const && function->isSuitableForConstantFolding())
@@ -202,7 +213,7 @@ void ExpressionAction::prepare(Block & sample_block)
         /// in case of coprocessor task, the join is always not null, but if the query comes from
         /// clickhouse client, the join maybe null, skip updating column type if join is null
         // todo find a new way to update the column type so the type can always be updated.
-        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right && join->useNulls())
+        if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right)
         {
             /// update the column type for left block
             std::unordered_set<String> keys;
@@ -227,6 +238,23 @@ void ExpressionAction::prepare(Block & sample_block)
         for (const auto & col : columns_added_by_join)
             sample_block.insert(ColumnWithTypeAndName(nullptr, col.type, col.name));
 
+        break;
+    }
+
+    case EXPAND:
+    {
+        // sample_block is just for schema check followed by later block, modify it if your schema has changed during this action.
+        auto name_set = expand->getAllGroupSetColumnNames();
+        // make grouping set column to be nullable.
+        for (const auto & col_name : name_set)
+        {
+            auto & column_with_name = sample_block.getByName(col_name);
+            column_with_name.type = makeNullable(column_with_name.type);
+            if (column_with_name.column != nullptr)
+                column_with_name.column = makeNullable(column_with_name.column);
+        }
+        // fill one more column: groupingID.
+        sample_block.insert({nullptr, expand->grouping_identifier_column_type, expand->grouping_identifier_column_name});
         break;
     }
 
@@ -306,9 +334,18 @@ void ExpressionAction::execute(Block & block) const
         break;
     }
 
+    //TODO: Clean up all Join logic in ExpressionAction
     case JOIN:
     {
-        join->joinBlock(block);
+        ProbeProcessInfo probe_process_info(0);
+        probe_process_info.block = block;
+        join->joinBlock(probe_process_info);
+        break;
+    }
+
+    case EXPAND:
+    {
+        expand->replicateAndFillNull(block);
         break;
     }
 
@@ -417,35 +454,6 @@ String ExpressionAction::toString() const
     return ss.str();
 }
 
-void ExpressionActions::checkLimits(Block & block) const
-{
-    if (settings.max_temporary_columns && block.columns() > settings.max_temporary_columns)
-        throw Exception("Too many temporary columns: " + block.dumpNames()
-                            + ". Maximum: " + settings.max_temporary_columns.toString(),
-                        ErrorCodes::TOO_MANY_TEMPORARY_COLUMNS);
-
-    if (settings.max_temporary_non_const_columns)
-    {
-        size_t non_const_columns = 0;
-        for (size_t i = 0, size = block.columns(); i < size; ++i)
-            if (block.safeGetByPosition(i).column && !block.safeGetByPosition(i).column->isColumnConst())
-                ++non_const_columns;
-
-        if (non_const_columns > settings.max_temporary_non_const_columns)
-        {
-            std::stringstream list_of_non_const_columns;
-            for (size_t i = 0, size = block.columns(); i < size; ++i)
-                if (!block.safeGetByPosition(i).column->isColumnConst())
-                    list_of_non_const_columns << "\n"
-                                              << block.safeGetByPosition(i).name;
-
-            throw Exception("Too many temporary non-const columns:" + list_of_non_const_columns.str()
-                                + ". Maximum: " + settings.max_temporary_non_const_columns.toString(),
-                            ErrorCodes::TOO_MANY_TEMPORARY_NON_CONST_COLUMNS);
-        }
-    }
-}
-
 void ExpressionActions::addInput(const ColumnWithTypeAndName & column)
 {
     input_columns.emplace_back(column.name, column.type);
@@ -478,9 +486,6 @@ void ExpressionActions::addImpl(ExpressionAction action, Names & new_names)
 
     if (action.type == ExpressionAction::APPLY_FUNCTION)
     {
-        if (sample_block.has(action.result_name))
-            throw Exception("Column '" + action.result_name + "' already exists", ErrorCodes::DUPLICATE_COLUMN);
-
         ColumnsWithTypeAndName arguments(action.argument_names.size());
         for (size_t i = 0; i < action.argument_names.size(); ++i)
         {
@@ -505,10 +510,7 @@ void ExpressionActions::prependProjectInput()
 void ExpressionActions::execute(Block & block) const
 {
     for (const auto & action : actions)
-    {
         action.execute(block);
-        checkLimits(block);
-    }
 }
 
 void ExpressionActions::executeOnTotals(Block & block) const
@@ -718,8 +720,6 @@ void ExpressionActions::finalize(const Names & output_columns)
     }
 
     actions.swap(new_actions);
-
-    checkLimits(sample_block);
 }
 
 
@@ -746,7 +746,7 @@ std::string ExpressionActions::dumpActions() const
 BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & source_header, size_t index, size_t step, size_t max_block_size) const
 {
     for (const auto & action : actions)
-        if (action.join && (action.join->getKind() == ASTTableJoin::Kind::Full || action.join->getKind() == ASTTableJoin::Kind::Right))
+        if (action.join && (action.join->needReturnNonJoinedData()))
             return action.join->createStreamWithNonJoinedRows(source_header, index, step, max_block_size);
 
     return {};
@@ -758,7 +758,7 @@ void ExpressionActionsChain::addStep()
         throw Exception("Cannot add action to empty ExpressionActionsChain", ErrorCodes::LOGICAL_ERROR);
 
     ColumnsWithTypeAndName columns = steps.back().actions->getSampleBlock().getColumnsWithTypeAndName();
-    steps.push_back(Step(std::make_shared<ExpressionActions>(columns, settings)));
+    steps.push_back(Step(std::make_shared<ExpressionActions>(columns)));
 }
 
 void ExpressionActionsChain::finalize()

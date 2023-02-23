@@ -48,7 +48,6 @@
 #include <Common/UnifiedLogFormatter.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/setThreadName.h>
-#include <Flash/Mpp/getMPPTaskTracingLog.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
@@ -1157,11 +1156,12 @@ void BaseDaemon::initialize(Application & self)
 
 void BaseDaemon::logRevision() const
 {
-    Logger::root().information("Welcome to TiFlash");
-    Logger::root().information("Starting daemon with revision " + Poco::NumberFormatter::format(ClickHouseRevision::get()));
+    auto * log = &Logger::root();
+    LOG_INFO(log, "Welcome to TiFlash");
+    LOG_INFO(log, "Starting daemon with revision " + Poco::NumberFormatter::format(ClickHouseRevision::get()));
     std::stringstream ss;
     TiFlashBuildInfo::outputDetail(ss);
-    Logger::root().information("TiFlash build info: " + ss.str());
+    LOG_INFO(log, "TiFlash build info: {}", ss.str());
 }
 
 /// Used for exitOnTaskError()

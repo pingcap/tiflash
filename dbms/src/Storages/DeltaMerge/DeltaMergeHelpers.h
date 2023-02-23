@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/DeltaMerge/DMContext.h>
+
 #include <utility>
 
 #pragma once
@@ -244,6 +246,9 @@ inline bool isSameSchema(const Block & a, const Block & b)
     }
     return true;
 }
+
+using Digest = UInt256;
+Digest hashSchema(const Block & schema);
 
 /// This method guarantees that the returned valid block is not empty.
 inline Block readNextBlock(const BlockInputStreamPtr & in)

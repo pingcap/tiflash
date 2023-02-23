@@ -377,6 +377,60 @@ ColumnWithTypeAndName createDateTimeColumnConst(size_t size, const std::optional
     return {std::move(col), data_type_ptr, "datetime"};
 }
 
+template <bool is_nullable = true>
+ColumnWithTypeAndName createDurationColumn(std::initializer_list<std::optional<MyDuration>> init, int fraction)
+{
+    DataTypePtr data_type_ptr = std::make_shared<DataTypeMyDuration>(fraction);
+    if constexpr (is_nullable)
+    {
+        data_type_ptr = makeNullable(data_type_ptr);
+    }
+    auto col = data_type_ptr->createColumn();
+    for (const auto & dt : init)
+    {
+        if (dt.has_value())
+            col->insert(Field(dt->nanoSecond()));
+        else
+        {
+            if constexpr (is_nullable)
+            {
+                col->insert(Null());
+            }
+            else
+            {
+                throw Exception("Null value for not nullable DataTypeMyDuration");
+            }
+        }
+    }
+    return {std::move(col), data_type_ptr, "duration"};
+}
+
+template <bool is_nullable = true>
+ColumnWithTypeAndName createDurationColumnConst(size_t size, const std::optional<MyDuration> & duration, int fraction)
+{
+    DataTypePtr data_type_ptr = std::make_shared<DataTypeMyDuration>(fraction);
+    if constexpr (is_nullable)
+    {
+        data_type_ptr = makeNullable(data_type_ptr);
+    }
+
+    ColumnPtr col;
+    if (duration.has_value())
+        col = data_type_ptr->createColumnConst(size, Field(duration->nanoSecond()));
+    else
+    {
+        if constexpr (is_nullable)
+        {
+            col = data_type_ptr->createColumnConst(size, Field(Null()));
+        }
+        else
+        {
+            throw Exception("Null value for not nullable DataTypeMyDuration");
+        }
+    }
+    return {std::move(col), data_type_ptr, "duration"};
+}
+
 // parse a string into decimal field.
 template <typename T>
 typename TypeTraits<T>::FieldType parseDecimal(
@@ -781,11 +835,21 @@ protected:
 };
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
-#define ASSERT_BLOCK_EQ(expected, actual) DB::tests::blockEqual((expected), (actual))
+#define ASSERT_BLOCK_EQ(expected, actual) ASSERT_TRUE(DB::tests::blockEqual((expected), (actual)))
 
 /// restrictly checking columns equality, both data set and each row's offset should be the same
 #define ASSERT_COLUMNS_EQ_R(expected, actual) ASSERT_TRUE(DB::tests::columnsEqual((expected), (actual), true))
 /// unrestrictly checking columns equality, only checking data set equality
 #define ASSERT_COLUMNS_EQ_UR(expected, actual) ASSERT_TRUE(DB::tests::columnsEqual((expected), (actual), false))
+
+/// Check the profile event change after the body.
+#define ASSERT_PROFILE_EVENT(event, diff_expr, ...)                          \
+    do                                                                       \
+    {                                                                        \
+        auto profile_event_count = ProfileEvents::get(event);                \
+        {__VA_ARGS__};                                                       \
+        ASSERT_EQ(profile_event_count diff_expr, ProfileEvents::get(event)); \
+    } while (false);
+
 } // namespace tests
 } // namespace DB

@@ -189,7 +189,7 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
         r.resize(cols_size, true);
     }
 
-    for (auto const & [col_id, col] : ext::enumerate(cols))
+    for (auto && [col_id, col] : ext::enumerate(cols))
     {
         for (size_t i = 0, size = col.column->size(); i < size; ++i)
         {
@@ -300,7 +300,7 @@ ColumnsWithTypeAndName toColumnsWithUniqueName(const ColumnsWithTypeAndName & co
 ColumnsWithTypeAndName toColumnsReordered(const ColumnsWithTypeAndName & columns, const ColumnNumbers & new_offsets)
 {
     ColumnsWithTypeAndName columns_reordered(columns.size());
-    for (const auto & [i, offset] : ext::enumerate(new_offsets))
+    for (auto && [i, offset] : ext::enumerate(new_offsets))
     {
         columns_reordered[offset] = columns[i];
     }
@@ -467,7 +467,7 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
     assert(col_size >= end);
     assert(col_size > begin);
 
-    bool is_same = true;
+    bool is_same [[maybe_unused]] = true;
 
     for (size_t i = 1; i < col_num; ++i)
     {

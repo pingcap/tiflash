@@ -68,19 +68,13 @@ struct RowNumber
     }
 };
 
-class WindowBlockInputStream : public IProfilingBlockInputStream
-    , public std::enable_shared_from_this<WindowBlockInputStream>
+/* Implementation details.*/
+struct WindowTransformAction
 {
-    static constexpr auto NAME = "Window";
+    WindowTransformAction(const Block & input_header, const WindowDescription & window_description_, const String & req_id);
 
-public:
-    WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_, const String & req_id);
+    void cleanUp();
 
-    Block getHeader() const override { return output_header; };
-
-    String getName() const override { return NAME; }
-
-    /* Implementation details.*/
     void advancePartitionEnd();
     bool isDifferentFromPrevPartition(UInt64 current_partition_row);
 
@@ -107,7 +101,7 @@ public:
 
     const Columns & inputAt(const RowNumber & x) const
     {
-        return const_cast<WindowBlockInputStream *>(this)->inputAt(x);
+        return const_cast<WindowTransformAction *>(this)->inputAt(x);
     }
 
     auto & blockAt(const UInt64 block_number)
@@ -119,7 +113,7 @@ public:
 
     const auto & blockAt(const UInt64 block_number) const
     {
-        return const_cast<WindowBlockInputStream *>(this)->blockAt(block_number);
+        return const_cast<WindowTransformAction *>(this)->blockAt(block_number);
     }
 
     auto & blockAt(const RowNumber & x)
@@ -129,7 +123,7 @@ public:
 
     const auto & blockAt(const RowNumber & x) const
     {
-        return const_cast<WindowBlockInputStream *>(this)->blockAt(x);
+        return const_cast<WindowTransformAction *>(this)->blockAt(x);
     }
 
     size_t blockRowsNumber(const RowNumber & x) const
@@ -163,14 +157,12 @@ public:
 
     bool onlyHaveRowNumberAndRank();
 
-protected:
-    Block readImpl() override;
-    void appendInfo(FmtBuffer & buffer) const override;
-    bool returnIfCancelledOrKilled();
+    Int64 getPartitionEndRow(size_t block_rows);
+
+    void appendInfo(FmtBuffer & buffer) const;
 
     LoggerPtr log;
 
-public:
     bool input_is_finished = false;
 
     Block output_header;
@@ -242,7 +234,26 @@ public:
     //TODO: used as template parameters
     bool only_have_row_number = false;
     bool only_have_pure_window = false;
-    Int64 getPartitionEndRow(size_t block_rows);
+};
+
+class WindowBlockInputStream : public IProfilingBlockInputStream
+{
+    static constexpr auto NAME = "Window";
+
+public:
+    WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_, const String & req_id);
+
+    Block getHeader() const override { return action.output_header; };
+
+    String getName() const override { return NAME; }
+
+protected:
+    Block readImpl() override;
+    void appendInfo(FmtBuffer & buffer) const override;
+    bool returnIfCancelledOrKilled();
+
+private:
+    WindowTransformAction action;
 };
 
 } // namespace DB

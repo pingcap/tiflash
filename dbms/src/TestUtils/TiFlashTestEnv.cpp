@@ -20,6 +20,7 @@
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Server/RaftConfigParser.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -45,6 +46,20 @@ String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool g
         return poco_path.absolute().toString();
     else
         return poco_path.toString();
+}
+
+void TiFlashTestEnv::tryCreatePath(const std::string & path)
+{
+    try
+    {
+        Poco::File p(path);
+        if (!p.exists())
+            p.createDirectories();
+    }
+    catch (...)
+    {
+        tryLogCurrentException("gtest", fmt::format("while removing dir `{}`", path));
+    }
 }
 
 void TiFlashTestEnv::tryRemovePath(const std::string & path, bool recreate)
@@ -82,6 +97,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     global_contexts.push_back(global_context);
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
+    global_context->setTemporaryPath(getTemporaryPath());
 
     global_context->initializeTiFlashMetrics();
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
@@ -117,12 +133,12 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
         paths.first,
         paths.second,
         Strings{},
-        /*enable_raft_compatible_mode=*/true,
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
     global_context->setPageStorageRunMode(ps_run_mode);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
+    global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
     LOG_INFO(Logger::get(), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     TiFlashRaftConfig raft_config;
@@ -136,6 +152,8 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
 
     auto & path_pool = global_context->getPathPool();
     global_context->getTMTContext().restore(path_pool);
+
+    global_context->initializeSharedBlockSchemas();
 }
 
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
@@ -153,8 +171,9 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
         testdata_path.push_back(root_path);
     context.setPath(root_path);
     auto paths = getPathPool(testdata_path);
-    context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
+    context.setPathPool(paths.first, paths.second, Strings{}, context.getPathCapacity(), context.getFileProvider());
     global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
+    global_contexts[0]->initializeWriteNodePageStorageIfNeed(context.getPathPool());
     context.getSettingsRef() = settings;
     return context;
 }
@@ -176,5 +195,24 @@ void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel(level);
+}
+
+void TiFlashTestEnv::setUpTestContext(Context & context, DAGContext * dag_context, MockStorage * mock_storage, const TestType & test_type)
+{
+    switch (test_type)
+    {
+    case TestType::EXECUTOR_TEST:
+        context.setExecutorTest();
+        break;
+    case TestType::INTERPRETER_TEST:
+        context.setInterpreterTest();
+        break;
+    }
+    context.setMockStorage(mock_storage);
+    context.setDAGContext(dag_context);
+    context.getTimezoneInfo().resetByDAGRequest(*dag_context->dag_request);
+    /// by default non-mpp task will do collation insensitive group by, let the test do
+    /// collation sensitive group by setting `group_by_collation_sensitive` to true
+    context.setSetting("group_by_collation_sensitive", Field(static_cast<UInt64>(1)));
 }
 } // namespace DB::tests

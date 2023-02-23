@@ -20,9 +20,9 @@
 #include <Encryption/RateLimiter.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -95,14 +95,14 @@ try
     // In this case, WalStore throput is very low.
     // Because we only have 5 record to write.
     size_t wb_nums = 5;
-    PageId page_id = 50;
+    PageIdU64 page_id = 50;
     size_t buff_size = 100ul * 1024;
     const size_t rate_target = buff_size - 1;
 
     char c_buff[wb_nums * buff_size];
 
     WriteBatch wbs[wb_nums];
-    PageEntriesEdit edits[wb_nums];
+    u128::PageEntriesEdit edits[wb_nums];
 
     for (size_t i = 0; i < wb_nums; ++i)
     {
@@ -154,7 +154,7 @@ try
                                                                         rate_target,
                                                                         LimiterType::UNKNOW);
 
-        PageIds page_ids;
+        std::vector<PageIdU64> page_ids;
         for (size_t i = 0; i < wb_nums; ++i)
         {
             page_ids.emplace_back(page_id + i);
@@ -394,12 +394,12 @@ try
     }
 
     {
-        PageIds page_ids = {1, 2, 5};
+        std::vector<PageIdU64> page_ids = {1, 2, 5};
         // readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, true);
         auto page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, false);
-        ASSERT_EQ(page_maps[1].page_id, 1);
-        ASSERT_FALSE(page_maps[2].isValid());
-        ASSERT_FALSE(page_maps[5].isValid());
+        ASSERT_EQ(page_maps.at(1).page_id, 1);
+        ASSERT_FALSE(page_maps.at(2).isValid());
+        ASSERT_FALSE(page_maps.at(5).isValid());
 
         const auto & page1 = page_storage->readImpl(TEST_NAMESPACE_ID, 1, nullptr, nullptr, false);
         ASSERT_EQ(page1.page_id, 1);
@@ -415,16 +415,38 @@ try
         };
 
         page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, fields, nullptr, nullptr, false);
-        ASSERT_EQ(page_maps[4].page_id, 4);
-        ASSERT_EQ(page_maps[4].fieldSize(), 3);
-        ASSERT_EQ(page_maps[4].data.size(), 20 + 20 + 30);
+        ASSERT_EQ(page_maps.at(4).page_id, 4);
+        ASSERT_EQ(page_maps.at(4).fieldSize(), 3);
+        ASSERT_EQ(page_maps.at(4).data.size(), 20 + 20 + 30);
         // the invalid page ids in input param are returned with INVALID_ID
         ASSERT_GT(page_maps.count(6), 0);
-        ASSERT_EQ(page_maps[6].isValid(), false);
+        ASSERT_EQ(page_maps.at(6).isValid(), false);
         ASSERT_GT(page_maps.count(2), 0);
-        ASSERT_EQ(page_maps[2].isValid(), false);
+        ASSERT_EQ(page_maps.at(2).isValid(), false);
         ASSERT_GT(page_maps.count(5), 0);
-        ASSERT_EQ(page_maps[5].isValid(), false);
+        ASSERT_EQ(page_maps.at(5).isValid(), false);
+    }
+    {
+        // Read with id can also fetch the fieldOffsets
+        auto page_4 = page_storage->readImpl(TEST_NAMESPACE_ID, 4, nullptr, nullptr, false);
+        ASSERT_EQ(page_4.fieldSize(), 4);
+        ASSERT_EQ(page_4.getFieldData(0).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(1).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(2).size(), 30);
+        ASSERT_EQ(page_4.getFieldData(3).size(), 30);
+    }
+    {
+        // Read with ids can also fetch the fieldOffsets
+        std::vector<PageIdU64> page_ids{4};
+        auto pages = page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, false);
+        ASSERT_EQ(pages.size(), 1);
+        ASSERT_GT(pages.count(4), 0);
+        auto page_4 = pages.at(4);
+        ASSERT_EQ(page_4.fieldSize(), 4);
+        ASSERT_EQ(page_4.getFieldData(0).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(1).size(), 20);
+        ASSERT_EQ(page_4.getFieldData(2).size(), 30);
+        ASSERT_EQ(page_4.getFieldData(3).size(), 30);
     }
 }
 CATCH
@@ -501,7 +523,7 @@ CATCH
 TEST_F(PageStorageTest, MultipleWriteRead)
 {
     size_t page_id_max = 100;
-    for (DB::PageId page_id = 0; page_id <= page_id_max; ++page_id)
+    for (DB::PageIdU64 page_id = 0; page_id <= page_id_max; ++page_id)
     {
         std::mt19937 size_gen;
         size_gen.seed(time(nullptr));
@@ -525,7 +547,7 @@ TEST_F(PageStorageTest, MultipleWriteRead)
         page_storage->write(std::move(wb));
     }
 
-    for (DB::PageId page_id = 0; page_id <= page_id_max; ++page_id)
+    for (DB::PageIdU64 page_id = 0; page_id <= page_id_max; ++page_id)
     {
         page_storage->read(page_id);
     }
@@ -585,7 +607,7 @@ try
     char c_buff[buf_sz];
 
     const size_t num_repeat = 10;
-    PageId pid = 1;
+    PageIdU64 pid = 1;
     const char page0_byte = 0x3f;
     {
         // put page0
@@ -690,18 +712,18 @@ TEST_F(PageStorageTest, IngestFile)
     callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
         return {};
     };
-    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
+    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> & living_page_ids) -> void {
         times_remover_called += 1;
         EXPECT_EQ(living_page_ids.size(), 1);
         EXPECT_GT(living_page_ids.count(100), 0);
     };
-    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.prefix = TEST_NAMESPACE_ID;
     page_storage->registerExternalPagesCallbacks(callbacks);
     page_storage->gc();
     ASSERT_EQ(times_remover_called, 1);
     page_storage->gc();
     ASSERT_EQ(times_remover_called, 2);
-    page_storage->unregisterExternalPagesCallbacks(callbacks.ns_id);
+    page_storage->unregisterExternalPagesCallbacks(callbacks.prefix);
     page_storage->gc();
     ASSERT_EQ(times_remover_called, 2);
 }
@@ -1051,6 +1073,57 @@ TEST_F(PageStorageWith2PagesTest, PutCollapseDuplicatedRefPages)
     }
 }
 
+TEST_F(PageStorageWith2PagesTest, RemoveReadOnlyFile)
+{
+    PageStorageConfig cfg;
+    cfg.blob_heavy_gc_valid_rate = 1.0;
+    page_storage = reopenWithConfig(cfg);
+
+    auto blob_file1 = Poco::File(getTemporaryPath() + "/blobfile_1");
+    auto blob_file2 = Poco::File(getTemporaryPath() + "/blobfile_2");
+    ASSERT_EQ(blob_file1.exists(), true);
+    ASSERT_EQ(blob_file2.exists(), false);
+
+    // full gc happens, rewrite page from blobfile_1 to blobfile_2
+    bool flag = page_storage->gcImpl(true, nullptr, nullptr);
+    ASSERT_EQ(flag, true);
+    ASSERT_EQ(blob_file1.exists(), true);
+    ASSERT_EQ(blob_file2.exists(), true);
+
+    // cleanup blobfile_1
+    flag = page_storage->gcImpl(true, nullptr, nullptr);
+    ASSERT_EQ(blob_file1.exists(), false);
+    ASSERT_EQ(blob_file2.exists(), true);
+    EXPECT_EQ(flag, true);
+}
+
+TEST_F(PageStorageWith2PagesTest, ReuseEmptyFileAfterRestart)
+{
+    {
+        // delete the pages, the blobfile become "empty"
+        WriteBatch wb;
+        wb.delPage(1);
+        wb.delPage(2);
+        page_storage->write(std::move(wb));
+    }
+
+    PageStorageConfig cfg;
+    cfg.blob_heavy_gc_valid_rate = 1.0;
+    page_storage = reopenWithConfig(cfg);
+
+    auto blob_file1 = Poco::File(getTemporaryPath() + "/blobfile_1");
+    auto blob_file2 = Poco::File(getTemporaryPath() + "/blobfile_2");
+    ASSERT_EQ(blob_file1.exists(), true);
+    ASSERT_EQ(blob_file2.exists(), false);
+
+    // the "empty" blobfile_1 will be reused for later writing,
+    // no full gc happens.
+    bool flag = page_storage->gcImpl(true, nullptr, nullptr);
+    ASSERT_EQ(flag, false);
+    ASSERT_EQ(blob_file1.exists(), true);
+    ASSERT_EQ(blob_file2.exists(), false);
+}
+
 TEST_F(PageStorageWith2PagesTest, DISABLED_AddRefPageToNonExistPage)
 try
 {
@@ -1119,7 +1192,7 @@ try
     callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
         return {};
     };
-    callbacks.remover = [&times_remover_called, &test_stage](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
+    callbacks.remover = [&times_remover_called, &test_stage](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> & living_page_ids) -> void {
         times_remover_called += 1;
         switch (test_stage)
         {
@@ -1140,7 +1213,7 @@ try
         }
         }
     };
-    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.prefix = TEST_NAMESPACE_ID;
     page_storage->registerExternalPagesCallbacks(callbacks);
     {
         SCOPED_TRACE("fist gc");
@@ -1192,9 +1265,22 @@ CATCH
 TEST_F(PageStorageTest, ConcurrencyAddExtCallbacks)
 try
 {
+    NamespaceId ns_id1 = TEST_NAMESPACE_ID;
+    NamespaceId ns_id2 = TEST_NAMESPACE_ID + 1;
+    {
+        WriteBatch wb(ns_id1);
+        wb.putExternal(20, 0);
+        page_storage->write(std::move(wb));
+    }
+    {
+        WriteBatch wb(ns_id2);
+        wb.putExternal(20, 0);
+        page_storage->write(std::move(wb));
+    }
+
     auto ptr = std::make_shared<Int32>(100); // mock the `StorageDeltaMerge`
     ExternalPageCallbacks callbacks;
-    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.prefix = ns_id1;
     callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
         auto ptr = ptr_weak_ref.lock();
         if (!ptr)
@@ -1203,7 +1289,7 @@ try
         (*ptr) += 1; // mock access the storage inside callback
         return {};
     };
-    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> &) -> void {
         auto ptr = ptr_weak_ref.lock();
         if (!ptr)
             return;
@@ -1222,7 +1308,7 @@ try
     // mock table created while gc is running
     {
         ExternalPageCallbacks new_callbacks;
-        new_callbacks.ns_id = TEST_NAMESPACE_ID + 1;
+        new_callbacks.prefix = ns_id2;
         new_callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
             auto ptr = ptr_weak_ref.lock();
             if (!ptr)
@@ -1231,7 +1317,7 @@ try
             (*ptr) += 1; // mock access the storage inside callback
             return {};
         };
-        new_callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+        new_callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> &) -> void {
             auto ptr = ptr_weak_ref.lock();
             if (!ptr)
                 return;
@@ -1253,7 +1339,7 @@ try
 {
     auto ptr = std::make_shared<Int32>(100); // mock the `StorageDeltaMerge`
     ExternalPageCallbacks callbacks;
-    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.prefix = TEST_NAMESPACE_ID;
     callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
         auto ptr = ptr_weak_ref.lock();
         if (!ptr)
@@ -1262,7 +1348,7 @@ try
         (*ptr) += 1; // mock access the storage inside callback
         return {};
     };
-    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageIdU64> &) -> void {
         auto ptr = ptr_weak_ref.lock();
         if (!ptr)
             return;
@@ -1409,7 +1495,7 @@ try
         batch.putExternal(1999, 0);
         batch.putExternal(2000, 0);
         page_storage->write(std::move(batch));
-        ASSERT_EQ(page_storage->getMaxId(), 2000);
+        // ASSERT_EQ(page_storage->getMaxId(), 2000); // max id will not be updated, ignore this check
     }
 
     {
@@ -1437,7 +1523,7 @@ try
         batch.putExternal(20000, 0);
         batch.putExternal(20001, 0);
         page_storage->write(std::move(batch));
-        ASSERT_EQ(page_storage->getMaxId(), 20001);
+        // ASSERT_EQ(page_storage->getMaxId(), 20001); //  max id will not be updated, ignore this check
     }
 
     {
@@ -1525,7 +1611,7 @@ try
         c_buff[i] = i % 0xff;
     }
 
-    PageId page_id = 120;
+    PageIdU64 page_id = 120;
     UInt64 tag = 12345;
     {
         WriteBatch batch;
@@ -1577,7 +1663,7 @@ try
         c_buff[i] = i % 0xff;
     }
 
-    PageId page_id0 = 120;
+    PageIdU64 page_id0 = 120;
     {
         WriteBatch batch;
         batch.putPage(page_id0, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
@@ -1597,7 +1683,7 @@ try
     while (getLogFileNum() <= 1)
     {
         WriteBatch batch;
-        PageId page_id1 = 130;
+        PageIdU64 page_id1 = 130;
         batch.putPage(page_id1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
         page_storage->write(std::move(batch));
     }
@@ -1643,13 +1729,13 @@ try
         c_buff[i] = i % 0xff;
     }
 
-    PageId page_id0 = 120;
+    PageIdU64 page_id0 = 120;
     {
         WriteBatch batch;
         batch.putPage(page_id0, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
         page_storage->write(std::move(batch));
     }
-    PageId page_id1 = 121;
+    PageIdU64 page_id1 = 121;
     {
         WriteBatch batch;
         batch.putRefPage(page_id1, page_id0);
@@ -1673,7 +1759,7 @@ try
     while (getLogFileNum() <= 1)
     {
         WriteBatch batch;
-        PageId page_id2 = 130;
+        PageIdU64 page_id2 = 130;
         batch.putPage(page_id2, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
         page_storage->write(std::move(batch));
     }

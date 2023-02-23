@@ -14,23 +14,28 @@
 
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 
 namespace DB
 {
+
+const char * FineGrainedShuffleWriterLabels[] = {"FineGrainedShuffleWriter", "FineGrainedShuffleWriter-V1"};
+
 template <class ExchangeWriterPtr>
 FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     ExchangeWriterPtr writer_,
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
-    bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_,
     uint64_t fine_grained_shuffle_stream_count_,
-    UInt64 fine_grained_shuffle_batch_size_)
+    UInt64 fine_grained_shuffle_batch_size_,
+    MPPDataPacketVersion data_codec_version_,
+    tipb::CompressionMode compression_mode_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
-    , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
@@ -38,28 +43,13 @@ FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     , fine_grained_shuffle_batch_size(fine_grained_shuffle_batch_size_)
     , batch_send_row_limit(fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count)
     , hash(0)
+    , data_codec_version(data_codec_version_)
+    , compression_method(ToInternalCompressionMethod(compression_mode_))
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
-    chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
-}
-
-template <class ExchangeWriterPtr>
-void FineGrainedShuffleWriter<ExchangeWriterPtr>::finishWrite()
-{
-    assert(0 == rows_in_blocks);
-    if (should_send_exec_summary_at_last)
-        sendExecutionSummary();
-}
-
-template <class ExchangeWriterPtr>
-void FineGrainedShuffleWriter<ExchangeWriterPtr>::sendExecutionSummary()
-{
-    tipb::SelectResponse response;
-    summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
-    writer->sendExecutionSummary(response);
 }
 
 template <class ExchangeWriterPtr>
@@ -78,6 +68,23 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::prepare(const Block & sample_b
     num_bucket = partition_num * fine_grained_shuffle_stream_count;
     partition_key_containers_for_reuse.resize(collators.size());
     initScatterColumns();
+
+    switch (data_codec_version)
+    {
+    case MPPDataPacketV0:
+        break;
+    case MPPDataPacketV1:
+    default:
+    {
+        for (const auto & field_type : dag_context.result_field_types)
+        {
+            expected_types.emplace_back(getDataTypeByFieldTypeForComputingLayer(field_type));
+        }
+        assertBlockSchema(expected_types, header, FineGrainedShuffleWriterLabels[MPPDataPacketV1]);
+        break;
+    }
+    }
+
     prepared = true;
 }
 
@@ -97,9 +104,9 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & block)
         "Output column size mismatch with field type size");
 
     size_t rows = block.rows();
-    rows_in_blocks += rows;
     if (rows > 0)
     {
+        rows_in_blocks += rows;
         blocks.push_back(block);
     }
 
@@ -125,65 +132,63 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::initScatterColumns()
 }
 
 template <class ExchangeWriterPtr>
-void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
+template <MPPDataPacketVersion version>
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffleImpl()
 {
-    auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
-    if (likely(!blocks.empty()))
+    if (blocks.empty())
+        return;
+
     {
         assert(rows_in_blocks > 0);
         assert(fine_grained_shuffle_stream_count <= 1024);
 
         HashBaseWriterHelper::materializeBlocks(blocks);
-        while (!blocks.empty())
+        for (auto & block : blocks)
         {
-            const auto & block = blocks.back();
-            HashBaseWriterHelper::scatterColumnsInplace(block, num_bucket, collators, partition_key_containers_for_reuse, partition_col_ids, hash, selector, scattered);
-            blocks.pop_back();
+            if constexpr (version != MPPDataPacketV0)
+            {
+                // check schema
+                assertBlockSchema(expected_types, block, FineGrainedShuffleWriterLabels[MPPDataPacketV1]);
+            }
+            HashBaseWriterHelper::scatterColumnsForFineGrainedShuffle(block, partition_col_ids, collators, partition_key_containers_for_reuse, partition_num, fine_grained_shuffle_stream_count, hash, selector, scattered);
+            block.clear();
         }
+        blocks.clear();
 
         // serialize each partitioned block and write it to its destination
         size_t part_id = 0;
         for (size_t bucket_idx = 0; bucket_idx < num_bucket; bucket_idx += fine_grained_shuffle_stream_count, ++part_id)
         {
-            for (uint64_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
-            {
-                // assemble scatter columns into a block
-                MutableColumns columns;
-                columns.reserve(num_columns);
-                for (size_t col_id = 0; col_id < num_columns; ++col_id)
-                    columns.emplace_back(std::move(scattered[col_id][bucket_idx + stream_idx]));
-                auto block = header.cloneWithColumns(std::move(columns));
-
-                // encode into packet
-                chunk_codec_stream->encode(block, 0, block.rows());
-                tracked_packets[part_id]->addChunk(chunk_codec_stream->getString());
-                tracked_packets[part_id]->getPacket().add_stream_ids(stream_idx);
-                chunk_codec_stream->clear();
-
-                // disassemble the block back to scatter columns
-                columns = block.mutateColumns();
-                for (size_t col_id = 0; col_id < num_columns; ++col_id)
-                {
-                    columns[col_id]->popBack(columns[col_id]->size()); // clear column
-                    scattered[col_id][bucket_idx + stream_idx] = std::move(columns[col_id]);
-                }
-            }
+            writer->fineGrainedShuffleWrite(
+                header,
+                scattered,
+                bucket_idx,
+                fine_grained_shuffle_stream_count,
+                num_columns,
+                part_id,
+                data_codec_version,
+                compression_method);
         }
         rows_in_blocks = 0;
     }
-
-    writePackets(tracked_packets);
 }
 
 template <class ExchangeWriterPtr>
-void FineGrainedShuffleWriter<ExchangeWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
+void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
 {
-    for (size_t part_id = 0; part_id < packets.size(); ++part_id)
+    switch (data_codec_version)
     {
-        const auto & packet = packets[part_id];
-        assert(packet);
-        if (likely(packet->getPacket().chunks_size() > 0))
-            writer->partitionWrite(packet, part_id);
+    case MPPDataPacketV0:
+    {
+        batchWriteFineGrainedShuffleImpl<MPPDataPacketV0>();
+        break;
+    }
+    case MPPDataPacketV1:
+    default:
+    {
+        batchWriteFineGrainedShuffleImpl<MPPDataPacketV1>();
+        break;
+    }
     }
 }
 

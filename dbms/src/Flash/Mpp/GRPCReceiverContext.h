@@ -17,8 +17,12 @@
 #include <Common/UnaryCallback.h>
 #include <Common/grpcpp.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
+#include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <Storages/StorageDisaggregated.h>
 #include <common/types.h>
+#include <grpcpp/completion_queue.h>
 #include <kvproto/mpp.pb.h>
 #include <pingcap/kv/Cluster.h>
 #include <tipb/executor.pb.h>
@@ -36,7 +40,7 @@ class ExchangePacketReader
 public:
     virtual ~ExchangePacketReader() = default;
     virtual bool read(TrackedMppDataPacketPtr & packet) = 0;
-    virtual ::grpc::Status finish() = 0;
+    virtual grpc::Status finish() = 0;
     virtual void cancel(const String & reason) = 0;
 };
 using ExchangePacketReaderPtr = std::shared_ptr<ExchangePacketReader>;
@@ -54,7 +58,7 @@ using AsyncExchangePacketReaderPtr = std::shared_ptr<AsyncExchangePacketReader>;
 struct ExchangeRecvRequest
 {
     Int64 source_index = -1;
-    Int64 send_task_id = -2; //Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
+    Int64 send_task_id = -2; // Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
     Int64 recv_task_id = -2;
     std::shared_ptr<mpp::EstablishMPPConnectionRequest> req;
     bool is_local = false;
@@ -65,7 +69,7 @@ struct ExchangeRecvRequest
 class GRPCReceiverContext
 {
 public:
-    using Status = ::grpc::Status;
+    using Status = grpc::Status;
     using Request = ExchangeRecvRequest;
     using Reader = ExchangePacketReader;
     using AsyncReader = AsyncExchangePacketReader;
@@ -84,24 +88,47 @@ public:
 
     ExchangePacketReaderPtr makeReader(const ExchangeRecvRequest & request) const;
 
+    ExchangePacketReaderPtr makeSyncReader(const ExchangeRecvRequest & request) const;
+
     void makeAsyncReader(
         const ExchangeRecvRequest & request,
         AsyncExchangePacketReaderPtr & reader,
+        grpc::CompletionQueue * cq,
         UnaryCallback<bool> * callback) const;
 
     static Status getStatusOK()
     {
-        return ::grpc::Status::OK;
+        return grpc::Status::OK;
     }
 
     void fillSchema(DAGSchema & schema) const;
 
+    void establishMPPConnectionLocalV2(const ExchangeRecvRequest & request, size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained);
+
+    static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager);
+
+    // Only for tiflash_compute mode, make sure disaggregated_dispatch_reqs is not empty.
+    void sendMPPTaskToTiFlashStorageNode(
+        LoggerPtr log,
+        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs);
+
+    // Normally cancel will be sent by TiDB to all MPPTasks, so ExchangeReceiver no need to cancel.
+    // But in disaggregated mode, TableScan in tiflash_compute node will be converted to ExchangeReceiver(executed in tiflash_compute node),
+    // and ExchangeSender+TableScan(executed in tiflash_storage node).
+    // So when we cancel the former MPPTask, the latter MPPTask needs to be handled by the tiflash_compute node itself.
+    void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log);
+
 private:
+    void setDispatchMPPTaskErrMsg(const std::string & err);
+
     tipb::ExchangeReceiver exchange_receiver_meta;
     mpp::TaskMeta task_meta;
     pingcap::kv::Cluster * cluster;
     std::shared_ptr<MPPTaskManager> task_manager;
     bool enable_local_tunnel;
     bool enable_async_grpc;
+
+    std::mutex dispatch_mpp_task_err_msg_mu;
+    String dispatch_mpp_task_err_msg;
 };
 } // namespace DB

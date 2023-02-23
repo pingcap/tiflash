@@ -119,9 +119,14 @@ public:
     void insertData(const char * src, size_t /*length*/) override;
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode) override;
     void insertDefault() override { data.push_back(T()); }
+    void insertManyDefaults(size_t length) override
+    {
+        data.resize_fill(data.size() + length, T());
+    }
     void insert(const Field & x) override { data.push_back(DB::get<typename NearestFieldType<T>::Type>(x)); }
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
-
+    void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
+    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override;
     void popBack(size_t n) override { data.resize_assume_reserved(data.size() - n); }
 
     StringRef getRawData() const override
@@ -167,7 +172,8 @@ public:
     template <typename Type>
     ColumnPtr indexImpl(const PaddedPODArray<Type> & indexes, size_t limit) const;
 
-    ColumnPtr replicate(const IColumn::Offsets & offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
+
     void getExtremes(Field & min, Field & max) const override;
 
     MutableColumns scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const override

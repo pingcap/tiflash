@@ -39,7 +39,11 @@ else ()
     list (APPEND memcpy_sources memcpy.cpp)
 endif()
 
-add_sources_compile_flag_avx2 (${memcpy_sources})
+check_then_add_sources_compile_flag (
+    TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT
+    "${TIFLASH_COMPILER_ARCH_HASWELL_FLAG}"
+    ${memcpy_sources}
+)
 
 add_library (memcpy STATIC ${memcpy_sources})
 target_include_directories(memcpy PUBLIC ${TiFlash_SOURCE_DIR}/libs/libcommon/include)

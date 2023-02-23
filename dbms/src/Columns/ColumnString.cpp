@@ -21,11 +21,6 @@
 #include <common/memcpy.h>
 #include <fmt/core.h>
 
-
-/// Used in the `reserve` method, when the number of rows is known, but sizes of elements are not.
-#define APPROX_STRING_SIZE 64
-
-
 namespace DB
 {
 namespace ErrorCodes
@@ -230,28 +225,30 @@ void ColumnString::getPermutation(bool reverse, size_t limit, int /*nan_directio
     }
 }
 
-
-ColumnPtr ColumnString::replicate(const Offsets & replicate_offsets) const
+ColumnPtr ColumnString::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets) const
 {
-    size_t col_size = size();
-    if (col_size != replicate_offsets.size())
+    size_t col_rows = size();
+    if (col_rows != replicate_offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    assert(start_row < end_row);
+    assert(end_row <= col_rows);
 
     auto res = ColumnString::create();
 
-    if (0 == col_size)
+    if (0 == col_rows)
         return res;
 
     Chars_t & res_chars = res->chars;
     Offsets & res_offsets = res->offsets;
-    res_chars.reserve(chars.size() / col_size * replicate_offsets.back());
-    res_offsets.reserve(replicate_offsets.back());
+    res_chars.reserve(chars.size() / col_rows * (replicate_offsets[end_row - 1]));
+    res_offsets.reserve(replicate_offsets[end_row - 1]);
 
     Offset prev_replicate_offset = 0;
-    Offset prev_string_offset = 0;
+    Offset prev_string_offset = start_row == 0 ? 0 : offsets[start_row - 1];
     Offset current_new_offset = 0;
 
-    for (size_t i = 0; i < col_size; ++i)
+    for (size_t i = start_row; i < end_row; ++i)
     {
         size_t size_to_replicate = replicate_offsets[i] - prev_replicate_offset;
         size_t string_size = offsets[i] - prev_string_offset;

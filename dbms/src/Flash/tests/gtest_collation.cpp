@@ -56,7 +56,7 @@ public:
         /// For topn
         context.addMockTable({db_name, topn_table},
                              {{topn_col, TiDB::TP::TypeString}},
-                             {toNullableVec<String>("_col", ColumnWithString{"col0-0", "col0-1", "col0-2", {}, "col0-4", {}, "col0-6", "col0-7"})});
+                             {toNullableVec<String>(topn_col, ColumnWithString{"col0-0", "col0-1", "col0-2", {}, "col0-4", {}, "col0-6", "col0-7"})});
 
         /// For projection
         context.addMockTable({db_name, proj_table},
@@ -71,7 +71,7 @@ public:
                              {toNullableVec<String>(limit_col, ColumnWithString{"col0-0", {}, "col0-2", "col0-3", {}, "col0-5", "col0-6", "col0-7"})});
 
         /// For ExchangeSender
-        context.addExchangeRelationSchema(sender_name, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
+        context.addExchangeReceiver(sender_name, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
     }
 
     void setAndCheck(const String & table_name, const String & col_name, Int32 collation, const ColumnsWithTypeAndName & expect)

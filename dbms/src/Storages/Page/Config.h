@@ -16,7 +16,7 @@
 
 #include <Core/Types.h>
 #include <Interpreters/SettingsCommon.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 
 namespace DB
 {
@@ -85,12 +85,19 @@ struct PageStorageConfig
 
     MVCC::VersionSetConfig version_set_config;
 
+    // Use a more easy gc config for v2 when all of its data will be transformed to v3.
+    static PageStorageConfig getEasyGCConfig()
+    {
+        PageStorageConfig gc_config;
+        gc_config.file_roll_size = PAGE_FILE_SMALL_SIZE;
+        return gc_config;
+    }
+
     //==========================================================================================
     // V3 config
     //==========================================================================================
     SettingUInt64 blob_file_limit_size = BLOBFILE_LIMIT_SIZE;
     SettingUInt64 blob_spacemap_type = 2;
-    SettingUInt64 blob_cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
     SettingDouble blob_heavy_gc_valid_rate = 0.5;
     SettingUInt64 blob_block_alignment_bytes = 0;
 
@@ -114,7 +121,6 @@ struct PageStorageConfig
         // Reload V3 setting
         blob_file_limit_size = rhs.blob_file_limit_size;
         blob_spacemap_type = rhs.blob_spacemap_type;
-        blob_cached_fd_size = rhs.blob_cached_fd_size;
         blob_heavy_gc_valid_rate = rhs.blob_heavy_gc_valid_rate;
         blob_block_alignment_bytes = rhs.blob_block_alignment_bytes;
 
@@ -144,11 +150,10 @@ struct PageStorageConfig
         return fmt::format(
             "PageStorageConfig V3 {{"
             "blob_file_limit_size: {}, blob_spacemap_type: {}, "
-            "blob_cached_fd_size: {}, blob_heavy_gc_valid_rate: {:.3f}, blob_block_alignment_bytes: {}, "
+            "blob_heavy_gc_valid_rate: {:.3f}, blob_block_alignment_bytes: {}, "
             "wal_roll_size: {}, wal_max_persisted_log_files: {}}}",
             blob_file_limit_size.get(),
             blob_spacemap_type.get(),
-            blob_cached_fd_size.get(),
             blob_heavy_gc_valid_rate.get(),
             blob_block_alignment_bytes.get(),
             wal_roll_size.get(),

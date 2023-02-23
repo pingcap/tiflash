@@ -25,12 +25,12 @@ namespace DB
 {
 namespace DM
 {
-void serializeSchema(WriteBuffer & buf, const BlockPtr & schema)
+void serializeSchema(WriteBuffer & buf, const Block & schema)
 {
     if (schema)
     {
-        writeIntBinary(static_cast<UInt32>(schema->columns()), buf);
-        for (auto & col : *schema)
+        writeIntBinary(static_cast<UInt32>(schema.columns()), buf);
+        for (const auto & col : schema)
         {
             writeIntBinary(col.column_id, buf);
             writeStringBinary(col.name, buf);
@@ -58,7 +58,7 @@ BlockPtr deserializeSchema(ReadBuffer & buf)
         readIntBinary(column_id, buf);
         readStringBinary(name, buf);
         readStringBinary(type_name, buf);
-        schema->insert(ColumnWithTypeAndName({}, DataTypeFactory::instance().get(type_name), name, column_id));
+        schema->insert(ColumnWithTypeAndName({}, DataTypeFactory::instance().getOrSet(type_name), name, column_id));
     }
     return schema;
 }
@@ -105,7 +105,7 @@ void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & c
     }
 }
 
-ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
+ColumnFilePersisteds deserializeSavedColumnFiles(const DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf)
 {
     // Check binary version
     DeltaFormat::Version version;
@@ -117,7 +117,7 @@ ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowK
         // V1 and V2 share the same deserializer.
     case DeltaFormat::V1:
     case DeltaFormat::V2:
-        column_files = deserializeSavedColumnFilesInV2Format(buf, version);
+        column_files = deserializeSavedColumnFilesInV2Format(context, buf, version);
         break;
     case DeltaFormat::V3:
         column_files = deserializeSavedColumnFilesInV3Format(context, segment_range, buf);
