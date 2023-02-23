@@ -66,7 +66,7 @@ public:
     }
 
 #ifdef DBMS_PUBLIC_GTEST
-    WriteBatchWrapper(WriteBatch && wb_)
+    explicit WriteBatchWrapper(WriteBatch && wb_)
         : wb(std::make_unique<WriteBatch>(std::move(wb_)))
         , uwb(nullptr)
     {}
@@ -97,6 +97,26 @@ public:
             wb->putExternal(page_id, tag);
         else
             uwb->putExternal(page_id, tag);
+    }
+
+    void putRemotePage(PageIdU64 page_id, const Remote::RemoteDataLocation & loc, PageSize size, const PageFieldSizes & data_sizes)
+    {
+        if (uwb)
+        {
+            uwb->putRemotePage(page_id, loc, size, data_sizes);
+            return;
+        }
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "try to put remote page into non-universal ps, page_id={}", page_id);
+    }
+
+    void putRemoteExternal(const UniversalPageId & page_id, const Remote::RemoteDataLocation & loc)
+    {
+        if (uwb)
+        {
+            uwb->putRemoteExternal(page_id, loc);
+            return;
+        }
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "try to put remote external page into non-universal ps, page_id={}", page_id);
     }
 
     // Add RefPage{ref_id} -> Page{page_id}

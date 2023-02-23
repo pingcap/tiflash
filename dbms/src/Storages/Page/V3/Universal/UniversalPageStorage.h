@@ -128,6 +128,7 @@ public:
     void registerUniversalExternalPagesCallbacks(const UniversalExternalPageCallbacks & callbacks);
     void unregisterUniversalExternalPagesCallbacks(const String & prefix);
 
+private:
     String storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator; // Get paths for storing data
     PageStorageConfig config;

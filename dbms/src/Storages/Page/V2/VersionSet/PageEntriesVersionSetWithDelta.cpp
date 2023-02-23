@@ -20,6 +20,7 @@
 #include <common/types.h>
 
 #include <stack>
+#include "magic_enum.hpp"
 
 #ifdef FIU_ENABLE
 #include <Common/randomSeed.h>
@@ -453,7 +454,10 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
         case WriteBatchWriteType::REF:
             this->applyRef(rec);
             break;
+        case WriteBatchWriteType::PUT_REMOTE:
+        case WriteBatchWriteType::PUT_REMOTE_EXTERNAL:
         case WriteBatchWriteType::UPSERT:
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "DeltaVersionEditAcceptor::apply with invalid type {}", magic_enum::enum_name(rec.type));
             throw Exception("WriteType::UPSERT should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
             break;
         }
@@ -594,6 +598,9 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
         case WriteBatchWriteType::UPSERT:
             current->upsertPage(rec.page_id, rec.entry);
             break;
+        case WriteBatchWriteType::PUT_REMOTE:
+        case WriteBatchWriteType::PUT_REMOTE_EXTERNAL:
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "DeltaVersionEditAcceptor::applyInplace with invalid type {}", magic_enum::enum_name(rec.type));
         }
     }
 }

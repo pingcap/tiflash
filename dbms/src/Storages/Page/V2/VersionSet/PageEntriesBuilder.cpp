@@ -14,6 +14,8 @@
 
 #include <Storages/Page/V2/VersionSet/PageEntriesBuilder.h>
 
+#include <magic_enum.hpp>
+
 namespace DB::PS::V2
 {
 void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
@@ -48,6 +50,10 @@ void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
             break;
         case WriteBatchWriteType::UPSERT:
             current_version->upsertPage(rec.page_id, rec.entry);
+            break;
+        case WriteBatchWriteType::PUT_REMOTE:
+        case WriteBatchWriteType::PUT_REMOTE_EXTERNAL:
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "PageEntriesBuilder::apply with invalid type {}", magic_enum::enum_name(rec.type));
             break;
         }
     }
