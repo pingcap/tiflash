@@ -17,5 +17,4 @@ include_directories (${CMAKE_CURRENT_BINARY_DIR})
 set (page-workload-src MainEntry.cpp PSBackground.cpp PSRunnable.cpp PSStressEnv.cpp PSWorkload.cpp)
 
 add_library (page-workload-lib ${page-workload-src})
-target_link_libraries (page-workload-lib dbms clickhouse_functions clickhouse-server-lib)
-target_compile_options (page-workload-lib PRIVATE -Wno-format)
+target_link_libraries (page-workload-lib dbms)
