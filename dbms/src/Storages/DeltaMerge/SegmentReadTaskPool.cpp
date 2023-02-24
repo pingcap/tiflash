@@ -16,6 +16,8 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
+#include <magic_enum.hpp>
+
 namespace CurrentMetrics
 {
 extern const Metric DT_SegmentReadTasks;

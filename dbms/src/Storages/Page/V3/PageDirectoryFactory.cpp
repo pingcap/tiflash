@@ -16,6 +16,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -141,7 +142,7 @@ void PageDirectoryFactory<Trait>::loadEdit(const PageDirectoryPtr & dir, const P
             max_applied_ver = r.version;
 
         if (dump_entries)
-            LOG_INFO(Logger::get(), PageEntriesEdit::toDebugString(r));
+            LOG_INFO(Logger::get(), "{}", r);
         applyRecord(dir, r);
     }
 }
