@@ -123,14 +123,15 @@ PageStorage can be treated as a local object store, which can store `PageID - > 
 
 1. Pages can be stored permanently while avoiding the resulting write amplification
 2. It supports for External Pages, that is, storing larger Pages externally. This feature allows PS to manage large files, such as DTFile (SSTFile similar to LSM Tree).
-3. It supports for Ref Pages, a hard link similar to the file system
+3. It supports for Ref Pages, similar to hard link for file system
 4. It supports MVCC Snapshot, that is, the application layer can obtain a fixed data view according to the Snapshot
 
 
-Managing these complex IO dependencies at the application layer is doomed to have no future. We can store all TiFlash data in PageStorage (PS), and then PS upload all data changes regularly , which can solve the consistency problem.
+Managing these complex IO dependencies at the application layer is doomed to have no future. We choose to store all TiFlash data in PageStorage (PS), and then PS upload all data changes regularly , which can solve the consistency problem.
 
 
-It works like EBS snapshot, uploading changes to S3 periodically.
+It works like EBS snapshot, i.e. uploading changes to S3 periodically.
+
 1. It has been guaranteed that if the PS state on the TiFlash disk at a certain time t is S(t), at this time restart, the PS based on the local disk can be restored to the state S(t)
 2. If we get PS snapshot at time t and upload all the data in the snapshot to S3 to form file F, then the TiFlash state recovered from F must be equal to S(t)
 
