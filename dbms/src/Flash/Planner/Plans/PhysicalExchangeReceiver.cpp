@@ -17,14 +17,14 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Interpreters/Context.h>
+#include <Operators/ExchangeReceiverSourceOp.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <fmt/format.h>
-#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
-#include <Operators/ExchangeReceiverSourceOp.h>
 
 namespace DB
 {
@@ -93,10 +93,10 @@ void PhysicalExchangeReceiver::buildPipelineExec(PipelineExecGroupBuilder & grou
 {
     const bool enable_fine_grained_shuffle = enableFineGrainedShuffle(mpp_exchange_receiver->getFineGrainedShuffleStreamCount());
     // TODO choose a more reasonable source concurrency.
-    size_t source_concurrency = enable_fine_grained_shuffle 
+    size_t source_concurrency = enable_fine_grained_shuffle
         ? std::min(concurrency, mpp_exchange_receiver->getFineGrainedShuffleStreamCount())
         : concurrency;
-    
+
     group_builder.init(source_concurrency);
     size_t index = 0;
     group_builder.transform([&](auto & builder) {

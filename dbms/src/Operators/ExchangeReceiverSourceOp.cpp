@@ -38,9 +38,9 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
             assert(recv_res);
             assert(recv_res->recv_status != ReceiveStatus::empty);
             auto result = exchange_receiver->toExchangeReceiveResult(
-                recv_res->recv_msg, 
-                block_queue, 
-                header, 
+                recv_res->recv_msg,
+                block_queue,
+                header,
                 decoder_ptr,
                 recv_res->recv_status == ReceiveStatus::eof);
             recv_res.reset();
@@ -72,7 +72,7 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
 
             if (decode_detail.rows <= 0)
                 continue;
-    
+
             block = std::move(block_queue.front());
             block_queue.pop();
             return OperatorStatus::HAS_OUTPUT;

@@ -710,7 +710,7 @@ template <typename RPCContext>
 ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
 {
     return receive(
-        stream_id, 
+        stream_id,
         [&](size_t stream_id, std::shared_ptr<ReceivedMessage> & recv_msg) {
             return msg_channels[stream_id]->pop(recv_msg);
         });
@@ -720,7 +720,7 @@ template <typename RPCContext>
 ReceiveResult ExchangeReceiverBase<RPCContext>::nonBlockingReceive(size_t stream_id)
 {
     return receive(
-        stream_id, 
+        stream_id,
         [&](size_t stream_id, std::shared_ptr<ReceivedMessage> & recv_msg) {
             return msg_channels[stream_id]->tryPop(recv_msg);
         });
@@ -728,7 +728,7 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::nonBlockingReceive(size_t stream
 
 template <typename RPCContext>
 ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
-    size_t stream_id, 
+    size_t stream_id,
     std::function<MPMCQueueResult(size_t, std::shared_ptr<ReceivedMessage> &)> recv_func)
 {
     if (unlikely(stream_id >= msg_channels.size()))

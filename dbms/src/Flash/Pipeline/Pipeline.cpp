@@ -22,8 +22,8 @@
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Flash/Statistics/traverseExecutors.h>
-#include <tipb/select.pb.h>
 #include <Interpreters/Context.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {
