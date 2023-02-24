@@ -25,56 +25,76 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
 {
     if (!block_queue.empty())
     {
-        std::swap(block, block_queue.front());
+        block = std::move(block_queue.front());
         block_queue.pop();
         return OperatorStatus::HAS_OUTPUT;
     }
 
-    auto await_status = awaitImpl();
-    if (await_status == OperatorStatus::HAS_OUTPUT)
+    while (true)
     {
-        std::swap(block, block_queue.front());
-        block_queue.pop();
-        return OperatorStatus::HAS_OUTPUT;
+        auto await_status = awaitImpl();
+        if (await_status == OperatorStatus::HAS_OUTPUT)
+        {
+            assert(recv_res);
+            assert(recv_res->recv_status != ReceiveStatus::empty);
+            auto result = exchange_receiver->toExchangeReceiveResult(
+                recv_res->recv_msg, 
+                block_queue, 
+                header, 
+                decoder_ptr,
+                recv_res->recv_status == ReceiveStatus::eof);
+            recv_res.reset();
+
+            if (result.meet_error)
+            {
+                LOG_WARNING(log, "exchange receiver meets error: {}", result.error_msg);
+                throw Exception(result.error_msg);
+            }
+            if (result.eof)
+            {
+                LOG_DEBUG(log, "exchange receiver meets eof");
+                return {};
+            }
+            if (result.resp != nullptr && result.resp->has_error())
+            {
+                LOG_WARNING(log, "exchange receiver meets error: {}", result.resp->error().DebugString());
+                throw Exception(result.resp->error().DebugString());
+            }
+
+            const auto & decode_detail = result.decode_detail;
+            total_rows += decode_detail.rows;
+            LOG_TRACE(
+                log,
+                "recv {} rows from exchange receiver for {}, total recv row num: {}",
+                decode_detail.rows,
+                result.req_info,
+                total_rows);
+
+            if (decode_detail.rows <= 0)
+                continue;
+    
+            block = std::move(block_queue.front());
+            block_queue.pop();
+            return OperatorStatus::HAS_OUTPUT;
+        }
+        return await_status;
     }
-    return await_status;
 }
 
 OperatorStatus ExchangeReceiverSourceOp::awaitImpl()
 {
-    if (!block_queue.empty() || recv_msg)
+    if (!block_queue.empty() || recv_res)
         return OperatorStatus::HAS_OUTPUT;
-    while (true)
+    recv_res.emplace(exchange_receiver->nonBlockingReceive(stream_id));
+    switch (recv_res->recv_status)
     {
-        if (remote_reader->receive(recv_msg, stream_id))
-        {
-            if (recv_msg->chunks.empty())
-                return OperatorStatus::FINISHED;
-            auto result = remote_reader->toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
-            recv_msg.reset();
-            if (result.meet_error)
-            {
-                LOG_WARNING(log, "remote reader meets error: {}", result.error_msg);
-                throw Exception(result.error_msg);
-            }
-
-            if (result.resp != nullptr && result.resp->has_error())
-            {
-                LOG_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
-                throw Exception(result.resp->error().DebugString());
-            }
-
-            auto decode_detail = result.decode_detail;
-            total_rows += decode_detail.rows;
-            LOG_TRACE(
-                log,
-                "recv {} rows from remote for {}, total recv row num: {}",
-                decode_detail.rows,
-                result.req_info,
-                total_rows);
-            return OperatorStatus::HAS_OUTPUT;
-        }
-        // else continue
+    case ReceiveStatus::ok:
+        return OperatorStatus::HAS_OUTPUT;
+    case ReceiveStatus::empty:
+        recv_res.reset();
+        return OperatorStatus::WAITING;
+    case ReceiveStatus::eof:
+        return OperatorStatus::HAS_OUTPUT;
     }
 }
 } // namespace DB

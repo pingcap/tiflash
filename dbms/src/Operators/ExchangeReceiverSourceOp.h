@@ -26,15 +26,15 @@ class ExchangeReceiverSourceOp : public SourceOp
 public:
     ExchangeReceiverSourceOp(
         PipelineExecutorStatus & exec_status_,
-        const std::shared_ptr<ExchangeReceiver> & remote_reader_,
+        const std::shared_ptr<ExchangeReceiver> & exchange_receiver_,
         size_t stream_id_,
         const String & req_id)
         : SourceOp(exec_status_)
-        , remote_reader(remote_reader_)
+        , exchange_receiver(exchange_receiver_)
         , stream_id(stream_id_)
         , log(Logger::get(req_id))
     {
-        setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(remote_reader->getOutputSchema()))));
+        setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))));
         decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(getHeader(), 8192);
     }
 
@@ -52,11 +52,12 @@ protected:
 
 private:
     // TODO support ConnectionProfileInfo.
-    std::shared_ptr<ExchangeReceiver> remote_reader;
+    // TODO support RemoteExecutionSummary.
+    std::shared_ptr<ExchangeReceiver> exchange_receiver;
     std::unique_ptr<CHBlockChunkDecodeAndSquash> decoder_ptr;
     uint64_t total_rows{};
     std::queue<Block> block_queue;
-    std::optional<ReceivedMessagePtr> recv_msg;
+    std::optional<ReceiveResult> recv_res;
 
     size_t stream_id;
     const LoggerPtr log;

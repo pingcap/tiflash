@@ -112,7 +112,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     const auto & logger = dag_context.log;
     RUNTIME_ASSERT(logger);
 
-    if (!TaskScheduler::instance || !Pipeline::isSupported(*dag_context.dag_request))
+    if (!TaskScheduler::instance || !Pipeline::isSupported(*dag_context.dag_request, context))
         return {};
 
     prepareForExecute(context);
@@ -154,9 +154,7 @@ QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
     // now only support pipeline model in executor/interpreter test.
-    if ((context.isExecutorTest() || context.isInterpreterTest())
-        && context.getSettingsRef().enable_planner
-        && context.getSettingsRef().enable_pipeline)
+    if (context.getSettingsRef().enable_planner && context.getSettingsRef().enable_pipeline)
     {
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);

@@ -80,6 +80,7 @@ struct ReceivedMessage
         packet->switchMemTracker(current_memory_tracker);
     }
 };
+using ReceivedMessagePtr = std::shared_ptr<ReceivedMessage>;
 
 enum class ReceiverMode
 {
@@ -147,7 +148,6 @@ public:
     bool isReadyForWrite() const;
 
 private:
-    using ReceivedMessagePtr = std::shared_ptr<ReceivedMessage>;
     using WriteToChannelFunc = std::function<MPMCQueueResult(size_t, ReceivedMessagePtr &&)>;
 
     bool writeFineGrain(

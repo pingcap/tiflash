@@ -63,7 +63,7 @@ public:
 
     Events toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
 
-    static bool isSupported(const tipb::DAGRequest & dag_request);
+    static bool isSupported(const tipb::DAGRequest & dag_request, Context & context);
 
     Block getSampleBlock() const;
 

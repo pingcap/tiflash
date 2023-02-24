@@ -82,6 +82,19 @@ enum class ExchangeReceiverState
     CLOSED,
 };
 
+enum class ReceiveStatus
+{
+    empty,
+    ok,
+    eof,
+};
+
+struct ReceiveResult
+{
+    ReceiveStatus recv_status;
+    std::shared_ptr<ReceivedMessage> recv_msg;
+};
+
 template <typename RPCContext>
 class ExchangeReceiverBase
 {
@@ -104,6 +117,16 @@ public:
 
     void cancel();
     void close();
+
+    ReceiveResult receive(size_t stream_id);
+    ReceiveResult nonBlockingReceive(size_t stream_id);
+
+    ExchangeReceiverResult toExchangeReceiveResult(
+        std::shared_ptr<ReceivedMessage> & recv_msg,
+        std::queue<Block> & block_queue,
+        const Block & header,
+        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr,
+        bool is_eof);
 
     ExchangeReceiverResult nextResult(
         std::queue<Block> & block_queue,
@@ -158,6 +181,10 @@ private:
         const Block & header,
         const std::shared_ptr<ReceivedMessage> & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
+
+    ReceiveResult receive(
+        size_t stream_id,
+        std::function<MPMCQueueResult(size_t, std::shared_ptr<ReceivedMessage> &)> recv_func);
 
 private:
     void prepareMsgChannels();

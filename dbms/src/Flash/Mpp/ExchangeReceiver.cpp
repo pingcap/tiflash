@@ -707,20 +707,59 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 }
 
 template <typename RPCContext>
-ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
-    std::queue<Block> & block_queue,
-    const Block & header,
-    size_t stream_id,
-    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
+ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
+{
+    return receive(
+        stream_id, 
+        [&](size_t stream_id, std::shared_ptr<ReceivedMessage> & recv_msg) {
+            return msg_channels[stream_id]->pop(recv_msg);
+        });
+}
+
+template <typename RPCContext>
+ReceiveResult ExchangeReceiverBase<RPCContext>::nonBlockingReceive(size_t stream_id)
+{
+    return receive(
+        stream_id, 
+        [&](size_t stream_id, std::shared_ptr<ReceivedMessage> & recv_msg) {
+            return msg_channels[stream_id]->tryPop(recv_msg);
+        });
+}
+
+template <typename RPCContext>
+ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
+    size_t stream_id, 
+    std::function<MPMCQueueResult(size_t, std::shared_ptr<ReceivedMessage> &)> recv_func)
 {
     if (unlikely(stream_id >= msg_channels.size()))
     {
-        LOG_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
-        return ExchangeReceiverResult::newError(0, "", "stream_id out of range");
+        auto err_msg = fmt::format("stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
+        LOG_ERROR(exc_log, err_msg);
+        throw Exception(err_msg);
     }
 
     std::shared_ptr<ReceivedMessage> recv_msg;
-    if (msg_channels[stream_id]->pop(recv_msg) != MPMCQueueResult::OK)
+    switch (recv_func(stream_id, recv_msg))
+    {
+    case MPMCQueueResult::OK:
+        assert(recv_msg);
+        return {ReceiveStatus::ok, recv_msg};
+    case MPMCQueueResult::EMPTY:
+        return {ReceiveStatus::empty, nullptr};
+    default:
+        return {ReceiveStatus::eof, nullptr};
+    }
+}
+
+template <typename RPCContext>
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toExchangeReceiveResult(
+    std::shared_ptr<ReceivedMessage> & recv_msg,
+    std::queue<Block> & block_queue,
+    const Block & header,
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr,
+    bool is_eof)
+{
+    if (is_eof)
     {
         return handleUnnormalChannel(block_queue, decoder_ptr);
     }
@@ -733,6 +772,23 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
         ExchangeReceiverMetric::subDataSizeMetric(data_size_in_queue, recv_msg->packet->getPacket().ByteSizeLong());
         return toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
     }
+}
+
+template <typename RPCContext>
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
+    std::queue<Block> & block_queue,
+    const Block & header,
+    size_t stream_id,
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
+{
+    auto recv_res = receive(stream_id);
+    assert(recv_res.recv_status != ReceiveStatus::empty);
+    return toExchangeReceiveResult(
+        recv_res.recv_msg,
+        block_queue,
+        header,
+        decoder_ptr,
+        recv_res.recv_status == ReceiveStatus::eof);
 }
 
 template <typename RPCContext>
