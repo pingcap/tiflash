@@ -36,7 +36,7 @@ void PhysicalBuildAggregation::buildPipelineExec(PipelineExecGroupBuilder & grou
     Block before_agg_header = group_builder.getCurrentHeader();
     size_t concurrency = group_builder.concurrency;
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
-    SpillConfig spill_config(context.getTemporaryPath(), fmt::format("{}_aggregation", log->identifier()), context.getSettingsRef().max_spilled_size_per_spill, context.getFileProvider());
+    SpillConfig spill_config(context.getTemporaryPath(), fmt::format("{}_aggregation", log->identifier()), context.getSettingsRef().max_cached_data_bytes_in_spiller, context.getSettingsRef().max_spilled_rows_per_file, context.getSettingsRef().max_spilled_bytes_per_file, context.getFileProvider());
 
     auto params = AggregationInterpreterHelper::buildParams(
         context,
