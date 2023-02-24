@@ -50,12 +50,16 @@ struct S3GCConfig
 {
     Int64 manifest_expired_hour = 1;
     Int64 delmark_expired_hour = 1;
+
+    // The temporary path for storing
+    // downloaded manifest
+    String temp_path;
 };
 
 class S3GCManager
 {
 public:
-    explicit S3GCManager(const String & temp_path_);
+    explicit S3GCManager(S3GCConfig config_);
 
     bool runOnAllStores();
 
@@ -90,9 +94,7 @@ private:
 private:
     std::shared_ptr<TiFlashS3Client> client;
 
-    // The temporary path for storing
-    // downloaded manifest
-    String temp_path;
+    S3GCConfig config;
 
     LoggerPtr log;
 };

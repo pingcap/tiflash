@@ -39,9 +39,9 @@ extern const int S3_ERROR;
 namespace DB::S3
 {
 
-S3GCManager::S3GCManager(const String & temp_path_)
+S3GCManager::S3GCManager(S3GCConfig config_)
     : client(nullptr)
-    , temp_path(temp_path_)
+    , config(config_)
     , log(Logger::get())
 {
     client = S3::ClientFactory::instance().createWithBucket();
@@ -163,16 +163,15 @@ void S3GCManager::removeDataFileIfDelmarkExpired(
     // delmark exist
     bool expired = false;
     {
-        // Get the time diff by `now`-`mtime`
+        // Get the time diff by `timepoint`-`mtime`
         auto diff_seconds = Aws::Utils::DateTime::Diff(timepoint, delmark_mtime).count() / 1000.0;
-        static constexpr Int64 DELMARK_EXPIRED_HOURS = 1;
-        if (diff_seconds > DELMARK_EXPIRED_HOURS * 3600) // TODO: make it configurable
+        if (diff_seconds > config.delmark_expired_hour * 3600)
         {
             expired = true;
         }
         LOG_INFO(
             log,
-            "delmark exist, datafile={} mark_time={} now={} diff_sec={:.3f} expired={}",
+            "delmark exist, datafile={} mark_mtime={} now={} diff_sec={:.3f} expired={}",
             datafile_key,
             delmark_mtime.ToGmtString(Aws::Utils::DateFormat::ISO_8601),
             timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601),
@@ -258,16 +257,22 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const String &
 void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime & timepoint)
 {
     // clean the outdated manifest files
-    std::chrono::milliseconds expired_ms(1 * 3600 * 1000); // 1 hour
+    auto expired_bound_sec = config.manifest_expired_hour * 3600;
     for (const auto & mf : manifests.objects())
     {
-        if (auto diff_ms = Aws::Utils::DateTime::Diff(timepoint, mf.second.last_modification);
-            diff_ms <= expired_ms)
+        auto diff_sec = Aws::Utils::DateTime::Diff(timepoint, mf.second.last_modification).count() / 1000.0;
+        if (diff_sec <= expired_bound_sec)
         {
             continue;
         }
         // expired manifest, remove
         deleteObject(*client, client->bucket(), mf.second.key);
+        LOG_INFO(
+            log,
+            "remove outdated manifest, key={} mtime={} diff_sec={:.3f}",
+            mf.second.key,
+            mf.second.last_modification.ToGmtString(Aws::Utils::DateFormat::ISO_8601),
+            diff_sec);
     }
 }
 
@@ -275,13 +280,16 @@ String S3GCManager::getTemporaryDownloadFile(String s3_key)
 {
     // FIXME: Is there any other logic that download manifest?
     std::replace(s3_key.begin(), s3_key.end(), '/', '_');
-    return fmt::format("{}/{}_{}", temp_path, s3_key, std::hash<std::thread::id>()(std::this_thread::get_id()));
+    return fmt::format("{}/{}_{}", config.temp_path, s3_key, std::hash<std::thread::id>()(std::this_thread::get_id()));
 }
 
 S3GCManagerService::S3GCManagerService(Context & context, Int64 interval_seconds)
     : global_ctx(context.getGlobalContext())
 {
-    manager = std::make_unique<S3GCManager>(global_ctx.getTemporaryPath());
+    S3GCConfig config;
+    config.temp_path = global_ctx.getTemporaryPath();
+
+    manager = std::make_unique<S3GCManager>(config);
 
     timer = global_ctx.getBackgroundPool().addTask(
         [this]() {
