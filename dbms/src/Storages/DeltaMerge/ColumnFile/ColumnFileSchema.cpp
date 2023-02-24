@@ -80,12 +80,10 @@ ColumnFileSchemaPtr SharedBlockSchemas::find(const Digest & digest)
     auto iter = column_file_schemas.find(digest);
     if (iter == column_file_schemas.end())
     {
-        GET_METRIC(tiflash_shared_block_schemas, type_miss_count).Increment();
         return nullptr;
     }
 
     lru_queue.splice(lru_queue.end(), lru_queue, iter->second.queue_it);
-    GET_METRIC(tiflash_shared_block_schemas, type_hit_count).Increment();
 
     return iter->second.column_file_schema.lock();
 }
@@ -103,6 +101,16 @@ ColumnFileSchemaPtr SharedBlockSchemas::getOrCreate(const Block & block)
             GET_METRIC(tiflash_shared_block_schemas, type_hit_count).Increment();
             lru_queue.splice(lru_queue.end(), lru_queue, iter->second.queue_it);
             return schema;
+        }
+        else
+        {
+            // if the weak_ptr.lock() only get nullptr, that means the schema is not used by any ColumnFiles
+            // So we need update the item
+            GET_METRIC(tiflash_shared_block_schemas, type_miss_count).Increment();
+            auto new_schema = std::make_shared<ColumnFileSchema>(block);
+            iter->second.column_file_schema = new_schema;
+            lru_queue.splice(lru_queue.end(), lru_queue, iter->second.queue_it);
+            return new_schema;
         }
     }
 
