@@ -59,7 +59,7 @@ IColumn::Selector buildSelector(int num_rows, int num_columns)
 IColumn::Filter buildFilter(int num_rows, int num_columns)
 {
     std::mt19937 mt(rd());
-    std::uniform_int_distribution<int> dist;
+    std::uniform_int_distribution<int> dist(1, 100);
 
     IColumn::Filter filter;
     filter.resize(num_rows);
