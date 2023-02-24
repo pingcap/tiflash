@@ -17,9 +17,9 @@
 #include <IO/ReadBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
-#include <Storages/Page/V3/Universal/UniversalPageIdFormat.h>
-#include <Storages/Page/V3/Universal/UniversalWriteBatch.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
+#include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <fmt/format.h>
 
 #include <vector>
@@ -30,14 +30,6 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
-
-enum class PageStorageRunMode : UInt8
-{
-    ONLY_V2 = 1,
-    ONLY_V3 = 2,
-    MIX_MODE = 3,
-    UNI_PS = 4,
-};
 
 // It contains either an UniversalWriteBatch or a WriteBatch.
 class WriteBatchWrapper : private boost::noncopyable
@@ -91,6 +83,12 @@ public:
             wb->putPage(page_id, tag, read_buffer, size, data_sizes);
         else
             uwb->putPage(page_id, tag, read_buffer, size, data_sizes);
+    }
+
+    void putPage(PageIdU64 page_id, UInt64 tag, std::string_view data)
+    {
+        auto buffer_ptr = std::make_shared<ReadBufferFromOwnString>(data);
+        putPage(page_id, tag, buffer_ptr, data.size());
     }
 
     void putExternal(PageIdU64 page_id, UInt64 tag)

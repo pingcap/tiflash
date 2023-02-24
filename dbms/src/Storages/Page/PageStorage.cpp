@@ -17,6 +17,7 @@
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/Page/WriteBatchWrapperImpl.h>
 
 namespace DB
 {
