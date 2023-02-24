@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/Plans/PhysicalPreAggregation.h>
+#include <Flash/Planner/Plans/PhysicalBuildAggregation.h>
 
 namespace DB
 {
-void PhysicalPreAggregation::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
+void PhysicalBuildAggregation::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
 {
     if (!before_agg_actions->getActions().empty())
     {

@@ -43,10 +43,12 @@ void AggregateContext::initConvergent()
 {
     merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, is_final, max_threads);
 
-    if (merging_buckets)
-    {
-        RUNTIME_CHECK(merging_buckets->getConcurrency() > 0);
-    }
+    RUNTIME_CHECK(!merging_buckets || merging_buckets->getConcurrency() > 0);
+}
+
+size_t AggregateContext::getConcurrency()
+{
+    return isTwoLevel() ? merging_buckets->getConcurrency() : 1;
 }
 
 bool AggregateContext::isTwoLevel()
@@ -54,8 +56,8 @@ bool AggregateContext::isTwoLevel()
     return many_data[0]->isTwoLevel();
 }
 
-void AggregateContext::read(Block & block, size_t index)
+Block AggregateContext::read(size_t index)
 {
-    block = merging_buckets->getData(index);
+    return merging_buckets->getData(index);
 }
 } // namespace DB

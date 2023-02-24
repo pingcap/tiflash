@@ -19,7 +19,7 @@
 namespace DB
 {
 
-void PhysicalConvergentAggregation::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency)
+void PhysicalConvergentAggregation::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     aggregate_context->initConvergent();
     if (aggregate_context->useNullSource())
@@ -34,10 +34,8 @@ void PhysicalConvergentAggregation::buildPipelineExec(PipelineExecGroupBuilder &
     }
     else
     {
-        concurrency = aggregate_context->isTwoLevel() ? concurrency : 1;
-        group_builder.init(concurrency);
+        group_builder.init(aggregate_context->getConcurrency());
         size_t index = 0;
-
         group_builder.transform([&](auto & builder) {
             builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(
                 group_builder.exec_status,

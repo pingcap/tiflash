@@ -21,6 +21,7 @@
 #include <Interpreters/Aggregator.h>
 #include <Operators/Operator.h>
 
+#include <cstddef>
 #include <mutex>
 
 namespace DB
@@ -58,7 +59,9 @@ public:
 
     void initConvergent();
 
-    void read(Block & block, size_t index);
+    size_t getConcurrency();
+
+    Block read(size_t index);
 
     Block getHeader() const
     {

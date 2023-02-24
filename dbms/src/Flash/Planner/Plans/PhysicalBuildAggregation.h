@@ -27,10 +27,10 @@
 
 namespace DB
 {
-class PhysicalPreAggregation : public PhysicalUnary
+class PhysicalBuildAggregation : public PhysicalUnary
 {
 public:
-    PhysicalPreAggregation(
+    PhysicalBuildAggregation(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,

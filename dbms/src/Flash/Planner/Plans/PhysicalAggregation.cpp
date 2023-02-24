@@ -25,8 +25,8 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalAggregation.h>
+#include <Flash/Planner/Plans/PhysicalBuildAggregation.h>
 #include <Flash/Planner/Plans/PhysicalConvergentAggregation.h>
-#include <Flash/Planner/Plans/PhysicalPreAggregation.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -162,7 +162,7 @@ void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)
         log->identifier());
     // TODO support fine grained shuffle.
     assert(!fine_grained_shuffle.enable());
-    auto pre_agg = std::make_shared<PhysicalPreAggregation>(
+    auto pre_agg = std::make_shared<PhysicalBuildAggregation>(
         executor_id,
         schema,
         log->identifier(),
