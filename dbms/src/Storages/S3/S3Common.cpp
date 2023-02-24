@@ -169,7 +169,6 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
     cfg.connectTimeoutMs = config_.connection_timeout_ms;
-    cfg.region = config_.region;
     if (!config_.endpoint.empty())
     {
         cfg.endpointOverride = config_.endpoint;

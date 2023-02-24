@@ -529,7 +529,6 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
 
     readConfig(table, "endpoint", endpoint);
     readConfig(table, "bucket", bucket);
-    readConfig(table, "region", region);
     readConfig(table, "max_connections", max_connections);
     RUNTIME_CHECK(max_connections > 0);
     readConfig(table, "connection_timeout_ms", connection_timeout_ms);
@@ -546,7 +545,7 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     LOG_INFO(
         log,
         "endpoint={} bucket={} max_connections={} connection_timeout_ms={} "
-        "request_timeout_ms={} cache_dir={} cache_capacity={} region={} "
+        "request_timeout_ms={} cache_dir={} cache_capacity={} "
         "access_key_id_size={}  secret_access_key_size={}",
         endpoint,
         bucket,
@@ -555,7 +554,6 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
         request_timeout_ms,
         cache_dir,
         cache_capacity,
-        region,
         access_key_id.size(),
         secret_access_key.size());
 }

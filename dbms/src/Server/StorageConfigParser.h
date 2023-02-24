@@ -97,7 +97,6 @@ struct StorageS3Config
 {
     String endpoint;
     String bucket;
-    String region;
     String access_key_id;
     String secret_access_key;
     UInt64 max_connections = 1024;
