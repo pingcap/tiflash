@@ -537,7 +537,6 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     RUNTIME_CHECK(request_timeout_ms > 0);
     readConfig(table, "cache_dir", cache_dir);
     readConfig(table, "cache_capacity", cache_capacity);
-    readConfig(table, "cache_strategy", cache_strategy);
 
     access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", /*default*/ "");
     secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", /*default*/ "");
@@ -565,7 +564,7 @@ bool StorageS3Config::isS3Enabled() const
 
 bool StorageS3Config::isFileCacheEnabled() const
 {
-    return !cache_dir.empty() && cache_capacity != 0 && cache_strategy != 0;
+    return !cache_dir.empty() && cache_capacity != 0;
 }
 
 } // namespace DB

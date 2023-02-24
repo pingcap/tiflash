@@ -104,7 +104,6 @@ struct StorageS3Config
     UInt64 request_timeout_ms = 3000;
     String cache_dir;
     UInt64 cache_capacity = 0;
-    UInt64 cache_strategy = 0;
 
     void parse(const String & content, const LoggerPtr & log);
     bool isS3Enabled() const;
