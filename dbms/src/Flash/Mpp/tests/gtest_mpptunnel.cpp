@@ -815,11 +815,10 @@ TEST_F(TestMPPTunnel, AsyncTunnelNonBlockingWrite)
     ASSERT_TRUE(stop_watch.elapsedMilliseconds() < 10);
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+    t.join();
 
     GTEST_ASSERT_EQ(call_data->write_packet_vec.size(), 1);
     GTEST_ASSERT_EQ(call_data->write_packet_vec.back(), "First");
-
-    t.join();
 }
 
 TEST_F(TestMPPTunnel, LocalTunnelNonBlockingWrite)
@@ -836,11 +835,10 @@ TEST_F(TestMPPTunnel, LocalTunnelNonBlockingWrite)
     ASSERT_TRUE(stop_watch.elapsedMilliseconds() < 10);
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+    t.join();
 
     GTEST_ASSERT_EQ(receiver->getReceivedMsgs().size(), 1);
     GTEST_ASSERT_EQ(receiver->getReceivedMsgs().back()->packet->getPacket().data(), "First");
-
-    t.join();
 }
 
 TEST_F(TestMPPTunnel, isReadyForWriteTimeout)
