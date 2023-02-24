@@ -1422,14 +1422,18 @@ enum class DeltaTreeVariant
 
 static inline DeltaTreeVariant resolveDeltaTreeVariant()
 {
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
     if (DB::TargetSpecific::AVX512Checker::runtimeSupport())
     {
         return DeltaTreeVariant::AVX512;
     }
+#endif
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if (DB::TargetSpecific::AVXChecker::runtimeSupport())
     {
         return DeltaTreeVariant::AVX;
     }
+#endif
     if (DB::TargetSpecific::SSE4Checker::runtimeSupport())
     {
         return DeltaTreeVariant::SSE4;
