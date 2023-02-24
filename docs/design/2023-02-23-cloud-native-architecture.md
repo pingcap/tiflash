@@ -30,8 +30,8 @@ We split TiFlash node into the following nodes:
 3. Greatly increase the speed of volume expansion and contraction
     * Because RN is stateless, in theory, expansion and Load Balance can be completed in a few seconds.
     * The Region migration on WN does not need to resynchronize the snapshot from the TiKV. Instead, migration is completed by downloading or referencing the S3 file directly. It is expected that a new node can complete load balancing within one minute.
-4. Improves Scalability while retaining the performance benefits of Locality
-    * RN can use the local disk as LRU cache, so that most of the hot data does not need to read S3
+4. Improves Scalability while retaining the performance benefits of locality
+    * RN can use the local disk as an LRU cache, so that most of the hot data does not need to read S3
 
 ## Core Design
 
