@@ -15,7 +15,8 @@
 #pragma once
 
 #include <Core/Block.h>
-
+#include <Flash/Statistics/ExecutorStatisticsBase.h>
+#include <Common/Stopwatch.h>
 #include <memory>
 
 namespace DB
@@ -72,8 +73,16 @@ public:
         header = header_;
     }
 
+    void updateStatistics(const Block & block)
+    {
+        ++statistics.blocks;
+        statistics.rows += block.rows();
+        statistics.bytes += block.bytes();
+    }
+
 protected:
     PipelineExecutorStatus & exec_status;
+    BaseRuntimeStatistics statistics;
     Block header;
 };
 
