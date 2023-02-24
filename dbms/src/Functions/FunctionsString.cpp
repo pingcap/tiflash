@@ -122,6 +122,35 @@ struct LengthImpl
     }
 };
 
+/** Calculates the bitlength of a string in bytes.
+  */
+struct BitLengthImpl
+{
+    static constexpr auto is_fixed_to_constant = true;
+
+    static void vector(const ColumnString::Chars_t & /*data*/, const ColumnString::Offsets & offsets, PaddedPODArray<UInt64> & res)
+    {
+        size_t size = offsets.size();
+        for (size_t i = 0; i < size; ++i)
+            res[i] = i == 0 ? 8 * (offsets[i] - 1) : 8 * (offsets[i] - 1 - offsets[i - 1]);
+    }
+
+    static void vectorFixedToConstant(const ColumnString::Chars_t & /*data*/, size_t n, UInt64 & res)
+    {
+        res = n;
+    }
+
+    static void vectorFixedToVector(const ColumnString::Chars_t & /*data*/, size_t /*n*/, PaddedPODArray<UInt64> & /*res*/)
+    {
+    }
+
+    static void array(const ColumnString::Offsets & offsets, PaddedPODArray<UInt64> & res)
+    {
+        size_t size = offsets.size();
+        for (size_t i = 0; i < size; ++i)
+            res[i] = i == 0 ? 8 * (offsets[i]) : 8 * (offsets[i] - offsets[i - 1]);
+    }
+};
 
 /** If the string is UTF-8 encoded text, it returns the length of the text in code points.
   * (not in characters: the length of the text "ё" can be either 1 or 2, depending on the normalization)
@@ -4174,6 +4203,56 @@ public:
 private:
 };
 
+class FunctionBitLength : public IFunction
+{
+public:
+    static constexpr auto name = "bitLength";
+    FunctionBitLength() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionBitLength>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() != 1)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        return std::make_shared<DataTypeInt64>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
+        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
+
+        Field res_field;
+        int val_num = c0_col->size();
+        auto col_res = ColumnInt64::create();
+        col_res->reserve(val_num);
+        if (c0_const == nullptr && c0_string == nullptr)
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        for (int i = 0; i < val_num; i++)
+        {
+            c0_col->get(i, res_field);
+            String handled_str = res_field.get<String>();
+            col_res->insert(static_cast<Int64>(8 * handled_str.size()));
+        }
+
+        block.getByPosition(result).column = std::move(col_res);
+    }
+
+private:
+};
+
 class FunctionRepeat : public IFunction
 {
 public:
@@ -6096,6 +6175,7 @@ private:
 struct NameEmpty                 { static constexpr auto name = "empty"; };
 struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
 struct NameLength                { static constexpr auto name = "length"; };
+struct NameBitLength             { static constexpr auto name = "bitLength"; };
 struct NameLengthUTF8            { static constexpr auto name = "lengthUTF8"; };
 struct NameLowerBinary           { static constexpr auto name = "lowerBinary"; };
 struct NameLowerUTF8             { static constexpr auto name = "lowerUTF8"; };
@@ -6120,6 +6200,7 @@ struct NameFormat                { static constexpr auto name = "format"; };
 using FunctionEmpty = FunctionStringOrArrayToT<EmptyImpl<false>, NameEmpty, UInt8>;
 using FunctionNotEmpty = FunctionStringOrArrayToT<EmptyImpl<true>, NameNotEmpty, UInt8>;
 // using FunctionLength = FunctionStringOrArrayToT<LengthImpl, NameLength, UInt64>;
+// using FunctionBitLength = FunctionStringOrArrayToT<BitLengthImpl, NameBitLength, UInt64>;
 using FunctionLengthUTF8 = FunctionStringOrArrayToT<LengthUTF8Impl, NameLengthUTF8, UInt64>;
 using FunctionLowerBinary = FunctionStringToString<TiDBLowerUpperBinaryImpl, NameLowerBinary>;
 using FunctionLowerUTF8 = FunctionStringToString<TiDBLowerUpperUTF8Impl<'A', 'Z', CharUtil::unicodeToLower>, NameLowerUTF8>;
@@ -6148,6 +6229,7 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionEmpty>();
     factory.registerFunction<FunctionNotEmpty>();
     factory.registerFunction<FunctionLength>();
+    factory.registerFunction<FunctionBitLength>();
     factory.registerFunction<FunctionLengthUTF8>();
     factory.registerFunction<FunctionLowerBinary>();
     factory.registerFunction<FunctionUpperBinary>();
