@@ -22,7 +22,6 @@
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Flash/Statistics/traverseExecutors.h>
-#include <Interpreters/Context.h>
 #include <tipb/select.pb.h>
 
 namespace DB
@@ -123,7 +122,7 @@ EventPtr Pipeline::toEvent(PipelineExecutorStatus & status, Context & context, s
     return plain_pipeline_event;
 }
 
-bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, Context & context)
+bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
 {
     bool is_supported = true;
     traverseExecutors(
@@ -143,10 +142,8 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request, Context & conte
             case tipb::ExecType::TypeTopN:
             case tipb::ExecType::TypeExchangeSender:
             case tipb::ExecType::TypeExchangeReceiver:
-                return true;
-            // Only support table_scan in executor/interpreter test.
             case tipb::ExecType::TypeTableScan:
-                return context.isExecutorTest() || context.isInterpreterTest();
+                return true;
             default:
                 is_supported = false;
                 return false;
