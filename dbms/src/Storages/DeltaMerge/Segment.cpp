@@ -2324,7 +2324,9 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(const D
     std::vector<IdSetPtr> some_packs_sets;
     some_packs_sets.reserve(dmfiles.size());
 
+    // The offset of the first row in the current range.
     size_t offset = 0;
+    // The number of rows in the current range.
     size_t rows = 0;
     UInt32 preceded_rows = 0;
 
@@ -2409,9 +2411,9 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(const DMContext & dm_contex
     }
 
     auto bitmap_filter = std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ false);
-    for (const auto & pack : skipped_ranges)
+    for (const auto & range : skipped_ranges)
     {
-        bitmap_filter->set(pack.offset, pack.rows);
+        bitmap_filter->set(range.offset, range.rows);
     }
 
     bool has_some_packs = false;
