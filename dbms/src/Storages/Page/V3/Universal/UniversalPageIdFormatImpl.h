@@ -116,7 +116,7 @@ public:
         return buff.releaseStr();
     }
 
-    // 0x01 0x02 region_id 0x01
+    // LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX
     static String toFullRaftLogPrefix(UInt64 region_id)
     {
         WriteBufferFromOwnString buff;
