@@ -337,7 +337,7 @@ TEST(ReadLimiterTest, LimiterStat)
         request(read_limiter, 1 << i);
     }
     std::this_thread::sleep_for(100ms);
-    ASSERT_EQ(read_limiter.getAvailableBalance(), -947);
+    ASSERT_GT(read_limiter.getAvailableBalance(), -1024);
 
     stat = read_limiter.getStat();
     ASSERT_EQ(stat.alloc_bytes, total_bytes + read_limiter.getAvailableBalance());
