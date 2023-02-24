@@ -230,7 +230,7 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
 
   </details>
 
-- **Build under AMD64 Architecture**:
+- **Build for AMD64 Architecture**:
 
   <details>
   <summary>Click to expand instructions</summary>
