@@ -42,12 +42,12 @@ public:
     AggregateContext(
         bool final_,
         const String & req_id)
-        : log(Logger::get(req_id))
-        , is_final(final_)
+        : is_final(final_)
+        , log(Logger::get(req_id))
     {
     }
 
-    void init(const Aggregator::Params & params, size_t max_threads_);
+    void initBuild(const Aggregator::Params & params, size_t max_threads_);
 
     void executeOnBlock(size_t task_index, const Block & block);
 
@@ -65,13 +65,16 @@ public:
 
 private:
     std::unique_ptr<Aggregator> aggregator;
+    bool inited_build = false;
+    bool inited_convergent = false;
+
     MergingBucketsPtr merging_buckets;
-    const LoggerPtr log;
     ManyAggregatedDataVariants many_data;
     std::vector<ThreadData> threads_data;
     size_t max_threads{};
     bool is_final{};
-    mutable std::shared_mutex mu;
+
+    const LoggerPtr log;
 };
 
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;

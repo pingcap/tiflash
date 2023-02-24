@@ -36,8 +36,8 @@ struct PlanType
         TableScan = 11,
         MockTableScan = 12,
         Join = 13,
-        PreAggregation = 14,
-        ConvergentAggregation = 15,
+        AggregationBuild = 14,
+        AggregationConvergent = 15,
         Expand = 16,
         GetResult = 17
     };

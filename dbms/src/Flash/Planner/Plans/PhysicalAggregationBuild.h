@@ -24,10 +24,10 @@
 
 namespace DB
 {
-class PhysicalBuildAggregation : public PhysicalUnary
+class PhysicalAggregationBuild : public PhysicalUnary
 {
 public:
-    PhysicalBuildAggregation(
+    PhysicalAggregationBuild(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
@@ -38,15 +38,15 @@ public:
         bool is_final_agg_,
         const AggregateDescriptions & aggregate_descriptions_,
         const ExpressionActionsPtr & expr_after_agg_,
-        const AggregateContextPtr & agg_context_)
-        : PhysicalUnary(executor_id_, PlanType::PreAggregation, schema_, req_id, child_)
+        const AggregateContextPtr & aggregate_context_)
+        : PhysicalUnary(executor_id_, PlanType::AggregationBuild, schema_, req_id, child_)
         , before_agg_actions(before_agg_actions_)
         , aggregation_keys(aggregation_keys_)
         , aggregation_collators(aggregation_collators_)
         , is_final_agg(is_final_agg_)
         , aggregate_descriptions(aggregate_descriptions_)
         , expr_after_agg(expr_after_agg_)
-        , agg_context(agg_context_)
+        , aggregate_context(aggregate_context_)
     {}
 
     void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/) override;
@@ -61,6 +61,6 @@ private:
     bool is_final_agg;
     AggregateDescriptions aggregate_descriptions;
     ExpressionActionsPtr expr_after_agg;
-    AggregateContextPtr agg_context;
+    AggregateContextPtr aggregate_context;
 };
 } // namespace DB

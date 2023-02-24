@@ -13,13 +13,13 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
-#include <Flash/Planner/Plans/PhysicalBuildAggregation.h>
+#include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Operators/AggregateSinkOp.h>
 #include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
-void PhysicalBuildAggregation::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
+void PhysicalAggregationBuild::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
 {
     if (!before_agg_actions->getActions().empty())
     {
@@ -30,13 +30,19 @@ void PhysicalBuildAggregation::buildPipelineExec(PipelineExecGroupBuilder & grou
 
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<AggregateSinkOp>(group_builder.exec_status, build_index++, agg_context, log->identifier()));
+        builder.setSinkOp(std::make_unique<AggregateSinkOp>(group_builder.exec_status, build_index++, aggregate_context, log->identifier()));
     });
 
     Block before_agg_header = group_builder.getCurrentHeader();
     size_t concurrency = group_builder.concurrency;
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
-    SpillConfig spill_config(context.getTemporaryPath(), fmt::format("{}_aggregation", log->identifier()), context.getSettingsRef().max_cached_data_bytes_in_spiller, context.getSettingsRef().max_spilled_rows_per_file, context.getSettingsRef().max_spilled_bytes_per_file, context.getFileProvider());
+    SpillConfig spill_config(
+        context.getTemporaryPath(),
+        fmt::format("{}_aggregation", log->identifier()),
+        context.getSettingsRef().max_cached_data_bytes_in_spiller,
+        context.getSettingsRef().max_spilled_rows_per_file,
+        context.getSettingsRef().max_spilled_bytes_per_file,
+        context.getFileProvider());
 
     auto params = AggregationInterpreterHelper::buildParams(
         context,
@@ -49,6 +55,6 @@ void PhysicalBuildAggregation::buildPipelineExec(PipelineExecGroupBuilder & grou
         is_final_agg,
         spill_config);
 
-    agg_context->init(params, concurrency);
+    aggregate_context->initBuild(params, concurrency);
 }
 } // namespace DB

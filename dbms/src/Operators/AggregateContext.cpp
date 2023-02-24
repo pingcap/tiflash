@@ -16,7 +16,7 @@
 
 namespace DB
 {
-void AggregateContext::init(const Aggregator::Params & params, size_t max_threads_)
+void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_threads_)
 {
     max_threads = max_threads_;
     many_data.reserve(max_threads);
@@ -29,6 +29,7 @@ void AggregateContext::init(const Aggregator::Params & params, size_t max_thread
 
     aggregator = std::make_unique<Aggregator>(params, log->identifier());
     aggregator->initThresholdByAggregatedDataVariantsSize(many_data.size());
+    inited_build = true;
     LOG_TRACE(log, "Aggregate Context inited");
 }
 
@@ -42,12 +43,15 @@ void AggregateContext::executeOnBlock(size_t task_index, const Block & block)
 void AggregateContext::initConvergent()
 {
     merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, is_final, max_threads);
+    inited_convergent = true;
 
     RUNTIME_CHECK(!merging_buckets || merging_buckets->getConcurrency() > 0);
 }
 
 size_t AggregateContext::getConcurrency()
 {
+    RUNTIME_CHECK(inited_convergent);
+
     return isTwoLevel() ? merging_buckets->getConcurrency() : 1;
 }
 
@@ -58,11 +62,13 @@ Block AggregateContext::getHeader() const
 
 bool AggregateContext::isTwoLevel()
 {
+    RUNTIME_CHECK(inited_build);
     return many_data[0]->isTwoLevel();
 }
 
 bool AggregateContext::useNullSource()
 {
+    RUNTIME_CHECK(inited_convergent);
     return !merging_buckets;
 }
 

@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <Flash/Planner/Plans/PhysicalConvergentAggregation.h>
+#include <Flash/Planner/Plans/PhysicalAggregationConvergent.h>
 #include <Operators/AggregateConvergentSourceOp.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/NullSourceOp.h>
@@ -19,10 +19,11 @@
 namespace DB
 {
 
-void PhysicalConvergentAggregation::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalAggregationConvergent::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
 {
     aggregate_context->initConvergent();
-    if (aggregate_context->useNullSource())
+
+    if (unlikely(aggregate_context->useNullSource()))
     {
         group_builder.init(1);
         group_builder.transform([&](auto & builder) {
