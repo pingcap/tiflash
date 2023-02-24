@@ -16,11 +16,11 @@
 
 namespace DB
 {
-// Proxy may try to scan data in range [start, end), and the `end` may be empty which means infinite end.
-// But we don't want to scan data unrelated to raft.
-// We notice that all raft related key start with the byte `0x01`,
-// so we will manually set an end value `0x02` when proxy pass an empty end key for range scan.
-char RaftDataReader::raft_data_end_key[1] = {0x02};
+// Proxy may try to scan data in range [start, end), and kv engine may specify an empty `end` which means infinite end.(Raft engine will always specify a non-empty `end` key)
+// But we don't want to scan data unrelated to it.
+// We notice that we prepend keys written by kv engine with the byte `0x02`
+// so we will manually set an end value `0x03` when proxy pass an empty end key for range scan.
+char RaftDataReader::raft_data_end_key[1] = {0x03};
 
 Page RaftDataReader::read(const UniversalPageId & page_id)
 {
