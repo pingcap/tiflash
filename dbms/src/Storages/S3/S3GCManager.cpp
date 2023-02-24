@@ -61,13 +61,18 @@ bool S3GCManager::runOnAllStores()
 
 void S3GCManager::runForStore(UInt64 gc_store_id)
 {
-    LOG_DEBUG(log, "run gc, gc_store_id={}", gc_store_id);
+    // get a timepoint at the begin, only remove objects that expired compare
+    // to this timepoint
+    const Aws::Utils::DateTime gc_timepoint = Aws::Utils::DateTime::Now();
+    LOG_DEBUG(log, "run gc, gc_store_id={} timepoint={}", gc_store_id, gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
+
+    // TODO: Get store ids from pd. If the store id is tombstoned,
+    //       then run gc on the store as if no locks.
+
     // Get the latest manifest
-    auto manifests = CheckpointManifestS3Set::getFromS3(*client, gc_store_id);
-    {
-        // clean the outdated manifest files
-        removeOutdatedManifest(manifests);
-    }
+    const auto manifests = CheckpointManifestS3Set::getFromS3(*client, gc_store_id);
+    // clean the outdated manifest files
+    removeOutdatedManifest(manifests, gc_timepoint);
 
     LOG_INFO(log, "latest manifest, gc_store_id={} upload_seq={} key={}", gc_store_id, manifests.latestUploadSequence(), manifests.latestManifestKey());
     // Parse from the latest manifest and collect valid lock files
@@ -76,24 +81,22 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
     LOG_INFO(log, "latest manifest, key={} n_locks={}", manifests.latestManifestKey(), valid_lock_files.size());
 
     // Scan and remove the expired locks
-    {
-        // All locks share the same prefix
-        const auto lock_prefix = S3Filename::getLockPrefix();
-        cleanUnusedLocksOnPrefix(gc_store_id, lock_prefix, manifests.latestUploadSequence(), valid_lock_files);
-    }
+    const auto lock_prefix = S3Filename::getLockPrefix();
+    cleanUnusedLocks(gc_store_id, lock_prefix, manifests.latestUploadSequence(), valid_lock_files, gc_timepoint);
 
     // After removing the expired lock, we need to scan the data files
     // with expired delmark
-    tryCleanExpiredDataFiles(gc_store_id);
+    tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
 }
 
-void S3GCManager::cleanUnusedLocksOnPrefix(
+void S3GCManager::cleanUnusedLocks(
     UInt64 gc_store_id,
     String scan_prefix,
     UInt64 safe_sequence,
-    const std::unordered_set<String> & valid_lock_files)
+    const std::unordered_set<String> & valid_lock_files,
+    const Aws::Utils::DateTime & timepoint)
 {
-    // List the lock files under this prefix
+    // All locks (even for different stores) share the same prefix, list the lock files under this prefix
     listPrefix(*client, client->bucket(), scan_prefix, [&](const Aws::S3::Model::ListObjectsV2Result & result) {
         const auto & objects = result.GetContents();
         for (const auto & object : objects)
@@ -115,13 +118,13 @@ void S3GCManager::cleanUnusedLocksOnPrefix(
                 continue;
 
             // The data file is not used by `gc_store_id` anymore, remove the lock file
-            tryCleanLock(lock_key, lock_filename_view);
+            tryCleanLock(lock_key, lock_filename_view, timepoint);
         }
         return PageResult{.num_keys = objects.size(), .more = true};
     });
 }
 
-void S3GCManager::tryCleanLock(const String & lock_key, const S3FilenameView & lock_filename_view)
+void S3GCManager::tryCleanLock(const String & lock_key, const S3FilenameView & lock_filename_view, const Aws::Utils::DateTime & timepoint)
 {
     const auto unlocked_datafilename_view = lock_filename_view.asDataFile();
     RUNTIME_CHECK(unlocked_datafilename_view.isDataFile());
@@ -130,6 +133,11 @@ void S3GCManager::tryCleanLock(const String & lock_key, const S3FilenameView & l
 
     // delete S3 lock file
     deleteObject(*client, client->bucket(), lock_key);
+
+    // TODO: If `lock_key` is the only lock to datafile and GCManager crashs
+    //       after the lock deleted but before delmark uploaded, then the
+    //       datafile is not able to be cleaned.
+    //       Need another logic to cover this corner case.
 
     bool delmark_exists = false;
     Aws::Utils::DateTime mtime;
@@ -143,20 +151,20 @@ void S3GCManager::tryCleanLock(const String & lock_key, const S3FilenameView & l
     }
 
     assert(delmark_exists); // function should return in previous if-branch
-    removeDataFileIfDelmarkExpired(unlocked_datafile_key, unlocked_datafile_delmark_key, mtime);
+    removeDataFileIfDelmarkExpired(unlocked_datafile_key, unlocked_datafile_delmark_key, timepoint, mtime);
 }
 
 void S3GCManager::removeDataFileIfDelmarkExpired(
     const String & datafile_key,
     const String & delmark_key,
+    const Aws::Utils::DateTime & timepoint,
     const Aws::Utils::DateTime & delmark_mtime)
 {
     // delmark exist
     bool expired = false;
     {
         // Get the time diff by `now`-`mtime`
-        Aws::Utils::DateTime now = Aws::Utils::DateTime::Now();
-        auto diff_seconds = Aws::Utils::DateTime::Diff(now, delmark_mtime).count() / 1000.0;
+        auto diff_seconds = Aws::Utils::DateTime::Diff(timepoint, delmark_mtime).count() / 1000.0;
         static constexpr Int64 DELMARK_EXPIRED_HOURS = 1;
         if (diff_seconds > DELMARK_EXPIRED_HOURS * 3600) // TODO: make it configurable
         {
@@ -167,23 +175,25 @@ void S3GCManager::removeDataFileIfDelmarkExpired(
             "delmark exist, datafile={} mark_time={} now={} diff_sec={:.3f} expired={}",
             datafile_key,
             delmark_mtime.ToGmtString(Aws::Utils::DateFormat::ISO_8601),
-            now.ToGmtString(Aws::Utils::DateFormat::ISO_8601),
+            timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601),
             diff_seconds,
             expired);
     }
     // The delmark is not expired, wait for next GC round
     if (!expired)
         return;
+
     // The data file is marked as delete and delmark expired, safe to be
     // physical delete.
     deleteObject(*client, client->bucket(), datafile_key); // TODO: it is safe to ignore if not exist
     LOG_INFO(log, "datafile deleted, key={}", datafile_key);
+
     // TODO: mock crash before deleting delmark on S3
     deleteObject(*client, client->bucket(), delmark_key);
     LOG_INFO(log, "datafile delmark deleted, key={}", delmark_key);
 }
 
-void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id)
+void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils::DateTime & timepoint)
 {
     // StableFiles and CheckpointDataFile are stored with the same prefix, scan
     // the keys by prefix, and if there is an expired delmark, then try to remove
@@ -200,7 +210,7 @@ void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id)
             if (!filename_view.isDelMark())
                 continue;
             auto datafile_key = filename_view.asDataFile().toFullKey();
-            removeDataFileIfDelmarkExpired(datafile_key, delmark_key, object.GetLastModified());
+            removeDataFileIfDelmarkExpired(datafile_key, delmark_key, timepoint, object.GetLastModified());
         }
         return PageResult{.num_keys = objects.size(), .more = true};
     });
@@ -245,19 +255,18 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const String &
     return {};
 }
 
-void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifests)
+void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime & timepoint)
 {
     // clean the outdated manifest files
     std::chrono::milliseconds expired_ms(1 * 3600 * 1000); // 1 hour
     for (const auto & mf : manifests.objects())
     {
-        Aws::Utils::DateTime now = Aws::Utils::DateTime::Now();
-        if (auto diff_ms = Aws::Utils::DateTime::Diff(now, mf.second.last_modification);
+        if (auto diff_ms = Aws::Utils::DateTime::Diff(timepoint, mf.second.last_modification);
             diff_ms <= expired_ms)
         {
             continue;
         }
-        // expired manifest
+        // expired manifest, remove
         deleteObject(*client, client->bucket(), mf.second.key);
     }
 }

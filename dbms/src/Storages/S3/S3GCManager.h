@@ -46,6 +46,12 @@ namespace DB::S3
 {
 struct S3FilenameView;
 
+struct S3GCConfig
+{
+    Int64 manifest_expired_hour = 1;
+    Int64 delmark_expired_hour = 1;
+};
+
 class S3GCManager
 {
 public:
@@ -56,26 +62,28 @@ public:
 private:
     void runForStore(UInt64 gc_store_id);
 
-    void cleanUnusedLocksOnPrefix(
+    void cleanUnusedLocks(
         UInt64 gc_store_id,
         String scan_prefix,
         UInt64 safe_sequence,
-        const std::unordered_set<String> & valid_lock_files);
+        const std::unordered_set<String> & valid_lock_files,
+        const Aws::Utils::DateTime &);
 
-    void tryCleanLock(const String & lock_key, const S3FilenameView & lock_filename_view);
+    void tryCleanLock(const String & lock_key, const S3FilenameView & lock_filename_view, const Aws::Utils::DateTime &);
 
-    void tryCleanExpiredDataFiles(UInt64 gc_store_id);
+    void tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils::DateTime &);
 
     void removeDataFileIfDelmarkExpired(
         const String & datafile_key,
         const String & delmark_key,
+        const Aws::Utils::DateTime & timepoint,
         const Aws::Utils::DateTime & delmark_mtime);
 
     std::vector<UInt64> getAllStoreIds() const;
 
     std::unordered_set<String> getValidLocksFromManifest(const String & manifest_key);
 
-    void removeOutdatedManifest(const CheckpointManifestS3Set & manifests);
+    void removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime &);
 
     String getTemporaryDownloadFile(String s3_key);
 
