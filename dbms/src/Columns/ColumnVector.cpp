@@ -208,22 +208,23 @@ namespace
 
 /// If mask is a number of this kind: [0]*[1]* function returns the length of the cluster of 1s.
 /// Otherwise it returns the special value: 0xFF.
-UInt8 prefixToCopy(UInt64 mask)
+inline UInt8 prefixToCopy(UInt64 mask)
 {
+    static constexpr UInt64 all_match = 0xFFFFFFFFFFFFFFFFULL;
     if (mask == 0)
         return 0;
-    if (mask == static_cast<UInt64>(-1))
+    if (mask == all_match)
         return 64;
     /// Row with index 0 correspond to the least significant bit.
     /// So the length of the prefix to copy is 64 - #(leading zeroes).
     const UInt64 leading_zeroes = __builtin_clzll(mask);
-    if (mask == ((static_cast<UInt64>(-1) << leading_zeroes) >> leading_zeroes))
+    if (mask == ((all_match << leading_zeroes) >> leading_zeroes))
         return 64 - leading_zeroes;
     else
         return 0xFF;
 }
 
-uint8_t suffixToCopy(UInt64 mask)
+inline UInt8 suffixToCopy(UInt64 mask)
 {
     const auto prefix_to_copy = prefixToCopy(~mask);
     return prefix_to_copy >= 64 ? prefix_to_copy : 64 - prefix_to_copy;
@@ -245,7 +246,7 @@ inline void doFilterAligned(const UInt8 *& filt_pos, const UInt8 *& filt_end_ali
         }
         else
         {
-            const uint8_t suffix_to_copy = suffixToCopy(mask);
+            const UInt8 suffix_to_copy = suffixToCopy(mask);
             if (0xFF != suffix_to_copy)
             {
                 res_data.insert(data_pos + SIMD_BYTES - suffix_to_copy, data_pos + SIMD_BYTES);
