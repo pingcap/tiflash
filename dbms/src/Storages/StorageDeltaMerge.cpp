@@ -42,6 +42,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/PathPool.h>
 #include <Storages/PrimaryKeyNotMatchException.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>

@@ -28,7 +28,7 @@
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
@@ -108,7 +108,7 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
                     fmt::format("Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
                                 ver,
                                 last_iter->first,
-                                last_iter->second.toDebugString()),
+                                last_iter->second),
                     ErrorCodes::LOGICAL_ERROR);
             }
             // create a new version that inherit the `being_ref_count` of the last entry
@@ -121,7 +121,7 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
         fmt::format("try to create entry version with invalid state "
                     "[ver={}] [entry={}] [state={}]",
                     ver,
-                    ::DB::PS::V3::toDebugString(entry),
+                    entry,
                     toDebugString()),
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS);
 }
@@ -156,7 +156,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
                     fmt::format("Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
                                 ver,
                                 last_iter->first,
-                                last_iter->second.toDebugString()),
+                                last_iter->second),
                     ErrorCodes::LOGICAL_ERROR);
             }
             // create a new version that inherit the `being_ref_count` of the last entry
@@ -199,7 +199,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
         fmt::format("try to create upsert entry version with invalid state "
                     "[ver={}] [entry={}] [state={}]",
                     ver,
-                    ::DB::PS::V3::toDebugString(entry),
+                    entry,
                     toDebugString()),
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS);
 }
@@ -544,7 +544,7 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & ver)
             {
                 if (unlikely(met_delete && iter->second.being_ref_count == 1))
                 {
-                    throw Exception(fmt::format("Try to add ref to a completely deleted entry [entry={}] [ver={}]", iter->second.toDebugString(), ver), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(fmt::format("Try to add ref to a completely deleted entry [entry={}] [ver={}]", iter->second, ver), ErrorCodes::LOGICAL_ERROR);
                 }
                 return ++iter->second.being_ref_count;
             }
@@ -751,7 +751,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
         assert(iter->second.isEntry());
         if (iter->second.being_ref_count <= deref_count)
         {
-            throw Exception(fmt::format("Decreasing ref count error [page_id={}] [ver={}] [deref_count={}] [entry={}]", page_id, deref_ver, deref_count, iter->second.toDebugString()));
+            throw Exception(fmt::format("Decreasing ref count error [page_id={}] [ver={}] [deref_count={}] [entry={}]", page_id, deref_ver, deref_count, iter->second));
         }
         iter->second.being_ref_count -= deref_count;
 
