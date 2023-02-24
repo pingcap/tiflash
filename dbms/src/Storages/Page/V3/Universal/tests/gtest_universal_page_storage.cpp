@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/Page/V3/Universal/RaftDataReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
-#include <Storages/Page/V3/Universal/UniversalWriteBatch.h>
+#include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 
@@ -264,6 +265,147 @@ TEST_F(UniPageStorageTest, GetMaxIdWithPrefix)
     ASSERT_EQ(page_storage->getMaxIdAfterRestart(), write_count - 1);
 }
 
+TEST_F(UniPageStorageTest, GetLowerBound)
+{
+    const String prefix = "aaa";
+    UInt64 tag = 0;
+    {
+        UniversalWriteBatch wb;
+        c_buff[0] = 10;
+        c_buff[1] = 1;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 5), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 4;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 7), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 5;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 6), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 6;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 10), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 7;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 9), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+
+        page_storage->write(std::move(wb));
+    }
+
+    RaftDataReader reader(*page_storage);
+    {
+        auto target_id = UniversalPageIdFormat::toFullPageId(prefix, 4);
+        auto result_id = reader.getLowerBound(target_id);
+        ASSERT_TRUE(result_id.has_value());
+        ASSERT_EQ(*result_id, UniversalPageIdFormat::toFullPageId(prefix, 5));
+    }
+    {
+        auto target_id = UniversalPageIdFormat::toFullPageId(prefix, 5);
+        auto result_id = reader.getLowerBound(target_id);
+        ASSERT_TRUE(result_id.has_value());
+        ASSERT_EQ(*result_id, UniversalPageIdFormat::toFullPageId(prefix, 5));
+    }
+    {
+        auto target_id = UniversalPageIdFormat::toFullPageId(prefix, 7);
+        auto result_id = reader.getLowerBound(target_id);
+        ASSERT_TRUE(result_id.has_value());
+        ASSERT_EQ(*result_id, UniversalPageIdFormat::toFullPageId(prefix, 7));
+    }
+    {
+        auto target_id = UniversalPageIdFormat::toFullPageId(prefix, 8);
+        auto result_id = reader.getLowerBound(target_id);
+        ASSERT_TRUE(result_id.has_value());
+        ASSERT_EQ(*result_id, UniversalPageIdFormat::toFullPageId(prefix, 9));
+    }
+    {
+        auto target_id = UniversalPageIdFormat::toFullPageId(prefix, 10);
+        auto result_id = reader.getLowerBound(target_id);
+        ASSERT_TRUE(result_id.has_value());
+        ASSERT_EQ(*result_id, UniversalPageIdFormat::toFullPageId(prefix, 10));
+    }
+    {
+        auto target_id = UniversalPageIdFormat::toFullPageId(prefix, 11);
+        auto result_id = reader.getLowerBound(target_id);
+        ASSERT_TRUE(!result_id.has_value());
+    }
+}
+
+TEST_F(UniPageStorageTest, Scan)
+{
+    UInt64 tag = 0;
+    const UInt64 region_id = 100;
+    const String region_prefix = UniversalPageIdFormat::toFullRaftLogPrefix(region_id);
+    // write some raft related data
+    {
+        UniversalWriteBatch wb;
+        c_buff[0] = 10;
+        c_buff[1] = 1;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(region_prefix, 10), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 4;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(region_prefix, 15), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 5;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(region_prefix, 18), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 6;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(region_prefix, 20), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 7;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(region_prefix, 25), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+
+        page_storage->write(std::move(wb));
+    }
+
+    // write some non raft data
+    {
+        const String prefix = "aaa";
+        UniversalWriteBatch wb;
+        c_buff[0] = 10;
+        c_buff[1] = 1;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 10), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 4;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 15), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 5;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 18), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 6;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 20), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        c_buff[0] = 10;
+        c_buff[1] = 7;
+        wb.putPage(UniversalPageIdFormat::toFullPageId(prefix, 25), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+
+        page_storage->write(std::move(wb));
+    }
+
+    RaftDataReader reader(*page_storage);
+    {
+        auto start = UniversalPageIdFormat::toFullPageId(region_prefix, 15);
+        auto end = UniversalPageIdFormat::toFullPageId(region_prefix, 25);
+        size_t count = 0;
+        auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
+            UNUSED(page);
+            ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(page_id), region_prefix);
+            count++;
+        };
+        reader.traverse(start, end, checker);
+        ASSERT_EQ(count, 3);
+    }
+
+    {
+        auto start = UniversalPageIdFormat::toFullPageId(region_prefix, 15);
+        auto end = "";
+        size_t count = 0;
+        auto checker = [&](const UniversalPageId & page_id, const DB::Page & page) {
+            UNUSED(page);
+            ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(page_id), region_prefix);
+            count++;
+        };
+        reader.traverse(start, end, checker);
+        ASSERT_EQ(count, 4);
+    }
+}
+
 TEST(UniPageStorageIdTest, UniversalPageId)
 {
     {
@@ -278,5 +420,6 @@ TEST(UniPageStorageIdTest, UniversalPageId)
         ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(u_id), "z");
     }
 }
+
 } // namespace PS::universal::tests
 } // namespace DB

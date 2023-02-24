@@ -13,6 +13,8 @@
 // limitations under the License.
 
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
+#include <cstdlib>
+#include <string_view>
 #if !__clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
@@ -59,6 +61,15 @@ static std::string getCanonicalPath(std::string path)
 static String getNormalizedPath(const String & s)
 {
     return getCanonicalPath(Poco::Path{s}.toString());
+}
+
+template <typename T>
+void readConfig(const std::shared_ptr<cpptoml::table> & table, const String & name, T & value)
+{
+    if (auto p = table->get_qualified_as<typename std::remove_reference<decltype(value)>::type>(name); p)
+    {
+        value = *p;
+    }
 }
 
 void TiFlashStorageConfig::parseStoragePath(const String & storage, const LoggerPtr & log)
@@ -376,6 +387,11 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
         }
     }
 
+    if (config.has("storage.s3"))
+    {
+        storage_config.s3_config.parse(config.getString("storage.s3"), log);
+    }
+
     return std::make_tuple(global_capacity_quota, storage_config);
 }
 
@@ -385,26 +401,19 @@ void StorageIORateLimitConfig::parse(const String & storage_io_rate_limit, const
     cpptoml::parser p(ss);
     auto config = p.parse();
 
-    auto read_config = [&](const std::string & name, auto & value) {
-        if (auto p = config->get_qualified_as<typename std::remove_reference<decltype(value)>::type>(name); p)
-        {
-            value = *p;
-        }
-    };
-
-    read_config("max_bytes_per_sec", max_bytes_per_sec);
-    read_config("max_read_bytes_per_sec", max_read_bytes_per_sec);
-    read_config("max_write_bytes_per_sec", max_write_bytes_per_sec);
-    read_config("foreground_write_weight", fg_write_weight);
-    read_config("background_write_weight", bg_write_weight);
-    read_config("foreground_read_weight", fg_read_weight);
-    read_config("background_read_weight", bg_read_weight);
-    read_config("emergency_pct", emergency_pct);
-    read_config("high_pct", high_pct);
-    read_config("medium_pct", medium_pct);
-    read_config("tune_base", tune_base);
-    read_config("min_bytes_per_sec", min_bytes_per_sec);
-    read_config("auto_tune_sec", auto_tune_sec);
+    readConfig(config, "max_bytes_per_sec", max_bytes_per_sec);
+    readConfig(config, "max_read_bytes_per_sec", max_read_bytes_per_sec);
+    readConfig(config, "max_write_bytes_per_sec", max_write_bytes_per_sec);
+    readConfig(config, "foreground_write_weight", fg_write_weight);
+    readConfig(config, "background_write_weight", bg_write_weight);
+    readConfig(config, "foreground_read_weight", fg_read_weight);
+    readConfig(config, "background_read_weight", bg_read_weight);
+    readConfig(config, "emergency_pct", emergency_pct);
+    readConfig(config, "high_pct", high_pct);
+    readConfig(config, "medium_pct", medium_pct);
+    readConfig(config, "tune_base", tune_base);
+    readConfig(config, "min_bytes_per_sec", min_bytes_per_sec);
+    readConfig(config, "auto_tune_sec", auto_tune_sec);
 
     use_max_bytes_per_sec = (max_read_bytes_per_sec == 0 && max_write_bytes_per_sec == 0);
 
@@ -511,4 +520,26 @@ bool StorageIORateLimitConfig::operator==(const StorageIORateLimitConfig & confi
         && config.emergency_pct == emergency_pct && config.high_pct == high_pct && config.medium_pct == medium_pct
         && config.tune_base == tune_base && config.min_bytes_per_sec == min_bytes_per_sec && config.auto_tune_sec == auto_tune_sec;
 }
+
+void StorageS3Config::parse(const String & content, const LoggerPtr & log)
+{
+    std::istringstream ss(content);
+    cpptoml::parser p(ss);
+    auto table = p.parse();
+
+    readConfig(table, "endpoint", endpoint);
+    readConfig(table, "bucket", bucket);
+
+    access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", /*default*/ "");
+    secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", /*default*/ "");
+
+    LOG_INFO(log, "endpoint={} bucket={} isS3Enabled={}", endpoint, bucket, isS3Enabled());
+}
+
+bool StorageS3Config::isS3Enabled() const
+{
+    return !endpoint.empty() && !bucket.empty() && !access_key_id.empty() && !secret_access_key.empty();
+}
+
+
 } // namespace DB

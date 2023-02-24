@@ -14,7 +14,9 @@
 
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/Page/WriteBatchWrapperImpl.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
@@ -37,13 +39,6 @@ public:
         old_run_mode = global_context.getPageStorageRunMode();
         global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
         TiFlashStorageTestBasic::SetUp();
-
-        reload();
-    }
-
-    void reload()
-    {
-        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
         auto path = TiFlashTestEnv::getTemporaryPath("UniPageStorageStoragePoolTest");
         std::vector<size_t> caps = {};
         Strings paths = {path};
@@ -204,9 +199,9 @@ try
     {
         auto page_reader_with_snap = storage_pool->newLogReader(nullptr, snapshot);
 
-        const auto & page1 = page_reader_with_snap.read(1);
-        const auto & page2 = page_reader_with_snap.read(2);
-        const auto & page3 = page_reader_with_snap.read(3);
+        const auto & page1 = page_reader_with_snap->read(1);
+        const auto & page2 = page_reader_with_snap->read(2);
+        const auto & page3 = page_reader_with_snap->read(3);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 2);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
@@ -221,13 +216,12 @@ try
     }
     {
         auto page_reader_with_snap = storage_pool->newLogReader(nullptr, snapshot);
-        const auto & page3 = page_reader_with_snap.read(3);
+        const auto & page3 = page_reader_with_snap->read(3);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
-        ASSERT_THROW(page_reader_with_snap.read(4), DB::Exception);
+        ASSERT_THROW(page_reader_with_snap->read(4), DB::Exception);
     }
 }
 CATCH
-
 
 TEST_F(UniPageStorageStoragePoolTest, PutExt)
 try
@@ -356,8 +350,8 @@ try
 
     {
         auto page_reader_with_snap = storage_pool->newLogReader(nullptr, snapshot);
-        ASSERT_EQ(page_reader_with_snap.getNormalPageId(9), 7);
-        const auto & page = page_reader_with_snap.read(9);
+        ASSERT_EQ(page_reader_with_snap->getNormalPageId(9), 7);
+        const auto & page = page_reader_with_snap->read(9);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page, 9);
     }
 }

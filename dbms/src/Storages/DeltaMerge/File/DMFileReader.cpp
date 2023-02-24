@@ -87,7 +87,7 @@ DMFileReader::Stream::Stream(
         marks = mark_load();
 
     const String data_path = reader.dmfile->colDataPath(file_name_base);
-    size_t data_file_size = reader.dmfile->colDataSize(file_name_base);
+    size_t data_file_size = reader.dmfile->colDataSize(col_id);
     size_t packs = reader.dmfile->getPacks();
     size_t buffer_size = 0;
     size_t estimated_size = 0;

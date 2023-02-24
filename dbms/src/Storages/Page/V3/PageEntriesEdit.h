@@ -19,7 +19,6 @@
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
-#include <Storages/Page/WriteBatch.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
@@ -67,28 +66,6 @@ struct PageVersion
     }
 };
 } // namespace DB::PS::V3
-/// See https://fmt.dev/latest/api.html#formatting-user-defined-types
-template <>
-struct fmt::formatter<DB::PS::V3::PageVersion>
-{
-    static constexpr auto parse(format_parse_context & ctx)
-    {
-        const auto * it = ctx.begin();
-        const auto * end = ctx.end();
-
-        /// Only support {}.
-        if (it != end && *it != '}')
-            throw format_error("invalid format");
-
-        return it;
-    }
-
-    template <typename FormatContext>
-    auto format(const DB::PS::V3::PageVersion & ver, FormatContext & ctx)
-    {
-        return format_to(ctx.out(), "<{},{}>", ver.sequence, ver.epoch);
-    }
-};
 
 namespace DB::PS::V3
 {
@@ -254,18 +231,6 @@ public:
     };
     using EditRecords = std::vector<EditRecord>;
 
-    static String toDebugString(const EditRecord & rec)
-    {
-        return fmt::format(
-            "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
-            typeToString(rec.type),
-            rec.page_id,
-            rec.ori_page_id,
-            rec.version,
-            DB::PS::V3::toDebugString(rec.entry),
-            rec.being_ref_count);
-    }
-
     void appendRecord(const EditRecord & rec)
     {
         records.emplace_back(rec);
@@ -305,3 +270,62 @@ namespace universal
 using PageEntriesEdit = PageEntriesEdit<UniversalPageId>;
 }
 } // namespace DB::PS::V3
+
+template <>
+struct fmt::formatter<DB::PS::V3::PageVersion>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::PageVersion & ver, FormatContext & ctx) const
+    {
+        return format_to(ctx.out(), "{}.{}", ver.sequence, ver.epoch);
+    }
+};
+
+template <>
+struct fmt::formatter<DB::PS::V3::PageEntriesEdit<DB::PageIdV3Internal>::EditRecord>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::PageEntriesEdit<DB::PageIdV3Internal>::EditRecord & rec, FormatContext & ctx) const
+    {
+        return format_to(ctx.out(),
+                         "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
+                         DB::PS::V3::typeToString(rec.type),
+                         rec.page_id,
+                         rec.ori_page_id,
+                         rec.version,
+                         rec.entry,
+                         rec.being_ref_count);
+    }
+};
+
+template <>
+struct fmt::formatter<DB::PS::V3::PageEntriesEdit<DB::UniversalPageId>::EditRecord>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::PageEntriesEdit<DB::UniversalPageId>::EditRecord & rec, FormatContext & ctx) const
+    {
+        return format_to(ctx.out(),
+                         "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
+                         DB::PS::V3::typeToString(rec.type),
+                         rec.page_id,
+                         rec.ori_page_id,
+                         rec.version,
+                         rec.entry,
+                         rec.being_ref_count);
+    }
+};

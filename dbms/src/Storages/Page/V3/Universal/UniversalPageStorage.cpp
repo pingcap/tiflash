@@ -18,6 +18,7 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
 
 namespace DB

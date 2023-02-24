@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Debug/MockSchemaGetter.h>
@@ -50,12 +51,12 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     explicit TiDBSchemaSyncer(KVClusterPtr cluster_)
         : cluster(std::move(cluster_))
         , cur_version(0)
-        , log(&Poco::Logger::get("SchemaSyncer"))
+        , log(Logger::get())
     {}
 
     bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
