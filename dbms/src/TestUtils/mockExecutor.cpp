@@ -192,7 +192,7 @@ DAGRequestBuilder & DAGRequestBuilder::buildExchangeReceiver(const String & exch
         schema.push_back({exchange_name + "." + column.first, info});
     }
 
-    root = mock::compileExchangeReceiver(getExecutorIndex(), schema, fine_grained_shuffle_stream_count);
+    root = mock::compileExchangeReceiver(getExecutorIndex(), schema, fine_grained_shuffle_stream_count, std::static_pointer_cast<mock::ExchangeSenderBinder>(root));
     return *this;
 }
 

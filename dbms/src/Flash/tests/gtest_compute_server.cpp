@@ -125,9 +125,12 @@ try
 
     std::vector<String> expected_strings = {
         R"(
-exchange_sender_2 | type:PassThrough, {<0, Long>}
- project_1 | {<0, Long>}
-  table_scan_0 | {<0, Long>})"};
+exchange_sender_1 | type:PassThrough, {<0, Long>}
+ table_scan_0 | {<0, Long>})",
+        R"(
+exchange_sender_4 | type:PassThrough, {<0, Long>}
+ project_3 | {<0, Long>}
+  exchange_receiver_2 | type:PassThrough, {<0, Long>})"};
 
     WRAP_FOR_SERVER_TEST_BEGIN
     startServers(1);
@@ -135,6 +138,8 @@ exchange_sender_2 | type:PassThrough, {<0, Long>}
         ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
             context
                 .scan("test_db", "big_table")
+                .exchangeSender(tipb::PassThrough)
+                .exchangeReceiver("recv", {{"s1", TiDB::TP::TypeLong}})
                 .project({"s1"}),
             expected_strings,
             expected_cols);

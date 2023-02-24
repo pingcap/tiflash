@@ -28,11 +28,12 @@ public:
         PipelineExecutorStatus & exec_status_,
         const std::shared_ptr<ExchangeReceiver> & exchange_receiver_,
         size_t stream_id_,
-        const String & req_id)
+        const String & req_id,
+        const String & executor_id)
         : SourceOp(exec_status_)
         , exchange_receiver(exchange_receiver_)
         , stream_id(stream_id_)
-        , log(Logger::get(req_id))
+        , log(Logger::get(req_id, executor_id))
     {
         setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))));
         decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(getHeader(), 8192);

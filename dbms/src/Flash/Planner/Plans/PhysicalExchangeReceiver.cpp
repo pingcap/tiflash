@@ -79,10 +79,11 @@ void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline,
 
     for (size_t i = 0; i < stream_count; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(mpp_exchange_receiver,
-                                                                                   log->identifier(),
-                                                                                   execId(),
-                                                                                   /*stream_id=*/enable_fine_grained_shuffle ? i : 0);
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(
+            mpp_exchange_receiver,
+            log->identifier(),
+            execId(),
+            /*stream_id=*/enable_fine_grained_shuffle ? i : 0);
         exchange_receiver_io_input_streams.push_back(stream);
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
@@ -100,7 +101,12 @@ void PhysicalExchangeReceiver::buildPipelineExec(PipelineExecGroupBuilder & grou
     group_builder.init(source_concurrency);
     size_t index = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(group_builder.exec_status, mpp_exchange_receiver, index++, log->identifier()));
+        builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(
+            group_builder.exec_status,
+            mpp_exchange_receiver,
+            /*stream_id=*/enable_fine_grained_shuffle ? index++ : 0,
+            log->identifier(),
+            execId()));
     });
 }
 

@@ -61,9 +61,15 @@ bool ExchangeReceiverBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int3
 }
 
 
-ExecutorBinderPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema, uint64_t fine_grained_shuffle_stream_count)
+void ExchangeReceiverBinder::toMPPSubPlan(size_t &, const DAGProperties &, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
 {
-    ExecutorBinderPtr exchange_receiver = std::make_shared<mock::ExchangeReceiverBinder>(executor_index, schema, fine_grained_shuffle_stream_count);
+    assert(exchange_sender);
+    exchange_map[name] = std::make_pair(shared_from_this(), exchange_sender);
+}
+
+ExecutorBinderPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema, uint64_t fine_grained_shuffle_stream_count, const std::shared_ptr<ExchangeSenderBinder> & exchange_sender)
+{
+    ExecutorBinderPtr exchange_receiver = std::make_shared<mock::ExchangeReceiverBinder>(executor_index, schema, fine_grained_shuffle_stream_count, exchange_sender);
     return exchange_receiver;
 }
 } // namespace DB::mock
