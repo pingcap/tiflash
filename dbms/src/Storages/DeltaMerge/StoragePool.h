@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Common/Logger.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/StoragePool_fwd.h>
 #include <Storages/Page/FileUsage.h>
