@@ -141,6 +141,7 @@ Here is the new architecture:
 
 ## Key Implementation Points
 
+* Periodically upload checkpoints and delta data to S3 by WN.
 * Store raft logs data into PageStorage. Currently it is stored in [raft-engine](https://github.com/tikv/raft-engine).
 * Support generating query snapshots by WN and sending latest data to RN
 * Support directly read data from S3 by RN, and cache data to local disk for faster access
