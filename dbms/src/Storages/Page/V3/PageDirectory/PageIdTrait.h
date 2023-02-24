@@ -15,7 +15,6 @@
 
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
-#include <Storages/Page/V3/Universal/UniversalPageIdFormat.h>
 
 namespace DB::PS::V3
 {
@@ -55,14 +54,11 @@ struct PageIdTrait
     {
         return UniversalPageId{};
     }
-    static inline PageIdU64 getU64ID(const PageId & page_id)
-    {
-        return UniversalPageIdFormat::getU64ID(page_id);
-    }
-    static inline Prefix getPrefix(const PageId & page_id)
-    {
-        return UniversalPageIdFormat::getFullPrefix(page_id);
-    }
+
+    static PageIdU64 getU64ID(const PageId & page_id);
+
+    static Prefix getPrefix(const PageId & page_id);
+
     static inline PageId getPageMapKey(const PageId & page_id)
     {
         return page_id;

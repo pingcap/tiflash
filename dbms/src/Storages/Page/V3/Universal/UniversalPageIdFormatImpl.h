@@ -45,14 +45,6 @@ namespace DB
 //  Data
 //      Prefix = [optional prefix] + "td" + NamespaceId
 
-enum class StorageType
-{
-    Log = 1,
-    Data = 2,
-    Meta = 3,
-    KVStore = 4,
-};
-
 struct UniversalPageIdFormat
 {
 public:
@@ -120,24 +112,3 @@ private:
     }
 };
 } // namespace DB
-
-template <>
-struct fmt::formatter<DB::UniversalPageId>
-{
-    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
-    {
-        const auto * it = ctx.begin();
-        const auto * end = ctx.end();
-        /// Only support {}.
-        if (it != end && *it != '}')
-            throw format_error("invalid format");
-        return it;
-    }
-
-    template <typename FormatContext>
-    auto format(const DB::UniversalPageId & value, FormatContext & ctx) const -> decltype(ctx.out())
-    {
-        auto prefix = DB::UniversalPageIdFormat::getFullPrefix(value);
-        return format_to(ctx.out(), "{}.{}", Redact::keyToHexString(prefix.data(), prefix.size()), DB::UniversalPageIdFormat::getU64ID(value));
-    }
-};

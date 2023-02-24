@@ -18,7 +18,8 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -34,7 +35,6 @@ class RegionTaskLock;
 struct RegionManager;
 
 struct TiFlashRaftProxyHelper;
-class PageStorage;
 
 class RegionPersister final : private boost::noncopyable
 {
