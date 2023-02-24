@@ -16,6 +16,7 @@
 
 #include <Core/Types.h>
 #include <Storages/BackgroundProcessingPool.h>
+#include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
 #include <common/types.h>
 
@@ -72,18 +73,9 @@ private:
 
     std::vector<UInt64> getAllStoreIds() const;
 
-    struct ManifestListResult
-    {
-        Strings all_manifest;
-        const String latest_manifest;
-        const UInt64 latest_upload_seq;
-    };
-
-    ManifestListResult listManifest(UInt64 store_id);
-
     std::unordered_set<String> getValidLocksFromManifest(const String & manifest_key);
 
-    void removeOutdatedManifest(const ManifestListResult & manifests);
+    void removeOutdatedManifest(const CheckpointManifestS3Set & manifests);
 
     String getTemporaryDownloadFile(String s3_key);
 

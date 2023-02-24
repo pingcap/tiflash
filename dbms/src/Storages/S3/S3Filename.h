@@ -130,6 +130,7 @@ struct S3Filename
     StoreID store_id{0};
     String data_subpath;
 
+    static String allStorePrefix();
     static S3Filename fromStoreId(StoreID store_id);
     static S3Filename fromDMFileOID(const DMFileOID & oid);
     static S3Filename fromTableID(StoreID store_id, TableID table_id);

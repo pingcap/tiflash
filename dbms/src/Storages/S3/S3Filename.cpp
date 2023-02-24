@@ -44,6 +44,7 @@ constexpr static std::string_view DELMARK_SUFFIX = ".del";
 
 // clang-format off
 
+constexpr static std::string_view fmt_allstore_prefix  = "s";
 constexpr static std::string_view fmt_store_prefix     = "s{store_id}/";
 constexpr static std::string_view fmt_manifest_prefix  = "s{store_id}/manifest/";
 constexpr static std::string_view fmt_manifest         = "s{store_id}/manifest/{subpath}";
@@ -290,6 +291,11 @@ S3FilenameView::LockInfo S3FilenameView::getLockInfo() const
 }
 
 //==== Generate S3 key from raw parts ====//
+
+String S3Filename::allStorePrefix()
+{
+    return String(details::fmt_allstore_prefix);
+}
 
 S3Filename S3Filename::fromStoreId(StoreID store_id)
 {
