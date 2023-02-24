@@ -1110,29 +1110,16 @@ String DAGExpressionAnalyzer::appendNullAwareJoinEqColumn(
 
     auto & last_step = initAndGetLastStep(chain);
 
-    String column_for_null_aware_eq_condition;
-    if (probe_key_names.size() == 1)
+    Names and_arg_names(probe_key_names.size());
+    for (size_t i = 0; i < probe_key_names.size(); ++i)
     {
         Names arg_names;
-        arg_names.push_back(probe_key_names[0]);
-        arg_names.push_back(build_key_names[0]);
-        const TiDB::TiDBCollatorPtr & collator = collators.empty() ? nullptr : collators[0];
-        column_for_null_aware_eq_condition = applyFunction("equals", arg_names, last_step.actions, collator);
+        arg_names.push_back(probe_key_names[i]);
+        arg_names.push_back(build_key_names[i]);
+        const TiDB::TiDBCollatorPtr & collator = i < collators.size() ? collators[i] : nullptr;
+        and_arg_names[i] = applyFunction("equals", arg_names, last_step.actions, collator);
     }
-    else
-    {
-        Names and_arg_names;
-        for (size_t i = 0; i < probe_key_names.size(); ++i)
-        {
-            Names arg_names;
-            arg_names.push_back(probe_key_names[i]);
-            arg_names.push_back(build_key_names[i]);
-            const TiDB::TiDBCollatorPtr & collator = i < collators.size() ? collators[i] : nullptr;
-            and_arg_names.push_back(applyFunction("equals", arg_names, last_step.actions, collator));
-        }
-        column_for_null_aware_eq_condition = applyFunction("and", and_arg_names, last_step.actions, nullptr);
-    }
-    return column_for_null_aware_eq_condition;
+    return and_arg_names.size() == 1 ? and_arg_names[0] : applyFunction("and", and_arg_names, last_step.actions, nullptr);
 }
 
 void DAGExpressionAnalyzer::appendCastAfterWindow(

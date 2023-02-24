@@ -228,7 +228,7 @@ private:
 public:
     // Currently don't support task_id, so the following to structure is useless,
     // but we need it to contruct the TaskMeta.
-    // In TiFlash, we use task_id to identify a Mpp Task.
+    // In TiFlash, we use task_id to identify an Mpp Task.
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
     Context context;
     Int32 collation;
