@@ -16,7 +16,8 @@
 
 #include <IO/ReadBufferFromString.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
+#include <Storages/Page/WriteBatchImpl.h>
 
 namespace DB
 {

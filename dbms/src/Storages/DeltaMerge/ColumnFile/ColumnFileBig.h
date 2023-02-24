@@ -72,13 +72,7 @@ public:
     size_t getRows() const override { return valid_rows; }
     size_t getBytes() const override { return valid_bytes; };
 
-    void removeData(WriteBatches & wbs) const override
-    {
-        // Here we remove the data id instead of file_id.
-        // Because a dmfile could be used in several places, and only after all page ids are removed,
-        // then the file_id got removed.
-        wbs.removed_data.delPage(file->pageId());
-    }
+    void removeData(WriteBatches & wbs) const override;
 
     ColumnFileReaderPtr
     getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const override;
@@ -168,5 +162,6 @@ public:
 
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
 };
+
 } // namespace DM
 } // namespace DB

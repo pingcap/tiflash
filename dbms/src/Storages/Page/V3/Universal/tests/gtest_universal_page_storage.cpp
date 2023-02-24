@@ -14,7 +14,7 @@
 
 #include <Storages/Page/V3/Universal/RaftDataReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
-#include <Storages/Page/V3/Universal/UniversalWriteBatch.h>
+#include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 
