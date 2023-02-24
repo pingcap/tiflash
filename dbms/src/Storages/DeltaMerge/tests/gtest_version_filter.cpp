@@ -209,7 +209,7 @@ TEST(VersionFilterTest, RangesMVCC)
     {
         // test merged blocks
         Blocks block_vec{std::make_move_iterator(blocks.begin()), std::make_move_iterator(blocks.end())};
-        Block block = DB::mergeBlocks(std::move(block_vec));
+        Block block = DB::vstackBlocks(std::move(block_vec));
         blocks.clear();
         blocks.push_back(std::move(block));
         {

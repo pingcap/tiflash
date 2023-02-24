@@ -511,12 +511,12 @@ CATCH
 
 TEST_F(SegmentBitmapFilterTest, CleanStable)
 {
-    writeSegment("d_mem:[0, 10000)|d_mem:[20000, 25000)");
+    writeSegment("d_mem:[0, 20000)|d_mem:[30000, 35000)");
     mergeSegmentDelta(SEG_ID, true);
     auto [seg, snap] = getSegmentForRead(SEG_ID);
     ASSERT_EQ(seg->getDelta()->getRows(), 0);
     ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
-    ASSERT_EQ(seg->getStable()->getRows(), 15000);
+    ASSERT_EQ(seg->getStable()->getRows(), 25000);
     auto bitmap_filter = seg->buildBitmapFilterStableOnly(
         *dm_context,
         snap,
@@ -526,7 +526,7 @@ TEST_F(SegmentBitmapFilterTest, CleanStable)
         DEFAULT_BLOCK_SIZE);
     ASSERT_NE(bitmap_filter, nullptr);
     std::string expect_result;
-    expect_result.append(std::string(15000, '1'));
+    expect_result.append(std::string(25000, '1'));
     ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
 }
 
