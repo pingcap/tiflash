@@ -104,7 +104,7 @@ public:
     }
 
     // data is in kv engine, so it is prepend by KV_PREFIX
-    // KV_PREFIX LOCAL_PREFIX REGION_META_PREFIX region_id RAFT_LOG_SUFFIX
+    // KV_PREFIX LOCAL_PREFIX REGION_META_PREFIX region_id REGION_STATE_SUFFIX
     static UniversalPageId toRegionLocalStateKeyInKVEngine(UInt64 region_id)
     {
         WriteBufferFromOwnString buff;
