@@ -66,7 +66,7 @@ public:
     }
 
 #ifdef DBMS_PUBLIC_GTEST
-    explicit WriteBatchWrapper(WriteBatch && wb_)
+    WriteBatchWrapper(WriteBatch && wb_)
         : wb(std::make_unique<WriteBatch>(std::move(wb_)))
         , uwb(nullptr)
     {}

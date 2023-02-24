@@ -237,8 +237,13 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
         case WriteBatchWriteType::PUT_EXTERNAL:
             edit.putExternal(wb.getFullPageId(write.page_id));
             break;
+        case WriteBatchWriteType::PUT_REMOTE:
+        case WriteBatchWriteType::PUT_REMOTE_EXTERNAL:
+        {
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "");
+        }
         case WriteBatchWriteType::UPSERT:
-            throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown write type: {}", magic_enum::enum_name(write.type));
         }
     }
 
@@ -278,10 +283,14 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
                 edit.putExternal(wb.getFullPageId(write.page_id));
                 break;
             }
+            case WriteBatchWriteType::PUT_REMOTE:
+            case WriteBatchWriteType::PUT_REMOTE_EXTERNAL:
+            {
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "");
+            }
             case WriteBatchWriteType::PUT:
             case WriteBatchWriteType::UPSERT:
-                throw Exception(fmt::format("write batch have a invalid total size == 0 while this kind of entry exist, write_type={}", magic_enum::enum_name(write.type)),
-                                ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "write batch have a invalid total size == 0 while this kind of entry exist, write_type={}", magic_enum::enum_name(write.type));
             }
         }
         return edit;
@@ -376,6 +385,11 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
         case WriteBatchWriteType::PUT_EXTERNAL:
             edit.putExternal(wb.getFullPageId(write.page_id));
             break;
+        case WriteBatchWriteType::PUT_REMOTE:
+        case WriteBatchWriteType::PUT_REMOTE_EXTERNAL:
+        {
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "");
+        }
         case WriteBatchWriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }
