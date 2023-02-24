@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #pragma once
-#include <Common/LRUCache.h>
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
