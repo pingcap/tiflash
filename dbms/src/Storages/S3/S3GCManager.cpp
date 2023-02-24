@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Core/Types.h>
+#include <Flash/Disaggregated/S3LockClient.h>
 #include <Interpreters/Context.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
@@ -34,17 +35,18 @@
 namespace DB::ErrorCodes
 {
 extern const int S3_ERROR;
+extern const int TIMEOUT_EXCEEDED;
 } // namespace DB::ErrorCodes
 
 namespace DB::S3
 {
 
-S3GCManager::S3GCManager(S3GCConfig config_)
-    : client(nullptr)
+S3GCManager::S3GCManager(std::shared_ptr<TiFlashS3Client> client_, S3LockClientPtr lock_client_, S3GCConfig config_)
+    : client(std::move(client_))
+    , lock_client(std::move(lock_client_))
     , config(config_)
     , log(Logger::get())
 {
-    client = S3::ClientFactory::instance().createWithBucket();
 }
 
 bool S3GCManager::runOnAllStores()
@@ -118,13 +120,13 @@ void S3GCManager::cleanUnusedLocks(
                 continue;
 
             // The data file is not used by `gc_store_id` anymore, remove the lock file
-            tryCleanLock(lock_key, lock_filename_view, timepoint);
+            cleanOneLock(lock_key, lock_filename_view, timepoint);
         }
         return PageResult{.num_keys = objects.size(), .more = true};
     });
 }
 
-void S3GCManager::tryCleanLock(const String & lock_key, const S3FilenameView & lock_filename_view, const Aws::Utils::DateTime & timepoint)
+void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & lock_filename_view, const Aws::Utils::DateTime & timepoint)
 {
     const auto unlocked_datafilename_view = lock_filename_view.asDataFile();
     RUNTIME_CHECK(unlocked_datafilename_view.isDataFile());
@@ -144,9 +146,34 @@ void S3GCManager::tryCleanLock(const String & lock_key, const S3FilenameView & l
     std::tie(delmark_exists, mtime) = tryGetObjectModifiedTime(*client, client->bucket(), unlocked_datafile_delmark_key);
     if (!delmark_exists)
     {
-        // TODO: try create delmark through S3LockService
-        uploadEmptyFile(*client, client->bucket(), unlocked_datafile_delmark_key);
-        LOG_INFO(log, "creating delmark, key={}", unlocked_datafile_key);
+        bool ok;
+        String err_msg;
+        try
+        {
+            // delmark not exist, lets try create a delmark through S3LockService
+            std::tie(ok, err_msg) = lock_client->sendTryMarkDeleteRequest(unlocked_datafile_key, config.mark_delete_timeout_seconds);
+        }
+        catch (DB::Exception & e)
+        {
+            if (e.code() == ErrorCodes::TIMEOUT_EXCEEDED)
+            {
+                ok = false;
+                err_msg = e.message();
+            }
+            else
+            {
+                e.rethrow();
+            }
+        }
+        if (ok)
+        {
+            LOG_INFO(log, "delmark created, key={}", unlocked_datafile_key);
+        }
+        else
+        {
+            LOG_INFO(log, "delmark create failed, key={} reason={}", unlocked_datafile_key, err_msg);
+        }
+        // no matter delmark create success or not, leave it to later GC round.
         return;
     }
 
@@ -184,10 +211,11 @@ void S3GCManager::removeDataFileIfDelmarkExpired(
 
     // The data file is marked as delete and delmark expired, safe to be
     // physical delete.
-    deleteObject(*client, client->bucket(), datafile_key); // TODO: it is safe to ignore if not exist
+    // It is safe to ignore if datafile_key not exist and S3 won't report
+    // error when the key is not exist
+    deleteObject(*client, client->bucket(), datafile_key);
     LOG_INFO(log, "datafile deleted, key={}", datafile_key);
 
-    // TODO: mock crash before deleting delmark on S3
     deleteObject(*client, client->bucket(), delmark_key);
     LOG_INFO(log, "datafile delmark deleted, key={}", delmark_key);
 }
@@ -289,7 +317,9 @@ S3GCManagerService::S3GCManagerService(Context & context, Int64 interval_seconds
     S3GCConfig config;
     config.temp_path = global_ctx.getTemporaryPath();
 
-    manager = std::make_unique<S3GCManager>(config);
+    auto s3_client = S3::ClientFactory::instance().createWithBucket();
+    S3LockClientPtr lock_client; // TODO: get lock_client from TMTContext
+    manager = std::make_unique<S3GCManager>(s3_client, lock_client, config);
 
     timer = global_ctx.getBackgroundPool().addTask(
         [this]() {

@@ -38,8 +38,6 @@ public:
 
     Strings perservedManifests() const;
 
-    Strings outdatedManifests(Aws::Utils::DateTime current_time, std::chrono::milliseconds expired_ms) const;
-
     std::map<UInt64, CheckpointManifestS3Object> objects() const { return manifests; }
 
 private:

@@ -45,11 +45,15 @@ using LoggerPtr = std::shared_ptr<Logger>;
 namespace DB::S3
 {
 struct S3FilenameView;
+class IS3LockClient;
+using S3LockClientPtr = std::shared_ptr<IS3LockClient>;
 
 struct S3GCConfig
 {
     Int64 manifest_expired_hour = 1;
     Int64 delmark_expired_hour = 1;
+
+    Int64 mark_delete_timeout_seconds = 10;
 
     // The temporary path for storing
     // downloaded manifest
@@ -59,11 +63,11 @@ struct S3GCConfig
 class S3GCManager
 {
 public:
-    explicit S3GCManager(S3GCConfig config_);
+    explicit S3GCManager(std::shared_ptr<TiFlashS3Client> client_, S3LockClientPtr lock_client_, S3GCConfig config_);
 
     bool runOnAllStores();
 
-private:
+// private:
     void runForStore(UInt64 gc_store_id);
 
     void cleanUnusedLocks(
@@ -73,7 +77,7 @@ private:
         const std::unordered_set<String> & valid_lock_files,
         const Aws::Utils::DateTime &);
 
-    void tryCleanLock(const String & lock_key, const S3FilenameView & lock_filename_view, const Aws::Utils::DateTime &);
+    void cleanOneLock(const String & lock_key, const S3FilenameView & lock_filename_view, const Aws::Utils::DateTime &);
 
     void tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils::DateTime &);
 
@@ -92,7 +96,9 @@ private:
     String getTemporaryDownloadFile(String s3_key);
 
 private:
-    std::shared_ptr<TiFlashS3Client> client;
+    const std::shared_ptr<TiFlashS3Client> client;
+
+    const S3LockClientPtr lock_client;
 
     S3GCConfig config;
 

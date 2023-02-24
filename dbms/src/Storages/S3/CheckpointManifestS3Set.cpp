@@ -26,12 +26,6 @@ CheckpointManifestS3Set::getFromS3(const S3::TiFlashS3Client & client, StoreID s
     return CheckpointManifestS3Set::create(std::move(manifests));
 }
 
-Strings CheckpointManifestS3Set::perservedManifests() const
-{
-    // Now only perserve the latest manifest
-    return {manifests.rbegin()->second.key};
-}
-
 CheckpointManifestS3Set
 CheckpointManifestS3Set::create(std::vector<CheckpointManifestS3Object> manifest_keys)
 {
@@ -47,18 +41,10 @@ CheckpointManifestS3Set::create(std::vector<CheckpointManifestS3Object> manifest
     return set;
 }
 
-Strings CheckpointManifestS3Set::outdatedManifests(Aws::Utils::DateTime current_time, std::chrono::milliseconds expired_ms) const
+Strings CheckpointManifestS3Set::perservedManifests() const
 {
-    Strings outdated_keys;
-    for (const auto & mf : manifests)
-    {
-        if (auto diff_ms = Aws::Utils::DateTime::Diff(current_time, mf.second.last_modification);
-            diff_ms > expired_ms)
-        {
-            outdated_keys.emplace_back(mf.second.key);
-        }
-    }
-    return outdated_keys;
+    // Now only perserve the latest manifest
+    return {manifests.rbegin()->second.key};
 }
 
 } // namespace DB::S3
