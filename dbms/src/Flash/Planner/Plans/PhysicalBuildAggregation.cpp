@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Planner/Plans/PhysicalBuildAggregation.h>
+#include <Operators/AggregateSinkOp.h>
+#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
@@ -27,7 +30,7 @@ void PhysicalBuildAggregation::buildPipelineExec(PipelineExecGroupBuilder & grou
 
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<AggregateSinkOp>(group_builder.exec_status, build_index++, agg_context));
+        builder.setSinkOp(std::make_unique<AggregateSinkOp>(group_builder.exec_status, build_index++, agg_context, log->identifier()));
     });
 
     Block before_agg_header = group_builder.getCurrentHeader();

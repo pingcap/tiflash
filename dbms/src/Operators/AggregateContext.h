@@ -15,14 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <DataStreams/MergingAndConvertingBlockInputStream.h>
-#include <DataStreams/NullBlockInputStream.h>
-#include <DataStreams/UnionBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/Operator.h>
-
-#include <cstddef>
-#include <mutex>
 
 namespace DB
 {
@@ -63,17 +57,11 @@ public:
 
     Block read(size_t index);
 
-    Block getHeader() const
-    {
-        return aggregator->getHeader(is_final);
-    }
+    Block getHeader() const;
 
     bool isTwoLevel();
 
-    bool useNullSource()
-    {
-        return !merging_buckets;
-    }
+    bool useNullSource();
 
 private:
     std::unique_ptr<Aggregator> aggregator;

@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalUnary.h>
 #include <Flash/Planner/Plans/PipelineBreakerHelper.h>
@@ -22,8 +21,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Operators/AggregateContext.h>
-#include <Operators/AggregateSinkOp.h>
-#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {

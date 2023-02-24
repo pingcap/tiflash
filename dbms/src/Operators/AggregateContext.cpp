@@ -51,9 +51,19 @@ size_t AggregateContext::getConcurrency()
     return isTwoLevel() ? merging_buckets->getConcurrency() : 1;
 }
 
+Block AggregateContext::getHeader() const
+{
+    return aggregator->getHeader(is_final);
+}
+
 bool AggregateContext::isTwoLevel()
 {
     return many_data[0]->isTwoLevel();
+}
+
+bool AggregateContext::useNullSource()
+{
+    return !merging_buckets;
 }
 
 Block AggregateContext::read(size_t index)
