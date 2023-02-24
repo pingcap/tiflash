@@ -7,7 +7,7 @@ The current TiFlash architecture is a typical shared nothing architecture, which
 
 1. Storage and computation cannot be scaled separately
 2. Updating and reading operations are loaded on the same nodes and can affect each other, including using up IO, CPU, and other resources. AP query tasks are typically heavy and can suddenly spike in demand.
-3. Slow down scaling. Scaling needs to do data synchronization between TiFlash nodes.
+3. Scaling is slow because data must be synchronized between TiFlash and TiKV nodes.
 4. The cost-efficiency is not optimal. For example, there are only queries at night, but we need to keep TiFlash instances around.
 
 
