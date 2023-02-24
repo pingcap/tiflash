@@ -23,6 +23,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <fmt/format.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Operators/ExchangeReceiverSourceOp.h>
 
 namespace DB
 {
@@ -85,6 +87,21 @@ void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline,
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }
+}
+
+void PhysicalExchangeReceiver::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency)
+{
+    const bool enable_fine_grained_shuffle = enableFineGrainedShuffle(mpp_exchange_receiver->getFineGrainedShuffleStreamCount());
+    // TODO choose a more reasonable source concurrency.
+    size_t source_concurrency = enable_fine_grained_shuffle 
+        ? std::min(concurrency, mpp_exchange_receiver->getFineGrainedShuffleStreamCount())
+        : concurrency;
+    
+    group_builder.init(source_concurrency);
+    size_t index = 0;
+    group_builder.transform([&](auto & builder) {
+        builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(group_builder.exec_status, mpp_exchange_receiver, index++, log->identifier()));
+    });
 }
 
 void PhysicalExchangeReceiver::finalize(const Names & parent_require)
