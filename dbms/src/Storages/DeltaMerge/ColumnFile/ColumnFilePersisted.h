@@ -14,12 +14,14 @@
 
 #pragma once
 
+#include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 
 namespace DB
 {
 namespace DM
 {
+struct WriteBatches;
 class ColumnFilePersisted;
 using ColumnFilePersistedPtr = std::shared_ptr<ColumnFilePersisted>;
 using ColumnFilePersisteds = std::vector<ColumnFilePersistedPtr>;

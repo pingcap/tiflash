@@ -15,6 +15,7 @@
 #include <Common/ProfileEvents.h>
 #include <Storages/Page/V3/Blob/BlobFile.h>
 #include <Storages/Page/V3/Blob/BlobStat.h>
+#include <Storages/PathPool.h>
 #include <boost_wrapper/string_split.h>
 
 #include <boost/algorithm/string/classification.hpp>

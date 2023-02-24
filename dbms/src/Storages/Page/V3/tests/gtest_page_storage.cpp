@@ -30,7 +30,7 @@
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/Page/V3/tests/gtest_page_storage.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
