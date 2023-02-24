@@ -263,6 +263,7 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
     }
 
     method_chosen = chooseAggregationMethod();
+    RUNTIME_CHECK_MSG(method_chosen != AggregatedDataVariants::Type::EMPTY, "Invalid aggregation method");
     if (AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen))
     {
         /// for aggregation, the input block is sorted by bucket number
