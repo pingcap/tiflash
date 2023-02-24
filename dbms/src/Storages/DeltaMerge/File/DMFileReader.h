@@ -103,9 +103,10 @@ public:
     /// Return false if it is the end of stream.
     bool getSkippedRows(size_t & skip_rows);
 
-    /// Find the packs to read next, and mark them as not used.
-    /// Return false if it is the end of file.
-    bool skipNextBlock(size_t skip_rows);
+    /// Skip the packs to read next
+    /// Return the number of rows skipped.
+    /// Return 0 if it is the end of file.
+    size_t skipNextBlock();
 
     /// Read specified rows.
     Block readWithFilter(const IColumn::Filter & filter);

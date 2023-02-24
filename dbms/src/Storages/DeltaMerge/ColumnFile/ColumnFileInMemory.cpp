@@ -17,6 +17,8 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
+#include <cstddef>
+
 
 namespace DB
 {
@@ -134,14 +136,13 @@ Block ColumnFileInMemoryReader::readNextBlock()
 }
 
 
-bool ColumnFileInMemoryReader::skipNextBlock(size_t skip_rows [[maybe_unused]])
+size_t ColumnFileInMemoryReader::skipNextBlock()
 {
     if (read_done)
         return false;
 
-    assert(memory_file.getRows() == skip_rows);
     read_done = true;
-    return true;
+    return memory_file.getRows();
 }
 
 ColumnFileReaderPtr ColumnFileInMemoryReader::createNewReader(const ColumnDefinesPtr & new_col_defs)

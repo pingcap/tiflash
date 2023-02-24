@@ -94,7 +94,7 @@ public:
 
     bool getSkippedRows(size_t &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
 
-    bool skipNextBlock(size_t skip_rows) override
+    size_t skipNextBlock() override
     {
         while (cur_column_file_reader || next_file_index < column_files_count)
         {
@@ -111,13 +111,13 @@ public:
                     ++next_file_index;
                 }
             }
-            bool skipped = cur_column_file_reader->skipNextBlock(skip_rows);
-            if (skipped)
-                return true;
+            size_t skipped_rows = cur_column_file_reader->skipNextBlock();
+            if (skipped_rows > 0)
+                return skipped_rows;
             else
                 cur_column_file_reader = {};
         }
-        return false;
+        return 0;
     }
 
     Block read() override

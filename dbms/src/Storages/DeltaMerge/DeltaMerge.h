@@ -165,7 +165,7 @@ public:
         return true;
     }
 
-    bool skipNextBlock(size_t) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
+    size_t skipNextBlock() override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
     Block readWithFilter(const IColumn::Filter &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
 
     Block read() override

@@ -16,6 +16,8 @@
 
 #include <Storages/DeltaMerge/ReadUtil.h>
 
+#include <cstddef>
+
 namespace DB::DM
 {
 
@@ -47,9 +49,9 @@ public:
 
     bool getSkippedRows(size_t & /*skip_rows*/) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
 
-    bool skipNextBlock(size_t skip_rows) override
+    size_t skipNextBlock() override
     {
-        return skipBlock(stable, delta, skip_rows);
+        return skipBlock(stable, delta);
     }
 
     Block readWithFilter(const IColumn::Filter & filter) override

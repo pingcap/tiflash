@@ -57,7 +57,7 @@ public:
 
     bool getSkippedRows(size_t & skip_rows) override { return reader.getSkippedRows(skip_rows); }
 
-    bool skipNextBlock(size_t skip_rows) override { return reader.skipNextBlock(skip_rows); }
+    size_t skipNextBlock() override { return reader.skipNextBlock(); }
 
     Block read() override
     {

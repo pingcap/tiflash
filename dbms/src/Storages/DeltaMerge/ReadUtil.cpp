@@ -14,6 +14,8 @@
 
 #include <Storages/DeltaMerge/ReadUtil.h>
 
+#include <cstddef>
+
 namespace DB::DM
 {
 
@@ -45,30 +47,30 @@ std::pair<Block, bool> readBlock(SkippableBlockInputStreamPtr & stable, Skippabl
     }
 }
 
-bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, size_t skip_rows)
+size_t skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta)
 {
     if (stable == nullptr && delta == nullptr)
     {
-        return false;
+        return 0;
     }
 
     if (stable == nullptr)
     {
-        return delta->skipNextBlock(skip_rows);
+        return delta->skipNextBlock();
     }
 
-    if (stable->skipNextBlock(skip_rows))
+    if (size_t skipped_rows = stable->skipNextBlock(); skipped_rows > 0)
     {
-        return true;
+        return skipped_rows;
     }
     else
     {
         stable = nullptr;
         if (delta != nullptr)
         {
-            return delta->skipNextBlock(skip_rows);
+            return delta->skipNextBlock();
         }
-        return false;
+        return 0;
     }
 }
 

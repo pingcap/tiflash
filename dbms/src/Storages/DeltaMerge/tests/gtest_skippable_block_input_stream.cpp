@@ -185,7 +185,8 @@ protected:
         {
             if (std::find(skip_block_idxs.begin(), skip_block_idxs.end(), i) != skip_block_idxs.end())
             {
-                stream->skipNextBlock(expected_blks[i].rows());
+                size_t skipped_rows = stream->skipNextBlock();
+                ASSERT_EQ(skipped_rows, expected_blks[i].rows());
                 continue;
             }
             auto blk = stream->read();

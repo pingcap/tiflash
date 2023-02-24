@@ -132,7 +132,7 @@ public:
 
     Block readNextBlock() override;
 
-    bool skipNextBlock(size_t skip_rows) override;
+    size_t skipNextBlock() override;
 
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
 };

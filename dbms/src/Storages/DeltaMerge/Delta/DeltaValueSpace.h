@@ -35,6 +35,8 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefinesBase.h>
 
+#include <cstddef>
+
 namespace DB
 {
 namespace DM
@@ -439,21 +441,29 @@ public:
     bool getSkippedRows(size_t &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
 
     /// Skip next block in the stream.
-    /// Return false if failed to skip or the end of stream.
-    bool skipNextBlock(size_t skip_rows) override
+    /// Return the number of rows skipped.
+    /// Return 0 if meet the end of the stream.
+    size_t skipNextBlock() override
     {
-        read_rows += skip_rows;
+        size_t skipped_rows = 0;
         if (persisted_files_done)
-            return mem_table_input_stream.skipNextBlock(skip_rows);
-
-        if (persisted_files_input_stream.skipNextBlock(skip_rows))
         {
-            return true;
+            skipped_rows = mem_table_input_stream.skipNextBlock();
+            read_rows += skipped_rows;
+            return skipped_rows;
+        }
+
+        if (skipped_rows = persisted_files_input_stream.skipNextBlock(); skipped_rows > 0)
+        {
+            read_rows += skipped_rows;
+            return skipped_rows;
         }
         else
         {
             persisted_files_done = true;
-            return mem_table_input_stream.skipNextBlock(skip_rows);
+            skipped_rows = mem_table_input_stream.skipNextBlock();
+            read_rows += skipped_rows;
+            return skipped_rows;
         }
     }
 

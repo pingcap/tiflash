@@ -266,7 +266,7 @@ Block ColumnFileBigReader::readNextBlock()
     }
 }
 
-bool ColumnFileBigReader::skipNextBlock(size_t skip_rows)
+size_t ColumnFileBigReader::skipNextBlock()
 {
     initStream();
 
@@ -274,15 +274,13 @@ bool ColumnFileBigReader::skipNextBlock(size_t skip_rows)
     {
         if (next_block_index_in_cache >= cached_pk_ver_columns.size())
         {
-            return false;
+            return 0;
         }
-        assert(cached_pk_ver_columns[next_block_index_in_cache].front()->size() == skip_rows);
-        next_block_index_in_cache += 1;
-        return true;
+        return cached_pk_ver_columns[next_block_index_in_cache++].front()->size();
     }
     else
     {
-        return file_stream->skipNextBlock(skip_rows);
+        return file_stream->skipNextBlock();
     }
 }
 

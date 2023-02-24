@@ -33,9 +33,9 @@ public:
     virtual bool getSkippedRows(size_t & skip_rows) = 0;
 
     /// Skip next block in the stream.
-    /// The number of rows of the next block shoule equal to skip_rows.
-    /// Return false if failed to skip or the end of stream.
-    virtual bool skipNextBlock(size_t skip_rows) = 0;
+    /// Return the number of rows of the next block.
+    /// Return 0 if failed to skip or the end of stream.
+    virtual size_t skipNextBlock() = 0;
 
     /// Read specific rows of next block in the stream according to the filter.
     /// Return empty block if failed to read or the end of stream.
@@ -60,7 +60,7 @@ public:
 
     bool getSkippedRows(size_t &) override { return false; }
 
-    bool skipNextBlock(size_t) override { return false; }
+    size_t skipNextBlock() override { return 0; }
 
     Block readWithFilter(const IColumn::Filter &) override { return {}; }
 
@@ -120,17 +120,17 @@ public:
         return false;
     }
 
-    bool skipNextBlock(size_t skip_rows) override
+    size_t skipNextBlock() override
     {
         while (current_stream != children.end())
         {
             auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
 
-            bool skipped = skippable_stream->skipNextBlock(skip_rows);
+            size_t skipped_rows = skippable_stream->skipNextBlock();
 
-            if (skipped)
+            if (skipped_rows > 0)
             {
-                return true;
+                return skipped_rows;
             }
             else
             {
@@ -139,7 +139,7 @@ public:
                 ++current_stream;
             }
         }
-        return false;
+        return 0;
     }
 
     Block readWithFilter(const IColumn::Filter & filter) override

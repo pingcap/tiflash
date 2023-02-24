@@ -161,7 +161,7 @@ public:
     virtual Block readNextBlock() { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
 
     /// This method used to skip next block.
-    virtual bool skipNextBlock(size_t) { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
+    virtual size_t skipNextBlock() { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
 
     /// Create a new reader from current reader with different columns to read.
     virtual ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & col_defs) = 0;

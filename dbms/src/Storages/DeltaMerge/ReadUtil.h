@@ -28,9 +28,9 @@ namespace DB::DM
 std::pair<Block, bool> readBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta);
 
 /** Skip the next block.
-  * Return false if meets the end of both stable and delta.
+  * Return the number of rows of the next block.
   */
-bool skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta, size_t skip_rows);
+size_t skipBlock(SkippableBlockInputStreamPtr & stable, SkippableBlockInputStreamPtr & delta);
 
 /** Read the next block with filter.
   * Read from the stable first, then read from the delta.
