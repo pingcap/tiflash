@@ -25,7 +25,7 @@ We split TiFlash node into the following nodes:
 ## Advantages
 1. Storage and calculation separation reduces deployment costs
     * Storage and computing resources can be scaled separately on demand to avoid resource mismatch
-    * Light and heavy queries can be supported by different Query Tenant respectively. For example, regular heavy calculations can be temporarily started to complete the calculation and destroyed after use.
+    * Light and heavy queries can be supported by different Query Tenants respectively. For example, heavy computations can be temporarily launched to complete calculations and then destroyed after use.
 2. Read and write separation improves stability. Synchronize data, organize logic, and query load are physical separated, which can avoid heavy AP query load crowding out system resources.
 3. Greatly increase the speed of volume expansion and contraction
     * Because RN is stateless, in theory, expansion and Load Balance can be completed in a few seconds.
