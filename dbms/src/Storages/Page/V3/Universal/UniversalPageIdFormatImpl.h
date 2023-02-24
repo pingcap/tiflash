@@ -90,8 +90,8 @@ public:
         return buff.releaseStr();
     }
 
-    // data is in kv engine, so it has another `0x01` prefix
-    // 0x01 0x01 0x02 region_id 0x03
+    // data is in kv engine, so it is prepend by KV_PREFIX
+    // KV_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id APPLY_STATE_SUFFIX
     static UniversalPageId toRaftApplyStateKeyInKVEngine(UInt64 region_id)
     {
         WriteBufferFromOwnString buff;
