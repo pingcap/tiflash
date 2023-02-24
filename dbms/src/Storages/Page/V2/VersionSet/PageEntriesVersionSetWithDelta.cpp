@@ -20,7 +20,8 @@
 #include <common/types.h>
 
 #include <stack>
-#include "magic_enum.hpp"
+
+#include <magic_enum.hpp>
 
 #ifdef FIU_ENABLE
 #include <Common/randomSeed.h>

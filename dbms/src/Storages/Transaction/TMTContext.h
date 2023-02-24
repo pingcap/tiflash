@@ -152,6 +152,8 @@ private:
     OwnerManagerPtr s3gc_owner;
     S3::S3LockClientPtr s3_lock_client;
 
+    S3::S3GCManagerServicePtr s3gc_manager;
+
     mutable std::mutex mutex;
 
     std::atomic<StoreStatus> store_status{StoreStatus::Idle};

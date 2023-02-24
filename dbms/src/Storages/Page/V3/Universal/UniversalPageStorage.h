@@ -130,7 +130,7 @@ public:
 
     friend class PageReaderImplUniversal;
 
-// private: // TODO: make these private
+    // private: // TODO: make these private
     String storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator; // Get paths for storing data
     PageStorageConfig config;

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,8 +48,13 @@ struct S3FilenameView;
 class IS3LockClient;
 using S3LockClientPtr = std::shared_ptr<IS3LockClient>;
 
+// fwd
+class S3GCManagerService;
+using S3GCManagerServicePtr = std::unique_ptr<S3GCManagerService>;
+
 struct S3GCConfig
 {
+    Int64 interval_seconds = 600;
     Int64 manifest_expired_hour = 1;
     Int64 delmark_expired_hour = 1;
 
@@ -65,9 +70,11 @@ class S3GCManager
 public:
     explicit S3GCManager(std::shared_ptr<TiFlashS3Client> client_, S3LockClientPtr lock_client_, S3GCConfig config_);
 
+    ~S3GCManager() = default;
+
     bool runOnAllStores();
 
-// private:
+    // private:
     void runForStore(UInt64 gc_store_id);
 
     void cleanUnusedLocks(
@@ -108,7 +115,7 @@ private:
 class S3GCManagerService
 {
 public:
-    explicit S3GCManagerService(Context & context, Int64 interval_seconds);
+    explicit S3GCManagerService(Context & context, S3LockClientPtr lock_client, const S3GCConfig & config);
     ~S3GCManagerService();
 
 private:
@@ -116,6 +123,5 @@ private:
     std::unique_ptr<S3GCManager> manager;
     BackgroundProcessingPool::TaskHandle timer;
 };
-using S3GCManagerServicePtr = std::unique_ptr<S3GCManagerService>;
 
 } // namespace DB::S3

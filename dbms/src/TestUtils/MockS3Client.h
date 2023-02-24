@@ -23,7 +23,7 @@ public:
     Aws::S3::Model::DeleteObjectOutcome DeleteObject(const Aws::S3::Model::DeleteObjectRequest & r) const override;
     mutable Strings delete_keys;
 
-    Aws::S3::Model::ListObjectsV2Outcome ListObjectsV2(const Aws::S3::Model::ListObjectsV2Request &r) const override;
+    Aws::S3::Model::ListObjectsV2Outcome ListObjectsV2(const Aws::S3::Model::ListObjectsV2Request & r) const override;
     mutable Strings list_result;
 
     std::optional<Aws::Utils::DateTime> head_result_mtime;

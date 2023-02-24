@@ -10,4 +10,4 @@ struct RemoteDataLocation
     UInt64 size_in_file;
 };
 
-} // namespace DB::PS::V3::Remote
+} // namespace DB::Remote

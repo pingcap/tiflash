@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ bool S3GCManager::runOnAllStores()
 {
     const std::vector<UInt64> all_store_ids = getAllStoreIds();
     LOG_TRACE(log, "all_store_ids: {}", all_store_ids);
+    // TODO: Get all store status from pd after getting the store ids from S3.
     for (const auto gc_store_id : all_store_ids)
     {
         runForStore(gc_store_id);
@@ -311,22 +312,21 @@ String S3GCManager::getTemporaryDownloadFile(String s3_key)
     return fmt::format("{}/{}_{}", config.temp_path, s3_key, std::hash<std::thread::id>()(std::this_thread::get_id()));
 }
 
-S3GCManagerService::S3GCManagerService(Context & context, Int64 interval_seconds)
+S3GCManagerService::S3GCManagerService(
+    Context & context,
+    S3LockClientPtr lock_client,
+    const S3GCConfig & config)
     : global_ctx(context.getGlobalContext())
 {
-    S3GCConfig config;
-    config.temp_path = global_ctx.getTemporaryPath();
-
     auto s3_client = S3::ClientFactory::instance().createWithBucket();
-    S3LockClientPtr lock_client; // TODO: get lock_client from TMTContext
-    manager = std::make_unique<S3GCManager>(s3_client, lock_client, config);
+    manager = std::make_unique<S3GCManager>(std::move(s3_client), std::move(lock_client), config);
 
     timer = global_ctx.getBackgroundPool().addTask(
         [this]() {
             return manager->runOnAllStores();
         },
         false,
-        /*interval_ms*/ interval_seconds * 1000);
+        /*interval_ms*/ config.interval_seconds * 1000);
 }
 
 S3GCManagerService::~S3GCManagerService()

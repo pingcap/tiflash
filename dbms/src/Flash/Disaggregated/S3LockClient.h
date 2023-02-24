@@ -19,10 +19,10 @@
 #include <common/types.h>
 #include <kvproto/disaggregated.pb.h>
 #include <pingcap/kv/Cluster.h>
+#include <common/types.h>
 
 namespace DB
 {
-class Context;
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 } // namespace DB
