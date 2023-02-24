@@ -15,12 +15,16 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <common/types.h>
 
 #include <chrono>
 #include <unordered_set>
 
 namespace DB
 {
+using StoreID = UInt64;
+static constexpr StoreID InvalidStoreID = 0;
+
 using TableID = Int64;
 using TableIDSet = std::unordered_set<TableID>;
 

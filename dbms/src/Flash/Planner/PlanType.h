@@ -38,7 +38,8 @@ struct PlanType
         Join = 13,
         PreAggregation = 14,
         ConvergentAggregation = 15,
-        GetResult = 16,
+        Expand = 16,
+        GetResult = 17
     };
     PlanTypeEnum enum_value;
 
