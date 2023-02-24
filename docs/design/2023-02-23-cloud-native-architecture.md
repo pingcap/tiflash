@@ -26,7 +26,7 @@ We split TiFlash node into the following nodes:
 1. Storage and calculation separation reduces deployment costs
     * Storage and computing resources can be scaled separately on demand to avoid resource mismatch
     * Light and heavy queries can be supported by different Query Tenants respectively. For example, heavy computations can be temporarily launched to complete calculations and then destroyed after use.
-2. Read and write separation improves stability. Synchronize data, organize logic, and query load are physical separated, which can avoid heavy AP query load crowding out system resources.
+2. Separating reads and writes improves stability. Data synchronization, data reorganization logic, and query load are physically separated, which can prevent heavy AP query loads from crowding out system resources.
 3. Greatly increase the speed of volume expansion and contraction
     * Because RN is stateless, in theory, expansion and Load Balance can be completed in a few seconds.
     * The Region migration on WN does not need to resynchronize the snapshot from the TiKV , and the migration is completed directly by downloading or referencing the S3 file. It is expected that a new node can complete the Load Balance within 1min.
