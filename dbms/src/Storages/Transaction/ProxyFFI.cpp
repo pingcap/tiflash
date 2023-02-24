@@ -17,6 +17,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/Page/V3/Universal/RaftDataReader.h>
+#include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
