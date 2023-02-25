@@ -21,17 +21,25 @@ void ExchangeReceiverSourceOp::operateSuffix() noexcept
     LOG_DEBUG(log, "finish read {} rows from remote", total_rows);
 }
 
+Block ExchangeReceiverSourceOp::popFromBlockQueue()
+{
+    assert(!block_queue.empty());
+    Block block = std::move(block_queue.front());
+    block_queue.pop();
+    return block;
+}
+
 OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
 {
     if (!block_queue.empty())
     {
-        block = std::move(block_queue.front());
-        block_queue.pop();
+        block = popFromBlockQueue();
         return OperatorStatus::HAS_OUTPUT;
     }
 
     while (true)
     {
+        assert(block_queue.empty());
         auto await_status = awaitImpl();
         if (await_status == OperatorStatus::HAS_OUTPUT)
         {
@@ -73,8 +81,7 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
             if (decode_detail.rows <= 0)
                 continue;
 
-            block = std::move(block_queue.front());
-            block_queue.pop();
+            block = popFromBlockQueue();
             return OperatorStatus::HAS_OUTPUT;
         }
         return await_status;
@@ -89,6 +96,7 @@ OperatorStatus ExchangeReceiverSourceOp::awaitImpl()
     switch (recv_res->recv_status)
     {
     case ReceiveStatus::ok:
+        assert(recv_res->recv_msg);
         return OperatorStatus::HAS_OUTPUT;
     case ReceiveStatus::empty:
         recv_res.reset();

@@ -52,6 +52,9 @@ protected:
     void operateSuffix() noexcept override;
 
 private:
+    Block popFromBlockQueue();
+
+private:
     // TODO support ConnectionProfileInfo.
     // TODO support RemoteExecutionSummary.
     std::shared_ptr<ExchangeReceiver> exchange_receiver;

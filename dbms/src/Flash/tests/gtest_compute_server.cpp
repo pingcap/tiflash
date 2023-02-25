@@ -123,6 +123,8 @@ try
         {{"s1", TiDB::TP::TypeLong}},
         expected_cols);
 
+    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(100)));
+
     std::vector<String> expected_strings = {
         R"(
 exchange_sender_1 | type:PassThrough, {<0, Long>}

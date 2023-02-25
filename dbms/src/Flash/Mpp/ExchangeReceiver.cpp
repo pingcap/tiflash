@@ -733,7 +733,7 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
 {
     if (unlikely(stream_id >= msg_channels.size()))
     {
-        auto err_msg = fmt::format("stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
+        auto err_msg = fmt::format("stream_id out of range, stream_id: {}, total_channel_count: {}", stream_id, msg_channels.size());
         LOG_ERROR(exc_log, err_msg);
         throw Exception(err_msg);
     }
@@ -743,7 +743,7 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
     {
     case MPMCQueueResult::OK:
         assert(recv_msg);
-        return {ReceiveStatus::ok, recv_msg};
+        return {ReceiveStatus::ok, std::move(recv_msg)};
     case MPMCQueueResult::EMPTY:
         return {ReceiveStatus::empty, nullptr};
     default:

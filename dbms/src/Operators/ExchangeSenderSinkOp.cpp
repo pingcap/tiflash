@@ -50,7 +50,6 @@ OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
     if (!block)
     {
         writer->flush();
-        LOG_DEBUG(log, "finish write with {} rows", total_rows);
         return OperatorStatus::FINISHED;
     }
 
