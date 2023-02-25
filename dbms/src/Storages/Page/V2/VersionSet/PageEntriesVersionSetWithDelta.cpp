@@ -19,9 +19,8 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 
-#include <stack>
-
 #include <magic_enum.hpp>
+#include <stack>
 
 #ifdef FIU_ENABLE
 #include <Common/randomSeed.h>

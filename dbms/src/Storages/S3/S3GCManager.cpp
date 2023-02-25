@@ -214,8 +214,7 @@ void S3GCManager::removeDataFileIfDelmarkExpired(
     // physical delete.
     // It is safe to ignore if datafile_key not exist and S3 won't report
     // error when the key is not exist
-    deleteObject(*client, client->bucket(), datafile_key);
-    LOG_INFO(log, "datafile deleted, key={}", datafile_key);
+    physicalRemoveDataFile(datafile_key);
 
     deleteObject(*client, client->bucket(), delmark_key);
     LOG_INFO(log, "datafile delmark deleted, key={}", delmark_key);
@@ -242,6 +241,23 @@ void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils:
         }
         return PageResult{.num_keys = objects.size(), .more = true};
     });
+}
+
+void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
+{
+    auto view = S3FilenameView::fromKey(datafile_key);
+    if (!view.isDMFile())
+    {
+        // CheckpointDataFile is a single object, remove it.
+        deleteObject(*client, client->bucket(), datafile_key);
+    }
+    else
+    {
+        // DMFile is composed by multiple objects, need extra work to remove all of them.
+        // TODO: remove all objects belong to this DMFile
+        LOG_WARNING(log, "remove dmfile, key={}", datafile_key);
+    }
+    LOG_INFO(log, "datafile deleted, key={}", datafile_key);
 }
 
 std::vector<UInt64> S3GCManager::getAllStoreIds() const

@@ -82,6 +82,7 @@ struct S3FilenameView
     /// CheckpointDataFile/StableFile utils ///
 
     ALWAYS_INLINE bool isDataFile() const { return type == S3FilenameType::DataFile; }
+    bool isDMFile() const;
     // Return the lock key prefix for finding any locks on this data file through `S3::LIST`
     String getLockPrefix() const;
     // Return the lock key for writing lock file on S3

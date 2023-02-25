@@ -94,6 +94,8 @@ public:
         const Aws::Utils::DateTime & timepoint,
         const Aws::Utils::DateTime & delmark_mtime);
 
+    void physicalRemoveDataFile(const String & datafile_key);
+
     std::vector<UInt64> getAllStoreIds() const;
 
     std::unordered_set<String> getValidLocksFromManifest(const String & manifest_key);
