@@ -250,6 +250,7 @@ endif()
 # We mark it public to make the headers available.
 if (Poco_NetSSL_FOUND)
     target_link_libraries (tiflash_common_io PUBLIC ${Poco_NetSSL_LIBRARY})
+    target_no_warning (tiflash_common_io deprecated-enum-enum-conversion)
 endif()
 
 target_link_libraries (dbms ${Poco_Foundation_LIBRARY})

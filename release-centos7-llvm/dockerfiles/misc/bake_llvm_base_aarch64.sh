@@ -34,7 +34,7 @@ function bake_llvm_base_aarch64() {
 
     # LLVM
     source $SCRIPTPATH/bootstrap_llvm.sh
-    bootstrap_llvm "13.0.0"
+    bootstrap_llvm "15.0.0"
     export CC=clang
     export CXX=clang++
     export LD=ld.lld
@@ -46,7 +46,7 @@ function bake_llvm_base_aarch64() {
 
     # Go
     source $SCRIPTPATH/install_go.sh
-    install_go "1.17" "arm64"
+    install_go "1.20" "arm64"
     export PATH="$PATH:/usr/local/go/bin"
 
     # Rust

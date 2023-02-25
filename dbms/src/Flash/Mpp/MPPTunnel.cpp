@@ -208,7 +208,7 @@ void MPPTunnel::connectLocalV2(size_t source_index, LocalRequestHandler & local_
 {
     {
         std::unique_lock lk(mu);
-        RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, fmt::format("MPPTunnel {} has connected or finished: {}", tunnel_id, statusToString()));
+        RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, fmt::runtime(fmt::format("MPPTunnel {} has connected or finished: {}", tunnel_id, statusToString())));
         RUNTIME_CHECK_MSG(mode == TunnelSenderMode::LOCAL, "{} should be a local tunnel", tunnel_id);
 
         LOG_TRACE(log, "ready to connect local tunnel version 2");

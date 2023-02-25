@@ -16,6 +16,8 @@
 
 #include <common/avx2_mem_utils.h>
 
+#include <bit>
+
 namespace mem_utils::details
 {
 #if defined(MEM_UTILS_FUNC_NO_SANITIZE)
@@ -43,11 +45,11 @@ uint64_t avx2_byte_count(const char * src, size_t size, char target)
             mask <<= left_remain;
             mask >>= left_remain;
             mask >>= right_offset;
-            return __builtin_popcount(mask);
+            return std::popcount(mask);
         }
 
         mask >>= right_offset;
-        zero_bytes_cnt += __builtin_popcount(mask);
+        zero_bytes_cnt += std::popcount(mask);
         size -= left_remain;
         src += BLOCK32_SIZE;
     }
@@ -59,7 +61,7 @@ uint64_t avx2_byte_count(const char * src, size_t size, char target)
     for (; size >= BLOCK32_SIZE;)
     {
         auto mask = get_block32_cmp_eq_mask(src, check_block32);
-        zero_bytes_cnt += __builtin_popcount(mask);
+        zero_bytes_cnt += std::popcount(mask);
         size -= BLOCK32_SIZE, src += BLOCK32_SIZE;
     }
 
@@ -69,7 +71,7 @@ uint64_t avx2_byte_count(const char * src, size_t size, char target)
         uint32_t left_remain = BLOCK32_SIZE - size;
         mask <<= left_remain;
         mask >>= left_remain;
-        zero_bytes_cnt += __builtin_popcount(mask);
+        zero_bytes_cnt += std::popcount(mask);
     }
 
     return zero_bytes_cnt;

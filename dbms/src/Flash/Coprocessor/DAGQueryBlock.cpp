@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <fmt/core.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/select.pb.h>
@@ -54,7 +55,7 @@ const static String TOPN_NAME("topN");
 const static String LIMIT_NAME("limit");
 const static String EXCHANGE_SENDER_NAME("exchange_sender");
 
-const char * STREAM_AGG_ERROR = "Group by key is not supported in StreamAgg";
+constexpr const char * STREAM_AGG_ERROR = "Group by key is not supported in StreamAgg";
 
 static void assignOrThrowException(const tipb::Executor ** to, const tipb::Executor * from, const String & name)
 {
