@@ -101,7 +101,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
         s3_lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
 
         S3::S3GCConfig gc_config;
-        gc_config.temp_path = context.getTemporaryPath();
+        gc_config.temp_path = context.getTemporaryPath(); // TODO: add suffix for it?
         s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, s3_lock_client, gc_config);
     }
 }
