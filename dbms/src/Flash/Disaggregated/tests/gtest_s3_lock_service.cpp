@@ -83,7 +83,7 @@ protected:
     std::shared_ptr<MockOwnerManager> owner_manager;
     std::unique_ptr<DB::S3::S3LockService> s3_lock_service;
 
-    std::unique_ptr<S3::TiFlashS3Client> s3_client;
+    std::shared_ptr<S3::TiFlashS3Client> s3_client;
     const UInt64 store_id = 1;
     const Int64 physical_table_id = 1;
     UInt64 dm_file_id = 1;

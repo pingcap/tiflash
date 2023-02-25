@@ -13,11 +13,13 @@
 // limitations under the License.
 
 #include <Common/DNSCache.h>
+#include <Flash/Disaggregated/S3LockClient.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <Interpreters/Context.h>
 #include <Server/RaftConfigParser.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
@@ -90,12 +92,15 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {
-    if (!raft_config.pd_addrs.empty())
+    if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled())
     {
         etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
         s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.flash_server_addr, etcd_client);
+        s3_lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
     }
 }
+
+TMTContext::~TMTContext() = default;
 
 void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
 {

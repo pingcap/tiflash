@@ -38,7 +38,7 @@ public:
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy signPayloads,
         bool useVirtualAddressing);
 
-    const String & bucket() { return bucket_name; }
+    const String & bucket() const { return bucket_name; }
 
 private:
     const String bucket_name;
@@ -52,13 +52,15 @@ public:
 
     static ClientFactory & instance();
 
+    bool isEnabled() const;
+
     void init(const StorageS3Config & config_);
     void shutdown();
 
     const String & bucket() const;
     std::shared_ptr<Aws::S3::S3Client> sharedClient() const;
 
-    std::unique_ptr<TiFlashS3Client> createWithBucket() const;
+    std::shared_ptr<TiFlashS3Client> createWithBucket() const;
 
 private:
     ClientFactory() = default;

@@ -54,7 +54,7 @@ class S3LockService final : private boost::noncopyable
 public:
     explicit S3LockService(Context & context_);
 
-    S3LockService(OwnerManagerPtr owner_mgr_, std::unique_ptr<TiFlashS3Client> && s3_cli_);
+    S3LockService(OwnerManagerPtr owner_mgr_, std::shared_ptr<TiFlashS3Client> && s3_cli_);
 
     ~S3LockService() = default;
 
@@ -107,7 +107,7 @@ private:
     std::mutex file_latch_map_mutex;
 
     OwnerManagerPtr gc_owner;
-    const std::unique_ptr<TiFlashS3Client> s3_client;
+    const std::shared_ptr<TiFlashS3Client> s3_client;
 
     LoggerPtr log;
 };

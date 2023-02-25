@@ -121,6 +121,11 @@ TiFlashS3Client::TiFlashS3Client(
 {
 }
 
+bool ClientFactory::isEnabled() const
+{
+    return config.isS3Enabled();
+}
+
 void ClientFactory::init(const StorageS3Config & config_)
 {
     config = config_;
@@ -195,7 +200,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     }
 }
 
-std::unique_ptr<TiFlashS3Client> ClientFactory::createWithBucket() const
+std::shared_ptr<TiFlashS3Client> ClientFactory::createWithBucket() const
 {
     auto scheme = parseScheme(config.endpoint);
     Aws::Client::ClientConfiguration cfg;
@@ -203,7 +208,7 @@ std::unique_ptr<TiFlashS3Client> ClientFactory::createWithBucket() const
     cfg.scheme = scheme;
     cfg.verifySSL = scheme == Aws::Http::Scheme::HTTPS;
     Aws::Auth::AWSCredentials cred(config.access_key_id, config.secret_access_key);
-    return std::make_unique<TiFlashS3Client>(
+    return std::make_shared<TiFlashS3Client>(
         config.bucket,
         cred,
         cfg,

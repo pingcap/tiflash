@@ -76,12 +76,13 @@ extern const int TIMEOUT_EXCEEDED;
 
 namespace DB::S3
 {
-S3LockClient::S3LockClient(Context & context_)
-    : log(Logger::get())
+S3LockClient::S3LockClient(
+    pingcap::kv::Cluster * kv_cluster_,
+    OwnerManagerPtr s3gc_owner_)
+    : kv_cluster(kv_cluster_)
+    , s3gc_owner(s3gc_owner_)
+    , log(Logger::get())
 {
-    auto & tmt = context_.getTMTContext();
-    kv_cluster = tmt.getKVCluster();
-    s3gc_owner = tmt.getS3GCOwnerManager();
 }
 
 std::pair<bool, String>

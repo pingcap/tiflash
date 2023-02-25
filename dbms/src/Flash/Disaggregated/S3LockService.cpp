@@ -47,7 +47,7 @@ S3LockService::S3LockService(Context & context_)
 {
 }
 
-S3LockService::S3LockService(OwnerManagerPtr owner_mgr_, std::unique_ptr<TiFlashS3Client> && s3_cli_)
+S3LockService::S3LockService(OwnerManagerPtr owner_mgr_, std::shared_ptr<TiFlashS3Client> && s3_cli_)
     : gc_owner(std::move(owner_mgr_))
     , s3_client(std::move(s3_cli_))
     , log(Logger::get())
@@ -251,7 +251,6 @@ std::optional<String> S3LockService::anyLockExist(const String & lock_prefix) co
         *s3_client,
         s3_client->bucket(),
         lock_prefix,
-        "",
         [&lock_key](const Aws::S3::Model::ListObjectsV2Result & result) -> S3::PageResult {
             const auto & contents = result.GetContents();
             if (!contents.empty())

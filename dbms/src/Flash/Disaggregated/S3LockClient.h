@@ -30,10 +30,39 @@ using LoggerPtr = std::shared_ptr<Logger>;
 namespace DB::S3
 {
 
-class S3LockClient
+class IS3LockClient;
+using S3LockClientPtr = std::shared_ptr<IS3LockClient>;
+
+class IS3LockClient
 {
 public:
-    explicit S3LockClient(Context & context_);
+    virtual ~IS3LockClient() = default;
+
+    // Try add lock to the `data_file_key` by `lock_store_id` and `lock_seq`
+    // If the file is locked successfully, return <true, "">
+    // Otherwise return <false, conflict_message>
+    // This method will update the owner info when owner changed.
+    // If deadline exceed or failed to get the owner info within
+    // `timeour_s`, it will throw exception.
+    virtual std::pair<bool, String>
+    sendTryAddLockRequest(const String & data_file_key, UInt32 lock_store_id, UInt32 lock_seq, Int64 timeout_s) = 0;
+
+    // Try mark the `data_file_key` as deleted
+    // If the file is marked as deleted, return <true, "">
+    // Otherwise return <false, conflict_message>
+    // This method will update the owner info when owner changed.
+    // If deadline exceed or failed to get the owner info within
+    // `timeour_s`, it will throw exception.
+    virtual std::pair<bool, String>
+    sendTryMarkDeleteRequest(const String & data_file_key, Int64 timeout_s) = 0;
+};
+
+class S3LockClient : public IS3LockClient
+{
+public:
+    explicit S3LockClient(
+        pingcap::kv::Cluster * kv_cluster_,
+        OwnerManagerPtr s3gc_owner_);
 
     // Try add lock to the `data_file_key` by `lock_store_id` and `lock_seq`
     // If the file is locked successfully, return <true, "">
@@ -42,7 +71,7 @@ public:
     // If deadline exceed or failed to get the owner info within
     // `timeour_s`, it will throw exception.
     std::pair<bool, String>
-    sendTryAddLockRequest(const String & data_file_key, UInt32 lock_store_id, UInt32 lock_seq, Int64 timeout_s);
+    sendTryAddLockRequest(const String & data_file_key, UInt32 lock_store_id, UInt32 lock_seq, Int64 timeout_s) override;
 
     // Try mark the `data_file_key` as deleted
     // If the file is marked as deleted, return <true, "">
@@ -51,7 +80,7 @@ public:
     // If deadline exceed or failed to get the owner info within
     // `timeour_s`, it will throw exception.
     std::pair<bool, String>
-    sendTryMarkDeleteRequest(const String & data_file_key, Int64 timeout_s);
+    sendTryMarkDeleteRequest(const String & data_file_key, Int64 timeout_s) override;
 
 private:
     template <typename Response, typename Request, typename SendRpc>
