@@ -158,7 +158,7 @@ const String & ClientFactory::bucket() const
 std::shared_ptr<Aws::S3::S3Client> ClientFactory::sharedClient() const
 {
     // `shared_client` is created during initialization and destroyed when process exits
-    // which means it is read-only when processing requests. So, it is saft to read `shared_client`
+    // which means it is read-only when processing requests. So, it is safe to read `shared_client`
     // without acquiring lock.
     return shared_client;
 }
