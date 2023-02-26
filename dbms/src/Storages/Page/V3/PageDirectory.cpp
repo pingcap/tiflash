@@ -1194,6 +1194,55 @@ typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIdsWith
 }
 
 template <typename Trait>
+typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIdsInRange(const PageId & start, const PageId & end, const DB::PageStorageSnapshotPtr & snap_)
+{
+    if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+    {
+        PageIdSet page_ids;
+        auto seq = toConcreteSnapshot(snap_)->sequence;
+        std::shared_lock read_lock(table_rw_mutex);
+        for (auto iter = mvcc_table_directory.lower_bound(start);
+             iter != mvcc_table_directory.end();
+             ++iter)
+        {
+            if (!end.empty() && iter->first >= end)
+                break;
+            // Only return the page_id that is visible
+            if (iter->second->isVisible(seq))
+                page_ids.insert(iter->first);
+        }
+        return page_ids;
+    }
+    else
+    {
+        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+    }
+}
+
+template <typename Trait>
+std::optional<typename PageDirectory<Trait>::PageId> PageDirectory<Trait>::getLowerBound(const typename Trait::PageId & start, const DB::PageStorageSnapshotPtr & snap_)
+{
+    if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+    {
+        auto seq = toConcreteSnapshot(snap_)->sequence;
+        std::shared_lock read_lock(table_rw_mutex);
+        for (auto iter = mvcc_table_directory.lower_bound(start);
+             iter != mvcc_table_directory.end();
+             ++iter)
+        {
+            // Only return the page_id that is visible
+            if (iter->second->isVisible(seq))
+                return iter->first;
+        }
+        return std::nullopt;
+    }
+    else
+    {
+        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+    }
+}
+
+template <typename Trait>
 void PageDirectory<Trait>::applyRefEditRecord(
     MVCCMapType & mvcc_table_directory,
     const VersionedPageEntriesPtr & version_list,
