@@ -21,7 +21,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/PathPool.h>
 
 namespace DB

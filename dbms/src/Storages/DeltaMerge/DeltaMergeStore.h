@@ -24,8 +24,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/PathPool.h>
+#include <Storages/Page/PageStorage_fwd.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -36,8 +35,12 @@ namespace DB
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 
+class StoragePathPool;
+
 namespace DM
 {
+class StoragePool;
+using StoragePoolPtr = std::shared_ptr<StoragePool>;
 class DMFile;
 using DMFilePtr = std::shared_ptr<DMFile>;
 class Segment;

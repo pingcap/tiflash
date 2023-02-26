@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/Delta/ColumnFileFlushTask.h>
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>
 #include <Storages/DeltaMerge/Delta/MemTableSet.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 
 namespace DB
 {
