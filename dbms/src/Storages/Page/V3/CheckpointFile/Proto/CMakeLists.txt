@@ -12,19 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory (System)
-add_subdirectory (Page)
-add_subdirectory (DeltaMerge/File/dtpb)
-add_subdirectory (DeltaMerge/workload)
-add_subdirectory (Page/workload)
-add_subdirectory (Page/V3/CheckpointFile/Proto)
+file(GLOB PROTO_FILES CONFIGURE_DEPENDS *.proto)
+protobuf_generate_cpp(PROTO_SRCS PB_HEADERS ${PROTO_FILES})
 
-if (ENABLE_TESTS)
-    add_subdirectory (tests EXCLUDE_FROM_ALL)
-    add_subdirectory (Transaction/tests EXCLUDE_FROM_ALL)
-    add_subdirectory (Page/V2/tests EXCLUDE_FROM_ALL)
-    add_subdirectory (Page/V3 EXCLUDE_FROM_ALL)
-    add_subdirectory (Page/V3/tests EXCLUDE_FROM_ALL)
-    add_subdirectory (DeltaMerge/tests EXCLUDE_FROM_ALL)
-endif ()
-
+add_library(PSCheckpointProto
+        ${PROTO_SRCS})
+target_include_directories(PSCheckpointProto
+        PUBLIC ${Protobuf_INCLUDE_DIR})
+target_compile_options(PSCheckpointProto
+        PRIVATE -Wno-unused-parameter)

@@ -102,6 +102,7 @@ add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
 add_headers_and_sources(dbms src/Storages/Page/V3/PageDirectory)
 add_headers_and_sources(dbms src/Storages/Page/V3/Blob)
 add_headers_and_sources(dbms src/Storages/Page/V3/Universal)
+add_headers_and_sources(dbms src/Storages/Page/V3/CheckpointFile)
 add_headers_and_sources(dbms src/Storages/Page/)
 add_headers_and_sources(dbms src/Storages/S3)
 add_headers_and_sources(dbms src/TiDB)
@@ -213,6 +214,13 @@ target_link_libraries (tiflash_common_io
 target_include_directories (tiflash_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 target_compile_definitions(tiflash_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
 target_link_libraries (dbms
+    ${RE2_LIBRARY}
+    ${RE2_ST_LIBRARY}
+    ${OPENSSL_CRYPTO_LIBRARY}
+    ${BTRIE_LIBRARIES}
+    absl::synchronization
+    tiflash_contrib::aws_s3
+
     tiflash_parsers
     tiflash_common_config
     tiflash_common_io
@@ -221,12 +229,7 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
-    ${RE2_LIBRARY}
-    ${RE2_ST_LIBRARY}
-    ${OPENSSL_CRYPTO_LIBRARY}
-    ${BTRIE_LIBRARIES}
-    absl::synchronization
-    tiflash_contrib::aws_s3
+    PSCheckpointProto
 )
 
 # always add GmSSL include dir to the include path for static analysis
