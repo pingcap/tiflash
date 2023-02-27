@@ -48,8 +48,7 @@ void SharedBlockSchemas::removeOverflow()
         const auto & digest = lru_queue.front();
 
         auto iter = column_file_schemas.find(digest);
-        if (iter == column_file_schemas.end())
-            throw Exception(String(__FUNCTION__) + " inconsistent", ErrorCodes::LOGICAL_ERROR);
+        RUNTIME_CHECK_MSG(iter == column_file_schemas.end(), String(__FUNCTION__) + " inconsistent");
 
         const Holder & holder = iter->second;
         if (auto p = holder.column_file_schema.lock(); p)
@@ -65,10 +64,7 @@ void SharedBlockSchemas::removeOverflow()
         GET_METRIC(tiflash_shared_block_schemas, type_current_size).Decrement();
     }
 
-    if (current_size > (1ull << 63))
-    {
-        throw Exception(String(__FUNCTION__) + " inconsistent, current_size < 0", ErrorCodes::LOGICAL_ERROR);
-    }
+    RUNTIME_CHECK_MSG(current_size > (1ull << 63), String(__FUNCTION__) + " inconsistent, current_size < 0");
 }
 
 
@@ -105,6 +101,9 @@ ColumnFileSchemaPtr SharedBlockSchemas::getOrCreate(const Block & block)
             // if the weak_ptr.lock() only get nullptr, that means the schema is not used by any ColumnFiles
             // So we need update the item
             GET_METRIC(tiflash_shared_block_schemas, type_miss_count).Increment();
+            // We don't use make_shared here, because make_shared will allocate the memory of *ptr and control block together.
+            // Thus, the memory occupied by ColumnFileSchema will persists until all weak_ptr owners get destroyed as well.
+            // https://lanzkron.wordpress.com/2012/04/22/make_shared-almost-a-silver-bullet/
             std::shared_ptr<ColumnFileSchema> new_schema(new ColumnFileSchema(block));
             iter->second.column_file_schema = new_schema;
             lru_queue.splice(lru_queue.end(), lru_queue, iter->second.queue_it);
