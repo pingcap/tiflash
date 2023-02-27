@@ -121,13 +121,16 @@ public:
     // Returing false means the lease is not valid anymore.
     bool isValid() const;
 
+    using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
+    const TimePoint & lastKeepAliveTimePoint() const { return last_update_timepoint; }
+
 private:
     using KeepAliveWriter = std::unique_ptr<grpc::ClientReaderWriter<etcdserverpb::LeaseKeepAliveRequest, etcdserverpb::LeaseKeepAliveResponse>>;
-    using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
 
     Session(LeaseID l, TimePoint first_deadline, KeepAliveWriter && w)
         : lease_id(l)
         , lease_deadline(first_deadline)
+        , last_update_timepoint(std::chrono::system_clock::now())
         , writer(std::move(w))
         , log(Logger::get(fmt::format("lease={:x}", lease_id)))
     {
@@ -138,6 +141,8 @@ private:
 private:
     LeaseID lease_id{InvalidLeaseID};
     TimePoint lease_deadline;
+
+    TimePoint last_update_timepoint;
 
     KeepAliveWriter writer;
 

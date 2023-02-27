@@ -264,6 +264,7 @@ bool Session::keepAliveOne()
     }
     lease_deadline = next_timepoint + std::chrono::seconds(resp.ttl());
     LOG_DEBUG(log, "keep alive update deadline, ttl={} lease_deadline={:%Y-%m-%d %H:%M:%S}", resp.ttl(), lease_deadline);
+    last_update_timepoint = std::chrono::system_clock::now();
     return true;
 }
 
