@@ -20,7 +20,7 @@ CMAKE_VERSION=3.22.1
 GO_VERSION="1.20"
 ARCH=$(uname -m)
 GO_ARCH=$([[ "$ARCH" == "aarch64" ]] && echo "arm64" || echo "amd64")
-LLVM_VERSION="15.0.0"
+LLVM_VERSION="15.0.7"
 CCACHE_VERSION="4.5.1"
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SYSROOT="$SCRIPTPATH/sysroot"

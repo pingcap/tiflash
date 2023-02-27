@@ -34,7 +34,7 @@ function bake_llvm_base_aarch64() {
 
     # LLVM
     source $SCRIPTPATH/bootstrap_llvm.sh
-    bootstrap_llvm "15.0.0"
+    bootstrap_llvm "15.0.7"
     export CC=clang
     export CXX=clang++
     export LD=ld.lld
