@@ -39,6 +39,7 @@ void CPFilesWriter::writePrefix(const CPFilesWriter::PrefixInfo & info)
     auto create_at_ms = Poco::Timestamp().epochMicroseconds() / 1000;
 
     CheckpointProto::DataFilePrefix data_prefix;
+    data_prefix.set_file_format(1);
     data_prefix.set_local_sequence(info.sequence);
     data_prefix.set_create_at_ms(create_at_ms);
     data_prefix.mutable_writer_info()->CopyFrom(info.writer);
@@ -47,6 +48,7 @@ void CPFilesWriter::writePrefix(const CPFilesWriter::PrefixInfo & info)
     data_writer->writePrefix(data_prefix);
 
     CheckpointProto::ManifestFilePrefix manifest_prefix;
+    manifest_prefix.set_file_format(1);
     manifest_prefix.set_local_sequence(info.sequence);
     manifest_prefix.set_last_local_sequence(info.last_sequence);
     manifest_prefix.set_create_at_ms(create_at_ms);

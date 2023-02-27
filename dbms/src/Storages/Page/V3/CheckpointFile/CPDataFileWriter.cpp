@@ -21,7 +21,10 @@ void CPDataFileWriter::writePrefix(const CheckpointProto::DataFilePrefix & prefi
 {
     RUNTIME_CHECK_MSG(write_stage == WriteStage::WritingPrefix, "unexpected write stage {}", magic_enum::enum_name(write_stage));
 
-    details::writeMessageWithLength(*file_writer, prefix);
+    std::string json;
+    google::protobuf::util::MessageToJsonString(prefix, &json);
+    writeStringBinary(json, *file_writer);
+
     write_stage = WriteStage::WritingRecords;
 }
 
