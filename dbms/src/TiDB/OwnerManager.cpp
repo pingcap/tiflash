@@ -453,14 +453,9 @@ Etcd::SessionPtr EtcdOwnerManager::createEtcdSession()
     }
 
     keep_alive_ctx = std::make_unique<grpc::ClientContext>();
-    const Int64 keep_alive_interval_ms = leader_ttl * 1000 * 2 / 3;
     auto session = client->createSession(keep_alive_ctx.get(), leader_ttl);
     keep_alive_handle = bkg_pool.addTask(
-        [this, s = session, expect_interval = keep_alive_interval_ms] {
-            // multiple calls happen more frequently than expected, skip
-            if ((std::chrono::system_clock::now() - s->lastKeepAliveTimePoint()).count() < expect_interval / 2)
-                return false;
-
+        [this, s = session] {
             if (!s->keepAliveOne())
             {
                 tryChangeState(State::CancelByLeaseInvalid);
@@ -470,7 +465,7 @@ Etcd::SessionPtr EtcdOwnerManager::createEtcdSession()
             return false;
         },
         /*multi*/ false,
-        /*interval_ms*/ keep_alive_interval_ms);
+        /*interval_ms*/ leader_ttl * 1000 * 2 / 3);
     session_check_handle = bkg_pool.addTask(
         [this, s = session] {
             if (s->isValid())
