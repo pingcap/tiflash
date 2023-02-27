@@ -23,7 +23,7 @@
 namespace DB
 {
 
-enum class NullAwareSemiJoinStep
+enum class SemiJoinStep
 {
     /// Check other conditions for the right rows whose join key are equal to this left row.
     /// The join keys of this left row must not have null.
@@ -39,25 +39,47 @@ enum class NullAwareSemiJoinStep
     DONE,
 };
 
-class NullAwareSemiJoinResult
+enum class SemiJoinResultType
+{
+    FALSE_VALUE,
+    TRUE_VALUE,
+    NULL_VALUE,
+};
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
+class SemiJoinResult
 {
 public:
-    NullAwareSemiJoinResult(size_t row_num, bool has_null_join_key, NullAwareSemiJoinStep step, const void * map_it);
+    SemiJoinResult(size_t row_num, bool has_null_join_key, SemiJoinStep step, const void * map_it);
 
-    void setResult(bool is_null, bool res)
+    /// For convenience, caller can only consider the result of semi join.
+    /// This function will correct the result if it's not semi join.
+    template <SemiJoinResultType RES>
+    void setResult()
     {
-        step = NullAwareSemiJoinStep::DONE;
-        result = std::make_pair(is_null, res);
+        step = SemiJoinStep::DONE;
+        if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
+        {
+            result = RES;
+            return;
+        }
+        /// For (left) anti semi join
+        if constexpr (RES == SemiJoinResultType::FALSE_VALUE)
+            result = SemiJoinResultType::TRUE_VALUE;
+        else if constexpr (RES == SemiJoinResultType::TRUE_VALUE)
+            result = SemiJoinResultType::FALSE_VALUE;
+        else
+            result = SemiJoinResultType::NULL_VALUE;
     }
 
-    std::pair<bool, bool> getResult() const
+    SemiJoinResultType getResult() const
     {
-        if (unlikely(step != NullAwareSemiJoinStep::DONE))
+        if (unlikely(step != SemiJoinStep::DONE))
             throw Exception("null-aware semi join result is not ready");
         return result;
     }
 
-    inline NullAwareSemiJoinStep getStep() const
+    inline SemiJoinStep getStep() const
     {
         return step;
     }
@@ -67,23 +89,23 @@ public:
         return row_num;
     }
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Map, NullAwareSemiJoinStep STEP>
+    template <typename MAP, SemiJoinStep STEP>
     void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists, size_t & current_offset, size_t max_pace);
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, NullAwareSemiJoinStep STEP>
+    template <SemiJoinStep STEP>
     void checkExprResult(ConstNullMapPtr eq_null_map, size_t offset_begin, size_t offset_end);
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, NullAwareSemiJoinStep STEP>
+    template <SemiJoinStep STEP>
     void checkExprResult(ConstNullMapPtr eq_null_map, const PaddedPODArray<UInt8> & other_column, ConstNullMapPtr other_null_map, size_t offset_begin, size_t offset_end);
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, NullAwareSemiJoinStep STEP>
+    template <SemiJoinStep STEP>
     void checkStepEnd();
 
 private:
     size_t row_num;
     bool has_null_join_key;
 
-    NullAwareSemiJoinStep step;
+    SemiJoinStep step;
     bool step_end;
 
     /// Null list
@@ -93,15 +115,16 @@ private:
     /// Mapped data for one cell.
     const void * map_it;
 
-    /// (is_null, result)
-    std::pair<bool, bool> result;
+    SemiJoinResultType result;
 };
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
-class NullAwareSemiJoinHelper
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename MAP>
+class SemiJoinHelper
 {
 public:
-    NullAwareSemiJoinHelper(
+    using Result = SemiJoinResult<KIND, STRICTNESS>;
+
+    SemiJoinHelper(
         Block & block,
         size_t left_columns,
         size_t right_columns,
@@ -113,16 +136,16 @@ public:
         const String & null_aware_eq_column,
         const ExpressionActionsPtr & null_aware_eq_ptr);
 
-    void joinResult(std::list<NullAwareSemiJoinResult *> & res_list);
+    void joinResult(std::list<Result *> & res_list);
 
 private:
-    template <NullAwareSemiJoinStep STEP>
-    void runStep(std::list<NullAwareSemiJoinResult *> & res_list, std::list<NullAwareSemiJoinResult *> & next_res_list);
+    template <SemiJoinStep STEP>
+    void runStep(std::list<Result *> & res_list, std::list<Result *> & next_res_list);
 
-    void runStepAllBlocks(std::list<NullAwareSemiJoinResult *> & res_list);
+    void runStepAllBlocks(std::list<Result *> & res_list);
 
-    template <NullAwareSemiJoinStep STEP>
-    void checkAllExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<NullAwareSemiJoinResult *> & res_list, std::list<NullAwareSemiJoinResult *> & next_res_list);
+    template <SemiJoinStep STEP>
+    void checkAllExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<Result *> & res_list, std::list<Result *> & next_res_list);
 
 private:
     Block & block;

@@ -1098,7 +1098,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     return ret;
 }
 
-String DAGExpressionAnalyzer::appendNullAwareJoinEqColumn(
+String DAGExpressionAnalyzer::appendNullAwareSemiJoinEqColumn(
     ExpressionActionsChain & chain,
     const Names & probe_key_names,
     const Names & build_key_names,

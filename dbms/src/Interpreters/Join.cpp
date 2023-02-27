@@ -536,6 +536,7 @@ void Join::setSampleBlock(const Block & block)
 
 void Join::init(const Block & sample_block, size_t build_concurrency_)
 {
+    std::unique_lock lock(rwlock);
     if (unlikely(initialized))
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
@@ -2094,35 +2095,29 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     Arena pool;
     size_t segment_size = map.getSegmentSize();
 
-    std::vector<NullAwareSemiJoinResult> res;
+    std::vector<SemiJoinResult<KIND, STRICTNESS>> res;
     res.reserve(rows);
-    std::list<NullAwareSemiJoinResult *> res_list;
+    std::list<SemiJoinResult<KIND, STRICTNESS> *> res_list;
     for (size_t i = 0; i < rows; ++i)
     {
-        if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
-        {
-            if (right_table_is_empty)
-            {
-                /// I.e. (1,2) in ().
-                res.emplace_back(i, false, NullAwareSemiJoinStep::DONE, nullptr);
-                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                    res.back().setResult(false, false);
-                else
-                    res.back().setResult(false, true);
-                continue;
-            }
-        }
         if constexpr (has_filter_null_map)
         {
             if ((*filter_null_map)[i])
             {
                 /// Filter out by left_conditions so the result set is empty.
-                /// Like (1,2) in ().
-                res.emplace_back(i, false, NullAwareSemiJoinStep::DONE, nullptr);
-                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                    res.back().setResult(false, false);
-                else
-                    res.back().setResult(false, true);
+                res.emplace_back(i, false, SemiJoinStep::DONE, nullptr);
+                res.back().template setResult<SemiJoinResultType::FALSE_VALUE>();
+                continue;
+            }
+        }
+        if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+        {
+            if (right_table_is_empty)
+            {
+                /// If right table is empty, the result is false.
+                /// I.e. (1,2) in ().
+                res.emplace_back(i, false, SemiJoinStep::DONE, nullptr);
+                res.back().template setResult<SemiJoinResultType::FALSE_VALUE>();
                 continue;
             }
         }
@@ -2140,13 +2135,13 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                         ///   1. key column size is 1, i.e. (null) in (1,2).
                         ///   2. right table has a all-key-null row, i.e. (1,null) in ((2,2),(null,null)).
                         ///   3. this row is all-key-null, i.e. (null,null) in ((1,1),(2,2)).
-                        res.emplace_back(i, true, NullAwareSemiJoinStep::DONE, nullptr);
-                        res.back().setResult(true, false);
+                        res.emplace_back(i, true, SemiJoinStep::DONE, nullptr);
+                        res.back().template setResult<SemiJoinResultType::NULL_VALUE>();
                         continue;
                     }
                 }
                 /// Check null list first to speed up getting the NULL result if possible.
-                res.emplace_back(i, true, NullAwareSemiJoinStep::CHECK_NULL_LIST, nullptr);
+                res.emplace_back(i, true, SemiJoinStep::CHECK_NULL_LIST, nullptr);
                 res_list.push_back(&res.back());
                 continue;
             }
@@ -2175,19 +2170,16 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             /// Find the matched row(s).
             if (STRICTNESS == ASTTableJoin::Strictness::Any)
             {
-                /// If strictness is any, we get the result.
+                /// If strictness is any, the result is true.
                 /// I.e. (1,2) in ((1,2),(1,3),(null,3))
-                res.emplace_back(i, false, NullAwareSemiJoinStep::DONE, nullptr);
-                if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                    res.back().setResult(false, true);
-                else
-                    res.back().setResult(false, false);
+                res.emplace_back(i, false, SemiJoinStep::DONE, nullptr);
+                res.back().template setResult<SemiJoinResultType::TRUE_VALUE>();
             }
             else
             {
                 /// Else the other condition must be checked for these matched right row(s).
                 auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-                res.emplace_back(i, false, NullAwareSemiJoinStep::CHECK_OTHER_COND, static_cast<const void *>(map_it));
+                res.emplace_back(i, false, SemiJoinStep::CHECK_OTHER_COND, static_cast<const void *>(map_it));
                 res_list.push_back(&res.back());
             }
         }
@@ -2201,18 +2193,15 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                 {
                     /// If right table has a all-key-null row, the result is NULL.
                     /// I.e. (1) in (null) or (1,2) in ((1,3),(null,null)).
-                    res.emplace_back(i, false, NullAwareSemiJoinStep::DONE, nullptr);
-                    res.back().setResult(true, false);
+                    res.emplace_back(i, false, SemiJoinStep::DONE, nullptr);
+                    res.back().template setResult<SemiJoinResultType::NULL_VALUE>();
                 }
                 else if (key_columns.size() == 1)
                 {
-                    /// If key size is 1 and all key in right table row is not NULL, we get the result.
+                    /// If key size is 1 and all key in right table row is not NULL, the result is false.
                     /// I.e. (1) in () or (1) in (1,2,3,4,5).
-                    res.emplace_back(i, false, NullAwareSemiJoinStep::DONE, nullptr);
-                    if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
-                        res.back().setResult(false, false);
-                    else
-                        res.back().setResult(false, true);
+                    res.emplace_back(i, false, SemiJoinStep::DONE, nullptr);
+                    res.back().template setResult<SemiJoinResultType::FALSE_VALUE>();
                 }
                 /// Then key size is greater than 2 and right table has no all-key-null row, we must
                 /// compare the rows one by one.
@@ -2221,7 +2210,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             if (prev_size == res.size())
             {
                 /// Check null list first to speed up getting the NULL result if possible.
-                res.emplace_back(i, false, NullAwareSemiJoinStep::CHECK_NULL_LIST, nullptr);
+                res.emplace_back(i, false, SemiJoinStep::CHECK_NULL_LIST, nullptr);
                 res_list.push_back(&res.back());
             }
         }
@@ -2233,7 +2222,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 
     if (!res_list.empty())
     {
-        NullAwareSemiJoinHelper<KIND, STRICTNESS, typename Map::mapped_type::Base_t> helper(
+        SemiJoinHelper<KIND, STRICTNESS, typename Map::mapped_type::Base_t> helper(
             block,
             left_columns,
             right_columns,
@@ -2247,7 +2236,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 
         helper.joinResult(res_list);
 
-        RUNTIME_CHECK_MSG(res_list.empty(), "NullAwareSemiJoinResult list must be empty after calculating join result");
+        RUNTIME_CHECK_MSG(res_list.empty(), "SemiJoinResult list must be empty after calculating join result");
     }
 
     std::unique_ptr<IColumn::Filter> filter;
@@ -2265,7 +2254,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         auto result = res[i].getResult();
         if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
         {
-            if (!result.first && result.second)
+            if (result == SemiJoinResultType::TRUE_VALUE)
             {
                 // If the result is true, this row should be kept.
                 (*filter)[i] = 1;
@@ -2282,12 +2271,18 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         {
             for (size_t j = 0; j < right_columns - 1; ++j)
                 added_columns[j]->insertDefault();
-            if (result.first)
-                added_columns[right_columns - 1]->insert(FIELD_NULL);
-            else if (result.second)
-                added_columns[right_columns - 1]->insert(FIELD_INT8_1);
-            else
+            switch (result)
+            {
+            case SemiJoinResultType::FALSE_VALUE:
                 added_columns[right_columns - 1]->insert(FIELD_INT8_0);
+                break;
+            case SemiJoinResultType::TRUE_VALUE:
+                added_columns[right_columns - 1]->insert(FIELD_INT8_1);
+                break;
+            case SemiJoinResultType::NULL_VALUE:
+                added_columns[right_columns - 1]->insert(FIELD_NULL);
+                break;
+            }
         }
     }
 

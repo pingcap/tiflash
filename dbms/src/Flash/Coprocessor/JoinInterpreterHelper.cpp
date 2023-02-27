@@ -236,7 +236,7 @@ std::tuple<ExpressionActionsPtr, String, String, ExpressionActionsPtr, String> d
     ExpressionActionsPtr null_aware_eq_expr;
     if (join.left_null_aware_join_keys_size() > 0)
     {
-        column_for_null_aware_eq_condition = dag_analyzer.appendNullAwareJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
+        column_for_null_aware_eq_condition = dag_analyzer.appendNullAwareSemiJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
         null_aware_eq_expr = chain.getLastActions();
     }
 

@@ -163,7 +163,7 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
 
-    String appendNullAwareJoinEqColumn(
+    String appendNullAwareSemiJoinEqColumn(
         ExpressionActionsChain & chain,
         const Names & probe_key_names,
         const Names & build_key_names,
