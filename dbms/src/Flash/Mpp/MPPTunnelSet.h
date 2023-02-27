@@ -17,6 +17,7 @@
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/MppVersion.h>
+#include <IO/CompressedStream.h>
 
 namespace DB
 {

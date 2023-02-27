@@ -21,7 +21,7 @@
 template <>
 struct fmt::formatter<DB::PS::V3::BlobFileGCInfo>
 {
-    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    static constexpr auto parse(format_parse_context & ctx)
     {
         const auto * it = ctx.begin();
         const auto * end = ctx.end();
@@ -31,7 +31,7 @@ struct fmt::formatter<DB::PS::V3::BlobFileGCInfo>
     }
 
     template <typename FormatContext>
-    auto format(const DB::PS::V3::BlobFileGCInfo & i, FormatContext & ctx) const -> decltype(ctx.out())
+    auto format(const DB::PS::V3::BlobFileGCInfo & i, FormatContext & ctx) const
     {
         return format_to(ctx.out(), "<id:{} rate:{:.2f}>", i.blob_id, i.valid_rate);
     }
@@ -39,7 +39,7 @@ struct fmt::formatter<DB::PS::V3::BlobFileGCInfo>
 template <>
 struct fmt::formatter<DB::PS::V3::BlobFileTruncateInfo>
 {
-    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    static constexpr auto parse(format_parse_context & ctx)
     {
         const auto * it = ctx.begin();
         const auto * end = ctx.end();
@@ -49,7 +49,7 @@ struct fmt::formatter<DB::PS::V3::BlobFileTruncateInfo>
     }
 
     template <typename FormatContext>
-    auto format(const DB::PS::V3::BlobFileTruncateInfo & i, FormatContext & ctx) const -> decltype(ctx.out())
+    auto format(const DB::PS::V3::BlobFileTruncateInfo & i, FormatContext & ctx) const
     {
         return format_to(ctx.out(), "<id:{} origin:{} truncate:{} rate:{:.2f}>", i.blob_id, i.origin_size, i.truncated_size, i.valid_rate);
     }

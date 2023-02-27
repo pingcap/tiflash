@@ -95,6 +95,7 @@ add_headers_and_sources(dbms src/Storages/Page/V2/VersionSet)
 add_headers_and_sources(dbms src/Storages/Page/V2/gc)
 add_headers_and_sources(dbms src/WindowFunctions)
 add_headers_and_sources(dbms src/TiDB/Schema)
+add_headers_and_sources(dbms src/TiDB/Etcd)
 add_headers_and_sources(dbms src/Storages/Page/V3)
 add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
 add_headers_and_sources(dbms src/Storages/Page/V3/WAL)
@@ -221,6 +222,7 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
+    etcdpb
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}

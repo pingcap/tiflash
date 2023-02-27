@@ -23,8 +23,12 @@
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TiDB/Etcd/Client.h>
+#include <TiDB/OwnerInfo.h>
+#include <TiDB/OwnerManager.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
+#include <common/logger_useful.h>
 #include <pingcap/pd/MockPDClient.h>
 
 #include <memory>
@@ -85,12 +89,23 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
-{}
+{
+    if (!raft_config.pd_addrs.empty())
+    {
+        etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
+        s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.flash_server_addr, etcd_client);
+    }
+}
 
 void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
 {
     if (!raft_config.pd_addrs.empty())
+    {
+        // update the client config including pd_client
         cluster->update(raft_config.pd_addrs, cluster_config);
+        // update the etcd_client after pd_client get updated
+        etcd_client->update(cluster_config);
+    }
 }
 
 void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
@@ -107,6 +122,21 @@ void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * pr
     {
         // Only create when running with Raft threads
         background_service = std::make_unique<BackgroundService>(*this);
+    }
+}
+
+void TMTContext::shutdown()
+{
+    if (s3gc_owner)
+    {
+        s3gc_owner->cancel();
+        s3gc_owner = nullptr;
+    }
+
+    if (background_service)
+    {
+        background_service->shutdown();
+        background_service = nullptr;
     }
 }
 
@@ -189,6 +219,11 @@ SchemaSyncerPtr TMTContext::getSchemaSyncer() const
 pingcap::pd::ClientPtr TMTContext::getPDClient() const
 {
     return cluster->pd_client;
+}
+
+const OwnerManagerPtr & TMTContext::getS3GCOwnerManager() const
+{
+    return s3gc_owner;
 }
 
 MPPTaskManagerPtr TMTContext::getMPPTaskManager()

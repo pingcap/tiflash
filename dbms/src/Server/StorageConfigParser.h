@@ -99,9 +99,15 @@ struct StorageS3Config
     String bucket;
     String access_key_id;
     String secret_access_key;
+    UInt64 max_connections = 1024;
+    UInt64 connection_timeout_ms = 1000;
+    UInt64 request_timeout_ms = 3000;
+    String cache_dir;
+    UInt64 cache_capacity = 0;
 
     void parse(const String & content, const LoggerPtr & log);
     bool isS3Enabled() const;
+    bool isFileCacheEnabled() const;
 };
 
 struct TiFlashStorageConfig
