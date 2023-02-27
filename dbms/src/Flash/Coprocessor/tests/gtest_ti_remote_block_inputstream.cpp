@@ -86,17 +86,32 @@ struct MockWriter
         return summary;
     }
 
-    void broadcastOrPassThroughWrite(Blocks & blocks)
+    void broadcastOrPassThroughWrite(Blocks & blocks, bool /*is_broadcast*/)
     {
         auto && packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
         ++total_packets;
         if (!packet)
             return;
 
-        if (!packet->packet.chunks().empty())
-            total_bytes += packet->packet.ByteSizeLong();
+        total_bytes += packet->packet.ByteSizeLong();
         queue->push(std::move(packet));
     }
+
+    void broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method, bool is_broadcast = false)
+    {
+        if (version == MPPDataPacketV0)
+            return broadcastOrPassThroughWrite(blocks, is_broadcast);
+
+        size_t original_size{};
+        auto && packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
+        ++total_packets;
+        if (!packet)
+            return;
+
+        total_bytes += packet->packet.ByteSizeLong();
+        queue->push(std::move(packet));
+    }
+
     void write(tipb::SelectResponse & response)
     {
         if (add_summary)
@@ -124,10 +139,6 @@ struct MockWriter
         write(tmp);
     }
     uint16_t getPartitionNum() const { return 1; }
-    bool isLocal(size_t index) const
-    {
-        return index == 0;
-    }
 
     std::vector<tipb::FieldType> result_field_types;
 
@@ -361,7 +372,10 @@ public:
         auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<MockWriterPtr>>(
             writer,
             batch_send_min_limit,
-            *dag_context_ptr);
+            *dag_context_ptr,
+            MPPDataPacketVersion::MPPDataPacketV1,
+            tipb::CompressionMode::FAST,
+            false);
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)

@@ -34,7 +34,9 @@ public:
     void write(tipb::SelectResponse & response);
     // this is a broadcast or pass through writing.
     // data codec version V0
-    void broadcastOrPassThroughWrite(Blocks & blocks);
+    void broadcastOrPassThroughWrite(Blocks & blocks, bool is_broadcast);
+    // data codec version > V0
+    void broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method, bool is_broadcast);
     // this is a partition writing.
     // data codec version V0
     void partitionWrite(Blocks & blocks, int16_t partition_id);
@@ -83,9 +85,6 @@ public:
     }
 
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
-
-private:
-    bool isLocal(size_t index) const;
 
 private:
     std::vector<TunnelPtr> tunnels;
