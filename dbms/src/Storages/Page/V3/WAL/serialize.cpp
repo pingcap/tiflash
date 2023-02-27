@@ -20,7 +20,7 @@
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/V3/WAL/serialize.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 
 #include <magic_enum.hpp>
 #include <type_traits>

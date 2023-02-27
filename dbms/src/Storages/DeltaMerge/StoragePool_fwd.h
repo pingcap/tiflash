@@ -12,16 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/BlockStreamProfileInfo.h>
-#include <Flash/Statistics/ExecutorStatisticsBase.h>
+#pragma once
 
-namespace DB
+#include <memory>
+
+namespace DB::DM
 {
-void BaseRuntimeStatistics::append(const BlockStreamProfileInfo & profile_info)
-{
-    rows += profile_info.rows;
-    blocks += profile_info.blocks;
-    bytes += profile_info.bytes;
-    execution_time_ns = std::max(execution_time_ns, profile_info.execution_time);
-}
-} // namespace DB
+
+class StoragePool;
+using StoragePoolPtr = std::shared_ptr<StoragePool>;
+
+class GlobalStoragePool;
+using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
+
+struct StorageSnapshot;
+using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
+
+} // namespace DB::DM

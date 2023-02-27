@@ -181,6 +181,8 @@ public:
 
     size_t byteSize() const override;
 
+    size_t estimateByteSizeForSpill() const override;
+
     size_t allocatedBytes() const override;
 
     void insertRangeFrom(const IColumn & from, size_t start, size_t length) override;

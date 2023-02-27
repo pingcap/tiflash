@@ -48,6 +48,12 @@ Names ExpressionAction::getNeededColumns() const
     for (const auto & column : projections)
         res.push_back(column.first);
 
+    if (expand)
+    {
+        for (const auto & column : expand->getAllGroupSetColumnNames())
+            res.push_back(column);
+    }
+
     if (!source_name.empty())
         res.push_back(source_name);
 
@@ -135,6 +141,13 @@ ExpressionAction ExpressionAction::ordinaryJoin(std::shared_ptr<const Join> join
     return a;
 }
 
+ExpressionAction ExpressionAction::expandSource(GroupingSets grouping_sets_)
+{
+    ExpressionAction a;
+    a.type = EXPAND;
+    a.expand = std::make_shared<Expand>(grouping_sets_);
+    return a;
+}
 
 void ExpressionAction::prepare(Block & sample_block)
 {
@@ -228,6 +241,23 @@ void ExpressionAction::prepare(Block & sample_block)
         break;
     }
 
+    case EXPAND:
+    {
+        // sample_block is just for schema check followed by later block, modify it if your schema has changed during this action.
+        auto name_set = expand->getAllGroupSetColumnNames();
+        // make grouping set column to be nullable.
+        for (const auto & col_name : name_set)
+        {
+            auto & column_with_name = sample_block.getByName(col_name);
+            column_with_name.type = makeNullable(column_with_name.type);
+            if (column_with_name.column != nullptr)
+                column_with_name.column = makeNullable(column_with_name.column);
+        }
+        // fill one more column: groupingID.
+        sample_block.insert({nullptr, expand->grouping_identifier_column_type, expand->grouping_identifier_column_name});
+        break;
+    }
+
     case PROJECT:
     {
         Block new_block;
@@ -310,6 +340,12 @@ void ExpressionAction::execute(Block & block) const
         ProbeProcessInfo probe_process_info(0);
         probe_process_info.block = block;
         join->joinBlock(probe_process_info);
+        break;
+    }
+
+    case EXPAND:
+    {
+        expand->replicateAndFillNull(block);
         break;
     }
 

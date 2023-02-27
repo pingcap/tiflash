@@ -24,12 +24,11 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
-#include <Storages/Page/V3/Universal/UniversalPageIdFormat.h>
-#include <Storages/Page/V3/Universal/UniversalWriteBatch.h>
 #include <common/defines.h>
 
 namespace DB
 {
+class UniversalWriteBatch;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 class PathCapacityMetrics;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnsCommon.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -53,9 +54,10 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return
             }
             else
             {
+                size_t passed_count = countBytesInFilter(filter);
                 for (auto & col : block)
                 {
-                    col.column = col.column->filter(filter, block.rows());
+                    col.column = col.column->filter(filter, passed_count);
                 }
             }
         }

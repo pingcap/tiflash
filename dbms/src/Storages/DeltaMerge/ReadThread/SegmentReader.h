@@ -64,7 +64,7 @@ public:
         static SegmentReaderPoolManager pool_manager;
         return pool_manager;
     }
-    void init(const ServerInfo & server_info);
+    void init(UInt32 logical_cpu_cores, double read_thread_count_scale);
     ~SegmentReaderPoolManager();
     DISALLOW_COPY_AND_MOVE(SegmentReaderPoolManager);
 

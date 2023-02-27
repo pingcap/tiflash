@@ -12,29 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#include <Storages/Page/V3/PageDirectory/PageIdTrait.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 
-namespace DB
+namespace DB::PS::V3::universal
 {
-DAGBlockOutputStream::DAGBlockOutputStream(Block && header_, std::unique_ptr<DAGResponseWriter> response_writer_)
-    : header(std::move(header_))
-    , response_writer(std::move(response_writer_))
-{}
 
-void DAGBlockOutputStream::writePrefix()
+PageIdU64 PageIdTrait::getU64ID(const PageIdTrait::PageId & page_id)
 {
-    response_writer->prepare(header);
+    return UniversalPageIdFormat::getU64ID(page_id);
 }
 
-void DAGBlockOutputStream::write(const Block & block)
+PageIdTrait::Prefix PageIdTrait::getPrefix(const PageIdTrait::PageId & page_id)
 {
-    response_writer->write(block);
+    return UniversalPageIdFormat::getFullPrefix(page_id);
 }
 
-void DAGBlockOutputStream::writeSuffix()
-{
-    // todo error handle
-    response_writer->flush();
-}
-
-} // namespace DB
+} // namespace DB::PS::V3::universal

@@ -42,7 +42,7 @@ protected:
         spiller_test_header = Block(names_and_types);
         auto key_manager = std::make_shared<MockKeyManager>(false);
         auto file_provider = std::make_shared<FileProvider>(key_manager, false);
-        spill_config_ptr = std::make_shared<SpillConfig>(spill_dir, "test", 1024ULL * 1024 * 1024, file_provider);
+        spill_config_ptr = std::make_shared<SpillConfig>(spill_dir, "test", 1024ULL * 1024 * 1024, 0, 0, file_provider);
     }
     void TearDown() override
     {
@@ -85,9 +85,9 @@ protected:
         }
         return ret;
     }
-    static void verifyRestoreBlocks(Spiller & spiller, size_t restore_partition_id, size_t restore_max_stream_size, size_t expected_stream_size, const Blocks & expected_blocks)
+    static void verifyRestoreBlocks(Spiller & spiller, size_t restore_partition_id, size_t restore_max_stream_size, size_t expected_stream_size, const Blocks & expected_blocks, bool append_dummy_read_stream = false)
     {
-        auto block_streams = spiller.restoreBlocks(restore_partition_id, restore_max_stream_size);
+        auto block_streams = spiller.restoreBlocks(restore_partition_id, restore_max_stream_size, append_dummy_read_stream);
         if (expected_stream_size > 0)
         {
             GTEST_ASSERT_EQ(block_streams.size(), expected_stream_size);
@@ -138,6 +138,24 @@ catch (Exception & e)
     GTEST_ASSERT_EQ(e.message(), "Check partition_id < partition_num failed: test: partition id 30 exceeds partition num 20.");
 }
 
+TEST_F(SpillerTest, ExceptionDuringSpill)
+try
+{
+    FailPointHelper::enableFailPoint("exception_during_spill");
+    Spiller spiller(*spill_config_ptr, false, 1, spiller_test_header, logger);
+    try
+    {
+        spiller.spillBlocks(generateBlocks(10), 0);
+        GTEST_FAIL();
+    }
+    catch (Exception & e)
+    {
+        GTEST_ASSERT_EQ(std::strstr(e.message().c_str(), "exception_during_spill") != nullptr, true);
+        GTEST_ASSERT_EQ(spiller.hasSpilledData(), false);
+    }
+}
+CATCH
+
 TEST_F(SpillerTest, SpillAfterFinish)
 try
 {
@@ -148,7 +166,7 @@ try
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "Check spill_finished == false failed: test: spill after the spiller is finished.");
+    GTEST_ASSERT_EQ(e.message(), "Check isSpillFinished() == false failed: test: spill after the spiller is finished.");
 }
 
 TEST_F(SpillerTest, InvalidPartitionIdInRestore)
@@ -173,7 +191,7 @@ try
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "Check spill_finished failed: test: restore before the spiller is finished.");
+    GTEST_ASSERT_EQ(e.message(), "Check isSpillFinished() failed: test: restore before the spiller is finished.");
 }
 
 TEST_F(SpillerTest, SpilledBlockDataSize)
@@ -226,7 +244,7 @@ try
     std::vector<std::unique_ptr<Spiller>> spillers;
     spillers.push_back(std::make_unique<Spiller>(*spill_config_ptr, false, 2, spiller_test_header, logger));
     auto spiller_config_with_small_max_spill_size = *spill_config_ptr;
-    spiller_config_with_small_max_spill_size.max_spilled_size_per_spill = spill_config_ptr->max_spilled_size_per_spill / 1000;
+    spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller = spill_config_ptr->max_cached_data_bytes_in_spiller / 1000;
     spillers.push_back(std::make_unique<Spiller>(spiller_config_with_small_max_spill_size, false, 2, spiller_test_header, logger));
 
     for (auto & spiller : spillers)
@@ -263,7 +281,7 @@ try
     std::vector<std::unique_ptr<Spiller>> spillers;
     spillers.push_back(std::make_unique<Spiller>(*spill_config_ptr, false, 1, spiller_test_header, logger, 1, false));
     auto new_spill_path = fmt::format("{}{}_{}", spill_config_ptr->spill_dir, "release_file_on_restore_test", rand());
-    SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_spilled_size_per_spill, spill_config_ptr->file_provider);
+    SpillConfig new_spill_config(new_spill_path, spill_config_ptr->spill_id, spill_config_ptr->max_cached_data_bytes_in_spiller, 0, 0, spill_config_ptr->file_provider);
     Poco::File new_spiller_dir(new_spill_config.spill_dir);
     /// remove spiller dir if exists
     if (new_spiller_dir.exists())
@@ -321,7 +339,7 @@ try
     std::vector<std::unique_ptr<Spiller>> spillers;
     spillers.push_back(std::make_unique<Spiller>(*spill_config_ptr, true, 2, spiller_test_header, logger));
     auto spiller_config_with_small_max_spill_size = *spill_config_ptr;
-    spiller_config_with_small_max_spill_size.max_spilled_size_per_spill = spill_config_ptr->max_spilled_size_per_spill / 1000;
+    spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller = spill_config_ptr->max_cached_data_bytes_in_spiller / 1000;
     spillers.push_back(std::make_unique<Spiller>(spiller_config_with_small_max_spill_size, true, 2, spiller_test_header, logger));
 
     for (auto & spiller : spillers)
@@ -353,6 +371,96 @@ try
 }
 CATCH
 
+TEST_F(SpillerTest, RestoreWithAppendDummyReadStream)
+try
+{
+    auto spiller_config_for_append_write = *spill_config_ptr;
+
+    /// append_dummy_read = false
+    {
+        spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
+        Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
+        Blocks all_blocks;
+        auto blocks = generateBlocks(20);
+        spiller.spillBlocks(blocks, 0);
+        spiller.spillBlocks(blocks, 0);
+        spiller.finishSpill();
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        verifyRestoreBlocks(spiller, 0, 20, 1, all_blocks, false);
+    }
+    /// append_dummy_read = true
+    {
+        spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
+        Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
+        Blocks all_blocks;
+        auto blocks = generateBlocks(20);
+        spiller.spillBlocks(blocks, 0);
+        spiller.spillBlocks(blocks, 0);
+        spiller.finishSpill();
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        verifyRestoreBlocks(spiller, 0, 20, 20, all_blocks, true);
+    }
+}
+CATCH
+
+TEST_F(SpillerTest, AppendWrite)
+try
+{
+    auto spiller_config_for_append_write = *spill_config_ptr;
+
+    /// case 1, multiple spill write to the same file
+    {
+        spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
+        Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
+        Blocks all_blocks;
+        auto blocks = generateBlocks(50);
+        spiller.spillBlocks(blocks, 0);
+        spiller.spillBlocks(blocks, 0);
+        spiller.finishSpill();
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        verifyRestoreBlocks(spiller, 0, 2, 1, all_blocks);
+    }
+    /// case 2, one spill write to multiple files
+    {
+        spiller_config_for_append_write.max_spilled_rows_per_file = 1;
+        Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
+        auto all_blocks = generateBlocks(20);
+        spiller.spillBlocks(all_blocks, 0);
+        spiller.finishSpill();
+        verifyRestoreBlocks(spiller, 0, 0, 20, all_blocks);
+    }
+    /// case 3, spill empty blocks to existing spilled file
+    {
+        spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
+        Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
+        Blocks all_blocks = generateBlocks(20);
+        spiller.spillBlocks(all_blocks, 0);
+        Blocks empty_blocks;
+        spiller.spillBlocks(empty_blocks, 0);
+        BlocksList empty_blocks_list;
+        BlocksListBlockInputStream block_input_stream(std::move(empty_blocks_list));
+        spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
+        spiller.finishSpill();
+        verifyRestoreBlocks(spiller, 0, 2, 1, all_blocks);
+    }
+    /// case 4, spill empty blocks to new spilled file
+    {
+        spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
+        Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
+        Blocks empty_blocks;
+        spiller.spillBlocks(empty_blocks, 0);
+        BlocksList empty_blocks_list;
+        BlocksListBlockInputStream block_input_stream(std::move(empty_blocks_list));
+        spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
+        spiller.finishSpill();
+        ASSERT_TRUE(spiller.hasSpilledData() == false);
+    }
+}
+CATCH
+
 TEST_F(SpillerTest, SpillAndMeetCancelled)
 try
 {
@@ -362,7 +470,7 @@ try
         total_block_size += block.bytes();
 
     auto spiller_config_with_small_max_spill_size = *spill_config_ptr;
-    spiller_config_with_small_max_spill_size.max_spilled_size_per_spill = total_block_size / 50;
+    spiller_config_with_small_max_spill_size.max_cached_data_bytes_in_spiller = total_block_size / 50;
     Spiller spiller(spiller_config_with_small_max_spill_size, false, 1, spiller_test_header, logger);
     BlocksList block_list;
     block_list.insert(block_list.end(), blocks.begin(), blocks.end());
