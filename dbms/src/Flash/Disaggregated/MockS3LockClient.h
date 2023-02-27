@@ -21,6 +21,10 @@
 namespace DB::S3
 {
 
+// A simple mock lock client for testing.
+// Notice: It does NOT guarantee atomicity between
+// "try add lock" and "try mark delete" operations
+// on the same `data_file_key`.
 class MockS3LockClient : public IS3LockClient
 {
 public:
@@ -32,6 +36,7 @@ public:
     std::pair<bool, String>
     sendTryAddLockRequest(const String & data_file_key, UInt32 lock_store_id, UInt32 lock_seq, Int64) override
     {
+        // If the data file exist and no delmark exist, then create a lock file on `data_file_key`
         auto view = S3FilenameView::fromKey(data_file_key);
         if (!objectExists(*s3_client, s3_client->bucket(), data_file_key))
         {
@@ -49,6 +54,7 @@ public:
     std::pair<bool, String>
     sendTryMarkDeleteRequest(const String & data_file_key, Int64) override
     {
+        // If there is no lock on the given `data_file_key`, then mark as deleted
         auto view = S3FilenameView::fromKey(data_file_key);
         auto lock_prefix = view.getLockPrefix();
         bool any_lock_exist = false;

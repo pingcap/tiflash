@@ -75,7 +75,6 @@ void FlashService::init(Context & context_)
         context->getGlobalContext(),
         context->getGlobalContext().getSettingsRef());
 
-    // hack
     s3_lock_service = std::make_unique<S3::S3LockService>(*context);
 
     auto settings = context->getSettingsRef();
