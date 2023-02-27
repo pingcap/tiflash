@@ -67,6 +67,8 @@ OwnerManager::createS3GCOwner(
     const Etcd::ClientPtr & client,
     Int64 owner_ttl)
 {
+    // Notice: Need to add suffix for logger id to distingust owner type when
+    // there is more than one kind of owner manager in one TiFlash instance.
     return std::make_shared<EtcdOwnerManager>(context, S3GCOwnerKey, id, client, owner_ttl);
 }
 
