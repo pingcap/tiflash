@@ -19,7 +19,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
-#include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/PathPool.h>
 
 #include <ext/scope_guard.h>
@@ -383,7 +383,7 @@ bool DeltaValueSpace::compact(DMContext & context)
     {
         // do compaction task
         const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
-        compaction_task->prepare(context, wbs, reader);
+        compaction_task->prepare(context, wbs, *reader);
         log_storage_snap.reset(); // release the snapshot ASAP
     }
 

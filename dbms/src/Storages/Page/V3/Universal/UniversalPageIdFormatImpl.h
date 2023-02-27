@@ -31,8 +31,14 @@ namespace DB
 //
 //
 // The main key format types:
-// Raft related key
+// Raft related key format
 //  Format: https://github.com/tikv/tikv/blob/9c0df6d68c72d30021b36d24275fdceca9864235/components/keys/src/lib.rs#L24
+//  And because some key will be migrated from kv engine to raft engine,
+//  kv engine and raft engine may write and delete the same key.
+//  So to distinguish data written by kv engine and raft engine, we prepend an `0x02` to the key written by kv engine.
+//  For example, suppose a key in tikv to be {0x01, 0x02, 0x03}.
+//  If it is written by raft engine, then actual key uni ps see is the same as in tikv.
+//  But if it is written by kv engine, the actual key uni ps see will be {0x01, 0x01, 0x02, 0x03}.
 //
 // KVStore related key
 //  Prefix = [optional prefix] + "kvs"
@@ -44,14 +50,6 @@ namespace DB
 //      Prefix = [optional prefix] + "tl" + NamespaceId
 //  Data
 //      Prefix = [optional prefix] + "td" + NamespaceId
-
-enum class StorageType
-{
-    Log = 1,
-    Data = 2,
-    Meta = 3,
-    KVStore = 4,
-};
 
 struct UniversalPageIdFormat
 {
@@ -92,6 +90,43 @@ public:
         return buff.releaseStr();
     }
 
+    // data is in kv engine, so it is prepend by KV_PREFIX
+    // KV_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id APPLY_STATE_SUFFIX
+    static UniversalPageId toRaftApplyStateKeyInKVEngine(UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x02, buff);
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x03, buff);
+        return buff.releaseStr();
+    }
+
+    // data is in kv engine, so it is prepend by KV_PREFIX
+    // KV_PREFIX LOCAL_PREFIX REGION_META_PREFIX region_id REGION_STATE_SUFFIX
+    static UniversalPageId toRegionLocalStateKeyInKVEngine(UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x02, buff);
+        writeChar(0x01, buff);
+        writeChar(0x03, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
+    // LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX
+    static String toFullRaftLogPrefix(UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
     static inline PageIdU64 getU64ID(const UniversalPageId & page_id)
     {
         if (page_id.size() >= sizeof(UInt64))
@@ -120,24 +155,3 @@ private:
     }
 };
 } // namespace DB
-
-template <>
-struct fmt::formatter<DB::UniversalPageId>
-{
-    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
-    {
-        const auto * it = ctx.begin();
-        const auto * end = ctx.end();
-        /// Only support {}.
-        if (it != end && *it != '}')
-            throw format_error("invalid format");
-        return it;
-    }
-
-    template <typename FormatContext>
-    auto format(const DB::UniversalPageId & value, FormatContext & ctx) const -> decltype(ctx.out())
-    {
-        auto prefix = DB::UniversalPageIdFormat::getFullPrefix(value);
-        return format_to(ctx.out(), "{}.{}", Redact::keyToHexString(prefix.data(), prefix.size()), DB::UniversalPageIdFormat::getU64ID(value));
-    }
-};
