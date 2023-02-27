@@ -33,14 +33,7 @@ struct CheckpointLocation
     uint64_t offset_in_file = 0;
     uint64_t size_in_file = 0;
 
-    CheckpointProto::EntryDataLocation toProto() const
-    {
-        CheckpointProto::EntryDataLocation proto_rec;
-        proto_rec.set_data_file_id(*data_file_id);
-        proto_rec.set_offset_in_file(offset_in_file);
-        proto_rec.set_size_in_file(size_in_file);
-        return proto_rec;
-    }
+    CheckpointProto::EntryDataLocation toProto() const;
 
     /**
      * @param strings_map A modifyable map. This function will try to reuse strings in the map
@@ -48,25 +41,7 @@ struct CheckpointLocation
      */
     static CheckpointLocation fromProto(
         const CheckpointProto::EntryDataLocation & proto_rec,
-        CheckpointProto::StringsInternMap & strings_map)
-    {
-        std::shared_ptr<const std::string> data_file_id = nullptr;
-        if (auto it = strings_map.find(proto_rec.data_file_id()); it != strings_map.end())
-        {
-            data_file_id = it->second;
-        }
-        else
-        {
-            data_file_id = std::make_shared<std::string>(proto_rec.data_file_id());
-            strings_map.try_emplace(*data_file_id, data_file_id);
-        }
-
-        CheckpointLocation val;
-        val.data_file_id = data_file_id;
-        val.offset_in_file = proto_rec.offset_in_file();
-        val.size_in_file = proto_rec.size_in_file();
-        return val;
-    }
+        CheckpointProto::StringsInternMap & strings_map);
 };
 
 struct CheckpointInfo
