@@ -70,19 +70,49 @@ using ColumnFileSchemaPtr = std::shared_ptr<ColumnFileSchema>;
 class SharedBlockSchemas
 {
 private:
+    // we use LRU to store digest->weak_ptr<ColumnFileSchema>
+    // we choose to implement a new self LRUCache, instead use common/LRUCache.h,
+    // because the following reasons:
+    // 1. We need to add some important metrics, to observe the effectiveness of LRU, and whether the max_size is enough.
+    // 2. We need to use weak_ptr to avoid extra memory usage when the ColumnFileSchema is not used by ColumnFiles.
+    // 3. If we use common/LRUCache.h, for getOrCreate, we need
+    //    1. first use getOrSet to check whether the key exists.
+    //    2. If the key exists, we need to check whether the value(weak_ptr.lock()) is nullptr.
+    //    3. If the value is nullptr, we need to remove the key from the cache, and then create a new value by getOrSet.
+    //    While to ensure the atomicity, we need to use an extra mutex in SharedBlockSchemas to protect the whole process.
+
     // we use sha256 to generate Digest for each ColumnFileSchema as the key of column_file_schemas,
     // to minimize the possibility of two different schemas having the same key in column_file_schemas.
-    // Besides, we use weak_ptr to ensure we can remove the ColumnFileSchema,
-    // when no one use it, to avoid too much memory usage.
-    std::unordered_map<Digest, std::weak_ptr<ColumnFileSchema>> column_file_schemas;
+
+    // Besides, we use weak_ptr to avoid extra memory usage when the ColumnFileSchema is not used by ColumnFiles.
+    // We can use weak_ptr to observe when the item is evicted by LRU, whether it still be used by ColumnFiles,
+    // to know whether the max_size is enough.
+
+    struct Holder;
+    using ColumnFileSchemaMap = std::unordered_map<Digest, Holder>;
+    using LRUQueue = std::list<Digest>;
+    using LRUQueueItr = typename LRUQueue::iterator;
+
+    struct Holder
+    {
+        std::weak_ptr<ColumnFileSchema> column_file_schema;
+        LRUQueueItr queue_it;
+    };
+
+private:
+    ColumnFileSchemaMap column_file_schemas;
+    LRUQueue lru_queue;
+
+    const size_t max_size;
     std::mutex mutex;
-    BackgroundProcessingPool::TaskHandle handle;
-    BackgroundProcessingPool & background_pool;
+
+private:
+    void removeOverflow();
 
 public:
-    explicit SharedBlockSchemas(DB::Context & context);
-    ~SharedBlockSchemas();
-
+    explicit SharedBlockSchemas(size_t max_size_)
+        : max_size(max_size_)
+    {}
     ColumnFileSchemaPtr find(const Digest & digest);
 
     ColumnFileSchemaPtr getOrCreate(const Block & block);
