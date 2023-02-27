@@ -71,7 +71,7 @@ public:
 
         /// only can be invoked by one thread at same time.
         const bool multi;
-        std::atomic_bool occupied{false};
+        size_t concurrent_executors = 0;
 
         const uint64_t interval_milliseconds;
 

@@ -19,6 +19,9 @@
 #include <Common/setThreadName.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
+#include <Poco/DateTime.h>
+#include <Poco/DateTimeFormat.h>
+#include <Poco/DateTimeFormatter.h>
 #include <Poco/Timespan.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
@@ -177,12 +180,17 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
 
                 if (!tasks.empty())
                 {
-                    for (const auto & time_handle : tasks)
+                    for (const auto & [task_time, task_handle] : tasks)
                     {
-                        if (!time_handle.second->removed)
+                        // find the first coming task that no thread is running
+                        // or can be run by multithreads
+                        if (!task_handle->removed
+                            && (task_handle->concurrent_executors == 0 || task_handle->multi))
                         {
-                            min_time = time_handle.first;
-                            task = time_handle.second;
+                            min_time = task_time;
+                            task = task_handle;
+                            // indicate this task is running by one more thread
+                            task->concurrent_executors += 1;
                             break;
                         }
                     }
@@ -201,6 +209,11 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
                 continue;
             }
 
+            Poco::DateTime dt(min_time);
+            LOG_INFO(Logger::get(),
+                     "pop task with min_time={}",
+                     Poco::DateTimeFormatter::format(dt, Poco::DateTimeFormat::SORTABLE_FORMAT));
+
             /// No tasks ready for execution.
             Poco::Timestamp current_time;
             if (min_time > current_time)
@@ -217,21 +230,7 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
                 continue;
 
             {
-                bool done_work = false;
-                if (!task->multi)
-                {
-                    bool expected = false;
-                    if (task->occupied == expected && task->occupied.compare_exchange_strong(expected, true))
-                    {
-                        done_work = task->function();
-                        task->occupied = false;
-                    }
-                    else
-                        done_work = false;
-                }
-                else
-                    done_work = task->function();
-
+                bool done_work = task->function();
                 /// If task has done work, it could be executed again immediately.
                 /// If not, add delay before next run.
                 if (done_work)
@@ -244,16 +243,11 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
                     next_sleep_time_span = Poco::Timespan(0, /*microseconds=*/task->interval_milliseconds * 1000);
                 }
                 // else `sleep_seconds` by default
+                LOG_INFO(Logger::get(), "done_work={} next span s={} ms={}", done_work, next_sleep_time_span.seconds(), next_sleep_time_span.milliseconds());
             }
         }
         catch (...)
         {
-            if (task && !task->multi)
-            {
-                std::unique_lock<std::shared_mutex> wlock(task->rwlock);
-                task->occupied = false;
-            }
-
             tryLogCurrentException(__PRETTY_FUNCTION__);
         }
 
@@ -264,8 +258,17 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
         /// If not, add delay before next run.
         Poco::Timestamp next_time_to_execute = Poco::Timestamp() + next_sleep_time_span;
 
+        Poco::DateTime dt(next_time_to_execute);
+        LOG_INFO(Logger::get(),
+                 "next_span s={} ms={} next_exec={}",
+                 next_sleep_time_span.seconds(),
+                 next_sleep_time_span.milliseconds(),
+                 Poco::DateTimeFormatter::format(dt, Poco::DateTimeFormat::SORTABLE_FORMAT));
+
         {
             std::unique_lock lock(tasks_mutex);
+
+            task->concurrent_executors -= 1;
 
             if (task->removed)
                 continue;
