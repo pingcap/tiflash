@@ -27,6 +27,7 @@
 #include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
+#include <common/StringRef.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>

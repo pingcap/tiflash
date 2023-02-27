@@ -60,7 +60,7 @@ struct StringRef
         : data(s.data())
         , size(s.size())
     {}
-    constexpr explicit StringRef(std::string_view s)
+    constexpr StringRef(std::string_view s) // NOLINT(google-explicit-constructor)
         : data(s.data())
         , size(s.size())
     {}

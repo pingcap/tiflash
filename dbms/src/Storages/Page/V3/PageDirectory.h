@@ -123,15 +123,6 @@ struct EntryOrDelete
 
     bool isDelete() const { return is_delete; }
     bool isEntry() const { return !is_delete; }
-
-    String toDebugString() const
-    {
-        return fmt::format(
-            "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
-            is_delete,
-            ::DB::PS::V3::toDebugString(entry),
-            being_ref_count);
-    }
 };
 
 using PageLock = std::lock_guard<std::mutex>;
@@ -345,6 +336,11 @@ public:
 
     PageIdSet getAllPageIdsWithPrefix(const String & prefix, const DB::PageStorageSnapshotPtr & snap_);
 
+    // end is infinite if empty
+    PageIdSet getAllPageIdsInRange(const PageId & start, const PageId & end, const DB::PageStorageSnapshotPtr & snap_);
+
+    std::optional<PageId> getLowerBound(const PageId & start, const DB::PageStorageSnapshotPtr & snap_);
+
     void apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
 
     std::pair<GcEntriesMap, PageSize>
@@ -477,3 +473,24 @@ using VersionedPageEntries = DB::PS::V3::VersionedPageEntries<PageDirectoryTrait
 using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 } // namespace universal
 } // namespace DB::PS::V3
+
+
+template <>
+struct fmt::formatter<DB::PS::V3::EntryOrDelete>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::EntryOrDelete & entry, FormatContext & ctx) const
+    {
+        return format_to(
+            ctx.out(),
+            "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
+            entry.is_delete,
+            entry.entry,
+            entry.being_ref_count);
+    }
+};

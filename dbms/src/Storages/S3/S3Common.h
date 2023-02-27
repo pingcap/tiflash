@@ -25,6 +25,26 @@
 namespace DB::S3
 {
 
+class TiFlashS3Client : public Aws::S3::S3Client
+{
+public:
+    // Usually one tiflash instance only need access one bucket.
+    // Store the bucket name to simpilfy some param passing.
+
+    TiFlashS3Client(
+        const String & bucket_name_,
+        const Aws::Auth::AWSCredentials & credentials,
+        const Aws::Client::ClientConfiguration & clientConfiguration,
+        Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy signPayloads,
+        bool useVirtualAddressing);
+
+    const String & bucket() { return bucket_name; }
+
+private:
+    const String bucket_name;
+};
+
+
 class ClientFactory
 {
 public:
@@ -34,23 +54,23 @@ public:
 
     void init(const StorageS3Config & config_);
     void shutdown();
-    std::unique_ptr<Aws::S3::S3Client> create() const;
 
-    static std::unique_ptr<Aws::S3::S3Client> create(
-        const String & endpoint,
-        Aws::Http::Scheme scheme,
-        bool verifySSL,
-        const String & access_key_id,
-        const String & secret_access_key);
+    const String & bucket() const;
+    std::shared_ptr<Aws::S3::S3Client> sharedClient() const;
 
-    static Aws::Http::Scheme parseScheme(std::string_view endpoint);
+    std::unique_ptr<TiFlashS3Client> createWithBucket() const;
 
 private:
     ClientFactory() = default;
     DISALLOW_COPY_AND_MOVE(ClientFactory);
+    std::unique_ptr<Aws::S3::S3Client> create() const;
+
+    static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & config_);
+    static Aws::Http::Scheme parseScheme(std::string_view endpoint);
 
     Aws::SDKOptions aws_options;
     StorageS3Config config;
+    std::shared_ptr<Aws::S3::S3Client> shared_client;
 };
 
 struct ObjectInfo
@@ -71,7 +91,37 @@ bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const
 
 void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
 
+void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, const String & key);
+
 void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
 
-std::unordered_map<String, size_t> listPrefix(const Aws::S3::S3Client & client, const String & bucket, const String & prefix);
+struct PageResult
+{
+    size_t num_keys;
+    // true - continue to call next `LIST` when available
+    // false - stop `LIST`
+    bool more;
+};
+void listPrefix(
+    const Aws::S3::S3Client & client,
+    const String & bucket,
+    const String & prefix,
+    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
+void listPrefix(
+    const Aws::S3::S3Client & client,
+    const String & bucket,
+    const String & prefix,
+    std::string_view delimiter,
+    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
+
+std::unordered_map<String, size_t> listPrefixWithSize(const Aws::S3::S3Client & client, const String & bucket, const String & prefix);
+
+
+std::pair<bool, Aws::Utils::DateTime> tryGetObjectModifiedTime(
+    const Aws::S3::S3Client & client,
+    const String & bucket,
+    const String & key);
+
+void deleteObject(const Aws::S3::S3Client & client, const String & bucket, const String & key);
+
 } // namespace DB::S3

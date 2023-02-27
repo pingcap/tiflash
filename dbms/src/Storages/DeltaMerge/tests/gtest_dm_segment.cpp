@@ -20,9 +20,10 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -1515,9 +1516,12 @@ try
         const auto & dmfile = dmfiles[0];
         auto file_path = dmfile->path();
         // check property file exists and then delete it
-        ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
-        Poco::File(file_path + "/property").remove();
-        ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
+        if (!dmfile->useMetaV2())
+        {
+            ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
+            Poco::File(file_path + "/property").remove();
+            ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
+        }
         // clear PackProperties to force it to calculate from scratch
         dmfile->getPackProperties().clear_property();
         ASSERT_EQ(dmfile->getPackProperties().property_size(), 0);
