@@ -32,7 +32,7 @@ add_library(server_for_test
 )
 
 target_link_libraries (server_for_test PUBLIC tiflash_common_io tiflash_storages_system)
-target_include_directories(server_for_test PRIVATE ${TiFlash_SOURCE_DIR}/contrib/grpc/)
+target_include_directories (server_for_test PRIVATE ${TiFlash_SOURCE_DIR}/contrib/grpc/)
 
 add_library (tiflash-server-lib
     HTTPHandler.cpp
