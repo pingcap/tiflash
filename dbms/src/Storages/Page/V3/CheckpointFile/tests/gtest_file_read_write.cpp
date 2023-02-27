@@ -585,4 +585,50 @@ try
 }
 CATCH
 
+TEST_F(CheckpointFileTest, LotsOfEdits)
+try
+{
+    auto writer = CPFilesWriter::create({
+        .data_file_path = dir + "/data_1",
+        .data_file_id = "this-is-simply-a-very-long-data-file-id-7b768082-db43-4e65-a0fb-d34645200298",
+        .manifest_file_path = dir + "/manifest_1",
+        .manifest_file_id = "manifest_1",
+        .data_source = CPWriteDataSourceFixture::create({{10, "nahida opened her eyes"}}),
+    });
+
+    writer->writePrefix({
+        .writer = {},
+        .sequence = 5,
+        .last_sequence = 3,
+    });
+    {
+        auto edits = universal::PageEntriesEdit{};
+        for (size_t i = 0; i < 10000; ++i)
+            edits.appendRecord({
+                .type = EditRecordType::VAR_ENTRY,
+                .page_id = fmt::format("record_{}", i),
+                .entry = {.offset = 10},
+            });
+        writer->writeEditsAndApplyRemoteInfo(edits);
+    }
+    writer->writeSuffix();
+    writer.reset();
+
+    auto manifest_reader = CPManifestFileReader::create({
+        .file_path = dir + "/manifest_1",
+    });
+    manifest_reader->readPrefix();
+    CheckpointProto::StringsInternMap im;
+    {
+        auto edits_r = manifest_reader->readEdits(im);
+        auto r = edits_r->getRecords();
+        ASSERT_EQ(10000, r.size());
+    }
+    {
+        auto edits_r = manifest_reader->readEdits(im);
+        ASSERT_FALSE(edits_r.has_value());
+    }
+}
+CATCH
+
 } // namespace DB::PS::V3::tests
