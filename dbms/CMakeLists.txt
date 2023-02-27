@@ -76,6 +76,7 @@ add_headers_and_sources(dbms src/Storages/S3)
 add_headers_and_sources(dbms src/Storages/Transaction)
 add_headers_and_sources(dbms src/WindowFunctions)
 add_headers_and_sources(dbms src/TiDB/Schema)
+add_headers_and_sources(dbms src/TiDB/Etcd)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Flash/Coprocessor)
@@ -192,6 +193,7 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
+    etcdpb
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
