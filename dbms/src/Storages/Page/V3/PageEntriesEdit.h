@@ -23,6 +23,8 @@
 #include <common/types.h>
 #include <fmt/format.h>
 
+#include <magic_enum.hpp>
+
 namespace DB::PS::V3
 {
 
@@ -130,7 +132,7 @@ inline CheckpointProto::EditType typeToProto(EditRecordType t)
     case EditRecordType::VAR_DELETE:
         return CheckpointProto::EDIT_TYPE_DELETE;
     default:
-        return CheckpointProto::EDIT_TYPE_UNSPECIFIED;
+        RUNTIME_CHECK_MSG(false, "Unsupported Edit Type {}", magic_enum::enum_name(t));
     }
 }
 
@@ -147,7 +149,7 @@ inline EditRecordType typeFromProto(CheckpointProto::EditType t)
     case CheckpointProto::EDIT_TYPE_DELETE:
         return EditRecordType::VAR_DELETE;
     default:
-        RUNTIME_CHECK(false, EditType_Name(t));
+        RUNTIME_CHECK_MSG(false, "Unsupported Proto Edit Type {}", magic_enum::enum_name(t));
     }
 }
 

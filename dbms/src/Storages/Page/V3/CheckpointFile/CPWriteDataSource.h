@@ -32,6 +32,11 @@ public:
 
 using CPWriteDataSourcePtr = std::shared_ptr<CPWriteDataSource>;
 
+/**
+ * The source of the data comes from a specified BlobStore when writing checkpoint data files.
+ *
+ * You need to ensure the BlobStore reference is alive during the lifetime of this data source.
+ */
 class CPWriteDataSourceBlobStore : public CPWriteDataSource
 {
 public:
@@ -42,17 +47,20 @@ public:
         : blob_store(blob_store_)
     {}
 
-    Page read(const BlobStore<universal::BlobStoreTrait>::PageIdAndEntry & page_id_and_entry) override
+    static CPWriteDataSourcePtr create(BlobStore<universal::BlobStoreTrait> & blob_store_)
     {
-        return blob_store.read(page_id_and_entry);
+        return std::make_shared<CPWriteDataSourceBlobStore>(blob_store_);
     }
+
+    Page read(const BlobStore<universal::BlobStoreTrait>::PageIdAndEntry & page_id_and_entry) override;
 
 private:
     BlobStore<universal::BlobStoreTrait> & blob_store;
 };
 
 /**
- * Should be only useful in tests.
+ * Should be only useful in tests. You need to specify the data that can be read out when passing different
+ * BlobStore offset fields.
  */
 class CPWriteDataSourceFixture : public CPWriteDataSource
 {
@@ -67,19 +75,7 @@ public:
         return std::make_shared<CPWriteDataSourceFixture>(data_);
     }
 
-    Page read(const BlobStore<universal::BlobStoreTrait>::PageIdAndEntry & id_and_entry) override
-    {
-        auto it = data.find(id_and_entry.second.offset);
-        if (it == data.end())
-            return Page::invalidPage();
-
-        auto & value = it->second;
-
-        Page page(1);
-        page.mem_holder = nullptr;
-        page.data = ByteBuffer(value.data(), value.data() + value.size());
-        return page;
-    }
+    Page read(const BlobStore<universal::BlobStoreTrait>::PageIdAndEntry & id_and_entry) override;
 
 private:
     std::unordered_map<size_t /* offset */, std::string> data;
