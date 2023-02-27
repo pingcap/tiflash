@@ -18,7 +18,12 @@ package DB.PS.V3.CheckpointProto;
 
 import "common.proto";
 
-// This prefix is only for debugging purpose.
+/**
+ This prefix is only for debugging purpose. When reading the data
+ file, we will just seek to the specified offset and read desired data.
+
+ The content of this prefix is useful when we want to observe and parse this data file.
+ */
 message DataFilePrefix {
     uint64 file_format = 1;
 
@@ -37,7 +42,12 @@ message DataFilePrefix {
     WriterInfo writer_info = 22;
 }
 
-// This suffix is only for debugging purpose.
+/**
+ This suffix is only for debugging purpose. When reading the data
+ file, we will just seek to the specified offset and read desired data.
+
+ The content of this suffix is useful when we want to observe and parse this data file.
+ */
 message DataFileSuffix {
     // Records contained in this data file.
     repeated EntryEditRecord records = 1;
