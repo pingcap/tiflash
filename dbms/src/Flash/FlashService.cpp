@@ -33,6 +33,7 @@
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/support/status_code_enum.h>
@@ -75,7 +76,9 @@ void FlashService::init(Context & context_)
         context->getGlobalContext(),
         context->getGlobalContext().getSettingsRef());
 
-    s3_lock_service = std::make_unique<S3::S3LockService>(*context);
+    // Only when the s3 storage is enabled on write node, provide the lock service interfaces
+    if (!context->isDisaggregatedComputeMode() && S3::ClientFactory::instance().isEnabled())
+        s3_lock_service = std::make_unique<S3::S3LockService>(*context);
 
     auto settings = context->getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
@@ -554,6 +557,15 @@ grpc::Status FlashService::Compact(grpc::ServerContext * grpc_context, const kvr
 
 grpc::Status FlashService::tryAddLock(grpc::ServerContext * grpc_context, const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response)
 {
+    if (!s3_lock_service)
+    {
+        return grpc::Status(::grpc::StatusCode::INTERNAL,
+                            fmt::format(
+                                "can not handle tryAddLock, s3enabled={} compute_node={}",
+                                S3::ClientFactory::instance().isEnabled(),
+                                context->isDisaggregatedComputeMode()));
+    }
+
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -564,6 +576,15 @@ grpc::Status FlashService::tryAddLock(grpc::ServerContext * grpc_context, const 
 
 grpc::Status FlashService::tryMarkDelete(grpc::ServerContext * grpc_context, const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response)
 {
+    if (!s3_lock_service)
+    {
+        return grpc::Status(::grpc::StatusCode::INTERNAL,
+                            fmt::format(
+                                "can not handle tryMarkDelete, s3enabled={} compute_node={}",
+                                S3::ClientFactory::instance().isEnabled(),
+                                context->isDisaggregatedComputeMode()));
+    }
+
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())

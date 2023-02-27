@@ -92,10 +92,11 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {
-    if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled())
+    if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled() && !context.isDisaggregatedComputeMode())
     {
         etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
         s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.flash_server_addr, etcd_client);
+        s3gc_owner->campaignOwner(); // start campaign
         s3_lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
     }
 }
