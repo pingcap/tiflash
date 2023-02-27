@@ -128,6 +128,8 @@ set (ENABLE_TESTS ${_save})
 # -------
 add_subdirectory (tipb/cpp)
 
+add_subdirectory (etcd)
+
 if (USE_INTERNAL_TIFLASH_PROXY)
     add_subdirectory (tiflash-proxy-cmake)
 endif ()

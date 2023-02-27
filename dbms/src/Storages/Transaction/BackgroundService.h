@@ -37,6 +37,8 @@ class BackgroundService : boost::noncopyable
 public:
     explicit BackgroundService(TMTContext &);
 
+    void shutdown();
+
     ~BackgroundService();
 
 private:
