@@ -101,9 +101,11 @@ ColumnFileSchemaPtr SharedBlockSchemas::getOrCreate(const Block & block)
             // if the weak_ptr.lock() only get nullptr, that means the schema is not used by any ColumnFiles
             // So we need update the item
             GET_METRIC(tiflash_shared_block_schemas, type_miss_count).Increment();
-            // We don't use make_shared here, because make_shared will allocate the memory of *ptr and control block together.
-            // Thus, the memory occupied by ColumnFileSchema will persists until all weak_ptr owners get destroyed as well.
-            // https://lanzkron.wordpress.com/2012/04/22/make_shared-almost-a-silver-bullet/
+            // To ensure that the memory of ColumnFileSchema is released as soon as possible, we allocate memory using new
+            // and then assign it to a shared_ptr. With make_shared, the tracked object (ColumnFileSchema) and the reference counting
+            // are allocated on the same memory page. However, the memory of the tracked object can only be released after
+            // all weak_ptrs are removed. This is not the case with an LRUCache.
+            // For more information, see https://lanzkron.wordpress.com/2012/04/22/make_shared-almost-a-silver-bullet/.
             std::shared_ptr<ColumnFileSchema> new_schema(new ColumnFileSchema(block));
             iter->second.column_file_schema = new_schema;
             lru_queue.splice(lru_queue.end(), lru_queue, iter->second.queue_it);
