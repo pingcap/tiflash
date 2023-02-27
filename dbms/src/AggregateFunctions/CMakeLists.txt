@@ -34,5 +34,4 @@ list(REMOVE_ITEM tiflash_aggregate_functions_headers
 )
 
 add_library(tiflash_aggregate_functions ${tiflash_aggregate_functions_sources} AggregateFunctionGroupConcat.h)
-target_link_libraries(tiflash_aggregate_functions dbms)
-target_include_directories (tiflash_aggregate_functions BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
+target_link_libraries(tiflash_aggregate_functions PRIVATE dbms)
