@@ -83,6 +83,8 @@ public:
 
     bool runOnAllStores();
 
+    void shutdown() { shutdown_called = true; }
+
     // private:
     void runForStore(UInt64 gc_store_id);
 
@@ -122,6 +124,8 @@ private:
 
     const S3LockClientPtr lock_client;
 
+    std::atomic<bool> shutdown_called;
+
     S3GCConfig config;
 
     LoggerPtr log;
@@ -137,6 +141,8 @@ public:
         const S3GCConfig & config);
 
     ~S3GCManagerService();
+
+    void shutdown();
 
 private:
     Context & global_ctx;

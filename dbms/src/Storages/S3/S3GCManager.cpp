@@ -54,6 +54,7 @@ S3GCManager::S3GCManager(
     : pd_client(std::move(pd_client_))
     , client(std::move(client_))
     , lock_client(std::move(lock_client_))
+    , shutdown_called(false)
     , config(config_)
     , log(Logger::get())
 {
@@ -74,12 +75,26 @@ getStoresFromPD(const pingcap::pd::ClientPtr & pd_client)
 
 bool S3GCManager::runOnAllStores()
 {
+    // Only the GC Manager node run the GC logic
+    // TODO: keep a pointer of OwnerManager and check it here
+    bool is_gc_owner = true;
+    if (!is_gc_owner)
+    {
+        return false;
+    }
+
     const std::vector<UInt64> all_store_ids = getAllStoreIds();
     LOG_TRACE(log, "all_store_ids: {}", all_store_ids);
-    // TODO: Get all store status from pd after getting the store ids from S3.
+    // Get all store status from pd after getting the store ids from S3.
     const auto stores_from_pd = getStoresFromPD(pd_client);
     for (const auto gc_store_id : all_store_ids)
     {
+        if (shutdown_called)
+        {
+            LOG_INFO(log, "shutting down, break");
+            break;
+        }
+
         std::optional<metapb::StoreState> s = std::nullopt;
         if (auto iter = stores_from_pd.find(gc_store_id); iter != stores_from_pd.end())
         {
@@ -165,6 +180,13 @@ void S3GCManager::cleanUnusedLocks(
     // All locks (even for different stores) share the same prefix, list the lock files under this prefix
     listPrefix(*client, client->bucket(), scan_prefix, [&](const Aws::S3::Model::ListObjectsV2Result & result) {
         const auto & objects = result.GetContents();
+        if (shutdown_called)
+        {
+            LOG_INFO(log, "shutting down, break");
+            // .more=false to break the list
+            return PageResult{.num_keys = objects.size(), .more = false};
+        }
+
         for (const auto & object : objects)
         {
             const auto & lock_key = object.GetKey();
@@ -291,6 +313,13 @@ void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils:
     const auto prefix = S3Filename::fromStoreId(gc_store_id).toDataPrefix();
     listPrefix(*client, client->bucket(), prefix, [&](const Aws::S3::Model::ListObjectsV2Result & result) {
         const auto & objects = result.GetContents();
+        if (shutdown_called)
+        {
+            LOG_INFO(log, "shutting down, break");
+            // .more=false to break the list
+            return PageResult{.num_keys = objects.size(), .more = false};
+        }
+
         for (const auto & object : objects)
         {
             const auto & delmark_key = object.GetKey();
@@ -403,6 +432,8 @@ String S3GCManager::getTemporaryDownloadFile(String s3_key)
     return fmt::format("{}/{}_{}", config.temp_path, s3_key, std::hash<std::thread::id>()(std::this_thread::get_id()));
 }
 
+/// Service ///
+
 S3GCManagerService::S3GCManagerService(
     Context & context,
     pingcap::pd::ClientPtr pd_client,
@@ -423,6 +454,12 @@ S3GCManagerService::S3GCManagerService(
 
 S3GCManagerService::~S3GCManagerService()
 {
+    shutdown();
+}
+
+void S3GCManagerService::shutdown()
+{
+    manager->shutdown();
     if (timer)
     {
         global_ctx.getBackgroundPool().removeTask(timer);
