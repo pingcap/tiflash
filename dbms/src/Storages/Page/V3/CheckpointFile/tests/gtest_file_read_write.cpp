@@ -517,4 +517,72 @@ try
 }
 CATCH
 
+TEST_F(CheckpointFileTest, PreDefinedLocks)
+try
+{
+    auto writer = CPFilesWriter::create({
+        .data_file_path = dir + "/data_1",
+        .data_file_id = "data_1",
+        .manifest_file_path = dir + "/manifest_foo",
+        .manifest_file_id = "manifest_foo",
+        .data_source = CPWriteDataSourceFixture::create({{10, "nahida opened her eyes"}}),
+        .must_locked_files = {"f1", "fx"},
+    });
+
+    writer->writePrefix({
+        .writer = {},
+        .sequence = 5,
+        .last_sequence = 3,
+    });
+    {
+        auto edits = universal::PageEntriesEdit{};
+        edits.appendRecord({
+            .type = EditRecordType::VAR_ENTRY,
+            .page_id = "abc",
+            .entry = {
+                .offset = 5,
+                .checkpoint_info = CheckpointInfo{
+                    .data_location = {
+                        .data_file_id = std::make_shared<String>("my_file_id"),
+                    },
+                    .is_local_data_reclaimed = false,
+                },
+            },
+        });
+        edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.offset = 10}});
+        writer->writeEditsAndApplyRemoteInfo(edits);
+    }
+    writer->writeSuffix();
+    writer.reset();
+
+    auto manifest_reader = CPManifestFileReader::create({
+        .file_path = dir + "/manifest_foo",
+    });
+    manifest_reader->readPrefix();
+    CheckpointProto::StringsInternMap im;
+    {
+        auto edits_r = manifest_reader->readEdits(im);
+        auto r = edits_r->getRecords();
+        ASSERT_EQ(2, r.size());
+    }
+    {
+        auto edits_r = manifest_reader->readEdits(im);
+        ASSERT_FALSE(edits_r.has_value());
+    }
+    {
+        auto locks = manifest_reader->readLocks();
+        ASSERT_TRUE(locks.has_value());
+        ASSERT_EQ(4, locks->size());
+        ASSERT_EQ(1, locks->count("f1"));
+        ASSERT_EQ(1, locks->count("fx"));
+        ASSERT_EQ(1, locks->count("my_file_id"));
+        ASSERT_EQ(1, locks->count("data_1"));
+    }
+    {
+        auto locks = manifest_reader->readLocks();
+        ASSERT_FALSE(locks.has_value());
+    }
+}
+CATCH
+
 } // namespace DB::PS::V3::tests

@@ -44,6 +44,7 @@ CheckpointLocation CPDataFileWriter::write(UniversalPageId page_id, PageVersion 
     uint64_t file_offset = file_writer->count();
     file_writer->write(data, n);
     uint64_t write_n = file_writer->count() - file_offset;
+    RUNTIME_CHECK(write_n == n, write_n, n); // Note: When we add compression later, write_n == n may be false.
 
     auto * suffix_record = file_suffix.add_records();
     suffix_record->set_page_id(page_id.asStr());
