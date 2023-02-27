@@ -278,7 +278,7 @@ namespace DB
         F(type_mpp, {{"type", "mpp"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
         F(type_cop, {{"type", "cop"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
         F(type_batch, {{"type", "batch"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()})) \
-    M(tiflash_shared_block_schemas, "statistics about shared_block_schemas", Gauge,                                                                 \
+    M(tiflash_shared_block_schemas, "statistics about shared block schemas of ColumnFiles", Gauge,                                                                 \
         F(type_current_size, {{"type", "current_size"}}),                                                                                           \
         F(type_still_used_when_evict, {{"type", "still_used_when_evict"}}),                                                                    \
         F(type_miss_count, {{"type", "miss_count"}}),                                                                                          \

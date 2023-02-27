@@ -1211,7 +1211,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     DM::SegmentReaderPoolManager::instance().init(server_info);
     DM::SegmentReadTaskScheduler::instance();
 
-    global_context->initializeSharedBlockSchemas(settings.shared_block_schemas_size);
+    auto schema_cache_size = config().getInt("schema_cache_size", 10000);
+    global_context->initializeSharedBlockSchemas(schema_cache_size);
 
     // Load remaining databases
     loadMetadata(*global_context);

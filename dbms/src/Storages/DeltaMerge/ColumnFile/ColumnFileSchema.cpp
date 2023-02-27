@@ -107,7 +107,7 @@ ColumnFileSchemaPtr SharedBlockSchemas::getOrCreate(const Block & block)
             // if the weak_ptr.lock() only get nullptr, that means the schema is not used by any ColumnFiles
             // So we need update the item
             GET_METRIC(tiflash_shared_block_schemas, type_miss_count).Increment();
-            auto new_schema = std::make_shared<ColumnFileSchema>(block);
+            std::shared_ptr<ColumnFileSchema> new_schema(new ColumnFileSchema(block));
             iter->second.column_file_schema = new_schema;
             lru_queue.splice(lru_queue.end(), lru_queue, iter->second.queue_it);
             return new_schema;
@@ -115,7 +115,7 @@ ColumnFileSchemaPtr SharedBlockSchemas::getOrCreate(const Block & block)
     }
 
     GET_METRIC(tiflash_shared_block_schemas, type_miss_count).Increment();
-    auto schema = std::make_shared<ColumnFileSchema>(block);
+    std::shared_ptr<ColumnFileSchema> schema(new ColumnFileSchema(block));
     auto pair = column_file_schemas.emplace(std::piecewise_construct, std::forward_as_tuple(digest), std::forward_as_tuple());
     auto & holder = pair.first->second;
     holder.queue_it = lru_queue.insert(lru_queue.end(), digest);
