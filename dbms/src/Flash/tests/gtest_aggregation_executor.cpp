@@ -626,7 +626,7 @@ try
     request = context.scan("test_db", "empty_table")
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
-    executeAndAssertColumnsEqual(request, {toNullableVec<UInt64>({0})});
+    executeAndAssertColumnsEqual(request, {toVec<UInt64>({0})});
 }
 CATCH
 
