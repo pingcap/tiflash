@@ -275,6 +275,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     const Settings & settings = context.getSettingsRef();
     size_t max_block_size_for_cross_join = settings.max_block_size;
+    SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_build", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
+    SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_probe", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
 
     JoinPtr join_ptr = std::make_shared<Join>(
@@ -285,6 +287,10 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         log->identifier(),
         enableFineGrainedShuffle(fine_grained_shuffle_count),
         fine_grained_shuffle_count,
+        settings.max_join_bytes,
+        build_spill_config,
+        probe_spill_config,
+        settings.join_restore_concurrency,
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,
@@ -321,7 +327,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
-    join_ptr->init(right_query.source->getHeader(), join_build_concurrency);
+    join_ptr->initBuild(right_query.source->getHeader(),
+                        join_build_concurrency);
 
     /// probe side streams
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
@@ -332,7 +339,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     pipeline.streams = probe_pipeline.streams;
     /// add join input stream
     size_t probe_index = 0;
-    join_ptr->setProbeConcurrency(pipeline.streams.size());
+    join_ptr->initProbe(pipeline.firstStream()->getHeader(), pipeline.streams.size());
     for (auto & stream : pipeline.streams)
     {
         stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, probe_index++, log->identifier(), settings.max_block_size);

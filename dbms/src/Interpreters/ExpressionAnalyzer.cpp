@@ -2175,6 +2175,8 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
 
     if (!subquery_for_set.join)
     {
+        SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("hash_join_0_build"), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
+        SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("hash_join_0_probe"), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
         JoinPtr join = std::make_shared<Join>(
             join_key_names_left,
             join_key_names_right,
@@ -2182,7 +2184,11 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
             join_params.strictness,
             "" /*req_id=*/,
             false /*enable_fine_grained_shuffle_*/,
-            0 /*fine_grained_shuffle_count_*/);
+            0 /*fine_grained_shuffle_count_*/,
+            settings.max_join_bytes,
+            build_spill_config,
+            probe_spill_config,
+            settings.join_restore_concurrency);
 
         Names required_joined_columns(join_key_names_right.begin(), join_key_names_right.end());
         for (const auto & name_type : columns_added_by_join)
@@ -2209,7 +2215,7 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
 
         /// TODO You do not need to set this up when JOIN is only needed on remote servers.
         subquery_for_set.join = join;
-        subquery_for_set.join->init(subquery_for_set.source->getHeader());
+        subquery_for_set.join->initBuild(subquery_for_set.source->getHeader());
     }
 
     addJoinAction(step.actions, false);

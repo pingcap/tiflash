@@ -77,7 +77,10 @@ public:
     void executeInterpreterWithDeltaMerge(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
 
     ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency = 1);
-    void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
+    void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request,
+                                      const ColumnsWithTypeAndName & expect_columns,
+                                      std::vector<size_t> concurrencies = {1, 2, 10},
+                                      std::vector<size_t> block_sizes = {1, 2, DEFAULT_BLOCK_SIZE});
 
     // To check the output column with index = column_index sorted.
     struct SortInfo
@@ -128,7 +131,9 @@ public:
 private:
     void executeExecutor(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func);
+        std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func,
+        std::vector<size_t> concurrencies = {1, 2, 10},
+        std::vector<size_t> block_sizes = {1, 2, DEFAULT_BLOCK_SIZE});
 
     void checkBlockSorted(
         const std::shared_ptr<tipb::DAGRequest> & request,

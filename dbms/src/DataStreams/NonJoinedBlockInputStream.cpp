@@ -133,8 +133,22 @@ Block NonJoinedBlockInputStream::readImpl()
     /// just return empty block for extra non joined block input stream read
     if (unlikely(index >= parent.getBuildConcurrency()))
         return Block();
-    if (parent.blocks.empty())
-        return Block();
+    if (!parent.isEnableSpill())
+    {
+        if (parent.blocks.empty())
+            return Block();
+    }
+    else
+    {
+        if (std::all_of(
+                std::begin(parent.partitions),
+                std::end(parent.partitions),
+                [](const Join::JoinPartition & partition) { return partition.build_partition.blocks.empty(); }))
+        {
+            return Block();
+        }
+    }
+
 
     if (add_not_mapped_rows)
     {
@@ -243,33 +257,51 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
     if (!position)
     {
         current_segment = index;
+
+        while (parent.partitions[current_segment].spill)
+        {
+            current_segment += step;
+            if (current_segment >= map.getSegmentSize())
+            {
+                return rows_added;
+            }
+        }
+
         position = decltype(position)(
             static_cast<void *>(new typename Map::SegmentType::HashTable::const_iterator(map.getSegmentTable(current_segment).begin())),
             [](void * ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
     }
 
+    if (current_segment >= map.getSegmentSize())
+    {
+        return rows_added;
+    }
     /// use pointer instead of reference because `it` need to be re-assigned latter
     auto it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
     auto end = map.getSegmentTable(current_segment).end();
 
     for (; *it != end || current_segment + step < map.getSegmentSize();)
     {
-        if (*it == end)
+        if (*it == end || (parent.max_join_bytes && parent.partitions[current_segment].spill))
         {
-            // move to next internal hash table
-            do
+            current_segment += step;
+            while (parent.partitions[current_segment].spill)
             {
                 current_segment += step;
-                position = decltype(position)(
-                    static_cast<void *>(new typename Map::SegmentType::HashTable::const_iterator(
-                        map.getSegmentTable(current_segment).begin())),
-                    [](void * ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
-                it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
-                end = map.getSegmentTable(current_segment).end();
-            } while (*it == end && current_segment + step < map.getSegmentSize());
-            if (*it == end)
-                break;
+                if (current_segment >= map.getSegmentSize())
+                {
+                    return rows_added;
+                }
+            }
+            position = decltype(position)(
+                static_cast<void *>(new typename Map::SegmentType::HashTable::const_iterator(
+                    map.getSegmentTable(current_segment).begin())),
+                [](void * ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
+            it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
+            end = map.getSegmentTable(current_segment).end();
+            continue;
         }
+
         if ((*it)->getMapped().getUsed())
         {
             ++(*it);

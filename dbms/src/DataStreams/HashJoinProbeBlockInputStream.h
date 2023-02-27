@@ -40,7 +40,7 @@ public:
         const JoinPtr & join_,
         size_t probe_index,
         const String & req_id,
-        UInt64 max_block_size);
+        UInt64 max_block_size_);
 
     String getName() const override { return name; }
     Block getTotals() override;
@@ -50,27 +50,37 @@ public:
 protected:
     Block readImpl() override;
     Block getOutputBlock();
+    std::tuple<size_t, Block> getOneProbeBlock();
 
 private:
     enum class ProbeStatus
     {
         PROBE,
+        BUILD_RESTORE_PARTITION,
+        JUDGE_WEATHER_HAVE_PARTITION_TO_RESTORE,
         WAIT_FOR_READ_NON_JOINED_DATA,
         READ_NON_JOINED_DATA,
         FINISHED,
     };
+
     void readSuffixImpl() override;
     void finishOneProbe();
+    void finishOneNonJoin();
 
     const LoggerPtr log;
     JoinPtr join;
     size_t probe_index;
+    UInt64 max_block_size;
     ProbeProcessInfo probe_process_info;
     BlockInputStreamPtr non_joined_stream;
+    BlockInputStreamPtr restore_stream;
     ProbeStatus status{ProbeStatus::PROBE};
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;
+    std::list<JoinPtr> parents;
+    std::list<std::tuple<size_t, Block>> probe_partition_blocks;
     std::atomic<bool> probe_finished = false;
+    std::atomic<bool> non_join_finished = false;
 };
 
 } // namespace DB

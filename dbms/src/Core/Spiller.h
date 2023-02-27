@@ -134,4 +134,6 @@ private:
     bool enable_append_write = false;
 };
 
+using SpillerPtr = std::unique_ptr<Spiller>;
+
 } // namespace DB

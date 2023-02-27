@@ -211,8 +211,10 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
         }
         for (UInt64 i = 0; i < spill_file_read_stream_num; ++i)
         {
-            if (likely(!file_infos[i].empty()))
+            if (likely(i < file_infos.size() && !file_infos[i].empty()))
                 ret.push_back(std::make_shared<SpilledFilesInputStream>(std::move(file_infos[i]), input_schema, config.file_provider, spill_version));
+            else
+                ret.push_back(std::make_shared<NullBlockInputStream>(input_schema));
         }
     }
     for (size_t i = 0; i < spill_file_read_stream_num; ++i)

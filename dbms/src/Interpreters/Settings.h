@@ -294,17 +294,17 @@ struct Settings
     M(SettingUInt64, async_pollers_per_cq, 200, "grpc async pollers per cqs")                                                                                                                                                           \
     M(SettingUInt64, async_cqs, 1, "grpc async cqs")                                                                                                                                                                                    \
     M(SettingUInt64, preallocated_request_count_per_poller, 20, "grpc preallocated_request_count_per_poller")                                                                                                                           \
-                                                                                                                                                                                                                                        \
     M(SettingUInt64, manual_compact_pool_size, 1, "The number of worker threads to handle manual compact requests.")                                                                                                                    \
     M(SettingUInt64, manual_compact_max_concurrency, 10, "Max concurrent tasks. It should be larger than pool size.")                                                                                                                   \
     M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
-    M(SettingUInt64, max_cached_data_bytes_in_spiller, 1024ULL * 1024 * 100, "Max cached data bytes in spiller before spilling, 100MB as the default value, 0 means no limit")                                                              \
+    M(SettingUInt64, max_join_bytes, 0, "max bytes used by join")                                                                                                                                                                       \
+    M(SettingInt64, join_restore_concurrency, -1, "join restore concurrency, negative value means restore join serially, 0 means TiFlash choose restore concurrency automatically, -1 as the default value")                            \
+    M(SettingUInt64, max_cached_data_bytes_in_spiller, 1024ULL * 1024 * 100, "Max cached data bytes in spiller before spilling, 100MB as the default value, 0 means no limit")                                                          \
     M(SettingUInt64, max_spilled_rows_per_file, 200000, "Max spilled data rows per spill file, 200000 as the default value, 0 mean no limit.")                                                                                          \
-    M(SettingUInt64, max_spilled_bytes_per_file, 0, "Max spilled data bytes per spill file, 1GB as the default value, 0 means no limit.")                                                                                               \
-                                                                                                                                                                                                                                        \
+    M(SettingUInt64, max_spilled_bytes_per_file, 0, "Max spilled data bytes per spill file, 0 as the default value, 0 means no limit.")                                                                                                 \
     M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
     M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
-    M(SettingUInt64, pipeline_task_thread_pool_size, 0, "The size of task thread pool. 0 means using number_of_logical_cpu_cores.") \
+    M(SettingUInt64, pipeline_task_thread_pool_size, 0, "The size of task thread pool. 0 means using number_of_logical_cpu_cores.")                                                                                                     \
     M(SettingUInt64, local_tunnel_version, 1, "1: not refined, 2: refined")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};

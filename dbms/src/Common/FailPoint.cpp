@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <common/defines.h>

@@ -729,6 +729,28 @@ try
 }
 CATCH
 
+
+TEST_F(JoinExecutorTestRunner, SpillToDisk)
+try
+{
+    context.addMockTable("split_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toVec<Int32>("b", {2, 2, 2, 2, 2, 2, 2, 2, 2, 2})});
+    context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0})});
+
+    auto request = context
+                       .scan("split_test", "t1")
+                       .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                       .build(context);
+
+    const ColumnsWithTypeAndName expect = {toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0})};
+    context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(10000)));
+    ASSERT_THROW(executeAndAssertColumnsEqual(request, expect, {1}, {DEFAULT_BLOCK_SIZE}), Exception);
+    context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(50000)));
+    executeAndAssertColumnsEqual(request, expect, {2, 5}, {1, 2, 5, DEFAULT_BLOCK_SIZE});
+    context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(120000)));
+    executeAndAssertColumnsEqual(request, expect, {10}, {1, 2, 5, DEFAULT_BLOCK_SIZE});
+}
+CATCH
+
 TEST_F(JoinExecutorTestRunner, NonJoinedData)
 try
 {
@@ -791,8 +813,9 @@ try
     context.addExchangeReceiver("right_exchange_receiver_5_concurrency", right_column_infos, right_column_data, 5, right_partition_column_infos);
     context.addExchangeReceiver("right_exchange_receiver_10_concurrency", right_column_infos, right_column_data, 10, right_partition_column_infos);
     std::vector<String> left_table_names = {"left_table_1_concurrency", "left_table_3_concurrency", "left_table_5_concurrency", "left_table_10_concurrency"};
-    std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
+    std::vector<String> right_table_names = {"right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
     std::vector<size_t> right_exchange_receiver_concurrency = {1, 3, 5, 10};
+    UInt64 max_join_bytes = 23292240;
 
     /// case 1, right join without right condition
     auto request = context
@@ -815,6 +838,19 @@ try
                           .build(context);
             auto result_columns = executeStreams(request, original_max_streams);
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
+            // test spill to disk
+            context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(max_join_bytes)));
+            if (right_table_name == "right_table_1_concurrency" && left_table_name == "left_table_1_concurrency")
+            {
+                max_join_bytes = 100000;
+                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
+                max_join_bytes = 23292240;
+            }
+            else
+            {
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+            }
+            context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(0)));
         }
     }
     /// case 1.2 table scan join fine grained exchange receiver
@@ -828,6 +864,19 @@ try
                           .build(context);
             auto result_columns = executeStreams(request, original_max_streams);
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
+
+            // test spill to disk
+            if (exchange_concurrency == 1 && left_table_name == "left_table_1_concurrency")
+            {
+                context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(100000)));
+                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
+            }
+            else
+            {
+                context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(max_join_bytes)));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+            }
+            context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(0)));
         }
     }
     /// case 2, right join with right condition
@@ -850,6 +899,18 @@ try
                           .build(context);
             auto result_columns = executeStreams(request, original_max_streams);
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
+
+            // test spill to disk
+            context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(max_join_bytes)));
+            if (right_table_name == "right_table_1_concurrency" && left_table_name == "left_table_1_concurrency")
+            {
+                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
+            }
+            else
+            {
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+            }
+            context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(0)));
         }
     }
     /// case 2.2 table scan join fine grained exchange receiver
@@ -864,6 +925,19 @@ try
                           .build(context);
             auto result_columns = executeStreams(request, original_max_streams);
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
+
+            // test spill to disk
+            if (exchange_concurrency == 1 && left_table_name == "left_table_1_concurrency")
+            {
+                context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(100000)));
+                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
+            }
+            else
+            {
+                context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(max_join_bytes)));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+            }
+            context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(0)));
         }
     }
 }

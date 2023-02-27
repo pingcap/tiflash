@@ -20,6 +20,7 @@
 #include <Common/Arena.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/Logger.h>
+#include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
@@ -32,6 +33,51 @@
 namespace DB
 {
 struct ProbeProcessInfo;
+
+struct JoinMemoryInfo
+{
+    std::shared_ptr<std::atomic<size_t>> total_input_rows_ptr;
+    std::shared_ptr<std::atomic<size_t>> total_input_bytes_ptr;
+    JoinMemoryInfo()
+        : total_input_rows_ptr(std::make_shared<std::atomic<size_t>>(0))
+        , total_input_bytes_ptr(std::make_shared<std::atomic<size_t>>(0))
+    {}
+
+    JoinMemoryInfo(std::shared_ptr<std::atomic<size_t>> total_input_build_rows_ptr_, std::shared_ptr<std::atomic<size_t>> total_input_build_bytes_ptr_)
+        : total_input_rows_ptr(total_input_build_rows_ptr_)
+        , total_input_bytes_ptr(total_input_build_bytes_ptr_)
+    {}
+
+    void addRows(size_t row) const
+    {
+        (*total_input_rows_ptr) += row;
+    }
+
+    void addBytes(size_t bytes) const
+    {
+        (*total_input_bytes_ptr) += bytes;
+    }
+
+    void subRows(size_t row) const
+    {
+        (*total_input_rows_ptr) -= row;
+    }
+
+    void subBytes(size_t bytes) const
+    {
+        (*total_input_bytes_ptr) -= bytes;
+    }
+
+    size_t getTotalRows() const
+    {
+        return (*total_input_rows_ptr);
+    }
+
+    size_t getTotalBytes() const
+    {
+        return (*total_input_bytes_ptr);
+    }
+};
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -85,6 +131,9 @@ struct ProbeProcessInfo;
   * Always generate Nullable column and substitute NULLs for non-joined rows,
   *  as in standard SQL.
   */
+using JoinPtr = std::shared_ptr<Join>;
+using Joins = std::vector<JoinPtr>;
+
 class Join
 {
 public:
@@ -95,6 +144,10 @@ public:
          const String & req_id,
          bool enable_fine_grained_shuffle_,
          size_t fine_grained_shuffle_count_,
+         size_t max_join_bytes_,
+         const SpillConfig & build_spill_config_,
+         const SpillConfig & probe_spill_config_,
+         Int64 join_restore_concurrency_,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const String & left_filter_column = "",
          const String & right_filter_column = "",
@@ -102,12 +155,22 @@ public:
          const String & other_eq_filter_from_in_column = "",
          ExpressionActionsPtr other_condition_ptr = nullptr,
          size_t max_block_size = 0,
-         const String & match_helper_name = "");
+         const String & match_helper_name = "",
+         JoinMemoryInfo join_memory_info = JoinMemoryInfo(),
+         size_t restore_round = 0);
+
+    std::shared_ptr<Join> createRestoreJoin();
+
+    size_t restore_round;
+
+    std::atomic<bool> is_canceled = false;
 
     /** Call `setBuildConcurrencyAndInitPool`, `initMapImpl` and `setSampleBlock`.
       * You must call this method before subsequent calls to insertFromBlock.
       */
-    void init(const Block & sample_block, size_t build_concurrency_ = 1);
+    void initBuild(const Block & sample_block, size_t build_concurrency_ = 1);
+
+    void initProbe(const Block & sample_block, size_t probe_concurrency_ = 1);
 
     void insertFromBlock(const Block & block);
 
@@ -143,12 +206,36 @@ public:
       */
     BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
 
+    bool isEnableSpill() const;
+
+    bool isRestoreJoin() const;
+
+    void insertBlockToBuildPartition(Block & block, size_t partition_index);
+
+    void insertBlockToProbePartition(Block & block, size_t partition_index);
+
+    void tryMarkBuildSpillFinish();
+
+    void tryMarkProbeSpillFinish();
+
+    bool getPartitionSpilled(size_t partition_index);
+
+    bool hasPartitionSpilledWithLock();
+
+    bool hasPartitionSpilled();
+
+    std::tuple<JoinPtr, BlockInputStreamPtr, BlockInputStreamPtr> getOneRestoreStream();
+
+    void dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>> & partition_blocks_list);
+
+    Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
+
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
     /// Sum size in bytes of all buffers, used for JOIN maps and for all memory pools.
     size_t getTotalByteCount() const;
 
-    size_t getTotalBuildInputRows() const { return total_input_build_rows; }
+    size_t getTotalBuildInputRows() const { return join_memory_info.getTotalRows(); }
 
     ASTTableJoin::Kind getKind() const { return kind; }
 
@@ -159,8 +246,6 @@ public:
         std::unique_lock lock(build_probe_mutex);
         active_build_concurrency = getBuildConcurrencyInternal();
     }
-    void finishOneBuild();
-    void waitUntilAllBuildFinished() const;
 
     size_t getProbeConcurrency() const
     {
@@ -172,9 +257,17 @@ public:
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
         active_probe_concurrency = probe_concurrency;
+        active_non_join_concurrency = probe_concurrency;
     }
+
+    void finishOneBuild();
+    void waitUntilAllBuildFinished() const;
+
     void finishOneProbe();
     void waitUntilAllProbeFinished() const;
+
+    void finishOneNonJoin();
+    void waitUntilAllNonJoinFinished() const;
 
     size_t getBuildConcurrency() const
     {
@@ -289,6 +382,32 @@ public:
     // only use for left semi joins.
     const String match_helper_name;
 
+    struct BuildPartition
+    {
+        BlocksList blocks;
+        Blocks original_blocks;
+        size_t rows{0};
+        size_t bytes{0};
+    };
+
+    struct ProbePartition
+    {
+        Blocks blocks;
+        size_t rows{0};
+        size_t bytes{0};
+    };
+
+    struct JoinPartition
+    {
+        BuildPartition build_partition;
+        ProbePartition probe_partition;
+        bool spill{};
+    };
+    using JoinPartitions = std::vector<JoinPartition>;
+
+    SpillerPtr build_spiller;
+    SpillerPtr probe_spiller;
+
 
 private:
     friend class NonJoinedBlockInputStream;
@@ -307,9 +426,13 @@ private:
     size_t build_concurrency;
     size_t active_build_concurrency;
 
+    mutable std::mutex probe_mutex;
+    mutable std::mutex non_join_mutex;
+    mutable std::condition_variable non_join_cv;
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
     size_t active_probe_concurrency;
+    size_t active_non_join_concurrency;
 
     bool meet_error = false;
     String error_message;
@@ -328,10 +451,29 @@ private:
     /** Blocks of "right" table.
       */
     BlocksList blocks;
+    Blocks original_blocks;
     /// mutex to protect concurrent insert to blocks
     std::mutex blocks_lock;
-    /// keep original block for concurrent build
-    Blocks original_blocks;
+    /// mutex to protect concurrent modify partitions
+    std::mutex partitions_lock;
+    std::vector<std::mutex> partitions_locks;
+    /// mutex to protect concurrent modify probe blocks
+    std::mutex probe_blocks_lock;
+
+    JoinPartitions partitions;
+
+    std::list<size_t> spilled_partition_indexes;
+
+    size_t max_join_bytes;
+    SpillConfig build_spill_config;
+    SpillConfig probe_spill_config;
+    Int64 join_restore_concurrency;
+
+    BlockInputStreams restore_build_streams;
+    BlockInputStreams restore_probe_streams;
+    Int64 restore_join_build_concurrency = -1;
+
+    JoinPtr restore_join;
 
     MapsAny maps_any; /// For ANY LEFT|INNER JOIN
     MapsAll maps_all; /// For ALL LEFT|INNER JOIN
@@ -362,7 +504,8 @@ private:
     const LoggerPtr log;
 
     Block totals;
-    std::atomic<size_t> total_input_build_rows{0};
+    JoinMemoryInfo join_memory_info;
+
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
       * Note that these methods could be called simultaneously only while use of StorageJoin,
       *  and StorageJoin only calls these two methods.
@@ -417,14 +560,27 @@ private:
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
     void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
-};
 
-using JoinPtr = std::shared_ptr<Join>;
-using Joins = std::vector<JoinPtr>;
+    IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
+    IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
+
+    void trySpillBuildPartition(size_t partition_index, bool force);
+    void trySpillBuildPartitions(bool force);
+    void trySpillProbePartition(size_t partition_index, bool force);
+    void trySpillProbePartitions(bool force);
+
+    void releaseBuildPartitionBlocks(size_t partition_index);
+    void releaseBuildPartitionHashTable(size_t partition_index);
+    void releaseProbePartitionBlocks(size_t partition_index);
+    void releaseAllPartitions();
+
+    void spillMostMemoryUsedPartitionIfNeed();
+};
 
 struct ProbeProcessInfo
 {
     Block block;
+    size_t partition_index;
     UInt64 max_block_size;
     size_t start_row;
     size_t end_row;
@@ -434,7 +590,7 @@ struct ProbeProcessInfo
         : max_block_size(max_block_size_)
         , all_rows_joined_finish(true){};
 
-    void resetBlock(Block && block_);
+    void resetBlock(Block && block_, size_t partition_index_ = 0);
     void updateStartRow();
 };
 

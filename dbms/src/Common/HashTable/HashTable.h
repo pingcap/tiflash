@@ -709,7 +709,10 @@ public:
     using LookupResult = Cell *;
     using ConstLookupResult = const Cell *;
 
-    size_t hash(const Key & x) const { return Hash::operator()(x); }
+    size_t hash(const Key & x) const
+    {
+        return Hash::operator()(x);
+    }
 
 
     HashTable()
@@ -842,7 +845,10 @@ public:
         return const_iterator(this, ptr);
     }
 
-    const_iterator cbegin() const { return begin(); }
+    const_iterator cbegin() const
+    {
+        return begin();
+    }
 
     iterator begin()
     {
@@ -878,10 +884,22 @@ public:
 
 
 protected:
-    const_iterator iteratorTo(const Cell * ptr) const { return const_iterator(this, ptr); }
-    iterator iteratorTo(Cell * ptr) { return iterator(this, ptr); }
-    const_iterator iteratorToZero() const { return iteratorTo(this->zeroValue()); }
-    iterator iteratorToZero() { return iteratorTo(this->zeroValue()); }
+    const_iterator iteratorTo(const Cell * ptr) const
+    {
+        return const_iterator(this, ptr);
+    }
+    iterator iteratorTo(Cell * ptr)
+    {
+        return iterator(this, ptr);
+    }
+    const_iterator iteratorToZero() const
+    {
+        return iteratorTo(this->zeroValue());
+    }
+    iterator iteratorToZero()
+    {
+        return iteratorTo(this->zeroValue());
+    }
 
 
     /// If the key is zero, insert it into a special place and return true.
@@ -1479,9 +1497,19 @@ public:
         return segments[segment_index]->getHashTable();
     }
 
+    void resetSegmentTable(size_t segment_index)
+    {
+        segments[segment_index].reset();
+    }
+
     std::mutex & getSegmentMutex(size_t segment_index)
     {
         return segments[segment_index]->getMutex();
+    }
+
+    bool isSegmentRelease(size_t segment_index) const
+    {
+        return !static_cast<bool>(segments[segment_index]);
     }
 
     size_t getSegmentSize() const { return segment_size; }
@@ -1597,8 +1625,13 @@ public:
         size_t ret = 0;
         for (size_t i = 0; i < segments.size(); i++)
             /// note the return value might not be accurate since it does not use lock, but should be enough for current usage
-            ret += segments[i]->getBufferSizeInBytes();
+            ret += segments[i] ? segments[i]->getBufferSizeInBytes() : 0;
         return ret;
+    }
+
+    size_t getSegmentBufferSizeInBytes(size_t segment_index) const
+    {
+        return segments[segment_index] ? segments[segment_index]->getBufferSizeInBytes() : 0;
     }
 
     size_t rowCount() const
@@ -1606,7 +1639,7 @@ public:
         size_t ret = 0;
         for (size_t i = 0; i < segments.size(); i++)
             /// note the return value might not be accurate since it does not use lock, but should be enough for current usage
-            ret += segments[i]->size();
+            ret += segments[i] ? segments[i]->size() : 0;
         return ret;
     }
 

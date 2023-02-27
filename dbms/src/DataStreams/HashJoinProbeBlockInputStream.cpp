@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 
 namespace DB
@@ -21,11 +22,12 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const JoinPtr & join_,
     size_t probe_index_,
     const String & req_id,
-    UInt64 max_block_size)
+    UInt64 max_block_size_)
     : log(Logger::get(req_id))
     , join(join_)
     , probe_index(probe_index_)
-    , probe_process_info(max_block_size)
+    , max_block_size(max_block_size_)
+    , probe_process_info(max_block_size_)
 {
     children.push_back(input);
 
@@ -37,7 +39,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
 
 Block HashJoinProbeBlockInputStream::getTotals()
 {
-    if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
+    if (auto * child = !join->isRestoreJoin() ? dynamic_cast<IProfilingBlockInputStream *>(&*children.back()) : dynamic_cast<IProfilingBlockInputStream *>(&*restore_stream))
     {
         totals = child->getTotals();
         if (!totals)
@@ -76,26 +78,32 @@ void HashJoinProbeBlockInputStream::finishOneProbe()
         join->finishOneProbe();
 }
 
+void HashJoinProbeBlockInputStream::finishOneNonJoin()
+{
+    bool expect = false;
+    if likely (non_join_finished.compare_exchange_strong(expect, true))
+        join->finishOneNonJoin();
+}
+
 void HashJoinProbeBlockInputStream::cancel(bool kill)
 {
     IProfilingBlockInputStream::cancel(kill);
     /// When the probe stream quits probe by cancelling instead of normal finish, the Join operator might still produce meaningless blocks
     /// and expects these meaningless blocks won't be used to produce meaningful result.
-    try
-    {
-        finishOneProbe();
-    }
-    catch (...)
-    {
-        auto error_message = getCurrentExceptionMessage(false, true);
-        LOG_WARNING(log, error_message);
-        join->meetError(error_message);
-    }
+
+    join->is_canceled = true;
+
     if (non_joined_stream != nullptr)
     {
-        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get());
-        if (p_stream != nullptr)
-            p_stream->cancel(kill);
+        auto * p_non_joined_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get());
+        if (p_non_joined_stream != nullptr)
+            p_non_joined_stream->cancel(kill);
+    }
+    if (restore_stream != nullptr)
+    {
+        auto * p_restore_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_stream.get());
+        if (p_restore_stream != nullptr)
+            p_restore_stream->cancel(kill);
     }
 }
 
@@ -127,22 +135,50 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
         {
         case ProbeStatus::PROBE:
         {
+            join->waitUntilAllBuildFinished();
             if (probe_process_info.all_rows_joined_finish)
             {
-                Block block = children.back()->read();
+                size_t partition_index = 0;
+                Block block;
+
+                if (!join->isEnableSpill())
+                {
+                    block = children.back()->read();
+                }
+                else
+                {
+                    auto partition_block = getOneProbeBlock();
+                    partition_index = std::get<0>(partition_block);
+                    block = std::get<1>(partition_block);
+                }
+
                 if (!block)
                 {
+                    if (join->isEnableSpill())
+                    {
+                        block = !join->isRestoreJoin() ? children.back()->read() : restore_stream->read();
+                        if (block)
+                        {
+                            join->dispatchProbeBlock(block, probe_partition_blocks);
+                            break;
+                        }
+                    }
                     finishOneProbe();
+
                     if (join->needReturnNonJoinedData())
+                    {
                         status = ProbeStatus::WAIT_FOR_READ_NON_JOINED_DATA;
+                    }
                     else
-                        status = ProbeStatus::FINISHED;
+                    {
+                        status = ProbeStatus::JUDGE_WEATHER_HAVE_PARTITION_TO_RESTORE;
+                    }
                     break;
                 }
                 else
                 {
                     join->checkTypes(block);
-                    probe_process_info.resetBlock(std::move(block));
+                    probe_process_info.resetBlock(std::move(block), partition_index);
                 }
             }
             auto ret = join->joinBlock(probe_process_info);
@@ -161,14 +197,83 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
             if (!block)
             {
                 non_joined_stream->readSuffix();
-                status = ProbeStatus::FINISHED;
+                if (!join->isEnableSpill())
+                {
+                    status = ProbeStatus::FINISHED;
+                    break;
+                }
+                finishOneNonJoin();
+                join->waitUntilAllNonJoinFinished();
+                status = ProbeStatus::JUDGE_WEATHER_HAVE_PARTITION_TO_RESTORE;
+                break;
             }
             return block;
+        }
+        case ProbeStatus::BUILD_RESTORE_PARTITION:
+        {
+            auto [restore_join, build_stream, probe_stream] = join->getOneRestoreStream();
+            if (!restore_join)
+            {
+                status = ProbeStatus::JUDGE_WEATHER_HAVE_PARTITION_TO_RESTORE;
+                break;
+            }
+            parents.push_back(join);
+            join = restore_join;
+            probe_finished = false;
+            if (join->needReturnNonJoinedData())
+            {
+                non_join_finished = false;
+            }
+            build_stream = std::make_shared<HashJoinBuildBlockInputStream>(build_stream, restore_join, probe_index, log->identifier());
+            restore_stream.reset();
+            restore_stream = probe_stream;
+            if (join->needReturnNonJoinedData())
+            {
+                non_joined_stream = join->createStreamWithNonJoinedRows(probe_stream->getHeader(), probe_index, join->getProbeConcurrency(), max_block_size);
+            }
+            probe_process_info.all_rows_joined_finish = true;
+            while (build_stream->read()) {};
+            status = ProbeStatus::PROBE;
+            break;
+        }
+        case ProbeStatus::JUDGE_WEATHER_HAVE_PARTITION_TO_RESTORE:
+        {
+            if (!join->isEnableSpill())
+            {
+                status = ProbeStatus::FINISHED;
+                break;
+            }
+            join->waitUntilAllProbeFinished();
+            if (join->hasPartitionSpilledWithLock())
+            {
+                status = ProbeStatus::BUILD_RESTORE_PARTITION;
+            }
+            else if (!parents.empty())
+            {
+                join = parents.back();
+                parents.pop_back();
+            }
+            else
+            {
+                status = ProbeStatus::FINISHED;
+            }
+            break;
         }
         case ProbeStatus::FINISHED:
             return {};
         }
     }
+}
+
+std::tuple<size_t, Block> HashJoinProbeBlockInputStream::getOneProbeBlock()
+{
+    if (!probe_partition_blocks.empty())
+    {
+        auto partition_block = probe_partition_blocks.front();
+        probe_partition_blocks.pop_front();
+        return partition_block;
+    }
+    return {0, {}};
 }
 
 } // namespace DB
