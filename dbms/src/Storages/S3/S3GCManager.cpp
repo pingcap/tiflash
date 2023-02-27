@@ -22,15 +22,20 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3GCManager.h>
+#include <Storages/Transaction/Types.h>
 #include <aws/core/utils/DateTime.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CommonPrefix.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/ListObjectsV2Result.h>
 #include <common/logger_useful.h>
+#include <kvproto/metapb.pb.h>
+#include <pingcap/pd/IClient.h>
 
 #include <chrono>
+#include <limits>
 #include <thread>
+#include <unordered_map>
 
 namespace DB::ErrorCodes
 {
@@ -41,12 +46,30 @@ extern const int TIMEOUT_EXCEEDED;
 namespace DB::S3
 {
 
-S3GCManager::S3GCManager(std::shared_ptr<TiFlashS3Client> client_, S3LockClientPtr lock_client_, S3GCConfig config_)
-    : client(std::move(client_))
+S3GCManager::S3GCManager(
+    pingcap::pd::ClientPtr pd_client_,
+    std::shared_ptr<TiFlashS3Client> client_,
+    S3LockClientPtr lock_client_,
+    S3GCConfig config_)
+    : pd_client(std::move(pd_client_))
+    , client(std::move(client_))
     , lock_client(std::move(lock_client_))
     , config(config_)
     , log(Logger::get())
 {
+}
+
+std::unordered_map<StoreID, metapb::Store>
+getStoresFromPD(const pingcap::pd::ClientPtr & pd_client)
+{
+    const auto stores_from_pd = pd_client->getAllStores(false);
+    std::unordered_map<StoreID, metapb::Store> stores;
+    for (const auto & s : stores_from_pd)
+    {
+        auto [iter, inserted] = stores.emplace(s.id(), s);
+        RUNTIME_CHECK_MSG(inserted, "duplicated store id from pd response, duplicated_store_id={}", iter->first);
+    }
+    return stores;
 }
 
 bool S3GCManager::runOnAllStores()
@@ -54,9 +77,26 @@ bool S3GCManager::runOnAllStores()
     const std::vector<UInt64> all_store_ids = getAllStoreIds();
     LOG_TRACE(log, "all_store_ids: {}", all_store_ids);
     // TODO: Get all store status from pd after getting the store ids from S3.
+    const auto stores_from_pd = getStoresFromPD(pd_client);
     for (const auto gc_store_id : all_store_ids)
     {
-        runForStore(gc_store_id);
+        std::optional<metapb::StoreState> s = std::nullopt;
+        if (auto iter = stores_from_pd.find(gc_store_id); iter != stores_from_pd.end())
+        {
+            s = iter->second.state();
+        }
+        if (!s || *s == metapb::StoreState::Tombstone)
+        {
+            if (!s)
+            {
+                LOG_INFO(log, "store not found from pd, maybe already removed. gc_store_id={}", gc_store_id);
+            }
+            runForTombstonedStore(gc_store_id);
+        }
+        else
+        {
+            runForStore(gc_store_id);
+        }
     }
     // always return false, run in fixed rate
     return false;
@@ -69,26 +109,49 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
     const Aws::Utils::DateTime gc_timepoint = Aws::Utils::DateTime::Now();
     LOG_DEBUG(log, "run gc, gc_store_id={} timepoint={}", gc_store_id, gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
 
-    // TODO: Get store ids from pd. If the store id is tombstoned,
-    //       then run gc on the store as if no locks.
-
     // Get the latest manifest
     const auto manifests = CheckpointManifestS3Set::getFromS3(*client, gc_store_id);
-    // clean the outdated manifest files
-    removeOutdatedManifest(manifests, gc_timepoint);
-
     LOG_INFO(log, "latest manifest, gc_store_id={} upload_seq={} key={}", gc_store_id, manifests.latestUploadSequence(), manifests.latestManifestKey());
     // Parse from the latest manifest and collect valid lock files
     // TODO: collect valid lock files in multiple manifest?
-    const std::unordered_set<String> valid_lock_files = getValidLocksFromManifest(manifests.latestManifestKey());
+    std::unordered_set<String> valid_lock_files = getValidLocksFromManifest(manifests.latestManifestKey());
     LOG_INFO(log, "latest manifest, key={} n_locks={}", manifests.latestManifestKey(), valid_lock_files.size());
 
     // Scan and remove the expired locks
     const auto lock_prefix = S3Filename::getLockPrefix();
     cleanUnusedLocks(gc_store_id, lock_prefix, manifests.latestUploadSequence(), valid_lock_files, gc_timepoint);
 
+    // clean the outdated manifest objects
+    removeOutdatedManifest(manifests, &gc_timepoint);
+
     // After removing the expired lock, we need to scan the data files
     // with expired delmark
+    tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+}
+
+void S3GCManager::runForTombstonedStore(UInt64 gc_store_id)
+{
+    // get a timepoint at the begin, only remove objects that expired compare
+    // to this timepoint
+    const Aws::Utils::DateTime gc_timepoint = Aws::Utils::DateTime::Now();
+    LOG_DEBUG(log, "run gc, gc_store_id={} timepoint={}", gc_store_id, gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
+
+    // If the store id is tombstoned, then run gc on the store as if no locks.
+    // Scan and remove all expired locks
+    LOG_INFO(log, "store is tombstone, clean all locks");
+    std::unordered_set<String> valid_lock_files;
+    const auto lock_prefix = S3Filename::getLockPrefix();
+    cleanUnusedLocks(gc_store_id, lock_prefix, std::numeric_limits<UInt64>::max(), valid_lock_files, gc_timepoint);
+
+    // clean all manifest objects
+    const auto manifests = CheckpointManifestS3Set::getFromS3(*client, gc_store_id);
+    removeOutdatedManifest(manifests, nullptr);
+
+    // TODO: write a mark file and skip `cleanUnusedLocks` and `removeOutdatedManifest`
+    //       in the next round.
+
+    // After all the locks removed, the data files may still being locked by another
+    // store id, we need to scan the data files with expired delmark
     tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
 }
 
@@ -299,13 +362,25 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const String &
     return {};
 }
 
-void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime & timepoint)
+void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime * const timepoint)
 {
     // clean the outdated manifest files
     auto expired_bound_sec = config.manifest_expired_hour * 3600;
     for (const auto & mf : manifests.objects())
     {
-        auto diff_sec = Aws::Utils::DateTime::Diff(timepoint, mf.second.last_modification).count() / 1000.0;
+        if (!timepoint)
+        {
+            deleteObject(*client, client->bucket(), mf.second.key);
+            LOG_INFO(
+                log,
+                "remove outdated manifest because of store tombstone, key={} mtime={}",
+                mf.second.key,
+                mf.second.last_modification.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
+            continue;
+        }
+
+        assert(timepoint != nullptr);
+        auto diff_sec = Aws::Utils::DateTime::Diff(*timepoint, mf.second.last_modification).count() / 1000.0;
         if (diff_sec <= expired_bound_sec)
         {
             continue;
@@ -330,12 +405,13 @@ String S3GCManager::getTemporaryDownloadFile(String s3_key)
 
 S3GCManagerService::S3GCManagerService(
     Context & context,
+    pingcap::pd::ClientPtr pd_client,
     S3LockClientPtr lock_client,
     const S3GCConfig & config)
     : global_ctx(context.getGlobalContext())
 {
     auto s3_client = S3::ClientFactory::instance().createWithBucket();
-    manager = std::make_unique<S3GCManager>(std::move(s3_client), std::move(lock_client), config);
+    manager = std::make_unique<S3GCManager>(std::move(pd_client), std::move(s3_client), std::move(lock_client), config);
 
     timer = global_ctx.getBackgroundPool().addTask(
         [this]() {

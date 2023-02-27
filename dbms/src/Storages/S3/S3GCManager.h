@@ -23,6 +23,11 @@
 #include <memory>
 #include <unordered_set>
 
+namespace pingcap::pd
+{
+class IClient;
+using ClientPtr = std::shared_ptr<IClient>;
+} // namespace pingcap::pd
 namespace Aws
 {
 namespace S3
@@ -68,7 +73,11 @@ struct S3GCConfig
 class S3GCManager
 {
 public:
-    explicit S3GCManager(std::shared_ptr<TiFlashS3Client> client_, S3LockClientPtr lock_client_, S3GCConfig config_);
+    explicit S3GCManager(
+        pingcap::pd::ClientPtr pd_client_,
+        std::shared_ptr<TiFlashS3Client> client_,
+        S3LockClientPtr lock_client_,
+        S3GCConfig config_);
 
     ~S3GCManager() = default;
 
@@ -76,6 +85,8 @@ public:
 
     // private:
     void runForStore(UInt64 gc_store_id);
+
+    void runForTombstonedStore(UInt64 gc_store_id);
 
     void cleanUnusedLocks(
         UInt64 gc_store_id,
@@ -100,11 +111,13 @@ public:
 
     std::unordered_set<String> getValidLocksFromManifest(const String & manifest_key);
 
-    void removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime &);
+    void removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime * const timepoint); // NOLINT(readability-avoid-const-params-in-decls)
 
     String getTemporaryDownloadFile(String s3_key);
 
 private:
+    const pingcap::pd::ClientPtr pd_client;
+
     const std::shared_ptr<TiFlashS3Client> client;
 
     const S3LockClientPtr lock_client;
@@ -117,7 +130,12 @@ private:
 class S3GCManagerService
 {
 public:
-    explicit S3GCManagerService(Context & context, S3LockClientPtr lock_client, const S3GCConfig & config);
+    explicit S3GCManagerService(
+        Context & context,
+        pingcap::pd::ClientPtr pd_client,
+        S3LockClientPtr lock_client,
+        const S3GCConfig & config);
+
     ~S3GCManagerService();
 
 private:

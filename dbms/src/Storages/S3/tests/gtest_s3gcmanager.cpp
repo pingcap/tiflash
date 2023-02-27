@@ -23,6 +23,7 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/core/utils/DateTime.h>
 #include <gtest/gtest.h>
+#include <pingcap/pd/MockPDClient.h>
 
 #include <chrono>
 #include <unordered_set>
@@ -80,8 +81,9 @@ try
     };
     auto mock_client = std::make_shared<MockS3Client>();
     auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_client);
-    S3GCManager gc_mgr(mock_client, mock_lock_client, config);
-    gc_mgr.removeOutdatedManifest(set, timepoint);
+    auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
+    S3GCManager gc_mgr(mock_pd_client, mock_client, mock_lock_client, config);
+    gc_mgr.removeOutdatedManifest(set, &timepoint);
 
     auto delete_keys = mock_client->delete_keys;
     ASSERT_EQ(delete_keys.size(), 2);
@@ -101,7 +103,8 @@ try
     };
     auto mock_client = std::make_shared<MockS3Client>();
     auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_client);
-    S3GCManager gc_mgr(mock_client, mock_lock_client, config);
+    auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
+    S3GCManager gc_mgr(mock_pd_client, mock_client, mock_lock_client, config);
 
     auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
     {
@@ -138,7 +141,8 @@ try
     };
     auto mock_client = std::make_shared<MockS3Client>();
     auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_client);
-    S3GCManager gc_mgr(mock_client, mock_lock_client, config);
+    auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
+    S3GCManager gc_mgr(mock_pd_client, mock_client, mock_lock_client, config);
 
     StoreID store_id = 20;
     auto df = S3Filename::newCheckpointData(store_id, 300, 1);
@@ -217,7 +221,8 @@ try
     };
     auto mock_client = std::make_shared<MockS3Client>();
     auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_client);
-    S3GCManager gc_mgr(mock_client, mock_lock_client, config);
+    auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
+    S3GCManager gc_mgr(mock_pd_client, mock_client, mock_lock_client, config);
 
     StoreID store_id = 20;
     StoreID lock_store_id = 21;
