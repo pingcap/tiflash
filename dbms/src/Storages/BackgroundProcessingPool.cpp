@@ -147,6 +147,61 @@ BackgroundProcessingPool::~BackgroundProcessingPool()
     }
 }
 
+// Try to pop a task from the pool that is ready for execution.
+// For task->multi == false, it ensure the task is only pop for one execution threads.
+// For task->multi == true, it may pop the task multiple times.
+// Return nullptr when the pool is shutting down.
+BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::tryPopTask(pcg64 & rng)
+{
+    TaskHandle task;
+    Poco::Timestamp min_time;
+
+    std::unique_lock lock(tasks_mutex);
+
+    while (!task && !shutdown)
+    {
+        for (const auto & [task_time, task_handle] : tasks)
+        {
+            // find the first coming task that no thread is running
+            // or can be run by multithreads
+            if (!task_handle->removed
+                && (task_handle->concurrent_executors == 0 || task_handle->multi))
+            {
+                min_time = task_time;
+                task = task_handle;
+                // add the counter to indicate this task is running by one more thread
+                task->concurrent_executors += 1;
+                break;
+            }
+        }
+
+        if (!task)
+        {
+            /// No tasks ready for execution, wait for a while and check again
+            wake_event.wait_for(lock,
+                                std::chrono::duration<double>(
+                                    sleep_seconds + std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
+            continue;
+        }
+
+        Poco::DateTime dt(min_time);
+        LOG_INFO(Logger::get(),
+                 "pop task with min_time={}",
+                 Poco::DateTimeFormatter::format(dt, Poco::DateTimeFormat::SORTABLE_FORMAT));
+
+        Poco::Timestamp current_time;
+        if (min_time > current_time)
+        {
+            // The coming task is not ready for execution yet, wait for a while
+            wake_event.wait_for(lock,
+                                std::chrono::microseconds(
+                                    min_time - current_time + std::uniform_int_distribution<uint64_t>(0, sleep_seconds_random_part * 1000000)(rng)));
+        }
+        // here task != nullptr and is ready for execution
+        return task;
+    }
+    return task;
+}
 
 void BackgroundProcessingPool::threadFunction(size_t thread_idx)
 {
@@ -167,84 +222,21 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
 
     while (!shutdown)
     {
-        TaskHandle task;
-        // The time to sleep before running next task, `sleep_seconds` by default.
-        Poco::Timespan next_sleep_time_span(sleep_seconds, 0);
+        TaskHandle task = tryPopTask(rng);
+        if (shutdown)
+            break;
 
+        RUNTIME_CHECK_MSG(task != nullptr, "a null task has been pop!");
+
+        bool done_work;
         try
         {
-            Poco::Timestamp min_time;
-
-            {
-                std::unique_lock lock(tasks_mutex);
-
-                if (!tasks.empty())
-                {
-                    for (const auto & [task_time, task_handle] : tasks)
-                    {
-                        // find the first coming task that no thread is running
-                        // or can be run by multithreads
-                        if (!task_handle->removed
-                            && (task_handle->concurrent_executors == 0 || task_handle->multi))
-                        {
-                            min_time = task_time;
-                            task = task_handle;
-                            // indicate this task is running by one more thread
-                            task->concurrent_executors += 1;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (shutdown)
-                break;
-
-            if (!task)
-            {
-                std::unique_lock lock(tasks_mutex);
-                wake_event.wait_for(lock,
-                                    std::chrono::duration<double>(
-                                        sleep_seconds + std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
-                continue;
-            }
-
-            Poco::DateTime dt(min_time);
-            LOG_INFO(Logger::get(),
-                     "pop task with min_time={}",
-                     Poco::DateTimeFormatter::format(dt, Poco::DateTimeFormat::SORTABLE_FORMAT));
-
-            /// No tasks ready for execution.
-            Poco::Timestamp current_time;
-            if (min_time > current_time)
-            {
-                std::unique_lock lock(tasks_mutex);
-                wake_event.wait_for(lock,
-                                    std::chrono::microseconds(
-                                        min_time - current_time + std::uniform_int_distribution<uint64_t>(0, sleep_seconds_random_part * 1000000)(rng)));
-            }
-
             std::shared_lock<std::shared_mutex> rlock(task->rwlock);
 
             if (task->removed)
                 continue;
 
-            {
-                bool done_work = task->function();
-                /// If task has done work, it could be executed again immediately.
-                /// If not, add delay before next run.
-                if (done_work)
-                {
-                    next_sleep_time_span = 0;
-                }
-                else if (task->interval_milliseconds != 0)
-                {
-                    // Update `next_sleep_time_span` by user-defined interval if the later one is non-zero
-                    next_sleep_time_span = Poco::Timespan(0, /*microseconds=*/task->interval_milliseconds * 1000);
-                }
-                // else `sleep_seconds` by default
-                LOG_INFO(Logger::get(), "done_work={} next span s={} ms={}", done_work, next_sleep_time_span.seconds(), next_sleep_time_span.milliseconds());
-            }
+            done_work = task->function();
         }
         catch (...)
         {
@@ -254,16 +246,26 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
         if (shutdown)
             break;
 
+        // The time to sleep before running next task, `sleep_seconds` by default.
+        const auto next_sleep_time_span = [](bool done_work, const TaskHandle & t) {
+            if (done_work)
+            {
+                return Poco::Timespan(0, 0);
+            }
+            else if (t->interval_milliseconds != 0)
+            {
+                // Update `next_sleep_time_span` by user-defined interval if the later one is non-zero
+                return Poco::Timespan(0, /*microseconds=*/t->interval_milliseconds * 1000);
+            }
+            else
+            {
+                // else `sleep_seconds` by default
+                return Poco::Timespan(sleep_seconds, 0);
+            }
+        }(done_work, task);
         /// If task has done work, it could be executed again immediately.
         /// If not, add delay before next run.
-        Poco::Timestamp next_time_to_execute = Poco::Timestamp() + next_sleep_time_span;
-
-        Poco::DateTime dt(next_time_to_execute);
-        LOG_INFO(Logger::get(),
-                 "next_span s={} ms={} next_exec={}",
-                 next_sleep_time_span.seconds(),
-                 next_sleep_time_span.milliseconds(),
-                 Poco::DateTimeFormatter::format(dt, Poco::DateTimeFormat::SORTABLE_FORMAT));
+        LOG_INFO(Logger::get(), "done_work={} t.interval={} next_span s={} ms={}", done_work, task->interval_milliseconds, next_sleep_time_span.seconds(), next_sleep_time_span.milliseconds());
 
         {
             std::unique_lock lock(tasks_mutex);
@@ -274,7 +276,14 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
                 continue;
 
             tasks.erase(task->iterator);
+            Poco::Timestamp next_time_to_execute = Poco::Timestamp() + next_sleep_time_span;
             task->iterator = tasks.emplace(next_time_to_execute, task);
+            Poco::DateTime dt(next_time_to_execute);
+            LOG_INFO(Logger::get(),
+                     "next_span s={} ms={} next_exec={}",
+                     next_sleep_time_span.seconds(),
+                     next_sleep_time_span.milliseconds(),
+                     Poco::DateTimeFormatter::format(dt, Poco::DateTimeFormat::SORTABLE_FORMAT));
         }
     }
 

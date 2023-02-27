@@ -25,6 +25,7 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <pcg_random.hpp>
 #include <set>
 #include <shared_mutex>
 #include <thread>
@@ -69,8 +70,10 @@ public:
         std::shared_mutex rwlock;
         std::atomic<bool> removed{false};
 
-        /// only can be invoked by one thread at same time.
+        // multi=true, can be run by multiple threads concurrently
+        // multi=false, only run on one thread
         const bool multi;
+        // The number of worker threads is running this task
         size_t concurrent_executors = 0;
 
         const uint64_t interval_milliseconds;
@@ -103,6 +106,9 @@ public:
 
     std::vector<pid_t> getThreadIds();
     void addThreadId(pid_t tid);
+
+private:
+    TaskHandle tryPopTask(pcg64 & rng);
 
 private:
     using Tasks = std::multimap<Poco::Timestamp, TaskHandle>; /// key is desired next time to execute (priority).
