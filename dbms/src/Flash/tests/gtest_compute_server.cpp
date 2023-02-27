@@ -126,8 +126,9 @@ try
     context.context.setSetting("max_block_size", Field(static_cast<UInt64>(100)));
 
     WRAP_FOR_SERVER_TEST_BEGIN
-    startServers(1);
+    // For PassThrough and Broadcast, use only one server for testing, as multiple servers will double the result size.
     {
+        startServers(1);
         {
             std::vector<String> expected_strings = {
                 R"(
@@ -141,7 +142,6 @@ exchange_sender_2 | type:PassThrough, {<0, Long>}
                 expected_strings,
                 expected_cols);
         }
-
         {
             std::vector<String> expected_strings = {
                 R"(
@@ -154,12 +154,57 @@ exchange_sender_4 | type:PassThrough, {<0, Long>}
             ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
                 context
                     .scan("test_db", "big_table")
-                    .exchangeSender(tipb::PassThrough)
+                    .exchangeSender(tipb::ExchangeType::PassThrough)
                     .exchangeReceiver("recv", {{"s1", TiDB::TP::TypeLong}})
                     .project({"s1"}),
                 expected_strings,
                 expected_cols);
         }
+        {
+            std::vector<String> expected_strings = {
+                R"(
+exchange_sender_1 | type:Broadcast, {<0, Long>}
+ table_scan_0 | {<0, Long>})",
+                R"(
+exchange_sender_4 | type:PassThrough, {<0, Long>}
+ project_3 | {<0, Long>}
+  exchange_receiver_2 | type:Broadcast, {<0, Long>})"};
+            ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+                context
+                    .scan("test_db", "big_table")
+                    .exchangeSender(tipb::ExchangeType::Broadcast)
+                    .exchangeReceiver("recv", {{"s1", TiDB::TP::TypeLong}})
+                    .project({"s1"}),
+                expected_strings,
+                expected_cols);
+        }
+    }
+    // For Hash, multiple servers will not double the result.
+    {
+        startServers(2);
+        std::vector<String> expected_strings = {
+            R"(
+exchange_sender_1 | type:Hash, {<0, Long>}
+ table_scan_0 | {<0, Long>})",
+            R"(
+exchange_sender_1 | type:Hash, {<0, Long>}
+ table_scan_0 | {<0, Long>})",
+            R"(
+exchange_sender_4 | type:PassThrough, {<0, Long>}
+ project_3 | {<0, Long>}
+  exchange_receiver_2 | type:Hash, {<0, Long>})",
+            R"(
+exchange_sender_4 | type:PassThrough, {<0, Long>}
+ project_3 | {<0, Long>}
+  exchange_receiver_2 | type:Hash, {<0, Long>})"};
+        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+            context
+                .scan("test_db", "big_table")
+                .exchangeSender(tipb::ExchangeType::Hash)
+                .exchangeReceiver("recv", {{"s1", TiDB::TP::TypeLong}})
+                .project({"s1"}),
+            expected_strings,
+            expected_cols);
     }
     WRAP_FOR_SERVER_TEST_END
 }
@@ -289,7 +334,7 @@ try
                                                  .scan("test_db", "l_table")
                                                  .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
                                              expected_strings,
-                                             expect_cols);
+                                             expected_cols);
     }
 
     {
@@ -377,7 +422,7 @@ try
                 .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
                 .project({col("max(l_table.s)"), col("l_table.s")}),
             expected_strings,
-            expect_cols);
+            expected_cols);
     }
 
     {
