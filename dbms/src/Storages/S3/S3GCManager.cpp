@@ -23,6 +23,7 @@
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3GCManager.h>
 #include <Storages/Transaction/Types.h>
+#include <TiDB/OwnerManager.h>
 #include <aws/core/utils/DateTime.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CommonPrefix.h>
@@ -49,10 +50,12 @@ namespace DB::S3
 S3GCManager::S3GCManager(
     pingcap::pd::ClientPtr pd_client_,
     std::shared_ptr<TiFlashS3Client> client_,
+    OwnerManagerPtr gc_owner_manager_,
     S3LockClientPtr lock_client_,
     S3GCConfig config_)
     : pd_client(std::move(pd_client_))
     , client(std::move(client_))
+    , gc_owner_manager(std::move(gc_owner_manager_))
     , lock_client(std::move(lock_client_))
     , shutdown_called(false)
     , config(config_)
@@ -77,8 +80,7 @@ bool S3GCManager::runOnAllStores()
 {
     // Only the GC Manager node run the GC logic
     // TODO: keep a pointer of OwnerManager and check it here
-    bool is_gc_owner = true;
-    if (!is_gc_owner)
+    if (bool is_gc_owner = gc_owner_manager->isOwner(); !is_gc_owner)
     {
         return false;
     }
@@ -437,12 +439,13 @@ String S3GCManager::getTemporaryDownloadFile(String s3_key)
 S3GCManagerService::S3GCManagerService(
     Context & context,
     pingcap::pd::ClientPtr pd_client,
+    OwnerManagerPtr gc_owner_manager_,
     S3LockClientPtr lock_client,
     const S3GCConfig & config)
     : global_ctx(context.getGlobalContext())
 {
     auto s3_client = S3::ClientFactory::instance().createWithBucket();
-    manager = std::make_unique<S3GCManager>(std::move(pd_client), std::move(s3_client), std::move(lock_client), config);
+    manager = std::make_unique<S3GCManager>(std::move(pd_client), std::move(s3_client), std::move(gc_owner_manager_), std::move(lock_client), config);
 
     timer = global_ctx.getBackgroundPool().addTask(
         [this]() {

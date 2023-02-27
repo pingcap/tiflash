@@ -102,7 +102,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
 
         S3::S3GCConfig gc_config;
         gc_config.temp_path = context.getTemporaryPath(); // TODO: add suffix for it?
-        s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, cluster->pd_client, s3_lock_client, gc_config);
+        s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, cluster->pd_client, s3gc_owner, s3_lock_client, gc_config);
     }
 }
 
@@ -144,6 +144,12 @@ void TMTContext::shutdown()
         // let client retry
         s3gc_owner->cancel();
         s3gc_owner = nullptr;
+    }
+
+    if (s3gc_manager)
+    {
+        s3gc_manager->shutdown();
+        s3gc_manager = nullptr;
     }
 
     if (background_service)

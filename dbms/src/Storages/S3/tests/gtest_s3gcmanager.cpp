@@ -21,6 +21,7 @@
 #include <TestUtils/MockS3Client.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <TiDB/OwnerManager.h>
 #include <aws/core/utils/DateTime.h>
 #include <gtest/gtest.h>
 #include <pingcap/pd/MockPDClient.h>
@@ -42,6 +43,22 @@ public:
     {
     }
 
+    void SetUp() override
+    {
+        S3GCConfig config{
+            .manifest_expired_hour = 1,
+            .delmark_expired_hour = 1,
+            .temp_path = tests::TiFlashTestEnv::getTemporaryPath(),
+        };
+        mock_s3_client = std::make_shared<MockS3Client>();
+        auto mock_gc_owner = OwnerManager::createMockOwner("owner_0");
+        auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_s3_client);
+        auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
+        gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_s3_client, mock_gc_owner, mock_lock_client, config);
+    }
+
+    std::shared_ptr<MockS3Client> mock_s3_client;
+    std::unique_ptr<S3GCManager> gc_mgr;
     LoggerPtr log;
 };
 
@@ -74,18 +91,9 @@ try
     ASSERT_EQ(set.latestUploadSequence(), 81);
     ASSERT_EQ(set.latestManifestKey(), S3Filename::newCheckpointManifest(store_id, 81).toFullKey());
 
-    S3GCConfig config{
-        .manifest_expired_hour = 1,
-        .delmark_expired_hour = 1,
-        .temp_path = tests::TiFlashTestEnv::getTemporaryPath(),
-    };
-    auto mock_client = std::make_shared<MockS3Client>();
-    auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_client);
-    auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
-    S3GCManager gc_mgr(mock_pd_client, mock_client, mock_lock_client, config);
-    gc_mgr.removeOutdatedManifest(set, &timepoint);
+    gc_mgr->removeOutdatedManifest(set, &timepoint);
 
-    auto delete_keys = mock_client->delete_keys;
+    auto delete_keys = mock_s3_client->delete_keys;
     ASSERT_EQ(delete_keys.size(), 2);
     ASSERT_EQ(delete_keys[0], S3Filename::newCheckpointManifest(store_id, 4).toFullKey());
     ASSERT_EQ(delete_keys[1], S3Filename::newCheckpointManifest(store_id, 5).toFullKey());
@@ -96,23 +104,13 @@ CATCH
 TEST_F(S3GCManagerTest, RemoveDataFile)
 try
 {
-    S3GCConfig config{
-        .manifest_expired_hour = 1,
-        .delmark_expired_hour = 1,
-        .temp_path = tests::TiFlashTestEnv::getTemporaryPath(),
-    };
-    auto mock_client = std::make_shared<MockS3Client>();
-    auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_client);
-    auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
-    S3GCManager gc_mgr(mock_pd_client, mock_client, mock_lock_client, config);
-
     auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
     {
         // delmark expired
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3601 * 1000);
-        gc_mgr.removeDataFileIfDelmarkExpired("datafile_key", "datafile_key.del", timepoint, delmark_mtime);
+        gc_mgr->removeDataFileIfDelmarkExpired("datafile_key", "datafile_key.del", timepoint, delmark_mtime);
 
-        auto delete_keys = mock_client->delete_keys;
+        auto delete_keys = mock_s3_client->delete_keys;
         ASSERT_EQ(delete_keys.size(), 2);
         ASSERT_EQ(delete_keys[0], "datafile_key");
         ASSERT_EQ(delete_keys[1], "datafile_key.del");
@@ -120,9 +118,9 @@ try
     {
         // delmark not expired
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3599 * 1000);
-        gc_mgr.removeDataFileIfDelmarkExpired("datafile_key", "datafile_key.del", timepoint, delmark_mtime);
+        gc_mgr->removeDataFileIfDelmarkExpired("datafile_key", "datafile_key.del", timepoint, delmark_mtime);
 
-        auto delete_keys = mock_client->delete_keys;
+        auto delete_keys = mock_s3_client->delete_keys;
         ASSERT_EQ(delete_keys.size(), 2);
         ASSERT_EQ(delete_keys[0], "datafile_key");
         ASSERT_EQ(delete_keys[1], "datafile_key.del");
@@ -134,16 +132,6 @@ CATCH
 TEST_F(S3GCManagerTest, RemoveLock)
 try
 {
-    S3GCConfig config{
-        .manifest_expired_hour = 1,
-        .delmark_expired_hour = 1,
-        .temp_path = tests::TiFlashTestEnv::getTemporaryPath(),
-    };
-    auto mock_client = std::make_shared<MockS3Client>();
-    auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_client);
-    auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
-    S3GCManager gc_mgr(mock_pd_client, mock_client, mock_lock_client, config);
-
     StoreID store_id = 20;
     auto df = S3Filename::newCheckpointData(store_id, 300, 1);
 
@@ -153,59 +141,59 @@ try
     auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
     {
         // delmark not exist, and no more lockfile
-        mock_client->clear();
-        gc_mgr.cleanOneLock(lock_key, lock_view, timepoint);
+        mock_s3_client->clear();
+        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
         // lock is deleted and delmark is created
-        auto delete_keys = mock_client->delete_keys;
+        auto delete_keys = mock_s3_client->delete_keys;
         ASSERT_EQ(delete_keys.size(), 1);
         ASSERT_EQ(delete_keys[0], lock_key);
-        auto put_keys = mock_client->put_keys;
+        auto put_keys = mock_s3_client->put_keys;
         ASSERT_EQ(put_keys.size(), 1);
         ASSERT_EQ(put_keys[0], df.toView().getDelMarkKey());
     }
     {
         // delmark not exist, but still locked by another lockfile
-        mock_client->clear();
+        mock_s3_client->clear();
         auto another_lock_key = df.toView().getLockKey(store_id + 1, 450);
-        mock_client->list_result = {another_lock_key};
-        gc_mgr.cleanOneLock(lock_key, lock_view, timepoint);
+        mock_s3_client->list_result = {another_lock_key};
+        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
         // lock is deleted and delmark is created
-        auto delete_keys = mock_client->delete_keys;
+        auto delete_keys = mock_s3_client->delete_keys;
         ASSERT_EQ(delete_keys.size(), 1);
         ASSERT_EQ(delete_keys[0], lock_key);
-        auto put_keys = mock_client->put_keys;
+        auto put_keys = mock_s3_client->put_keys;
         ASSERT_EQ(put_keys.size(), 0);
     }
     {
         // delmark exist, not expired
-        mock_client->clear();
+        mock_s3_client->clear();
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3599 * 1000);
-        mock_client->head_result_mtime = delmark_mtime;
-        gc_mgr.cleanOneLock(lock_key, lock_view, timepoint);
+        mock_s3_client->head_result_mtime = delmark_mtime;
+        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
         // lock is deleted, datafile and delmark remain
-        auto delete_keys = mock_client->delete_keys;
+        auto delete_keys = mock_s3_client->delete_keys;
         ASSERT_EQ(delete_keys.size(), 1);
         ASSERT_EQ(delete_keys[0], lock_key);
-        auto put_keys = mock_client->put_keys;
+        auto put_keys = mock_s3_client->put_keys;
         ASSERT_EQ(put_keys.size(), 0);
     }
     {
         // delmark exist, expired
-        mock_client->clear();
+        mock_s3_client->clear();
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3601 * 1000);
-        mock_client->head_result_mtime = delmark_mtime;
-        gc_mgr.cleanOneLock(lock_key, lock_view, timepoint);
+        mock_s3_client->head_result_mtime = delmark_mtime;
+        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
         // lock datafile and delmark are deleted
-        auto delete_keys = mock_client->delete_keys;
+        auto delete_keys = mock_s3_client->delete_keys;
         ASSERT_EQ(delete_keys.size(), 3);
         ASSERT_EQ(delete_keys[0], lock_key);
         ASSERT_EQ(delete_keys[1], df.toFullKey());
         ASSERT_EQ(delete_keys[2], df.toView().getDelMarkKey());
-        auto put_keys = mock_client->put_keys;
+        auto put_keys = mock_s3_client->put_keys;
         ASSERT_EQ(put_keys.size(), 0);
     }
 }
@@ -214,16 +202,6 @@ CATCH
 TEST_F(S3GCManagerTest, ScanLocks)
 try
 {
-    S3GCConfig config{
-        .manifest_expired_hour = 1,
-        .delmark_expired_hour = 1,
-        .temp_path = tests::TiFlashTestEnv::getTemporaryPath(),
-    };
-    auto mock_client = std::make_shared<MockS3Client>();
-    auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_client);
-    auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
-    S3GCManager gc_mgr(mock_pd_client, mock_client, mock_lock_client, config);
-
     StoreID store_id = 20;
     StoreID lock_store_id = 21;
     UInt64 safe_sequence = 100;
@@ -258,19 +236,19 @@ try
             expected_created_delmark = df.toView().getDelMarkKey();
             keys.emplace_back(lock_key);
         }
-        mock_client->clear();
-        mock_client->list_result = keys; // set for `LIST`
+        mock_s3_client->clear();
+        mock_s3_client->list_result = keys; // set for `LIST`
     }
 
     {
         auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
-        gc_mgr.cleanUnusedLocks(lock_store_id, S3Filename::getLockPrefix(), safe_sequence, valid_lock_files, timepoint);
+        gc_mgr->cleanUnusedLocks(lock_store_id, S3Filename::getLockPrefix(), safe_sequence, valid_lock_files, timepoint);
 
         // lock is deleted and delmark is created
-        auto delete_keys = mock_client->delete_keys;
+        auto delete_keys = mock_s3_client->delete_keys;
         ASSERT_EQ(delete_keys.size(), 1);
         ASSERT_EQ(delete_keys[0], expected_deleted_lock_key);
-        auto put_keys = mock_client->put_keys;
+        auto put_keys = mock_s3_client->put_keys;
         ASSERT_EQ(put_keys.size(), 1);
         ASSERT_EQ(put_keys[0], expected_created_delmark);
     }

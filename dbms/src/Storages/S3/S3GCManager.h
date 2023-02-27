@@ -45,6 +45,8 @@ namespace DB
 class Context;
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
+class OwnerManager;
+using OwnerManagerPtr = std::shared_ptr<OwnerManager>;
 } // namespace DB
 
 namespace DB::S3
@@ -76,6 +78,7 @@ public:
     explicit S3GCManager(
         pingcap::pd::ClientPtr pd_client_,
         std::shared_ptr<TiFlashS3Client> client_,
+        OwnerManagerPtr gc_owner_manager_,
         S3LockClientPtr lock_client_,
         S3GCConfig config_);
 
@@ -122,6 +125,7 @@ private:
 
     const std::shared_ptr<TiFlashS3Client> client;
 
+    const OwnerManagerPtr gc_owner_manager;
     const S3LockClientPtr lock_client;
 
     std::atomic<bool> shutdown_called;
@@ -137,6 +141,7 @@ public:
     explicit S3GCManagerService(
         Context & context,
         pingcap::pd::ClientPtr pd_client,
+        OwnerManagerPtr gc_owner_manager_,
         S3LockClientPtr lock_client,
         const S3GCConfig & config);
 
