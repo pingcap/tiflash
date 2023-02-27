@@ -367,7 +367,8 @@ public:
         // 3. send execution summary
         writer->add_summary = true;
         ExecutionSummaryCollector summary_collector(*dag_context_ptr);
-        writer->write(summary_collector.genExecutionSummaryResponse());
+        auto summary_response = summary_collector.genExecutionSummaryResponse();
+        writer->write(summary_response);
     }
 
     void prepareQueueV2(
