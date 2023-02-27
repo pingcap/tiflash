@@ -25,16 +25,16 @@
 #include <Storages/Page/V3/PageDirectory/PageIdTrait.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
-#include <Storages/Page/V3/Universal/UniversalWriteBatch.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
-#include <Storages/Page/WriteBatch.h>
-#include <Storages/PathPool.h>
 
 #include <mutex>
 #include <unordered_map>
 
 namespace DB
 {
+class WriteBatch;
+class UniversalWriteBatch;
+
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;

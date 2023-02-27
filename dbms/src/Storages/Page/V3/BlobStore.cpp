@@ -13,13 +13,11 @@
 // limitations under the License.
 
 #include <Common/Checksum.h>
-#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
-#include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Poco/File.h>
@@ -30,15 +28,15 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
+#include <Storages/Page/WriteBatchImpl.h>
+#include <Storages/PathPool.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 
-#include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
 #include <iterator>
 #include <magic_enum.hpp>
-#include <mutex>
 #include <unordered_map>
 
 namespace ProfileEvents
@@ -434,7 +432,7 @@ void BlobStore<Trait>::remove(const PageEntries & del_entries)
         }
         catch (DB::Exception & e)
         {
-            e.addMessage(fmt::format("while removing entry [entry={}]", toDebugString(entry)));
+            e.addMessage(fmt::format("while removing entry [entry={}]", entry));
             e.rethrow();
         }
     }
@@ -606,7 +604,7 @@ BlobStore<Trait>::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_lim
                 to_read.begin(),
                 to_read.end(),
                 [](const FieldReadInfo & info, FmtBuffer & fb) {
-                    fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, toDebugString(info.entry));
+                    fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, info.entry);
                 },
                 ",");
 #ifndef NDEBUG
@@ -668,7 +666,7 @@ BlobStore<Trait>::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_lim
                                     field_index,
                                     beg_offset,
                                     size_to_read,
-                                    toDebugString(entry),
+                                    entry,
                                     blob_file->getPath()),
                         ErrorCodes::CHECKSUM_DOESNT_MATCH);
                 }
@@ -695,7 +693,7 @@ BlobStore<Trait>::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_lim
             to_read.begin(),
             to_read.end(),
             [](const FieldReadInfo & info, FmtBuffer & fb) {
-                fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, toDebugString(info.entry));
+                fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, info.entry);
             },
             ",");
         throw Exception(fmt::format("unexpected read size, end_pos={} current_pos={} read_info=[{}]",
@@ -738,7 +736,7 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
         for (const auto & [page_id_v3, entry] : entries)
         {
             // Unexpected behavior but do no harm
-            LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, toDebugString(entry));
+            LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, entry);
             Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
             page_map.emplace(Trait::PageIdTrait::getPageMapKey(page_id_v3), page);
         }
@@ -768,7 +766,7 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
                                 page_id_v3,
                                 entry.checksum,
                                 checksum,
-                                toDebugString(entry),
+                                entry,
                                 blob_file->getPath()),
                     ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
@@ -797,7 +795,7 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
             entries.begin(),
             entries.end(),
             [](const PageIdAndEntry & id_entry, FmtBuffer & fb) {
-                fb.fmtAppend("{{page_id: {}, entry: {}}}", id_entry.first, toDebugString(id_entry.second));
+                fb.fmtAppend("{{page_id: {}, entry: {}}}", id_entry.first, id_entry.second);
             },
             ",");
         throw Exception(fmt::format("unexpected read size, end_pos={} current_pos={} read_info=[{}]",
@@ -826,7 +824,7 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
     if (buf_size == 0)
     {
         // Unexpected behavior but do no harm
-        LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, toDebugString(entry));
+        LOG_INFO(log, "Read entry without entry size, page_id={} entry={}", page_id_v3, entry);
         Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
         return page;
     }
@@ -849,7 +847,7 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
                             page_id_v3,
                             entry.checksum,
                             checksum,
-                            toDebugString(entry),
+                            entry,
                             blob_file->getPath()),
                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
         }

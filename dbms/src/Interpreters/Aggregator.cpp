@@ -263,6 +263,7 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
     }
 
     method_chosen = chooseAggregationMethod();
+    RUNTIME_CHECK_MSG(method_chosen != AggregatedDataVariants::Type::EMPTY, "Invalid aggregation method");
     if (AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen))
     {
         /// for aggregation, the input block is sorted by bucket number
@@ -725,7 +726,7 @@ bool Aggregator::executeOnBlock(
     result.aggregator = this;
 
     /// How to perform the aggregation?
-    if (result.empty())
+    if (!result.inited())
     {
         result.init(method_chosen);
         result.keys_size = params.keys_size;
@@ -812,7 +813,7 @@ bool Aggregator::executeOnBlock(
     /** Flush data to disk if too much RAM is consumed.
       * Data can only be flushed to disk if a two-level aggregation is supported.
       */
-    if (max_bytes_before_external_group_by
+    if (max_bytes_before_external_group_by && result_size > 0
         && (result.isTwoLevel() || result.isConvertibleToTwoLevel())
         && result_size_bytes > max_bytes_before_external_group_by)
     {
@@ -2105,7 +2106,7 @@ void Aggregator::destroyWithoutKey(AggregatedDataVariants & result) const
 
 void Aggregator::destroyAllAggregateStates(AggregatedDataVariants & result)
 {
-    if (result.empty())
+    if (!result.inited())
         return;
 
     LOG_TRACE(log, "Destroying aggregate states");

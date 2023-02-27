@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnsCommon.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -162,7 +163,7 @@ inline Block filterUnsorted(const RowKeyRanges & rowkey_ranges, Block && block, 
             }
         }
     }
-    size_t passed_count = std::count(filter.cbegin(), filter.cend(), 1);
+    size_t passed_count = countBytesInFilter(filter);
 
     if (!passed_count)
         return {};
@@ -181,6 +182,11 @@ inline Block filterUnsorted(const RowKeyRanges & rowkey_ranges, Block && block, 
 }
 } // namespace RowKeyFilter
 
+/**
+  * DMRowKeyFilterBlockInputStream is used to filter block by rowkey ranges.
+  * Rows whose rowkey is not in the rowkey ranges will be filtered.
+  * Basically, only the rows in first and the last block of the child stream will be filtered.
+  */
 template <bool is_block_sorted>
 class DMRowKeyFilterBlockInputStream : public IBlockInputStream
 {
