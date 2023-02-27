@@ -353,6 +353,10 @@ private:
     /// For null-aware semi join family, including rows with NULL join keys.
     std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
 
+    /// Combine all RowRef in `rows_not_inserted_to_map`.
+    /// Used for null-aware semi join family to speed up calculation.
+    PaddedPODArray<RowRef> rows_with_null_keys;
+
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arenas pools;
 
@@ -420,6 +424,8 @@ private:
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
     void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
+
+    void workAfterBuildFinish();
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void joinBlockImplNullAware(Block & block, const Maps & maps) const;

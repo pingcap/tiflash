@@ -23,15 +23,17 @@
 namespace DB
 {
 
-enum class SemiJoinStep
+enum class SemiJoinStep : UInt8
 {
     /// Check other conditions for the right rows whose join key are equal to this left row.
     /// The join keys of this left row must not have null.
     CHECK_OTHER_COND,
     /// Check join key equal condition and other conditions(if any) for the right rows
-    /// in null list(i.e. all rows in right table with null join key).
-    /// The join keys of this left row may have null.
-    CHECK_NULL_LIST,
+    /// in null rows(i.e. all rows in right table with null join key).
+    /// The join keys of this left row must not have null.
+    CHECK_NULL_ROWS_NOT_NULL,
+    /// Like `CHECK_NULL_ROWS_NOT_NULL` except the join keys of this left row must have null.
+    CHECK_NULL_ROWS_NULL,
     /// Check join key equal condition and other conditions(if any) for all right rows in blocks.
     /// The join keys of this left row must have null.
     CHECK_ALL_BLOCKS,
@@ -39,7 +41,7 @@ enum class SemiJoinStep
     DONE,
 };
 
-enum class SemiJoinResultType
+enum class SemiJoinResultType : UInt8
 {
     FALSE_VALUE,
     TRUE_VALUE,
@@ -50,7 +52,7 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 class SemiJoinResult
 {
 public:
-    SemiJoinResult(size_t row_num, bool has_null_join_key, SemiJoinStep step, const void * map_it);
+    SemiJoinResult(size_t row_num, SemiJoinStep step, const void * map_it);
 
     /// For convenience, caller can only consider the result of semi join.
     /// This function will correct the result if it's not semi join.
@@ -89,8 +91,8 @@ public:
         return row_num;
     }
 
-    template <typename MAP, SemiJoinStep STEP>
-    void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists, size_t & current_offset, size_t max_pace);
+    template <typename Mapped, SemiJoinStep STEP>
+    void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const PaddedPODArray<Join::RowRef> & null_rows, size_t & current_offset, size_t max_pace);
 
     template <SemiJoinStep STEP>
     void checkExprResult(ConstNullMapPtr eq_null_map, size_t offset_begin, size_t offset_end);
@@ -103,22 +105,19 @@ public:
 
 private:
     size_t row_num;
-    bool has_null_join_key;
 
     SemiJoinStep step;
     bool step_end;
+    SemiJoinResultType result;
 
-    /// Null list
-    size_t null_pos;
-    Join::RowRefList * null_list;
+    /// Iterating position of null list.
+    size_t null_rows_pos;
 
     /// Mapped data for one cell.
     const void * map_it;
-
-    SemiJoinResultType result;
 };
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename MAP>
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
 class SemiJoinHelper
 {
 public:
@@ -129,7 +128,7 @@ public:
         size_t left_columns,
         size_t right_columns,
         const BlocksList & right_blocks,
-        const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists,
+        const PaddedPODArray<Join::RowRef> & null_rows,
         size_t max_block_size,
         const String & other_filter_column,
         const ExpressionActionsPtr & other_condition_ptr,
@@ -152,7 +151,7 @@ private:
     size_t left_columns;
     size_t right_columns;
     const BlocksList & right_blocks;
-    const std::vector<std::unique_ptr<Join::RowRefList>> & null_lists;
+    const PaddedPODArray<Join::RowRef> & null_rows;
     size_t max_block_size;
 
     const String & other_filter_column;
