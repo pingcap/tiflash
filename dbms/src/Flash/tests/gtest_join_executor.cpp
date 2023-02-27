@@ -137,6 +137,16 @@ try
 
             {
                 executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
+
+                // for spill to disk tests
+                context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(10000)));
+                ASSERT_THROW(executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j], {1}), Exception);
+                context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(25000)));
+                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j], {2});
+                context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(75000)));
+                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j], {5});
+                context.context.setSetting("max_join_bytes", Field(static_cast<UInt64>(170000)));
+                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j], {10});
             }
         }
     }
