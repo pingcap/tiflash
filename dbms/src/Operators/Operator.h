@@ -22,13 +22,15 @@ namespace DB
 {
 /**
  * All interfaces of the operator may return the following state.
- * - finish status and waiting status can be returned in all method of operator.
+ * - finish status will only be returned by sink op, because only sink can tell if the pipeline has actually finished.
+ * - cancel status and waiting status can be returned in all method of operator.
  * - operator may return a different running status depending on the method.
 */
 enum class OperatorStatus
 {
     /// finish status
     FINISHED,
+    /// cancel status
     CANCELLED,
     /// waiting status
     WAITING,

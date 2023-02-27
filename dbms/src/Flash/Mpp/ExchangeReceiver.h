@@ -122,11 +122,10 @@ public:
     ReceiveResult nonBlockingReceive(size_t stream_id);
 
     ExchangeReceiverResult toExchangeReceiveResult(
-        std::shared_ptr<ReceivedMessage> & recv_msg,
+        ReceiveResult & recv_result,
         std::queue<Block> & block_queue,
         const Block & header,
-        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr,
-        bool is_eof);
+        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     ExchangeReceiverResult nextResult(
         std::queue<Block> & block_queue,

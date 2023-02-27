@@ -46,11 +46,10 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
             assert(recv_res);
             assert(recv_res->recv_status != ReceiveStatus::empty);
             auto result = exchange_receiver->toExchangeReceiveResult(
-                recv_res->recv_msg,
+                *recv_res,
                 block_queue,
                 header,
-                decoder_ptr,
-                recv_res->recv_status == ReceiveStatus::eof);
+                decoder_ptr);
             recv_res.reset();
 
             if (result.meet_error)
@@ -58,15 +57,15 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
                 LOG_WARNING(log, "exchange receiver meets error: {}", result.error_msg);
                 throw Exception(result.error_msg);
             }
-            if (result.eof)
-            {
-                LOG_DEBUG(log, "exchange receiver meets eof");
-                return {};
-            }
             if (result.resp != nullptr && result.resp->has_error())
             {
                 LOG_WARNING(log, "exchange receiver meets error: {}", result.resp->error().DebugString());
                 throw Exception(result.resp->error().DebugString());
+            }
+            if (result.eof)
+            {
+                LOG_DEBUG(log, "exchange receiver meets eof");
+                return OperatorStatus::HAS_OUTPUT;
             }
 
             const auto & decode_detail = result.decode_detail;
@@ -84,6 +83,7 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
             block = popFromBlockQueue();
             return OperatorStatus::HAS_OUTPUT;
         }
+        assert(!recv_res);
         return await_status;
     }
 }

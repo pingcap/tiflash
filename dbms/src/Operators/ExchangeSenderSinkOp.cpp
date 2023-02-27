@@ -37,6 +37,7 @@ void ExchangeSenderSinkOp::operateSuffix() noexcept
 
 OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
 {
+#ifndef NDEBUG
     FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
     if (writer->dagContext().isRootMPPTask())
     {
@@ -46,6 +47,7 @@ OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_non_root_task_run);
     }
+#endif
 
     if (!block)
     {

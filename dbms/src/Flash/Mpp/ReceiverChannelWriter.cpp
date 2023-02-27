@@ -85,7 +85,7 @@ bool ReceiverChannelWriter::writeFineGrain(
             error_ptr,
             resp_ptr,
             std::move(chunks[i]));
-        success = write_func(i, std::move(recv_msg)) == MPMCQueueResult::OK;
+        success = (write_func(i, std::move(recv_msg)) == MPMCQueueResult::OK);
 
         injectFailPointReceiverPushFail(success, mode);
 

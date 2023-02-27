@@ -37,7 +37,7 @@ public:
 
     void columnPrune(std::unordered_set<String> &) override {}
 
-    void toMPPSubPlan(size_t &, const DAGProperties &, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map) override;
+    void toMPPSubPlan(size_t & executor_index, const DAGProperties &, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map) override;
 
 private:
     TaskMetas task_metas;

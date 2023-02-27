@@ -753,24 +753,31 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
 
 template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toExchangeReceiveResult(
-    std::shared_ptr<ReceivedMessage> & recv_msg,
+    ReceiveResult & recv_result,
     std::queue<Block> & block_queue,
     const Block & header,
-    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr,
-    bool is_eof)
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
-    if (is_eof)
+    switch (recv_result.recv_status)
     {
-        return handleUnnormalChannel(block_queue, decoder_ptr);
-    }
-    else
+    case ReceiveStatus::ok:
     {
-        assert(recv_msg != nullptr);
-        if (unlikely(recv_msg->error_ptr != nullptr))
-            return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
+        assert(recv_result.recv_msg != nullptr);
+        if (unlikely(recv_result.recv_msg->error_ptr != nullptr))
+            return ExchangeReceiverResult::newError(
+                recv_result.recv_msg->source_index,
+                recv_result.recv_msg->req_info,
+                recv_result.recv_msg->error_ptr->msg());
 
-        ExchangeReceiverMetric::subDataSizeMetric(data_size_in_queue, recv_msg->packet->getPacket().ByteSizeLong());
-        return toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
+        ExchangeReceiverMetric::subDataSizeMetric(
+            data_size_in_queue,
+            recv_result.recv_msg->packet->getPacket().ByteSizeLong());
+        return toDecodeResult(block_queue, header, recv_result.recv_msg, decoder_ptr);
+    }
+    case ReceiveStatus::eof:
+        return handleUnnormalChannel(block_queue, decoder_ptr);
+    case ReceiveStatus::empty:
+        throw Exception("Unexpect recv status: empty");
     }
 }
 
@@ -782,13 +789,11 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     auto recv_res = receive(stream_id);
-    assert(recv_res.recv_status != ReceiveStatus::empty);
     return toExchangeReceiveResult(
-        recv_res.recv_msg,
+        recv_res,
         block_queue,
         header,
-        decoder_ptr,
-        recv_res.recv_status == ReceiveStatus::eof);
+        decoder_ptr);
 }
 
 template <typename RPCContext>

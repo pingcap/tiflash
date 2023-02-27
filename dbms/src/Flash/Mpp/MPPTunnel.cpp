@@ -173,6 +173,7 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
 
 void MPPTunnel::nonBlockingWrite(TrackedMppDataPacketPtr && data)
 {
+    LOG_TRACE(log, "start non blocking writing");
     auto pushed_data_size = data->getPacket().ByteSizeLong();
     if (tunnel_sender->nonBlockingPush(std::move(data)))
     {

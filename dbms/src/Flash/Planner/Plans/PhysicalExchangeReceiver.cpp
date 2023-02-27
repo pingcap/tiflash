@@ -92,19 +92,17 @@ void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline,
 
 void PhysicalExchangeReceiver::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency)
 {
+    // TODO support fine grained shuffle.
     const bool enable_fine_grained_shuffle = enableFineGrainedShuffle(mpp_exchange_receiver->getFineGrainedShuffleStreamCount());
-    // TODO choose a more reasonable source concurrency.
-    size_t source_concurrency = enable_fine_grained_shuffle
-        ? std::min(concurrency, mpp_exchange_receiver->getFineGrainedShuffleStreamCount())
-        : concurrency;
+    RUNTIME_CHECK(!enable_fine_grained_shuffle);
 
-    group_builder.init(source_concurrency);
-    size_t index = 0;
+    // TODO choose a more reasonable concurrency.
+    group_builder.init(concurrency);
     group_builder.transform([&](auto & builder) {
         builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(
             group_builder.exec_status,
             mpp_exchange_receiver,
-            /*stream_id=*/enable_fine_grained_shuffle ? index++ : 0,
+            /*stream_id=*/0,
             log->identifier(),
             execId()));
     });
