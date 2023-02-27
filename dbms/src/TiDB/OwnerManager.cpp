@@ -245,9 +245,7 @@ void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
 
             const auto lease_id = session->leaseID();
             LOG_DEBUG(log, "new campaign loop with lease_id={:x}", lease_id);
-            Etcd::LeaderKey new_leader;
-            grpc::Status status;
-            std::tie(new_leader, status) = client->campaign(campaign_name, id, lease_id);
+            auto && [new_leader, status] = client->campaign(campaign_name, id, lease_id);
             if (!status.ok())
             {
                 // if error, continue next campaign
@@ -286,7 +284,6 @@ void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
                 // it means this node is not owner anymore
                 std::unique_lock lk(mtx_camaign);
                 cv_camaign.wait(lk, [this] { return state != State::Normal; });
-                LOG_INFO(log, "{}", magic_enum::enum_name(state));
             }
 
             watch_ctx.TryCancel();

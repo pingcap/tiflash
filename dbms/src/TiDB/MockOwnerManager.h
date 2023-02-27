@@ -62,7 +62,7 @@ public:
             return false;
         }
 
-        // other node win
+        // no owner now
         owner = OwnerType::NoLeader;
         actual_owner_id.clear();
         return true;

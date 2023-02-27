@@ -88,7 +88,12 @@ try
     if (etcd_endpoint.empty())
     {
         const auto * t = ::testing::UnitTest::GetInstance()->current_test_info();
-        LOG_INFO(log, "{}.{} is skipped because env ETCD_ENDPOINT not set", t->test_case_name(), t->name());
+        LOG_INFO(
+            log,
+            "{}.{} is skipped because env ETCD_ENDPOINT not set. "
+            "Run it with an etcd cluster using `ETCD_ENDPOINT=127.0.0.1:2379 ./dbms/gtests_dbms ...`",
+            t->test_case_name(),
+            t->name());
         return;
     }
 
@@ -203,10 +208,14 @@ try
     if (etcd_endpoint.empty())
     {
         const auto * t = ::testing::UnitTest::GetInstance()->current_test_info();
-        LOG_INFO(log, "{}.{} is skipped because env ETCD_ENDPOINT not set", t->test_case_name(), t->name());
+        LOG_INFO(
+            log,
+            "{}.{} is skipped because env ETCD_ENDPOINT not set. "
+            "Run it with an etcd cluster using `ETCD_ENDPOINT=127.0.0.1:2379 ./dbms/gtests_dbms ...`",
+            t->test_case_name(),
+            t->name());
         return;
     }
-
     using namespace std::chrono_literals;
 
     auto ctx = TiFlashTestEnv::getContext();
@@ -269,7 +278,12 @@ try
     if (etcd_endpoint.empty())
     {
         const auto * t = ::testing::UnitTest::GetInstance()->current_test_info();
-        LOG_INFO(log, "{}.{} is skipped because env ETCD_ENDPOINT not set", t->test_case_name(), t->name());
+        LOG_INFO(
+            log,
+            "{}.{} is skipped because env ETCD_ENDPOINT not set. "
+            "Run it with an etcd cluster using `ETCD_ENDPOINT=127.0.0.1:2379 ./dbms/gtests_dbms ...`",
+            t->test_case_name(),
+            t->name());
         return;
     }
 
