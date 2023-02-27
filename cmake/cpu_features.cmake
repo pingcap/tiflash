@@ -165,9 +165,8 @@ elseif (ARCH_AMD64)
     set (TEST_FLAG "-mpopcnt")
     set (CMAKE_REQUIRED_FLAGS "${TEST_FLAG} -O0")
     check_cxx_source_compiles("
-        #include <bit>
         int main() {
-            auto a = std::popcount(0);
+            auto a = __builtin_popcountll(0);
             (void)a;
             return 0;
         }
