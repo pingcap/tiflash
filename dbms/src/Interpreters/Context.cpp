@@ -267,6 +267,11 @@ struct ContextShared
             ps_write->shutdown();
         }
 
+        if (tmt_context)
+        {
+            tmt_context->shutdown();
+        }
+
         /** At this point, some tables may have threads that block our mutex.
           * To complete them correctly, we will copy the current list of tables,
           *  and ask them all to finish their work.

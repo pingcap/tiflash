@@ -44,7 +44,7 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
     LOG_INFO(log, "Start background storage gc worker with interval {} seconds.", global_settings.dt_bg_gc_check_interval);
 }
 
-BackgroundService::~BackgroundService()
+void BackgroundService::shutdown()
 {
     if (single_thread_task_handle)
     {
@@ -57,6 +57,11 @@ BackgroundService::~BackgroundService()
         background_pool.removeTask(storage_gc_handle);
         storage_gc_handle = nullptr;
     }
+}
+
+BackgroundService::~BackgroundService()
+{
+    shutdown();
 }
 
 } // namespace DB
