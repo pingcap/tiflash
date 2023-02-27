@@ -19,9 +19,6 @@
 #include <Common/setThreadName.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
-#include <Poco/DateTime.h>
-#include <Poco/DateTimeFormat.h>
-#include <Poco/DateTimeFormatter.h>
 #include <Poco/Timespan.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
@@ -184,11 +181,6 @@ BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::tryPopTask(pcg64 
             continue;
         }
 
-        Poco::DateTime dt(min_time);
-        LOG_INFO(Logger::get(),
-                 "pop task with min_time={}",
-                 Poco::DateTimeFormatter::format(dt, Poco::DateTimeFormat::SORTABLE_FORMAT));
-
         Poco::Timestamp current_time;
         if (min_time > current_time)
         {
@@ -246,7 +238,9 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
         if (shutdown)
             break;
 
-        // The time to sleep before running next task, `sleep_seconds` by default.
+        // Get the time to sleep before the task in the next run.
+        // - If task has done work, it could be executed again immediately.
+        // - If not, add delay before next run.
         const auto next_sleep_time_span = [](bool done_work, const TaskHandle & t) {
             if (done_work)
             {
@@ -263,9 +257,6 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
                 return Poco::Timespan(sleep_seconds, 0);
             }
         }(done_work, task);
-        /// If task has done work, it could be executed again immediately.
-        /// If not, add delay before next run.
-        LOG_INFO(Logger::get(), "done_work={} t.interval={} next_span s={} ms={}", done_work, task->interval_milliseconds, next_sleep_time_span.seconds(), next_sleep_time_span.milliseconds());
 
         {
             std::unique_lock lock(tasks_mutex);
@@ -278,12 +269,6 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
             tasks.erase(task->iterator);
             Poco::Timestamp next_time_to_execute = Poco::Timestamp() + next_sleep_time_span;
             task->iterator = tasks.emplace(next_time_to_execute, task);
-            Poco::DateTime dt(next_time_to_execute);
-            LOG_INFO(Logger::get(),
-                     "next_span s={} ms={} next_exec={}",
-                     next_sleep_time_span.seconds(),
-                     next_sleep_time_span.milliseconds(),
-                     Poco::DateTimeFormatter::format(dt, Poco::DateTimeFormat::SORTABLE_FORMAT));
         }
     }
 

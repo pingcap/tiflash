@@ -26,6 +26,7 @@ TEST(BackgroundProcessingPoolTest, FixedInterval)
     Int64 num_actual_called = 0;
     TimePoint last_update_timepoint = Clock::now();
     Int64 min_diff_ms = std::numeric_limits<Int64>::max();
+    Int64 max_diff_ms = 0;
     auto task = pool.addTask(
         [&]() {
             num_actual_called += 1;
@@ -37,6 +38,7 @@ TEST(BackgroundProcessingPoolTest, FixedInterval)
                     LOG_ERROR(Logger::get(), "Unexpected frequent call, actual interval={}ms", diff_ms);
                 }
                 min_diff_ms = std::min(min_diff_ms, diff_ms);
+                max_diff_ms = std::max(max_diff_ms, diff_ms);
             }
 
             last_update_timepoint = Clock::now();
@@ -49,7 +51,7 @@ TEST(BackgroundProcessingPoolTest, FixedInterval)
 
     pool.removeTask(task);
 
-    LOG_INFO(Logger::get(), "actual being called for {} times", num_actual_called);
+    LOG_INFO(Logger::get(), "actual being called for {} times, min_diff={} max_diff={}", num_actual_called, min_diff_ms, max_diff_ms);
     ASSERT_TRUE(num_expect_called - 1 <= num_actual_called
                 && num_actual_called <= num_expect_called + 1)
         << fmt::format("actual_called={} min_diff_ms={}", num_actual_called, min_diff_ms);
