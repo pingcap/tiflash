@@ -153,7 +153,10 @@ QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
-    if (context.getSettingsRef().enable_planner && context.getSettingsRef().enable_pipeline)
+    // now only support pipeline model in test model.
+    if (context.isTest()
+        && context.getSettingsRef().enable_planner
+        && context.getSettingsRef().enable_pipeline)
     {
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);
