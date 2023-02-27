@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+ENV_VARS_PATH=${ENV_VARS_PATH:-./_env.sh}
+
 function run_test()
 {
 	local name="$1"
@@ -11,7 +13,7 @@ function run_test()
     fi
 }
 
-source ./_env.sh
+source ${ENV_VARS_PATH}
 
 continue_on_error="${1:-1}" # default 1
 set -ex
@@ -30,4 +32,3 @@ export ALSO_RUN_WITH_TEST_DATA=1
 for test in ${tests[@]}; do
 	run_test "$test"
 done
-
