@@ -48,7 +48,8 @@ public:
     /// You should call this function multiple times to read out all edits, until it returns nullopt.
     std::optional<universal::PageEntriesEdit> readEdits(CheckpointProto::StringsInternMap & strings_map);
 
-    std::optional<uint64_t /* To be changed */> readLocks();
+    /// You should call this function multiple times to read out all locks, until it returns nullopt.
+    std::optional<std::unordered_set<String>> readLocks();
 
 private:
     enum class ReadStage

@@ -56,7 +56,7 @@ public:
     void writeEditsFinish();
 
     /// You can call this function multiple times. It must be called after `writeEdits`.
-    void writeLocks();
+    void writeLocks(const std::unordered_set<String> & locks);
     void writeLocksFinish();
 
     void writeSuffix();

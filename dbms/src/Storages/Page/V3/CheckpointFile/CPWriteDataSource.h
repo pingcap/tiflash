@@ -43,7 +43,7 @@ public:
     /**
      * The caller must ensure `blob_store` is valid when using with the CPFilesWriter.
      */
-    CPWriteDataSourceBlobStore(BlobStore<universal::BlobStoreTrait> & blob_store_)
+    explicit CPWriteDataSourceBlobStore(BlobStore<universal::BlobStoreTrait> & blob_store_)
         : blob_store(blob_store_)
     {}
 
@@ -65,7 +65,7 @@ private:
 class CPWriteDataSourceFixture : public CPWriteDataSource
 {
 public:
-    CPWriteDataSourceFixture(const std::unordered_map<size_t /* offset */, std::string> & data_)
+    explicit CPWriteDataSourceFixture(const std::unordered_map<size_t /* offset */, std::string> & data_)
         : data(data_)
     {
     }

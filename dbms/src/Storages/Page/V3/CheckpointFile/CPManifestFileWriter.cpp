@@ -40,13 +40,16 @@ void CPManifestFileWriter::writeEdits(const universal::PageEntriesEdit & edit)
     if (write_stage != WriteStage::WritingEdits)
         RUNTIME_CHECK_MSG(false, "unexpected write stage {}", magic_enum::enum_name(write_stage));
 
+    if (edit.empty())
+        return;
+
     CheckpointProto::ManifestFileEditsPart part;
+    part.set_has_more(true);
     for (const auto & edit_record : edit.getRecords())
     {
         auto * out_record = part.add_edits();
         *out_record = edit_record.toProto();
     }
-    part.set_has_more(true);
     details::writeMessageWithLength(*compressed_writer, part);
 }
 
@@ -64,17 +67,27 @@ void CPManifestFileWriter::writeEditsFinish()
     write_stage = WriteStage::WritingEditsFinished;
 }
 
-void CPManifestFileWriter::writeLocks()
+void CPManifestFileWriter::writeLocks(const std::unordered_set<String> & lock_files)
 {
     if (write_stage < WriteStage::WritingEditsFinished)
         writeEditsFinish(); // Trying to fast-forward. There may be exceptions.
     if (write_stage > WriteStage::WritingLocks)
         RUNTIME_CHECK_MSG(false, "unexpected write stage {}", magic_enum::enum_name(write_stage));
 
-    // Not implemented. Currently write nothing else.
+    if (lock_files.empty())
+        return;
 
     CheckpointProto::ManifestFileLocksPart part;
     part.set_has_more(true);
+    for (const auto & lock_file : lock_files)
+        part.add_locks()->set_name(lock_file);
+    // Always sort the lock files in order to write out deterministic results.
+    std::sort(
+        part.mutable_locks()->begin(),
+        part.mutable_locks()->end(),
+        [](const CheckpointProto::LockFile & a, const CheckpointProto::LockFile & b) {
+            return a.name() < b.name();
+        });
     details::writeMessageWithLength(*compressed_writer, part);
 
     write_stage = WriteStage::WritingLocks;

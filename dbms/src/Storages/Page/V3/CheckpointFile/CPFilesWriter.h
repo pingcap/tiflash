@@ -34,7 +34,15 @@ public:
         const std::string & data_file_id;
         const std::string & manifest_file_path;
         const std::string & manifest_file_id;
-        CPWriteDataSourcePtr data_source;
+        const CPWriteDataSourcePtr data_source;
+
+        /**
+         * The list of lock files that will be always appended to the checkpoint file.
+         *
+         * Note: In addition to the specified lock files, the checkpoint file will also contain
+         * lock files from `writeEditsAndApplyRemoteInfo`.
+         */
+        const std::unordered_set<String> & must_locked_files = {};
     };
 
     static CPFilesWriterPtr create(Options options)
@@ -51,71 +59,24 @@ public:
         const uint64_t last_sequence;
     };
 
-    void writePrefix(const PrefixInfo & info)
-    {
-        auto create_at_ms = Poco::Timestamp().epochMicroseconds() / 1000;
+    /**
+     * Must be called first, before other `writeXxx`.
+     */
+    void writePrefix(const PrefixInfo & info);
 
-        CheckpointProto::DataFilePrefix data_prefix;
-        data_prefix.set_local_sequence(info.sequence);
-        data_prefix.set_create_at_ms(create_at_ms);
-        data_prefix.mutable_writer_info()->CopyFrom(info.writer);
-        data_prefix.set_manifest_file_id(manifest_file_id);
-        data_prefix.set_sub_file_index(0);
-        data_writer->writePrefix(data_prefix);
+    /**
+     * This function can be called multiple times if there are too many edits and
+     * you want to write in a streaming way. You are also allowed to not call this
+     * function at all, if there is no edit.
+     *
+     * You must call `writeSuffix` finally, if you don't plan to write edits anymore.
+     */
+    bool /* has_new_data */ writeEditsAndApplyRemoteInfo(universal::PageEntriesEdit & edit);
 
-        CheckpointProto::ManifestFilePrefix manifest_prefix;
-        manifest_prefix.set_local_sequence(info.sequence);
-        manifest_prefix.set_last_local_sequence(info.last_sequence);
-        manifest_prefix.set_create_at_ms(create_at_ms);
-        manifest_prefix.mutable_writer_info()->CopyFrom(info.writer);
-        manifest_writer->writePrefix(manifest_prefix);
-    }
-
-    /// This function can be called multiple times.
-    bool /* has_new_data */ writeEditsAndApplyRemoteInfo(universal::PageEntriesEdit & edit)
-    {
-        auto & records = edit.getMutRecords();
-        if (records.empty())
-            return false;
-
-        // 1. Iterate all edits, find these entry edits without the checkpoint info.
-        for (auto & rec_edit : records)
-        {
-            if (rec_edit.type != EditRecordType::VAR_ENTRY)
-                continue;
-            if (rec_edit.entry.checkpoint_info.has_value())
-                continue;
-
-            // 2. For entry edits without the checkpoint info, write them to the data file, and assign a new checkpoint info.
-            auto page = data_source->read({rec_edit.page_id, rec_edit.entry});
-            RUNTIME_CHECK(page.isValid());
-            auto data_location = data_writer->write(
-                rec_edit.page_id,
-                rec_edit.version,
-                page.data.begin(),
-                page.data.size());
-            rec_edit.entry.checkpoint_info = {
-                .data_location = data_location,
-                .is_local_data_reclaimed = false,
-            };
-        }
-
-        // 3. Write down everything to the manifest.
-        manifest_writer->writeEdits(edit);
-
-        return data_writer->writtenRecords() > 0;
-    }
-
-    void writeEditsFinish()
-    {
-        manifest_writer->writeEditsFinish();
-    }
-
-    void writeSuffix()
-    {
-        data_writer->writeSuffix();
-        manifest_writer->writeSuffix();
-    }
+    /**
+     * This function must be called, and must be called last, after other `writeXxx`.
+     */
+    void writeSuffix();
 
     void flush()
     {
@@ -129,10 +90,20 @@ public:
     }
 
 private:
+    enum class WriteStage
+    {
+        WritingPrefix,
+        WritingEdits,
+        WritingFinished,
+    };
+
     const std::string manifest_file_id;
     const CPDataFileWriterPtr data_writer;
     const CPManifestFileWriterPtr manifest_writer;
-    CPWriteDataSourcePtr data_source;
+    const CPWriteDataSourcePtr data_source;
+
+    std::unordered_set<String> locked_files;
+    WriteStage write_stage = WriteStage::WritingPrefix;
 
     LoggerPtr log;
 };

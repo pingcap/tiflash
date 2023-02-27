@@ -149,6 +149,14 @@ try
         auto edits_r = manifest_reader->readEdits(im);
         ASSERT_FALSE(edits_r.has_value());
     }
+    {
+        auto locks = manifest_reader->readLocks();
+        ASSERT_FALSE(locks.has_value());
+    }
+    {
+        auto locks = manifest_reader->readLocks();
+        ASSERT_FALSE(locks.has_value());
+    }
 }
 CATCH
 
@@ -234,6 +242,16 @@ try
         auto edits_r = manifest_reader->readEdits(im);
         ASSERT_FALSE(edits_r.has_value());
     }
+    {
+        auto locks = manifest_reader->readLocks();
+        ASSERT_TRUE(locks.has_value());
+        ASSERT_EQ(1, locks->size());
+        ASSERT_EQ(1, locks->count("data_1"));
+    }
+    {
+        auto locks = manifest_reader->readLocks();
+        ASSERT_FALSE(locks.has_value());
+    }
 }
 CATCH
 
@@ -312,6 +330,17 @@ try
         auto edits_r = manifest_reader->readEdits(im);
         ASSERT_FALSE(edits_r.has_value());
     }
+    {
+        auto locks = manifest_reader->readLocks();
+        ASSERT_TRUE(locks.has_value());
+        ASSERT_EQ(2, locks->size());
+        ASSERT_EQ(1, locks->count("data_1"));
+        ASSERT_EQ(1, locks->count("my_file_id"));
+    }
+    {
+        auto locks = manifest_reader->readLocks();
+        ASSERT_FALSE(locks.has_value());
+    }
 }
 CATCH
 
@@ -379,6 +408,111 @@ try
         ASSERT_EQ(0, r[2].entry.size);
         ASSERT_TRUE(r[2].entry.checkpoint_info->is_local_data_reclaimed);
         ASSERT_EQ("Dreamed of the day that she was born", readData(r[2].entry.checkpoint_info->data_location));
+    }
+    EXPECT_THROW({
+        // Call readLocks without draining readEdits should result in exceptions
+        manifest_reader->readLocks();
+    },
+                 DB::Exception);
+    {
+        auto edits_r = manifest_reader->readEdits(im);
+        ASSERT_FALSE(edits_r.has_value());
+    }
+    {
+        auto locks = manifest_reader->readLocks();
+        ASSERT_TRUE(locks.has_value());
+        ASSERT_EQ(1, locks->size());
+        ASSERT_EQ(1, locks->count("data_1"));
+    }
+    {
+        auto locks = manifest_reader->readLocks();
+        ASSERT_FALSE(locks.has_value());
+    }
+}
+CATCH
+
+TEST_F(CheckpointFileTest, WriteEmptyEdits)
+try
+{
+    auto writer = CPFilesWriter::create({
+        .data_file_path = dir + "/data_1",
+        .data_file_id = "data_1",
+        .manifest_file_path = dir + "/manifest_foo",
+        .manifest_file_id = "manifest_foo",
+        .data_source = CPWriteDataSourceFixture::create({}),
+    });
+
+    writer->writePrefix({
+        .writer = {},
+        .sequence = 5,
+        .last_sequence = 3,
+    });
+    {
+        auto edits = universal::PageEntriesEdit{};
+        writer->writeEditsAndApplyRemoteInfo(edits);
+    }
+    {
+        auto edits = universal::PageEntriesEdit{};
+        edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "snow"});
+        writer->writeEditsAndApplyRemoteInfo(edits);
+    }
+    writer->writeSuffix();
+    writer.reset();
+
+    auto manifest_reader = CPManifestFileReader::create({
+        .file_path = dir + "/manifest_foo",
+    });
+    manifest_reader->readPrefix();
+    CheckpointProto::StringsInternMap im;
+
+    {
+        auto edits_r = manifest_reader->readEdits(im);
+        auto r = edits_r->getRecords();
+        ASSERT_EQ(1, r.size());
+        ASSERT_EQ(EditRecordType::VAR_DELETE, r[0].type);
+    }
+    {
+        auto edits_r = manifest_reader->readEdits(im);
+        ASSERT_FALSE(edits_r.has_value());
+    }
+    {
+        auto locks = manifest_reader->readLocks();
+        ASSERT_FALSE(locks.has_value());
+    }
+}
+CATCH
+
+TEST_F(CheckpointFileTest, WriteEditsNotCalled)
+try
+{
+    auto writer = CPFilesWriter::create({
+        .data_file_path = dir + "/data_1",
+        .data_file_id = "data_1",
+        .manifest_file_path = dir + "/manifest_foo",
+        .manifest_file_id = "manifest_foo",
+        .data_source = CPWriteDataSourceFixture::create({}),
+    });
+
+    writer->writePrefix({
+        .writer = {},
+        .sequence = 5,
+        .last_sequence = 3,
+    });
+    writer->writeSuffix();
+    writer.reset();
+
+    auto manifest_reader = CPManifestFileReader::create({
+        .file_path = dir + "/manifest_foo",
+    });
+    manifest_reader->readPrefix();
+    CheckpointProto::StringsInternMap im;
+    {
+        auto edits_r = manifest_reader->readEdits(im);
+        ASSERT_FALSE(edits_r.has_value());
+    }
+    {
+        auto locks = manifest_reader->readLocks();
+        ASSERT_FALSE(locks.has_value());
     }
 }
 CATCH

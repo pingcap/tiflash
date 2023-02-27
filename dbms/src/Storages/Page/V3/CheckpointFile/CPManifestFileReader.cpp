@@ -53,7 +53,7 @@ std::optional<universal::PageEntriesEdit> CPManifestFileReader::readEdits(Checkp
     return edit;
 }
 
-std::optional<uint64_t /* To be changed */> CPManifestFileReader::readLocks()
+std::optional<std::unordered_set<String>> CPManifestFileReader::readLocks()
 {
     if (read_stage == ReadStage::ReadingLocksFinished)
         return std::nullopt;
@@ -70,7 +70,11 @@ std::optional<uint64_t /* To be changed */> CPManifestFileReader::readLocks()
         return std::nullopt;
     }
 
-    return 42 /* TODO: deal with part */;
+    std::unordered_set<String> locks;
+    locks.reserve(part.locks_size());
+    for (const auto & lock : part.locks())
+        locks.emplace(lock.name());
+    return locks;
 }
 
 } // namespace DB::PS::V3
