@@ -1169,6 +1169,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     DM::SegmentReaderPoolManager::instance().init(server_info);
     DM::SegmentReadTaskScheduler::instance();
 
+<<<<<<< HEAD
     {
         // Note that this must do before initialize schema sync service.
         do
@@ -1186,6 +1187,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 break;
             upgrader.doUpgrade();
         } while (false);
+=======
+    auto schema_cache_size = config().getInt("schema_cache_size", 10000);
+    global_context->initializeSharedBlockSchemas(schema_cache_size);
+>>>>>>> da5c10dd76 (Change the implementation of shared_block_schemas with LRUCache (#6881))
 
         /// Then, load remaining databases
         loadMetadata(*global_context);

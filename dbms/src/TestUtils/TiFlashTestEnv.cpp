@@ -136,6 +136,11 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
 
     auto & path_pool = global_context->getPathPool();
     global_context->getTMTContext().restore(path_pool);
+<<<<<<< HEAD
+=======
+
+    global_context->initializeSharedBlockSchemas(10000);
+>>>>>>> da5c10dd76 (Change the implementation of shared_block_schemas with LRUCache (#6881))
 }
 
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)

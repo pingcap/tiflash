@@ -1813,6 +1813,19 @@ SharedQueriesPtr Context::getSharedQueries()
     return shared->shared_queries;
 }
 
+<<<<<<< HEAD
+=======
+const std::shared_ptr<DB::DM::SharedBlockSchemas> & Context::getSharedBlockSchemas() const
+{
+    return shared->shared_block_schemas;
+}
+
+void Context::initializeSharedBlockSchemas(size_t shared_block_schemas_size)
+{
+    shared->shared_block_schemas = std::make_shared<DB::DM::SharedBlockSchemas>(shared_block_schemas_size);
+}
+
+>>>>>>> da5c10dd76 (Change the implementation of shared_block_schemas with LRUCache (#6881))
 size_t Context::getMaxStreams() const
 {
     size_t max_streams = settings.max_threads;

@@ -484,6 +484,35 @@ public:
     MockMPPServerInfo mockMPPServerInfo() const;
     void setMockMPPServerInfo(MockMPPServerInfo & info);
 
+<<<<<<< HEAD
+=======
+    void setDisaggregatedMode(DisaggregatedMode mode)
+    {
+        disaggregated_mode = mode;
+    }
+    bool isDisaggregatedComputeMode() const
+    {
+        return disaggregated_mode == DisaggregatedMode::Compute;
+    }
+    bool isDisaggregatedStorageMode() const
+    {
+        return disaggregated_mode == DisaggregatedMode::Storage;
+    }
+
+    const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
+    void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
+
+    // todo: remove after AutoScaler is stable.
+    void setUseAutoScaler(bool use)
+    {
+        use_autoscaler = use;
+    }
+    bool useAutoScaler() const
+    {
+        return use_autoscaler;
+    }
+
+>>>>>>> da5c10dd76 (Change the implementation of shared_block_schemas with LRUCache (#6881))
 private:
     /** Check if the current client has access to the specified database.
       * If access is denied, throw an exception.
