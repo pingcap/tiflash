@@ -26,96 +26,144 @@
 #include <aws/s3/model/ListObjectsV2Result.h>
 #include <aws/s3/model/Object.h>
 #include <aws/s3/model/PutObjectRequest.h>
+#include <sstream>
 
 namespace DB::S3::tests
 {
 using namespace Aws::S3;
 
-Model::PutObjectOutcome MockS3Client::PutObject(const Model::PutObjectRequest & r) const
+Model::GetObjectOutcome MockS3Client::GetObject(const Model::GetObjectRequest & request) const
 {
-    put_keys.emplace_back(r.GetKey());
-    return Model::PutObjectOutcome{Aws::AmazonWebServiceResult<Aws::Utils::Xml::XmlDocument>{}};
-}
-
-Model::DeleteObjectOutcome MockS3Client::DeleteObject(const Model::DeleteObjectRequest & r) const
-{
-    delete_keys.emplace_back(r.GetKey());
-    return Model::DeleteObjectOutcome{Aws::AmazonWebServiceResult<Aws::Utils::Xml::XmlDocument>{}};
-}
-
-Model::ListObjectsV2Outcome MockS3Client::ListObjectsV2(const Model::ListObjectsV2Request & r) const
-{
-    Model::ListObjectsV2Result resp;
-    for (const auto & k : put_keys)
+    std::lock_guard lock(mtx);
+    auto itr = storage.find(request.GetBucket());
+    if (itr == storage.end())
     {
-        if (startsWith(k, r.GetPrefix()))
+        return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuchBucket");
+    }
+    const auto & bucket_storage = itr->second;
+    auto itr_obj = bucket_storage.find(request.GetKey());
+    if (itr_obj == bucket_storage.end())
+    {
+        return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuchKey");
+    }
+    auto * ss = new std::stringstream(itr_obj->second);
+    Model::GetObjectResult result;
+    result.ReplaceBody(ss);
+    result.SetContentLength(itr_obj->second.size());
+    return result;
+}
+
+Model::PutObjectOutcome MockS3Client::PutObject(const Model::PutObjectRequest & request) const
+{
+    std::lock_guard lock(mtx);
+    auto itr = storage.find(request.GetBucket());
+    if (itr == storage.end())
+    {
+        return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuchBucket");
+    }
+    auto & bucket_storage = itr->second;
+    bucket_storage[request.GetKey()] = String{std::istreambuf_iterator<char>(*request.GetBody()), {}};
+    return Model::PutObjectResult{};
+}
+
+Model::DeleteObjectOutcome MockS3Client::DeleteObject(const Model::DeleteObjectRequest & request) const
+{
+    std::lock_guard lock(mtx);
+    auto itr = storage.find(request.GetBucket());
+    if (itr == storage.end())
+    {
+        return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuchBucket");
+    }
+    auto & bucket_storage = itr->second;
+    bucket_storage.erase(request.GetKey());
+    return Model::DeleteObjectResult{};
+}
+
+Model::ListObjectsV2Outcome MockS3Client::ListObjectsV2(const Model::ListObjectsV2Request & request) const
+{
+    std::lock_guard lock(mtx);
+    auto itr = storage.find(request.GetBucket());
+    if (itr == storage.end())
+    {
+        return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuchBucket");
+    }
+    const auto & bucket_storage = itr->second;
+    Model::ListObjectsV2Result result;
+    for (auto itr_obj = bucket_storage.lower_bound(request.GetPrefix()); itr_obj != bucket_storage.end(); ++itr_obj)
+    {
+        if (startsWith(itr_obj->first, request.GetPrefix()))
         {
-            bool is_deleted = false;
-            for (const auto & d : delete_keys)
-            {
-                if (k == d)
-                {
-                    is_deleted = true;
-                    break;
-                }
-            }
-            if (is_deleted)
-                continue;
-            Model::Object o;
-            o.SetKey(k);
-            resp.AddContents(o);
+            Model::Object obj;
+            obj.SetKey(itr_obj->first);
+            obj.SetSize(itr_obj->second.size());
+            result.AddContents(std::move(obj));
+        }
+        else
+        {
+            break;
         }
     }
-    for (const auto & k : list_result)
-    {
-        if (startsWith(k, r.GetPrefix()))
-        {
-            bool is_deleted = false;
-            for (const auto & d : delete_keys)
-            {
-                if (k == d)
-                {
-                    is_deleted = true;
-                    break;
-                }
-            }
-            if (is_deleted)
-                continue;
-            Model::Object o;
-            o.SetKey(k);
-            resp.AddContents(o);
-        }
-    }
-    return Model::ListObjectsV2Outcome{resp};
+    return result;
 }
 
-Model::HeadObjectOutcome MockS3Client::HeadObject(const Model::HeadObjectRequest & r) const
+Model::HeadObjectOutcome MockS3Client::HeadObject(const Model::HeadObjectRequest & request) const
 {
-    for (const auto & k : put_keys)
+    std::lock_guard lock(mtx);
+    auto itr = storage.find(request.GetBucket());
+    if (itr == storage.end())
     {
-        if (r.GetKey() == k)
-        {
-            Model::HeadObjectResult resp;
-            return Model::HeadObjectOutcome{resp};
-        }
+        return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuchBucket");
     }
-
-    if (!head_result_mtime)
+    const auto & bucket_storage = itr->second;
+    auto itr_obj = bucket_storage.find(request.GetKey());
+    if (itr_obj != bucket_storage.end())
     {
-        Aws::Client::AWSError error(S3Errors::NO_SUCH_KEY, false);
-        return Model::HeadObjectOutcome{error};
+        return Model::HeadObjectResult{};
     }
-    Model::HeadObjectResult resp;
-    resp.SetLastModified(head_result_mtime.value());
-    return Model::HeadObjectOutcome{resp};
+    return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuchKey");
 }
 
-void MockS3Client::clear()
+Model::CreateMultipartUploadOutcome MockS3Client::CreateMultipartUpload(const Model::CreateMultipartUploadRequest & /*request*/) const
 {
-    put_keys.clear();
-    delete_keys.clear();
-    list_result.clear();
-    head_result_mtime.reset();
+    static std::atomic<UInt64> upload_id{0};
+    Model::CreateMultipartUploadResult result;
+    result.SetUploadId(std::to_string(upload_id++));
+    return result;
+}
+
+Model::UploadPartOutcome MockS3Client::UploadPart(const Model::UploadPartRequest & request) const
+{
+    std::lock_guard lock(mtx);
+    upload_parts[request.GetUploadId()][request.GetPartNumber()] = String{std::istreambuf_iterator<char>(*request.GetBody()), {}};
+    Model::UploadPartResult result;
+    result.SetETag(std::to_string(request.GetPartNumber()));
+    return result;
+}
+
+Model::CompleteMultipartUploadOutcome MockS3Client::CompleteMultipartUpload(const Model::CompleteMultipartUploadRequest & request) const
+{
+    std::lock_guard lock(mtx);
+    const auto & parts = upload_parts[request.GetUploadId()];
+    String s;
+    for (const auto & p : parts)
+    {
+        s += p.second;
+    }
+    auto itr = storage.find(request.GetBucket());
+    if (itr == storage.end())
+    {
+        return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuchBucket");
+    }
+    auto & bucket_storage = itr->second;
+    bucket_storage[request.GetKey()] = s;
+    return Model::CompleteMultipartUploadResult{};
+}
+
+Model::CreateBucketOutcome MockS3Client::CreateBucket(const Model::CreateBucketRequest & request) const
+{
+    std::lock_guard lock(mtx);
+    [[maybe_unused]] auto & bucket_storage = storage[request.GetBucket()];
+    return Model::CreateBucketResult{};
 }
 
 } // namespace DB::S3::tests

@@ -24,7 +24,6 @@
 
 namespace DB::S3
 {
-
 //==== Serialize/Deserialize ====//
 
 namespace details
@@ -52,6 +51,7 @@ constexpr static std::string_view fmt_subpath_manifest                       = "
 constexpr static std::string_view fmt_datafile_prefix  = "s{store_id}/data/";
 constexpr static std::string_view fmt_data_file        = "s{store_id}/data/{subpath}";
 constexpr static std::string_view fmt_subpath_checkpoint_data            = "dat_{seq}_{index}";
+constexpr static std::string_view fmt_subpath_dttable                    = "t_{table_id}";
 constexpr static std::string_view fmt_subpath_dtfile                     = "t_{table_id}/dmf_{id}";
 constexpr static std::string_view fmt_subpath_keyspace_dtfile            = "ks_{keyspace}_t_{table_id}/dmf_{id}";
 
@@ -290,6 +290,15 @@ S3Filename S3Filename::fromDMFileOID(const DMFileOID & oid)
         .type = S3FilenameType::DataFile,
         .store_id = oid.store_id,
         .data_subpath = fmt::format(details::fmt_subpath_dtfile, fmt::arg("table_id", oid.table_id), fmt::arg("id", oid.file_id)),
+    };
+}
+
+S3Filename S3Filename::fromTableID(StoreID store_id, TableID table_id)
+{
+    return S3Filename{
+        .type = S3FilenameType::DataFile,
+        .store_id = store_id,
+        .data_subpath = fmt::format(details::fmt_subpath_dttable, fmt::arg("table_id", table_id)),
     };
 }
 

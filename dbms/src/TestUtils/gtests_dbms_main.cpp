@@ -66,6 +66,10 @@ int main(int argc, char ** argv)
     auto run_mode = DB::PageStorageRunMode::ONLY_V3;
     DB::tests::TiFlashTestEnv::initializeGlobalContext(/*testdata_path*/ {}, run_mode);
 
+    DB::StorageS3Config s3_config;
+    s3_config.bucket = "mock_s3_bucket";
+    DB::S3::ClientFactory::instance().init(s3_config, /*use mock*/ true);
+
     DB::ServerInfo server_info;
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DB::DM::DMFileReaderPool::instance();
@@ -102,6 +106,7 @@ int main(int argc, char ** argv)
     // `TiFlashTestEnv::shutdown()` will destroy `DeltaIndexManager`.
     // Stop threads explicitly before `TiFlashTestEnv::shutdown()`.
     DB::DM::SegmentReaderPoolManager::instance().stop();
+    DB::S3::ClientFactory::instance().shutdown();
     DB::tests::TiFlashTestEnv::shutdown();
     DB::S3::ClientFactory::instance().shutdown();
 

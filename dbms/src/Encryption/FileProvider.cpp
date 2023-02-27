@@ -21,6 +21,9 @@
 #include <Encryption/PosixWritableFile.h>
 #include <Encryption/PosixWriteReadableFile.h>
 #include <Poco/File.h>
+#include <Storages/S3/S3Filename.h>
+#include <Storages/S3/S3RandomAccessFile.h>
+#include <Storages/S3/S3WritableFile.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <common/likely.h>
 
@@ -32,7 +35,15 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(
     const ReadLimiterPtr & read_limiter,
     int flags) const
 {
-    RandomAccessFilePtr file = std::make_shared<PosixRandomAccessFile>(file_path_, flags, read_limiter);
+    RandomAccessFilePtr file;
+    if (S3::S3FilenameView::fromKey(file_path_).isValid())
+    {
+        file = S3::S3RandomAccessFile::create(file_path_);
+    }
+    else
+    {
+        file = std::make_shared<PosixRandomAccessFile>(file_path_, flags, read_limiter);
+    }
     auto encryption_info = key_manager->getFile(encryption_path_.full_path);
     if (encryption_info.res != FileEncryptionRes::Disabled && encryption_info.method != EncryptionMethod::Plaintext)
     {
@@ -50,7 +61,15 @@ WritableFilePtr FileProvider::newWritableFile(
     int flags,
     mode_t mode) const
 {
-    WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
+    WritableFilePtr file;
+    if (S3::S3FilenameView::fromKey(file_path_).isValid())
+    {
+        file = S3::S3WritableFile::create(file_path_);
+    }
+    else
+    {
+        file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
+    }
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newFile(encryption_path_.full_path);

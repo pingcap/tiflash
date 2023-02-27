@@ -139,6 +139,22 @@ TEST(S3FilenameTest, StableFile)
     check(r.toView());
 }
 
+TEST(S3FilenameTest, StableTable)
+{
+    UInt64 test_store_id = 2077;
+    Int64 test_table_id = 44;
+    String table_key = "s2077/data/t_44";
+
+    auto name = S3Filename::fromTableID(test_store_id, test_table_id);
+    ASSERT_EQ(name.toFullKey(), table_key);
+
+    auto view = S3FilenameView::fromKey(table_key);
+    ASSERT_TRUE(view.isValid()) << table_key;
+    ASSERT_TRUE(view.isDataFile()) << table_key;
+    ASSERT_EQ(view.store_id, test_store_id) << table_key;
+    ASSERT_EQ(view.data_subpath, "t_44") << table_key;
+}
+
 TEST(S3FilenameTest, StorePrefix)
 {
     {
