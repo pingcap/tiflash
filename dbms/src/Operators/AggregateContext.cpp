@@ -18,6 +18,7 @@ namespace DB
 {
 void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_threads_)
 {
+    RUNTIME_CHECK(!inited_build && !inited_convergent);
     max_threads = max_threads_;
     many_data.reserve(max_threads);
     threads_data.reserve(max_threads);
@@ -35,6 +36,7 @@ void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_t
 
 void AggregateContext::executeOnBlock(size_t task_index, const Block & block)
 {
+    RUNTIME_CHECK(inited_build && !inited_convergent);
     aggregator->executeOnBlock(block, *many_data[task_index], threads_data[task_index].key_columns, threads_data[task_index].aggregate_columns);
     threads_data[task_index].src_bytes += block.bytes();
     threads_data[task_index].src_rows += block.rows();
@@ -42,13 +44,14 @@ void AggregateContext::executeOnBlock(size_t task_index, const Block & block)
 
 void AggregateContext::initConvergent()
 {
+    RUNTIME_CHECK(inited_build && !inited_convergent);
     merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, is_final, max_threads);
     inited_convergent = true;
 
     RUNTIME_CHECK(!merging_buckets || merging_buckets->getConcurrency() > 0);
 }
 
-size_t AggregateContext::getConcurrency()
+size_t AggregateContext::getConvergentConcurrency()
 {
     RUNTIME_CHECK(inited_convergent);
 
@@ -57,6 +60,7 @@ size_t AggregateContext::getConcurrency()
 
 Block AggregateContext::getHeader() const
 {
+    RUNTIME_CHECK(inited_build);
     return aggregator->getHeader(is_final);
 }
 
@@ -72,8 +76,9 @@ bool AggregateContext::useNullSource()
     return !merging_buckets;
 }
 
-Block AggregateContext::read(size_t index)
+Block AggregateContext::readForConvergent(size_t index)
 {
+    RUNTIME_CHECK(inited_convergent);
     return merging_buckets->getData(index);
 }
 } // namespace DB

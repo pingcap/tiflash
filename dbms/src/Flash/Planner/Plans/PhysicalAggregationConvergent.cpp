@@ -35,7 +35,7 @@ void PhysicalAggregationConvergent::buildPipelineExec(PipelineExecGroupBuilder &
     }
     else
     {
-        group_builder.init(aggregate_context->getConcurrency());
+        group_builder.init(aggregate_context->getConvergentConcurrency());
         size_t index = 0;
         group_builder.transform([&](auto & builder) {
             builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(

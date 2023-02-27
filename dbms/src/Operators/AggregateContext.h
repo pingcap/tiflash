@@ -20,7 +20,6 @@
 
 namespace DB
 {
-
 struct ThreadData
 {
     size_t src_rows = 0;
@@ -53,20 +52,21 @@ public:
 
     void initConvergent();
 
-    size_t getConcurrency();
+    size_t getConvergentConcurrency();
 
-    Block read(size_t index);
+    Block readForConvergent(size_t index);
 
     Block getHeader() const;
-
-    bool isTwoLevel();
 
     bool useNullSource();
 
 private:
+    bool isTwoLevel();
+
+private:
     std::unique_ptr<Aggregator> aggregator;
-    bool inited_build = false;
-    bool inited_convergent = false;
+    std::atomic_bool inited_build = false;
+    std::atomic_bool inited_convergent = false;
 
     MergingBucketsPtr merging_buckets;
     ManyAggregatedDataVariants many_data;
