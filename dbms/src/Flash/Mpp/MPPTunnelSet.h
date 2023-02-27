@@ -38,6 +38,14 @@ public:
     void write(tipb::SelectResponse & response, size_t index);
     void nonBlockingWrite(tipb::SelectResponse & response, size_t index);
 
+    /// this is a execution summary writing.
+    /// only return meaningful execution summary for the first tunnel,
+    /// because in TiDB, it does not know enough information
+    /// about the execution details for the mpp query, it just
+    /// add up all the execution summaries for the same executor,
+    /// so if return execution summary for all the tunnels, the
+    /// information in TiDB will be amplified, which may make
+    /// user confused.
     void sendExecutionSummary(const tipb::SelectResponse & response);
 
     void close(const String & reason, bool wait_sender_finish);

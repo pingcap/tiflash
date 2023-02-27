@@ -321,7 +321,9 @@ public:
         if (unlikely(checkPacketErr(data)))
             return false;
 
-        // same as function push.
+        // receiver_mem_tracker pointer will always be valid because ExchangeReceiverBase won't be destructed
+        // before all local tunnels are destructed so that the MPPTask which contains ExchangeReceiverBase and
+        // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
         data->switchMemTracker(local_request_handler.recv_mem_tracker);
 
         return local_request_handler.write<enable_fine_grained_shuffle, true>(source_index, data);

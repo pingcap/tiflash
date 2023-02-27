@@ -57,17 +57,6 @@ public:
         MPPDataPacketVersion version,
         CompressionMethod compression_method);
 
-    /// this is a execution summary writing.
-    /// for both broadcast writing and partition/fine grained shuffle writing, only
-    /// return meaningful execution summary for the first tunnel,
-    /// because in TiDB, it does not know enough information
-    /// about the execution details for the mpp query, it just
-    /// add up all the execution summaries for the same executor,
-    /// so if return execution summary for all the tunnels, the
-    /// information in TiDB will be amplified, which may make
-    /// user confused.
-    void sendExecutionSummary(const tipb::SelectResponse & response);
-
     uint16_t getPartitionNum() const { return mpp_tunnel_set->getPartitionNum(); }
 
     virtual bool isReadyForWrite() const = 0;

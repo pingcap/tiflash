@@ -88,12 +88,6 @@ MPPTunnelSetWriterBase::MPPTunnelSetWriterBase(
     RUNTIME_CHECK(mpp_tunnel_set->getPartitionNum() > 0);
 }
 
-void MPPTunnelSetWriterBase::sendExecutionSummary(const tipb::SelectResponse & response)
-{
-    checkPacketSize(response.ByteSizeLong());
-    mpp_tunnel_set->sendExecutionSummary(response);
-}
-
 void MPPTunnelSetWriterBase::write(tipb::SelectResponse & response)
 {
     checkPacketSize(response.ByteSizeLong());

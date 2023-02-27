@@ -64,7 +64,7 @@ bool ExchangeReceiverBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int3
 
 void ExchangeReceiverBinder::toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map)
 {
-    assert(exchange_sender);
+    RUNTIME_CHECK_MSG(exchange_sender, "exchange_sender must not be nullptr in toMPPSubPlan");
     exchange_sender->toMPPSubPlan(executor_index, properties, exchange_map);
     exchange_map[name] = std::make_pair(shared_from_this(), exchange_sender);
 }
