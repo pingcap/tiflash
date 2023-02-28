@@ -757,7 +757,6 @@ void DAGQueryBlockInterpreter::executeExpand(DAGPipeline & pipeline, const Expre
 
 void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
 {
-    RUNTIME_ASSERT(dagContext().isMPPTask() && dagContext().tunnel_set != nullptr, log, "exchange_sender only run in MPP");
     /// exchange sender should be at the top of operators
     const auto & exchange_sender = query_block.exchange_sender->exchange_sender();
     std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
@@ -776,7 +775,6 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     pipeline.transform([&](auto & stream) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
-            dagContext().tunnel_set,
             partition_col_ids,
             partition_col_collators,
             exchange_sender.tp(),
@@ -787,7 +785,8 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             stream_count,
             batch_size,
             exchange_sender.compression(),
-            context.getSettingsRef().batch_send_min_limit_compression);
+            context.getSettingsRef().batch_send_min_limit_compression,
+            log->identifier());
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         stream->setExtraInfo(extra_info);
     });
