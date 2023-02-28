@@ -14,6 +14,7 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/FilterBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
@@ -60,11 +61,20 @@ void PhysicalFilter::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, before_filter_actions, filter_column, log->identifier()); });
 }
 
-void PhysicalFilter::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalFilter::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
 {
     auto input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<FilterTransformOp>(group_builder.exec_status, input_header, before_filter_actions, filter_column, log->identifier()));
+        auto transform = std::make_unique<FilterTransformOp>(group_builder.exec_status, input_header, before_filter_actions, filter_column, log->identifier());
+
+        std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
+        if (is_tidb_operator)
+        {
+            auto statistics = std::make_shared<BaseRuntimeStatistics>();
+            transform->setRuntimeStatistics(statistics);
+            context.getDAGContext()->pipeline_profiles[executor_id].push_back({statistics});
+        }
+        builder.appendTransformOp(std::move(transform));
     });
 }
 

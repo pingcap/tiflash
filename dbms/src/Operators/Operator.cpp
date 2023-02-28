@@ -45,7 +45,10 @@ OperatorStatus SourceOp::read(Block & block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
+        if (statistics)
+            updateStatistics(block);
     }
+
     assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
 #endif
     return op_status;
@@ -61,7 +64,10 @@ OperatorStatus TransformOp::transform(Block & block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
+        if (statistics && op_status == OperatorStatus::HAS_OUTPUT)
+            updateStatistics(block);
     }
+
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     return op_status;

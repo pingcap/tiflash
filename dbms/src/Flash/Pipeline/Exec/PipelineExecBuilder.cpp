@@ -36,6 +36,11 @@ void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
     sink_op = std::move(sink_op_);
 }
 
+TransformOpPtr & PipelineExecBuilder::lastTransform()
+{
+    return transform_ops.back();
+}
+
 PipelineExecPtr PipelineExecBuilder::build()
 {
     assert(source_op && sink_op);

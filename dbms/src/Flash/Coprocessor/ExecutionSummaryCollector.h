@@ -17,6 +17,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Flash/Coprocessor/DAGContext.h>
 
 namespace DB
 {
@@ -32,7 +33,11 @@ public:
 
     void addExecuteSummaries(tipb::SelectResponse & response);
 
+    void addExecuteSummariesForPipeline(tipb::SelectResponse & response);
+
     tipb::SelectResponse genExecutionSummaryResponse();
+
+    tipb::SelectResponse genExecutionSummaryResponseForPipeline();
 
 private:
     void fillTiExecutionSummary(
@@ -44,6 +49,12 @@ private:
         tipb::SelectResponse & response,
         const String & executor_id,
         const BlockInputStreams & streams,
+        const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
+
+    void fillLocalExecutionSummaryForPipeline(
+        tipb::SelectResponse & response,
+        const String & executor_id,
+        const BaseRuntimeStatisticsGroupVec & statistic_group,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
 private:

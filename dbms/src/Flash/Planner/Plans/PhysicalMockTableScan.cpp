@@ -111,12 +111,20 @@ void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Co
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
 {
     group_builder.init(mock_streams.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(group_builder.exec_status, mock_streams[i++]));
+        auto source = std::make_unique<BlockInputStreamSourceOp>(group_builder.exec_status, mock_streams[i++]);
+        std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
+        if (is_tidb_operator)
+        {
+            auto statistics = std::make_shared<BaseRuntimeStatistics>();
+            source->setRuntimeStatistics(statistics);
+            context.getDAGContext()->pipeline_profiles[executor_id].push_back({statistics});
+        }
+        builder.setSourceOp(std::move(source));
     });
 }
 

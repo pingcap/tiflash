@@ -47,6 +47,7 @@ protected:
     Block readImpl() override
     {
         FilterPtr filter_ignored;
+        LOG_INFO(log, "ywq test here");
         return readImpl(filter_ignored, false);
     }
 

@@ -78,6 +78,13 @@ void PhysicalTopN::buildPipelineExec(PipelineExecGroupBuilder & group_builder, C
     }
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<TopNTransformOp>(group_builder.exec_status, order_descr, limit, context.getSettingsRef().max_block_size, log->identifier()));
+        std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
+        if (is_tidb_operator)
+        {
+            auto statistics = std::make_shared<BaseRuntimeStatistics>();
+            builder.lastTransform()->setRuntimeStatistics(statistics);
+            context.getDAGContext()->pipeline_profiles[executor_id].push_back({statistics});
+        }
     });
 }
 

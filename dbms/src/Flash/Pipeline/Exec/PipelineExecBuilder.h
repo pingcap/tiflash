@@ -30,6 +30,8 @@ struct PipelineExecBuilder
     void appendTransformOp(TransformOpPtr && transform_op);
     void setSinkOp(SinkOpPtr && sink_op_);
 
+    TransformOpPtr & lastTransform();
+
     Block getCurrentHeader() const;
 
     PipelineExecPtr build();

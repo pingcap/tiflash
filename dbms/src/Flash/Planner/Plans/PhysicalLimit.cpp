@@ -53,12 +53,20 @@ void PhysicalLimit::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & 
     }
 }
 
-void PhysicalLimit::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalLimit::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
 {
     auto input_header = group_builder.getCurrentHeader();
     auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<LimitTransformOp>(group_builder.exec_status, global_limit, log->identifier()));
+
+        std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
+        if(is_tidb_operator)
+        {
+            auto statistics = std::make_shared<BaseRuntimeStatistics>();
+            builder.lastTransform()->setRuntimeStatistics(statistics);
+            context.getDAGContext()->pipeline_profiles[executor_id].push_back({statistics});
+        }
     });
 }
 

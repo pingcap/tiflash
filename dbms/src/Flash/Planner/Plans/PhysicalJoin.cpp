@@ -234,16 +234,16 @@ void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline)
     executeExpression(pipeline, schema_project, log, "remove useless column after join");
 }
 
-void PhysicalJoin::buildPipeline(PipelineBuilder & builder)
+void PhysicalJoin::buildPipeline(PipelineBuilder & builder, Context & context)
 {
     // Break the pipeline for join build.
     // FIXME: Should be newly created PhysicalJoinBuild.
     auto join_build_builder = builder.breakPipeline(shared_from_this());
     // Join build pipeline.
-    build()->buildPipeline(join_build_builder);
+    build()->buildPipeline(join_build_builder, context);
     join_build_builder.build();
     // Join probe pipeline.
-    probe()->buildPipeline(builder);
+    probe()->buildPipeline(builder, context);
     // FIXME: Should be newly created PhysicalJoinProbe.
     builder.addPlanNode(shared_from_this());
     throw Exception("Unsupport");

@@ -31,6 +31,7 @@
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Statistics/BaseRuntimeStatistics.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/Transaction/TiDB.h>
@@ -61,6 +62,9 @@ struct JoinExecuteInfo
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 class ProcessListEntry;
+
+using BaseRuntimeStatisticsGroup = std::vector<BaseRuntimeStatisticsPtr>; // a group of statistics for same operator
+using BaseRuntimeStatisticsGroupVec = std::vector<BaseRuntimeStatisticsGroup>; // a group of statistics for same executor
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 {
@@ -281,7 +285,7 @@ public:
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
     bool return_executor_id{};
-    String root_executor_id = "";
+    String root_executor_id;
     /* const */ bool is_mpp_task = false;
     /* const */ bool is_root_mpp_task = false;
     /* const */ bool is_batch_cop = false;
@@ -311,6 +315,8 @@ public:
     /// thus we need to pay attention to scan_context_map usage that time.
     std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
 
+    std::unordered_map<String, BaseRuntimeStatisticsGroupVec> pipeline_profiles;
+
 private:
     void initExecutorIdToJoinIdMap();
     void initOutputInfo();
@@ -330,6 +336,7 @@ private:
     /// profile_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
     /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
     std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;
+
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;

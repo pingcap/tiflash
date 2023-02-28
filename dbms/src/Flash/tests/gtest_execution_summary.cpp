@@ -64,6 +64,36 @@ public:
             // time_processed_ns, num_iterations and tiflash_scan_context are not checked here.
         }
     }
+
+    void testForPipelineExecutionSummary(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const Expect & expect)
+    {
+        request->set_collect_execution_summaries(true);
+        DAGContext dag_context(*request, "test_execution_summary", concurrency);
+        enablePipeline(true);
+        executeStreams(&dag_context);
+        // ASSERT_EQ(dag_context.getProfileStreamsMap().size(), expect.size());
+        ASSERT_TRUE(dag_context.collect_execution_summaries);
+        ExecutionSummaryCollector summary_collector(dag_context);
+        auto summaries = summary_collector.genExecutionSummaryResponseForPipeline().execution_summaries();
+        ASSERT_EQ(summaries.size(), expect.size());
+        enablePipeline(false);
+
+        for (const auto & summary : summaries)
+        {
+            ASSERT_TRUE(summary.has_executor_id());
+            auto it = expect.find(summary.executor_id());
+
+            std::cout << summary.executor_id() << std::endl;
+            ASSERT_TRUE(it != expect.end()) << fmt::format("unknown executor_id: {}", summary.executor_id());
+            std::cout << "produced rows: " << summary.num_produced_rows() << std::endl;
+            if (it->second.first != not_check_rows)
+                ASSERT_EQ(summary.num_produced_rows(), it->second.first) << fmt::format("executor_id: {}", summary.executor_id());
+            ASSERT_EQ(summary.concurrency(), it->second.second) << fmt::format("executor_id: {}", summary.executor_id());
+            // time_processed_ns, num_iterations and tiflash_scan_context are not checked here.
+        }
+    }
 };
 
 TEST_F(ExecutionSummaryTestRunner, test)
@@ -75,6 +105,7 @@ try
                            .filter(eq(col("s1"), col("s2")))
                            .build(context);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}};
+        testForPipelineExecutionSummary(request, expect);
         testForExecutionSummary(request, expect);
     }
     {
@@ -83,6 +114,9 @@ try
                            .limit(5)
                            .build(context);
         Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"limit_1", {5, 1}}};
+        Expect expect1{{"table_scan_0", {not_check_rows, concurrency}}, {"limit_1", {5, 10}}};
+        testForPipelineExecutionSummary(request, expect1);
+
         testForExecutionSummary(request, expect);
     }
     {
@@ -91,6 +125,8 @@ try
                            .topN("s1", true, 5)
                            .build(context);
         Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {5, 1}}};
+        // testForPipelineExecutionSummary(request, expect);
+
         testForExecutionSummary(request, expect);
     }
     {
@@ -99,6 +135,8 @@ try
                            .project({col("s2")})
                            .build(context);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"project_1", {12, concurrency}}};
+        testForPipelineExecutionSummary(request, expect);
+
         testForExecutionSummary(request, expect);
     }
     {

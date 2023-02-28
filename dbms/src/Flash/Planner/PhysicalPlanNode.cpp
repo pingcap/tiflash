@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/PipelineBuilder.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
@@ -88,16 +89,27 @@ void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & c
     }
 }
 
-void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalPlanNode::buildPipelineExecImpl(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/)
 {
     throw Exception("Unsupport");
 }
-
-void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder)
+void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t concurrency)
 {
-    assert(childrenSize() <= 1);
+    buildPipelineExecImpl(group_builder, context, concurrency);
+    // if (is_tidb_operator)
+    // {
+    //      group_builder.transform([&](auto &) {
+    //         context.getDAGContext()->pipeline_profiles[executor_id].back().emplace_back(std::make_unique<BaseRuntimeStatistics>());
+    //      });
+    // }
+    // recordPipelineProfile..
+}
+
+void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context)
+{
+    assert(childrenSize() <= 1);    
     if (childrenSize() == 1)
-        children(0)->buildPipeline(builder);
+        children(0)->buildPipeline(builder, context);
     builder.addPlanNode(shared_from_this());
 }
 } // namespace DB

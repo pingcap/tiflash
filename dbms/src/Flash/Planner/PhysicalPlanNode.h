@@ -61,8 +61,7 @@ public:
     virtual void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
     virtual void buildPipelineExec(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/);
-
-    virtual void buildPipeline(PipelineBuilder & builder);
+    virtual void buildPipeline(PipelineBuilder & builder, Context & context);
 
     virtual void finalize(const Names & parent_require) = 0;
     void finalize();
@@ -82,6 +81,8 @@ public:
 
 protected:
     virtual void buildBlockInputStreamImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
+    
+    virtual void buildPipelineExecImpl(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/);
 
     void recordProfileStreams(DAGPipeline & pipeline, const Context & context);
 

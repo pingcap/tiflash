@@ -72,6 +72,7 @@ ExpressionActionsPtr FilterTransformAction::getExperssion() const
 
 bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, bool return_filter)
 {
+    std::cout << "filter transform action " << std::endl;
     if (unlikely(!block))
         return true;
 
@@ -115,6 +116,8 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
     }
 
     size_t filtered_rows = countBytesInFilter(*filter);
+
+    std::cout << "filtered rows: " << filtered_rows << std::endl;
 
     /// If the current block is completely filtered out, let's move on to the next one.
     if (filtered_rows == 0)

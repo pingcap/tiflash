@@ -153,13 +153,13 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
     executeExpression(pipeline, expr_after_agg, log, "expr after aggregation");
 }
 
-void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)
+void PhysicalAggregation::buildPipeline(PipelineBuilder & builder, Context & context)
 {
     // Break the pipeline for pre-agg.
     // FIXME: Should be newly created PhysicalPreAgg.
     auto pre_agg_builder = builder.breakPipeline(shared_from_this());
     // Pre-agg pipeline.
-    child->buildPipeline(pre_agg_builder);
+    child->buildPipeline(pre_agg_builder, context);
     pre_agg_builder.build();
     // Final-agg pipeline.
     // FIXME: Should be newly created PhysicalFinalAgg.

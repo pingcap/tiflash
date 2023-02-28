@@ -143,12 +143,19 @@ void PhysicalProjection::buildBlockInputStreamImpl(DAGPipeline & pipeline, Conte
     executeExpression(pipeline, project_actions, log, extra_info);
 }
 
-void PhysicalProjection::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalProjection::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
 {
     if (project_actions && !project_actions->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, project_actions, log->identifier()));
+            std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
+            if (is_tidb_operator)
+            {
+                auto statistics = std::make_shared<BaseRuntimeStatistics>();
+                builder.lastTransform()->setRuntimeStatistics(statistics);
+                context.getDAGContext()->pipeline_profiles[executor_id].push_back({statistics});
+            }
         });
     }
 }

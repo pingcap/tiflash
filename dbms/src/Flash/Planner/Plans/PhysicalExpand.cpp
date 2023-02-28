@@ -17,6 +17,7 @@
 #include <Common/TiFlashException.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
@@ -82,10 +83,18 @@ void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
     });
 }
 
-void PhysicalExpand::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context &, size_t)
+void PhysicalExpand::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t)
 {
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, expand_actions, log->identifier()));
+
+        std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
+        if (is_tidb_operator)
+        {
+            auto statistics = std::make_shared<BaseRuntimeStatistics>();
+            builder.lastTransform()->setRuntimeStatistics(statistics);
+            context.getDAGContext()->pipeline_profiles[executor_id].push_back({statistics});
+        }
     });
 }
 
