@@ -27,7 +27,7 @@ namespace DB
 struct DAGQueryInfo
 {
     DAGQueryInfo(
-        const std::vector<const tipb::Expr *> & filters_,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & filters_,
         DAGPreparedSets dag_sets_,
         const NamesAndTypes & source_columns_,
         const TimezoneInfo & timezone_info_)
@@ -36,7 +36,7 @@ struct DAGQueryInfo
         , source_columns(source_columns_)
         , timezone_info(timezone_info_){};
     // filters in dag request
-    const std::vector<const tipb::Expr *> & filters;
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters;
     // Prepared sets extracted from dag request, which are used for indices
     // by storage engine.
     DAGPreparedSets dag_sets;

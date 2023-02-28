@@ -20,7 +20,7 @@ namespace DB
 {
 FilterConditions::FilterConditions(
     const String & executor_id_,
-    const std::vector<const tipb::Expr *> & conditions_)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions_)
     : executor_id(executor_id_)
     , conditions(conditions_)
 {
@@ -40,7 +40,7 @@ tipb::Executor * FilterConditions::constructSelectionForRemoteRead(tipb::Executo
         mutable_executor->set_executor_id(executor_id);
         auto * new_selection = mutable_executor->mutable_selection();
         for (const auto & condition : conditions)
-            *new_selection->add_conditions() = *condition;
+            *new_selection->add_conditions() = condition;
         return new_selection->mutable_child();
     }
     else
@@ -61,10 +61,6 @@ FilterConditions FilterConditions::filterConditionsFrom(const String & executor_
 
 FilterConditions FilterConditions::filterConditionsFrom(const String & executor_id, const tipb::Selection & selection)
 {
-    std::vector<const tipb::Expr *> conditions;
-    for (const auto & condition : selection.conditions())
-        conditions.push_back(&condition);
-
-    return {executor_id, conditions};
+    return {executor_id, selection.conditions()};
 }
 } // namespace DB
