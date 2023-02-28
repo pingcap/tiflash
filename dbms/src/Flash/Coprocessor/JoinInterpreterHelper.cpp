@@ -185,23 +185,13 @@ std::tuple<ExpressionActionsPtr, String, String> doGenJoinOtherConditionAction(
     String filter_column_for_other_condition;
     if (join.other_conditions_size() > 0)
     {
-        std::vector<const tipb::Expr *> condition_vector;
-        for (const auto & c : join.other_conditions())
-        {
-            condition_vector.push_back(&c);
-        }
-        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, condition_vector);
+        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, join.other_conditions());
     }
 
     String filter_column_for_other_eq_condition;
     if (join.other_eq_conditions_from_in_size() > 0)
     {
-        std::vector<const tipb::Expr *> condition_vector;
-        for (const auto & c : join.other_eq_conditions_from_in())
-        {
-            condition_vector.push_back(&c);
-        }
-        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
+        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, join.other_eq_conditions_from_in());
     }
 
     return {chain.getLastActions(), std::move(filter_column_for_other_condition), std::move(filter_column_for_other_eq_condition)};
