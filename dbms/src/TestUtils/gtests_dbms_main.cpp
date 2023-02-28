@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Poco/Environment.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
@@ -21,8 +22,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 #include <signal.h>
-
-#include "Poco/Environment.h"
 
 
 namespace DB::FailPoints
