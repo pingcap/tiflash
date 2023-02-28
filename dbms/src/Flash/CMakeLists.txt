@@ -28,6 +28,7 @@ add_headers_and_sources(flash_service ./Planner)
 add_headers_and_sources(flash_service ./Planner/Plans)
 add_headers_and_sources(flash_service ./Statistics)
 add_headers_and_sources(flash_service ./Management)
+add_headers_and_sources(flash_service ./Disaggregated)
 
 add_library(flash_service ${flash_service_headers} ${flash_service_sources})
 target_link_libraries(flash_service dbms)
