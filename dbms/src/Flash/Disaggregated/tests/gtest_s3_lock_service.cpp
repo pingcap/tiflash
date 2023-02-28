@@ -28,6 +28,8 @@
 #include <fmt/core.h>
 #include <gtest/gtest.h>
 
+#include <memory>
+
 namespace DB::S3::tests
 {
 
@@ -41,14 +43,18 @@ public:
         log = Logger::get();
 
         auto & client_factory = DB::S3::ClientFactory::instance();
+        is_s3_test_enabled = client_factory.isEnabled();
 
-        owner_manager.reset(typeid_cast<MockOwnerManager *>(OwnerManager::createMockOwner("owner_0").get()));
+        owner_manager = std::static_pointer_cast<MockOwnerManager>(OwnerManager::createMockOwner("owner_0"));
         owner_manager->campaignOwner();
 
-        s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager, client_factory.sharedTiFlashClient());
+        if (is_s3_test_enabled)
+        {
+            s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager, client_factory.sharedTiFlashClient());
 
-        s3_client = client_factory.sharedTiFlashClient();
-        createS3DataFiles();
+            s3_client = client_factory.sharedTiFlashClient();
+            createS3DataFiles();
+        }
     }
 
     void createS3DataFiles()
@@ -64,6 +70,9 @@ public:
 
     void TearDown() override
     {
+        if (!is_s3_test_enabled)
+            return;
+
         // clean data files
         while (dm_file_id > 0)
         {
@@ -80,6 +89,8 @@ public:
     }
 
 protected:
+    bool is_s3_test_enabled = false;
+
     std::shared_ptr<MockOwnerManager> owner_manager;
     std::unique_ptr<DB::S3::S3LockService> s3_lock_service;
 
@@ -92,9 +103,24 @@ protected:
     LoggerPtr log;
 };
 
+#define CHECK_S3_ENABLED                                                          \
+    if (!is_s3_test_enabled)                                                      \
+    {                                                                             \
+        const auto * t = ::testing::UnitTest::GetInstance()->current_test_info(); \
+        LOG_INFO(                                                                 \
+            log,                                                                  \
+            "{}.{} is skipped because S3ClientFactory is not inited.",            \
+            t->test_case_name(),                                                  \
+            t->name());                                                           \
+        return;                                                                   \
+    }
+
+
 TEST_F(S3LockServiceTest, SingleTryAddLockRequest)
 try
 {
+    CHECK_S3_ENABLED;
+
     auto data_filename = getDataFilename();
     auto data_file_key = data_filename.toFullKey();
     auto lock_key = data_filename.toView().getLockKey(lock_store_id, lock_seq);
@@ -118,6 +144,8 @@ CATCH
 TEST_F(S3LockServiceTest, SingleTryMarkDeleteTest)
 try
 {
+    CHECK_S3_ENABLED;
+
     auto data_filename = getDataFilename();
     auto data_file_key = data_filename.toFullKey();
     auto delmark_key = data_filename.toView().getDelMarkKey();
@@ -138,6 +166,8 @@ CATCH
 TEST_F(S3LockServiceTest, SingleTryAddLockRequestWithDeleteFileTest)
 try
 {
+    CHECK_S3_ENABLED;
+
     auto data_filename = getDataFilename();
     auto data_file_key = data_filename.toFullKey();
     auto delmark_key = data_filename.toView().getDelMarkKey();
@@ -176,6 +206,8 @@ CATCH
 TEST_F(S3LockServiceTest, SingleTryMarkDeleteRequestWithLockFileTest)
 try
 {
+    CHECK_S3_ENABLED;
+
     auto data_filename = getDataFilename();
     auto data_file_key = data_filename.toFullKey();
     auto delmark_key = data_filename.toView().getDelMarkKey();
@@ -216,6 +248,8 @@ CATCH
 TEST_F(S3LockServiceTest, SingleTryAddLockRequestWithDataFileLostTest)
 try
 {
+    CHECK_S3_ENABLED;
+
     auto data_filename = getDataFilename(dm_file_id); // not created dmfile key
     auto data_file_key = data_filename.toFullKey();
     auto lock_key = data_filename.toView().getLockKey(lock_store_id, lock_seq);
@@ -241,6 +275,8 @@ CATCH
 TEST_F(S3LockServiceTest, MultipleTryAddLockRequest)
 try
 {
+    CHECK_S3_ENABLED;
+
     auto job = [&](size_t store_id) -> void {
         auto data_filename = getDataFilename();
         auto data_file_key = data_filename.toFullKey();
@@ -281,6 +317,8 @@ CATCH
 TEST_F(S3LockServiceTest, MultipleTryMarkDeleteRequest)
 try
 {
+    CHECK_S3_ENABLED;
+
     auto data_filename = getDataFilename();
     auto data_file_key = data_filename.toFullKey();
     auto delmark_key = data_filename.toView().getDelMarkKey();
@@ -314,6 +352,8 @@ CATCH
 TEST_F(S3LockServiceTest, MultipleMixRequest)
 try
 {
+    CHECK_S3_ENABLED;
+
     auto lock_job = [&](size_t file_id) -> void {
         auto data_filename = getDataFilename(file_id);
         auto data_file_key = data_filename.toFullKey();

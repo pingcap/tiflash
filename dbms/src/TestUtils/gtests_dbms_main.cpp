@@ -22,6 +22,8 @@
 #include <gtest/gtest.h>
 #include <signal.h>
 
+#include "Poco/Environment.h"
+
 
 namespace DB::FailPoints
 {
@@ -73,11 +75,15 @@ int main(int argc, char ** argv)
         DB::tests::TiFlashTestEnv::getGlobalContext().getSettingsRef().dt_read_thread_count_scale);
     DB::DM::SegmentReadTaskScheduler::instance();
 
+    const auto s3_endpoint = Poco::Environment::get("S3_ENDPOINT", "");
+    const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "");
+    const auto access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", "");
+    const auto secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", "");
     auto s3config = DB::StorageS3Config{
-        .endpoint = "http://172.16.5.85:9000",
-        .bucket = "jayson",
-        .access_key_id = "minioadmin",
-        .secret_access_key = "minioadmin",
+        .endpoint = s3_endpoint,
+        .bucket = s3_bucket,
+        .access_key_id = access_key_id,
+        .secret_access_key = secret_access_key,
     };
     DB::S3::ClientFactory::instance().init(s3config);
 
