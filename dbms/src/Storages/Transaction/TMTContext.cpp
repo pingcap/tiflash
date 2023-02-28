@@ -98,11 +98,11 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
         etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
         s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.flash_server_addr, etcd_client);
         s3gc_owner->campaignOwner(); // start campaign
-        s3_lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
+        s3lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
 
         S3::S3GCConfig gc_config;
-        gc_config.temp_path = context.getTemporaryPath(); // TODO: add suffix for it?
-        s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, cluster->pd_client, s3gc_owner, s3_lock_client, gc_config);
+        gc_config.temp_path = context.getTemporaryPath() + "/s3_temp"; // TODO: unify the suffix for it?
+        s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, cluster->pd_client, s3gc_owner, s3lock_client, gc_config);
     }
 }
 
@@ -150,6 +150,11 @@ void TMTContext::shutdown()
     {
         s3gc_manager->shutdown();
         s3gc_manager = nullptr;
+    }
+
+    if (s3lock_client)
+    {
+        s3lock_client = nullptr;
     }
 
     if (background_service)

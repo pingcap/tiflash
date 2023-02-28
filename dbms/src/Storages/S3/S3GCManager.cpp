@@ -17,6 +17,7 @@
 #include <Core/Types.h>
 #include <Flash/Disaggregated/S3LockClient.h>
 #include <Interpreters/Context.h>
+#include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
@@ -37,6 +38,7 @@
 #include <limits>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace DB::ErrorCodes
 {
@@ -386,11 +388,30 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const String &
     downloadFile(*client, client->bucket(), local_manifest_path, manifest_key);
     LOG_INFO(log, "Download manifest, from={} to={}", manifest_key, local_manifest_path);
 
-    // TODO: parse lock from manifest
-    // using ManifestReader = PS::V3::CheckpointManifestFileReader<PS::V3::universal::PageDirectoryTrait>;
-    // auto reader = ManifestReader::create(ManifestReader::Options{.file_path = local_manifest_path});
-    // return reader->readLocks();
-    return {};
+    // parse lock from manifest
+    PS::V3::CheckpointProto::StringsInternMap strings_cache; // TODO: Is there global cache?
+    using ManifestReader = DB::PS::V3::CPManifestFileReader;
+    auto reader = ManifestReader::create(ManifestReader::Options{.file_path = local_manifest_path});
+    auto mf_prefix = reader->readPrefix();
+
+    while (true)
+    {
+        // TODO: calculate the valid size of each CheckpointDataFile in the manifest
+        auto part_edit = reader->readEdits(strings_cache);
+        if (!part_edit)
+            break;
+    }
+
+    std::unordered_set<String> locks;
+    while (true)
+    {
+        auto part_locks = reader->readLocks();
+        if (!part_locks)
+            break;
+        locks.merge(part_locks.value());
+    }
+
+    return locks;
 }
 
 void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime * const timepoint)
@@ -399,8 +420,9 @@ void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifes
     auto expired_bound_sec = config.manifest_expired_hour * 3600;
     for (const auto & mf : manifests.objects())
     {
-        if (!timepoint)
+        if (timepoint == nullptr)
         {
+            // store tombstoned, remove all manifests
             deleteObject(*client, client->bucket(), mf.second.key);
             LOG_INFO(
                 log,
