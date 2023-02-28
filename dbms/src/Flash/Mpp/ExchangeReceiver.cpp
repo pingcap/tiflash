@@ -777,7 +777,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toExchangeReceiveResult
     case ReceiveStatus::eof:
         return handleUnnormalChannel(block_queue, decoder_ptr);
     case ReceiveStatus::empty:
-        throw Exception("Unexpect recv status: empty");
+        throw Exception("Unexpected recv status: empty");
     }
 }
 

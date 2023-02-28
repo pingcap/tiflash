@@ -81,7 +81,8 @@ public:
         : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id)
     {}
 
-    bool isReadyForWrite() const override { throw Exception("Unsupport async write"); }
+    // For sync writer, `isReadyForWrite` will not be called, so an exception is thrown here.
+    bool isReadyForWrite() const override { throw Exception("Unsupport"); }
 
 protected:
     void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) override;
