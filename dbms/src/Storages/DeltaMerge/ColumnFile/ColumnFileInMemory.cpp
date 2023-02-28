@@ -137,7 +137,7 @@ Block ColumnFileInMemoryReader::readNextBlock()
 size_t ColumnFileInMemoryReader::skipNextBlock()
 {
     if (read_done)
-        return false;
+        return 0;
 
     read_done = true;
     return memory_file.getRows();
