@@ -444,7 +444,7 @@ S3GCManagerService::S3GCManagerService(
     const S3GCConfig & config)
     : global_ctx(context.getGlobalContext())
 {
-    auto s3_client = S3::ClientFactory::instance().createWithBucket();
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     manager = std::make_unique<S3GCManager>(std::move(pd_client), std::move(s3_client), std::move(gc_owner_manager_), std::move(lock_client), config);
 
     timer = global_ctx.getBackgroundPool().addTask(

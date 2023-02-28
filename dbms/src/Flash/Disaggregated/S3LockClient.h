@@ -19,7 +19,6 @@
 #include <common/types.h>
 #include <kvproto/disaggregated.pb.h>
 #include <pingcap/kv/Cluster.h>
-#include <common/types.h>
 
 namespace DB
 {
@@ -43,7 +42,7 @@ public:
     // Otherwise return <false, conflict_message>
     // This method will update the owner info when owner changed.
     // If deadline exceed or failed to get the owner info within
-    // `timeour_s`, it will throw exception.
+    // `timeout_s`, it will throw exception.
     virtual std::pair<bool, String>
     sendTryAddLockRequest(const String & data_file_key, UInt32 lock_store_id, UInt32 lock_seq, Int64 timeout_s) = 0;
 
@@ -52,7 +51,7 @@ public:
     // Otherwise return <false, conflict_message>
     // This method will update the owner info when owner changed.
     // If deadline exceed or failed to get the owner info within
-    // `timeour_s`, it will throw exception.
+    // `timeout_s`, it will throw exception.
     virtual std::pair<bool, String>
     sendTryMarkDeleteRequest(const String & data_file_key, Int64 timeout_s) = 0;
 };
@@ -69,7 +68,7 @@ public:
     // Otherwise return <false, conflict_message>
     // This method will update the owner info when owner changed.
     // If deadline exceed or failed to get the owner info within
-    // `timeour_s`, it will throw exception.
+    // `timeout_s`, it will throw exception.
     std::pair<bool, String>
     sendTryAddLockRequest(const String & data_file_key, UInt32 lock_store_id, UInt32 lock_seq, Int64 timeout_s) override;
 
@@ -78,7 +77,7 @@ public:
     // Otherwise return <false, conflict_message>
     // This method will update the owner info when owner changed.
     // If deadline exceed or failed to get the owner info within
-    // `timeour_s`, it will throw exception.
+    // `timeout_s`, it will throw exception.
     std::pair<bool, String>
     sendTryMarkDeleteRequest(const String & data_file_key, Int64 timeout_s) override;
 

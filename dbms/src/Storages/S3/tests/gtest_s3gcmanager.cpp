@@ -15,10 +15,10 @@
 #include <Common/Logger.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
+#include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3GCManager.h>
-#include <TestUtils/MockS3Client.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/OwnerManager.h>
@@ -29,7 +29,7 @@
 #include <chrono>
 #include <unordered_set>
 
-namespace DB::S3
+namespace DB::S3::tests
 {
 
 class S3GCManagerTest : public ::testing::Test
@@ -48,16 +48,16 @@ public:
         S3GCConfig config{
             .manifest_expired_hour = 1,
             .delmark_expired_hour = 1,
-            .temp_path = tests::TiFlashTestEnv::getTemporaryPath(),
+            .temp_path = ::DB::tests::TiFlashTestEnv::getTemporaryPath(),
         };
-        mock_s3_client = std::make_shared<MockS3Client>();
+        mock_s3_client = std::make_shared<tests::MockS3Client>();
         auto mock_gc_owner = OwnerManager::createMockOwner("owner_0");
         auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_s3_client);
         auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
         gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_s3_client, mock_gc_owner, mock_lock_client, config);
     }
 
-    std::shared_ptr<MockS3Client> mock_s3_client;
+    std::shared_ptr<tests::MockS3Client> mock_s3_client;
     std::unique_ptr<S3GCManager> gc_mgr;
     LoggerPtr log;
 };
@@ -255,4 +255,4 @@ try
 }
 CATCH
 
-} // namespace DB::S3
+} // namespace DB::S3::tests

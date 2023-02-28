@@ -23,8 +23,6 @@
 #include <magic_enum.hpp>
 #include <string_view>
 
-#include "Common/StringUtils/StringUtils.h"
-
 namespace DB::S3
 {
 //==== Serialize/Deserialize ====//
@@ -90,9 +88,11 @@ String toFullKey(const S3FilenameType type, const StoreID store_id, const std::s
 
 bool S3FilenameView::isDMFile() const
 {
+    // dmfile with table prefix
     static_assert(details::fmt_subpath_dtfile[0] == 't', "dtfile prefix changed!");
     static_assert(details::fmt_subpath_dtfile[1] == '_', "dtfile prefix changed!");
 
+    // dmfile with keyspace prefix
     static_assert(details::fmt_subpath_keyspace_dtfile[0] == 'k', "keyspace dtfile prefix changed!");
     static_assert(details::fmt_subpath_keyspace_dtfile[1] == 's', "keyspace dtfile prefix changed!");
     static_assert(details::fmt_subpath_keyspace_dtfile[2] == '_', "keyspace dtfile prefix changed!");
