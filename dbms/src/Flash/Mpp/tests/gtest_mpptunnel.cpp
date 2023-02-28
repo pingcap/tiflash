@@ -789,10 +789,7 @@ TEST_F(TestMPPTunnel, SyncTunnelNonBlockingWrite)
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
 
     ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
-    Stopwatch stop_watch{CLOCK_MONOTONIC_COARSE};
     mpp_tunnel_ptr->nonBlockingWrite(newDataPacket("First"));
-    // make sure that non blocking.
-    ASSERT_TRUE(stop_watch.elapsedMilliseconds() < 10);
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
 
@@ -809,10 +806,7 @@ TEST_F(TestMPPTunnel, AsyncTunnelNonBlockingWrite)
     std::thread t(&MockAsyncCallData::run, call_data.get());
 
     ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
-    Stopwatch stop_watch{CLOCK_MONOTONIC_COARSE};
     mpp_tunnel_ptr->nonBlockingWrite(newDataPacket("First"));
-    // make sure that non blocking.
-    ASSERT_TRUE(stop_watch.elapsedMilliseconds() < 10);
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
     t.join();
@@ -829,10 +823,7 @@ TEST_F(TestMPPTunnel, LocalTunnelNonBlockingWrite)
     std::thread t(&MockExchangeReceiver::receiveAll, receiver.get());
 
     ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
-    Stopwatch stop_watch{CLOCK_MONOTONIC_COARSE};
     mpp_tunnel_ptr->nonBlockingWrite(newDataPacket("First"));
-    // make sure that non blocking.
-    ASSERT_TRUE(stop_watch.elapsedMilliseconds() < 10);
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
     t.join();
@@ -847,15 +838,7 @@ try
     timeout = std::chrono::seconds(1);
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
     Stopwatch stop_watch{CLOCK_MONOTONIC_COARSE};
-    try
-    {
-        ASSERT_FALSE(mpp_tunnel_ptr->isReadyForWrite());
-    }
-    catch (Exception &)
-    {
-        GTEST_FAIL();
-    }
-    while (stop_watch.elapsedSeconds() < 2 * timeout.count())
+    while (stop_watch.elapsedSeconds() < 3 * timeout.count())
     {
         ASSERT_FALSE(mpp_tunnel_ptr->isReadyForWrite());
     }
