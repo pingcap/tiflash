@@ -43,7 +43,7 @@ namespace DB::S3
 S3LockService::S3LockService(Context & context_)
     : S3LockService(
         context_.getGlobalContext().getTMTContext().getS3GCOwnerManager(),
-        S3::ClientFactory::instance().createWithBucket())
+        S3::ClientFactory::instance().sharedTiFlashClient())
 {
 }
 

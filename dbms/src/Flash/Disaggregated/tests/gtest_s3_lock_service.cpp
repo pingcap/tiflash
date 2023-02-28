@@ -45,9 +45,9 @@ public:
         owner_manager.reset(typeid_cast<MockOwnerManager *>(OwnerManager::createMockOwner("owner_0").get()));
         owner_manager->campaignOwner();
 
-        s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager, client_factory.createWithBucket());
+        s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager, client_factory.sharedTiFlashClient());
 
-        s3_client = client_factory.createWithBucket();
+        s3_client = client_factory.sharedTiFlashClient();
         createS3DataFiles();
     }
 

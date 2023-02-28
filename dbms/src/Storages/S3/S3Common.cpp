@@ -121,6 +121,12 @@ TiFlashS3Client::TiFlashS3Client(
 {
 }
 
+TiFlashS3Client::TiFlashS3Client(const String & bucket_name_, Aws::S3::S3Client && raw_client)
+    : Aws::S3::S3Client(std::move(raw_client))
+    , bucket_name(bucket_name_)
+{
+}
+
 bool ClientFactory::isEnabled() const
 {
     return config.isS3Enabled();
@@ -132,10 +138,15 @@ void ClientFactory::init(const StorageS3Config & config_)
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
     shared_client = create();
+    {
+        auto raw_client = create();
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, std::move(*raw_client.release()));
+    }
 }
 
 void ClientFactory::shutdown()
 {
+    shared_tiflash_client.reset();
     shared_client.reset(); // Reset S3Client before Aws::ShutdownAPI.
     Aws::Utils::Logging::ShutdownAWSLogging();
     Aws::ShutdownAPI(aws_options);
@@ -168,6 +179,11 @@ std::shared_ptr<Aws::S3::S3Client> ClientFactory::sharedClient() const
     return shared_client;
 }
 
+std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient() const
+{
+    return shared_tiflash_client;
+}
+
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_)
 {
     Aws::Client::ClientConfiguration cfg;
@@ -198,22 +214,6 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
             /*useVirtualAddressing*/ true);
     }
-}
-
-std::shared_ptr<TiFlashS3Client> ClientFactory::createWithBucket() const
-{
-    auto scheme = parseScheme(config.endpoint);
-    Aws::Client::ClientConfiguration cfg;
-    cfg.endpointOverride = config.endpoint;
-    cfg.scheme = scheme;
-    cfg.verifySSL = scheme == Aws::Http::Scheme::HTTPS;
-    Aws::Auth::AWSCredentials cred(config.access_key_id, config.secret_access_key);
-    return std::make_shared<TiFlashS3Client>(
-        config.bucket,
-        cred,
-        cfg,
-        Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-        /*useVirtualAddressing*/ true);
 }
 
 Aws::Http::Scheme ClientFactory::parseScheme(std::string_view endpoint)
