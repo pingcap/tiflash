@@ -119,8 +119,7 @@ public:
         ++s;
     }
 
-    void insertData(const char *, size_t)
-        override
+    void insertData(const char *, size_t) override
     {
         ++s;
     }
@@ -131,9 +130,24 @@ public:
         ++s;
     }
 
+    void insertManyFrom(const IColumn &, size_t, size_t length) override
+    {
+        s += length;
+    }
+
+    void insertDisjunctFrom(const IColumn &, const std::vector<size_t> & position_vec) override
+    {
+        s += position_vec.size();
+    }
+
     void insertDefault() override
     {
         ++s;
+    }
+
+    void insertManyDefaults(size_t length) override
+    {
+        s += length;
     }
 
     void popBack(size_t n) override

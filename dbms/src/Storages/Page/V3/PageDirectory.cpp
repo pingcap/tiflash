@@ -28,7 +28,7 @@
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
@@ -108,7 +108,7 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
                     fmt::format("Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
                                 ver,
                                 last_iter->first,
-                                last_iter->second.toDebugString()),
+                                last_iter->second),
                     ErrorCodes::LOGICAL_ERROR);
             }
             // create a new version that inherit the `being_ref_count` of the last entry
@@ -121,7 +121,7 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
         fmt::format("try to create entry version with invalid state "
                     "[ver={}] [entry={}] [state={}]",
                     ver,
-                    ::DB::PS::V3::toDebugString(entry),
+                    entry,
                     toDebugString()),
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS);
 }
@@ -156,7 +156,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
                     fmt::format("Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
                                 ver,
                                 last_iter->first,
-                                last_iter->second.toDebugString()),
+                                last_iter->second),
                     ErrorCodes::LOGICAL_ERROR);
             }
             // create a new version that inherit the `being_ref_count` of the last entry
@@ -199,7 +199,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
         fmt::format("try to create upsert entry version with invalid state "
                     "[ver={}] [entry={}] [state={}]",
                     ver,
-                    ::DB::PS::V3::toDebugString(entry),
+                    entry,
                     toDebugString()),
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS);
 }
@@ -544,7 +544,7 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & ver)
             {
                 if (unlikely(met_delete && iter->second.being_ref_count == 1))
                 {
-                    throw Exception(fmt::format("Try to add ref to a completely deleted entry [entry={}] [ver={}]", iter->second.toDebugString(), ver), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(fmt::format("Try to add ref to a completely deleted entry [entry={}] [ver={}]", iter->second, ver), ErrorCodes::LOGICAL_ERROR);
                 }
                 return ++iter->second.being_ref_count;
             }
@@ -751,7 +751,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
         assert(iter->second.isEntry());
         if (iter->second.being_ref_count <= deref_count)
         {
-            throw Exception(fmt::format("Decreasing ref count error [page_id={}] [ver={}] [deref_count={}] [entry={}]", page_id, deref_ver, deref_count, iter->second.toDebugString()));
+            throw Exception(fmt::format("Decreasing ref count error [page_id={}] [ver={}] [deref_count={}] [entry={}]", page_id, deref_ver, deref_count, iter->second));
         }
         iter->second.being_ref_count -= deref_count;
 
@@ -859,8 +859,7 @@ PageDirectory<Trait>::PageDirectory(String storage_name, WALStorePtr && wal_, UI
     , wal(std::move(wal_))
     , max_persisted_log_files(max_persisted_log_files_)
     , log(Logger::get(storage_name))
-{
-}
+{}
 
 template <typename Trait>
 PageDirectorySnapshotPtr PageDirectory<Trait>::createSnapshot(const String & tracing_id) const
@@ -1146,7 +1145,7 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(cons
 }
 
 template <typename Trait>
-UInt64 PageDirectory<Trait>::getMaxId() const
+UInt64 PageDirectory<Trait>::getMaxIdAfterRestart() const
 {
     std::shared_lock read_lock(table_rw_mutex);
     return max_page_id;
@@ -1171,7 +1170,6 @@ typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIds()
 template <typename Trait>
 typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIdsWithPrefix(const String & prefix, const DB::PageStorageSnapshotPtr & snap_)
 {
-    UNUSED(snap_);
     if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
     {
         PageIdSet page_ids;
@@ -1181,13 +1179,62 @@ typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIdsWith
              iter != mvcc_table_directory.end();
              ++iter)
         {
-            if (!iter->first.isPrefix(prefix))
+            if (!iter->first.hasPrefix(prefix))
                 break;
             // Only return the page_id that is visible
             if (iter->second->isVisible(seq))
                 page_ids.insert(iter->first);
         }
         return page_ids;
+    }
+    else
+    {
+        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+    }
+}
+
+template <typename Trait>
+typename PageDirectory<Trait>::PageIdSet PageDirectory<Trait>::getAllPageIdsInRange(const PageId & start, const PageId & end, const DB::PageStorageSnapshotPtr & snap_)
+{
+    if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+    {
+        PageIdSet page_ids;
+        auto seq = toConcreteSnapshot(snap_)->sequence;
+        std::shared_lock read_lock(table_rw_mutex);
+        for (auto iter = mvcc_table_directory.lower_bound(start);
+             iter != mvcc_table_directory.end();
+             ++iter)
+        {
+            if (!end.empty() && iter->first >= end)
+                break;
+            // Only return the page_id that is visible
+            if (iter->second->isVisible(seq))
+                page_ids.insert(iter->first);
+        }
+        return page_ids;
+    }
+    else
+    {
+        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+    }
+}
+
+template <typename Trait>
+std::optional<typename PageDirectory<Trait>::PageId> PageDirectory<Trait>::getLowerBound(const typename Trait::PageId & start, const DB::PageStorageSnapshotPtr & snap_)
+{
+    if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+    {
+        auto seq = toConcreteSnapshot(snap_)->sequence;
+        std::shared_lock read_lock(table_rw_mutex);
+        for (auto iter = mvcc_table_directory.lower_bound(start);
+             iter != mvcc_table_directory.end();
+             ++iter)
+        {
+            // Only return the page_id that is visible
+            if (iter->second->isVisible(seq))
+                return iter->first;
+        }
+        return std::nullopt;
     }
     else
     {
@@ -1341,8 +1388,6 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
         for (const auto & r : edit.getRecords())
         {
             // Protected in write_lock
-            max_page_id = std::max(max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
-
             auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
             if (created)
             {
@@ -1503,9 +1548,13 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
             RUNTIME_CHECK(page_iter != mvcc_table_directory.end(), ref_id, ori_id, ver);
         }
         const auto & version_entries = page_iter->second;
+        // After storing all data in one PageStorage instance, we will run full gc
+        // with external pages. Skip rewriting if it is an external pages.
+        if (version_entries->isExternalPage())
+            continue;
         // the latest entry with version.seq <= ref_id.create_ver.seq
         auto entry = version_entries->getLastEntry(ver.sequence);
-        RUNTIME_CHECK(entry.has_value(), ref_id, ori_id, ver);
+        RUNTIME_CHECK_MSG(entry.has_value(), "ref_id={} ori_id={} ver={} entries={}", ref_id, ori_id, ver, version_entries->toDebugString());
         // If the being-ref entry lays on the full gc candidate blobfiles, then we
         // need to rewrite the ref-id to a normal page.
         if (blob_id_set.count(entry->file_id) > 0)
@@ -1539,6 +1588,8 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
     assert(!files_snap.persisted_log_files.empty()); // should not be empty
     auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
     auto identifier = fmt::format("{}.dump_{}", wal->name(), log_num);
+
+    Stopwatch watch;
     auto snapshot_reader = wal->createReaderForFiles(identifier, files_snap.persisted_log_files, read_limiter);
     // we just use the `collapsed_dir` to dump edit of the snapshot, should never call functions like `apply` that
     // persist new logs into disk. So we pass `nullptr` as `wal` to the factory.
@@ -1566,7 +1617,9 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
     }();
     // The records persisted in `files_snap` is older than or equal to all records in `edit`
     auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
-    bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), edit_from_disk.size(), write_limiter);
+    files_snap.num_records = edit_from_disk.size();
+    files_snap.read_elapsed_ms = watch.elapsedMilliseconds();
+    bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), write_limiter);
     return done_any_io;
 }
 
@@ -1685,22 +1738,23 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         }
     }
 
-    LOG_INFO(log, "After MVCC gc in memory [lowest_seq={}] "
-                  "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
-                  "[total_deref_counter={}] [all_del_entries={}]. "
-                  "Still exist [snapshot_nums={}], [page_nums={}]. "
-                  "Longest alive snapshot: [longest_alive_snapshot_time={}] "
-                  "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
-             lowest_seq,
-             invalid_snapshot_nums,
-             invalid_page_nums,
-             total_deref_counter,
-             all_del_entries.size(),
-             valid_snapshot_nums,
-             valid_page_nums,
-             longest_alive_snapshot_time,
-             longest_alive_snapshot_seq,
-             stale_snapshot_nums);
+    LOG_DEBUG(log,
+              "After MVCC gc in memory [lowest_seq={}] "
+              "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
+              "[total_deref_counter={}] [all_del_entries={}]. "
+              "Still exist [snapshot_nums={}], [page_nums={}]. "
+              "Longest alive snapshot: [longest_alive_snapshot_time={}] "
+              "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
+              lowest_seq,
+              invalid_snapshot_nums,
+              invalid_page_nums,
+              total_deref_counter,
+              all_del_entries.size(),
+              valid_snapshot_nums,
+              valid_page_nums,
+              longest_alive_snapshot_time,
+              longest_alive_snapshot_seq,
+              stale_snapshot_nums);
 
     return all_del_entries;
 }
@@ -1735,6 +1789,29 @@ typename PageDirectory<Trait>::PageEntriesEdit PageDirectory<Trait>::dumpSnapsho
 
     LOG_INFO(log, "Dumped snapshot to edits.[sequence={}]", snap->sequence);
     return edit;
+}
+
+template <typename Trait>
+size_t PageDirectory<Trait>::numPagesWithPrefix(const String & prefix) const
+{
+    if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+    {
+        std::shared_lock read_lock(table_rw_mutex);
+        size_t num = 0;
+        for (auto iter = mvcc_table_directory.lower_bound(prefix);
+             iter != mvcc_table_directory.end();
+             ++iter)
+        {
+            if (!iter->first.hasPrefix(prefix))
+                break;
+            num++;
+        }
+        return num;
+    }
+    else
+    {
+        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+    }
 }
 
 template class VersionedPageEntries<u128::PageDirectoryTrait>;

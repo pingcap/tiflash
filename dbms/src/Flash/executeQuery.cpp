@@ -135,21 +135,21 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
         LOG_DEBUG(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     return {std::move(executor)};
 }
-} // namespace
 
-BlockIO executeAsBlockIO(Context & context, bool internal)
+QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 {
     if (context.getSettingsRef().enable_planner)
     {
         PlanQuerySource plan(context);
-        return doExecuteAsBlockIO(plan, context, internal);
+        return std::make_unique<DataStreamExecutor>(context, doExecuteAsBlockIO(plan, context, internal));
     }
     else
     {
         DAGQuerySource dag(context);
-        return doExecuteAsBlockIO(dag, context, internal);
+        return std::make_unique<DataStreamExecutor>(context, doExecuteAsBlockIO(dag, context, internal));
     }
 }
+} // namespace
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
@@ -161,6 +161,6 @@ QueryExecutorPtr queryExecute(Context & context, bool internal)
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);
     }
-    return std::make_unique<DataStreamExecutor>(executeAsBlockIO(context, internal));
+    return executeAsBlockIO(context, internal);
 }
 } // namespace DB

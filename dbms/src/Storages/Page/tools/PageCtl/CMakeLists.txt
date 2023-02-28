@@ -14,7 +14,7 @@
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-add_library(page-ctl-lib MainEntry.cpp PageStorageCtlV3.cpp PageStorageCtlV2.cpp ${page-ctl-src})
-target_include_directories(page-ctl-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
-target_link_libraries(page-ctl-lib dbms daemon tiflash-dttool-entry-object clickhouse-server-lib)
-target_compile_options(page-ctl-lib  PRIVATE -Wno-format)
+add_library (page-ctl-lib MainEntry.cpp PageStorageCtlV3.cpp PageStorageCtlV2.cpp ${page-ctl-src})
+target_include_directories (page-ctl-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
+target_link_libraries (page-ctl-lib dbms page tiflash-dttool-entry-object)
+target_compile_options(page-ctl-lib PRIVATE -Wno-format)

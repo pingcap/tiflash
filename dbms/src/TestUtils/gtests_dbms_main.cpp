@@ -59,11 +59,15 @@ int main(int argc, char ** argv)
     install_fault_signal_handlers({SIGSEGV, SIGILL, SIGFPE, SIGABRT, SIGTERM});
 
     DB::tests::TiFlashTestEnv::setupLogger();
-    DB::tests::TiFlashTestEnv::initializeGlobalContext();
+    auto run_mode = DB::PageStorageRunMode::ONLY_V3;
+    DB::tests::TiFlashTestEnv::initializeGlobalContext(/*testdata_path*/ {}, run_mode);
+
     DB::ServerInfo server_info;
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DB::DM::DMFileReaderPool::instance();
-    DB::DM::SegmentReaderPoolManager::instance().init(server_info);
+    DB::DM::SegmentReaderPoolManager::instance().init(
+        server_info.cpu_info.logical_cores,
+        DB::tests::TiFlashTestEnv::getGlobalContext().getSettingsRef().dt_read_thread_count_scale);
     DB::DM::SegmentReadTaskScheduler::instance();
 
 #ifdef FIU_ENABLE

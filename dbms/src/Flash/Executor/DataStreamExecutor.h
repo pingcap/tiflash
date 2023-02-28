@@ -26,7 +26,7 @@ struct BlockIO;
 class DataStreamExecutor : public QueryExecutor
 {
 public:
-    explicit DataStreamExecutor(const BlockIO & block_io);
+    DataStreamExecutor(Context & context_, const BlockIO & block_io);
 
     String toString() const override;
 
@@ -36,10 +36,16 @@ public:
 
     RU collectRequestUnit() override;
 
+    Block getSampleBlock() const override;
+
+    BaseRuntimeStatistics getRuntimeStatistics() const override;
+
 protected:
-    ExecutionResult execute(ResultHandler result_handler) override;
+    ExecutionResult execute(ResultHandler && result_handler) override;
 
 protected:
     BlockInputStreamPtr data_stream;
+    uint64_t thread_cnt_before_execute = 0;
+    uint64_t estimate_thread_cnt = 0;
 };
 } // namespace DB

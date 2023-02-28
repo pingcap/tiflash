@@ -97,7 +97,7 @@ curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
 source $HOME/.cargo/env
 
 # Install compilers and dependencies
-sudo pacman -S clang lld libc++ libc++abi compiler-rt openmp lcov cmake ninja curl openssl zlib
+sudo pacman -S clang lld libc++ libc++abi compiler-rt openmp lcov cmake ninja curl openssl zlib llvm
 ```
 
 </details>
@@ -227,6 +227,17 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
   There is another option to append extra paths for CMake to find system libraries:
 
   - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, seperated by `;`
+
+  </details>
+
+- **Build for AMD64 Architecture**:
+
+  <details>
+  <summary>Click to expand instructions</summary>
+
+  To deploy TiFlash under the Linux AMD64 architecture, the CPU must support the `AVX2` instruction set. Ensure that `cat /proc/cpuinfo | grep avx2` has output.
+
+  If need to build TiFlash for AMD64 architecture without such instruction set, please use cmake option `-DNO_AVX_OR_HIGHER=ON`.
 
   </details>
 

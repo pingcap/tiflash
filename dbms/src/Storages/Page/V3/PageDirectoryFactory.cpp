@@ -16,6 +16,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -53,7 +54,7 @@ PageDirectoryFactory<Trait>::createFromReader(const String & storage_name, WALSt
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     // It's no need to remove the expired entries in BlobStore, so skip filling removed_entries to improve performance.
     dir->gcInMemEntries(/*return_removed_entries=*/false);
-    LOG_INFO(DB::Logger::get(storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxId(), dir->sequence);
+    LOG_INFO(DB::Logger::get(storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxIdAfterRestart(), dir->sequence);
 
     if (blob_stats)
     {
@@ -141,7 +142,7 @@ void PageDirectoryFactory<Trait>::loadEdit(const PageDirectoryPtr & dir, const P
             max_applied_ver = r.version;
 
         if (dump_entries)
-            LOG_INFO(Logger::get(), PageEntriesEdit::toDebugString(r));
+            LOG_INFO(Logger::get(), "{}", r);
         applyRecord(dir, r);
     }
 }
@@ -164,7 +165,21 @@ void PageDirectoryFactory<Trait>::applyRecord(
         }
     }
 
-    dir->max_page_id = std::max(dir->max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
+    if constexpr (std::is_same_v<Trait, universal::FactoryTrait>)
+    {
+        // We only need page id under specific prefix after restart.
+        // If you want to add other prefix here, make sure the page id allocation space is still enough after adding it.
+        if (r.page_id.hasPrefix(UniversalPageIdFormat::toSubPrefix(StorageType::Data))
+            || r.page_id.hasPrefix(UniversalPageIdFormat::toSubPrefix(StorageType::Log))
+            || r.page_id.hasPrefix(UniversalPageIdFormat::toSubPrefix(StorageType::Meta)))
+        {
+            dir->max_page_id = std::max(dir->max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
+        }
+    }
+    else
+    {
+        dir->max_page_id = std::max(dir->max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
+    }
 
     const auto & version_list = iter->second;
     const auto & restored_version = r.version;

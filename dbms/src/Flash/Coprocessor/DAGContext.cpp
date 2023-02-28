@@ -35,6 +35,98 @@ bool strictSqlMode(UInt64 sql_mode)
     return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
 }
 
+// for non-mpp(cop/batchCop)
+DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_)
+    : dag_request(&dag_request_)
+    , dummy_query_string(dag_request->DebugString())
+    , dummy_ast(makeDummyQuery())
+    , tidb_host(tidb_host_)
+    , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
+    , is_mpp_task(false)
+    , is_root_mpp_task(false)
+    , is_batch_cop(is_batch_cop_)
+    , tables_regions_info(std::move(tables_regions_info_))
+    , log(std::move(log_))
+    , flags(dag_request->flags())
+    , sql_mode(dag_request->sql_mode())
+    , max_recorded_error_count(getMaxErrorCount(*dag_request))
+    , warnings(max_recorded_error_count)
+    , warning_count(0)
+{
+    RUNTIME_CHECK((dag_request->executors_size() > 0) != dag_request->has_root_executor());
+    const auto & root_executor = dag_request->has_root_executor()
+        ? dag_request->root_executor()
+        : dag_request->executors(dag_request->executors_size() - 1);
+    return_executor_id = root_executor.has_executor_id();
+    if (return_executor_id)
+        root_executor_id = root_executor.executor_id();
+    initOutputInfo();
+}
+
+// for mpp
+DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
+    : dag_request(&dag_request_)
+    , dummy_query_string(dag_request->DebugString())
+    , dummy_ast(makeDummyQuery())
+    , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
+    , return_executor_id(true)
+    , is_mpp_task(true)
+    , is_root_mpp_task(is_root_mpp_task_)
+    , flags(dag_request->flags())
+    , sql_mode(dag_request->sql_mode())
+    , mpp_task_meta(meta_)
+    , mpp_task_id(mpp_task_meta)
+    , max_recorded_error_count(getMaxErrorCount(*dag_request))
+    , warnings(max_recorded_error_count)
+    , warning_count(0)
+{
+    RUNTIME_CHECK(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
+    root_executor_id = dag_request->root_executor().executor_id();
+    // only mpp task has join executor.
+    initExecutorIdToJoinIdMap();
+    initOutputInfo();
+}
+
+// for test
+DAGContext::DAGContext(UInt64 max_error_count_)
+    : dag_request(nullptr)
+    , dummy_ast(makeDummyQuery())
+    , collect_execution_summaries(false)
+    , is_mpp_task(false)
+    , is_root_mpp_task(false)
+    , flags(0)
+    , sql_mode(0)
+    , max_recorded_error_count(max_error_count_)
+    , warnings(max_recorded_error_count)
+    , warning_count(0)
+{}
+
+// for tests need to run query tasks.
+DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency)
+    : dag_request(&dag_request_)
+    , dummy_query_string(dag_request->DebugString())
+    , dummy_ast(makeDummyQuery())
+    , initialize_concurrency(concurrency)
+    , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
+    , is_mpp_task(false)
+    , is_root_mpp_task(false)
+    , log(Logger::get(log_identifier))
+    , flags(dag_request->flags())
+    , sql_mode(dag_request->sql_mode())
+    , max_recorded_error_count(getMaxErrorCount(*dag_request))
+    , warnings(max_recorded_error_count)
+    , warning_count(0)
+{
+    RUNTIME_CHECK((dag_request->executors_size() > 0) != dag_request->has_root_executor());
+    const auto & root_executor = dag_request->has_root_executor()
+        ? dag_request->root_executor()
+        : dag_request->executors(dag_request->executors_size() - 1);
+    return_executor_id = root_executor.has_executor_id();
+    if (return_executor_id)
+        root_executor_id = root_executor.executor_id();
+    initOutputInfo();
+}
+
 void DAGContext::initOutputInfo()
 {
     output_field_types = collectOutputFieldTypes(*dag_request);
@@ -51,6 +143,16 @@ void DAGContext::initOutputInfo()
     }
     encode_type = analyzeDAGEncodeType(*this);
     keep_session_timezone_info = encode_type == tipb::EncodeType::TypeChunk || encode_type == tipb::EncodeType::TypeCHBlock;
+}
+
+String DAGContext::getRootExecutorId()
+{
+    // If return_executor_id is false, we can get the generated executor_id from list_based_executors_order.
+    return return_executor_id
+        ? root_executor_id
+        : (list_based_executors_order.empty()
+               ? ""
+               : list_based_executors_order.back());
 }
 
 bool DAGContext::allowZeroInDate() const

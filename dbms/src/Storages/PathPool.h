@@ -18,6 +18,7 @@
 #include <Common/nocopyable.h>
 #include <Core/Types.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <Storages/PathPool_fwd.h>
 
 #include <mutex>
 #include <unordered_map>
@@ -29,17 +30,6 @@ using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 
-/// A class to manage global paths.
-class PathPool;
-/// A class to manage paths for the specified storage.
-class StoragePathPool;
-
-/// ===== Delegators to StoragePathPool ===== ///
-/// Delegators to StoragePathPool. Use for managing the path of DTFiles.
-class StableDiskDelegator;
-/// Delegators to StoragePathPool. Use by PageStorage for managing the path of PageFiles.
-class PSDiskDelegator;
-using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 class PSDiskDelegatorMulti;
 class PSDiskDelegatorSingle;
 class PSDiskDelegatorRaft;
@@ -76,6 +66,12 @@ public:
     const Strings & listKVStorePaths() const { return kvstore_paths; }
 
     const Strings & listGlobalPagePaths() const { return global_page_paths; }
+
+    static const String log_path_prefix;
+    static const String data_path_prefix;
+    static const String meta_path_prefix;
+    static const String kvstore_path_prefix;
+    static const String write_uni_path_prefix;
 
 public:
     // A thread safe wrapper for storing a map of <page data file id, path index>

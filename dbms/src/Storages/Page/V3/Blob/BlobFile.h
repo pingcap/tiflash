@@ -21,8 +21,7 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/V3/PageDefines.h>
-#include <Storages/Page/WriteBatch.h>
-#include <Storages/PathPool.h>
+#include <Storages/PathPool_fwd.h>
 
 namespace DB::PS::V3
 {

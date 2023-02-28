@@ -52,6 +52,12 @@ inline String getNormalizedPath(const String & s)
     return removeTrailingSlash(Poco::Path{s}.toString());
 }
 
+const String PathPool::log_path_prefix = "log";
+const String PathPool::data_path_prefix = "data";
+const String PathPool::meta_path_prefix = "meta";
+const String PathPool::kvstore_path_prefix = "kvstore";
+const String PathPool::write_uni_path_prefix = "write";
+
 // Constructor to be used during initialization
 PathPool::PathPool(
     const Strings & main_data_paths_,
@@ -64,7 +70,7 @@ PathPool::PathPool(
     , kvstore_paths(kvstore_paths_)
     , global_capacity(global_capacity_)
     , file_provider(file_provider_)
-    , log(Logger::get("PathPool"))
+    , log(Logger::get())
 {
     if (kvstore_paths.empty())
     {
@@ -72,7 +78,7 @@ PathPool::PathPool(
         for (const auto & s : latest_data_paths)
         {
             // Get a normalized path without trailing '/'
-            auto p = getNormalizedPath(s + "/kvstore");
+            auto p = getNormalizedPath(s + "/" + PathPool::kvstore_path_prefix);
             kvstore_paths.emplace_back(std::move(p));
         }
     }
@@ -135,7 +141,7 @@ StoragePathPool::StoragePathPool( //
     , shutdown_called(false)
     , global_capacity(std::move(global_capacity_))
     , file_provider(std::move(file_provider_))
-    , log(Logger::get("StoragePathPool"))
+    , log(Logger::get())
 {
     RUNTIME_CHECK_MSG(!database.empty() && !table.empty(), "Can NOT create StoragePathPool [database={}] [table={}]", database, table);
 
