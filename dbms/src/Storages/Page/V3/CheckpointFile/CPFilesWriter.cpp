@@ -58,11 +58,11 @@ void CPFilesWriter::writePrefix(const CPFilesWriter::PrefixInfo & info)
     write_stage = WriteStage::WritingEdits;
 }
 
-bool CPFilesWriter::writeEditsAndApplyRemoteInfo(universal::PageEntriesEdit & edit)
+bool CPFilesWriter::writeEditsAndApplyRemoteInfo(universal::PageEntriesEdit & edits)
 {
     RUNTIME_CHECK_MSG(write_stage == WriteStage::WritingEdits, "unexpected write stage {}", magic_enum::enum_name(write_stage));
 
-    auto & records = edit.getMutRecords();
+    auto & records = edits.getMutRecords();
     if (records.empty())
         return false;
 
@@ -100,6 +100,7 @@ bool CPFilesWriter::writeEditsAndApplyRemoteInfo(universal::PageEntriesEdit & ed
             rec_edit.version,
             page.data.begin(),
             page.data.size());
+        RUNTIME_CHECK(page.data.size() == rec_edit.entry.size, page.data.size(), rec_edit.entry.size);
         rec_edit.entry.checkpoint_info = {
             .data_location = data_location,
             .is_local_data_reclaimed = false,
@@ -108,7 +109,7 @@ bool CPFilesWriter::writeEditsAndApplyRemoteInfo(universal::PageEntriesEdit & ed
     }
 
     // 3. Write down everything to the manifest.
-    manifest_writer->writeEdits(edit);
+    manifest_writer->writeEdits(edits);
 
     return data_writer->writtenRecords() > 0;
 }

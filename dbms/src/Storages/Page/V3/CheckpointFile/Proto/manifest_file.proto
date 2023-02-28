@@ -72,11 +72,13 @@ message EditRecord {
     string ori_page_id = 3;
     uint64 version_sequence = 4;
     uint64 version_epoch = 5;
-    EntryDataLocation entry = 6;
 
-    // The offset to the data (not the offset to the file) for each field.
-    repeated uint64 fields_offset = 8;
-    repeated uint64 fields_checksum = 9;
+    EntryDataLocation entry_location = 6;
+    uint64 entry_size = 7; // The size of the data (uncompressed)
+    uint64 entry_tag = 8;
+    uint64 entry_checksum = 9;
+    repeated uint64 entry_fields_offset = 10; // The offset to the data (not the offset to the file) for each field.
+    repeated uint64 entry_fields_checksum = 11;
 }
 
 message LockFile {

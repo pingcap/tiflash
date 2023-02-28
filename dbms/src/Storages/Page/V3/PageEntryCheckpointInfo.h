@@ -36,8 +36,8 @@ struct CheckpointLocation
     CheckpointProto::EntryDataLocation toProto() const;
 
     /**
-     * @param strings_map A modifyable map. This function will try to reuse strings in the map
-     *                    or insert new strings into the map to share memory for the same string.
+     * @param strings_map A modifyable map. This function will try to reuse strings in the intern map
+     *                    or insert new strings into the intern map to share memory for the same string.
      */
     static CheckpointLocation fromProto(
         const CheckpointProto::EntryDataLocation & proto_rec,

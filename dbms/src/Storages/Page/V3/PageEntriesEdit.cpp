@@ -29,11 +29,14 @@ CheckpointProto::EditRecord PageEntriesEdit<UniversalPageId>::EditRecord::toProt
     if (type == EditRecordType::VAR_ENTRY)
     {
         RUNTIME_CHECK(entry.checkpoint_info.has_value());
-        *proto_edit.mutable_entry() = entry.checkpoint_info->data_location.toProto();
+        proto_edit.set_entry_size(entry.size);
+        proto_edit.set_entry_tag(entry.tag);
+        proto_edit.set_entry_checksum(entry.checksum);
+        proto_edit.mutable_entry_location()->CopyFrom(entry.checkpoint_info->data_location.toProto());
         for (const auto & [offset, checksum] : entry.field_offsets)
         {
-            proto_edit.add_fields_offset(offset);
-            proto_edit.add_fields_checksum(checksum);
+            proto_edit.add_entry_fields_offset(offset);
+            proto_edit.add_entry_fields_checksum(checksum);
         }
     }
     return proto_edit;
@@ -54,16 +57,19 @@ typename PageEntriesEdit<UniversalPageId>::EditRecord PageEntriesEdit<UniversalP
     if (rec.type == EditRecordType::VAR_ENTRY)
     {
         rec.entry.checkpoint_info = CheckpointInfo{
-            .data_location = CheckpointLocation::fromProto(proto_edit.entry(), strings_map),
+            .data_location = CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map),
             .is_local_data_reclaimed = true,
         };
-        RUNTIME_CHECK(proto_edit.fields_offset_size() == proto_edit.fields_checksum_size());
-        auto sz = proto_edit.fields_offset_size();
+        rec.entry.size = proto_edit.entry_size();
+        rec.entry.checksum = proto_edit.entry_checksum();
+        rec.entry.tag = proto_edit.entry_tag();
+        RUNTIME_CHECK(proto_edit.entry_fields_offset_size() == proto_edit.entry_fields_checksum_size());
+        auto sz = proto_edit.entry_fields_offset_size();
         for (int i = 0; i < sz; ++i)
         {
             rec.entry.field_offsets.emplace_back(std::make_pair(
-                proto_edit.fields_offset(i),
-                proto_edit.fields_checksum(i)));
+                proto_edit.entry_fields_offset(i),
+                proto_edit.entry_fields_checksum(i)));
         }
         // Note: rec.entry.* is untouched, leaving zero value.
         // We need to take care when restoring the PS instance.

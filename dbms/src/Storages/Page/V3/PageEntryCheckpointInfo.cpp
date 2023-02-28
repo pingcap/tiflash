@@ -30,6 +30,8 @@ CheckpointLocation CheckpointLocation::fromProto(
     const CheckpointProto::EntryDataLocation & proto_rec,
     CheckpointProto::StringsInternMap & strings_map)
 {
+    // Try to reuse the same data_file_id from the string intern map.
+    // Usually a lot of entries are placed in the same data file. This reduces memory overhead.
     std::shared_ptr<const std::string> data_file_id = nullptr;
     if (auto it = strings_map.find(proto_rec.data_file_id()); it != strings_map.end())
     {
