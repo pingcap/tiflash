@@ -40,7 +40,7 @@ public:
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy signPayloads,
         bool useVirtualAddressing);
 
-    TiFlashS3Client(const String & bucket_name_, Aws::S3::S3Client && raw_client);
+    TiFlashS3Client(const String & bucket_name_, std::unique_ptr<Aws::S3::S3Client> && raw_client);
 
     const String & bucket() const { return bucket_name; }
 

@@ -126,8 +126,8 @@ TiFlashS3Client::TiFlashS3Client(
 {
 }
 
-TiFlashS3Client::TiFlashS3Client(const String & bucket_name_, Aws::S3::S3Client && raw_client)
-    : Aws::S3::S3Client(std::move(raw_client))
+TiFlashS3Client::TiFlashS3Client(const String & bucket_name_, std::unique_ptr<Aws::S3::S3Client> && raw_client)
+    : Aws::S3::S3Client(std::move(*raw_client))
     , bucket_name(bucket_name_)
 {
 }
@@ -145,12 +145,11 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     shared_client = mock_s3_ ? std::make_unique<tests::MockS3Client>() : create();
     if (!mock_s3_)
     {
-        auto raw_client = create();
-        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, std::move(*raw_client.release()));
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, create());
     }
     else
     {
-        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, tests::MockS3Client());
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, std::make_unique<tests::MockS3Client>());
     }
 }
 
