@@ -13,6 +13,10 @@
 // limitations under the License.
 
 #include <Columns/ColumnVector.h>
+#include <Columns/ColumnsCommon.h>
+#include <Columns/ColumnsNumber.h>
+#include <Columns/IColumn.h>
+#include <Common/typeid_cast.h>
 #include <common/types.h>
 #include <fmt/core.h>
 
@@ -29,6 +33,243 @@ namespace
 std::random_device rd;
 
 using StopFlag = std::atomic<bool>;
+
+namespace
+{
+
+/// If mask is a number of this kind: [0]*[1]+ function returns the length of the cluster of 1s.
+/// Otherwise it returns the special value: 0xFF.
+inline UInt8 prefixToCopy(UInt64 mask)
+{
+    static constexpr UInt64 all_match = 0xFFFFFFFFFFFFFFFFULL;
+    if (mask == all_match)
+        return 64;
+    /// Row with index 0 correspond to the least significant bit.
+    /// So the length of the prefix to copy is 64 - #(leading zeroes).
+    const UInt64 leading_zeroes = __builtin_clzll(mask);
+    if (mask == ((all_match << leading_zeroes) >> leading_zeroes))
+        return 64 - leading_zeroes;
+    else
+        return 0xFF;
+}
+
+inline UInt8 suffixToCopy(UInt64 mask)
+{
+    const auto prefix_to_copy = prefixToCopy(~mask);
+    return prefix_to_copy >= 64 ? prefix_to_copy : 64 - prefix_to_copy;
+}
+
+} // namespace
+
+ColumnPtr filterV1(ColumnPtr & col, IColumn::Filter & filt, ssize_t result_size_hint)
+{
+    const auto & data = typeid_cast<const ColumnVector<Int64> *>(col.get())->getData();
+    size_t size = col->size();
+    if (size != filt.size())
+        throw Exception("Size of filter doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    auto res = ColumnVector<Int64>::create();
+    using Container = ColumnVector<Int64>::Container;
+    Container & res_data = res->getData();
+
+    if (result_size_hint)
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filt);
+        res_data.reserve(result_size_hint);
+    }
+
+    const UInt8 * filt_pos = &filt[0];
+    const UInt8 * filt_end = filt_pos + size;
+    const Int64 * data_pos = &data[0];
+
+#if __SSE2__
+    /** A slightly more optimized version.
+        * Based on the assumption that often pieces of consecutive values
+        *  completely pass or do not pass the filter.
+        * Therefore, we will optimistically check the parts of `SIMD_BYTES` values.
+        */
+
+    static constexpr size_t SIMD_BYTES = 16;
+    const __m128i zero16 = _mm_setzero_si128();
+    const UInt8 * filt_end_sse = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
+
+    while (filt_pos < filt_end_sse)
+    {
+        int mask = _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)), zero16));
+
+        if (0 == mask)
+        {
+            /// Nothing is inserted.
+        }
+        else if (0xFFFF == mask)
+        {
+            res_data.insert(data_pos, data_pos + SIMD_BYTES);
+        }
+        else
+        {
+            for (size_t i = 0; i < SIMD_BYTES; ++i)
+                if (filt_pos[i])
+                    res_data.push_back(data_pos[i]);
+        }
+
+        filt_pos += SIMD_BYTES;
+        data_pos += SIMD_BYTES;
+    }
+#endif
+
+    while (filt_pos < filt_end)
+    {
+        if (*filt_pos)
+            res_data.push_back(*data_pos);
+
+        ++filt_pos;
+        ++data_pos;
+    }
+
+    return res;
+}
+
+ColumnPtr filterV2(ColumnPtr & col, IColumn::Filter & filt, ssize_t result_size_hint)
+{
+    const auto & data = typeid_cast<const ColumnVector<Int64> *>(col.get())->getData();
+    size_t size = col->size();
+    if (size != filt.size())
+        throw Exception("Size of filter doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    auto res = ColumnVector<Int64>::create();
+    using Container = ColumnVector<Int64>::Container;
+    Container & res_data = res->getData();
+
+    if (result_size_hint)
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filt);
+        res_data.reserve(result_size_hint);
+    }
+
+    const UInt8 * filt_pos = &filt[0];
+    const UInt8 * filt_end = filt_pos + size;
+    const Int64 * data_pos = &data[0];
+
+    static constexpr size_t SIMD_BYTES = 64;
+    const UInt8 * filt_end_aligned = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
+
+    while (filt_pos < filt_end_aligned)
+    {
+        UInt64 mask = ToBits64(filt_pos);
+        if likely (0 != mask)
+        {
+            const UInt8 prefix_to_copy = prefixToCopy(mask);
+
+            if (0xFF != prefix_to_copy)
+            {
+                res_data.insert(data_pos, data_pos + prefix_to_copy);
+            }
+            else
+            {
+                const UInt8 suffix_to_copy = suffixToCopy(mask);
+                if (0xFF != suffix_to_copy)
+                {
+                    res_data.insert(data_pos + SIMD_BYTES - suffix_to_copy, data_pos + SIMD_BYTES);
+                }
+                else
+                {
+                    while (mask)
+                    {
+                        size_t index = __builtin_ctzll(mask);
+                        res_data.push_back(data_pos[index]);
+                        mask &= mask - 1;
+                    }
+                }
+            }
+        }
+
+        filt_pos += SIMD_BYTES;
+        data_pos += SIMD_BYTES;
+    }
+
+    while (filt_pos < filt_end)
+    {
+        if (*filt_pos)
+            res_data.push_back(*data_pos);
+
+        ++filt_pos;
+        ++data_pos;
+    }
+
+    return res;
+}
+
+ColumnPtr filterV3(ColumnPtr & col, IColumn::Filter & filt, ssize_t result_size_hint)
+{
+    const auto & data = typeid_cast<const ColumnVector<Int64> *>(col.get())->getData();
+    size_t size = col->size();
+    if (size != filt.size())
+        throw Exception("Size of filter doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    auto res = ColumnVector<Int64>::create();
+    using Container = ColumnVector<Int64>::Container;
+    Container & res_data = res->getData();
+
+    if (result_size_hint)
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filt);
+        res_data.reserve(result_size_hint);
+    }
+
+    const UInt8 * filt_pos = &filt[0];
+    const UInt8 * filt_end = filt_pos + size;
+    const Int64 * data_pos = &data[0];
+
+    static constexpr size_t SIMD_BYTES = 64;
+    const UInt8 * filt_end_aligned = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
+
+    while (filt_pos < filt_end_aligned)
+    {
+        UInt64 mask = ToBits64(filt_pos);
+        if (0xFFFFFFFFFFFFFFFFULL == mask)
+        {
+            res_data.insert(data_pos, data_pos + SIMD_BYTES);
+        }
+        else
+        {
+            int processed_bytes = 0;
+            while (mask)
+            {
+                const int prefix_to_copy = __builtin_ctzll(~mask);
+                if (prefix_to_copy)
+                {
+                    res_data.insert(data_pos + processed_bytes, data_pos + processed_bytes + prefix_to_copy);
+                    processed_bytes += prefix_to_copy;
+                    mask >>= prefix_to_copy;
+                }
+                else
+                {
+                    const int suffix_to_pass = __builtin_ctzll(mask);
+                    processed_bytes += suffix_to_pass;
+                    mask >>= suffix_to_pass;
+                }
+            }
+        }
+
+        filt_pos += SIMD_BYTES;
+        data_pos += SIMD_BYTES;
+    }
+
+
+    while (filt_pos < filt_end)
+    {
+        if (*filt_pos)
+            res_data.push_back(*data_pos);
+
+        ++filt_pos;
+        ++data_pos;
+    }
+
+    return res;
+}
 
 template <typename T>
 ColumnPtr buildColumn(int n)
@@ -107,29 +348,54 @@ void testFilter(int num_rows, int num_columns, int seconds)
     auto filter = buildFilter(num_rows, num_columns);
 
     StopFlag stop_flag = false;
-    std::atomic<Int64> counter = 0;
+    std::vector<std::atomic<Int64>> counters(3);
+    for (auto & counter : counters)
+        counter = 0;
 
+    const std::vector<std::function<void()>> filter_func = {
+        [&] {
+            while (!stop_flag.load(std::memory_order_relaxed))
+            {
+                filterV1(src, filter, -1);
+                counters[0].fetch_add(1, std::memory_order_relaxed);
+            }
+        },
+        [&] {
+            while (!stop_flag.load(std::memory_order_relaxed))
+            {
+                filterV2(src, filter, -1);
+                counters[1].fetch_add(1, std::memory_order_relaxed);
+            }
+        },
+        [&] {
+            while (!stop_flag.load(std::memory_order_relaxed))
+            {
+                filterV3(src, filter, -1);
+                counters[2].fetch_add(1, std::memory_order_relaxed);
+            }
+        }};
+
+    std::vector<std::thread> threads;
+    threads.reserve(filter_func.size());
     auto start = std::chrono::high_resolution_clock::now();
-
-    auto filter_func = [&] {
-        while (!stop_flag.load(std::memory_order_relaxed))
-        {
-            src->filter(filter, -1);
-            counter.fetch_add(1, std::memory_order_relaxed);
-        }
-    };
-
-    std::thread t(filter_func);
+    for (const auto & f : filter_func)
+    {
+        threads.emplace_back(f);
+    }
 
     std::this_thread::sleep_for(std::chrono::seconds(seconds));
     stop_flag.store(true);
-    t.join();
+    for (auto & t : threads)
+        t.join();
 
     auto cur = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(cur - start);
-    std::cout
-        << fmt::format("Filter/s: {:<10}", counter.load() * 1000 / duration.count())
-        << std::endl;
+    for (size_t i = 0; i < counters.size(); ++i)
+    {
+        std::cout
+            << fmt::format("FilterV{}: {:<10}", i + 1, counters[i].load() * 1000 / duration.count())
+            << std::endl;
+    }
 }
 
 } // namespace
@@ -150,7 +416,7 @@ int main(int argc [[maybe_unused]], char ** argv [[maybe_unused]])
         handlers = {
             {"int",
              {{"scatter", DB::tests::testScatter<Int32>},
-              {"filter", DB::tests::testFilter<Int32>}}},
+              {"filter", DB::tests::testFilter<Int64>}}},
             {"int64",
              {{"scatter", DB::tests::testScatter<Int64>},
               {"filter", DB::tests::testFilter<Int64>}}}};

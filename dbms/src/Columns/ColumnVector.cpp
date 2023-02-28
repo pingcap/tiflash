@@ -206,13 +206,12 @@ void ColumnVector<T>::insertRangeFrom(const IColumn & src, size_t start, size_t 
 namespace
 {
 
-/// If mask is a number of this kind: [0]*[1]* function returns the length of the cluster of 1s.
+/// If mask is a number of this kind: [0]*[1]+ function returns the length of the cluster of 1s.
 /// Otherwise it returns the special value: 0xFF.
+/// Note: mask must be non-zero.
 inline UInt8 prefixToCopy(UInt64 mask)
 {
     static constexpr UInt64 all_match = 0xFFFFFFFFFFFFFFFFULL;
-    if (mask == 0)
-        return 0;
     if (mask == all_match)
         return 64;
     /// Row with index 0 correspond to the least significant bit.
@@ -232,32 +231,34 @@ inline UInt8 suffixToCopy(UInt64 mask)
 
 } // namespace
 
-template <typename T, typename Container, size_t SIMD_BYTES>
+template <typename T, typename Container, size_t SIMD_BYTES = 64>
 inline void doFilterAligned(const UInt8 *& filt_pos, const UInt8 *& filt_end_aligned, const T *& data_pos, Container & res_data)
 {
     while (filt_pos < filt_end_aligned)
     {
         UInt64 mask = ToBits64(filt_pos);
-        const UInt8 prefix_to_copy = prefixToCopy(mask);
-
-        if (0xFF != prefix_to_copy)
+        if likely (0 != mask)
         {
-            res_data.insert(data_pos, data_pos + prefix_to_copy);
-        }
-        else
-        {
-            const UInt8 suffix_to_copy = suffixToCopy(mask);
-            if (0xFF != suffix_to_copy)
+            const UInt8 prefix_to_copy = prefixToCopy(mask);
+            if (0xFF != prefix_to_copy)
             {
-                res_data.insert(data_pos + SIMD_BYTES - suffix_to_copy, data_pos + SIMD_BYTES);
+                res_data.insert(data_pos, data_pos + prefix_to_copy);
             }
             else
             {
-                while (mask)
+                const UInt8 suffix_to_copy = suffixToCopy(mask);
+                if (0xFF != suffix_to_copy)
                 {
-                    size_t index = __builtin_ctzll(mask);
-                    res_data.push_back(data_pos[index]);
-                    mask &= mask - 1;
+                    res_data.insert(data_pos + SIMD_BYTES - suffix_to_copy, data_pos + SIMD_BYTES);
+                }
+                else
+                {
+                    while (mask)
+                    {
+                        size_t index = __builtin_ctzll(mask);
+                        res_data.push_back(data_pos[index]);
+                        mask &= mask - 1;
+                    }
                 }
             }
         }
