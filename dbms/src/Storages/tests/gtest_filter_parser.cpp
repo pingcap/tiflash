@@ -88,12 +88,8 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
     // Don't care about regions information in this test
     DAGQuerySource dag(ctx);
     auto query_block = *dag.getRootQueryBlock();
-    std::vector<const tipb::Expr *> conditions;
-    if (query_block.children[0]->selection != nullptr)
-    {
-        for (const auto & condition : query_block.children[0]->selection->selection().conditions())
-            conditions.push_back(&condition);
-    }
+    google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = query_block.children[0]->selection != nullptr ? query_block.children[0]->selection->selection().conditions() : empty_condition;
 
     std::unique_ptr<DAGQueryInfo> dag_query;
     DM::ColumnDefines columns_to_read;
