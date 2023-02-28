@@ -354,7 +354,7 @@ try
     auto edits = universal::PageEntriesEdit{};
     {
         UniversalWriteBatch wb;
-        wb.putPage("page_foo", 0, "The flower carriage rocked");
+        wb.putPage("page_foo", 0, "The flower carriage rocked", {4, 10, 12});
         wb.delPage("id_bar");
         wb.putPage("page_abc", 0, "Dreamed of the day that she was born");
         auto blob_store_edits = blob_store.write(wb, nullptr);
@@ -398,6 +398,9 @@ try
         ASSERT_EQ(0, r[0].entry.size);
         ASSERT_TRUE(r[0].entry.checkpoint_info->is_local_data_reclaimed);
         ASSERT_EQ("The flower carriage rocked", readData(r[0].entry.checkpoint_info->data_location));
+        ASSERT_EQ(4, r[0].entry.getFieldSize(0));
+        ASSERT_EQ(10, r[0].entry.getFieldSize(1));
+        ASSERT_EQ(12, r[0].entry.getFieldSize(2));;
 
         ASSERT_EQ(EditRecordType::VAR_DELETE, r[1].type);
         ASSERT_EQ("id_bar", r[1].page_id);
