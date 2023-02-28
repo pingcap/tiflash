@@ -99,7 +99,7 @@ public:
             uwb->putExternal(page_id, tag);
     }
 
-    void putRemotePage(PageIdU64 page_id, const Remote::RemoteDataLocation & loc, PageSize size, const PageFieldSizes & data_sizes)
+    void putRemotePage(PageIdU64 page_id, const PS::V3::CheckpointLocation & loc, PageSize size, const PageFieldSizes & data_sizes)
     {
         if (uwb)
         {
@@ -109,7 +109,7 @@ public:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "try to put remote page into non-universal ps, page_id={}", page_id);
     }
 
-    void putRemoteExternal(const UniversalPageId & page_id, const Remote::RemoteDataLocation & loc)
+    void putRemoteExternal(const UniversalPageId & page_id, const PS::V3::CheckpointLocation & loc)
     {
         if (uwb)
         {

@@ -16,7 +16,7 @@
 
 #include <IO/ReadBufferFromString.h>
 #include <Storages/Page/PageDefinesBase.h>
-#include <Storages/Page/V3/Remote/RemoteDataLocation.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/WriteBatchImpl.h>
@@ -43,7 +43,7 @@ private:
         UniversalPageId ori_page_id;
         // Fields' offset inside Page's data
         PageFieldOffsetChecksums offsets;
-        std::optional<Remote::RemoteDataLocation> remote;
+        std::optional<PS::V3::CheckpointLocation> remote;
     };
     using Writes = std::vector<Write>;
 
@@ -110,12 +110,12 @@ public:
         writes.emplace_back(std::move(w));
     }
 
-    void putRemotePage(PageIdU64 page_id, const Remote::RemoteDataLocation & loc, PageSize size, const PageFieldSizes & data_sizes = {})
+    void putRemotePage(PageIdU64 page_id, const PS::V3::CheckpointLocation & loc, PageSize size, const PageFieldSizes & data_sizes = {})
     {
         putRemotePage(UniversalPageIdFormat::toFullPageId(prefix, page_id), loc, size, data_sizes);
     }
 
-    void putRemotePage(const UniversalPageId & page_id, const Remote::RemoteDataLocation & loc, PageSize size, const PageFieldSizes & data_sizes)
+    void putRemotePage(const UniversalPageId & page_id, const PS::V3::CheckpointLocation & loc, PageSize size, const PageFieldSizes & data_sizes)
     {
         // Convert from data_sizes to the offset of each field
         PageFieldOffsetChecksums offsets;
@@ -139,7 +139,7 @@ public:
         has_remote = true;
     }
 
-    void putRemoteExternal(const UniversalPageId & page_id, const Remote::RemoteDataLocation & loc)
+    void putRemoteExternal(const UniversalPageId & page_id, const PS::V3::CheckpointLocation & loc)
     {
         Write w{WriteBatchWriteType::PUT_REMOTE_EXTERNAL, page_id, /*tag*/ 0, nullptr, /*size*/ 0, "", {}, loc};
         writes.emplace_back(std::move(w));
