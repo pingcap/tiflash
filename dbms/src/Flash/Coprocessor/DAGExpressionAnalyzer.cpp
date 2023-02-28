@@ -679,16 +679,16 @@ String DAGExpressionAnalyzer::applyFunction(
 
 String DAGExpressionAnalyzer::buildFilterColumn(
     const ExpressionActionsPtr & actions,
-    const std::vector<const tipb::Expr *> & conditions)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
 {
     String filter_column_name;
     if (conditions.size() == 1)
     {
-        filter_column_name = getActions(*conditions[0], actions, true);
-        if (isColumnExpr(*conditions[0])
-            && (!exprHasValidFieldType(*conditions[0])
+        filter_column_name = getActions(conditions[0], actions, true);
+        if (isColumnExpr(conditions[0])
+            && (!exprHasValidFieldType(conditions[0])
                 /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
-                || isUInt8Type(getDataTypeByFieldTypeForComputingLayer(conditions[0]->field_type()))))
+                || isUInt8Type(getDataTypeByFieldTypeForComputingLayer(conditions[0].field_type()))))
         {
             /// FilterBlockInputStream will CHANGE the filter column inplace, so
             /// filter column should never be a columnRef in DAG request, otherwise
@@ -700,8 +700,8 @@ String DAGExpressionAnalyzer::buildFilterColumn(
     else
     {
         Names arg_names;
-        for (const auto * condition : conditions)
-            arg_names.push_back(getActions(*condition, actions, true));
+        for (const auto & condition : conditions)
+            arg_names.push_back(getActions(condition, actions, true));
         // connect all the conditions by logical and
         filter_column_name = applyFunction("and", arg_names, actions, nullptr);
     }
@@ -710,7 +710,7 @@ String DAGExpressionAnalyzer::buildFilterColumn(
 
 String DAGExpressionAnalyzer::appendWhere(
     ExpressionActionsChain & chain,
-    const std::vector<const tipb::Expr *> & conditions)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
 {
     auto & last_step = initAndGetLastStep(chain);
 
@@ -1058,10 +1058,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     if (!filters.empty())
     {
         ret = true;
-        std::vector<const tipb::Expr *> filter_vector;
-        for (const auto & c : filters)
-            filter_vector.push_back(&c);
-        filter_column_name = appendWhere(chain, filter_vector);
+        filter_column_name = appendWhere(chain, filters);
     }
     /// remove useless columns to avoid duplicate columns
     /// as when compiling the key/filter expression, the origin

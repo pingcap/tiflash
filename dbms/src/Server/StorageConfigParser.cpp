@@ -529,17 +529,42 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
 
     readConfig(table, "endpoint", endpoint);
     readConfig(table, "bucket", bucket);
+    readConfig(table, "max_connections", max_connections);
+    RUNTIME_CHECK(max_connections > 0);
+    readConfig(table, "connection_timeout_ms", connection_timeout_ms);
+    RUNTIME_CHECK(connection_timeout_ms > 0);
+    readConfig(table, "request_timeout_ms", request_timeout_ms);
+    RUNTIME_CHECK(request_timeout_ms > 0);
+    readConfig(table, "cache_dir", cache_dir);
+    readConfig(table, "cache_capacity", cache_capacity);
 
     access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", /*default*/ "");
     secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", /*default*/ "");
 
-    LOG_INFO(log, "endpoint={} bucket={} isS3Enabled={}", endpoint, bucket, isS3Enabled());
+    LOG_INFO(
+        log,
+        "endpoint={} bucket={} max_connections={} connection_timeout_ms={} "
+        "request_timeout_ms={} cache_dir={} cache_capacity={} "
+        "access_key_id_size={}  secret_access_key_size={}",
+        endpoint,
+        bucket,
+        max_connections,
+        connection_timeout_ms,
+        request_timeout_ms,
+        cache_dir,
+        cache_capacity,
+        access_key_id.size(),
+        secret_access_key.size());
 }
 
 bool StorageS3Config::isS3Enabled() const
 {
-    return !endpoint.empty() && !bucket.empty() && !access_key_id.empty() && !secret_access_key.empty();
+    return !bucket.empty();
 }
 
+bool StorageS3Config::isFileCacheEnabled() const
+{
+    return !cache_dir.empty() && cache_capacity != 0;
+}
 
 } // namespace DB

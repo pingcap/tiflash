@@ -230,6 +230,17 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
 
   </details>
 
+- **Build for AMD64 Architecture**:
+
+  <details>
+  <summary>Click to expand instructions</summary>
+
+  To deploy TiFlash under the Linux AMD64 architecture, the CPU must support the `AVX2` instruction set. Ensure that `cat /proc/cpuinfo | grep avx2` has output.
+
+  If need to build TiFlash for AMD64 architecture without such instruction set, please use cmake option `-DNO_AVX_OR_HIGHER=ON`.
+
+  </details>
+
 ## Run Unit Tests
 
 Unit tests are automatically enabled in debug profile. To build these unit tests:

@@ -267,6 +267,11 @@ struct ContextShared
             ps_write->shutdown();
         }
 
+        if (tmt_context)
+        {
+            tmt_context->shutdown();
+        }
+
         /** At this point, some tables may have threads that block our mutex.
           * To complete them correctly, we will copy the current list of tables,
           *  and ask them all to finish their work.
@@ -1934,9 +1939,9 @@ const std::shared_ptr<DB::DM::SharedBlockSchemas> & Context::getSharedBlockSchem
     return shared->shared_block_schemas;
 }
 
-void Context::initializeSharedBlockSchemas()
+void Context::initializeSharedBlockSchemas(size_t shared_block_schemas_size)
 {
-    shared->shared_block_schemas = std::make_shared<DB::DM::SharedBlockSchemas>(*this);
+    shared->shared_block_schemas = std::make_shared<DB::DM::SharedBlockSchemas>(shared_block_schemas_size);
 }
 
 size_t Context::getMaxStreams() const

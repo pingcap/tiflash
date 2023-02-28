@@ -21,10 +21,10 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <Storages/Page/PageStorage_fwd.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/WALRecoveryMode.h>
-#include <Storages/Page/WriteBatchWrapper.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
@@ -41,6 +41,10 @@
 
 namespace DB
 {
+class WriteBatch;
+class WriteBatchWrapper;
+class UniversalWriteBatch;
+
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 class PathCapacityMetrics;
@@ -48,11 +52,7 @@ using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 class Context;
-class PageStorage;
-using PageStoragePtr = std::shared_ptr<PageStorage>;
 class RegionPersister;
-class UniversalPageStorage;
-using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 namespace ErrorCodes
 {
@@ -273,7 +273,6 @@ public:
 private:
     std::unique_ptr<PageReaderImpl> impl;
 };
-using PageReaderPtr = std::shared_ptr<PageReader>;
 
 class PageWriter : private boost::noncopyable
 {
@@ -320,7 +319,5 @@ private:
     PageStoragePtr storage_v3;
     UniversalPageStoragePtr uni_ps;
 };
-using PageWriterPtr = std::shared_ptr<PageWriter>;
-
 
 } // namespace DB

@@ -257,7 +257,9 @@ void dailyRandomTest(WorkloadOptions & opts)
 void initReadThread()
 {
     DB::ServerInfo server_info;
-    DB::DM::SegmentReaderPoolManager::instance().init(server_info);
+    DB::DM::SegmentReaderPoolManager::instance().init(
+        server_info.cpu_info.logical_cores,
+        TiFlashTestEnv::getGlobalContext().getSettingsRef().dt_read_thread_count_scale);
     DB::DM::SegmentReadTaskScheduler::instance();
     DB::DM::DMFileReaderPool::instance();
 }

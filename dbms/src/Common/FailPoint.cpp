@@ -21,10 +21,11 @@
 
 #include <boost/core/noncopyable.hpp>
 #include <condition_variable>
+#include <mutex>
+#include <optional>
 
 namespace DB
 {
-std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
 #define APPLY_FOR_FAILPOINTS_ONCE(M)                              \
     M(exception_between_drop_meta_and_data)                       \
     M(exception_between_alter_data_and_meta)                      \
@@ -68,6 +69,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_between_schema_change_in_the_same_diff)           \
     M(force_ps_wal_compact)                                       \
     M(pause_before_full_gc_prepare)                               \
+    M(force_owner_mgr_state)                                      \
     M(exception_during_spill)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
@@ -144,6 +146,8 @@ APPLY_FOR_RANDOM_FAILPOINTS(M)
 } // namespace FailPoints
 
 #ifdef FIU_ENABLE
+std::unordered_map<String, std::any> FailPointHelper::fail_point_val;
+std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
 class FailPointChannel : private boost::noncopyable
 {
 public:
@@ -201,13 +205,17 @@ void FailPointHelper::enablePauseFailPoint(const String & fail_point_name, UInt6
     throw Exception(fmt::format("Cannot find fail point {}", fail_point_name), ErrorCodes::FAIL_POINT_ERROR);
 }
 
-void FailPointHelper::enableFailPoint(const String & fail_point_name)
+void FailPointHelper::enableFailPoint(const String & fail_point_name, std::optional<std::any> v)
 {
 #define SUB_M(NAME, flags)                                                                                  \
     if (fail_point_name == FailPoints::NAME)                                                                \
     {                                                                                                       \
         /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
         fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
+        if (v.has_value())                                                                                  \
+        {                                                                                                   \
+            fail_point_val.try_emplace(FailPoints::NAME, v.value());                                        \
+        }                                                                                                   \
         return;                                                                                             \
     }
 
@@ -225,6 +233,10 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
         /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
         fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
         fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>());       \
+        if (v.has_value())                                                                                  \
+        {                                                                                                   \
+            fail_point_val.try_emplace(FailPoints::NAME, v.value());                                        \
+        }                                                                                                   \
         return;                                                                                             \
     }
 
@@ -240,6 +252,18 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
     throw Exception(fmt::format("Cannot find fail point {}", fail_point_name), ErrorCodes::FAIL_POINT_ERROR);
 }
 
+std::optional<std::any>
+FailPointHelper::getFailPointVal(const String & fail_point_name)
+{
+    if (auto iter = fail_point_val.find(fail_point_name); iter != fail_point_val.end())
+    {
+        auto v = iter->second;
+        fail_point_val.erase(iter);
+        return v;
+    }
+    return std::nullopt;
+}
+
 void FailPointHelper::disableFailPoint(const String & fail_point_name)
 {
     if (auto iter = fail_point_wait_channels.find(fail_point_name); iter != fail_point_wait_channels.end())
@@ -248,6 +272,7 @@ void FailPointHelper::disableFailPoint(const String & fail_point_name)
         /// if someone wait on this, the deconstruct will never be called.
         iter->second->notifyAll();
         fail_point_wait_channels.erase(iter);
+        fail_point_val.erase(fail_point_name);
     }
     fiu_disable(fail_point_name.c_str());
 }
@@ -302,7 +327,12 @@ class FailPointChannel
 {
 };
 
-void FailPointHelper::enableFailPoint(const String &) {}
+void FailPointHelper::enableFailPoint(const String &, std::optional<std::any>) {}
+
+std::optional<std::any> FailPointHelper::getFailPointVal(const String &)
+{
+    return std::nullopt;
+}
 
 void FailPointHelper::enablePauseFailPoint(const String &, UInt64) {}
 

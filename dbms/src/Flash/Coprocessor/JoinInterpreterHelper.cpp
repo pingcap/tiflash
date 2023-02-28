@@ -206,23 +206,13 @@ std::tuple<ExpressionActionsPtr, String, String, ExpressionActionsPtr, String> d
     String filter_column_for_other_condition;
     if (join.other_conditions_size() > 0)
     {
-        std::vector<const tipb::Expr *> condition_vector;
-        for (const auto & c : join.other_conditions())
-        {
-            condition_vector.push_back(&c);
-        }
-        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, condition_vector);
+        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, join.other_conditions());
     }
 
     String filter_column_for_other_eq_condition;
     if (join.other_eq_conditions_from_in_size() > 0)
     {
-        std::vector<const tipb::Expr *> condition_vector;
-        for (const auto & c : join.other_eq_conditions_from_in())
-        {
-            condition_vector.push_back(&c);
-        }
-        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
+        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, join.other_eq_conditions_from_in());
     }
 
     ExpressionActionsPtr other_cond_expr;

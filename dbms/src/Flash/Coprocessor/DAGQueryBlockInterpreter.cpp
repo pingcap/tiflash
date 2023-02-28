@@ -103,10 +103,7 @@ AnalysisResult analyzeExpressions(
     // In test mode, filter is not pushed down to table scan.
     if (query_block.selection && (!query_block.isTableScanSource() || context.isTest()))
     {
-        std::vector<const tipb::Expr *> where_conditions;
-        for (const auto & c : query_block.selection->selection().conditions())
-            where_conditions.push_back(&c);
-        res.filter_column_name = analyzer.appendWhere(chain, where_conditions);
+        res.filter_column_name = analyzer.appendWhere(chain, query_block.selection->selection().conditions());
         res.before_where = chain.getLastActions();
         chain.addStep();
     }
@@ -123,10 +120,7 @@ AnalysisResult analyzeExpressions(
 
         if (query_block.having != nullptr)
         {
-            std::vector<const tipb::Expr *> having_conditions;
-            for (const auto & c : query_block.having->selection().conditions())
-                having_conditions.push_back(&c);
-            res.having_column_name = analyzer.appendWhere(chain, having_conditions);
+            res.having_column_name = analyzer.appendWhere(chain, query_block.having->selection().conditions());
             res.before_having = chain.getLastActions();
             chain.addStep();
         }
