@@ -277,7 +277,7 @@ Block ColumnFileTinyReader::readNextBlock()
 size_t ColumnFileTinyReader::skipNextBlock()
 {
     if (read_done)
-        return false;
+        return 0;
 
     read_done = true;
     return tiny_file.getRows();
