@@ -108,7 +108,7 @@ OperatorStatus SinkOp::write(Block && block)
     // TODO collect operator profile info here.
     auto op_status = writeImpl(std::move(block));
 #ifndef NDEBUG
-    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif
     return op_status;
 }

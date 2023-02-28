@@ -780,5 +780,73 @@ TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
     if (tunnel != nullptr)
         tunnel->waitForFinish();
 }
+
+TEST_F(TestMPPTunnel, SyncTunnelNonBlockingWrite)
+{
+    auto writer_ptr = std::make_unique<MockPacketWriter>();
+    auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
+    mpp_tunnel_ptr->connectSync(writer_ptr.get());
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+
+    ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
+    mpp_tunnel_ptr->nonBlockingWrite(newDataPacket("First"));
+    mpp_tunnel_ptr->writeDone();
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+
+    GTEST_ASSERT_EQ(writer_ptr->write_packet_vec.size(), 1);
+    GTEST_ASSERT_EQ(writer_ptr->write_packet_vec.back(), "First");
+}
+
+TEST_F(TestMPPTunnel, AsyncTunnelNonBlockingWrite)
+{
+    auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
+    std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
+    mpp_tunnel_ptr->connectAsync(call_data.get());
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+    std::thread t(&MockAsyncCallData::run, call_data.get());
+
+    ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
+    mpp_tunnel_ptr->nonBlockingWrite(newDataPacket("First"));
+    mpp_tunnel_ptr->writeDone();
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+    t.join();
+
+    GTEST_ASSERT_EQ(call_data->write_packet_vec.size(), 1);
+    GTEST_ASSERT_EQ(call_data->write_packet_vec.back(), "First");
+}
+
+TEST_F(TestMPPTunnel, LocalTunnelNonBlockingWrite)
+{
+    auto [receiver, tunnels] = prepareLocal(1);
+    const auto & mpp_tunnel_ptr = tunnels.back();
+    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+    std::thread t(&MockExchangeReceiver::receiveAll, receiver.get());
+
+    ASSERT_TRUE(mpp_tunnel_ptr->isReadyForWrite());
+    mpp_tunnel_ptr->nonBlockingWrite(newDataPacket("First"));
+    mpp_tunnel_ptr->writeDone();
+    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+    t.join();
+
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs().size(), 1);
+    GTEST_ASSERT_EQ(receiver->getReceivedMsgs().back()->packet->getPacket().data(), "First");
+}
+
+TEST_F(TestMPPTunnel, isReadyForWriteTimeout)
+try
+{
+    timeout = std::chrono::seconds(1);
+    auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
+    Stopwatch stop_watch{CLOCK_MONOTONIC_COARSE};
+    while (stop_watch.elapsedSeconds() < 3 * timeout.count())
+    {
+        ASSERT_FALSE(mpp_tunnel_ptr->isReadyForWrite());
+    }
+    GTEST_FAIL();
+}
+catch (Exception & e)
+{
+    GTEST_ASSERT_EQ(e.message(), "0000_0001 is timeout");
+}
 } // namespace tests
 } // namespace DB
