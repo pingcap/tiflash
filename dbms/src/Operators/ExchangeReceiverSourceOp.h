@@ -49,7 +49,7 @@ protected:
 
     OperatorStatus awaitImpl() override;
 
-    void operateSuffix() noexcept override;
+    void operateSuffix() override;
 
 private:
     Block popFromBlockQueue();

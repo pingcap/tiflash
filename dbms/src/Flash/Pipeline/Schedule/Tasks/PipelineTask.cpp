@@ -28,10 +28,13 @@ PipelineTask::PipelineTask(
     , pipeline_exec(std::move(pipeline_exec_))
 {
     assert(pipeline_exec);
+    pipeline_exec->execPrefix();
 }
 
-void PipelineTask::finalize()
+void PipelineTask::finalizeImpl()
 {
+    assert(pipeline_exec);
+    pipeline_exec->execSuffix();
     pipeline_exec.reset();
 }
 

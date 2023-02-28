@@ -29,9 +29,14 @@ public:
     PipelineExec(
         SourceOpPtr && source_op_,
         TransformOps && transform_ops_,
-        SinkOpPtr && sink_op_);
+        SinkOpPtr && sink_op_)
+        : source_op(std::move(source_op_))
+        , transform_ops(std::move(transform_ops_))
+        , sink_op(std::move(sink_op_))
+    {}
 
-    ~PipelineExec();
+    void execPrefix();
+    void execSuffix();
 
     OperatorStatus execute();
 

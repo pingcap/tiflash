@@ -16,7 +16,7 @@
 
 namespace DB
 {
-void ExchangeReceiverSourceOp::operateSuffix() noexcept
+void ExchangeReceiverSourceOp::operateSuffix()
 {
     LOG_DEBUG(log, "finish read {} rows from remote", total_rows);
 }

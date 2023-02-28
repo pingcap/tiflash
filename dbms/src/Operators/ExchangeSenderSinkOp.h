@@ -38,8 +38,8 @@ public:
         return "ExchangeSenderSinkOp";
     }
 
-    void operatePrefix() noexcept override;
-    void operateSuffix() noexcept override;
+    void operatePrefix() override;
+    void operateSuffix() override;
 
     OperatorStatus writeImpl(Block && block) override;
 
