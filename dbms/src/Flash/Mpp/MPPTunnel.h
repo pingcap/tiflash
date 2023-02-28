@@ -17,6 +17,7 @@
 #include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
@@ -103,10 +104,13 @@ public:
     }
 
     virtual bool push(TrackedMppDataPacketPtr &&) = 0;
+    virtual bool nonBlockingPush(TrackedMppDataPacketPtr &&) = 0;
 
     virtual void cancelWith(const String &) = 0;
 
     virtual bool finish() = 0;
+
+    virtual bool isReadyForWrite() const = 0;
 
     void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg()
@@ -184,6 +188,11 @@ public:
         return send_queue.push(std::move(data)) == MPMCQueueResult::OK;
     }
 
+    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    {
+        return send_queue.nonBlockingPush(std::move(data)) == MPMCQueueResult::OK;
+    }
+
     void cancelWith(const String & reason) override
     {
         send_queue.cancelWith(reason);
@@ -192,6 +201,11 @@ public:
     bool finish() override
     {
         return send_queue.finish();
+    }
+
+    bool isReadyForWrite() const override
+    {
+        return !send_queue.isFull();
     }
 
 private:
@@ -221,9 +235,19 @@ public:
         return queue.push(std::move(data));
     }
 
+    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    {
+        return queue.nonBlockingPush(std::move(data));
+    }
+
     bool finish() override
     {
         return queue.finish();
+    }
+
+    bool isReadyForWrite() const override
+    {
+        return !queue.isFull();
     }
 
     void cancelWith(const String & reason) override
@@ -289,7 +313,20 @@ public:
         // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
         data->switchMemTracker(local_request_handler.recv_mem_tracker);
 
-        return local_request_handler.write<enable_fine_grained_shuffle>(source_index, data);
+        return local_request_handler.write<enable_fine_grained_shuffle, false>(source_index, data);
+    }
+
+    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    {
+        if (unlikely(checkPacketErr(data)))
+            return false;
+
+        // receiver_mem_tracker pointer will always be valid because ExchangeReceiverBase won't be destructed
+        // before all local tunnels are destructed so that the MPPTask which contains ExchangeReceiverBase and
+        // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
+        data->switchMemTracker(local_request_handler.recv_mem_tracker);
+
+        return local_request_handler.write<enable_fine_grained_shuffle, true>(source_index, data);
     }
 
     void cancelWith(const String & reason) override
@@ -301,6 +338,11 @@ public:
     {
         finishWrite(false, "");
         return true;
+    }
+
+    bool isReadyForWrite() const override
+    {
+        return local_request_handler.isReadyForWrite();
     }
 
 private:
@@ -352,6 +394,11 @@ public:
         return send_queue.push(std::move(data)) == MPMCQueueResult::OK;
     }
 
+    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    {
+        return send_queue.nonBlockingPush(std::move(data)) == MPMCQueueResult::OK;
+    }
+
     void cancelWith(const String & reason) override
     {
         send_queue.cancelWith(reason);
@@ -360,6 +407,11 @@ public:
     bool finish() override
     {
         return send_queue.finish();
+    }
+
+    bool isReadyForWrite() const override
+    {
+        return !send_queue.isFull();
     }
 
 private:
@@ -428,6 +480,15 @@ public:
     // write a single packet to the tunnel's send queue, it will block if tunnel is not ready.
     void write(TrackedMppDataPacketPtr && data);
 
+    // nonBlockingWrite write a single packet to the tunnel's send queue without blocking,
+    // and need to call isReadForWrite first.
+    // ```
+    // while (!isReadyForWrite()) {}
+    // nonBlockingWrite(std::move(data));
+    // ```
+    void nonBlockingWrite(TrackedMppDataPacketPtr && data);
+    bool isReadyForWrite() const;
+
     // finish the writing, and wait until the sender finishes.
     void writeDone();
 
@@ -475,7 +536,7 @@ private:
         Finished // Final state, no more work to do
     };
 
-    StringRef statusToString();
+    std::string_view statusToString();
 
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
@@ -492,12 +553,14 @@ private:
         connection_profile_info.packets += 1;
     }
 
-    std::mutex mu;
+private:
+    mutable std::mutex mu;
     std::condition_variable cv_for_status_changed;
 
     TunnelStatus status;
 
     std::chrono::seconds timeout;
+    mutable std::optional<Stopwatch> timeout_stopwatch;
 
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
