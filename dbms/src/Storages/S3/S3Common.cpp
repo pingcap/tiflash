@@ -110,6 +110,10 @@ private:
 namespace DB::S3
 {
 
+TiFlashS3Client::TiFlashS3Client(const String & bucket_name_)
+    : bucket_name(bucket_name_)
+{}
+
 TiFlashS3Client::TiFlashS3Client(
     const String & bucket_name_,
     const Aws::Auth::AWSCredentials & credentials,

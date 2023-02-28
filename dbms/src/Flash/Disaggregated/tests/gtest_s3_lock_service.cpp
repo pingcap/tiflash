@@ -18,6 +18,7 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/MockS3Client.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/MockOwnerManager.h>
 #include <TiDB/OwnerManager.h>
@@ -50,11 +51,14 @@ public:
 
         if (is_s3_test_enabled)
         {
-            s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager, client_factory.sharedTiFlashClient());
-
             s3_client = client_factory.sharedTiFlashClient();
-            createS3DataFiles();
         }
+        else
+        {
+            s3_client = std::make_shared<MockS3Client>();
+        }
+        s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager, s3_client);
+        createS3DataFiles();
     }
 
     void createS3DataFiles()
@@ -70,9 +74,6 @@ public:
 
     void TearDown() override
     {
-        if (!is_s3_test_enabled)
-            return;
-
         // clean data files
         while (dm_file_id > 0)
         {
@@ -119,8 +120,6 @@ protected:
 TEST_F(S3LockServiceTest, SingleTryAddLockRequest)
 try
 {
-    CHECK_S3_ENABLED;
-
     auto data_filename = getDataFilename();
     auto data_file_key = data_filename.toFullKey();
     auto lock_key = data_filename.toView().getLockKey(lock_store_id, lock_seq);
@@ -144,8 +143,6 @@ CATCH
 TEST_F(S3LockServiceTest, SingleTryMarkDeleteTest)
 try
 {
-    CHECK_S3_ENABLED;
-
     auto data_filename = getDataFilename();
     auto data_file_key = data_filename.toFullKey();
     auto delmark_key = data_filename.toView().getDelMarkKey();
@@ -166,8 +163,6 @@ CATCH
 TEST_F(S3LockServiceTest, SingleTryAddLockRequestWithDeleteFileTest)
 try
 {
-    CHECK_S3_ENABLED;
-
     auto data_filename = getDataFilename();
     auto data_file_key = data_filename.toFullKey();
     auto delmark_key = data_filename.toView().getDelMarkKey();
@@ -206,8 +201,6 @@ CATCH
 TEST_F(S3LockServiceTest, SingleTryMarkDeleteRequestWithLockFileTest)
 try
 {
-    CHECK_S3_ENABLED;
-
     auto data_filename = getDataFilename();
     auto data_file_key = data_filename.toFullKey();
     auto delmark_key = data_filename.toView().getDelMarkKey();
@@ -248,8 +241,6 @@ CATCH
 TEST_F(S3LockServiceTest, SingleTryAddLockRequestWithDataFileLostTest)
 try
 {
-    CHECK_S3_ENABLED;
-
     auto data_filename = getDataFilename(dm_file_id); // not created dmfile key
     auto data_file_key = data_filename.toFullKey();
     auto lock_key = data_filename.toView().getLockKey(lock_store_id, lock_seq);
@@ -275,8 +266,6 @@ CATCH
 TEST_F(S3LockServiceTest, MultipleTryAddLockRequest)
 try
 {
-    CHECK_S3_ENABLED;
-
     auto job = [&](size_t store_id) -> void {
         auto data_filename = getDataFilename();
         auto data_file_key = data_filename.toFullKey();
@@ -317,8 +306,6 @@ CATCH
 TEST_F(S3LockServiceTest, MultipleTryMarkDeleteRequest)
 try
 {
-    CHECK_S3_ENABLED;
-
     auto data_filename = getDataFilename();
     auto data_file_key = data_filename.toFullKey();
     auto delmark_key = data_filename.toView().getDelMarkKey();
@@ -352,8 +339,6 @@ CATCH
 TEST_F(S3LockServiceTest, MultipleMixRequest)
 try
 {
-    CHECK_S3_ENABLED;
-
     auto lock_job = [&](size_t file_id) -> void {
         auto data_filename = getDataFilename(file_id);
         auto data_file_key = data_filename.toFullKey();

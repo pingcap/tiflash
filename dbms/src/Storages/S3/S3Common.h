@@ -31,6 +31,8 @@ public:
     // Usually one tiflash instance only need access one bucket.
     // Store the bucket name to simpilfy some param passing.
 
+    explicit TiFlashS3Client(const String & bucket_name_);
+
     TiFlashS3Client(
         const String & bucket_name_,
         const Aws::Auth::AWSCredentials & credentials,

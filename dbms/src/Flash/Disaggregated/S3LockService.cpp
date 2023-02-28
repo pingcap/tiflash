@@ -47,7 +47,7 @@ S3LockService::S3LockService(Context & context_)
 {
 }
 
-S3LockService::S3LockService(OwnerManagerPtr owner_mgr_, std::shared_ptr<TiFlashS3Client> && s3_cli_)
+S3LockService::S3LockService(OwnerManagerPtr owner_mgr_, std::shared_ptr<TiFlashS3Client> s3_cli_)
     : gc_owner(std::move(owner_mgr_))
     , s3_client(std::move(s3_cli_))
     , log(Logger::get())
