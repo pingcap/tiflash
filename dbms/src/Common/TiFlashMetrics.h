@@ -203,6 +203,14 @@ namespace DB
         F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))                                                                             \
     M(tiflash_storage_rough_set_filter_rate, "Bucketed histogram of rough set filter rate", Histogram,                                              \
         F(type_dtfile_pack, {{"type", "dtfile_pack"}}, EqualWidthBuckets{0, 6, 20}))                                                                \
+    M(tiflash_disaggregated_object_lock_request_count, "Total number of S3 object lock/delete request", Counter,                                    \
+        F(type_lock, {"type", "lock"}), F(type_delete, {"type", "delete"}),                                                                         \
+        F(type_owner_changed, {"type", "owner_changed"}), F(type_error, {"type", "error"}),                                                         \
+        F(type_lock_conflict, {"type", "lock_conflict"}), F(type_delete_conflict, {"type", "delete_conflict"}),                                     \
+        F(type_delete_risk, {"type", "delete_risk"}))                                                                                               \
+    M(tiflash_disaggregated_object_lock_request_duration_seconds, "Bucketed histogram of S3 object lock/delete request duration", Histogram,        \
+        F(type_lock, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                  \
+        F(type_delete, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}))                                                                              \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                             \
         Histogram, /* these command usually cost servel seconds, increase the start bucket to 50ms */                                               \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                                      \
