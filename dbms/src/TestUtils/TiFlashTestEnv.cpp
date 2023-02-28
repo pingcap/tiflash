@@ -154,7 +154,7 @@ void TiFlashTestEnv::addGlobalContext(const DB::Settings & settings_, Strings te
     auto & path_pool = global_context->getPathPool();
     global_context->getTMTContext().restore(path_pool);
 
-    global_context->initializeSharedBlockSchemas();
+    global_context->initializeSharedBlockSchemas(10000);
 }
 
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
