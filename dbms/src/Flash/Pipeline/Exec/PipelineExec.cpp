@@ -17,7 +17,7 @@
 
 namespace DB
 {
-void PipelineExec::execPrefix()
+void PipelineExec::executePrefix()
 {
     sink_op->operatePrefix();
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
@@ -25,7 +25,7 @@ void PipelineExec::execPrefix()
     source_op->operatePrefix();
 }
 
-void PipelineExec::execSuffix()
+void PipelineExec::executeSuffix()
 {
     sink_op->operateSuffix();
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
