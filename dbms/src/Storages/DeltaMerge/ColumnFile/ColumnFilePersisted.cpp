@@ -63,28 +63,30 @@ BlockPtr deserializeSchema(ReadBuffer & buf)
     return schema;
 }
 
-void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level)
+void serializeColumn(WriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level)
 {
     CompressedWriteBuffer compressed(buf, CompressionSettings(compression_method, compression_level));
-    type->serializeBinaryBulkWithMultipleStreams(column, //
-                                                 [&](const IDataType::SubstreamPath &) { return &compressed; },
-                                                 offset,
-                                                 limit,
-                                                 true,
-                                                 {});
+    type->serializeBinaryBulkWithMultipleStreams(
+        column,
+        [&](const IDataType::SubstreamPath &) { return &compressed; },
+        offset,
+        limit,
+        true,
+        {});
     compressed.next();
 }
 
-void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows)
+void deserializeColumn(IColumn & column, const DataTypePtr & type, const ConstByteBuffer & data_buf, size_t rows)
 {
     ReadBufferFromMemory buf(data_buf.begin(), data_buf.size());
     CompressedReadBuffer compressed(buf);
-    type->deserializeBinaryBulkWithMultipleStreams(column, //
-                                                   [&](const IDataType::SubstreamPath &) { return &compressed; },
-                                                   rows,
-                                                   static_cast<double>(data_buf.size()) / rows,
-                                                   true,
-                                                   {});
+    type->deserializeBinaryBulkWithMultipleStreams(
+        column,
+        [&](const IDataType::SubstreamPath &) { return &compressed; },
+        rows,
+        static_cast<double>(data_buf.size()) / rows,
+        true,
+        {});
 }
 
 void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files)

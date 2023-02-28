@@ -21,6 +21,7 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -323,6 +324,15 @@ public:
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID,
                            const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+
+    Remote::DisaggPhysicalTableReadSnapshotPtr
+    buildRemoteReadSnapshot(const Context & db_context,
+                            const DB::Settings & db_settings,
+                            const RowKeyRanges & sorted_ranges,
+                            size_t num_streams,
+                            const String & tracing_id,
+                            const SegmentIdSet & read_segments = {},
+                            const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
     bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)

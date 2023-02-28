@@ -62,6 +62,11 @@ using S3LockClientPtr = std::shared_ptr<IS3LockClient>;
 class S3GCManagerService;
 using S3GCManagerServicePtr = std::unique_ptr<S3GCManagerService>;
 } // namespace S3
+namespace DM::Remote
+{
+class DisaggregatedSnapshotManager;
+using DisaggregatedSnapshotManagerPtr = std::unique_ptr<DisaggregatedSnapshotManager>;
+} // namespace DM::Remote
 
 class TMTContext : private boost::noncopyable
 {
@@ -152,6 +157,8 @@ private:
     OwnerManagerPtr s3gc_owner;
     S3::S3LockClientPtr s3lock_client;
     S3::S3GCManagerServicePtr s3gc_manager;
+
+    DM::Remote::DisaggregatedSnapshotManagerPtr snapshot_manager;
 
     mutable std::mutex mutex;
 
