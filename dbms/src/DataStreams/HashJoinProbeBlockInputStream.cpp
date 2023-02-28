@@ -71,18 +71,18 @@ Block HashJoinProbeBlockInputStream::getHeader() const
     return join->joinBlock(header_probe_process_info);
 }
 
-void HashJoinProbeBlockInputStream::finishOneProbe()
+void HashJoinProbeBlockInputStream::finishOneProbe(bool is_canceled)
 {
     bool expect = false;
     if likely (probe_finished.compare_exchange_strong(expect, true))
-        join->finishOneProbe();
+        join->finishOneProbe(is_canceled);
 }
 
-void HashJoinProbeBlockInputStream::finishOneNonJoin()
+void HashJoinProbeBlockInputStream::finishOneNonJoin(bool is_canceled)
 {
     bool expect = false;
     if likely (non_join_finished.compare_exchange_strong(expect, true))
-        join->finishOneNonJoin();
+        join->finishOneNonJoin(is_canceled);
 }
 
 void HashJoinProbeBlockInputStream::cancel(bool kill)
@@ -91,19 +91,25 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
     /// When the probe stream quits probe by cancelling instead of normal finish, the Join operator might still produce meaningless blocks
     /// and expects these meaningless blocks won't be used to produce meaningful result.
 
-    join->is_canceled = true;
-
+    try
+    {
+        finishOneProbe(true);
+        if (non_joined_stream != nullptr)
+        {
+            finishOneNonJoin(true);
+        }
+    }
+    catch (...)
+    {
+        auto error_message = getCurrentExceptionMessage(false, true);
+        LOG_WARNING(log, error_message);
+        join->meetError(error_message);
+    }
     if (non_joined_stream != nullptr)
     {
-        auto * p_non_joined_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get());
-        if (p_non_joined_stream != nullptr)
-            p_non_joined_stream->cancel(kill);
-    }
-    if (restore_stream != nullptr)
-    {
-        auto * p_restore_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_stream.get());
-        if (p_restore_stream != nullptr)
-            p_restore_stream->cancel(kill);
+        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get());
+        if (p_stream != nullptr)
+            p_stream->cancel(kill);
     }
 }
 

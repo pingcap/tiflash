@@ -163,8 +163,6 @@ public:
 
     size_t restore_round;
 
-    std::atomic<bool> is_canceled = false;
-
     /** Call `setBuildConcurrencyAndInitPool`, `initMapImpl` and `setSampleBlock`.
       * You must call this method before subsequent calls to insertFromBlock.
       */
@@ -263,10 +261,10 @@ public:
     void finishOneBuild();
     void waitUntilAllBuildFinished() const;
 
-    void finishOneProbe();
+    void finishOneProbe(bool is_canceled = false);
     void waitUntilAllProbeFinished() const;
 
-    void finishOneNonJoin();
+    void finishOneNonJoin(bool is_canceled = false);
     void waitUntilAllNonJoinFinished() const;
 
     size_t getBuildConcurrency() const

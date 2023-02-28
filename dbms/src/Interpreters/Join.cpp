@@ -2239,13 +2239,13 @@ void Join::waitUntilAllBuildFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
     build_cv.wait(lock, [&]() {
-        return active_build_concurrency == 0 || is_canceled || meet_error;
+        return active_build_concurrency == 0 || meet_error;
     });
     if (meet_error)
         throw Exception(error_message);
 }
 
-void Join::finishOneProbe()
+void Join::finishOneProbe(bool is_canceled)
 {
     std::unique_lock lock(build_probe_mutex);
     if (active_probe_concurrency == 1)
@@ -2255,7 +2255,7 @@ void Join::finishOneProbe()
     --active_probe_concurrency;
     if (active_probe_concurrency == 0 || is_canceled)
     {
-        if (!is_canceled && !needReturnNonJoinedData() && isEnableSpill())
+        if (!needReturnNonJoinedData() && isEnableSpill() && !is_canceled)
         {
             std::unique_lock lk(partitions_lock);
             trySpillProbePartitions(true);
@@ -2270,20 +2270,20 @@ void Join::waitUntilAllProbeFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
     probe_cv.wait(lock, [&]() {
-        return active_probe_concurrency == 0 || is_canceled || meet_error;
+        return active_probe_concurrency == 0 || meet_error;
     });
     if (meet_error)
         throw Exception(error_message);
 }
 
 
-void Join::finishOneNonJoin()
+void Join::finishOneNonJoin(bool is_canceled)
 {
     std::unique_lock lock(non_join_mutex);
     active_non_join_concurrency--;
-    if (active_non_join_concurrency == 0)
+    if (active_non_join_concurrency == 0 || is_canceled)
     {
-        if (!is_canceled && isEnableSpill())
+        if (isEnableSpill() && !is_canceled)
         {
             std::unique_lock lk(partitions_lock);
             trySpillProbePartitions(true);
@@ -2298,7 +2298,7 @@ void Join::waitUntilAllNonJoinFinished() const
 {
     std::unique_lock lock(non_join_mutex);
     non_join_cv.wait(lock, [&]() {
-        return active_non_join_concurrency == 0 || is_canceled || meet_error;
+        return active_non_join_concurrency == 0 || meet_error;
     });
     if (meet_error)
         throw Exception(error_message);
