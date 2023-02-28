@@ -56,6 +56,9 @@ private:
 
     bool gc(Timestamp gc_safe_point, KeyspaceID keyspace_id);
 
+    void addKeyspaceGCTasks();
+    void removeKeyspaceGCTasks();
+
 private:
     Context & context;
 
@@ -65,6 +68,7 @@ private:
     BackgroundProcessingPool::TaskHandle handle;
 
     mutable std::shared_mutex ks_map_mutex;
+    // Handles for each keyspace schema sync task.
     std::unordered_map<KeyspaceID, BackgroundProcessingPool::TaskHandle> ks_handle_map;
 
     Poco::Logger * log;

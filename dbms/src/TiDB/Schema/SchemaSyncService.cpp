@@ -40,79 +40,85 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
     // Add task for adding and removing keyspace sync schema tasks.
     handle = background_pool.addTask(
         [&, this] {
-            auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
-            std::unique_lock<std::shared_mutex> lock(ks_map_mutex);
-
-            // Add new sync schema task for new keyspace.
-            for (auto const iter: keyspaces)
-            {
-                auto ks = iter.first;
-                if (!ks_handle_map.count(ks))
-                {
-                    LOG_INFO(log, "add sync schema task for keyspace {}", ks);
-
-                    auto task_handle = background_pool.addTask(
-                        [&, this, ks] {
-                            String stage;
-                            bool done_anything = false;
-                            try
-                            {
-                                LOG_DEBUG(log, "sync schema for keyspace {}", ks);
-                                /// Do sync schema first, then gc.
-                                /// They must be performed synchronously,
-                                /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
-                                // GC safe point must be obtained ahead of syncing schema.
-                                auto gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
-                                stage = "Sync schemas";
-                                done_anything = syncSchemas(ks);
-                                if (done_anything)
-                                    GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
-
-                                stage = "GC";
-                                done_anything = gc(gc_safe_point, ks);
-
-                                return done_anything;
-                            }
-                            catch (const Exception & e)
-                            {
-                                LOG_ERROR(log, "[keyspace {}] {} failed by {} \n stack : {}", ks, stage, e.displayText(), e.getStackTrace().toString());
-                            }
-                            catch (const Poco::Exception & e)
-                            {
-                                LOG_ERROR(log, "[keyspace {}] {} failed by {}", ks, stage, e.displayText());
-                            }
-                            catch (const std::exception & e)
-                            {
-                                LOG_ERROR(log, "[keyspace {}] {} failed by {}", ks, stage, e.what());
-                            }
-                            return false;
-                        },
-                        false
-                    );
-
-                    ks_handle_map.emplace(ks, task_handle);
-                }
-            }
-
-            // Remove stale sync schema task.
-            for (auto const & iter: ks_handle_map)
-            {
-                auto ks = iter.first;
-                auto task_handle = iter.second;
-
-                if (!keyspaces.count(ks))
-                {
-                    LOG_INFO(log, "remove sync schema task for keyspace {}", ks);
-                    ks_handle_map.erase(ks);
-
-                    background_pool.removeTask(task_handle);
-                }
-            }
+            addKeyspaceGCTasks();
+            removeKeyspaceGCTasks();
 
             return false;
         },
-        false
-    );
+        false);
+}
+
+void SchemaSyncService::addKeyspaceGCTasks()
+{
+    auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
+    std::unique_lock<std::shared_mutex> lock(ks_map_mutex);
+
+    // Add new sync schema task for new keyspace.
+    for (auto const iter : keyspaces)
+    {
+        auto ks = iter.first;
+        if (!ks_handle_map.count(ks))
+        {
+            LOG_INFO(log, "add sync schema task for keyspace {}", ks);
+
+            auto task_handle = background_pool.addTask(
+                [&, this, ks] {
+                    String stage;
+                    bool done_anything = false;
+                    try
+                    {
+                        LOG_DEBUG(log, "sync schema for keyspace {}", ks);
+                        /// Do sync schema first, then gc.
+                        /// They must be performed synchronously,
+                        /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
+                        // GC safe point must be obtained ahead of syncing schema.
+                        auto gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
+                        stage = "Sync schemas";
+                        done_anything = syncSchemas(ks);
+                        if (done_anything)
+                            GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
+
+                        stage = "GC";
+                        done_anything = gc(gc_safe_point, ks);
+
+                        return done_anything;
+                    }
+                    catch (const Exception & e)
+                    {
+                        LOG_ERROR(log, "[keyspace {}] {} failed by {} \n stack : {}", ks, stage, e.displayText(), e.getStackTrace().toString());
+                    }
+                    catch (const Poco::Exception & e)
+                    {
+                        LOG_ERROR(log, "[keyspace {}] {} failed by {}", ks, stage, e.displayText());
+                    }
+                    catch (const std::exception & e)
+                    {
+                        LOG_ERROR(log, "[keyspace {}] {} failed by {}", ks, stage, e.what());
+                    }
+                    return false;
+                },
+                false);
+
+            ks_handle_map.emplace(ks, task_handle);
+        }
+    }
+}
+
+void SchemaSyncService::removeKeyspaceGCTasks()
+{
+    auto keyspaces = context.getTMTContext().getStorages().getAllKeyspaces();
+    std::unique_lock<std::shared_mutex> lock(ks_map_mutex);
+
+    // Remove stale sync schema task.
+    for (auto const & [ks, task_handle] : ks_handle_map)
+    {
+        if (!keyspaces.count(ks))
+        {
+            LOG_INFO(log, "remove sync schema task for keyspace {}", ks);
+            ks_handle_map.erase(ks);
+            background_pool.removeTask(task_handle);
+        }
+    }
 }
 
 SchemaSyncService::~SchemaSyncService()
