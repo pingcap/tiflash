@@ -16,7 +16,6 @@
 
 #include <Storages/DeltaMerge/ReadUtil.h>
 
-#include <cstddef>
 
 namespace DB::DM
 {

@@ -17,8 +17,6 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
-#include <cstddef>
-
 
 namespace DB
 {

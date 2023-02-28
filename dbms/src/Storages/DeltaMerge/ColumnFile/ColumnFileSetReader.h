@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Columns/ColumnsCommon.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
