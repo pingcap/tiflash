@@ -36,7 +36,7 @@ public:
     // while (!isReadyForWrite()) {}
     // write(block);
     // ```
-    virtual bool isReadyForWrite() const { throw Exception("Unsupport async write"); }
+    virtual bool isReadyForWrite() const { throw Exception("Unsupport"); }
 
     /// flush cached blocks for batch writer
     virtual void flush() = 0;

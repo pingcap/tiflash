@@ -82,7 +82,7 @@ public:
     {}
 
     // For sync writer, `isReadyForWrite` will not be called, so an exception is thrown here.
-    bool isReadyForWrite() const override { throw Exception("Unsupport"); }
+    bool isReadyForWrite() const override { throw Exception("Unsupport sync writer"); }
 
 protected:
     void writeToTunnel(TrackedMppDataPacketPtr && data, size_t index) override;
