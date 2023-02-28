@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/StringUtils/StringUtils.h>
-#include <TestUtils/MockS3Client.h>
+#include <Storages/S3/MockS3Client.h>
 #include <aws/core/AmazonWebServiceRequest.h>
 #include <aws/core/AmazonWebServiceResult.h>
 #include <aws/core/utils/xml/XmlSerializer.h>
@@ -27,24 +27,25 @@
 #include <aws/s3/model/Object.h>
 #include <aws/s3/model/PutObjectRequest.h>
 
-namespace DB
+namespace DB::S3::tests
 {
+using namespace Aws::S3;
 
-Aws::S3::Model::PutObjectOutcome MockS3Client::PutObject(const Aws::S3::Model::PutObjectRequest & r) const
+Model::PutObjectOutcome MockS3Client::PutObject(const Model::PutObjectRequest & r) const
 {
     put_keys.emplace_back(r.GetKey());
-    return Aws::S3::Model::PutObjectOutcome{Aws::AmazonWebServiceResult<Aws::Utils::Xml::XmlDocument>{}};
+    return Model::PutObjectOutcome{Aws::AmazonWebServiceResult<Aws::Utils::Xml::XmlDocument>{}};
 }
 
-Aws::S3::Model::DeleteObjectOutcome MockS3Client::DeleteObject(const Aws::S3::Model::DeleteObjectRequest & r) const
+Model::DeleteObjectOutcome MockS3Client::DeleteObject(const Model::DeleteObjectRequest & r) const
 {
     delete_keys.emplace_back(r.GetKey());
-    return Aws::S3::Model::DeleteObjectOutcome{Aws::AmazonWebServiceResult<Aws::Utils::Xml::XmlDocument>{}};
+    return Model::DeleteObjectOutcome{Aws::AmazonWebServiceResult<Aws::Utils::Xml::XmlDocument>{}};
 }
 
-Aws::S3::Model::ListObjectsV2Outcome MockS3Client::ListObjectsV2(const Aws::S3::Model::ListObjectsV2Request & r) const
+Model::ListObjectsV2Outcome MockS3Client::ListObjectsV2(const Model::ListObjectsV2Request & r) const
 {
-    Aws::S3::Model::ListObjectsV2Result resp;
+    Model::ListObjectsV2Result resp;
     for (const auto & k : put_keys)
     {
         if (startsWith(k, r.GetPrefix()))
@@ -60,7 +61,7 @@ Aws::S3::Model::ListObjectsV2Outcome MockS3Client::ListObjectsV2(const Aws::S3::
             }
             if (is_deleted)
                 continue;
-            Aws::S3::Model::Object o;
+            Model::Object o;
             o.SetKey(k);
             resp.AddContents(o);
         }
@@ -80,33 +81,33 @@ Aws::S3::Model::ListObjectsV2Outcome MockS3Client::ListObjectsV2(const Aws::S3::
             }
             if (is_deleted)
                 continue;
-            Aws::S3::Model::Object o;
+            Model::Object o;
             o.SetKey(k);
             resp.AddContents(o);
         }
     }
-    return Aws::S3::Model::ListObjectsV2Outcome{resp};
+    return Model::ListObjectsV2Outcome{resp};
 }
 
-Aws::S3::Model::HeadObjectOutcome MockS3Client::HeadObject(const Aws::S3::Model::HeadObjectRequest & r) const
+Model::HeadObjectOutcome MockS3Client::HeadObject(const Model::HeadObjectRequest & r) const
 {
     for (const auto & k : put_keys)
     {
         if (r.GetKey() == k)
         {
-            Aws::S3::Model::HeadObjectResult resp;
-            return Aws::S3::Model::HeadObjectOutcome{resp};
+            Model::HeadObjectResult resp;
+            return Model::HeadObjectOutcome{resp};
         }
     }
 
     if (!head_result_mtime)
     {
-        Aws::Client::AWSError error(Aws::S3::S3Errors::NO_SUCH_KEY, false);
-        return Aws::S3::Model::HeadObjectOutcome{error};
+        Aws::Client::AWSError error(S3Errors::NO_SUCH_KEY, false);
+        return Model::HeadObjectOutcome{error};
     }
-    Aws::S3::Model::HeadObjectResult resp;
+    Model::HeadObjectResult resp;
     resp.SetLastModified(head_result_mtime.value());
-    return Aws::S3::Model::HeadObjectOutcome{resp};
+    return Model::HeadObjectOutcome{resp};
 }
 
 void MockS3Client::clear()
@@ -117,4 +118,4 @@ void MockS3Client::clear()
     head_result_mtime.reset();
 }
 
-} // namespace DB
+} // namespace DB::S3::tests

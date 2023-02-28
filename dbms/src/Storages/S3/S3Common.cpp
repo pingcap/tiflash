@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
+#include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/http/Scheme.h>
@@ -136,15 +137,20 @@ bool ClientFactory::isEnabled() const
     return config.isS3Enabled();
 }
 
-void ClientFactory::init(const StorageS3Config & config_)
+void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     config = config_;
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
-    shared_client = create();
+    shared_client = mock_s3_ ? std::make_unique<tests::MockS3Client>() : create();
+    if (!mock_s3_)
     {
         auto raw_client = create();
         shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, std::move(*raw_client.release()));
+    }
+    else
+    {
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, tests::MockS3Client());
     }
 }
 

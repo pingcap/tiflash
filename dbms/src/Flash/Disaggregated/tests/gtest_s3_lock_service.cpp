@@ -15,10 +15,10 @@
 #include <Common/Logger.h>
 #include <Common/typeid_cast.h>
 #include <Flash/Disaggregated/S3LockService.h>
+#include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
-#include <TestUtils/MockS3Client.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/MockOwnerManager.h>
 #include <TiDB/OwnerManager.h>

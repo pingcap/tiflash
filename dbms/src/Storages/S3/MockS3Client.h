@@ -18,7 +18,7 @@
 #include <aws/s3/S3Client.h>
 #include <common/defines.h>
 
-namespace DB
+namespace DB::S3::tests
 {
 class MockS3Client final : public S3::TiFlashS3Client
 {
@@ -43,4 +43,4 @@ public:
     std::optional<Aws::Utils::DateTime> head_result_mtime;
     Aws::S3::Model::HeadObjectOutcome HeadObject(const Aws::S3::Model::HeadObjectRequest & request) const override;
 };
-} // namespace DB
+} // namespace DB::S3::tests

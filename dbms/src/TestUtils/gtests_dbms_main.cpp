@@ -84,6 +84,7 @@ int main(int argc, char ** argv)
         .access_key_id = access_key_id,
         .secret_access_key = secret_access_key,
     };
+    Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
     DB::S3::ClientFactory::instance().init(s3config);
 
 #ifdef FIU_ENABLE
