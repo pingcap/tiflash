@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -83,7 +83,8 @@ Block LateMaterializationBlockInputStream::readImpl()
         else
         {
             Block rest_column_block;
-            if (rows - passed_count >= DEFAULT_MERGE_BLOCK_SIZE * 2)
+            auto rows_left = rows - passed_count;
+            if (rows_left >= DEFAULT_MERGE_BLOCK_SIZE * 2)
             {
                 // if the number of rows left after filtering out is large enough, we can skip some packs of the next block
                 // so we call readWithFilter to get the next block.
@@ -93,7 +94,7 @@ Block LateMaterializationBlockInputStream::readImpl()
                     col.column = col.column->filter(*filter, passed_count);
                 }
             }
-            else if (rows - passed_count > 0)
+            else if (rows_left > 0)
             {
                 // if the number of rows left after filtering out is small, we can't skip any packs of the next block
                 // so we call read() to get the next block, and then filter it.
