@@ -1,5 +1,5 @@
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Disaggregated/DisaggregatedTask.h>
+#include <Flash/Disaggregated/EstablishDisaggregatedTask.h>
 #include <Flash/Executor/QueryExecutorHolder.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
@@ -10,9 +10,15 @@
 
 namespace DB
 {
-DisaggregatedTask::DisaggregatedTask(ContextPtr context_)
+
+namespace ErrorCodes
+{
+extern const int REGION_EPOCH_NOT_MATCH;
+} // namespace ErrorCodes
+
+EstablishDisaggregatedTask::EstablishDisaggregatedTask(ContextPtr context_)
     : context(std::move(context_))
-    , log(Logger::get("DisaggregatedTask")) // TODO: add id
+    , log(Logger::get("EstablishDisaggregatedTask")) // TODO: add id
 {}
 
 // Some preparation
@@ -20,11 +26,11 @@ DisaggregatedTask::DisaggregatedTask(ContextPtr context_)
 // - Build `dag_context`
 // - Set the read_tso, schema_version, timezone
 // - Register the task
-void DisaggregatedTask::prepare(const mpp::EstablishDisaggregatedTaskRequest * const request)
+void EstablishDisaggregatedTask::prepare(const mpp::EstablishDisaggregatedTaskRequest * const request)
 {
     auto & tmt_context = context->getTMTContext();
     TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context);
-    LOG_DEBUG(log, "Handling {} regions from {} physical tables in Disaggregrated task", tables_regions_info.regionCount(), tables_regions_info.tableCount());
+    LOG_DEBUG(log, "EstablishDisaggregatedTask handling {} regions from {} physical tables", tables_regions_info.regionCount(), tables_regions_info.tableCount());
 
     // set schema ver and start ts // TODO: set timeout
     auto schema_ver = request->schema_ver();
@@ -50,7 +56,7 @@ void DisaggregatedTask::prepare(const mpp::EstablishDisaggregatedTaskRequest * c
     context->setDAGContext(dag_context.get());
 }
 
-void DisaggregatedTask::execute(mpp::EstablishDisaggregatedTaskResponse * response)
+void EstablishDisaggregatedTask::execute(mpp::EstablishDisaggregatedTaskResponse * response)
 {
     query_executor_holder.set(queryExecute(*context));
 
@@ -65,11 +71,7 @@ void DisaggregatedTask::execute(mpp::EstablishDisaggregatedTaskResponse * respon
     const auto & task_id = *dag_context->getDisaggregatedTaskId();
     auto snap = manager->getSnapshot(task_id);
     if (!snap)
-    {
-        response->mutable_error()->set_code(1); // code = 1?
-        response->mutable_error()->set_msg("register fail");
-        return;
-    }
+        throw Exception(fmt::format("Snapshot for {} was missing", task_id));
 
     for (const auto & [table_id, table_tasks] : snap->tableSnapshots())
     {

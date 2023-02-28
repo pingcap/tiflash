@@ -21,7 +21,7 @@
 #include <Common/getNumberOfCPUCores.h>
 #include <Common/setThreadName.h>
 #include <Flash/BatchCoprocessorHandler.h>
-#include <Flash/DisaggreatedTaskHandler.h>
+#include <Flash/Disaggregated/EstablishDisaggregatedTask.h>
 #include <Flash/Disaggregated/PageTunnel.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
@@ -46,7 +46,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
-}
+extern const int UNKNOWN_EXCEPTION;
+} // namespace ErrorCodes
 
 #define CATCH_FLASHSERVICE_EXCEPTION                                                                                                        \
     catch (Exception & e)                                                                                                                   \
@@ -498,7 +499,7 @@ grpc::Status FlashService::Compact(grpc::ServerContext * grpc_context, const kvr
 grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const mpp::EstablishDisaggregatedTaskRequest * request, mpp::EstablishDisaggregatedTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_DEBUG(log, "Handling disaggregated establish request: {}", request->ShortDebugString());
+    LOG_DEBUG(log, "Handling EstablishDisaggregatedTask request: {}", request->ShortDebugString());
     if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
         return check_result;
     // TODO metrics
@@ -508,9 +509,51 @@ grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc
     db_context->setMockStorage(mock_storage);
     db_context->setMockMPPServerInfo(mpp_test_info);
 
-    DisaggregatedTaskHandler handler(request, response);
-    grpc::Status ret = handler.execute(db_context);
-    LOG_DEBUG(log, "Handle disaggregated establish request done: {}, {}", ret.error_code(), ret.error_message());
+    RUNTIME_CHECK(context->isDisaggregatedStorageMode());
+
+    EstablishDisaggregatedTaskPtr task = nullptr;
+    SCOPE_EXIT({
+        current_memory_tracker = nullptr;
+    });
+
+    try
+    {
+        task = std::make_shared<DB::EstablishDisaggregatedTask>(db_context);
+        task->prepare(request);
+        task->execute(response);
+    }
+    catch (Exception & e)
+    {
+        auto * err = response->mutable_error();
+        err->set_code(e.code());
+        err->set_msg(e.message());
+        // TODO unregister
+    }
+    catch (std::exception & e)
+    {
+        auto * err = response->mutable_error();
+        err->set_code(ErrorCodes::UNKNOWN_EXCEPTION);
+        err->set_msg(e.what());
+        // TODO unregister
+    }
+    catch (...)
+    {
+        auto * err = response->mutable_error();
+        err->set_code(ErrorCodes::UNKNOWN_EXCEPTION);
+        err->set_msg("Unknown exception");
+        // TODO unregister
+    }
+
+    // There may be region errors. Add information about which region to retry.
+    for (const auto & region : db_context->getDAGContext()->retry_regions)
+    {
+        auto * retry_region = response->add_retry_regions();
+        retry_region->set_id(region.region_id);
+        retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+        retry_region->mutable_region_epoch()->set_version(region.region_version);
+    }
+
+    LOG_DEBUG(log, "Handle EstablishDisaggregatedTask request done, resp_err={}", response->error().ShortDebugString());
     return grpc::Status::OK;
 }
 
