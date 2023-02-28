@@ -14,6 +14,8 @@
 
 include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 
+add_subdirectory (./V3/CheckpointFile/Proto)
+
 add_headers_and_sources(page .)
 add_headers_and_sources(page ./V1)
 add_headers_and_sources(page ./V1/mvcc)
@@ -28,6 +30,7 @@ add_headers_and_sources(page ./V3/LogFile)
 add_headers_and_sources(page ./V3/PageDirectory)
 add_headers_and_sources(page ./V3/spacemap)
 add_headers_and_sources(page ./V3/Universal)
+add_headers_and_sources(page ./V3/CheckpointFile)
 add_headers_and_sources(page ./V3/WAL)
 
 add_library(page ${page_headers} ${page_sources})
