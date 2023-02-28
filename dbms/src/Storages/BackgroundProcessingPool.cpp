@@ -148,7 +148,7 @@ BackgroundProcessingPool::~BackgroundProcessingPool()
 // For task->multi == false, it ensure the task is only pop for one execution threads.
 // For task->multi == true, it may pop the task multiple times.
 // Return nullptr when the pool is shutting down.
-BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::tryPopTask(pcg64 & rng)
+BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::tryPopTask(pcg64 & rng) noexcept
 {
     TaskHandle task;
     Poco::Timestamp min_time;
@@ -195,7 +195,7 @@ BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::tryPopTask(pcg64 
     return task;
 }
 
-void BackgroundProcessingPool::threadFunction(size_t thread_idx)
+void BackgroundProcessingPool::threadFunction(size_t thread_idx) noexcept
 {
     {
         const auto name = thread_prefix + std::to_string(thread_idx);
@@ -204,6 +204,7 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
         addThreadId(getTid());
     }
 
+    // set up the thread local memory tracker
     auto memory_tracker = MemoryTracker::create();
     memory_tracker->setNext(root_of_non_query_mem_trackers.get());
     memory_tracker->setMetric(CurrentMetrics::MemoryTrackingInBackgroundProcessingPool);
@@ -217,17 +218,19 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
         TaskHandle task = tryPopTask(rng);
         if (shutdown)
             break;
+        // not shutting down but a null task pop, should not happen
+        if (task == nullptr)
+        {
+            LOG_ERROR(Logger::get(), "a null task has been pop!");
+            continue;
+        }
 
-        RUNTIME_CHECK_MSG(task != nullptr, "a null task has been pop!");
-
-        bool done_work;
+        bool done_work = false;
         try
         {
             std::shared_lock<std::shared_mutex> rlock(task->rwlock);
-
             if (task->removed)
                 continue;
-
             done_work = task->function();
         }
         catch (...)
@@ -261,11 +264,13 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
         {
             std::unique_lock lock(tasks_mutex);
 
+            // the task has been done in this thread
             task->concurrent_executors -= 1;
 
             if (task->removed)
                 continue;
 
+            // reschedule this task
             tasks.erase(task->iterator);
             Poco::Timestamp next_time_to_execute = Poco::Timestamp() + next_sleep_time_span;
             task->iterator = tasks.emplace(next_time_to_execute, task);
