@@ -79,6 +79,10 @@ public:
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
+    BlockInputStreams readFromWriteNode(
+        const Context & db_context,
+        unsigned num_streams);
+
     // helper functions for building the task read from S3
     std::shared_ptr<::mpp::EstablishDisaggregatedTaskRequest>
     buildDisaggregatedTaskForNode(

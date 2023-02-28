@@ -53,6 +53,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int REGION_EPOCH_NOT_MATCH;
+} // namespace ErrorCodes
+
 namespace FailPoints
 {
 extern const char region_exception_after_read_from_storage_some_error[];
@@ -319,10 +324,22 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
+    auto & dag_context = dagContext();
+
+    auto remote_requests = buildRemoteRequests();
+
+    if (dag_context.is_disaggregated_task && !remote_requests.empty())
+    {
+        // This means RN is sending requests with stale region info, we simply reject the request
+        // and ask RN to send requests again with correct region info. When RN updates region info,
+        // RN may be sending requests to other WN.
+        
+        throw Exception("Rejected disaggregated DAG execute because RN region info does not match", DB::ErrorCodes::REGION_EPOCH_NOT_MATCH);
+    }
+
     if (!mvcc_query_info->regions_query_info.empty())
     {
         auto scan_context = std::make_shared<DM::ScanContext>();
-        auto & dag_context = dagContext();
         dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
         mvcc_query_info->scan_context = scan_context;
         buildLocalStreams(pipeline, settings.max_block_size);
@@ -330,8 +347,6 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
     // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
     auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
-
-    auto remote_requests = buildRemoteRequests();
 
     // A failpoint to test pause before alter lock released
     FAIL_POINT_PAUSE(FailPoints::pause_with_alter_locks_acquired);
