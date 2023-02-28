@@ -136,10 +136,8 @@ static void BroadcastOrPassThroughWriteImpl(
     TrackedMppDataPacketPtr && compressed_tracked_packet,
     CompressionMethod compression_method)
 {
-    assert(tracked_packet);
-
     const size_t remote_tunnel_cnt = tunnels.size() - local_tunnel_cnt;
-    auto tracked_packet_bytes = tracked_packet->getPacket().ByteSizeLong();
+    auto tracked_packet_bytes = tracked_packet ? tracked_packet->getPacket().ByteSizeLong() : 0;
     auto compressed_tracked_packet_bytes = compressed_tracked_packet ? compressed_tracked_packet->getPacket().ByteSizeLong() : 0;
     checkPacketSize(tracked_packet_bytes);
     checkPacketSize(compressed_tracked_packet_bytes);
@@ -148,6 +146,8 @@ static void BroadcastOrPassThroughWriteImpl(
 
     if (!compressed_tracked_packet)
     {
+        assert(tracked_packet);
+
         compressed_tracked_packet_bytes = tracked_packet_bytes;
 
         for (size_t i = 1; i < tunnels.size(); ++i)
@@ -238,6 +238,12 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPD
     }
 
     auto remote_tunnel_tracked_packet = MPPTunnelSetHelper::ToCompressedPacket(local_tunnel_tracked_packet, version, compression_method);
+
+    if (0 == local_tunnel_cnt)
+    {
+        // if no need local tunnel, just release early to reduce memory usage
+        local_tunnel_tracked_packet = nullptr;
+    }
 
     return BroadcastOrPassThroughWriteImpl(
         tunnels,
