@@ -34,6 +34,21 @@ EventTask::~EventTask()
     event.reset();
 }
 
+void EventTask::finalize()
+{
+    try
+    {
+        bool tmp = false;
+        if (finalized.compare_exchange_strong(tmp, true))
+            finalizeImpl();
+    }
+    catch (...)
+    {
+        // ignore exception from finalizeImpl.
+        // TODO add log here.
+    }
+}
+
 ExecTaskStatus EventTask::executeImpl()
 {
     return doTaskAction([&] { return doExecuteImpl(); });

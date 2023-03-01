@@ -20,6 +20,7 @@
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
 
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -162,6 +163,19 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
 
     auto pushed_data_size = data->getPacket().ByteSizeLong();
     if (tunnel_sender->push(std::move(data)))
+    {
+        updateMetric(data_size_in_queue, pushed_data_size, mode);
+        updateConnProfileInfo(pushed_data_size);
+        return;
+    }
+    throw Exception(fmt::format("write to tunnel {} which is already closed, {}", tunnel_id, tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
+}
+
+void MPPTunnel::nonBlockingWrite(TrackedMppDataPacketPtr && data)
+{
+    LOG_TRACE(log, "start non blocking writing");
+    auto pushed_data_size = data->getPacket().ByteSizeLong();
+    if (tunnel_sender->nonBlockingPush(std::move(data)))
     {
         updateMetric(data_size_in_queue, pushed_data_size, mode);
         updateConnProfileInfo(pushed_data_size);
@@ -314,21 +328,37 @@ void MPPTunnel::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
         throw Exception(fmt::format("MPPTunnel {} can not be connected because MPPTask is cancelled", tunnel_id));
 }
 
-StringRef MPPTunnel::statusToString()
+bool MPPTunnel::isReadyForWrite() const
 {
+    std::unique_lock lk(mu);
     switch (status)
     {
     case TunnelStatus::Unconnected:
-        return "Unconnected";
-    case TunnelStatus::Connected:
-        return "Connected";
-    case TunnelStatus::WaitingForSenderFinish:
-        return "WaitingForSenderFinish";
-    case TunnelStatus::Finished:
-        return "Finished";
-    default:
-        RUNTIME_ASSERT(false, log, "Unknown TaskStatus {}", static_cast<Int32>(status));
+    {
+        if (timeout.count() > 0)
+        {
+            fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, throw Exception(tunnel_id + " is timeout"););
+            if (unlikely(!timeout_stopwatch))
+                timeout_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
+            if (timeout_stopwatch->elapsedSeconds() > timeout.count())
+                throw Exception(tunnel_id + " is timeout");
+        }
+        return false;
     }
+    case TunnelStatus::Connected:
+        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
+        return tunnel_sender->isReadyForWrite();
+    default:
+        // Returns true directly for TunnelStatus::WaitingForSenderFinish and TunnelStatus::Finished,
+        // and then handled by `nonBlockingWrite`.
+        RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
+        return true;
+    }
+}
+
+std::string_view MPPTunnel::statusToString()
+{
+    return magic_enum::enum_name(status);
 }
 
 void TunnelSender::consumerFinish(const String & msg)

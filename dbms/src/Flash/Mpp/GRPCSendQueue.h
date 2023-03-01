@@ -120,6 +120,16 @@ public:
         return ret;
     }
 
+    bool nonBlockingPush(T && data)
+    {
+        auto ret = send_queue.nonBlockingPush(std::move(data)) == MPMCQueueResult::OK;
+        if (ret)
+        {
+            kickCompletionQueue();
+        }
+        return ret;
+    }
+
     /// Cancel the send queue, and set the cancel reason
     bool cancelWith(const String & reason)
     {
@@ -191,6 +201,11 @@ public:
             kickCompletionQueue();
         }
         return ret;
+    }
+
+    bool isFull() const
+    {
+        return send_queue.isFull();
     }
 
 private:

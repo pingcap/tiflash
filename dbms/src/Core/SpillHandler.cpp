@@ -164,15 +164,7 @@ void SpillHandler::finish()
                                (details.data_bytes_compressed / time_cost / 1048576.0));
         };
         LOG_DEBUG(spiller->logger, gen_spill_detail_info());
-        std::unique_lock lock(spiller->spilled_files[partition_id]->spilled_files_mutex);
-        for (auto & spilled_file : spilled_files)
-        {
-            if (!spilled_file->isFull())
-                spiller->spilled_files[partition_id]->mutable_spilled_files.push_back(std::move(spilled_file));
-            else
-                spiller->spilled_files[partition_id]->immutable_spilled_files.push_back(std::move(spilled_file));
-        }
-        spilled_files.clear();
+        spiller->spilled_files[partition_id]->commitSpilledFiles(std::move(spilled_files));
         spiller->has_spilled_data = true;
         current_spilled_file_index = INVALID_CURRENT_SPILLED_FILE_INDEX;
         RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);

@@ -686,9 +686,13 @@ struct AggregatedDataVariants : private boost::noncopyable
         : aggregates_pools(1, std::make_shared<Arena>())
         , aggregates_pool(aggregates_pools.back().get())
     {}
+    bool inited() const
+    {
+        return type != Type::EMPTY;
+    }
     bool empty() const
     {
-        return type == Type::EMPTY;
+        return size() == 0;
     }
     void invalidate()
     {

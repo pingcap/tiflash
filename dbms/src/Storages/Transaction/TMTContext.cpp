@@ -13,18 +13,24 @@
 // limitations under the License.
 
 #include <Common/DNSCache.h>
+#include <Flash/Disaggregated/S3LockClient.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <Interpreters/Context.h>
 #include <Server/RaftConfigParser.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TiDB/Etcd/Client.h>
+#include <TiDB/OwnerInfo.h>
+#include <TiDB/OwnerManager.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaSyncer.h>
+#include <common/logger_useful.h>
 #include <pingcap/pd/MockPDClient.h>
 
 #include <memory>
@@ -85,12 +91,27 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
-{}
+{
+    if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled() && !context.isDisaggregatedComputeMode())
+    {
+        etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
+        s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.flash_server_addr, etcd_client);
+        s3gc_owner->campaignOwner(); // start campaign
+        s3_lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
+    }
+}
+
+TMTContext::~TMTContext() = default;
 
 void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
 {
     if (!raft_config.pd_addrs.empty())
+    {
+        // update the client config including pd_client
         cluster->update(raft_config.pd_addrs, cluster_config);
+        // update the etcd_client after pd_client get updated
+        etcd_client->update(cluster_config);
+    }
 }
 
 void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
@@ -107,6 +128,23 @@ void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * pr
     {
         // Only create when running with Raft threads
         background_service = std::make_unique<BackgroundService>(*this);
+    }
+}
+
+void TMTContext::shutdown()
+{
+    if (s3gc_owner)
+    {
+        // stop the campaign loop, so the S3LockService will
+        // let client retry
+        s3gc_owner->cancel();
+        s3gc_owner = nullptr;
+    }
+
+    if (background_service)
+    {
+        background_service->shutdown();
+        background_service = nullptr;
     }
 }
 
@@ -189,6 +227,11 @@ SchemaSyncerPtr TMTContext::getSchemaSyncer() const
 pingcap::pd::ClientPtr TMTContext::getPDClient() const
 {
     return cluster->pd_client;
+}
+
+const OwnerManagerPtr & TMTContext::getS3GCOwnerManager() const
+{
+    return s3gc_owner;
 }
 
 MPPTaskManagerPtr TMTContext::getMPPTaskManager()

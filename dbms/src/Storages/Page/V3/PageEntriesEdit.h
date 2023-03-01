@@ -16,14 +16,18 @@
 
 #include <Common/nocopyable.h>
 #include <Storages/Page/Page.h>
+#include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
+#include <magic_enum.hpp>
+
 namespace DB::PS::V3
 {
+
 // `PageDirectory::apply` with create a version={directory.sequence, epoch=0}.
 // After data compaction and page entries need to be updated, will create
 // some entries with a version={old_sequence, epoch=old_epoch+1}.
@@ -112,6 +116,40 @@ inline const char * typeToString(EditRecordType t)
         return "VAR_DEL";
     default:
         return "INVALID";
+    }
+}
+
+inline CheckpointProto::EditType typeToProto(EditRecordType t)
+{
+    switch (t)
+    {
+    case EditRecordType::VAR_ENTRY:
+        return CheckpointProto::EDIT_TYPE_ENTRY;
+    case EditRecordType::VAR_REF:
+        return CheckpointProto::EDIT_TYPE_REF;
+    case EditRecordType::VAR_EXTERNAL:
+        return CheckpointProto::EDIT_TYPE_EXTERNAL;
+    case EditRecordType::VAR_DELETE:
+        return CheckpointProto::EDIT_TYPE_DELETE;
+    default:
+        RUNTIME_CHECK_MSG(false, "Unsupported Edit Type {}", magic_enum::enum_name(t));
+    }
+}
+
+inline EditRecordType typeFromProto(CheckpointProto::EditType t)
+{
+    switch (t)
+    {
+    case CheckpointProto::EDIT_TYPE_ENTRY:
+        return EditRecordType::VAR_ENTRY;
+    case CheckpointProto::EDIT_TYPE_REF:
+        return EditRecordType::VAR_REF;
+    case CheckpointProto::EDIT_TYPE_EXTERNAL:
+        return EditRecordType::VAR_EXTERNAL;
+    case CheckpointProto::EDIT_TYPE_DELETE:
+        return EditRecordType::VAR_DELETE;
+    default:
+        RUNTIME_CHECK_MSG(false, "Unsupported Proto Edit Type {}", magic_enum::enum_name(t));
     }
 }
 
@@ -228,6 +266,12 @@ public:
         PageVersion version;
         PageEntryV3 entry;
         Int64 being_ref_count{1};
+
+        CheckpointProto::EditRecord toProto() const;
+
+        static EditRecord fromProto(
+            const CheckpointProto::EditRecord & edit_rec,
+            CheckpointProto::StringsInternMap & strings_map);
     };
     using EditRecords = std::vector<EditRecord>;
 

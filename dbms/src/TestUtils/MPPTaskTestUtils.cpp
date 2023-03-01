@@ -63,7 +63,7 @@ void MPPTaskTestUtils::startServers(size_t server_num_)
     {
         MockComputeServerManager::instance().addServer(MockServerAddrGenerator::instance().nextAddr());
         // Currently, we simply add a context and don't care about destruct it.
-        TiFlashTestEnv::addGlobalContext();
+        TiFlashTestEnv::addGlobalContext(context.context.getSettings());
         TiFlashTestEnv::getGlobalContext(i + test_meta.context_idx).setMPPTest();
     }
 

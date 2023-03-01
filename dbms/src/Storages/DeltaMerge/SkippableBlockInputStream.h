@@ -17,6 +17,8 @@
 #include <Columns/ColumnsNumber.h>
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
 namespace DB
 {
@@ -25,7 +27,7 @@ namespace DM
 class SkippableBlockInputStream : public IBlockInputStream
 {
 public:
-    virtual ~SkippableBlockInputStream() = default;
+    ~SkippableBlockInputStream() override = default;
 
     /// Return false if it is the end of stream.
     virtual bool getSkippedRows(size_t & skip_rows) = 0;
@@ -37,7 +39,7 @@ using SkippableBlockInputStreams = std::vector<SkippableBlockInputStreamPtr>;
 class EmptySkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    EmptySkippableBlockInputStream(const ColumnDefines & read_columns_)
+    explicit EmptySkippableBlockInputStream(const ColumnDefines & read_columns_)
         : read_columns(read_columns_)
     {}
 
@@ -50,7 +52,7 @@ public:
     Block read() override { return {}; }
 
 private:
-    ColumnDefines read_columns;
+    ColumnDefines read_columns{};
 };
 
 template <bool need_row_id = false>
@@ -82,7 +84,7 @@ public:
         skip_rows = 0;
         while (current_stream != children.end())
         {
-            auto skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+            auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
 
             size_t skip;
             bool has_next_block = skippable_stream->getSkippedRows(skip);
