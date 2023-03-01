@@ -250,7 +250,7 @@ struct CHBlockChunkCodecV1Impl
     }
     CHBlockChunkCodecV1::EncodeRes encode(std::vector<Block> && blocks, CompressionMethod compression_method)
     {
-        return encodeImpl(blocks, compression_method);
+        return encodeImpl(std::move(blocks), compression_method);
     }
 
     static const ColumnPtr & toColumnPtr(const Columns & c, size_t index)

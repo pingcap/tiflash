@@ -127,6 +127,41 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
             ASSERT_EQ(total_rows, decoded_block.rows());
         }
         {
+            std::vector<Block> blocks_to_move;
+            blocks_to_move.reserve(blocks.size());
+            for (auto && block : blocks)
+            {
+                blocks_to_move.emplace_back(block);
+            }
+            for (auto && block : blocks_to_move)
+            {
+                for (auto && col : block)
+                {
+                    ASSERT_TRUE(col.column);
+                }
+            }
+            auto codec = CHBlockChunkCodecV1{
+                header,
+            };
+            auto str = codec.encode(std::move(blocks_to_move), mode);
+            for (auto && block : blocks_to_move)
+            {
+                ASSERT_EQ(block.rows(), 0);
+            }
+            ASSERT_FALSE(str.empty());
+            ASSERT_EQ(codec.encoded_rows, total_rows);
+
+            if (mode == CompressionMethod::NONE)
+                ASSERT_EQ(codec.compressed_size, 0);
+            else
+                ASSERT_NE(codec.compressed_size, 0);
+
+            ASSERT_NE(codec.original_size, 0);
+
+            auto decoded_block = CHBlockChunkCodecV1::decode(header, str);
+            ASSERT_EQ(total_rows, decoded_block.rows());
+        }
+        {
             auto columns = prepareBlock(rows).getColumns();
             auto codec = CHBlockChunkCodecV1{
                 header,
