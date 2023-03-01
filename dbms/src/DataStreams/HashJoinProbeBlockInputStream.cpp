@@ -84,16 +84,11 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
     /// When the probe stream quits probe by cancelling instead of normal finish, the Join operator might still produce meaningless blocks
     /// and expects these meaningless blocks won't be used to produce meaningful result.
 
-    try
     {
-        finishOneProbe();
+        std::unique_lock lk(join->getJoinLock());
+        join->cancel();
     }
-    catch (...)
-    {
-        auto error_message = getCurrentExceptionMessage(false, true);
-        LOG_WARNING(log, error_message);
-        join->meetError(error_message);
-    }
+
     if (non_joined_stream != nullptr)
     {
         auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get());
@@ -212,12 +207,16 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
                 break;
             }
             parents.push_back(join);
-            join = restore_join;
-            probe_finished = false;
-            if (join->needReturnNonJoinedData())
             {
-                non_join_finished = false;
+                std::unique_lock join_lk(join->getJoinLock());
+                if (join->isCanceled())
+                {
+                    status = ProbeStatus::FINISHED;
+                    break;
+                }
+                join = restore_join;
             }
+            probe_finished = false;
             build_stream = std::make_shared<HashJoinBuildBlockInputStream>(build_stream, restore_join, probe_index, log->identifier());
             restore_stream.reset();
             restore_stream = probe_stream;

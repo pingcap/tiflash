@@ -255,7 +255,24 @@ public:
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
         active_probe_concurrency = probe_concurrency;
-        active_non_join_concurrency = probe_concurrency;
+    }
+
+    std::mutex & getJoinLock()
+    {
+        return join_mutex;
+    }
+
+    void cancel()
+    {
+        is_canceled = true;
+        std::unique_lock lk(build_probe_mutex);
+        probe_cv.notify_all();
+        build_cv.notify_all();
+    }
+
+    bool isCanceled()
+    {
+        return is_canceled;
     }
 
     void finishOneBuild();
@@ -429,8 +446,10 @@ private:
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
     size_t active_probe_concurrency;
-    size_t active_non_join_concurrency;
 
+
+    mutable std::mutex join_mutex;
+    bool is_canceled = false;
     bool meet_error = false;
     String error_message;
 

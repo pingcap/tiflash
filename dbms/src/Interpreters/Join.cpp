@@ -174,7 +174,6 @@ Join::Join(
     , active_build_concurrency(0)
     , probe_concurrency(0)
     , active_probe_concurrency(0)
-    , active_non_join_concurrency(0)
     , collators(collators_)
     , left_filter_column(left_filter_column_)
     , right_filter_column(right_filter_column_)
@@ -2242,7 +2241,7 @@ void Join::waitUntilAllBuildFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
     build_cv.wait(lock, [&]() {
-        return active_build_concurrency == 0 || meet_error;
+        return active_build_concurrency == 0 || meet_error || is_canceled;
     });
     if (meet_error)
         throw Exception(error_message);
@@ -2276,7 +2275,7 @@ void Join::waitUntilAllProbeFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
     probe_cv.wait(lock, [&]() {
-        return active_probe_concurrency == 0 || meet_error;
+        return active_probe_concurrency == 0 || meet_error || is_canceled;
     });
     if (meet_error)
         throw Exception(error_message);
