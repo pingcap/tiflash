@@ -122,7 +122,9 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     dispatch_req_meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
     dispatch_req_meta->set_task_id(sender_target_mpp_task_id.task_id);
     dispatch_req_meta->set_address(batch_cop_task.store_addr);
-    dispatch_req_meta->set_mpp_version(GetMppVersion());
+
+    // TODO: use different mpp version if necessary
+    // dispatch_req_meta->set_mpp_version(?);
 
     const auto & settings = context.getSettings();
     dispatch_req->set_timeout(60);
