@@ -871,18 +871,14 @@ try
 }
 CATCH
 
-template <tipb::JoinType JOIN_TYPE>
-ColumnsWithTypeAndName genNullAwareJoinResult(const ColumnsWithTypeAndName & left, const ColumnWithTypeAndName & left_semi_ans)
+ColumnsWithTypeAndName genNullAwareJoinResult(tipb::JoinType type, const ColumnsWithTypeAndName & left, const ColumnWithTypeAndName & left_semi_ans)
 {
-    static_assert(JOIN_TYPE == tipb::JoinType::TypeLeftOuterSemiJoin || JOIN_TYPE == tipb::JoinType::TypeAntiLeftOuterSemiJoin
-                  || JOIN_TYPE == tipb::JoinType::TypeAntiSemiJoin);
-
     ColumnsWithTypeAndName res = left;
-    if constexpr (JOIN_TYPE == tipb::JoinType::TypeLeftOuterSemiJoin)
+    if (type == tipb::JoinType::TypeLeftOuterSemiJoin)
     {
         res.emplace_back(left_semi_ans);
     }
-    else if constexpr (JOIN_TYPE == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
+    else if (type == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
     {
         auto new_column = left_semi_ans.column->cloneEmpty();
         const auto * nullable_column = checkAndGetColumn<ColumnNullable>(left_semi_ans.column.get());
@@ -901,7 +897,7 @@ ColumnsWithTypeAndName genNullAwareJoinResult(const ColumnsWithTypeAndName & lef
 
         res.emplace_back(anti_left_semi_ans);
     }
-    else if constexpr (JOIN_TYPE == tipb::JoinType::TypeAntiSemiJoin)
+    else if (type == tipb::JoinType::TypeAntiSemiJoin)
     {
         IColumn::Filter filter(left_semi_ans.column->size());
         const auto * nullable_column = checkAndGetColumn<ColumnNullable>(left_semi_ans.column.get());
@@ -964,44 +960,21 @@ try
         context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}}, left);
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}}, right);
 
-        auto request = context.scan("null_aware_semi", "t")
-                           .join(context.scan("null_aware_semi", "s"),
-                                 JoinType::TypeLeftOuterSemiJoin,
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 0,
-                                 {col("a")})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeLeftOuterSemiJoin>(left, res));
-
-        request = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"),
-                            JoinType::TypeAntiLeftOuterSemiJoin,
-                            {},
-                            {},
-                            {},
-                            {},
-                            {},
-                            0,
-                            {col("a")})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiLeftOuterSemiJoin>(left, res));
-
-        request = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"),
-                            JoinType::TypeAntiSemiJoin,
-                            {},
-                            {},
-                            {},
-                            {},
-                            {},
-                            0,
-                            {col("a")})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiSemiJoin>(left, res));
+        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+        {
+            auto request = context.scan("null_aware_semi", "t")
+                               .join(context.scan("null_aware_semi", "s"),
+                                     type,
+                                     {col("a")},
+                                     {},
+                                     {},
+                                     {},
+                                     {},
+                                     0,
+                                     true)
+                               .build(context);
+            executeAndAssertColumnsEqual(request, genNullAwareJoinResult(type, left, res));
+        }
     }
 
     /// One join key + other condition(c > b).
@@ -1038,44 +1011,21 @@ try
         context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
 
-        auto request = context.scan("null_aware_semi", "t")
-                           .join(context.scan("null_aware_semi", "s"),
-                                 tipb::JoinType::TypeLeftOuterSemiJoin,
-                                 {},
-                                 {},
-                                 {},
-                                 {gt(col("c"), col("b"))},
-                                 {},
-                                 0,
-                                 {col("a")})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeLeftOuterSemiJoin>(left, res));
-
-        request = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"),
-                            tipb::JoinType::TypeAntiLeftOuterSemiJoin,
-                            {},
-                            {},
-                            {},
-                            {gt(col("c"), col("b"))},
-                            {},
-                            0,
-                            {col("a")})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiLeftOuterSemiJoin>(left, res));
-
-        request = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"),
-                            tipb::JoinType::TypeAntiSemiJoin,
-                            {},
-                            {},
-                            {},
-                            {gt(col("c"), col("b"))},
-                            {},
-                            0,
-                            {col("a")})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiSemiJoin>(left, res));
+        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+        {
+            auto request = context.scan("null_aware_semi", "t")
+                               .join(context.scan("null_aware_semi", "s"),
+                                     type,
+                                     {col("a")},
+                                     {},
+                                     {},
+                                     {gt(col("c"), col("b"))},
+                                     {},
+                                     0,
+                                     true)
+                               .build(context);
+            executeAndAssertColumnsEqual(request, genNullAwareJoinResult(type, left, res));
+        }
     }
 
     /// Two join keys + no other condition.
@@ -1103,44 +1053,21 @@ try
         context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, left);
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, right);
 
-        auto request = context.scan("null_aware_semi", "t")
-                           .join(context.scan("null_aware_semi", "s"),
-                                 tipb::JoinType::TypeLeftOuterSemiJoin,
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 {},
-                                 0,
-                                 {col("a"), col("b")})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeLeftOuterSemiJoin>(left, res));
-
-        request = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"),
-                            tipb::JoinType::TypeAntiLeftOuterSemiJoin,
-                            {},
-                            {},
-                            {},
-                            {},
-                            {},
-                            0,
-                            {col("a"), col("b")})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiLeftOuterSemiJoin>(left, res));
-
-        request = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"),
-                            tipb::JoinType::TypeAntiSemiJoin,
-                            {},
-                            {},
-                            {},
-                            {},
-                            {},
-                            0,
-                            {col("a"), col("b")})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiSemiJoin>(left, res));
+        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+        {
+            auto request = context.scan("null_aware_semi", "t")
+                               .join(context.scan("null_aware_semi", "s"),
+                                     type,
+                                     {col("a"), col("b")},
+                                     {},
+                                     {},
+                                     {},
+                                     {},
+                                     0,
+                                     true)
+                               .build(context);
+            executeAndAssertColumnsEqual(request, genNullAwareJoinResult(type, left, res));
+        }
     }
 
     /// Two join keys + other condition(d > c).
@@ -1168,44 +1095,21 @@ try
         context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
         context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}}, right);
 
-        auto request = context.scan("null_aware_semi", "t")
-                           .join(context.scan("null_aware_semi", "s"),
-                                 tipb::JoinType::TypeLeftOuterSemiJoin,
-                                 {},
-                                 {},
-                                 {},
-                                 {gt(col("d"), col("c"))},
-                                 {},
-                                 0,
-                                 {col("a"), col("b")})
-                           .build(context);
-        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeLeftOuterSemiJoin>(left, res));
-
-        request = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"),
-                            tipb::JoinType::TypeAntiLeftOuterSemiJoin,
-                            {},
-                            {},
-                            {},
-                            {gt(col("d"), col("c"))},
-                            {},
-                            0,
-                            {col("a"), col("b")})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiLeftOuterSemiJoin>(left, res));
-
-        request = context.scan("null_aware_semi", "t")
-                      .join(context.scan("null_aware_semi", "s"),
-                            tipb::JoinType::TypeAntiSemiJoin,
-                            {},
-                            {},
-                            {},
-                            {gt(col("d"), col("c"))},
-                            {},
-                            0,
-                            {col("a"), col("b")})
-                      .build(context);
-        executeAndAssertColumnsEqual(request, genNullAwareJoinResult<JoinType::TypeAntiSemiJoin>(left, res));
+        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+        {
+            auto request = context.scan("null_aware_semi", "t")
+                               .join(context.scan("null_aware_semi", "s"),
+                                     type,
+                                     {col("a"), col("b")},
+                                     {},
+                                     {},
+                                     {gt(col("d"), col("c"))},
+                                     {},
+                                     0,
+                                     true)
+                               .build(context);
+            executeAndAssertColumnsEqual(request, genNullAwareJoinResult(type, left, res));
+        }
     }
 
     // TODO: add left and right condition cases.

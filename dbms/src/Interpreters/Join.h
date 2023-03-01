@@ -21,6 +21,7 @@
 #include <Common/HashTable/HashMap.h>
 #include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/SettingsCommon.h>
@@ -98,11 +99,7 @@ public:
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const String & left_filter_column = "",
          const String & right_filter_column = "",
-         const String & other_filter_column = "",
-         const String & other_eq_filter_from_in_column = "",
-         ExpressionActionsPtr other_condition_ptr = nullptr,
-         const String & null_aware_eq_column = "",
-         ExpressionActionsPtr null_aware_eq_ptr = nullptr,
+         const JoinConditions & conditions = {},
          size_t max_block_size = 0,
          const String & match_helper_name = "");
 
@@ -319,12 +316,8 @@ private:
 
     String left_filter_column;
     String right_filter_column;
-    String other_filter_column;
-    String other_eq_filter_from_in_column;
-    ExpressionActionsPtr other_condition_ptr;
 
-    String null_aware_eq_column;
-    ExpressionActionsPtr null_aware_eq_ptr;
+    const JoinConditions conditions;
 
     /// For null-aware semi join with no other condition.
     /// Indicate if the right table is empty after filtering.
@@ -354,7 +347,7 @@ private:
     std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
 
     /// Combine all RowRef in `rows_not_inserted_to_map`.
-    /// Used for null-aware semi join family to speed up calculation.
+    /// Used for null-aware semi join family to speed up join process.
     PaddedPODArray<RowRef> rows_with_null_keys;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.

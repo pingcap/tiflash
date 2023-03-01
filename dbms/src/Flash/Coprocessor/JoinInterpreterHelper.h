@@ -36,6 +36,34 @@ struct JoinKeyType
 };
 using JoinKeyTypes = std::vector<JoinKeyType>;
 
+struct JoinConditions
+{
+    String other_cond_name;
+    String other_eq_cond_from_in_name;
+    ExpressionActionsPtr other_cond_expr;
+
+    /// null_aware_eq_cond is used for checking the null-aware equal condition for not-matched rows.
+    String null_aware_eq_cond_name;
+    ExpressionActionsPtr null_aware_eq_cond_expr;
+
+    /// Validate this JoinConditions and return error message if any.
+    String validate(bool is_null_aware_semi_join) const
+    {
+        if ((!other_cond_name.empty() || !other_eq_cond_from_in_name.empty()) && other_cond_expr == nullptr)
+            return "other_cond_name and/or other_eq_cond_from_in_name are/is not empty but other_cond_expr is nullptr";
+        if (other_cond_name.empty() && other_eq_cond_from_in_name.empty() && other_cond_expr != nullptr)
+            return "other_cond_name and other_eq_cond_from_in_name are empty but other_cond_expr is not nullptr";
+
+        if (is_null_aware_semi_join)
+        {
+            if (null_aware_eq_cond_name.empty() || null_aware_eq_cond_expr == nullptr)
+                return "null-aware semi join does not have null_aware_eq_cond_name or null_aware_eq_cond_expr is nullptr";
+        }
+
+        return "";
+    }
+};
+
 namespace JoinInterpreterHelper
 {
 struct TiFlashJoin
@@ -59,15 +87,11 @@ struct TiFlashJoin
 
     const google::protobuf::RepeatedPtrField<tipb::Expr> & getBuildJoinKeys() const
     {
-        if (join.left_null_aware_join_keys_size() > 0)
-            return build_side_index == 1 ? join.right_null_aware_join_keys() : join.left_null_aware_join_keys();
         return build_side_index == 1 ? join.right_join_keys() : join.left_join_keys();
     }
 
     const google::protobuf::RepeatedPtrField<tipb::Expr> & getProbeJoinKeys() const
     {
-        if (join.left_null_aware_join_keys_size() > 0)
-            return build_side_index == 0 ? join.right_null_aware_join_keys() : join.left_null_aware_join_keys();
         return build_side_index == 0 ? join.right_join_keys() : join.left_join_keys();
     }
 
@@ -97,18 +121,31 @@ struct TiFlashJoin
         const Block & right_input_header,
         const String & match_helper_name) const;
 
-    /// @other_condition_expr: generates other_filter_column and other_eq_filter_from_in_column
-    /// @other_filter_column_name: column name of `and(other_cond1, other_cond2, ...)`
-    /// @other_eq_filter_from_in_column_name: column name of `and(other_eq_cond1_from_in, other_eq_cond2_from_in, ...)`
-    /// such as
-    ///   `select * from t1 where col1 not in (select col2 from t2 where t1.col2 > t2.col3)`
-    ///   - other_filter is `t1.col2 > t2.col3`
-    ///   - other_eq_filter_from_in_column is `t1.col1 = t2.col2`
+    /// Example 1:
+    ///   `select * from t1 inner join t2 on t1.col1 = t2.col1 and t1.col2 > t2.col2`
+    ///   - join key are `t1.col1` and `t2.col1`
+    ///   - other_cond is `t1.col2 > t2.col2`
     ///
-    /// new columns from build side prepare join actions cannot be appended.
+    /// Example 2:
+    ///   `select * from t1 where col1 not in (select col1 from t2 where t1.col2 = t2.col2 and t1.col3 > t2.col3)`
+    ///   There are several possibilities which depends on TiDB.
+    ///   1. cartesian anti semi join.
+    ///      - join key is empty
+    ///      - other_cond is `t1.col2 = t2.col2 and t1.col3 > t2.col3`
+    ///      - other_cond_from_in is `t1.col1 = t2.col1`
+    ///   2. anti semi join.
+    ///      - join keys are `t1.col2` and `t2.col2`
+    ///      - other_cond is `t1.col3 > t2.col3`
+    ///      - other_cond_from_in is `t1.col1 = t2.col1`
+    ///   3. null-aware anti semi join
+    ///      - join keys are `t1.col1` and `t2.col1`
+    ///      - other_cond is `t1.col2 = t2.col2 and t1.col3 > t2.col3`
+    ///      - null_aware_eq_cond is `t1.col1 = t2.col1`
+    ///
+    /// Note that new columns from build side prepare join actions cannot be appended.
     /// because the input that other filter accepts is
     /// {left_input_columns, right_input_columns, new_columns_from_probe_side_prepare, match_helper_name}.
-    std::tuple<ExpressionActionsPtr, String, String, ExpressionActionsPtr, String> genJoinOtherConditionAction(
+    JoinConditions genJoinConditionsAction(
         const Context & context,
         const Block & left_input_header,
         const Block & right_input_header,

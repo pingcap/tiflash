@@ -23,7 +23,7 @@ class ExchangeReceiverBinder;
 class JoinBinder : public ExecutorBinder
 {
 public:
-    JoinBinder(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, const ASTs & join_cols_, const ASTs & l_conds, const ASTs & r_conds, const ASTs & o_conds, const ASTs & o_eq_conds, uint64_t fine_grained_shuffle_stream_count_, const ASTs & null_aware_join_cols_)
+    JoinBinder(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, const ASTs & join_cols_, const ASTs & l_conds, const ASTs & r_conds, const ASTs & o_conds, const ASTs & o_eq_conds, uint64_t fine_grained_shuffle_stream_count_, bool is_null_aware_semi_join)
         : ExecutorBinder(index_, "Join_" + std::to_string(index_), output_schema_)
         , tp(tp_)
         , join_cols(join_cols_)
@@ -32,9 +32,9 @@ public:
         , other_conds(o_conds)
         , other_eq_conds_from_in(o_eq_conds)
         , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
-        , null_aware_join_cols(null_aware_join_cols_)
+        , is_null_aware_semi_join(is_null_aware_semi_join)
     {
-        if (!(join_cols.size() + left_conds.size() + right_conds.size() + other_conds.size() + other_eq_conds_from_in.size() + null_aware_join_cols.size()))
+        if (!(join_cols.size() + left_conds.size() + right_conds.size() + other_conds.size() + other_eq_conds_from_in.size()))
             throw Exception("No join condition found.");
     }
 
@@ -60,10 +60,10 @@ protected:
     const ASTs other_conds{};
     const ASTs other_eq_conds_from_in{};
     uint64_t fine_grained_shuffle_stream_count;
-    const ASTs null_aware_join_cols{};
+    bool is_null_aware_semi_join;
 };
 // compileJoin constructs a mocked Join executor node, note that all conditional expression params can be default
-ExecutorBinderPtr compileJoin(size_t & executor_index, ExecutorBinderPtr left, ExecutorBinderPtr right, tipb::JoinType tp, const ASTs & join_cols, const ASTs & left_conds = {}, const ASTs & right_conds = {}, const ASTs & other_conds = {}, const ASTs & other_eq_conds_from_in = {}, uint64_t fine_grained_shuffle_stream_count = 0, const ASTs & null_aware_join_cols = {});
+ExecutorBinderPtr compileJoin(size_t & executor_index, ExecutorBinderPtr left, ExecutorBinderPtr right, tipb::JoinType tp, const ASTs & join_cols, const ASTs & left_conds = {}, const ASTs & right_conds = {}, const ASTs & other_conds = {}, const ASTs & other_eq_conds_from_in = {}, uint64_t fine_grained_shuffle_stream_count = 0, bool is_null_aware_semi_join = false);
 
 
 /// Note: this api is only used by legacy test framework for compatibility purpose, which will be depracated soon,

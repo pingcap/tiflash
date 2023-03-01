@@ -62,10 +62,14 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
         {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::NullAware_LeftAnti}};
 
     const auto & join_type_map = [join]() {
-        if (join.left_join_keys_size() > 0)
-            return equal_join_type_map;
-        else if (join.left_null_aware_join_keys_size() > 0)
+        if (join.is_null_aware_semi_join())
+        {
+            if (unlikely(join.left_join_keys_size() == 0))
+                throw TiFlashException("null-aware semi join does not have join key", Errors::Coprocessor::BadRequest);
             return null_aware_join_type_map;
+        }
+        else if (join.left_join_keys_size() > 0)
+            return equal_join_type_map;
         else
             return cartesian_join_type_map;
     }();
@@ -149,16 +153,13 @@ JoinKeyType geCommonTypeForJoinOn(const DataTypePtr & left_type, const DataTypeP
 
 JoinKeyTypes getJoinKeyTypes(const tipb::Join & join)
 {
-    int left_keys_size = join.left_null_aware_join_keys_size() > 0 ? join.left_null_aware_join_keys_size() : join.left_join_keys_size();
-    int right_keys_size = join.right_null_aware_join_keys_size() > 0 ? join.right_null_aware_join_keys_size() : join.right_join_keys_size();
+    const auto & left_join_keys = join.left_join_keys();
+    const auto & right_join_keys = join.right_join_keys();
 
-    const auto & left_join_keys = join.left_null_aware_join_keys_size() > 0 ? join.left_null_aware_join_keys() : join.left_join_keys();
-    const auto & right_join_keys = join.right_null_aware_join_keys_size() > 0 ? join.right_null_aware_join_keys() : join.right_join_keys();
-
-    if (unlikely(left_keys_size != right_keys_size))
+    if (unlikely(join.left_join_keys_size() != join.right_join_keys_size()))
         throw TiFlashException("size of join.left_join_keys != size of join.right_join_keys", Errors::Coprocessor::BadRequest);
     JoinKeyTypes join_key_types;
-    for (int i = 0; i < left_keys_size; ++i)
+    for (int i = 0; i < join.left_join_keys_size(); ++i)
     {
         if (unlikely(!exprHasValidFieldType(left_join_keys[i]) || !exprHasValidFieldType(right_join_keys[i])))
             throw TiFlashException("Join key without field type", Errors::Coprocessor::BadRequest);
@@ -189,7 +190,7 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTy
     return collators;
 }
 
-std::tuple<ExpressionActionsPtr, String, String, ExpressionActionsPtr, String> doGenJoinOtherConditionAction(
+JoinConditions doGenJoinConditionsAction(
     const Context & context,
     const TiFlashJoin & tiflash_join,
     const NamesAndTypes & source_columns,
@@ -197,40 +198,34 @@ std::tuple<ExpressionActionsPtr, String, String, ExpressionActionsPtr, String> d
     const Names & build_key_names)
 {
     const tipb::Join & join = tiflash_join.join;
-    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0 && join.left_null_aware_join_keys_size() == 0)
-        return {nullptr, "", "", nullptr, ""};
+    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0 && !join.is_null_aware_semi_join())
+        return {};
 
     DAGExpressionAnalyzer dag_analyzer(source_columns, context);
     ExpressionActionsChain chain;
 
-    String filter_column_for_other_condition;
+    JoinConditions cond;
     if (join.other_conditions_size() > 0)
-    {
-        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, join.other_conditions());
-    }
+        cond.other_cond_name = dag_analyzer.appendWhere(chain, join.other_conditions());
 
-    String filter_column_for_other_eq_condition;
     if (join.other_eq_conditions_from_in_size() > 0)
-    {
-        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, join.other_eq_conditions_from_in());
-    }
+        cond.other_eq_cond_from_in_name = dag_analyzer.appendWhere(chain, join.other_eq_conditions_from_in());
 
-    ExpressionActionsPtr other_cond_expr;
     if (!chain.steps.empty())
     {
-        other_cond_expr = chain.getLastActions();
+        cond.other_cond_expr = chain.getLastActions();
         chain.clear();
     }
 
     String column_for_null_aware_eq_condition;
     ExpressionActionsPtr null_aware_eq_expr;
-    if (join.left_null_aware_join_keys_size() > 0)
+    if (join.is_null_aware_semi_join())
     {
-        column_for_null_aware_eq_condition = dag_analyzer.appendNullAwareSemiJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
-        null_aware_eq_expr = chain.getLastActions();
+        cond.null_aware_eq_cond_name = dag_analyzer.appendNullAwareSemiJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
+        cond.null_aware_eq_cond_expr = chain.getLastActions();
     }
 
-    return {other_cond_expr, std::move(filter_column_for_other_condition), std::move(filter_column_for_other_eq_condition), null_aware_eq_expr, std::move(column_for_null_aware_eq_condition)};
+    return cond;
 }
 } // namespace
 
@@ -354,7 +349,7 @@ NamesAndTypes TiFlashJoin::genJoinOutputColumns(
     return join_output_columns;
 }
 
-std::tuple<ExpressionActionsPtr, String, String, ExpressionActionsPtr, String> TiFlashJoin::genJoinOtherConditionAction(
+JoinConditions TiFlashJoin::genJoinConditionsAction(
     const Context & context,
     const Block & left_input_header,
     const Block & right_input_header,
@@ -368,7 +363,7 @@ std::tuple<ExpressionActionsPtr, String, String, ExpressionActionsPtr, String> T
             right_input_header,
             probe_side_prepare_join);
 
-    return doGenJoinOtherConditionAction(context, *this, columns_for_other_join_filter, probe_key_names, build_key_names);
+    return doGenJoinConditionsAction(context, *this, columns_for_other_join_filter, probe_key_names, build_key_names);
 }
 
 std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(

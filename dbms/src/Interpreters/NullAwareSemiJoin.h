@@ -130,10 +130,7 @@ public:
         const BlocksList & right_blocks,
         const PaddedPODArray<Join::RowRef> & null_rows,
         size_t max_block_size,
-        const String & other_filter_column,
-        const ExpressionActionsPtr & other_condition_ptr,
-        const String & null_aware_eq_column,
-        const ExpressionActionsPtr & null_aware_eq_ptr);
+        const JoinConditions & conditions);
 
     void joinResult(std::list<Result *> & res_list);
 
@@ -154,10 +151,7 @@ private:
     const PaddedPODArray<Join::RowRef> & null_rows;
     size_t max_block_size;
 
-    const String & other_filter_column;
-    const ExpressionActionsPtr & other_condition_ptr;
-    const String & null_aware_eq_column;
-    const ExpressionActionsPtr & null_aware_eq_ptr;
+    const JoinConditions & conditions;
 };
 
 } // namespace DB

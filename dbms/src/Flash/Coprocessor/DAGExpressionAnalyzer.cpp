@@ -1101,9 +1101,9 @@ String DAGExpressionAnalyzer::appendNullAwareSemiJoinEqColumn(
     const Names & build_key_names,
     const TiDB::TiDBCollators & collators)
 {
+    RUNTIME_ASSERT(probe_key_names.size() == build_key_names.size());
     if (probe_key_names.empty())
         return "";
-    RUNTIME_ASSERT(probe_key_names.size() == build_key_names.size());
 
     auto & last_step = initAndGetLastStep(chain);
 
@@ -1111,8 +1111,8 @@ String DAGExpressionAnalyzer::appendNullAwareSemiJoinEqColumn(
     for (size_t i = 0; i < probe_key_names.size(); ++i)
     {
         Names arg_names;
-        arg_names.push_back(probe_key_names[i]);
-        arg_names.push_back(build_key_names[i]);
+        arg_names.emplace_back(probe_key_names[i]);
+        arg_names.emplace_back(build_key_names[i]);
         const TiDB::TiDBCollatorPtr & collator = i < collators.size() ? collators[i] : nullptr;
         and_arg_names[i] = applyFunction("equals", arg_names, last_step.actions, collator);
     }

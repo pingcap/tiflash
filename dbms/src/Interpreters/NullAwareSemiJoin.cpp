@@ -175,20 +175,14 @@ SemiJoinHelper<KIND, STRICTNESS, Mapped>::SemiJoinHelper(
     const BlocksList & right_blocks,
     const PaddedPODArray<Join::RowRef> & null_rows,
     size_t max_block_size,
-    const String & other_filter_column,
-    const ExpressionActionsPtr & other_condition_ptr,
-    const String & null_aware_eq_column,
-    const ExpressionActionsPtr & null_aware_eq_ptr)
+    const JoinConditions & conditions)
     : block(block)
     , left_columns(left_columns)
     , right_columns(right_columns)
     , right_blocks(right_blocks)
     , null_rows(null_rows)
     , max_block_size(max_block_size)
-    , other_filter_column(other_filter_column)
-    , other_condition_ptr(other_condition_ptr)
-    , null_aware_eq_column(null_aware_eq_column)
-    , null_aware_eq_ptr(null_aware_eq_ptr)
+    , conditions(conditions)
 {
     static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                   || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
@@ -349,17 +343,13 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename
 template <SemiJoinStep STEP>
 void SemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<SemiJoinHelper::Result *> & res_list, std::list<SemiJoinHelper::Result *> & next_res_list)
 {
-    if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
-    {
-        other_condition_ptr->execute(exec_block);
-    }
-
     ConstNullMapPtr eq_null_map = nullptr;
+    /// If step is CHECK_OTHER_COND,
     if constexpr (STEP != SemiJoinStep::CHECK_OTHER_COND)
     {
-        null_aware_eq_ptr->execute(exec_block);
+        conditions.null_aware_eq_cond_expr->execute(exec_block);
 
-        auto eq_column = exec_block.getByName(null_aware_eq_column).column;
+        auto eq_column = exec_block.getByName(conditions.null_aware_eq_cond_name).column;
         if (eq_column->isColumnConst())
             eq_column = eq_column->convertToFullColumnIfConst();
 
@@ -370,7 +360,9 @@ void SemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(Block & exec_b
     }
     else
     {
-        /// If STEP is CHECK_OTHER_COND, other condition must exist so STRICTNESS must be all.
+        /// If STEP is CHECK_OTHER_COND, it means these right rows have the same join keys to the corresponding left row.
+        /// So do not need to run null_aware_eq_cond_expr.
+        /// And other condition must exist so STRICTNESS must be all.
         static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
     }
 
@@ -397,7 +389,9 @@ void SemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(Block & exec_b
     }
     else
     {
-        auto other_column = exec_block.getByName(other_filter_column).column;
+        conditions.other_cond_expr->execute(exec_block);
+
+        auto other_column = exec_block.getByName(conditions.other_cond_name).column;
         if (other_column->isColumnConst())
             other_column = other_column->convertToFullColumnIfConst();
 
