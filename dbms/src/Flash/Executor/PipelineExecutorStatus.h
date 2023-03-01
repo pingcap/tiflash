@@ -60,7 +60,7 @@ public:
         }
         if (is_timeout)
         {
-            LOG_DEBUG(log, "wait timeout");
+            LOG_WARNING(log, "wait timeout");
             onErrorOccurred(timeout_err_msg);
             throw Exception(timeout_err_msg);
         }

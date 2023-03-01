@@ -58,6 +58,7 @@ void PipelineExecutorStatus::onErrorOccurred(const String & err_msg)
 
 bool PipelineExecutorStatus::setExceptionPtr(const std::exception_ptr & exception_ptr_)
 {
+    assert(exception_ptr_ != nullptr);
     std::lock_guard lock(mu);
     if (exception_ptr != nullptr)
         return false;
@@ -67,7 +68,6 @@ bool PipelineExecutorStatus::setExceptionPtr(const std::exception_ptr & exceptio
 
 void PipelineExecutorStatus::onErrorOccurred(const std::exception_ptr & exception_ptr_)
 {
-    assert(exception_ptr_ != nullptr);
     if (setExceptionPtr(exception_ptr_))
     {
         cancel();
