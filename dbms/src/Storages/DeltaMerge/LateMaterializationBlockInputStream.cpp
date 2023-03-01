@@ -86,9 +86,9 @@ Block LateMaterializationBlockInputStream::readImpl()
             auto filter_out_count = rows - passed_count;
             if (filter_out_count >= DEFAULT_MERGE_BLOCK_SIZE * 2)
             {
-                // When DEFAULT_MERGE_BLOCK_SIZE < row_left < DEFAULT_MERGE_BLOCK_SIZE * 2, 
+                // When DEFAULT_MERGE_BLOCK_SIZE < row_left < DEFAULT_MERGE_BLOCK_SIZE * 2,
                 // the possibility of skipping a pack in the next block is quite small, less than 1%.
-                // And the performance read and then filter is is better than readWithFilter, 
+                // And the performance read and then filter is is better than readWithFilter,
                 // so only if the number of rows left after filtering out is large enough,
                 // we can skip some packs of the next block, call readWithFilter to get the next block.
                 rest_column_block = rest_column_stream->readWithFilter(*filter);
