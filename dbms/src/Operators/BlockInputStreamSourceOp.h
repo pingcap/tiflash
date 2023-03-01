@@ -27,18 +27,26 @@ using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 class BlockInputStreamSourceOp : public SourceOp
 {
 public:
-    BlockInputStreamSourceOp(PipelineExecutorStatus & exec_status_, const BlockInputStreamPtr & impl_);
+    BlockInputStreamSourceOp(
+        PipelineExecutorStatus & exec_status_,
+        const String & req_id,
+        const BlockInputStreamPtr & impl_)
+        : SourceOp(exec_status_, req_id)
+        , impl(impl_)
+    {}
 
     String getName() const override
     {
         return "BlockInputStreamSourceOp";
     }
 
+    void operatePrefix() override;
+    void operateSuffix() override;
+
 protected:
     OperatorStatus readImpl(Block & block) override;
 
 private:
     BlockInputStreamPtr impl;
-    bool finished = false;
 };
 } // namespace DB

@@ -32,7 +32,7 @@ PhysicalPlanNode::PhysicalPlanNode(
     : executor_id(executor_id_)
     , type(type_)
     , schema(schema_)
-    , log(Logger::get(type_.toString(), req_id))
+    , log(Logger::get(type_.toString(), executor_id_, req_id))
 {}
 
 String PhysicalPlanNode::toString()

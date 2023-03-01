@@ -23,21 +23,22 @@ BlockInputStreamSourceOp::BlockInputStreamSourceOp(
     : SourceOp(exec_status_)
     , impl(impl_)
 {
-    impl->readPrefix();
     setHeader(impl->getHeader());
+}
+
+void BlockInputStreamSourceOp::operatePrefix()
+{
+    impl->readPrefix();
+}
+
+void BlockInputStreamSourceOp::operateSuffix()
+{
+    impl->readSuffix();
 }
 
 OperatorStatus BlockInputStreamSourceOp::readImpl(Block & block)
 {
-    if (unlikely(finished))
-        return OperatorStatus::HAS_OUTPUT;
-
     block = impl->read();
-    if (unlikely(!block))
-    {
-        impl->readSuffix();
-        finished = true;
-    }
     return OperatorStatus::HAS_OUTPUT;
 }
 } // namespace DB
