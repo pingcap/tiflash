@@ -267,7 +267,7 @@ size_t DMFileReader::skipNextBlock()
     // Go to next available pack.
     size_t skip;
     if (!getSkippedRows(skip))
-        return false;
+        return 0;
 
     // Find the next contiguous packs will be read in next read,
     // let next_pack_id point to the next pack of the contiguous packs.
