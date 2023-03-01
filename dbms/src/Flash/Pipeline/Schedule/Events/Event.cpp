@@ -81,7 +81,7 @@ void Event::schedule() noexcept
     }
     else
     {
-        // if no task is scheduled here, we can call finish directly.
+        // if no task is scheduled here, we should call finish directly.
         finish();
     }
 }
@@ -123,7 +123,10 @@ void Event::scheduleTasks(std::vector<TaskPtr> & tasks) noexcept
     assert(0 == unfinished_tasks);
     unfinished_tasks = tasks.size();
     assert(status != EventStatus::FINISHED);
-    TaskScheduler::instance->submit(tasks);
+    // If query has already been cancelled, we can skip scheduling tasks.
+    // And then tasks will be destroyed and call `onTaskFinish`.
+    if (likely(!exec_status.isCancelled()))
+        TaskScheduler::instance->submit(tasks);
 }
 
 void Event::onTaskFinish() noexcept
