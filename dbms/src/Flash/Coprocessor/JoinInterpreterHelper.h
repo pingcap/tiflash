@@ -161,7 +161,7 @@ struct TiFlashJoin
 
 /// @join_prepare_expr_actions: generates join key columns and join filter column
 /// @key_names: column names of keys.
-/// @original_key_names: original column names of keys.(used for null-aware semi join)
+/// @original_key_names: original column names of keys.(only used for null-aware semi join)
 /// @filter_column_name: column name of `and(filters)`
 std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     const Context & context,

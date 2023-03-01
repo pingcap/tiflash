@@ -290,6 +290,9 @@ private:
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
         const ColumnInfos & table_scan_columns);
 
+    /// @ret: if some new expression actions are added.
+    /// @key_names: column names of keys.
+    /// @original_key_names: original column names of keys.(only used for null-aware semi join)
     std::tuple<bool, Names, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,

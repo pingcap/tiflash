@@ -105,7 +105,11 @@ struct ASTTableJoin : public IAST
         Cross_Anti, /// cartesian anti join, used by TiFlash
         Cross_LeftSemi, /// cartesian version of left semi join, used by TiFlash.
         Cross_LeftAnti, /// cartesian version of left anti semi join, used by TiFlash.
+        /// Note that there is no NullAware_Semi because semi join does not need to be null-aware.
+        /// In semi join, if it's found in hash table, result is 1, otherwise, 0 or NULL(they're the same).
+        /// However, in anti semi join, if it's found in hash table, result is 0, otherwise, 1 or NULL(they're different).
         NullAware_Anti, /// null-aware version of anti semi join, used by TiFlash.
+        /// For left (anti) semi join, the exact result must be given, so both of them need to be null-aware.
         NullAware_LeftSemi, /// null-aware version of left semi join, used by TiFlash.
         NullAware_LeftAnti, /// null-aware version of left anti semi join, used by TiFlash.
     };
