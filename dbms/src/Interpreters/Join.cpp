@@ -2051,9 +2051,9 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     Arena pool;
     size_t segment_size = map.getSegmentSize();
 
-    PaddedPODArray<SemiJoinResult<KIND, STRICTNESS>> res;
+    PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>> res;
     res.reserve(rows);
-    std::list<SemiJoinResult<KIND, STRICTNESS> *> res_list;
+    std::list<NASemiJoinResult<KIND, STRICTNESS> *> res_list;
     for (size_t i = 0; i < rows; ++i)
     {
         if constexpr (has_filter_null_map)
@@ -2061,8 +2061,8 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             if ((*filter_null_map)[i])
             {
                 /// Filter out by left_conditions so the result set is empty.
-                res.emplace_back(i, SemiJoinStep::DONE, nullptr);
-                res.back().template setResult<SemiJoinResultType::FALSE_VALUE>();
+                res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+                res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
                 continue;
             }
         }
@@ -2072,8 +2072,8 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             {
                 /// If right table is empty, the result is false.
                 /// I.e. (1,2) in ().
-                res.emplace_back(i, SemiJoinStep::DONE, nullptr);
-                res.back().template setResult<SemiJoinResultType::FALSE_VALUE>();
+                res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+                res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
                 continue;
             }
         }
@@ -2091,13 +2091,13 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                         ///   1. key column size is 1, i.e. (null) in (1,2).
                         ///   2. right table has a all-key-null row, i.e. (1,null) in ((2,2),(null,null)).
                         ///   3. this row is all-key-null, i.e. (null,null) in ((1,1),(2,2)).
-                        res.emplace_back(i, SemiJoinStep::DONE, nullptr);
-                        res.back().template setResult<SemiJoinResultType::NULL_VALUE>();
+                        res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+                        res.back().template setResult<NASemiJoinResultType::NULL_VALUE>();
                         continue;
                     }
                 }
                 /// Check null rows first to speed up getting the NULL result if possible.
-                res.emplace_back(i, SemiJoinStep::CHECK_NULL_ROWS_NULL, nullptr);
+                res.emplace_back(i, NASemiJoinStep::CHECK_NULL_ROWS_NULL, nullptr);
                 res_list.push_back(&res.back());
                 continue;
             }
@@ -2130,14 +2130,14 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             {
                 /// If strictness is any, the result is true.
                 /// I.e. (1,2) in ((1,2),(1,3),(null,3))
-                res.emplace_back(i, SemiJoinStep::DONE, nullptr);
-                res.back().template setResult<SemiJoinResultType::TRUE_VALUE>();
+                res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+                res.back().template setResult<NASemiJoinResultType::TRUE_VALUE>();
             }
             else
             {
                 /// Else the other condition must be checked for these matched right row(s).
                 auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-                res.emplace_back(i, SemiJoinStep::CHECK_OTHER_COND, static_cast<const void *>(map_it));
+                res.emplace_back(i, NASemiJoinStep::CHECK_OTHER_COND, static_cast<const void *>(map_it));
                 res_list.push_back(&res.back());
             }
             continue;
@@ -2150,16 +2150,16 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             {
                 /// If right table has a all-key-null row, the result is NULL.
                 /// I.e. (1) in (null) or (1,2) in ((1,3),(null,null)).
-                res.emplace_back(i, SemiJoinStep::DONE, nullptr);
-                res.back().template setResult<SemiJoinResultType::NULL_VALUE>();
+                res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+                res.back().template setResult<NASemiJoinResultType::NULL_VALUE>();
                 continue;
             }
             else if (key_columns.size() == 1)
             {
                 /// If key size is 1 and all key in right table row is not NULL, the result is false.
                 /// I.e. (1) in () or (1) in (1,2,3,4,5).
-                res.emplace_back(i, SemiJoinStep::DONE, nullptr);
-                res.back().template setResult<SemiJoinResultType::FALSE_VALUE>();
+                res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+                res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
                 continue;
             }
             /// Then key size is greater than 2 and right table has no all-key-null row, we must
@@ -2167,7 +2167,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             /// I.e. (1,2) in ((1,3),(1,null),(null,2)).
         }
         /// Check null rows first to speed up getting the NULL result if possible.
-        res.emplace_back(i, SemiJoinStep::CHECK_NULL_ROWS_NOT_NULL, nullptr);
+        res.emplace_back(i, NASemiJoinStep::CHECK_NULL_ROWS_NOT_NULL, nullptr);
         res_list.push_back(&res.back());
     }
     RUNTIME_ASSERT(res.size() == rows, "NullAwareSemiJoinResult size {} must be equal to block size {}", res.size(), rows);
@@ -2176,7 +2176,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 
     if (!res_list.empty())
     {
-        SemiJoinHelper<KIND, STRICTNESS, typename Map::mapped_type::Base_t> helper(
+        NASemiJoinHelper<KIND, STRICTNESS, typename Map::mapped_type::Base_t> helper(
             block,
             left_columns,
             right_columns,
@@ -2205,7 +2205,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         auto result = res[i].getResult();
         if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
         {
-            if (result == SemiJoinResultType::TRUE_VALUE)
+            if (result == NASemiJoinResultType::TRUE_VALUE)
             {
                 // If the result is true, this row should be kept.
                 (*filter)[i] = 1;
@@ -2224,13 +2224,13 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                 added_columns[j]->insertDefault();
             switch (result)
             {
-            case SemiJoinResultType::FALSE_VALUE:
+            case NASemiJoinResultType::FALSE_VALUE:
                 added_columns[right_columns - 1]->insert(FIELD_INT8_0);
                 break;
-            case SemiJoinResultType::TRUE_VALUE:
+            case NASemiJoinResultType::TRUE_VALUE:
                 added_columns[right_columns - 1]->insert(FIELD_INT8_1);
                 break;
-            case SemiJoinResultType::NULL_VALUE:
+            case NASemiJoinResultType::NULL_VALUE:
                 added_columns[right_columns - 1]->insert(FIELD_NULL);
                 break;
             }

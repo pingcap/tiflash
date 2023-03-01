@@ -186,7 +186,6 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTy
             }
             else
                 collators.push_back(nullptr);
-
         }
     return collators;
 }

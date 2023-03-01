@@ -23,7 +23,7 @@
 namespace DB
 {
 
-enum class SemiJoinStep : UInt8
+enum class NASemiJoinStep : UInt8
 {
     /// Check other conditions for the right rows whose join key are equal to this left row.
     /// The join keys of this left row must not have null.
@@ -41,7 +41,7 @@ enum class SemiJoinStep : UInt8
     DONE,
 };
 
-enum class SemiJoinResultType : UInt8
+enum class NASemiJoinResultType : UInt8
 {
     FALSE_VALUE,
     TRUE_VALUE,
@@ -49,39 +49,39 @@ enum class SemiJoinResultType : UInt8
 };
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
-class SemiJoinResult
+class NASemiJoinResult
 {
 public:
-    SemiJoinResult(size_t row_num, SemiJoinStep step, const void * map_it);
+    NASemiJoinResult(size_t row_num, NASemiJoinStep step, const void * map_it);
 
     /// For convenience, caller can only consider the result of semi join.
     /// This function will correct the result if it's not semi join.
-    template <SemiJoinResultType RES>
+    template <NASemiJoinResultType RES>
     void setResult()
     {
-        step = SemiJoinStep::DONE;
+        step = NASemiJoinStep::DONE;
         if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
         {
             result = RES;
             return;
         }
         /// For (left) anti semi join
-        if constexpr (RES == SemiJoinResultType::FALSE_VALUE)
-            result = SemiJoinResultType::TRUE_VALUE;
-        else if constexpr (RES == SemiJoinResultType::TRUE_VALUE)
-            result = SemiJoinResultType::FALSE_VALUE;
+        if constexpr (RES == NASemiJoinResultType::FALSE_VALUE)
+            result = NASemiJoinResultType::TRUE_VALUE;
+        else if constexpr (RES == NASemiJoinResultType::TRUE_VALUE)
+            result = NASemiJoinResultType::FALSE_VALUE;
         else
-            result = SemiJoinResultType::NULL_VALUE;
+            result = NASemiJoinResultType::NULL_VALUE;
     }
 
-    SemiJoinResultType getResult() const
+    NASemiJoinResultType getResult() const
     {
-        if (unlikely(step != SemiJoinStep::DONE))
+        if (unlikely(step != NASemiJoinStep::DONE))
             throw Exception("null-aware semi join result is not ready");
         return result;
     }
 
-    inline SemiJoinStep getStep() const
+    inline NASemiJoinStep getStep() const
     {
         return step;
     }
@@ -91,26 +91,26 @@ public:
         return row_num;
     }
 
-    template <typename Mapped, SemiJoinStep STEP>
+    template <typename Mapped, NASemiJoinStep STEP>
     void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const PaddedPODArray<Join::RowRef> & null_rows, size_t & current_offset, size_t max_pace);
 
-    template <SemiJoinStep STEP>
+    template <NASemiJoinStep STEP>
     void checkExprResult(ConstNullMapPtr eq_null_map, size_t offset_begin, size_t offset_end);
 
-    template <SemiJoinStep STEP>
+    template <NASemiJoinStep STEP>
     void checkExprResult(ConstNullMapPtr eq_null_map, const PaddedPODArray<UInt8> & other_column, ConstNullMapPtr other_null_map, size_t offset_begin, size_t offset_end);
 
-    template <SemiJoinStep STEP>
+    template <NASemiJoinStep STEP>
     void checkStepEnd();
 
 private:
     size_t row_num;
 
-    SemiJoinStep step;
+    NASemiJoinStep step;
     bool step_end;
-    SemiJoinResultType result;
+    NASemiJoinResultType result;
 
-    /// Iterating position of null list.
+    /// Iterating position of null rows.
     size_t null_rows_pos;
 
     /// Mapped data for one cell.
@@ -118,12 +118,12 @@ private:
 };
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
-class SemiJoinHelper
+class NASemiJoinHelper
 {
 public:
-    using Result = SemiJoinResult<KIND, STRICTNESS>;
+    using Result = NASemiJoinResult<KIND, STRICTNESS>;
 
-    SemiJoinHelper(
+    NASemiJoinHelper(
         Block & block,
         size_t left_columns,
         size_t right_columns,
@@ -135,12 +135,12 @@ public:
     void joinResult(std::list<Result *> & res_list);
 
 private:
-    template <SemiJoinStep STEP>
+    template <NASemiJoinStep STEP>
     void runStep(std::list<Result *> & res_list, std::list<Result *> & next_res_list);
 
     void runStepAllBlocks(std::list<Result *> & res_list);
 
-    template <SemiJoinStep STEP>
+    template <NASemiJoinStep STEP>
     void checkAllExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<Result *> & res_list, std::list<Result *> & next_res_list);
 
 private:
