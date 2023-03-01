@@ -58,7 +58,7 @@ public:
         }
         else
         {
-            s3_client = std::make_shared<tests::MockS3Client>();
+            s3_client = std::make_shared<MockS3Client>();
         }
         s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager, s3_client);
         createBucketIfNotExist();
