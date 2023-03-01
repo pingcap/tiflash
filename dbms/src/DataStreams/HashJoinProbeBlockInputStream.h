@@ -64,8 +64,7 @@ private:
     };
 
     void readSuffixImpl() override;
-    void finishOneProbe(bool is_canceled = false);
-    void finishOneNonJoin(bool is_canceled = false);
+    void finishOneProbe();
 
     const LoggerPtr log;
     JoinPtr join;

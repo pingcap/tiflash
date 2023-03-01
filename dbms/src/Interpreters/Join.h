@@ -261,11 +261,10 @@ public:
     void finishOneBuild();
     void waitUntilAllBuildFinished() const;
 
-    void finishOneProbe(bool is_canceled = false);
+    void finishOneProbe();
     void waitUntilAllProbeFinished() const;
 
-    void finishOneNonJoin(bool is_canceled = false);
-    void waitUntilAllNonJoinFinished() const;
+    void finishOneNonJoin(size_t partition_index);
 
     size_t getBuildConcurrency() const
     {

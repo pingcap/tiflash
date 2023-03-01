@@ -71,18 +71,11 @@ Block HashJoinProbeBlockInputStream::getHeader() const
     return join->joinBlock(header_probe_process_info);
 }
 
-void HashJoinProbeBlockInputStream::finishOneProbe(bool is_canceled)
+void HashJoinProbeBlockInputStream::finishOneProbe()
 {
     bool expect = false;
     if likely (probe_finished.compare_exchange_strong(expect, true))
-        join->finishOneProbe(is_canceled);
-}
-
-void HashJoinProbeBlockInputStream::finishOneNonJoin(bool is_canceled)
-{
-    bool expect = false;
-    if likely (non_join_finished.compare_exchange_strong(expect, true))
-        join->finishOneNonJoin(is_canceled);
+        join->finishOneProbe();
 }
 
 void HashJoinProbeBlockInputStream::cancel(bool kill)
@@ -93,11 +86,7 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
 
     try
     {
-        finishOneProbe(true);
-        if (non_joined_stream != nullptr)
-        {
-            finishOneNonJoin(true);
-        }
+        finishOneProbe();
     }
     catch (...)
     {
@@ -208,8 +197,7 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
                     status = ProbeStatus::FINISHED;
                     break;
                 }
-                finishOneNonJoin();
-                join->waitUntilAllNonJoinFinished();
+                join->finishOneNonJoin(probe_index);
                 status = ProbeStatus::JUDGE_WEATHER_HAVE_PARTITION_TO_RESTORE;
                 break;
             }
