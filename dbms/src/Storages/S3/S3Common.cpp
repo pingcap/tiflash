@@ -148,7 +148,7 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     }
     else
     {
-        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, std::make_unique<tests::MockS3Client>());
+        shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket);
     }
 }
 

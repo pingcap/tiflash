@@ -66,10 +66,6 @@ int main(int argc, char ** argv)
     auto run_mode = DB::PageStorageRunMode::ONLY_V3;
     DB::tests::TiFlashTestEnv::initializeGlobalContext(/*testdata_path*/ {}, run_mode);
 
-    DB::StorageS3Config s3_config;
-    s3_config.bucket = "mock_s3_bucket";
-    DB::S3::ClientFactory::instance().init(s3_config, /*use mock*/ true);
-
     DB::ServerInfo server_info;
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DB::DM::DMFileReaderPool::instance();
@@ -79,9 +75,10 @@ int main(int argc, char ** argv)
     DB::DM::SegmentReadTaskScheduler::instance();
 
     const auto s3_endpoint = Poco::Environment::get("S3_ENDPOINT", "");
-    const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "");
+    const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "mock_bucket");
     const auto access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", "");
     const auto secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", "");
+    const auto mock_s3 = Poco::Environment::get("MOCK_S3", "true"); // In unit-tests, use MockS3Client by default.
     auto s3config = DB::StorageS3Config{
         .endpoint = s3_endpoint,
         .bucket = s3_bucket,
@@ -89,7 +86,7 @@ int main(int argc, char ** argv)
         .secret_access_key = secret_access_key,
     };
     Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
-    DB::S3::ClientFactory::instance().init(s3config);
+    DB::S3::ClientFactory::instance().init(s3config, mock_s3 == "true");
 
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
@@ -106,7 +103,6 @@ int main(int argc, char ** argv)
     // `TiFlashTestEnv::shutdown()` will destroy `DeltaIndexManager`.
     // Stop threads explicitly before `TiFlashTestEnv::shutdown()`.
     DB::DM::SegmentReaderPoolManager::instance().stop();
-    DB::S3::ClientFactory::instance().shutdown();
     DB::tests::TiFlashTestEnv::shutdown();
     DB::S3::ClientFactory::instance().shutdown();
 

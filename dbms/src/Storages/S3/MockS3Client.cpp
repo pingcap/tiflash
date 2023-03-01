@@ -16,17 +16,26 @@
 #include <Storages/S3/MockS3Client.h>
 #include <aws/core/AmazonWebServiceRequest.h>
 #include <aws/core/AmazonWebServiceResult.h>
+#include <aws/core/utils/stream/ResponseStream.h>
 #include <aws/core/utils/xml/XmlSerializer.h>
+#include <aws/s3/S3Client.h>
 #include <aws/s3/S3Errors.h>
 #include <aws/s3/S3ServiceClientModel.h>
+#include <aws/s3/model/CompleteMultipartUploadRequest.h>
+#include <aws/s3/model/CreateBucketRequest.h>
+#include <aws/s3/model/CreateBucketResult.h>
+#include <aws/s3/model/CreateMultipartUploadRequest.h>
 #include <aws/s3/model/DeleteObjectRequest.h>
+#include <aws/s3/model/GetObjectRequest.h>
+#include <aws/s3/model/GetObjectResult.h>
 #include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/HeadObjectResult.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/ListObjectsV2Result.h>
 #include <aws/s3/model/Object.h>
 #include <aws/s3/model/PutObjectRequest.h>
-#include <sstream>
+#include <aws/s3/model/UploadPartRequest.h>
+#include <common/types.h>
 
 namespace DB::S3::tests
 {
@@ -165,5 +174,6 @@ Model::CreateBucketOutcome MockS3Client::CreateBucket(const Model::CreateBucketR
     [[maybe_unused]] auto & bucket_storage = storage[request.GetBucket()];
     return Model::CreateBucketResult{};
 }
+
 
 } // namespace DB::S3::tests
