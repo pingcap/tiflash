@@ -30,10 +30,7 @@ public:
     BlockInputStreamSourceOp(
         PipelineExecutorStatus & exec_status_,
         const String & req_id,
-        const BlockInputStreamPtr & impl_)
-        : SourceOp(exec_status_, req_id)
-        , impl(impl_)
-    {}
+        const BlockInputStreamPtr & impl_);
 
     String getName() const override
     {

@@ -20,10 +20,11 @@
 namespace DB
 {
 PipelineExecutor::PipelineExecutor(
-    const ProcessListEntryPtr & process_list_entry_,
+    const MemoryTrackerPtr & memory_tracker_,
     Context & context_,
+    const String & req_id,
     const PipelinePtr & root_pipeline_)
-    : QueryExecutor(process_list_entry_, context_)
+    : QueryExecutor(memory_tracker_, context_, req_id)
     , root_pipeline(root_pipeline_)
 {
     assert(root_pipeline);

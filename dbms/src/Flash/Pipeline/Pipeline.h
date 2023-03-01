@@ -46,8 +46,9 @@ using SharedQueuePtr = std::shared_ptr<SharedQueue>;
 class Pipeline : public std::enable_shared_from_this<Pipeline>
 {
 public:
-    explicit Pipeline(UInt32 id_)
+    Pipeline(UInt32 id_, const String & req_id)
         : id(id_)
+        , log(Logger::get(req_id))
     {}
 
     void addPlanNode(const PhysicalPlanNodePtr & plan_node);
@@ -74,6 +75,7 @@ private:
 
 private:
     const UInt32 id;
+    LoggerPtr log;
 
     // data flow: plan_nodes.begin() --> plan_nodes.end()
     std::deque<PhysicalPlanNodePtr> plan_nodes;
