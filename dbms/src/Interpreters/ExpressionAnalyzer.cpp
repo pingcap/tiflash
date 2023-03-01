@@ -2185,7 +2185,7 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
             "" /*req_id=*/,
             false /*enable_fine_grained_shuffle_*/,
             0 /*fine_grained_shuffle_count_*/,
-            settings.max_join_bytes,
+            settings.max_bytes_before_external_join,
             build_spill_config,
             probe_spill_config,
             settings.join_restore_concurrency);

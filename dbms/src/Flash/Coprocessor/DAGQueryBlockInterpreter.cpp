@@ -287,7 +287,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         log->identifier(),
         enableFineGrainedShuffle(fine_grained_shuffle_count),
         fine_grained_shuffle_count,
-        settings.max_join_bytes,
+        settings.max_bytes_before_external_join,
         build_spill_config,
         probe_spill_config,
         settings.join_restore_concurrency,

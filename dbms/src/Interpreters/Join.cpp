@@ -150,7 +150,7 @@ Join::Join(
     const String & req_id,
     bool enable_fine_grained_shuffle_,
     size_t fine_grained_shuffle_count_,
-    size_t max_join_bytes_,
+    size_t max_bytes_before_external_join_,
     const SpillConfig & build_spill_config_,
     const SpillConfig & probe_spill_config_,
     Int64 join_restore_concurrency_,
@@ -182,7 +182,7 @@ Join::Join(
     , other_condition_ptr(other_condition_ptr_)
     , original_strictness(strictness)
     , max_block_size_for_cross_join(max_block_size_)
-    , max_join_bytes(max_join_bytes_)
+    , max_bytes_before_external_join(max_bytes_before_external_join_)
     , build_spill_config(build_spill_config_)
     , probe_spill_config(probe_spill_config_)
     , join_restore_concurrency(join_restore_concurrency_)
@@ -633,8 +633,8 @@ std::shared_ptr<Join> Join::createRestoreJoin()
         log->identifier(),
         false,
         0,
-        // todo update max_join_bytes based on the restore concurrency
-        max_join_bytes,
+        // todo update max_bytes_before_external_join based on the restore concurrency
+        max_bytes_before_external_join,
         createSpillConfigWithNewSpillId(build_spill_config, fmt::format("{}_hash_join_{}_build", log->identifier(), restore_round + 1)),
         createSpillConfigWithNewSpillId(probe_spill_config, fmt::format("{}_hash_join_{}_probe", log->identifier(), restore_round + 1)),
         join_restore_concurrency,
@@ -1026,7 +1026,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
     Block * stored_block = nullptr;
 
-    //    LOG_INFO(log, "insert one block, enable spill {}, max_join_bytes {}, current bytes {}", isEnableSpill(), max_join_bytes, getTotalByteCount());
+    //    LOG_INFO(log, "insert one block, enable spill {}, max_bytes_before_external_join {}, current bytes {}", isEnableSpill(), max_bytes_before_external_join, getTotalByteCount());
     if (!isEnableSpill())
     {
         {
@@ -1041,7 +1041,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
     }
     else
     {
-        //        LOG_INFO(log, "enable spill, max_join_bytes {}, current bytes {}", max_join_bytes, getTotalByteCount());
+        //        LOG_INFO(log, "enable spill, max_bytes_before_external_join {}, current bytes {}", max_bytes_before_external_join, getTotalByteCount());
         auto dispatch_blocks = dispatchBlock(key_names_right, block);
         assert(dispatch_blocks.size() == build_concurrency);
 
@@ -1073,7 +1073,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
 
 bool Join::isEnableSpill() const
 {
-    return max_join_bytes > 0;
+    return max_bytes_before_external_join > 0;
 }
 
 bool Join::isRestoreJoin() const
@@ -1155,7 +1155,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
         }
     }
 
-    bool enable_join_spill = max_join_bytes;
+    bool enable_join_spill = max_bytes_before_external_join;
 
     if (!isCrossJoin(kind))
     {
@@ -2511,7 +2511,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
     size_t j = 0;
 
     std::unique_lock lk(partitions_lock);
-    if (max_join_bytes && getTotalByteCount() <= max_join_bytes)
+    if (max_bytes_before_external_join && getTotalByteCount() <= max_bytes_before_external_join)
     {
         return;
     }

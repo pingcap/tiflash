@@ -144,7 +144,7 @@ public:
          const String & req_id,
          bool enable_fine_grained_shuffle_,
          size_t fine_grained_shuffle_count_,
-         size_t max_join_bytes_,
+         size_t max_bytes_before_external_join_,
          const SpillConfig & build_spill_config_,
          const SpillConfig & probe_spill_config_,
          Int64 join_restore_concurrency_,
@@ -480,7 +480,7 @@ private:
 
     std::list<size_t> spilled_partition_indexes;
 
-    size_t max_join_bytes;
+    size_t max_bytes_before_external_join;
     SpillConfig build_spill_config;
     SpillConfig probe_spill_config;
     Int64 join_restore_concurrency;

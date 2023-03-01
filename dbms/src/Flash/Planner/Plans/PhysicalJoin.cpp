@@ -129,7 +129,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         log->identifier(),
         fine_grained_shuffle.enable(),
         fine_grained_shuffle.stream_count,
-        settings.max_join_bytes,
+        settings.max_bytes_before_external_join,
         build_spill_config,
         probe_spill_config,
         settings.join_restore_concurrency,
