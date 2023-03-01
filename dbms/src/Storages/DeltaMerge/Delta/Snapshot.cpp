@@ -109,6 +109,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     snap->mem_table_snap = mem_table_set->createSnapshot(storage_reader, for_update);
     snap->persisted_files_snap = persisted_file_set->createSnapshot(storage_reader);
     snap->shared_delta_index = delta_index;
+    snap->delta_index_epoch = delta_index_epoch;
 
     return snap;
 }

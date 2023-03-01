@@ -37,14 +37,18 @@ public:
     struct CacheKey
     {
         UInt64 write_node_id;
+        Int64 table_id;
         UInt64 segment_id;
         UInt64 segment_epoch;
+        UInt64 delta_index_epoch;
 
         bool operator==(const CacheKey & other) const
         {
             return write_node_id == other.write_node_id
+                && table_id == other.table_id
                 && segment_id == other.segment_id
-                && segment_epoch == other.segment_epoch;
+                && segment_epoch == other.segment_epoch
+                && delta_index_epoch == other.delta_index_epoch;
         }
     };
 
@@ -54,7 +58,11 @@ public:
         {
             using std::hash;
 
-            return hash<UInt64>()(k.write_node_id) ^ hash<UInt64>()(k.segment_id) ^ hash<UInt64>()(k.segment_epoch);
+            return hash<UInt64>()(k.write_node_id) ^ //
+                hash<Int64>()(k.table_id) ^ //
+                hash<UInt64>()(k.segment_id) ^ //
+                hash<UInt64>()(k.segment_epoch) ^ //
+                hash<UInt64>()(k.delta_index_epoch);
         }
     };
 
@@ -67,16 +75,10 @@ public:
             auto index = std::make_shared<DeltaIndex>();
             return index;
         });
-
         return index_ptr;
     }
 
 private:
-    struct WeakIndex
-    {
-        std::weak_ptr<DeltaIndex> index;
-    };
-
     LRUCache<CacheKey, DeltaIndex, CacheKeyHasher> cache;
 };
 

@@ -121,6 +121,7 @@ dtpb::DisaggregatedSegment SegmentSnapshot::serializeToRemoteProtocol(
     dtpb::DisaggregatedSegment remote;
     remote.set_segment_id(segment_id);
     remote.set_segment_epoch(segment_epoch);
+    remote.set_delta_index_epoch(delta->delta_index_epoch);
 
     WriteBufferFromOwnString wb;
     {
@@ -177,11 +178,15 @@ SegmentSnapshotPtr SegmentSnapshot::deserializeFromRemoteProtocol(
         write_node_id,
         table_id,
         segment_range);
+
     delta_snap->shared_delta_index = remote_manager->getDeltaIndexCache()->getDeltaIndex({
         .write_node_id = write_node_id,
+        .table_id = table_id,
         .segment_id = proto.segment_id(),
         .segment_epoch = proto.segment_epoch(),
+        .delta_index_epoch = proto.delta_index_epoch(),
     });
+    delta_snap->delta_index_epoch = proto.delta_index_epoch();
 
     auto data_store = remote_manager->getDataStore();
     auto new_stable = std::make_shared<StableValueSpace>(/* id */ 0);

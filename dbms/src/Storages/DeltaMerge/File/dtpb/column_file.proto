@@ -74,7 +74,9 @@ message ColumnFileRemote {
 message DisaggregatedSegment {
     uint64 segment_id = 1;
     uint64 segment_epoch = 2;
-    bytes key_range = 3;
+    uint64 delta_index_epoch = 3;
+
+    bytes key_range = 4;
 
     repeated ColumnFileBig stable_pages = 10;
     // serialized array of ColumnFileRemote
