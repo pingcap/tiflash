@@ -51,7 +51,7 @@ public:
 
     ~TaskScheduler();
 
-    void submit(std::vector<TaskPtr> & tasks);
+    void submit(std::vector<TaskPtr> & tasks) noexcept;
 
     static std::unique_ptr<TaskScheduler> instance;
 

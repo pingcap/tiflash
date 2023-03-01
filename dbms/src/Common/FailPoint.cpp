@@ -132,7 +132,13 @@ namespace DB
     M(random_sharedquery_failpoint)                     \
     M(random_interpreter_failpoint)                     \
     M(random_task_manager_find_task_failure_failpoint)  \
-    M(random_min_tso_scheduler_failpoint)
+    M(random_min_tso_scheduler_failpoint)               \
+    M(random_pipeline_model_task_run_failpoint)         \
+    M(random_pipeline_model_task_construct_failpoint)   \
+    M(random_pipeline_model_event_schedule_failpoint)   \
+    M(random_pipeline_model_event_finish_failpoint)     \
+    M(random_pipeline_model_operator_run_failpoint)     \
+    M(random_pipeline_model_cancel_failpoint)
 
 namespace FailPoints
 {
