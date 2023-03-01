@@ -26,6 +26,7 @@ PipelineExecutor::PipelineExecutor(
     const PipelinePtr & root_pipeline_)
     : QueryExecutor(memory_tracker_, context_, req_id)
     , root_pipeline(root_pipeline_)
+    , status(req_id)
 {
     assert(root_pipeline);
 }

@@ -33,12 +33,12 @@ std::exception_ptr PipelineExecutorStatus::getExceptionPtr()
 
 String PipelineExecutorStatus::getExceptionMsg()
 {
-    std::lock_guard lock(mu);
     try
     {
-        if (!exception_ptr)
+        auto cur_exception_ptr = getExceptionPtr();
+        if (!cur_exception_ptr)
             return "";
-        std::rethrow_exception(exception_ptr);
+        std::rethrow_exception(cur_exception_ptr);
     }
     catch (const DB::Exception & e)
     {
@@ -56,22 +56,32 @@ void PipelineExecutorStatus::onErrorOccurred(const String & err_msg)
     onErrorOccurred(std::make_exception_ptr(e));
 }
 
+bool PipelineExecutorStatus::setExceptionPtr(const std::exception_ptr & exception_ptr_)
+{
+    std::lock_guard lock(mu);
+    if (exception_ptr != nullptr)
+        return false;
+    exception_ptr = exception_ptr_;
+    return true;
+}
+
 void PipelineExecutorStatus::onErrorOccurred(const std::exception_ptr & exception_ptr_)
 {
     assert(exception_ptr_ != nullptr);
+    if (setExceptionPtr(exception_ptr_))
     {
-        std::lock_guard lock(mu);
-        if (exception_ptr != nullptr)
-            return;
-        exception_ptr = exception_ptr_;
+        cancel();
+        LOG_WARNING(log, "error occured and cancel the query");
     }
-    cancel();
 }
 
 void PipelineExecutorStatus::wait()
 {
-    std::unique_lock lock(mu);
-    cv.wait(lock, [&] { return 0 == active_event_count; });
+    {
+        std::unique_lock lock(mu);
+        cv.wait(lock, [&] { return 0 == active_event_count; });
+    }
+    LOG_DEBUG(log, "query finished and wait done");
 }
 
 void PipelineExecutorStatus::onEventSchedule()

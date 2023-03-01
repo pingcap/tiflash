@@ -19,13 +19,16 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <assert.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 // if any exception throw here, we should record err msg and then cancel the query.
-#define CATCH                                                  \
-    catch (...)                                                \
-    {                                                          \
-        exec_status.onErrorOccurred(std::current_exception()); \
+#define CATCH                                                    \
+    catch (...)                                                  \
+    {                                                            \
+        LOG_WARNING(log, "error occurred and cancel the query"); \
+        exec_status.onErrorOccurred(std::current_exception());   \
     }
 
 void Event::addInput(const EventPtr & input)
@@ -109,6 +112,7 @@ void Event::scheduleTasks(std::vector<TaskPtr> & tasks)
     assert(0 == unfinished_tasks);
     unfinished_tasks = tasks.size();
     assert(status != EventStatus::FINISHED);
+    LOG_DEBUG(log, "{} tasks scheduled by event", tasks.size());
     TaskScheduler::instance->submit(tasks);
 }
 
@@ -117,6 +121,7 @@ void Event::onTaskFinish() noexcept
     assert(status != EventStatus::FINISHED);
     auto cur_value = unfinished_tasks.fetch_sub(1);
     assert(cur_value >= 1);
+    LOG_DEBUG(log, "one task finished, {} tasks remaining", cur_value - 1);
     if (1 == cur_value)
         finish();
 }
@@ -124,6 +129,7 @@ void Event::onTaskFinish() noexcept
 void Event::switchStatus(EventStatus from, EventStatus to)
 {
     RUNTIME_ASSERT(status.compare_exchange_strong(from, to));
+    LOG_DEBUG(log, "switch status: {} --> {}", magic_enum::enum_name(from), magic_enum::enum_name(to));
 }
 
 #undef CATCH

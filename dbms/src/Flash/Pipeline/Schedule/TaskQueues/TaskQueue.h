@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <memory>
@@ -39,6 +40,9 @@ public:
     virtual bool empty() = 0;
 
     virtual void close() = 0;
+
+protected:
+    LoggerPtr logger = Logger::get();
 };
 using TaskQueuePtr = std::unique_ptr<TaskQueue>;
 
