@@ -120,6 +120,7 @@ namespace DB
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \
     M(random_tunnel_wait_timeout_failpoint)             \
+    M(random_tunnel_write_failpoint)                    \
     M(random_tunnel_init_rpc_failure_failpoint)         \
     M(random_receiver_local_msg_push_failure_failpoint) \
     M(random_receiver_sync_msg_push_failure_failpoint)  \
