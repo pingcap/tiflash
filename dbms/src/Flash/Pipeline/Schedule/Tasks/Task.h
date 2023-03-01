@@ -16,7 +16,10 @@
 
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
+#include <common/logger_useful.h>
 #include <memory.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -58,9 +61,19 @@ public:
         return mem_tracker;
     }
 
-    ExecTaskStatus execute() noexcept;
-    
-    ExecTaskStatus await() noexcept;
+    ExecTaskStatus execute() noexcept
+    {
+        assert(getMemTracker().get() == current_memory_tracker);
+        switchStatus(executeImpl());
+        return exec_status;
+    }
+
+    ExecTaskStatus await() noexcept
+    {
+        assert(getMemTracker().get() == current_memory_tracker);
+        switchStatus(awaitImpl());
+        return exec_status;
+    }
 
 protected:
     virtual ExecTaskStatus executeImpl() = 0;
@@ -68,7 +81,14 @@ protected:
     virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
 
 private:
-    void switchStatus(ExecTaskStatus to);
+    void switchStatus(ExecTaskStatus to) noexcept
+    {
+        if (exec_status != to)
+        {
+            LOG_TRACE(log, "switch status: {} --> {}", magic_enum::enum_name(exec_status), magic_enum::enum_name(to));
+            exec_status = to;
+        }
+    }
 
 protected:
     MemoryTrackerPtr mem_tracker;
