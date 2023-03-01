@@ -98,6 +98,7 @@ private:
     std::atomic<size_t> last_try_place_delta_index_rows = 0;
 
     DeltaIndexPtr delta_index;
+    UInt64 delta_index_epoch = 0;
 
     // Protects the operations in this instance.
     // It is a recursive_mutex because the lock may be also used by the parent segment as its update lock.
@@ -327,6 +328,7 @@ private:
 public:
     // The delta index of cached.
     DeltaIndexPtr shared_delta_index;
+    UInt64 delta_index_epoch;
 
     ColumnFileSetSnapshotPtr mem_table_snap;
     ColumnFileSetSnapshotPtr persisted_files_snap;
@@ -338,6 +340,7 @@ public:
 
         auto c = std::make_shared<DeltaValueSnapshot>(type, is_update, _delta);
         c->shared_delta_index = shared_delta_index;
+        c->delta_index_epoch = delta_index_epoch;
         c->mem_table_snap = mem_table_snap->clone();
         c->persisted_files_snap = persisted_files_snap->clone();
 
