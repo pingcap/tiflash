@@ -170,7 +170,7 @@ JoinKeyTypes getJoinKeyTypes(const tipb::Join & join)
     return join_key_types;
 }
 
-TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTypes & join_key_types)
+TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTypes & join_key_types, bool is_test)
 {
     TiDB::TiDBCollators collators;
     size_t join_key_size = join_key_types.size();
@@ -178,7 +178,7 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTy
         for (size_t i = 0; i < join_key_size; ++i)
         {
             // Don't need to check the collate for decimal format string.
-            if (removeNullable(join_key_types[i].key_type)->isString() && !join_key_types[i].is_incompatible_decimal)
+            if (unlikely(is_test) || (removeNullable(join_key_types[i].key_type)->isString() && !join_key_types[i].is_incompatible_decimal))
             {
                 if (unlikely(join.probe_types(i).collate() != join.build_types(i).collate()))
                     throw TiFlashException("Join with different collators on the join key", Errors::Coprocessor::BadRequest);
@@ -186,6 +186,7 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTy
             }
             else
                 collators.push_back(nullptr);
+
         }
     return collators;
 }
@@ -214,7 +215,7 @@ JoinConditions doGenJoinConditionsAction(
     if (!chain.steps.empty())
     {
         cond.other_cond_expr = chain.getLastActions();
-        chain.clear();
+        chain.addStep();
     }
 
     String column_for_null_aware_eq_condition;
@@ -229,10 +230,10 @@ JoinConditions doGenJoinConditionsAction(
 }
 } // namespace
 
-TiFlashJoin::TiFlashJoin(const tipb::Join & join_) // NOLINT(cppcoreguidelines-pro-type-member-init)
+TiFlashJoin::TiFlashJoin(const tipb::Join & join_, bool is_test) // NOLINT(cppcoreguidelines-pro-type-member-init)
     : join(join_)
     , join_key_types(getJoinKeyTypes(join_))
-    , join_key_collators(getJoinKeyCollators(join_, join_key_types))
+    , join_key_collators(getJoinKeyCollators(join_, join_key_types, is_test))
 {
     std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
     strictness = isSemiJoin() ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;

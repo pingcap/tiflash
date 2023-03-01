@@ -343,6 +343,23 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename
 template <SemiJoinStep STEP>
 void SemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<SemiJoinHelper::Result *> & res_list, std::list<SemiJoinHelper::Result *> & next_res_list)
 {
+    /// Attention: other_cond_expr must be executed first then null_aware_eq_cond_expr can be executed.
+    /// Because the execution order must be the same as the construction order in compiling(in TiFlashJoin::genJoinConditionsAction).
+    /// Otherwise a certain expression will throw exception if these two expressions have one added column with the same name.
+    ///
+    /// There are three cases:
+    /// 1. Strictness: Any, which means no other_cond_expr
+    ///    - order: null_aware_eq_cond_expr
+    /// 2. Strictness: All, Step is CHECK_OTHER_COND
+    ///    - order: other_cond_expr
+    /// 3. Strictness: All, Step is not CHECK_OTHER_COND
+    ///    - order: other_cond_expr -> null_aware_eq_cond_expr
+    ///
+    /// In summary, it's correct as long as null_aware_eq_cond_expr is not executed solely when other_cond_expr exists.
+
+    if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+        conditions.other_cond_expr->execute(exec_block);
+
     ConstNullMapPtr eq_null_map = nullptr;
     /// If step is CHECK_OTHER_COND,
     if constexpr (STEP != SemiJoinStep::CHECK_OTHER_COND)
@@ -351,7 +368,11 @@ void SemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(Block & exec_b
 
         auto eq_column = exec_block.getByName(conditions.null_aware_eq_cond_name).column;
         if (eq_column->isColumnConst())
+        {
             eq_column = eq_column->convertToFullColumnIfConst();
+            /// Attention: must set the full column to the original column otherwise eq_null_map will be a dangling pointer.
+            exec_block.getByName(conditions.null_aware_eq_cond_name).column = eq_column;
+        }
 
         RUNTIME_CHECK_MSG(eq_column->isColumnNullable(), "The equal column of null-aware semi join should be nullable, otherwise Anti/LeftAnti/LeftSemi should be used instead");
 
@@ -389,8 +410,6 @@ void SemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(Block & exec_b
     }
     else
     {
-        conditions.other_cond_expr->execute(exec_block);
-
         auto other_column = exec_block.getByName(conditions.other_cond_name).column;
         if (other_column->isColumnConst())
             other_column = other_column->convertToFullColumnIfConst();

@@ -222,7 +222,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         throw TiFlashException("Join query block must have 2 input streams", Errors::BroadcastJoin::Internal);
     }
 
-    JoinInterpreterHelper::TiFlashJoin tiflash_join{join};
+    JoinInterpreterHelper::TiFlashJoin tiflash_join(join, context.isTest());
 
     DAGPipeline probe_pipeline;
     DAGPipeline build_pipeline;

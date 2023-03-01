@@ -68,7 +68,7 @@ namespace JoinInterpreterHelper
 {
 struct TiFlashJoin
 {
-    explicit TiFlashJoin(const tipb::Join & join_);
+    TiFlashJoin(const tipb::Join & join_, bool is_test);
 
     const tipb::Join & join;
 

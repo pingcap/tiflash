@@ -921,7 +921,7 @@ TEST_F(JoinExecutorTestRunner, NullAwareSemiJoin)
 try
 {
     using tipb::JoinType;
-    /// One join key + no other condition.
+    /// One join key(t.a = s.a) + no other condition.
     /// left table + right table + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t1 = {
         {
@@ -977,7 +977,7 @@ try
         }
     }
 
-    /// One join key + other condition(c > b).
+    /// One join key(t.a = s.a) + other condition(t.c > s.b).
     /// left table + right table + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t2 = {
         {
@@ -1028,7 +1028,7 @@ try
         }
     }
 
-    /// Two join keys + no other condition.
+    /// Two join keys(t.a = s.a and t.b = s.b) + no other condition.
     /// left table + right table + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t3 = {
         {
@@ -1070,7 +1070,7 @@ try
         }
     }
 
-    /// Two join keys + other condition(d > c).
+    /// Two join keys(t.a = s.a and t.b = s.b) + other condition(t.d > s.c).
     /// left table + right table + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t4 = {
         {
@@ -1087,6 +1087,11 @@ try
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
             {toNullableVec<Int32>("a", {1, {}, 3, {}, 4, 4}), toNullableVec<Int32>("b", {1, 2, {}, 4, {}, 4}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2, 2})},
             toNullableVec<Int8>({1, {}, {}, 1, 0}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 6}), toNullableVec<Int32>("b", {1, 2, 3, {}, {}}), toNullableVec<Int32>("c", {1, 2, 1, 2, 1})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, {}}), toNullableVec<Int32>("d", {2, 1, 2, 1, 2})},
+            toNullableVec<Int8>({1, 0, {}, 0, 0}),
         },
     };
 
@@ -1112,7 +1117,44 @@ try
         }
     }
 
-    // TODO: add left and right condition cases.
+    /// Two join keys(t.a = s.a and t.b = s.b) and other condition(t.d > s.c or t.a = s.a)
+    /// left table + right table + result column.
+    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t5 = {
+        {
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {{}, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, {}, 3, 4, 5}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2})},
+            toNullableVec<Int8>({{}, {}, {}, 1, 1}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 6}), toNullableVec<Int32>("b", {1, 2, 3, {}, 5}), toNullableVec<Int32>("c", {1, 2, 1, 2, 1})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, {}}), toNullableVec<Int32>("d", {2, 1, 2, 1, 2})},
+            toNullableVec<Int8>({1, 1, {}, {}, 0}),
+        },
+    };
+
+    for (const auto & [left, right, res] : t5)
+    {
+        context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}}, right);
+
+        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+        {
+            auto request = context.scan("null_aware_semi", "t")
+                               .join(context.scan("null_aware_semi", "s"),
+                                     type,
+                                     {col("a"), col("b")},
+                                     {},
+                                     {},
+                                     {Or(gt(col("d"), col("c")), eq(col("t.a"), col("s.a")))},
+                                     {},
+                                     0,
+                                     true)
+                               .build(context);
+            executeAndAssertColumnsEqual(request, genNullAwareJoinResult(type, left, res));
+        }
+    }
+
+    // TODO: add left condition cases.
 }
 CATCH
 

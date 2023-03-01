@@ -73,7 +73,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const Block & left_input_header = left->getSampleBlock();
     const Block & right_input_header = right->getSampleBlock();
 
-    JoinInterpreterHelper::TiFlashJoin tiflash_join{join};
+    JoinInterpreterHelper::TiFlashJoin tiflash_join(join, context.isTest());
 
     const auto & probe_plan = tiflash_join.build_side_index == 0 ? right : left;
     const auto & build_plan = tiflash_join.build_side_index == 0 ? left : right;
