@@ -58,7 +58,11 @@ public:
         {
             using std::hash;
 
-            return hash<UInt64>()(k.write_node_id) ^ hash<Int64>()(k.write_node_id) ^ hash<UInt64>()(k.segment_id) ^ hash<UInt64>()(k.segment_epoch) ^ hash<UInt64>()(k.delta_index_epoch);
+            return hash<UInt64>()(k.write_node_id) ^ //
+                hash<Int64>()(k.table_id) ^ //
+                hash<UInt64>()(k.segment_id) ^ //
+                hash<UInt64>()(k.segment_epoch) ^ //
+                hash<UInt64>()(k.delta_index_epoch);
         }
     };
 
