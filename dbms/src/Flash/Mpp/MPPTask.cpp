@@ -141,7 +141,7 @@ void MPPTask::finishWrite()
     RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
     if (dag_context->collect_execution_summaries)
     {
-        ExecutionSummaryCollector summary_collector(*dag_context);
+        ExecutionSummaryCollector summary_collector(*dag_context, context->getSettingsRef().enable_pipeline);
         tunnel_set->sendExecutionSummary(summary_collector.genExecutionSummaryResponse());
     }
     tunnel_set->finishWrite();

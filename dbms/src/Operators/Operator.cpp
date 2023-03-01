@@ -26,27 +26,36 @@ namespace DB
 OperatorStatus Operator::await()
 {
     CHECK_IS_CANCELLED
-    // TODO collect operator profile info here.
+    UInt64 start_time;
+    if (profile_info)
+        start_time = profile_info->total_stopwatch.elapsed();
     auto op_status = awaitImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
+    // todo update time.
+
+    if (profile_info)
+        profile_info->updateTime(profile_info->total_stopwatch.elapsed() - start_time);
     return op_status;
 }
 
 OperatorStatus SourceOp::read(Block & block)
 {
     CHECK_IS_CANCELLED
-    // TODO collect operator profile info here.
     assert(!block);
+    UInt64 start_time;
+    if (profile_info)
+        start_time = profile_info->total_stopwatch.elapsed();
+
     auto op_status = readImpl(block);
 #ifndef NDEBUG
     if (block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
-        if (statistics)
-            updateStatistics(block);
+        if (profile_info)
+            profile_info->update(block, profile_info->total_stopwatch.elapsed() - start_time);
     }
 
     assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
@@ -57,15 +66,23 @@ OperatorStatus SourceOp::read(Block & block)
 OperatorStatus TransformOp::transform(Block & block)
 {
     CHECK_IS_CANCELLED
-    // TODO collect operator profile info here.
+    UInt64 start_time;
+    if (profile_info)
+        start_time = profile_info->total_stopwatch.elapsed();
     auto op_status = transformImpl(block);
 #ifndef NDEBUG
     if (block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
-        if (statistics && op_status == OperatorStatus::HAS_OUTPUT)
-            updateStatistics(block);
+        if (profile_info)
+        {
+            auto time = profile_info->total_stopwatch.elapsed() - start_time;
+            if (op_status == OperatorStatus::HAS_OUTPUT)
+                profile_info->update(block, time);
+            else
+                profile_info->updateTime(time);
+        }
     }
 
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
@@ -76,15 +93,26 @@ OperatorStatus TransformOp::transform(Block & block)
 OperatorStatus TransformOp::tryOutput(Block & block)
 {
     CHECK_IS_CANCELLED
-    // TODO collect operator profile info here.
     assert(!block);
+    UInt64 start_time;
+    if (profile_info)
+        start_time = profile_info->total_stopwatch.elapsed();
     auto op_status = tryOutputImpl(block);
 #ifndef NDEBUG
     if (block)
     {
         Block header = getHeader();
         assertBlocksHaveEqualStructure(block, header, getName());
+        if (profile_info)
+        {
+            auto time = profile_info->total_stopwatch.elapsed() - start_time;
+            if (op_status == OperatorStatus::HAS_OUTPUT)
+                profile_info->update(block, time);
+            else
+                profile_info->updateTime(time);
+        }
     }
+
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     return op_status;
@@ -93,17 +121,24 @@ OperatorStatus TransformOp::tryOutput(Block & block)
 OperatorStatus SinkOp::prepare()
 {
     CHECK_IS_CANCELLED
-    // TODO collect operator profile info here.
+    UInt64 start_time;
+    if (profile_info)
+        start_time = profile_info->total_stopwatch.elapsed();
     auto op_status = prepareImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
 #endif
+    if (profile_info)
+        profile_info->updateTime(profile_info->total_stopwatch.elapsed() - start_time);
     return op_status;
 }
 
 OperatorStatus SinkOp::write(Block && block)
 {
     CHECK_IS_CANCELLED
+    UInt64 start_time;
+    if (profile_info)
+        start_time = profile_info->total_stopwatch.elapsed();
 #ifndef NDEBUG
     if (block)
     {
@@ -116,6 +151,8 @@ OperatorStatus SinkOp::write(Block && block)
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
 #endif
+    if (profile_info)
+        profile_info->update(block, profile_info->total_stopwatch.elapsed() - start_time);
     return op_status;
 }
 

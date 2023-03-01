@@ -31,8 +31,8 @@
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
-#include <Flash/Statistics/BaseRuntimeStatistics.h>
 #include <Interpreters/SubqueryForSet.h>
+#include <Operators/OperatorProfileInfo.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -63,8 +63,10 @@ using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 class ProcessListEntry;
 
-using BaseRuntimeStatisticsGroup = std::vector<BaseRuntimeStatisticsPtr>; // a group of statistics for same operator
-using BaseRuntimeStatisticsGroupVec = std::vector<BaseRuntimeStatisticsGroup>; // a group of statistics for same executor
+using OperatorProfileInfoGroup = std::vector<OperatorProfileInfoPtr>;
+// a group of profile for same operator
+using ExecutorProfileInfo = std::vector<OperatorProfileInfoGroup>;
+// a group of profile for same executor, one executor can have multiple operators when it is Pipeline Breaker
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 {
@@ -315,7 +317,7 @@ public:
     /// thus we need to pay attention to scan_context_map usage that time.
     std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
 
-    std::unordered_map<String, BaseRuntimeStatisticsGroupVec> pipeline_profiles;
+    std::unordered_map<String, ExecutorProfileInfo> pipeline_profiles;
 
 private:
     void initExecutorIdToJoinIdMap();

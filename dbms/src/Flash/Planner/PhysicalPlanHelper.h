@@ -14,10 +14,15 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Operators/OperatorProfileInfo.h>
 
 namespace DB::PhysicalPlanHelper
 {
+
 ExpressionActionsPtr newActions(const Block & input_block);
 
 ExpressionActionsPtr newActions(const NamesAndTypes & input_columns);
@@ -30,4 +35,6 @@ NamesAndTypes addSchemaProjectAction(
 void addParentRequireProjectAction(
     const ExpressionActionsPtr & expr_actions,
     const Names & parent_require);
+
+void registerProfileInfo(PipelineExecBuilder & builder, OperatorProfileInfoGroup & profile_group);
 } // namespace DB::PhysicalPlanHelper

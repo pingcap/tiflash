@@ -23,6 +23,7 @@
 #include <Flash/Planner/Plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExpressionTransformOp.h>
+#include <Operators/OperatorProfileInfo.h>
 #include <Operators/TopNTransformOp.h>
 
 namespace DB
@@ -72,20 +73,26 @@ void PhysicalTopN::buildPipelineExec(PipelineExecGroupBuilder & group_builder, C
 {
     if (!before_sort_actions->getActions().empty())
     {
+        std::cout << "reach here?" << std::endl;
+        OperatorProfileInfoGroup profile_group_1;
+        profile_group_1.resize(group_builder.concurrency);
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, before_sort_actions, log->identifier()));
+            PhysicalPlanHelper::registerProfileInfo(builder, profile_group_1);
         });
+        std::cout << "profile group 1 size: " << profile_group_1.size() << std::endl;
+        context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group_1);
     }
+
+    OperatorProfileInfoGroup profile_group;
+    profile_group.reserve(group_builder.concurrency);
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<TopNTransformOp>(group_builder.exec_status, order_descr, limit, context.getSettingsRef().max_block_size, log->identifier()));
         std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
-        if (is_tidb_operator)
-        {
-            auto statistics = std::make_shared<BaseRuntimeStatistics>();
-            builder.lastTransform()->setRuntimeStatistics(statistics);
-            context.getDAGContext()->pipeline_profiles[executor_id].push_back({statistics});
-        }
+        PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
     });
+    std::cout << "profile group size: " << profile_group.size() << std::endl;
+    context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)

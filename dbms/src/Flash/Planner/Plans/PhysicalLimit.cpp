@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalLimit.h>
 #include <Interpreters/Context.h>
 #include <Operators/LimitTransformOp.h>
@@ -57,17 +58,15 @@ void PhysicalLimit::buildPipelineExec(PipelineExecGroupBuilder & group_builder, 
 {
     auto input_header = group_builder.getCurrentHeader();
     auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);
+    OperatorProfileInfoGroup profile_group;
+    profile_group.reserve(group_builder.concurrency);
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<LimitTransformOp>(group_builder.exec_status, global_limit, log->identifier()));
 
         std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
-        if(is_tidb_operator)
-        {
-            auto statistics = std::make_shared<BaseRuntimeStatistics>();
-            builder.lastTransform()->setRuntimeStatistics(statistics);
-            context.getDAGContext()->pipeline_profiles[executor_id].push_back({statistics});
-        }
+        PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
     });
+    context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);
 }
 
 void PhysicalLimit::finalize(const Names & parent_require)

@@ -63,19 +63,15 @@ void PhysicalFilter::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
 
 void PhysicalFilter::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
 {
+    OperatorProfileInfoGroup profile_group;
+    profile_group.reserve(group_builder.concurrency);
     auto input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
-        auto transform = std::make_unique<FilterTransformOp>(group_builder.exec_status, input_header, before_filter_actions, filter_column, log->identifier());
-
+        builder.appendTransformOp(std::make_unique<FilterTransformOp>(group_builder.exec_status, input_header, before_filter_actions, filter_column, log->identifier()));
         std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
-        if (is_tidb_operator)
-        {
-            auto statistics = std::make_shared<BaseRuntimeStatistics>();
-            transform->setRuntimeStatistics(statistics);
-            context.getDAGContext()->pipeline_profiles[executor_id].push_back({statistics});
-        }
-        builder.appendTransformOp(std::move(transform));
+        PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
     });
+    context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);
 }
 
 void PhysicalFilter::finalize(const Names & parent_require)

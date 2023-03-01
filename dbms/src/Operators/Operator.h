@@ -16,7 +16,7 @@
 
 #include <Common/Stopwatch.h>
 #include <Core/Block.h>
-#include <Flash/Statistics/ExecutorStatisticsBase.h>
+#include <Operators/OperatorProfileInfo.h>
 
 #include <memory>
 
@@ -74,22 +74,23 @@ public:
         header = header_;
     }
 
-    void setRuntimeStatistics(BaseRuntimeStatisticsPtr statistics_)
+    void setProfileInfo(OperatorProfileInfoPtr profile_info_)
     {
-        statistics = statistics_;
+        profile_info = profile_info_;
     }
 
-    void updateStatistics(const Block & block)
-    {
-        std::cout << "update rows: " << block.rows() << std::endl; 
-        ++statistics->blocks;
-        statistics->rows += block.rows();
-        statistics->bytes += block.bytes();
-    }
+    // void updateProfileInfo(const Block & block, UInt64 time)
+    // {
+    //     std::cout << "update rows: " << block.rows() << std::endl;
+    //     ++profile_info->blocks;
+    //     profile_info->rows += block.rows();
+    //     profile_info->bytes += block.bytes();
+    //     profile_info->execution_time += time;
+    // }
 
 protected:
     PipelineExecutorStatus & exec_status;
-    BaseRuntimeStatisticsPtr statistics;
+    OperatorProfileInfoPtr profile_info;
     Block header;
 };
 

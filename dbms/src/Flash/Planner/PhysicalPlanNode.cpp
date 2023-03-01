@@ -107,7 +107,7 @@ void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & group_builde
 
 void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context)
 {
-    assert(childrenSize() <= 1);    
+    assert(childrenSize() <= 1);
     if (childrenSize() == 1)
         children(0)->buildPipeline(builder, context);
     builder.addPlanNode(shared_from_this());

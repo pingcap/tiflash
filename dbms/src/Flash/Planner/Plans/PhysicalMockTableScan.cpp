@@ -115,17 +115,17 @@ void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_b
 {
     group_builder.init(mock_streams.size());
     size_t i = 0;
+    OperatorProfileInfoGroup profile_group;
+    profile_group.reserve(group_builder.concurrency);
     group_builder.transform([&](auto & builder) {
         auto source = std::make_unique<BlockInputStreamSourceOp>(group_builder.exec_status, mock_streams[i++]);
         std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
-        if (is_tidb_operator)
-        {
-            auto statistics = std::make_shared<BaseRuntimeStatistics>();
-            source->setRuntimeStatistics(statistics);
-            context.getDAGContext()->pipeline_profiles[executor_id].push_back({statistics});
-        }
+        auto profile = std::make_shared<OperatorProfileInfo>();
+        source->setProfileInfo(profile);
+        profile_group.emplace_back(profile);
         builder.setSourceOp(std::move(source));
     });
+    context.getDAGContext()->pipeline_profiles[executor_id].push_back(profile_group);
 }
 
 void PhysicalMockTableScan::finalize(const Names & parent_require)

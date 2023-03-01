@@ -85,17 +85,14 @@ void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
 
 void PhysicalExpand::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t)
 {
+    OperatorProfileInfoGroup profile_group;
+    profile_group.reserve(group_builder.concurrency);
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, expand_actions, log->identifier()));
-
         std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
-        if (is_tidb_operator)
-        {
-            auto statistics = std::make_shared<BaseRuntimeStatistics>();
-            builder.lastTransform()->setRuntimeStatistics(statistics);
-            context.getDAGContext()->pipeline_profiles[executor_id].push_back({statistics});
-        }
+        PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
     });
+    context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);
 }
 
 void PhysicalExpand::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)

@@ -51,7 +51,7 @@ public:
         });
     }
 
-    virtual String toJson() const override
+    String toJson() const override
     {
         FmtBuffer fmt_buffer;
         fmt_buffer.fmtAppend(

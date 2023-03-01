@@ -48,7 +48,7 @@ private:
         Block & block,
         size_t & start_transform_op_index);
 
-private:
+public:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;

@@ -57,7 +57,10 @@ void ExecutionSummaryCollector::fillTiExecutionSummary(
 tipb::SelectResponse ExecutionSummaryCollector::genExecutionSummaryResponse()
 {
     tipb::SelectResponse response;
-    addExecuteSummaries(response);
+    if (enable_pipeline)
+        addExecuteSummariesForPipeline(response);
+    else
+        addExecuteSummaries(response);
     return response;
 }
 
@@ -152,94 +155,72 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
     }
 }
 
-void ExecutionSummaryCollector::addExecuteSummariesForPipeline(tipb::SelectResponse & response[[maybe_unused]])
+void ExecutionSummaryCollector::addExecuteSummariesForPipeline(tipb::SelectResponse & response [[maybe_unused]])
 {
     if (!dag_context.collect_execution_summaries)
         return;
 
-
-    std::cout << "dagcontext return executor id: " << dag_context.return_executor_id << std::endl;
     /// fill execution_summary for local executor
     if (dag_context.return_executor_id)
     {
         for (auto & p : dag_context.pipeline_profiles)
             fillLocalExecutionSummaryForPipeline(response, p.first, p.second, dag_context.scan_context_map);
-        // for (auto & p : dag_context.getProfileStreamsMap())
-            // fillLocalExecutionSummary(response, p.first, p.second, dag_context.scan_context_map);
     }
     else
     {
-        // const auto & profile_streams_map = dag_context.getProfileStreamsMap();
-        // assert(profile_streams_map.size() == dag_context.list_based_executors_order.size());
-        // for (const auto & executor_id : dag_context.list_based_executors_order)
-        // {
-        //     auto it = profile_streams_map.find(executor_id);
-        //     assert(it != profile_streams_map.end());
-        //     fillLocalExecutionSummary(response, executor_id, it->second, dag_context.scan_context_map);
-        // }
+        const auto & profile_map = dag_context.pipeline_profiles;
+        assert(profile_map.size() == dag_context.list_based_executors_order.size());
+        for (const auto & executor_id : dag_context.list_based_executors_order)
+        {
+            auto it = profile_map.find(executor_id);
+            assert(it != profile_map.end());
+            fillLocalExecutionSummaryForPipeline(response, executor_id, it->second, dag_context.scan_context_map);
+        }
     }
 
-    // TODO support cop remote read and disaggregated mode.
-    // auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(dag_context);
-    // fill execution_summary to reponse for remote executor received by exchange.
-    // for (auto & p : exchange_execution_summary.execution_summaries)
-    {
-        // fillTiExecutionSummary(response.add_execution_summaries(), p.second, p.first);
-    }
+    // TODO: consider cop remote read and disaggregated mode.
 }
 
 void ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
-    tipb::SelectResponse & response[[maybe_unused]],
-    const String & executor_id [[maybe_unused]],
-    const BaseRuntimeStatisticsGroupVec & statistic_group_vec [[maybe_unused]],
+    tipb::SelectResponse & response,
+    const String & executor_id,
+    const ExecutorProfileInfo & executor_profile,
     const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map [[maybe_unused]]) const
 {
+    std::cout << "executor id: " << executor_id << std::endl;
+    std::cout << "ywq test executor operator size: " << executor_profile.size() << std::endl;
     ExecutionSummary current;
-    /// part 1: local execution info
-    // get execution info from streams
-    std::cout << "executor id: " << executor_id << std::endl; 
-    for (const auto & statistic_group : statistic_group_vec)
+    UInt64 time = 0;
+    for (size_t i = 0; i < executor_profile.size(); ++i)
     {
-
-        for (const auto & statistic: statistic_group) {
-            std::cout << "rows: " << statistic->rows << std::endl;
-            current.time_processed_ns = std::max(current.time_processed_ns, statistic->execution_time_ns);
-            current.num_produced_rows += statistic->rows;
-            current.num_iterations += statistic->blocks;
-            ++current.concurrency;
+        if (i == executor_profile.size() - 1)
+        {
+            auto && operator_profile_group = executor_profile[i];
+            ExecutionSummary current_operator;
+            UInt64 time_processed_ns = 0;
+            current.concurrency = operator_profile_group.size();
+            for (const auto & operator_profile : operator_profile_group)
+            {
+                time_processed_ns = std::max(time_processed_ns, operator_profile->execution_time);
+                current.num_produced_rows += operator_profile->rows;
+                current.num_iterations += operator_profile->blocks;
+            }
+            current.time_processed_ns = time + time_processed_ns;
         }
-        std::cout << "----------" << std::endl;
+        else
+        {
+            auto && operator_profile_group = executor_profile[i];
+            ExecutionSummary current_operator;
+            current_operator.concurrency = operator_profile_group.size();
+            for (const auto & operator_profile : operator_profile_group)
+            {
+                current_operator.time_processed_ns = std::max(current.time_processed_ns, operator_profile->execution_time);
+            }
+            time += current_operator.time_processed_ns;
+        }
     }
-    std::cout << "+++++++++++++++++" << std::endl;
-    // // get execution info from scan_context
-    // if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
-    // {
-    //     current.scan_context->merge(*(iter->second));
-    // }
-    // /// part 2: for join need to add the build time
-    // /// In TiFlash, a hash join's build side is finished before probe side starts,
-    // /// so the join probe side's running time does not include hash table's build time,
-    // /// when construct ExecSummaries, we need add the build cost to probe executor
-    // auto all_join_id_it = dag_context.getExecutorIdToJoinIdMap().find(executor_id);
-    // if (all_join_id_it != dag_context.getExecutorIdToJoinIdMap().end())
-    // {
-    //     for (const auto & join_executor_id : all_join_id_it->second)
-    //     {
-    //         auto it = dag_context.getJoinExecuteInfoMap().find(join_executor_id);
-    //         if (it != dag_context.getJoinExecuteInfoMap().end())
-    //         {
-    //             UInt64 process_time_for_build = 0;
-    //             for (const auto & join_build_stream : it->second.join_build_streams)
-    //             {
-    //                 if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get()); p_stream)
-    //                     process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
-    //             }
-    //             current.time_processed_ns += process_time_for_build;
-    //         }
-    //     }
-    // }
-
-    // current.time_processed_ns += dag_context.compile_time_ns;
+    std::cout << "current rows: " << current.num_produced_rows << ", blocks: " << current.num_iterations << ", concurrency: " << current.concurrency << std::endl;
+    // TODO get execution info from scan_context
     fillTiExecutionSummary(response.add_execution_summaries(), current, executor_id);
 }
 } // namespace DB

@@ -81,7 +81,7 @@ public:
 
 protected:
     virtual void buildBlockInputStreamImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
-    
+
     virtual void buildPipelineExecImpl(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/);
 
     void recordProfileStreams(DAGPipeline & pipeline, const Context & context);

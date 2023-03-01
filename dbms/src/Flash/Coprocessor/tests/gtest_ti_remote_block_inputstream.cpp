@@ -370,7 +370,7 @@ public:
 
         // 3. send execution summary
         writer->add_summary = true;
-        ExecutionSummaryCollector summary_collector(*dag_context_ptr);
+        ExecutionSummaryCollector summary_collector(*dag_context_ptr, false);
         writer->sendExecutionSummary(summary_collector.genExecutionSummaryResponse());
     }
 
@@ -396,7 +396,7 @@ public:
 
         // 3. send execution summary
         writer->add_summary = true;
-        ExecutionSummaryCollector summary_collector(*dag_context_ptr);
+        ExecutionSummaryCollector summary_collector(*dag_context_ptr, false);
         auto execution_summary_response = summary_collector.genExecutionSummaryResponse();
         writer->write(execution_summary_response);
     }

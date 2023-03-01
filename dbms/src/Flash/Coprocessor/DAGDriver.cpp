@@ -114,7 +114,7 @@ try
 
         if (dag_context.collect_execution_summaries)
         {
-            ExecutionSummaryCollector summary_collector(dag_context);
+            ExecutionSummaryCollector summary_collector(dag_context, context.getSettingsRef().enable_pipeline);
             summary_collector.addExecuteSummaries(*dag_response);
         }
     }
@@ -146,7 +146,7 @@ try
 
         if (dag_context.collect_execution_summaries)
         {
-            ExecutionSummaryCollector summary_collector(dag_context);
+            ExecutionSummaryCollector summary_collector(dag_context, context.getSettingsRef().enable_pipeline);
             auto execution_summary_response = summary_collector.genExecutionSummaryResponse();
             streaming_writer->write(execution_summary_response);
         }

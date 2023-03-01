@@ -29,6 +29,4 @@ struct BaseRuntimeStatistics
 
     void append(const BlockStreamProfileInfo &);
 };
-
-using BaseRuntimeStatisticsPtr = std::shared_ptr<BaseRuntimeStatistics>;
 } // namespace DB

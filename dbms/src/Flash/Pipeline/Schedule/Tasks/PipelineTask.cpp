@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
 
+#include <cstddef>
 #include <magic_enum.hpp>
 
 namespace DB

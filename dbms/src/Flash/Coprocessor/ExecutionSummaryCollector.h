@@ -15,9 +15,9 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-#include <Flash/Coprocessor/DAGContext.h>
 
 namespace DB
 {
@@ -27,8 +27,10 @@ class ExecutionSummaryCollector
 {
 public:
     explicit ExecutionSummaryCollector(
-        DAGContext & dag_context_)
+        DAGContext & dag_context_,
+        bool enable_pipeline_)
         : dag_context(dag_context_)
+        , enable_pipeline(enable_pipeline_)
     {}
 
     void addExecuteSummaries(tipb::SelectResponse & response);
@@ -54,10 +56,11 @@ private:
     void fillLocalExecutionSummaryForPipeline(
         tipb::SelectResponse & response,
         const String & executor_id,
-        const BaseRuntimeStatisticsGroupVec & statistic_group,
+        const ExecutorProfileInfo & executor_profile,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
 private:
     DAGContext & dag_context;
+    bool enable_pipeline;
 };
 } // namespace DB
