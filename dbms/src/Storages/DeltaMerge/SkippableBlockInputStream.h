@@ -31,6 +31,17 @@ public:
 
     /// Return false if it is the end of stream.
     virtual bool getSkippedRows(size_t & skip_rows) = 0;
+
+    /// Skip next block in the stream.
+    /// Return the number of rows of the next block.
+    /// Return 0 if failed to skip or the end of stream.
+    virtual size_t skipNextBlock() = 0;
+
+    /// Read specific rows of next block in the stream according to the filter.
+    /// Return empty block if failed to read or the end of stream.
+    /// Note: filter can not be all false.
+    /// Only used in Late Materialization.
+    virtual Block readWithFilter(const IColumn::Filter & filter) = 0;
 };
 
 using SkippableBlockInputStreamPtr = std::shared_ptr<SkippableBlockInputStream>;
@@ -48,6 +59,10 @@ public:
     Block getHeader() const override { return toEmptyBlock(read_columns); }
 
     bool getSkippedRows(size_t &) override { return false; }
+
+    size_t skipNextBlock() override { return 0; }
+
+    Block readWithFilter(const IColumn::Filter &) override { return {}; }
 
     Block read() override { return {}; }
 
@@ -103,6 +118,52 @@ public:
         }
 
         return false;
+    }
+
+    size_t skipNextBlock() override
+    {
+        while (current_stream != children.end())
+        {
+            auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+
+            size_t skipped_rows = skippable_stream->skipNextBlock();
+
+            if (skipped_rows > 0)
+            {
+                return skipped_rows;
+            }
+            else
+            {
+                (*current_stream)->readSuffix();
+                precede_stream_rows += rows[current_stream - children.begin()];
+                ++current_stream;
+            }
+        }
+        return 0;
+    }
+
+    Block readWithFilter(const IColumn::Filter & filter) override
+    {
+        Block res;
+
+        while (current_stream != children.end())
+        {
+            auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+            res = skippable_stream->readWithFilter(filter);
+
+            if (res)
+            {
+                res.setStartOffset(res.startOffset() + precede_stream_rows);
+                break;
+            }
+            else
+            {
+                (*current_stream)->readSuffix();
+                precede_stream_rows += rows[current_stream - children.begin()];
+                ++current_stream;
+            }
+        }
+        return res;
     }
 
     Block read() override
