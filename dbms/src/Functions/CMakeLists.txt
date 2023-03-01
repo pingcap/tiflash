@@ -12,12 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
+include("${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
 
 add_headers_and_sources(tiflash_functions .)
 add_headers_and_sources(tiflash_functions ./GatherUtils)
-add_headers_and_sources(tiflash_functions ./Conditional)
-add_headers_and_sources(tiflash_functions ${TiFlash_BINARY_DIR}/dbms/src/Functions)
 
 check_then_add_sources_compile_flag (
     TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT
@@ -48,8 +46,4 @@ endif ()
 
 if (USE_VECTORCLASS)
     target_include_directories (tiflash_functions BEFORE PUBLIC ${VECTORCLASS_INCLUDE_DIR})
-endif ()
-
-if (ENABLE_TESTS)
-    add_subdirectory (tests EXCLUDE_FROM_ALL)
 endif ()

@@ -68,43 +68,15 @@ add_headers_and_sources(dbms src/Databases)
 add_headers_and_sources(dbms src/Debug)
 add_headers_and_sources(dbms src/Debug/MockExecutor)
 add_headers_and_sources(dbms src/Dictionaries)
-add_headers_and_sources(dbms src/Dictionaries/Embedded)
-add_headers_and_sources(dbms src/Dictionaries/Embedded/GeodataProviders)
 add_headers_and_sources(dbms src/Encryption)
 add_headers_and_sources(dbms src/Interpreters)
-add_headers_and_sources(dbms src/Interpreters/ClusterProxy)
 add_headers_and_sources(dbms src/Columns)
 add_headers_and_sources(dbms src/Storages)
-add_headers_and_sources(dbms src/Storages/DeltaMerge)
-add_headers_and_sources(dbms src/Storages/DeltaMerge/BitmapFilter)
-add_headers_and_sources(dbms src/Storages/DeltaMerge/Index)
-add_headers_and_sources(dbms src/Storages/DeltaMerge/Filter)
-add_headers_and_sources(dbms src/Storages/DeltaMerge/FilterParser)
-add_headers_and_sources(dbms src/Storages/DeltaMerge/File)
-add_headers_and_sources(dbms src/Storages/DeltaMerge/ColumnFile)
-add_headers_and_sources(dbms src/Storages/DeltaMerge/Delta)
-add_headers_and_sources(dbms src/Storages/DeltaMerge/ReadThread)
-add_headers_and_sources(dbms src/Storages/Distributed)
+add_headers_and_sources(dbms src/Storages/S3)
 add_headers_and_sources(dbms src/Storages/Transaction)
-add_headers_and_sources(dbms src/Storages/Page/V1)
-add_headers_and_sources(dbms src/Storages/Page/V1/mvcc)
-add_headers_and_sources(dbms src/Storages/Page/V1/VersionSet)
-add_headers_and_sources(dbms src/Storages/Page/V2)
-add_headers_and_sources(dbms src/Storages/Page/V2/mvcc)
-add_headers_and_sources(dbms src/Storages/Page/V2/VersionSet)
-add_headers_and_sources(dbms src/Storages/Page/V2/gc)
 add_headers_and_sources(dbms src/WindowFunctions)
 add_headers_and_sources(dbms src/TiDB/Schema)
 add_headers_and_sources(dbms src/TiDB/Etcd)
-add_headers_and_sources(dbms src/Storages/Page/V3)
-add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
-add_headers_and_sources(dbms src/Storages/Page/V3/WAL)
-add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
-add_headers_and_sources(dbms src/Storages/Page/V3/PageDirectory)
-add_headers_and_sources(dbms src/Storages/Page/V3/Blob)
-add_headers_and_sources(dbms src/Storages/Page/V3/Universal)
-add_headers_and_sources(dbms src/Storages/Page/)
-add_headers_and_sources(dbms src/Storages/S3)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Flash/Coprocessor)
@@ -180,7 +152,6 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELW
         src/Dictionaries/HTTPDictionarySource.cpp
         src/Dictionaries/LibraryDictionarySource.cpp
         src/Dictionaries/ExecutableDictionarySource.cpp
-        src/Dictionaries/ClickHouseDictionarySource.cpp
         PROPERTIES COMPILE_FLAGS -g0)
 endif ()
 
@@ -214,6 +185,14 @@ target_link_libraries (tiflash_common_io
 target_include_directories (tiflash_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 target_compile_definitions(tiflash_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
 target_link_libraries (dbms
+    ${RE2_LIBRARY}
+    ${RE2_ST_LIBRARY}
+    ${OPENSSL_CRYPTO_LIBRARY}
+    ${BTRIE_LIBRARIES}
+    absl::synchronization
+    tiflash_contrib::aws_s3
+
+    etcdpb
     tiflash_parsers
     tiflash_common_config
     tiflash_common_io
@@ -222,13 +201,7 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
-    etcdpb
-    ${RE2_LIBRARY}
-    ${RE2_ST_LIBRARY}
-    ${OPENSSL_CRYPTO_LIBRARY}
-    ${BTRIE_LIBRARIES}
-    absl::synchronization
-    tiflash_contrib::aws_s3
+    PSCheckpointProto
 )
 
 # always add GmSSL include dir to the include path for static analysis
@@ -330,7 +303,7 @@ if (ENABLE_TESTS)
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_compile_definitions(dbms PUBLIC MULTIPLE_CONTEXT_GTEST)
 
-    target_link_libraries(gtests_dbms test_util_gtest_main tiflash_functions tiflash-dttool-lib)
+    target_link_libraries(gtests_dbms test_util_gtest_main tiflash_functions tiflash-dttool-lib delta_merge)
 
     install (TARGETS gtests_dbms
             COMPONENT tiflash-gtest
