@@ -30,6 +30,7 @@ namespace DB
  */
 enum class ExecTaskStatus
 {
+    INIT,
     WAITING,
     RUNNING,
     FINISHED,
@@ -52,30 +53,29 @@ public:
 
     virtual ~Task() = default;
 
-    MemoryTrackerPtr getMemTracker()
+    MemoryTrackerPtr getMemTracker() const
     {
         return mem_tracker;
     }
 
-    ExecTaskStatus execute() noexcept
-    {
-        assert(getMemTracker().get() == current_memory_tracker);
-        return executeImpl();
-    }
-    // Avoid allocating memory in `await` if possible.
-    ExecTaskStatus await() noexcept
-    {
-        assert(getMemTracker().get() == current_memory_tracker);
-        return awaitImpl();
-    }
+    ExecTaskStatus execute() noexcept;
+    
+    ExecTaskStatus await() noexcept;
 
 protected:
     virtual ExecTaskStatus executeImpl() = 0;
+    // Avoid allocating memory in `await` if possible.
     virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
+
+private:
+    void switchStatus(ExecTaskStatus to);
 
 protected:
     MemoryTrackerPtr mem_tracker;
     LoggerPtr log;
+
+private:
+    ExecTaskStatus exec_status{ExecTaskStatus::INIT};
 };
 using TaskPtr = std::unique_ptr<Task>;
 
