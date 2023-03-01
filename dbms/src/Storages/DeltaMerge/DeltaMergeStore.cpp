@@ -38,6 +38,7 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
@@ -116,6 +117,7 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
     case TaskType::Compact:
     case TaskType::Flush:
     case TaskType::PlaceIndex:
+    case TaskType::NotifyCompactLog:
         is_heavy = false;
         // reserve some task space for heavy tasks
         if (max_task_num > 1 && light_tasks.size() >= static_cast<size_t>(max_task_num * 0.9))
@@ -1173,6 +1175,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto delta_cache_limit_rows = dm_context->delta_cache_limit_rows;
     auto delta_cache_limit_bytes = dm_context->delta_cache_limit_bytes;
 
+    bool should_background_compact_log = (unsaved_rows >= delta_cache_limit_rows / 4 || unsaved_bytes >= delta_cache_limit_bytes / 4);
     bool should_background_flush = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes) //
         && (delta_rows - delta_last_try_flush_rows >= delta_cache_limit_rows
             || delta_bytes - delta_last_try_flush_bytes >= delta_cache_limit_bytes);
@@ -1246,6 +1249,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             delta_last_try_flush_bytes = delta_bytes;
             LOG_DEBUG(log, "Foreground flush cache in checkSegmentUpdate, thread={} segment={}", thread_type, segment->info());
             segment->flushCache(*dm_context);
+            triggerCompactLog(dm_context, segment, false);
         }
         else if (should_background_flush)
         {
@@ -1259,6 +1263,10 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                 delta_last_try_flush_bytes = delta_bytes;
                 try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment});
             }
+        }
+        if (should_background_compact_log)
+        {
+            try_add_background_task(BackgroundTask{TaskType::NotifyCompactLog, dm_context, segment});
         }
     }
 

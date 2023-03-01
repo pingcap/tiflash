@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/StorageEngineType.h>
@@ -167,6 +168,8 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const;
 
+    void copmactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, TableID table_id, bool is_background);
+    void notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 compact_term, bool is_background);
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif

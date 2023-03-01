@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/Transaction/TMTContext.h>
+
 #include <Common/Exception.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
@@ -38,6 +40,8 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/RegionTable.h>
+#include <Storages/Transaction/KVStore.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
 #include <fmt/core.h>

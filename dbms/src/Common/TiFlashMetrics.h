@@ -134,7 +134,11 @@ namespace DB
         F(type_seg_split_fg, {"type", "seg_split_fg"}),                                                                                             \
         F(type_seg_split_ingest, {"type", "seg_split_ingest"}),                                                                                     \
         F(type_seg_merge_bg_gc, {"type", "seg_merge_bg_gc"}),                                                                                       \
-        F(type_place_index_update, {"type", "place_index_update"}))                                                                                 \
+        F(type_place_index_update, {"type", "place_index_update"}),                                                                                 \
+        F(type_compact_log_segment_bg, {"type", "compact_log_segment_bg"}),                                                                         \
+        F(type_compact_log_segment_fg, {"type", "compact_log_segment_fg"}),                                                                         \
+        F(type_compact_log_region_bg, {"type", "compact_log_region_bg"}),                                                                           \
+        F(type_compact_log_region_fg, {"type", "compact_log_region_fg"}))                                                                           \
     M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                                     \
         F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.001, 2, 20}),                                                             \
         F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                                       \
@@ -146,7 +150,9 @@ namespace DB
         F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
         F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.001, 2, 20}),                                                         \
         F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                                           \
-        F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}))                                                     \
+        F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}),                                                     \
+        F(type_compact_log_bg, {{"type", "compact_log_bg"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+        F(type_compact_log_fg, {{"type", "compact_log_fg"}}, ExpBuckets{0.001, 2, 20}))                                                             \
     M(tiflash_storage_throughput_bytes, "Calculate the throughput of tasks of storage in bytes", Gauge,           /**/                              \
         F(type_write, {"type", "write"}),                                                                         /**/                              \
         F(type_ingest, {"type", "ingest"}),                                                                       /**/                              \

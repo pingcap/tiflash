@@ -797,16 +797,27 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
     return state;
 }
 
+void TiFlashRaftProxyHelper::notifyCompactLog(uint64_t region_id, uint64_t compact_index, uint64_t compact_term) const
+{
+    this->fn_notify_compact_log(this->proxy_ptr, region_id, compact_index, compact_term, compact_index);
+}
+
 void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts)
 {
     RegionTable & region_table = server->tmt->getRegionTable();
     region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
 }
 
-
 std::string_view buffToStrView(const BaseBuffView & buf)
 {
     return std::string_view{buf.data, buf.len};
+}
+
+FlushedState GetFlushedState(EngineStoreServerWrap * server, uint64_t region_id)
+{
+    auto & kvstore = server->tmt->getKVStore();
+    auto region_ptr = kvstore->getRegion(region_id);
+    return region_ptr->getFlushedState();
 }
 
 } // namespace DB

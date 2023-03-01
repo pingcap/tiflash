@@ -18,6 +18,7 @@
 #include <Core/Block.h>
 #include <Core/Names.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionException.h>

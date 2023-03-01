@@ -116,6 +116,7 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
     TimerTask makeTimerTask(uint64_t time_ms) const;
     bool pollTimerTask(TimerTask & task, RawVoidPtr waker = nullptr) const;
     raft_serverpb::RegionLocalState getRegionLocalState(uint64_t region_id) const;
+    void notifyCompactLog(uint64_t region_id, uint64_t compact_index, uint64_t compact_term) const;
 };
 
 extern "C" {
@@ -169,6 +170,7 @@ CppStrWithView GetConfig(EngineStoreServerWrap *, uint8_t full);
 void SetStore(EngineStoreServerWrap *, BaseBuffView);
 void SetPBMsByBytes(MsgPBType type, RawVoidPtr ptr, BaseBuffView view);
 void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts);
+FlushedState GetFlushedState(EngineStoreServerWrap * server, uint64_t region_id);
 }
 
 inline EngineStoreServerHelper GetEngineStoreServerHelper(
@@ -215,6 +217,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_set_store = SetStore,
         .fn_set_pb_msg_by_bytes = SetPBMsByBytes,
         .fn_handle_safe_ts_update = HandleSafeTSUpdate,
+        .fn_get_flushed_state = GetFlushedState,
     };
 }
 

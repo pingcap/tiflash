@@ -1418,7 +1418,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     auto & name_col = columns[0];
     auto & value_col = columns[1];
 
-    StoreStats stat;
+    DM::StoreStats stat;
     if (storeInited())
     {
         stat = _store->getStoreStats();

@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 
 #include <magic_enum.hpp>
@@ -41,7 +42,6 @@ extern const char pause_until_dt_background_delta_merge[];
 
 namespace DM
 {
-
 // A callback class for scanning the DMFiles on local filesystem
 class LocalDMFileGcScanner final
 {
@@ -307,6 +307,8 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             left = task.segment;
             type = ThreadType::BG_Flush;
             break;
+        case TaskType::NotifyCompactLog:
+            triggerCompactLog(task.dm_context, task.segment, true);
         case TaskType::PlaceIndex:
             task.segment->placeDeltaIndex(*task.dm_context);
             break;
@@ -829,5 +831,32 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
     return gc_segments_num;
 }
 
+void DeltaMergeStore::triggerCompactLog(const DMContextPtr & dm_context, const SegmentPtr & segment, bool is_background)
+{
+    auto & tmt = dm_context->db_context.getTMTContext();
+    auto & kv_store = tmt.getKVStore();
+
+    if (is_background)
+    {
+        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_bg).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_segment_fg).Increment();
+    }
+
+    Stopwatch watch;
+    SCOPE_EXIT({
+        if (is_background)
+        {
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_bg).Observe(watch.elapsedSeconds());
+        }
+        else
+        {
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_compact_log_fg).Observe(watch.elapsedSeconds());
+        }
+    });
+    kv_store->copmactLogByRowKeyRange(tmt, segment->getRowKeyRange(), physical_table_id, is_background);
+}
 } // namespace DM
 } // namespace DB

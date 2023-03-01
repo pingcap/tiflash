@@ -98,6 +98,7 @@ RegionPtr KVStore::getRegion(RegionID region_id) const
         return it->second;
     return nullptr;
 }
+// TODO: may get regions not in segment?
 RegionMap KVStore::getRegionsByRangeOverlap(const RegionRange & range) const
 {
     auto manage_lock = genRegionReadLock();
@@ -365,7 +366,7 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_
     }
     else
     {
-        return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
+        return canFlushRegionDataImpl(curr_region_ptr, false, try_until_succeed, tmt, region_task_lock, index, term);
     }
 }
 
@@ -400,7 +401,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
         LOG_DEBUG(log, "{} flush region due to tryFlushRegionData, index {} term {}", curr_region.toString(false), index, term);
         return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
     }
-    return can_flush;
+    return false;
 }
 
 bool KVStore::forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
@@ -859,4 +860,79 @@ FileUsageStatistics KVStore::getFileUsageStatistics() const
     return region_persister->getFileUsageStatistics();
 }
 
+// We need to get applied index before flushing cache, and can't hold region task lock when flush cache to avoid hang write cmd apply.
+void KVStore::copmactLogByRowKeyRange(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, TableID table_id, bool is_background)
+{
+    auto range = std::make_pair(TiKVRangeKey::makeTiKVRangeKey<true>(RecordKVFormat::encodeAsTiKVKey(*rowkey_range.start.toRegionKey(table_id))),
+                                TiKVRangeKey::makeTiKVRangeKey<false>(RecordKVFormat::encodeAsTiKVKey(*rowkey_range.end.toRegionKey(table_id))));
+    std::unordered_map<UInt64, std::pair<UInt64, UInt64>> region_copmact_indexes;
+    auto region_read_lock = genRegionReadLock();
+    auto region_map = getRegionsByRangeOverlap(range);
+    for (const auto & overlapped_region : region_map)
+    {
+        region_copmact_indexes[overlapped_region.first] = {overlapped_region.second->appliedIndex(), overlapped_region.second->appliedIndexTerm()};
+    }
+    auto storage = tmt.getStorages().get(table_id);
+    if (unlikely(storage == nullptr))
+    {
+        LOG_WARNING(log,
+                    "tryFlushRegionCacheInStorage can not get table for table id {}, ignored",
+                    table_id);
+        return;
+    }
+    storage->flushCache(tmt.getContext(), rowkey_range);
+    for (const auto & region : region_copmact_indexes)
+    {
+        auto reion_ptr = getRegion(region.first);
+        if (!reion_ptr)
+        {
+            LOG_INFO(log, "region {} has been removed, ignore", region.first);
+            continue;
+        }
+        auto region_rowkey_range = DM::RowKeyRange::fromRegionRange(
+            reion_ptr->getRange(),
+            table_id,
+            storage->isCommonHandle(),
+            storage->getRowKeyColumnSize());
+        if (rowkey_range.getStart() <= region_rowkey_range.getStart() && region_rowkey_range.getEnd() <= rowkey_range.getEnd())
+        {
+            notifyCompactLog(region.first, region.second.first, region.second.second, is_background);
+            reion_ptr->setFlushedState(region.second.first, region.second.second);
+        }
+        else
+        {
+            storage->flushCache(tmt.getContext(), region_rowkey_range, true);
+            notifyCompactLog(region.first, region.second.first, region.second.second, is_background);
+            reion_ptr->setFlushedState(region.second.first, region.second.second);
+        }
+    }
+}
+
+// the caller guarantee that delta cache has been flushed. This function need to persiste region cache before trigger proxy to compact log.
+void KVStore::notifyCompactLog(RegionID region_id, UInt64 compact_index, UInt64 compact_term, bool is_background)
+{
+    auto region = getRegion(region_id);
+    if (!region)
+    {
+        LOG_INFO(log, "region {} has been removed, ignore", region_id);
+        return;
+    }
+    if (region->lastCompactLogTime() + Seconds{region_compact_log_period.load(std::memory_order_relaxed)} > Clock::now())
+    {
+        return;
+    }
+    if (is_background)
+    {
+        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_region_bg).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_subtask_count, type_compact_log_region_fg).Increment();
+    }
+    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+    persistRegion(*region, region_task_lock, "tryFlushRegionData");
+    region->markCompactLog();
+    region->cleanApproxMemCacheInfo();
+    getProxyHelper()->notifyCompactLog(region_id, compact_index, compact_term);
+}
 } // namespace DB
