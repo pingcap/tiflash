@@ -47,6 +47,30 @@ SpilledFile::~SpilledFile()
     }
 }
 
+void SpilledFiles::commitSpilledFiles(std::vector<std::unique_ptr<SpilledFile>> && spilled_files)
+{
+    std::unique_lock lock(spilled_files_mutex);
+    for (auto & spilled_file : spilled_files)
+    {
+        if (!spilled_file->isFull())
+            mutable_spilled_files.push_back(std::move(spilled_file));
+        else
+            immutable_spilled_files.push_back(std::move(spilled_file));
+    }
+    spilled_files.clear();
+}
+
+void SpilledFiles::makeAllSpilledFilesImmutable()
+{
+    std::lock_guard lock(spilled_files_mutex);
+    for (auto & mutable_file : mutable_spilled_files)
+    {
+        mutable_file->markFull();
+        immutable_spilled_files.push_back(std::move(mutable_file));
+    }
+    mutable_spilled_files.clear();
+}
+
 Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 partition_num_, const Block & input_schema_, const LoggerPtr & logger_, Int64 spill_version_, bool release_spilled_file_on_restore_)
     : config(config_)
     , is_input_sorted(is_input_sorted_)

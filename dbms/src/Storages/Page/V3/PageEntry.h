@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Storages/Page/V3/PageDefines.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -36,6 +37,12 @@ public:
     UInt64 tag = 0;
     BlobFileOffset offset = 0; // The offset of page data in file
     UInt64 checksum = 0; // The checksum of whole page data
+
+    /**
+     * Whether this page entry's data is stored in a checkpoint and where it is stored.
+     * If this page entry is not stored in a checkpoint file, this field is nullopt.
+     */
+    std::optional<CheckpointInfo> checkpoint_info = std::nullopt;
 
     // The offset to the beginning of specify field.
     PageFieldOffsetChecksums field_offsets{};
