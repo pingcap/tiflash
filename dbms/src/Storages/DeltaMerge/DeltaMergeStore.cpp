@@ -1175,7 +1175,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto delta_cache_limit_rows = dm_context->delta_cache_limit_rows;
     auto delta_cache_limit_bytes = dm_context->delta_cache_limit_bytes;
 
-    bool should_background_compact_log = (unsaved_rows >= delta_cache_limit_rows / 4 || unsaved_bytes >= delta_cache_limit_bytes / 4);
+    bool should_background_compact_log = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes);
     bool should_background_flush = (unsaved_rows >= delta_cache_limit_rows || unsaved_bytes >= delta_cache_limit_bytes) //
         && (delta_rows - delta_last_try_flush_rows >= delta_cache_limit_rows
             || delta_bytes - delta_last_try_flush_bytes >= delta_cache_limit_bytes);

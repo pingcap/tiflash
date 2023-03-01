@@ -50,7 +50,20 @@ RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIte
 
 RegionDataReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value) const
 {
-    return data.readDataByWriteIt(write_it, need_value);
+    try
+    {
+        return data.readDataByWriteIt(write_it, need_value);
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage(fmt::format("(region id {}, applied_index:{}, applied_term:{}, flushed_index:{}, flushed_term:{})",
+                                 meta.regionId(),
+                                 appliedIndex(),
+                                 appliedIndexTerm(),
+                                 flushed_state.applied_index,
+                                 flushed_state.applied_term));
+        throw;
+    }
 }
 
 DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) const
