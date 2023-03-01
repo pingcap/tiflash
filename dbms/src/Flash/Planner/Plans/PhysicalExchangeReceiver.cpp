@@ -17,10 +17,12 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Interpreters/Context.h>
+#include <Operators/ExchangeReceiverSourceOp.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <fmt/format.h>
 
@@ -77,14 +79,33 @@ void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline,
 
     for (size_t i = 0; i < stream_count; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(mpp_exchange_receiver,
-                                                                                   log->identifier(),
-                                                                                   execId(),
-                                                                                   /*stream_id=*/enable_fine_grained_shuffle ? i : 0);
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(
+            mpp_exchange_receiver,
+            log->identifier(),
+            execId(),
+            /*stream_id=*/enable_fine_grained_shuffle ? i : 0);
         exchange_receiver_io_input_streams.push_back(stream);
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }
+}
+
+void PhysicalExchangeReceiver::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency)
+{
+    // TODO support fine grained shuffle.
+    const bool enable_fine_grained_shuffle = enableFineGrainedShuffle(mpp_exchange_receiver->getFineGrainedShuffleStreamCount());
+    RUNTIME_CHECK(!enable_fine_grained_shuffle);
+
+    // TODO choose a more reasonable concurrency.
+    group_builder.init(concurrency);
+    group_builder.transform([&](auto & builder) {
+        builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(
+            group_builder.exec_status,
+            mpp_exchange_receiver,
+            /*stream_id=*/0,
+            log->identifier(),
+            execId()));
+    });
 }
 
 void PhysicalExchangeReceiver::finalize(const Names & parent_require)

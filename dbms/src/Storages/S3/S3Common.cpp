@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
+#include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/http/Scheme.h>
@@ -110,6 +111,10 @@ private:
 namespace DB::S3
 {
 
+TiFlashS3Client::TiFlashS3Client(const String & bucket_name_)
+    : bucket_name(bucket_name_)
+{}
+
 TiFlashS3Client::TiFlashS3Client(
     const String & bucket_name_,
     const Aws::Auth::AWSCredentials & credentials,
@@ -121,16 +126,36 @@ TiFlashS3Client::TiFlashS3Client(
 {
 }
 
-void ClientFactory::init(const StorageS3Config & config_)
+TiFlashS3Client::TiFlashS3Client(const String & bucket_name_, std::unique_ptr<Aws::S3::S3Client> && raw_client)
+    : Aws::S3::S3Client(std::move(*raw_client))
+    , bucket_name(bucket_name_)
+{
+}
+
+bool ClientFactory::isEnabled() const
+{
+    return config.isS3Enabled();
+}
+
+void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     config = config_;
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
-    shared_client = create();
+    shared_client = mock_s3_ ? std::make_unique<tests::MockS3Client>() : create();
+    if (!mock_s3_)
+    {
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, create());
+    }
+    else
+    {
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, std::make_unique<tests::MockS3Client>());
+    }
 }
 
 void ClientFactory::shutdown()
 {
+    shared_tiflash_client.reset();
     shared_client.reset(); // Reset S3Client before Aws::ShutdownAPI.
     Aws::Utils::Logging::ShutdownAWSLogging();
     Aws::ShutdownAPI(aws_options);
@@ -163,6 +188,11 @@ std::shared_ptr<Aws::S3::S3Client> ClientFactory::sharedClient() const
     return shared_client;
 }
 
+std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient() const
+{
+    return shared_tiflash_client;
+}
+
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_)
 {
     Aws::Client::ClientConfiguration cfg;
@@ -193,22 +223,6 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
             /*useVirtualAddressing*/ true);
     }
-}
-
-std::unique_ptr<TiFlashS3Client> ClientFactory::createWithBucket() const
-{
-    auto scheme = parseScheme(config.endpoint);
-    Aws::Client::ClientConfiguration cfg;
-    cfg.endpointOverride = config.endpoint;
-    cfg.scheme = scheme;
-    cfg.verifySSL = scheme == Aws::Http::Scheme::HTTPS;
-    Aws::Auth::AWSCredentials cred(config.access_key_id, config.secret_access_key);
-    return std::make_unique<TiFlashS3Client>(
-        config.bucket,
-        cred,
-        cfg,
-        Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-        /*useVirtualAddressing*/ true);
 }
 
 Aws::Http::Scheme ClientFactory::parseScheme(std::string_view endpoint)
