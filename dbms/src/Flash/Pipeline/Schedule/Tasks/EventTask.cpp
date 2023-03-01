@@ -17,10 +17,20 @@
 namespace DB
 {
 EventTask::EventTask(
-    MemoryTrackerPtr mem_tracker_,
     PipelineExecutorStatus & exec_status_,
     const EventPtr & event_)
-    : Task(std::move(mem_tracker_))
+    : exec_status(exec_status_)
+    , event(event_)
+{
+    assert(event);
+}
+
+EventTask::EventTask(
+    MemoryTrackerPtr mem_tracker_,
+    const String & req_id,
+    PipelineExecutorStatus & exec_status_,
+    const EventPtr & event_)
+    : Task(std::move(mem_tracker_), req_id)
     , exec_status(exec_status_)
     , event(event_)
 {
@@ -45,7 +55,7 @@ void EventTask::finalize()
     catch (...)
     {
         // ignore exception from finalizeImpl.
-        // TODO add log here.
+        LOG_WARNING(log, "finalizeImpl throw exception: {}", getCurrentExceptionMessage(true, true));
     }
 }
 
@@ -57,6 +67,33 @@ ExecTaskStatus EventTask::executeImpl()
 ExecTaskStatus EventTask::awaitImpl()
 {
     return doTaskAction([&] { return doAwaitImpl(); });
+}
+
+ExecTaskStatus EventTask::doTaskAction(std::function<ExecTaskStatus()> && action)
+{
+    if (unlikely(exec_status.isCancelled()))
+    {
+        finalize();
+        return ExecTaskStatus::CANCELLED;
+    }
+    try
+    {
+        auto status = action();
+        switch (status)
+        {
+        case FINISH_STATUS:
+            finalize();
+        default:
+            return status;
+        }
+    }
+    catch (...)
+    {
+        finalize();
+        assert(event);
+        exec_status.onErrorOccurred(std::current_exception());
+        return ExecTaskStatus::ERROR;
+    }
 }
 
 } // namespace DB

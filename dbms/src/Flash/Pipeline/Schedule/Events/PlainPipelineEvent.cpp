@@ -26,7 +26,7 @@ bool PlainPipelineEvent::scheduleImpl()
     std::vector<TaskPtr> tasks;
     tasks.reserve(pipeline_exec_group.size());
     for (auto & pipline_exec : pipeline_exec_group)
-        tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, exec_status, shared_from_this(), std::move(pipline_exec)));
+        tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipline_exec)));
     scheduleTasks(tasks);
     return false;
 }

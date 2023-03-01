@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <memory.h>
 
@@ -39,8 +40,14 @@ enum class ExecTaskStatus
 class Task
 {
 public:
-    explicit Task(MemoryTrackerPtr mem_tracker_)
+    Task()
+        : mem_tracker(nullptr)
+        , log(Logger::get())
+    {}
+
+    Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
         : mem_tracker(std::move(mem_tracker_))
+        , log(Logger::get(req_id))
     {}
 
     virtual ~Task() = default;
@@ -66,8 +73,9 @@ protected:
     virtual ExecTaskStatus executeImpl() = 0;
     virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
 
-private:
+protected:
     MemoryTrackerPtr mem_tracker;
+    LoggerPtr log;
 };
 using TaskPtr = std::unique_ptr<Task>;
 

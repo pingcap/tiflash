@@ -48,7 +48,7 @@ class Pipeline : public std::enable_shared_from_this<Pipeline>
 public:
     Pipeline(UInt32 id_, const String & req_id)
         : id(id_)
-        , log(Logger::get(req_id))
+        , log(Logger::get(req_id, id_))
     {}
 
     void addPlanNode(const PhysicalPlanNodePtr & plan_node);

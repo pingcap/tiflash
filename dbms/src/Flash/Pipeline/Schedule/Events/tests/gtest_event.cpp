@@ -31,7 +31,7 @@ public:
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_,
         std::atomic_int64_t & counter_)
-        : EventTask(nullptr, exec_status_, event_)
+        : EventTask(exec_status_, event_)
         , counter(counter_)
     {}
 
@@ -84,7 +84,7 @@ public:
     RunTask(
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_)
-        : EventTask(nullptr, exec_status_, event_)
+        : EventTask(exec_status_, event_)
     {}
 
 protected:
@@ -133,7 +133,7 @@ public:
     DeadLoopTask(
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_)
-        : EventTask(nullptr, exec_status_, event_)
+        : EventTask(exec_status_, event_)
     {}
 
 protected:
@@ -221,7 +221,7 @@ public:
     ThrowExceptionTask(
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_)
-        : EventTask(nullptr, exec_status_, event_)
+        : EventTask(exec_status_, event_)
     {}
 
 protected:
