@@ -31,6 +31,8 @@ public:
     // Usually one tiflash instance only need access one bucket.
     // Store the bucket name to simpilfy some param passing.
 
+    explicit TiFlashS3Client(const String & bucket_name_);
+
     TiFlashS3Client(
         const String & bucket_name_,
         const Aws::Auth::AWSCredentials & credentials,
@@ -38,7 +40,9 @@ public:
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy signPayloads,
         bool useVirtualAddressing);
 
-    const String & bucket() { return bucket_name; }
+    TiFlashS3Client(const String & bucket_name_, std::unique_ptr<Aws::S3::S3Client> && raw_client);
+
+    const String & bucket() const { return bucket_name; }
 
 private:
     const String bucket_name;
@@ -52,13 +56,15 @@ public:
 
     static ClientFactory & instance();
 
-    void init(const StorageS3Config & config_);
+    bool isEnabled() const;
+
+    void init(const StorageS3Config & config_, bool mock_s3_ = false);
     void shutdown();
 
     const String & bucket() const;
     std::shared_ptr<Aws::S3::S3Client> sharedClient() const;
 
-    std::unique_ptr<TiFlashS3Client> createWithBucket() const;
+    std::shared_ptr<TiFlashS3Client> sharedTiFlashClient() const;
 
 private:
     ClientFactory() = default;
@@ -71,6 +77,7 @@ private:
     Aws::SDKOptions aws_options;
     StorageS3Config config;
     std::shared_ptr<Aws::S3::S3Client> shared_client;
+    std::shared_ptr<TiFlashS3Client> shared_tiflash_client;
 };
 
 struct ObjectInfo

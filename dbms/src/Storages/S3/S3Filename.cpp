@@ -29,6 +29,7 @@ namespace DB::S3
 
 namespace details
 {
+// Ref: https://github.com/google/re2/wiki/Syntax
 
 /// parsing LockFile
 const static re2::RE2 rgx_lock("^lock/s(?P<store_id>[0-9]+)/(?P<data_subpath>.+)$");
