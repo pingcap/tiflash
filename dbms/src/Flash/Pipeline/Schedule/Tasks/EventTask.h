@@ -40,7 +40,8 @@ protected:
     virtual ExecTaskStatus doAwaitImpl() { return ExecTaskStatus::RUNNING; };
 
     // Used to release held resources, just like `Event::finishImpl`.
-    virtual void finalize(){};
+    void finalize();
+    virtual void finalizeImpl(){};
 
 private:
     template <typename Action>
@@ -74,6 +75,7 @@ private:
 private:
     PipelineExecutorStatus & exec_status;
     EventPtr event;
+    std::atomic_bool finalized{false};
 };
 
 } // namespace DB

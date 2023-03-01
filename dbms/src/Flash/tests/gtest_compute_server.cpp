@@ -102,9 +102,118 @@ public:
 };
 
 
+#define WRAP_FOR_SERVER_TEST_BEGIN                 \
+    std::vector<bool> pipeline_bools{false, true}; \
+    for (auto enable_pipeline : pipeline_bools)    \
+    {                                              \
+        enablePipeline(enable_pipeline);
+
+#define WRAP_FOR_SERVER_TEST_END \
+    }
+
+TEST_F(ComputeServerRunner, simpleExchange)
+try
+{
+    std::vector<std::optional<TypeTraits<Int32>::FieldType>> s1_col(10000);
+    for (size_t i = 0; i < s1_col.size(); ++i)
+        s1_col[i] = i;
+    auto expected_cols = {toNullableVec<Int32>("s1", s1_col)};
+    context.addMockTable(
+        {"test_db", "big_table"},
+        {{"s1", TiDB::TP::TypeLong}},
+        expected_cols);
+
+    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(100)));
+
+    WRAP_FOR_SERVER_TEST_BEGIN
+    // For PassThrough and Broadcast, use only one server for testing, as multiple servers will double the result size.
+    {
+        startServers(1);
+        {
+            std::vector<String> expected_strings = {
+                R"(
+exchange_sender_2 | type:PassThrough, {<0, Long>}
+ project_1 | {<0, Long>}
+  table_scan_0 | {<0, Long>})"};
+            ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+                context
+                    .scan("test_db", "big_table")
+                    .project({"s1"}),
+                expected_strings,
+                expected_cols);
+        }
+        {
+            std::vector<String> expected_strings = {
+                R"(
+exchange_sender_1 | type:PassThrough, {<0, Long>}
+ table_scan_0 | {<0, Long>})",
+                R"(
+exchange_sender_4 | type:PassThrough, {<0, Long>}
+ project_3 | {<0, Long>}
+  exchange_receiver_2 | type:PassThrough, {<0, Long>})"};
+            ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+                context
+                    .scan("test_db", "big_table")
+                    .exchangeSender(tipb::ExchangeType::PassThrough)
+                    .exchangeReceiver("recv", {{"s1", TiDB::TP::TypeLong}})
+                    .project({"s1"}),
+                expected_strings,
+                expected_cols);
+        }
+        {
+            std::vector<String> expected_strings = {
+                R"(
+exchange_sender_1 | type:Broadcast, {<0, Long>}
+ table_scan_0 | {<0, Long>})",
+                R"(
+exchange_sender_4 | type:PassThrough, {<0, Long>}
+ project_3 | {<0, Long>}
+  exchange_receiver_2 | type:Broadcast, {<0, Long>})"};
+            ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+                context
+                    .scan("test_db", "big_table")
+                    .exchangeSender(tipb::ExchangeType::Broadcast)
+                    .exchangeReceiver("recv", {{"s1", TiDB::TP::TypeLong}})
+                    .project({"s1"}),
+                expected_strings,
+                expected_cols);
+        }
+    }
+    // For Hash, multiple servers will not double the result.
+    {
+        startServers(2);
+        std::vector<String> expected_strings = {
+            R"(
+exchange_sender_1 | type:Hash, {<0, Long>}
+ table_scan_0 | {<0, Long>})",
+            R"(
+exchange_sender_1 | type:Hash, {<0, Long>}
+ table_scan_0 | {<0, Long>})",
+            R"(
+exchange_sender_4 | type:PassThrough, {<0, Long>}
+ project_3 | {<0, Long>}
+  exchange_receiver_2 | type:Hash, {<0, Long>})",
+            R"(
+exchange_sender_4 | type:PassThrough, {<0, Long>}
+ project_3 | {<0, Long>}
+  exchange_receiver_2 | type:Hash, {<0, Long>})"};
+        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+            context
+                .scan("test_db", "big_table")
+                .exchangeSender(tipb::ExchangeType::Hash)
+                .exchangeReceiver("recv", {{"s1", TiDB::TP::TypeLong}})
+                .project({"s1"}),
+            expected_strings,
+            expected_cols);
+    }
+    WRAP_FOR_SERVER_TEST_END
+}
+CATCH
+
 TEST_F(ComputeServerRunner, runAggTasks)
 try
 {
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
     {
         std::vector<String> expected_strings = {
@@ -179,12 +288,14 @@ exchange_sender_3 | type:PassThrough, {<0, Long>}
             ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
         }
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
 TEST_F(ComputeServerRunner, runJoinTasks)
 try
 {
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(3);
     {
         auto expected_cols = {
@@ -223,7 +334,7 @@ try
                                                  .scan("test_db", "l_table")
                                                  .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
                                              expected_strings,
-                                             expect_cols);
+                                             expected_cols);
     }
 
     {
@@ -249,12 +360,14 @@ try
             ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
         }
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
 TEST_F(ComputeServerRunner, runJoinThenAggTasks)
 try
 {
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(3);
     {
         std::vector<String> expected_strings = {
@@ -309,7 +422,7 @@ try
                 .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
                 .project({col("max(l_table.s)"), col("l_table.s")}),
             expected_strings,
-            expect_cols);
+            expected_cols);
     }
 
     {
@@ -343,12 +456,14 @@ try
             ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
         }
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
 TEST_F(ComputeServerRunner, aggWithColumnPrune)
 try
 {
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(3);
 
     context.addMockTable(
@@ -390,12 +505,14 @@ try
             ASSERT_COLUMNS_EQ_UR(expected_cols, buildAndExecuteMPPTasks(request));
         }
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
 TEST_F(ComputeServerRunner, cancelAggTasks)
 try
 {
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
     {
         auto [query_id, res] = prepareMPPStreams(context
@@ -406,12 +523,14 @@ try
         MockComputeServerManager::instance().cancelQuery(query_id);
         EXPECT_TRUE(assertQueryCancelled(query_id));
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
 TEST_F(ComputeServerRunner, cancelJoinTasks)
 try
 {
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
     {
         auto [query_id, res] = prepareMPPStreams(context
@@ -421,12 +540,14 @@ try
         MockComputeServerManager::instance().cancelQuery(query_id);
         EXPECT_TRUE(assertQueryCancelled(query_id));
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
 TEST_F(ComputeServerRunner, cancelJoinThenAggTasks)
 try
 {
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
     {
         auto [query_id, _] = prepareMPPStreams(context
@@ -438,12 +559,14 @@ try
         MockComputeServerManager::instance().cancelQuery(query_id);
         EXPECT_TRUE(assertQueryCancelled(query_id));
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
 TEST_F(ComputeServerRunner, multipleQuery)
 try
 {
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(4);
     {
         auto [query_id1, res1] = prepareMPPStreams(context
@@ -481,6 +604,7 @@ try
             EXPECT_TRUE(assertQueryCancelled(query_id));
         }
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
@@ -488,6 +612,7 @@ TEST_F(ComputeServerRunner, runCoprocessor)
 try
 {
     // In coprocessor test, we only need to start 1 server.
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(1);
     {
         auto request = context
@@ -499,12 +624,14 @@ try
             toNullableVec<String>({{"apple", {}, "banana"}})};
         ASSERT_COLUMNS_EQ_UR(expected_cols, executeCoprocessorTask(request));
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
 TEST_F(ComputeServerRunner, runFineGrainedShuffleJoinTest)
 try
 {
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(3);
     constexpr size_t join_type_num = 7;
     constexpr tipb::JoinType join_types[join_type_num] = {
@@ -522,7 +649,6 @@ try
 
     for (auto join_type : join_types)
     {
-        std::cout << "JoinType: " << static_cast<int>(join_type) << std::endl;
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
         auto request = context
                            .scan("test_db", "l_table_2")
@@ -538,12 +664,14 @@ try
         const auto actual_cols = executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
         ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
 
 TEST_F(ComputeServerRunner, runFineGrainedShuffleAggTest)
 try
 {
+    WRAP_FOR_SERVER_TEST_BEGIN
     startServers(3);
     // fine-grained shuffle is enabled.
     constexpr uint64_t enable = 8;
@@ -562,8 +690,12 @@ try
         const auto actual_cols = executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
         ASSERT_COLUMNS_EQ_UR(expected_cols, actual_cols);
     }
+    WRAP_FOR_SERVER_TEST_END
 }
 CATCH
+
+#undef WRAP_FOR_SERVER_TEST_BEGIN
+#undef WRAP_FOR_SERVER_TEST_END
 
 } // namespace tests
 } // namespace DB
