@@ -35,7 +35,6 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
-#include <DataStreams/TotalsHavingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Encryption/FileProvider.h>
@@ -495,7 +494,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
         /// Now we will compose block streams that perform the necessary actions.
 
         /// Do I need to immediately finalize the aggregate functions after the aggregation?
-        bool aggregate_final = expressions.need_aggregate && to_stage > QueryProcessingStage::WithMergeableState && !query.group_by_with_totals;
+        bool aggregate_final = expressions.need_aggregate && to_stage > QueryProcessingStage::WithMergeableState;
 
         if (expressions.first_stage)
         {
@@ -553,9 +552,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                 if (!expressions.first_stage)
                     executeMergeAggregated(pipeline, aggregate_final);
 
-                if (!aggregate_final)
-                    executeTotalsAndHaving(pipeline, expressions.has_having, expressions.before_having);
-                else if (expressions.has_having)
+                if (aggregate_final && expressions.has_having)
                     executeHaving(pipeline, expressions.before_having);
 
                 executeExpression(pipeline, expressions.before_order_and_select);
@@ -566,9 +563,6 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
             else
             {
                 need_second_distinct_pass = query.distinct && pipeline.hasMoreThanOneStream();
-
-                if (query.group_by_with_totals && !aggregate_final)
-                    executeTotalsAndHaving(pipeline, false, nullptr);
             }
 
             if (expressions.has_order_by)
@@ -577,7 +571,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                   *  but there is no aggregation, then on the remote servers ORDER BY was made
                   *  - therefore, we merge the sorted streams from remote servers.
                   */
-                if (!expressions.first_stage && !expressions.need_aggregate && !(query.group_by_with_totals && !aggregate_final))
+                if (!expressions.first_stage && !expressions.need_aggregate)
                     executeMergeSorted(pipeline);
                 else /// Otherwise, just sort.
                     executeOrder(pipeline);
@@ -702,10 +696,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
             required_columns,
             QueryProcessingStage::Complete,
             subquery_depth + 1);
-
-        /// If there is an aggregation in the outer query, WITH TOTALS is ignored in the subquery.
-        if (query_analyzer->hasAggregation())
-            interpreter_subquery->ignoreWithTotals();
     }
 
     const Settings & settings = context.getSettingsRef();
@@ -1010,21 +1000,6 @@ void InterpreterSelectQuery::executeHaving(Pipeline & pipeline, const Expression
     });
 }
 
-
-void InterpreterSelectQuery::executeTotalsAndHaving(Pipeline & pipeline, bool has_having, const ExpressionActionsPtr & expression)
-{
-    executeUnion(pipeline);
-
-    const Settings & settings = context.getSettingsRef();
-
-    pipeline.firstStream() = std::make_shared<TotalsHavingBlockInputStream>(
-        pipeline.firstStream(),
-        expression,
-        has_having ? query.having_expression->getColumnName() : "",
-        settings.totals_mode);
-}
-
-
 void InterpreterSelectQuery::executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expression) // NOLINT
 {
     pipeline.transform([&](auto & stream) {
@@ -1203,32 +1178,6 @@ void InterpreterSelectQuery::executePreLimit(Pipeline & pipeline)
     }
 }
 
-
-bool hasWithTotalsInAnySubqueryInFromClause(const ASTSelectQuery & query)
-{
-    if (query.group_by_with_totals)
-        return true;
-
-    /** NOTE You can also check that the table in the subquery is distributed, and that it only looks at one shard.
-      * In other cases, totals will be computed on the initiating server of the query, and it is not necessary to read the data to the end.
-      */
-
-    auto query_table = query.table();
-    if (query_table)
-    {
-        const auto * ast_union = typeid_cast<const ASTSelectWithUnionQuery *>(query_table.get());
-        if (ast_union)
-        {
-            for (const auto & elem : ast_union->list_of_selects->children)
-                if (hasWithTotalsInAnySubqueryInFromClause(typeid_cast<const ASTSelectQuery &>(*elem)))
-                    return true;
-        }
-    }
-
-    return false;
-}
-
-
 void InterpreterSelectQuery::executeLimit(Pipeline & pipeline)
 {
     size_t limit_length = 0;
@@ -1269,13 +1218,6 @@ void InterpreterSelectQuery::executeSubqueriesInSetsAndJoins(Pipeline & pipeline
         SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
         /*req_id=*/"");
 }
-
-
-void InterpreterSelectQuery::ignoreWithTotals()
-{
-    query.group_by_with_totals = false;
-}
-
 
 void InterpreterSelectQuery::initSettings()
 {

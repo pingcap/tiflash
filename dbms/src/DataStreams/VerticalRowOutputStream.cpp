@@ -136,7 +136,7 @@ void VerticalRowOutputStream::writeSuffix()
         writeCString(".\n", ostr);
     }
 
-    if (totals || extremes)
+    if (extremes)
     {
         writeCString("\n", ostr);
         writeExtremes();
