@@ -429,7 +429,6 @@ PageEntriesEdit Serializer<PageEntriesEdit>::deserializeFrom(std::string_view re
     UInt32 version = 0;
     readIntBinary(version, buf);
     CompressedReadBuffer compressed_buf(buf);
-    LOG_DEBUG(&Poco::Logger::get("Serializer"), fmt::format("record serialize version {}", version));
     switch (version)
     {
     case WALSerializeVersion::Plain:

@@ -228,7 +228,6 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
         {
             PageEntryV3 entry;
             entry.file_id = INVALID_BLOBFILE_ID;
-            entry.size = write.data_location->size_in_file;
             entry.tag = write.tag;
             entry.checkpoint_info = CheckpointInfo{
                 .data_location = *write.data_location,
@@ -283,7 +282,6 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
             {
                 PageEntryV3 entry;
                 entry.file_id = INVALID_BLOBFILE_ID;
-                entry.size = write.data_location->size_in_file;
                 entry.tag = write.tag;
                 entry.checkpoint_info = CheckpointInfo{
                     .data_location = *write.data_location,
@@ -401,7 +399,6 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
         {
             PageEntryV3 entry;
             entry.file_id = INVALID_BLOBFILE_ID;
-            entry.size = write.data_location->size_in_file;
             entry.tag = write.tag;
             entry.checkpoint_info = CheckpointInfo{
                 .data_location = *write.data_location,
