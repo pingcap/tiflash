@@ -55,10 +55,10 @@ curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
 source $HOME/.cargo/env
 
 # Install LLVM, see https://apt.llvm.org for details
-# Clang will be available as /usr/bin/clang++-14
+# Clang will be available as /usr/bin/clang++-15
 wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
-sudo ./llvm.sh 14 all
+sudo ./llvm.sh 15 all
 
 # Install other dependencies
 sudo apt install -y cmake ninja-build zlib1g-dev libcurl4-openssl-dev

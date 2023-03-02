@@ -46,7 +46,7 @@ function bake_llvm_base_aarch64() {
 
     # Go
     source $SCRIPTPATH/install_go.sh
-    install_go "1.17" "arm64"
+    install_go "1.20" "arm64"
     export PATH="$PATH:/usr/local/go/bin"
 
     # Rust
