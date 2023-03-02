@@ -48,6 +48,20 @@ String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool g
         return poco_path.toString();
 }
 
+void TiFlashTestEnv::tryCreatePath(const std::string & path)
+{
+    try
+    {
+        Poco::File p(path);
+        if (!p.exists())
+            p.createDirectories();
+    }
+    catch (...)
+    {
+        tryLogCurrentException("gtest", fmt::format("while removing dir `{}`", path));
+    }
+}
+
 void TiFlashTestEnv::tryRemovePath(const std::string & path, bool recreate)
 {
     try
@@ -73,10 +87,10 @@ void TiFlashTestEnv::tryRemovePath(const std::string & path, bool recreate)
 
 void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
 {
-    addGlobalContext(testdata_path, ps_run_mode, bg_thread_count);
+    addGlobalContext(DB::Settings(), testdata_path, ps_run_mode, bg_thread_count);
 }
 
-void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
+void TiFlashTestEnv::addGlobalContext(const DB::Settings & settings_, Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
 {
     // set itself as global context
     auto global_context = std::make_shared<DB::Context>(DB::Context::createGlobal());
@@ -90,6 +104,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     global_context->initializeFileProvider(key_manager, false);
 
     // initialize background & blockable background thread pool
+    global_context->setSettings(settings_);
     Settings & settings = global_context->getSettingsRef();
     global_context->initializeBackgroundPool(bg_thread_count == 0 ? settings.background_pool_size.get() : bg_thread_count);
     global_context->initializeBlockableBackgroundPool(bg_thread_count == 0 ? settings.background_pool_size.get() : bg_thread_count);
@@ -119,12 +134,12 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
         paths.first,
         paths.second,
         Strings{},
-        /*enable_raft_compatible_mode=*/true,
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
     global_context->setPageStorageRunMode(ps_run_mode);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
+    global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
     LOG_INFO(Logger::get(), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     TiFlashRaftConfig raft_config;
@@ -139,7 +154,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     auto & path_pool = global_context->getPathPool();
     global_context->getTMTContext().restore(path_pool);
 
-    global_context->initializeSharedBlockSchemas();
+    global_context->initializeSharedBlockSchemas(10000);
 }
 
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
@@ -157,8 +172,9 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
         testdata_path.push_back(root_path);
     context.setPath(root_path);
     auto paths = getPathPool(testdata_path);
-    context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
+    context.setPathPool(paths.first, paths.second, Strings{}, context.getPathCapacity(), context.getFileProvider());
     global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
+    global_contexts[0]->initializeWriteNodePageStorageIfNeed(context.getPathPool());
     context.getSettingsRef() = settings;
     return context;
 }

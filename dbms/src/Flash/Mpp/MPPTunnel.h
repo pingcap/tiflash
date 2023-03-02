@@ -14,9 +14,10 @@
 
 #pragma once
 
+#include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/MPMCQueue.h>
+#include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
@@ -26,6 +27,7 @@
 #include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
+#include <common/StringRef.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -102,10 +104,13 @@ public:
     }
 
     virtual bool push(TrackedMppDataPacketPtr &&) = 0;
+    virtual bool nonBlockingPush(TrackedMppDataPacketPtr &&) = 0;
 
     virtual void cancelWith(const String &) = 0;
 
     virtual bool finish() = 0;
+
+    virtual bool isReadyForWrite() const = 0;
 
     void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg()
@@ -172,7 +177,7 @@ class SyncTunnelSender : public TunnelSender
 public:
     SyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_, std::atomic<Int64> * data_size_in_queue_)
         : TunnelSender(memory_tracker_, log_, tunnel_id_, data_size_in_queue_)
-        , send_queue(MPMCQueue<TrackedMppDataPacketPtr>(queue_size))
+        , send_queue(ConcurrentIOQueue<TrackedMppDataPacketPtr>(queue_size))
     {}
 
     ~SyncTunnelSender() override;
@@ -181,6 +186,11 @@ public:
     bool push(TrackedMppDataPacketPtr && data) override
     {
         return send_queue.push(std::move(data)) == MPMCQueueResult::OK;
+    }
+
+    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    {
+        return send_queue.nonBlockingPush(std::move(data)) == MPMCQueueResult::OK;
     }
 
     void cancelWith(const String & reason) override
@@ -193,11 +203,16 @@ public:
         return send_queue.finish();
     }
 
+    bool isReadyForWrite() const override
+    {
+        return !send_queue.isFull();
+    }
+
 private:
     friend class tests::TestMPPTunnel;
     void sendJob(PacketWriter * writer);
     std::shared_ptr<ThreadManager> thread_manager;
-    MPMCQueue<TrackedMppDataPacketPtr> send_queue;
+    ConcurrentIOQueue<TrackedMppDataPacketPtr> send_queue;
 };
 
 /// AsyncTunnelSender is mainly triggered by the Async PacketWriter which handles GRPC request/response in async mode, send one element one time
@@ -220,9 +235,19 @@ public:
         return queue.push(std::move(data));
     }
 
+    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    {
+        return queue.nonBlockingPush(std::move(data));
+    }
+
     bool finish() override
     {
         return queue.finish();
+    }
+
+    bool isReadyForWrite() const override
+    {
+        return !queue.isFull();
     }
 
     void cancelWith(const String & reason) override
@@ -288,7 +313,20 @@ public:
         // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
         data->switchMemTracker(local_request_handler.recv_mem_tracker);
 
-        return local_request_handler.write<enable_fine_grained_shuffle>(source_index, data);
+        return local_request_handler.write<enable_fine_grained_shuffle, false>(source_index, data);
+    }
+
+    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    {
+        if (unlikely(checkPacketErr(data)))
+            return false;
+
+        // receiver_mem_tracker pointer will always be valid because ExchangeReceiverBase won't be destructed
+        // before all local tunnels are destructed so that the MPPTask which contains ExchangeReceiverBase and
+        // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
+        data->switchMemTracker(local_request_handler.recv_mem_tracker);
+
+        return local_request_handler.write<enable_fine_grained_shuffle, true>(source_index, data);
     }
 
     void cancelWith(const String & reason) override
@@ -300,6 +338,11 @@ public:
     {
         finishWrite(false, "");
         return true;
+    }
+
+    bool isReadyForWrite() const override
+    {
+        return local_request_handler.isReadyForWrite();
     }
 
 private:
@@ -351,6 +394,11 @@ public:
         return send_queue.push(std::move(data)) == MPMCQueueResult::OK;
     }
 
+    bool nonBlockingPush(TrackedMppDataPacketPtr && data) override
+    {
+        return send_queue.nonBlockingPush(std::move(data)) == MPMCQueueResult::OK;
+    }
+
     void cancelWith(const String & reason) override
     {
         send_queue.cancelWith(reason);
@@ -361,9 +409,14 @@ public:
         return send_queue.finish();
     }
 
+    bool isReadyForWrite() const override
+    {
+        return !send_queue.isFull();
+    }
+
 private:
     bool cancel_reason_sent = false;
-    MPMCQueue<TrackedMppDataPacketPtr> send_queue;
+    ConcurrentIOQueue<TrackedMppDataPacketPtr> send_queue;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
@@ -427,6 +480,15 @@ public:
     // write a single packet to the tunnel's send queue, it will block if tunnel is not ready.
     void write(TrackedMppDataPacketPtr && data);
 
+    // nonBlockingWrite write a single packet to the tunnel's send queue without blocking,
+    // and need to call isReadForWrite first.
+    // ```
+    // while (!isReadyForWrite()) {}
+    // nonBlockingWrite(std::move(data));
+    // ```
+    void nonBlockingWrite(TrackedMppDataPacketPtr && data);
+    bool isReadyForWrite() const;
+
     // finish the writing, and wait until the sender finishes.
     void writeDone();
 
@@ -474,7 +536,7 @@ private:
         Finished // Final state, no more work to do
     };
 
-    StringRef statusToString();
+    std::string_view statusToString();
 
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
@@ -491,12 +553,15 @@ private:
         connection_profile_info.packets += 1;
     }
 
-    std::mutex mu;
+private:
+    mutable std::mutex mu;
     std::condition_variable cv_for_status_changed;
 
     TunnelStatus status;
 
     std::chrono::seconds timeout;
+    UInt64 timeout_nanoseconds{0};
+    mutable std::optional<Stopwatch> timeout_stopwatch;
 
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;

@@ -26,6 +26,7 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 
@@ -76,7 +77,7 @@ void PageStorageImpl::restore()
 
 PageIdU64 PageStorageImpl::getMaxId()
 {
-    return page_directory->getMaxId();
+    return page_directory->getMaxIdAfterRestart();
 }
 
 void PageStorageImpl::drop()

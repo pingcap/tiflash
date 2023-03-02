@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/MPMCQueue.h>
 #include <Common/grpcpp.h>
 #include <common/logger_useful.h>
 
@@ -110,10 +110,19 @@ public:
     ///
     /// Return true if push succeed.
     /// Else return false.
-    template <typename U>
-    bool push(U && u)
+    bool push(T && data)
     {
-        auto ret = send_queue.push(std::forward<U>(u)) == MPMCQueueResult::OK;
+        auto ret = send_queue.push(std::move(data)) == MPMCQueueResult::OK;
+        if (ret)
+        {
+            kickCompletionQueue();
+        }
+        return ret;
+    }
+
+    bool nonBlockingPush(T && data)
+    {
+        auto ret = send_queue.nonBlockingPush(std::move(data)) == MPMCQueueResult::OK;
         if (ret)
         {
             kickCompletionQueue();
@@ -153,27 +162,19 @@ public:
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
 
         auto res = send_queue.tryPop(data);
-        switch (res)
+        if (res == MPMCQueueResult::EMPTY)
         {
-        case MPMCQueueResult::OK:
-            return GRPCSendQueueRes::OK;
-        case MPMCQueueResult::FINISHED:
-            return GRPCSendQueueRes::FINISHED;
-        case MPMCQueueResult::CANCELLED:
-            return GRPCSendQueueRes::CANCELLED;
-        case MPMCQueueResult::EMPTY:
-            // Handle this case later.
-            break;
-        default:
-            RUNTIME_ASSERT(false, log, "Result {} is invalid", static_cast<Int32>(res));
+            // Double check if this queue is empty.
+            std::unique_lock lock(mu);
+            RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
+            res = send_queue.tryPop(data);
+            if (res == MPMCQueueResult::EMPTY)
+            {
+                // If empty, change status to WAITING.
+                status = Status::WAITING;
+                tag = new_tag;
+            }
         }
-
-        std::unique_lock lock(mu);
-
-        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
-
-        // Double check if this queue is empty.
-        res = send_queue.tryPop(data);
         switch (res)
         {
         case MPMCQueueResult::OK:
@@ -183,12 +184,7 @@ public:
         case MPMCQueueResult::CANCELLED:
             return GRPCSendQueueRes::CANCELLED;
         case MPMCQueueResult::EMPTY:
-        {
-            // If empty, change status to WAITING.
-            status = Status::WAITING;
-            tag = new_tag;
             return GRPCSendQueueRes::EMPTY;
-        }
         default:
             RUNTIME_ASSERT(false, log, "Result {} is invalid", magic_enum::enum_name(res));
         }
@@ -205,6 +201,11 @@ public:
             kickCompletionQueue();
         }
         return ret;
+    }
+
+    bool isFull() const
+    {
+        return send_queue.isFull();
     }
 
 private:
@@ -238,7 +239,7 @@ private:
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
 
-    MPMCQueue<T> send_queue;
+    ConcurrentIOQueue<T> send_queue;
 
     const LoggerPtr log;
 

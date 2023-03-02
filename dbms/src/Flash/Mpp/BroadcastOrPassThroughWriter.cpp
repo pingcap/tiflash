@@ -17,7 +17,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
-#include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MPPTunnelSetWriter.h>
 
 namespace DB
 {
@@ -70,6 +70,12 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 }
 
 template <class ExchangeWriterPtr>
+bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::isReadyForWrite() const
+{
+    return writer->isReadyForWrite();
+}
+
+template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
@@ -107,6 +113,6 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::writeBlocks()
     rows_in_blocks = 0;
 }
 
-template class BroadcastOrPassThroughWriter<MPPTunnelSetPtr>;
-
+template class BroadcastOrPassThroughWriter<SyncMPPTunnelSetWriterPtr>;
+template class BroadcastOrPassThroughWriter<AsyncMPPTunnelSetWriterPtr>;
 } // namespace DB

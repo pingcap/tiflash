@@ -224,12 +224,6 @@ struct MockExchangeWriter
     }
 
     static void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
-    void sendExecutionSummary(const tipb::SelectResponse & response)
-    {
-        auto tracked_packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
-        tracked_packet->serializeByResponse(response);
-        checker(tracked_packet, 0);
-    }
     uint16_t getPartitionNum() const { return part_num; }
     bool isLocal(size_t index) const
     {
@@ -237,6 +231,7 @@ struct MockExchangeWriter
         // make only part 0 use local tunnel
         return index == 0;
     }
+    bool isReadyForWrite() const { throw Exception("Unsupport async write"); }
 
 private:
     MockExchangeWriterChecker checker;

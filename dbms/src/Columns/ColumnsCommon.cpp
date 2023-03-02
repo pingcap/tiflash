@@ -16,6 +16,8 @@
 #include <Columns/IColumn.h>
 #include <common/memcpy.h>
 
+#include <bit>
+
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 ASSERT_USE_AVX2_COMPILE_FLAG
 #endif
@@ -106,7 +108,7 @@ static inline size_t CountBytesInFilterWithNull(const IColumn::Filter & filt, co
 #if defined(__SSE2__) || defined(__AVX2__)
     for (; size >= 64;)
     {
-        count += __builtin_popcountll(ToBits64(p1) & ~ToBits64(p2));
+        count += std::popcount(ToBits64(p1) & ~ToBits64(p2));
         p1 += 64, p2 += 64;
         size -= 64;
     }
@@ -249,17 +251,17 @@ void filterArraysImplGeneric(
     };
 
 #if __SSE2__
-    static constexpr size_t SIMD_BYTES = mem_utils::details::BLOCK16_SIZE;
+    static constexpr size_t SIMD_BYTES = 16;
     const auto * filt_end_aligned = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
     const auto zero_vec = _mm_setzero_si128();
 
     while (filt_pos < filt_end_aligned)
     {
         uint32_t mask = _mm_movemask_epi8(_mm_cmpgt_epi8(
-            mem_utils::details::load_block16(filt_pos),
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)),
             zero_vec));
 
-        if (mem_utils::details::Block16Mask == mask)
+        if (0xffff == mask)
         {
             /// SIMD_BYTES consecutive rows pass the filter
             const auto first = offsets_pos == offsets_begin;
@@ -278,7 +280,7 @@ void filterArraysImplGeneric(
         {
             while (mask)
             {
-                size_t index = __builtin_ctz(mask);
+                size_t index = std::countr_zero(mask);
                 copy_array(offsets_pos + index);
                 mask = mask & (mask - 1);
             }

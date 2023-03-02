@@ -221,8 +221,6 @@ void applyAlter(ColumnDefines & table_columns,
     /// Caller should ensure the command is legal.
     /// eg. The column to modify/drop/rename must exist, the column to add must not exist, the new column name of rename must not exists.
 
-    Poco::Logger * log = &Poco::Logger::get("SchemaUpdate");
-
     if (command.type == AlterCommand::MODIFY_COLUMN)
     {
         // find column define and then apply modify
@@ -248,7 +246,7 @@ void applyAlter(ColumnDefines & table_columns,
         {
             // Fall back to find column by name, this path should only call by tests.
             LOG_WARNING(
-                log,
+                Logger::get(),
                 "Try to apply alter to column: {}, id: {},"
                 " but not found by id, fall back locating col by name.",
                 command.column_name,
@@ -311,7 +309,7 @@ void applyAlter(ColumnDefines & table_columns,
     }
     else
     {
-        LOG_WARNING(log, "receive unknown alter command, type: {}", static_cast<Int32>(command.type));
+        LOG_WARNING(Logger::get(), "receive unknown alter command, type: {}", static_cast<Int32>(command.type));
     }
 }
 

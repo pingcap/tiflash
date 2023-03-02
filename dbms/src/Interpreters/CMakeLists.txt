@@ -12,14 +12,3 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-list(GET Poco_INCLUDE_DIRS 0 Poco_Foundation_INCLUDE_DIR)
-list(GET Poco_INCLUDE_DIRS 1 Poco_Util_INCLUDE_DIR)
-
-if (NOT DOUBLE_CONVERSION_INCLUDE_DIR)
-    get_target_property(DOUBLE_CONVERSION_INCLUDE_DIR ${DOUBLE_CONVERSION_LIBRARIES} INTERFACE_INCLUDE_DIRECTORIES)
-endif ()
-
-if (ENABLE_TESTS)
-    add_subdirectory (tests EXCLUDE_FROM_ALL)
-endif ()

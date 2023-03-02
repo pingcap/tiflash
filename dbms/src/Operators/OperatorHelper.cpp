@@ -25,8 +25,7 @@ void assertOperatorStatus(
 {
     switch (status)
     {
-    // finish status and waiting status can be returned in all method of operator.
-    case OperatorStatus::FINISHED:
+    // cancel status and waiting status can be returned in all method of operator.
     case OperatorStatus::CANCELLED:
     case OperatorStatus::WAITING:
         return;

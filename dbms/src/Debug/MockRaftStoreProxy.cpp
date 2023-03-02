@@ -657,7 +657,7 @@ TableID MockRaftStoreProxy::bootstrap_table(
     columns.ordinary = NamesAndTypesList({NameAndTypePair{"a", data_type_factory.get("Int64")}});
     auto tso = tmt.getPDClient()->getTS();
     MockTiDB::instance().newDataBase("d");
-    UInt64 table_id = MockTiDB::instance().newTable("d", "t", columns, tso, "", "dt");
+    UInt64 table_id = MockTiDB::instance().newTable("d", "t" + toString(random()), columns, tso, "", "dt");
 
     auto schema_syncer = tmt.getSchemaSyncer();
     schema_syncer->syncSchemas(ctx);

@@ -23,10 +23,19 @@
 namespace DB
 {
 
+struct SpilledFileInfo
+{
+    String path;
+    std::unique_ptr<SpilledFile> file;
+    SpilledFileInfo(const String path_)
+        : path(path_)
+    {}
+};
+
 class SpilledFilesInputStream : public IProfilingBlockInputStream
 {
 public:
-    SpilledFilesInputStream(const std::vector<String> & spilled_files, const Block & header, const FileProviderPtr & file_provider, Int64 max_supported_spill_version);
+    SpilledFilesInputStream(std::vector<SpilledFileInfo> && spilled_file_infos, const Block & header, const FileProviderPtr & file_provider, Int64 max_supported_spill_version);
     Block getHeader() const override;
     String getName() const override;
 
@@ -36,12 +45,14 @@ protected:
 private:
     struct SpilledFileStream
     {
+        SpilledFileInfo spilled_file_info;
         ReadBufferFromFileProvider file_in;
         CompressedReadBuffer<> compressed_in;
         BlockInputStreamPtr block_in;
 
-        SpilledFileStream(const std::string & path, const Block & header, const FileProviderPtr & file_provider, Int64 max_supported_spill_version)
-            : file_in(file_provider, path, EncryptionPath(path, ""))
+        SpilledFileStream(SpilledFileInfo && spilled_file_info_, const Block & header, const FileProviderPtr & file_provider, Int64 max_supported_spill_version)
+            : spilled_file_info(std::move(spilled_file_info_))
+            , file_in(file_provider, spilled_file_info.path, EncryptionPath(spilled_file_info.path, ""))
             , compressed_in(file_in)
         {
             Int64 file_spill_version = 0;
@@ -54,7 +65,7 @@ private:
         }
     };
 
-    std::vector<String> spilled_files;
+    std::vector<SpilledFileInfo> spilled_file_infos;
     size_t current_reading_file_index;
     Block header;
     FileProviderPtr file_provider;

@@ -40,11 +40,15 @@ using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
 
 class PipelineExecutorStatus;
 
+class SharedQueue;
+using SharedQueuePtr = std::shared_ptr<SharedQueue>;
+
 class Pipeline : public std::enable_shared_from_this<Pipeline>
 {
 public:
-    explicit Pipeline(UInt32 id_)
+    Pipeline(UInt32 id_, const String & req_id)
         : id(id_)
+        , log(Logger::get(req_id, id_))
     {}
 
     void addPlanNode(const PhysicalPlanNodePtr & plan_node);
@@ -53,14 +57,16 @@ public:
 
     void toTreeString(FmtBuffer & buffer, size_t level = 0) const;
 
-    // only used for test to get the result blocks.
-    void addGetResultSink(ResultHandler result_handler);
+    // used for getting the result blocks.
+    void addGetResultSink(ResultHandler && result_handler);
 
     PipelineExecGroup buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
 
     Events toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
 
     static bool isSupported(const tipb::DAGRequest & dag_request);
+
+    Block getSampleBlock() const;
 
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
@@ -69,6 +75,7 @@ private:
 
 private:
     const UInt32 id;
+    LoggerPtr log;
 
     // data flow: plan_nodes.begin() --> plan_nodes.end()
     std::deque<PhysicalPlanNodePtr> plan_nodes;

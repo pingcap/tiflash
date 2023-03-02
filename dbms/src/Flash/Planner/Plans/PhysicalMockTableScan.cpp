@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
@@ -67,6 +68,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     assert(!schema.empty());
     assert(!mock_streams.empty());
 
+    // Ignore handling GeneratedColumnPlaceholderBlockInputStream for now, because we don't support generated column in test framework.
     return {std::move(schema), std::move(mock_streams)};
 }
 } // namespace
@@ -114,7 +116,7 @@ void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_b
     group_builder.init(mock_streams.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(group_builder.exec_status, mock_streams[i++]));
+        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(group_builder.exec_status, log->identifier(), mock_streams[i++]));
     });
 }
 

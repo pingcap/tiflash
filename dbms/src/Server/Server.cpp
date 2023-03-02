@@ -15,6 +15,7 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/CPUAffinityManager.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/ComputeLabelHolder.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DynamicThreadPool.h>
@@ -48,7 +49,6 @@
 #include <IO/ReadHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
-#include <Interpreters/IDAsPathUpgrader.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/loadMetadata.h>
 #include <Poco/DirectoryIterator.h>
@@ -74,6 +74,7 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
@@ -946,6 +947,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashStorageConfig storage_config;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
 
+    if (storage_config.s3_config.isS3Enabled())
+    {
+        S3::ClientFactory::instance().init(storage_config.s3_config);
+    }
+
     if (storage_config.format_version)
     {
         setStorageFormat(storage_config.format_version);
@@ -967,7 +973,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.main_data_paths, //
         storage_config.latest_data_paths, //
         storage_config.kvstore_data_path, //
-        raft_config.enable_compatible_mode, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
@@ -976,8 +981,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
 
     // Use pd address to define which default_database we use by default.
-    // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
-    std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
+    // For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
+    std::string default_database = config().getString("default_database", "system");
     Strings all_normal_path = storage_config.getAllNormalPaths();
     const std::string path = all_normal_path[0];
     global_context->setPath(path);
@@ -1077,6 +1082,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
+    /// Initialize the labels of tiflash compute node.
+    ComputeLabelHolder::instance().init(config());
+
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
@@ -1101,6 +1109,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// PageStorage run mode has been determined above
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
+
+    global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
@@ -1198,32 +1208,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DM::DMFileReaderPool::instance();
-    DM::SegmentReaderPoolManager::instance().init(server_info);
+    DM::SegmentReaderPoolManager::instance().init(server_info.cpu_info.logical_cores, settings.dt_read_thread_count_scale);
     DM::SegmentReadTaskScheduler::instance();
 
-    global_context->initializeSharedBlockSchemas();
+    auto schema_cache_size = config().getInt("schema_cache_size", 10000);
+    global_context->initializeSharedBlockSchemas(schema_cache_size);
 
-    {
-        // Note that this must do before initialize schema sync service.
-        do
-        {
-            // Check whether we need to upgrade directories hierarchy
-            // If some database can not find in TiDB, they will be dropped
-            // if theirs name is not in reserved_databases.
-            // Besides, database engine in reserved_databases just keep as
-            // what they are.
-            IDAsPathUpgrader upgrader(
-                *global_context,
-                /*is_mock=*/raft_config.pd_addrs.empty(),
-                /*reserved_databases=*/raft_config.ignore_databases);
-            if (!upgrader.needUpgrade())
-                break;
-            upgrader.doUpgrade();
-        } while (false);
-
-        /// Then, load remaining databases
-        loadMetadata(*global_context);
-    }
+    // Load remaining databases
+    loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
 
     if (!global_context->isDisaggregatedComputeMode())
@@ -1270,6 +1262,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // `Context::shutdown()` will destroy `DeltaIndexManager`.
         // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
         DB::DM::SegmentReaderPoolManager::instance().stop();
+        if (storage_config.s3_config.isS3Enabled())
+        {
+            S3::ClientFactory::instance().shutdown();
+        }
         global_context->shutdown();
         LOG_DEBUG(log, "Shutted down storages.");
     });
@@ -1283,10 +1279,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// setting up elastic thread pool
-    if (settings.enable_elastic_threadpool)
+    bool enable_elastic_threadpool = settings.enable_elastic_threadpool;
+    if (enable_elastic_threadpool)
         DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
             settings.elastic_threadpool_init_cap,
             std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
+    SCOPE_EXIT({
+        if (enable_elastic_threadpool)
+        {
+            assert(DynamicThreadPool::global_instance);
+            DynamicThreadPool::global_instance.reset();
+        }
+    });
 
     // For test mode, TaskScheduler is controlled by test case.
     bool enable_pipeline = settings.enable_pipeline && !global_context->isTest();
@@ -1366,6 +1370,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto & tmt_context = global_context->getTMTContext();
         if (proxy_conf.is_proxy_runnable)
         {
+            // If a TiFlash starts before any TiKV starts, then the very first Region will be created in TiFlash's proxy and it must be the peer as a leader role.
+            // This conflicts with the assumption that tiflash does not contain any Region leader peer and leads to unexpected errors
+            LOG_INFO(log, "Waiting for TiKV cluster to be bootstrapped");
+            while (!tmt_context.getPDClient()->isClusterBootstrapped())
+            {
+                const int wait_seconds = 3;
+                LOG_ERROR(
+                    log,
+                    "Waiting for cluster to be bootstrapped, we will sleep for {} seconds and try again.",
+                    wait_seconds);
+                ::sleep(wait_seconds);
+            }
+
             tiflash_instance_wrap.tmt = &tmt_context;
             LOG_INFO(log, "Let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;

@@ -13,9 +13,9 @@
 # limitations under the License.
 
 include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
-add_headers_and_sources(clickhouse_aggregate_functions .)
+add_headers_and_sources(tiflash_aggregate_functions .)
 
-list(REMOVE_ITEM clickhouse_aggregate_functions_sources
+list(REMOVE_ITEM tiflash_aggregate_functions_sources
     AggregateFunctionFactory.cpp
     AggregateFunctionCombinatorFactory.cpp
     AggregateFunctionState.cpp
@@ -23,7 +23,7 @@ list(REMOVE_ITEM clickhouse_aggregate_functions_sources
     FactoryHelpers.cpp
 )
 
-list(REMOVE_ITEM clickhouse_aggregate_functions_headers
+list(REMOVE_ITEM tiflash_aggregate_functions_headers
     IAggregateFunction.h
     IAggregateFunctionCombinator.h
     AggregateFunctionFactory.h
@@ -33,6 +33,5 @@ list(REMOVE_ITEM clickhouse_aggregate_functions_headers
     FactoryHelpers.h
 )
 
-add_library(clickhouse_aggregate_functions ${clickhouse_aggregate_functions_sources} AggregateFunctionGroupConcat.h)
-target_link_libraries(clickhouse_aggregate_functions dbms)
-target_include_directories (clickhouse_aggregate_functions BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
+add_library(tiflash_aggregate_functions ${tiflash_aggregate_functions_sources} AggregateFunctionGroupConcat.h)
+target_link_libraries(tiflash_aggregate_functions PRIVATE dbms)

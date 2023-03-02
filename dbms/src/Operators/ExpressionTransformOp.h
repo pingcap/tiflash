@@ -27,11 +27,10 @@ class ExpressionTransformOp : public TransformOp
 public:
     ExpressionTransformOp(
         PipelineExecutorStatus & exec_status_,
-        const ExpressionActionsPtr & expression_,
-        const String & req_id)
-        : TransformOp(exec_status_)
+        const String & req_id,
+        const ExpressionActionsPtr & expression_)
+        : TransformOp(exec_status_, req_id)
         , expression(expression_)
-        , log(Logger::get(req_id))
     {}
 
     String getName() const override
@@ -39,12 +38,12 @@ public:
         return "ExpressionTransformOp";
     }
 
+protected:
     OperatorStatus transformImpl(Block & block) override;
 
     void transformHeaderImpl(Block & header_) override;
 
 private:
     ExpressionActionsPtr expression;
-    const LoggerPtr log;
 };
 } // namespace DB

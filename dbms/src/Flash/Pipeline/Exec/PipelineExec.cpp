@@ -17,12 +17,28 @@
 
 namespace DB
 {
+void PipelineExec::executePrefix()
+{
+    sink_op->operatePrefix();
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+        (*it)->operatePrefix();
+    source_op->operatePrefix();
+}
+
+void PipelineExec::executeSuffix()
+{
+    sink_op->operateSuffix();
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+        (*it)->operateSuffix();
+    source_op->operateSuffix();
+}
+
 OperatorStatus PipelineExec::execute()
 {
     auto op_status = executeImpl();
 #ifndef NDEBUG
     // `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`.
-    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif
     return op_status;
 }

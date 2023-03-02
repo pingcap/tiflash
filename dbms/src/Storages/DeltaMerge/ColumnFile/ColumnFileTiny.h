@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
+#include <Storages/Page/PageStorage_fwd.h>
 
 namespace DB
 {
@@ -91,10 +92,7 @@ public:
     ColumnFileReaderPtr
     getReader(const DMContext & /*context*/, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
 
-    void removeData(WriteBatches & wbs) const override
-    {
-        wbs.removed_log.delPage(data_page_id);
-    }
+    void removeData(WriteBatches & wbs) const override;
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
@@ -170,6 +168,8 @@ public:
     std::pair<size_t, size_t> readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
 
     Block readNextBlock() override;
+
+    size_t skipNextBlock() override;
 
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
 };

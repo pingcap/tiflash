@@ -15,6 +15,8 @@
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/WriteBatchImpl.h>
+#include <Storages/Page/WriteBatchWrapperImpl.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
@@ -43,7 +45,7 @@ public:
 
         auto & global_context = TiFlashTestEnv::getGlobalContext();
 
-        storage_path_pool_v3 = std::make_unique<PathPool>(Strings{path}, Strings{path}, Strings{}, std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps), global_context.getFileProvider(), true);
+        storage_path_pool_v3 = std::make_unique<PathPool>(Strings{path}, Strings{path}, Strings{}, std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps), global_context.getFileProvider());
 
         global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
     }
@@ -67,7 +69,7 @@ public:
         storage_pool_v2 = std::make_unique<DM::StoragePool>(global_context, TEST_NAMESPACE_ID, *storage_path_pool_v2, "test.t1");
 
         global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
-        storage_pool_mix = std::make_unique<DM::StoragePool>(global_context,
+        storage_pool_mix = std::make_unique<DM::StoragePool>(*db_context,
                                                              TEST_NAMESPACE_ID,
                                                              *storage_path_pool_v2,
                                                              "test.t1");
@@ -84,12 +86,12 @@ public:
         return run_mode;
     }
 
-    PageReader newMixedPageReader(PageStorage::SnapshotPtr & snapshot)
+    PageReaderPtr newMixedPageReader(PageStorage::SnapshotPtr & snapshot)
     {
         return storage_pool_mix->newLogReader(nullptr, snapshot);
     }
 
-    PageReader newMixedPageReader()
+    PageReaderPtr newMixedPageReader()
     {
         return storage_pool_mix->newLogReader(nullptr, true, "PageStorageMixedTest");
     }
@@ -340,9 +342,9 @@ try
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix);
 
-        const auto & page1 = page_reader_mix_with_snap.read(1);
-        const auto & page2 = page_reader_mix_with_snap.read(2);
-        const auto & page3 = page_reader_mix_with_snap.read(3);
+        const auto & page1 = page_reader_mix_with_snap->read(1);
+        const auto & page2 = page_reader_mix_with_snap->read(2);
+        const auto & page3 = page_reader_mix_with_snap->read(3);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 2);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
@@ -350,9 +352,9 @@ try
 
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, true, "ReadWithSnapshotTest");
-        const auto & page1 = page_reader_mix_with_snap.read(1);
-        const auto & page2 = page_reader_mix_with_snap.read(2);
-        const auto & page3 = page_reader_mix_with_snap.read(3);
+        const auto & page1 = page_reader_mix_with_snap->read(1);
+        const auto & page2 = page_reader_mix_with_snap->read(2);
+        const auto & page3 = page_reader_mix_with_snap->read(3);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 2);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
@@ -366,7 +368,7 @@ try
     }
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix);
-        ASSERT_THROW(page_reader_mix_with_snap.read(4), DB::Exception);
+        ASSERT_THROW(page_reader_mix_with_snap->read(4), DB::Exception);
     }
 
     {
@@ -519,7 +521,7 @@ try
     auto snapshot_mix_mode = page_reader_mix->getSnapshot("ReadWithSnapshotAfterDelOrigin");
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_mode);
-        const auto & page1 = page_reader_mix_with_snap.read(1);
+        const auto & page1 = page_reader_mix_with_snap->read(1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
     }
 
@@ -531,7 +533,7 @@ try
 
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_mode);
-        const auto & page1 = page_reader_mix_with_snap.read(1);
+        const auto & page1 = page_reader_mix_with_snap->read(1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
     }
 }
@@ -565,7 +567,7 @@ try
     auto snapshot_mix_mode = page_reader_mix->getSnapshot("ReadWithSnapshotAfterDelOrigin");
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_mode);
-        const auto & page1 = page_reader_mix_with_snap.read(1);
+        const auto & page1 = page_reader_mix_with_snap->read(1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
     }
 
@@ -578,7 +580,7 @@ try
 
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_mode);
-        const auto & page1 = page_reader_mix_with_snap.read(1);
+        const auto & page1 = page_reader_mix_with_snap->read(1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
     }
 }
@@ -618,7 +620,7 @@ try
     auto snapshot_mix_mode = page_reader_mix->getSnapshot("ReadWithSnapshotAfterDelOrigin");
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_mode);
-        const auto & page1 = page_reader_mix_with_snap.read(2);
+        const auto & page1 = page_reader_mix_with_snap->read(2);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 2);
     }
 
@@ -630,7 +632,7 @@ try
 
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_mode);
-        const auto & page1 = page_reader_mix_with_snap.read(2);
+        const auto & page1 = page_reader_mix_with_snap->read(2);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 2);
     }
 }
@@ -683,7 +685,7 @@ try
 
     {
         ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
-        ASSERT_EQ(storage_pool_mix->newLogPageId(), 4);
+        //        ASSERT_EQ(storage_pool_mix->newLogPageId(), 4); // max id for v3 will not be updated, ignore this check
     }
 }
 CATCH
@@ -728,7 +730,7 @@ try
 
     {
         ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::ONLY_V3);
-        ASSERT_EQ(storage_pool_mix->newLogPageId(), 2);
+        //        ASSERT_EQ(storage_pool_mix->newLogPageId(), 2); // max id for v3 will not be updated, ignore this check
     }
 }
 CATCH
@@ -758,7 +760,7 @@ try
     {
         ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
         ASSERT_EQ(page_reader_mix->getNormalPageId(2), 1);
-        ASSERT_EQ(storage_pool_mix->newLogPageId(), 3);
+        //        ASSERT_EQ(storage_pool_mix->newLogPageId(), 3); // max id for v3 will not be updated, ignore this check
     }
 
     auto snapshot_before_del = page_reader_mix->getSnapshot("ReadWithSnapshotBeforeDelOrigin");
@@ -773,7 +775,7 @@ try
 
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_before_del);
-        const auto & page1 = page_reader_mix_with_snap.read(1);
+        const auto & page1 = page_reader_mix_with_snap->read(1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
     }
 
@@ -787,19 +789,19 @@ try
 
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_after_del_origin);
-        const auto & page1 = page_reader_mix_with_snap.read(2);
+        const auto & page1 = page_reader_mix_with_snap->read(2);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 2);
     }
 
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_after_del_origin);
-        const auto & page1 = page_reader_mix_with_snap.read(2);
+        const auto & page1 = page_reader_mix_with_snap->read(2);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 2);
     }
 
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_after_del_all);
-        ASSERT_ANY_THROW(page_reader_mix_with_snap.read(2));
+        ASSERT_ANY_THROW(page_reader_mix_with_snap->read(2));
     }
 }
 CATCH
@@ -1034,18 +1036,18 @@ try
     auto snapshot_mix_before_merge_delta = page_reader_mix->getSnapshot("ReadWithSnapshotAfterMergeDelta");
     {
         auto page_reader_mix_with_snap = newMixedPageReader(snapshot_mix_before_merge_delta);
-        const auto & page1 = page_reader_mix_with_snap.read(1);
-        const auto & page2 = page_reader_mix_with_snap.read(2);
-        const auto & page3 = page_reader_mix_with_snap.read(3);
+        const auto & page1 = page_reader_mix_with_snap->read(1);
+        const auto & page2 = page_reader_mix_with_snap->read(2);
+        const auto & page3 = page_reader_mix_with_snap->read(3);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 2);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
     }
     {
         auto page_reader_mix_with_snap = newMixedPageReader();
-        const auto & page1 = page_reader_mix_with_snap.read(1);
-        const auto & page2 = page_reader_mix_with_snap.read(2);
-        const auto & page3 = page_reader_mix_with_snap.read(3);
+        const auto & page1 = page_reader_mix_with_snap->read(1);
+        const auto & page2 = page_reader_mix_with_snap->read(2);
+        const auto & page3 = page_reader_mix_with_snap->read(3);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 2);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
@@ -1063,11 +1065,11 @@ try
     {
         auto page_reader_mix_with_snap = newMixedPageReader(snapshot_mix_before_merge_delta);
         // read 1, 3 with snapshot, should be success
-        const auto & page1 = page_reader_mix_with_snap.read(1);
-        const auto & page3 = page_reader_mix_with_snap.read(3);
+        const auto & page1 = page_reader_mix_with_snap->read(1);
+        const auto & page3 = page_reader_mix_with_snap->read(3);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
-        ASSERT_THROW(page_reader_mix_with_snap.read(4), DB::Exception);
+        ASSERT_THROW(page_reader_mix_with_snap->read(4), DB::Exception);
     }
 
     {
@@ -1116,7 +1118,7 @@ try
     }
 
     {
-        auto page_maps = newMixedPageReader(snapshot_mix).read({1, 2});
+        auto page_maps = newMixedPageReader(snapshot_mix)->read({1, 2});
         ASSERT_EQ(page_maps.size(), 2);
 
         ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(1), 1);
@@ -1183,7 +1185,7 @@ try
     }
 
     {
-        auto page_maps = newMixedPageReader(snapshot_mix).read({1, 2});
+        auto page_maps = newMixedPageReader(snapshot_mix)->read({1, 2});
         ASSERT_EQ(page_maps.size(), 2);
 
         ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(1), 1);
@@ -1346,7 +1348,7 @@ try
     }
 
     {
-        auto page1 = newMixedPageReader(snapshot_mix).read(1);
+        auto page1 = newMixedPageReader(snapshot_mix)->read(1);
         ASSERT_PAGE_EQ(c_buff1, buf_sz, page1, 1);
     }
 

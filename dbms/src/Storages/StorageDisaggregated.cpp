@@ -102,6 +102,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(
         bo,
         cluster,
+        /*is_mpp=*/true,
         table_scan.isPartitionTableScan(),
         physical_table_ids,
         ranges_for_each_physical_table,

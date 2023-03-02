@@ -37,6 +37,7 @@ public:
         tipb::CompressionMode compression_mode_,
         tipb::ExchangeType exchange_type_);
     void write(const Block & block) override;
+    bool isReadyForWrite() const override;
     void flush() override;
 
 private:

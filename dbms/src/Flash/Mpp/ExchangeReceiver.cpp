@@ -411,9 +411,9 @@ void ExchangeReceiverBase<RPCContext>::prepareMsgChannels()
 {
     if (enable_fine_grained_shuffle_flag)
         for (size_t i = 0; i < output_stream_count; ++i)
-            msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+            msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
     else
-        msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+        msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
 }
 
 template <typename RPCContext>
@@ -707,32 +707,93 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 }
 
 template <typename RPCContext>
+ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
+{
+    return receive(
+        stream_id,
+        [&](size_t stream_id, std::shared_ptr<ReceivedMessage> & recv_msg) {
+            return msg_channels[stream_id]->pop(recv_msg);
+        });
+}
+
+template <typename RPCContext>
+ReceiveResult ExchangeReceiverBase<RPCContext>::nonBlockingReceive(size_t stream_id)
+{
+    return receive(
+        stream_id,
+        [&](size_t stream_id, std::shared_ptr<ReceivedMessage> & recv_msg) {
+            return msg_channels[stream_id]->tryPop(recv_msg);
+        });
+}
+
+template <typename RPCContext>
+ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
+    size_t stream_id,
+    std::function<MPMCQueueResult(size_t, std::shared_ptr<ReceivedMessage> &)> recv_func)
+{
+    if (unlikely(stream_id >= msg_channels.size()))
+    {
+        auto err_msg = fmt::format("stream_id out of range, stream_id: {}, total_channel_count: {}", stream_id, msg_channels.size());
+        LOG_ERROR(exc_log, err_msg);
+        throw Exception(err_msg);
+    }
+
+    std::shared_ptr<ReceivedMessage> recv_msg;
+    switch (recv_func(stream_id, recv_msg))
+    {
+    case MPMCQueueResult::OK:
+        assert(recv_msg);
+        return {ReceiveStatus::ok, std::move(recv_msg)};
+    case MPMCQueueResult::EMPTY:
+        return {ReceiveStatus::empty, nullptr};
+    default:
+        return {ReceiveStatus::eof, nullptr};
+    }
+}
+
+template <typename RPCContext>
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toExchangeReceiveResult(
+    ReceiveResult & recv_result,
+    std::queue<Block> & block_queue,
+    const Block & header,
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
+{
+    switch (recv_result.recv_status)
+    {
+    case ReceiveStatus::ok:
+    {
+        assert(recv_result.recv_msg != nullptr);
+        if (unlikely(recv_result.recv_msg->error_ptr != nullptr))
+            return ExchangeReceiverResult::newError(
+                recv_result.recv_msg->source_index,
+                recv_result.recv_msg->req_info,
+                recv_result.recv_msg->error_ptr->msg());
+
+        ExchangeReceiverMetric::subDataSizeMetric(
+            data_size_in_queue,
+            recv_result.recv_msg->packet->getPacket().ByteSizeLong());
+        return toDecodeResult(block_queue, header, recv_result.recv_msg, decoder_ptr);
+    }
+    case ReceiveStatus::eof:
+        return handleUnnormalChannel(block_queue, decoder_ptr);
+    case ReceiveStatus::empty:
+        throw Exception("Unexpected recv status: empty");
+    }
+}
+
+template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
     std::queue<Block> & block_queue,
     const Block & header,
     size_t stream_id,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
-    if (unlikely(stream_id >= msg_channels.size()))
-    {
-        LOG_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
-        return ExchangeReceiverResult::newError(0, "", "stream_id out of range");
-    }
-
-    std::shared_ptr<ReceivedMessage> recv_msg;
-    if (msg_channels[stream_id]->pop(recv_msg) != MPMCQueueResult::OK)
-    {
-        return handleUnnormalChannel(block_queue, decoder_ptr);
-    }
-    else
-    {
-        assert(recv_msg != nullptr);
-        if (unlikely(recv_msg->error_ptr != nullptr))
-            return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
-
-        ExchangeReceiverMetric::subDataSizeMetric(data_size_in_queue, recv_msg->packet->getPacket().ByteSizeLong());
-        return toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
-    }
+    auto recv_res = receive(stream_id);
+    return toExchangeReceiveResult(
+        recv_res,
+        block_queue,
+        header,
+        decoder_ptr);
 }
 
 template <typename RPCContext>
@@ -834,6 +895,7 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
     const LoggerPtr & log)
 {
     Int32 copy_live_connections;
+    String first_err_msg = local_err_msg;
     {
         std::lock_guard lock(mu);
 
@@ -843,29 +905,39 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
                 state = ExchangeReceiverState::ERROR;
             if (err_msg.empty())
                 err_msg = local_err_msg;
+            else
+                first_err_msg = err_msg;
         }
 
         copy_live_connections = --live_connections;
     }
 
-    LOG_DEBUG(
-        log,
-        "connection end. meet error: {}, err msg: {}, current alive connections: {}",
-        meet_error,
-        local_err_msg,
-        copy_live_connections);
-
+    if (meet_error)
+    {
+        LOG_WARNING(
+            log,
+            "connection end. meet error: {}, err msg: {}, current alive connections: {}",
+            meet_error,
+            local_err_msg,
+            copy_live_connections);
+    }
+    else
+    {
+        LOG_DEBUG(
+            log,
+            "connection end. Current alive connections: {}",
+            copy_live_connections);
+    }
+    assert(copy_live_connections >= 0);
     if (copy_live_connections == 0)
     {
         LOG_DEBUG(log, "All threads end in ExchangeReceiver");
         cv.notify_all();
     }
-    else if (copy_live_connections < 0)
-        throw Exception("alive_connection_num should not be less than 0!");
 
     if (meet_error || copy_live_connections == 0)
     {
-        LOG_INFO(exc_log, "receiver channels finished");
+        LOG_INFO(exc_log, "receiver channels finished, meet error: {}, error message: {}", meet_error, first_err_msg);
         finishAllMsgChannels();
     }
 }

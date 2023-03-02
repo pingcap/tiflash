@@ -13,12 +13,16 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Poco/Environment.h>
+#include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 #include <signal.h>
+
 
 namespace DB::FailPoints
 {
@@ -59,12 +63,29 @@ int main(int argc, char ** argv)
     install_fault_signal_handlers({SIGSEGV, SIGILL, SIGFPE, SIGABRT, SIGTERM});
 
     DB::tests::TiFlashTestEnv::setupLogger();
-    DB::tests::TiFlashTestEnv::initializeGlobalContext();
+    auto run_mode = DB::PageStorageRunMode::ONLY_V3;
+    DB::tests::TiFlashTestEnv::initializeGlobalContext(/*testdata_path*/ {}, run_mode);
+
     DB::ServerInfo server_info;
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DB::DM::DMFileReaderPool::instance();
-    DB::DM::SegmentReaderPoolManager::instance().init(server_info);
+    DB::DM::SegmentReaderPoolManager::instance().init(
+        server_info.cpu_info.logical_cores,
+        DB::tests::TiFlashTestEnv::getGlobalContext().getSettingsRef().dt_read_thread_count_scale);
     DB::DM::SegmentReadTaskScheduler::instance();
+
+    const auto s3_endpoint = Poco::Environment::get("S3_ENDPOINT", "");
+    const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "");
+    const auto access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", "");
+    const auto secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", "");
+    auto s3config = DB::StorageS3Config{
+        .endpoint = s3_endpoint,
+        .bucket = s3_bucket,
+        .access_key_id = access_key_id,
+        .secret_access_key = secret_access_key,
+    };
+    Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
+    DB::S3::ClientFactory::instance().init(s3config);
 
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
@@ -82,6 +103,7 @@ int main(int argc, char ** argv)
     // Stop threads explicitly before `TiFlashTestEnv::shutdown()`.
     DB::DM::SegmentReaderPoolManager::instance().stop();
     DB::tests::TiFlashTestEnv::shutdown();
+    DB::S3::ClientFactory::instance().shutdown();
 
     return ret;
 }

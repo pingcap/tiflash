@@ -20,7 +20,6 @@
 
 namespace DB
 {
-
 class IBlockInputStream;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 using BlockInputStreams = std::vector<BlockInputStreamPtr>;
@@ -28,11 +27,11 @@ class SpillHandler;
 
 struct SpillDetails
 {
-    size_t rows;
-    size_t data_bytes_uncompressed;
-    size_t data_bytes_compressed;
+    UInt64 rows = 0;
+    UInt64 data_bytes_uncompressed = 0;
+    UInt64 data_bytes_compressed = 0;
     SpillDetails() = default;
-    SpillDetails(size_t rows_, size_t data_bytes_uncompressed_, size_t data_bytes_compressed_)
+    SpillDetails(UInt64 rows_, UInt64 data_bytes_uncompressed_, UInt64 data_bytes_compressed_)
         : rows(rows_)
         , data_bytes_uncompressed(data_bytes_uncompressed_)
         , data_bytes_compressed(data_bytes_compressed_)
@@ -43,56 +42,88 @@ struct SpillDetails
         data_bytes_uncompressed += other.data_bytes_uncompressed;
         data_bytes_compressed += other.data_bytes_compressed;
     }
+    void subtract(const SpillDetails & other)
+    {
+        assert(rows >= other.rows);
+        rows -= other.rows;
+        assert(data_bytes_uncompressed >= other.data_bytes_uncompressed);
+        data_bytes_uncompressed -= other.data_bytes_uncompressed;
+        assert(data_bytes_compressed >= other.data_bytes_compressed);
+        data_bytes_compressed -= other.data_bytes_compressed;
+    }
 };
 class SpilledFile : public Poco::File
 {
 public:
     SpilledFile(const String & file_name, const FileProviderPtr & file_provider_);
     ~SpilledFile() override;
-    size_t getSpilledRows() const { return details.rows; }
+    UInt64 getSpilledRows() const { return details.rows; }
     const SpillDetails & getSpillDetails() const { return details; }
     void updateSpillDetails(const SpillDetails & other_details) { details.merge(other_details); }
+    void markFull() { is_full = true; }
+    bool isFull() const { return is_full; }
 
 private:
     SpillDetails details;
+    bool is_full = false;
     FileProviderPtr file_provider;
 };
 
 struct SpilledFiles
 {
     std::mutex spilled_files_mutex;
-    std::vector<std::unique_ptr<SpilledFile>> spilled_files;
+    /// immutable spilled files mean the file can not be append
+    std::vector<std::unique_ptr<SpilledFile>> immutable_spilled_files;
+    /// mutable spilled files means the next spill can append to the files
+    std::vector<std::unique_ptr<SpilledFile>> mutable_spilled_files;
+    void makeAllSpilledFilesImmutable();
+    void commitSpilledFiles(std::vector<std::unique_ptr<SpilledFile>> && spilled_files);
 };
 
 class Spiller
 {
 public:
-    Spiller(const SpillConfig & config, bool is_input_sorted, size_t partition_num, const Block & input_schema, const LoggerPtr & logger, Int64 spill_version = 1);
-    void spillBlocks(const Blocks & blocks, size_t partition_id);
+    Spiller(const SpillConfig & config, bool is_input_sorted, UInt64 partition_num, const Block & input_schema, const LoggerPtr & logger, Int64 spill_version = 1, bool release_spilled_file_on_restore = true);
+    void spillBlocks(const Blocks & blocks, UInt64 partition_id);
     /// spill blocks by reading from BlockInputStream, this is more memory friendly compared to spillBlocks
-    void spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, size_t partition_id, const std::function<bool()> & is_cancelled);
+    void spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled);
     /// max_stream_size == 0 means the spiller choose the stream size automatically
-    BlockInputStreams restoreBlocks(size_t partition_id, size_t max_stream_size = 0);
-    size_t spilledRows(size_t partition_id);
-    void finishSpill() { spill_finished = true; };
-    bool hasSpilledData() { return has_spilled_data; };
+    BlockInputStreams restoreBlocks(UInt64 partition_id, UInt64 max_stream_size = 0, bool append_dummy_read_stream = false);
+    UInt64 spilledRows(UInt64 partition_id);
+    void finishSpill();
+    bool hasSpilledData() const { return has_spilled_data; };
+    /// only for test now
+    bool releaseSpilledFileOnRestore() const { return release_spilled_file_on_restore; }
 
 private:
     friend class SpillHandler;
-    String nextSpillFileName(size_t partition_id);
-    SpillHandler createSpillHandler(size_t partition_id);
+    String nextSpillFileName(UInt64 partition_id);
+    SpillHandler createSpillHandler(UInt64 partition_id);
+    std::pair<std::unique_ptr<SpilledFile>, bool> getOrCreateSpilledFile(UInt64 partition_id);
+    bool isSpillFinished()
+    {
+        std::lock_guard lock(spill_finished_mutex);
+        return spill_finished;
+    }
 
-    const SpillConfig config;
-    bool is_input_sorted;
-    size_t partition_num;
+    SpillConfig config;
+    const bool is_input_sorted;
+    const UInt64 partition_num;
     /// todo remove input_schema if spiller does not rely on BlockInputStream
-    Block input_schema;
-    LoggerPtr logger;
-    std::atomic<bool> spill_finished{false};
+    const Block input_schema;
+    const LoggerPtr logger;
+    std::mutex spill_finished_mutex;
+    bool spill_finished = false;
     std::atomic<bool> has_spilled_data{false};
     static std::atomic<Int64> tmp_file_index;
     std::vector<std::unique_ptr<SpilledFiles>> spilled_files;
-    Int64 spill_version = 1;
+    const Int64 spill_version = 1;
+    /// If release_spilled_file_on_restore is true, the spilled file will be released once all the data in the spilled
+    /// file is read, otherwise, the spilled file will be released when destruct the spiller. Currently, all the spilled
+    /// file can be released on restore since it is only read once, but in the future if SharedScan(shared cte) need spill,
+    /// the data may be restored multiple times and release_spilled_file_on_restore need to be set to false.
+    const bool release_spilled_file_on_restore;
+    bool enable_append_write = false;
 };
 
 } // namespace DB

@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -595,7 +597,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     auto new_segment = segmentMerge(*dm_context, segments_to_merge, SegmentMergeReason::BackgroundGCThread);
     if (new_segment)
     {
-        checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
+        checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC);
     }
 
     return new_segment;
@@ -718,7 +720,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
     }
 
     segment_snap = {};
-    checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
+    checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC);
 
     return new_segment;
 }

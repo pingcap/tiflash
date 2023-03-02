@@ -32,6 +32,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Expand.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/convertFieldToType.h>
@@ -678,16 +679,16 @@ String DAGExpressionAnalyzer::applyFunction(
 
 String DAGExpressionAnalyzer::buildFilterColumn(
     const ExpressionActionsPtr & actions,
-    const std::vector<const tipb::Expr *> & conditions)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
 {
     String filter_column_name;
     if (conditions.size() == 1)
     {
-        filter_column_name = getActions(*conditions[0], actions, true);
-        if (isColumnExpr(*conditions[0])
-            && (!exprHasValidFieldType(*conditions[0])
+        filter_column_name = getActions(conditions[0], actions, true);
+        if (isColumnExpr(conditions[0])
+            && (!exprHasValidFieldType(conditions[0])
                 /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
-                || isUInt8Type(getDataTypeByFieldTypeForComputingLayer(conditions[0]->field_type()))))
+                || isUInt8Type(getDataTypeByFieldTypeForComputingLayer(conditions[0].field_type()))))
         {
             /// FilterBlockInputStream will CHANGE the filter column inplace, so
             /// filter column should never be a columnRef in DAG request, otherwise
@@ -699,8 +700,8 @@ String DAGExpressionAnalyzer::buildFilterColumn(
     else
     {
         Names arg_names;
-        for (const auto * condition : conditions)
-            arg_names.push_back(getActions(*condition, actions, true));
+        for (const auto & condition : conditions)
+            arg_names.push_back(getActions(condition, actions, true));
         // connect all the conditions by logical and
         filter_column_name = applyFunction("and", arg_names, actions, nullptr);
     }
@@ -709,7 +710,7 @@ String DAGExpressionAnalyzer::buildFilterColumn(
 
 String DAGExpressionAnalyzer::appendWhere(
     ExpressionActionsChain & chain,
-    const std::vector<const tipb::Expr *> & conditions)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions)
 {
     auto & last_step = initAndGetLastStep(chain);
 
@@ -802,6 +803,65 @@ NamesAndTypes DAGExpressionAnalyzer::buildOrderColumns(
         order_columns.emplace_back(name, type);
     }
     return order_columns;
+}
+
+GroupingSets DAGExpressionAnalyzer::buildExpandGroupingColumns(
+    const tipb::Expand & expand,
+    const ExpressionActionsPtr & actions)
+{
+    GroupingSets group_sets_columns;
+    std::map<String, bool> map_grouping_col;
+    group_sets_columns.reserve(expand.grouping_sets().size());
+    for (const auto & group_set : expand.grouping_sets())
+    {
+        GroupingSet group_set_columns;
+        group_set_columns.reserve(group_set.grouping_exprs().size());
+        for (const auto & group_exprs : group_set.grouping_exprs())
+        {
+            GroupingColumnNames group_exprs_columns;
+            group_exprs_columns.reserve(group_exprs.grouping_expr().size());
+            for (const auto & group_expr : group_exprs.grouping_expr())
+            {
+                String cp_name = getActions(group_expr, actions);
+                // tidb expression computation is based on column index offset child's chunk schema, change to ck block column name here.
+                group_exprs_columns.emplace_back(cp_name);
+                map_grouping_col.insert(std::pair<String, bool>(cp_name, true));
+            }
+            // move here, cause basic string is copied from input cols.
+            group_set_columns.emplace_back(std::move(group_exprs_columns));
+        }
+        group_sets_columns.emplace_back(std::move(group_set_columns));
+    }
+    // change the original source column to be nullable, and add a new column for groupingID.
+    for (auto & mutable_one : source_columns)
+    {
+        if (map_grouping_col[mutable_one.name])
+            mutable_one.type = makeNullable(mutable_one.type);
+    }
+    source_columns.emplace_back(Expand::grouping_identifier_column_name, Expand::grouping_identifier_column_type);
+    return group_sets_columns;
+}
+
+ExpressionActionsPtr DAGExpressionAnalyzer::appendExpand(
+    const tipb::Expand & expand,
+    ExpressionActionsChain & chain)
+{
+    auto & last_step = initAndGetLastStep(chain);
+    for (const auto & origin_col : last_step.actions->getSampleBlock().getNamesAndTypesList())
+    {
+        last_step.required_output.push_back(origin_col.name);
+    }
+    auto grouping_sets = buildExpandGroupingColumns(expand, last_step.actions);
+    last_step.actions->add(ExpressionAction::expandSource(grouping_sets));
+
+    auto before_expand = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
+
+    auto & after_expand_step = initAndGetLastStep(chain);
+    for (const auto & column : getCurrentInputColumns())
+        after_expand_step.required_output.push_back(column.name);
+    return before_expand;
 }
 
 std::vector<NameAndTypePair> DAGExpressionAnalyzer::appendOrderBy(
@@ -994,10 +1054,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     if (!filters.empty())
     {
         ret = true;
-        std::vector<const tipb::Expr *> filter_vector;
-        for (const auto & c : filters)
-            filter_vector.push_back(&c);
-        filter_column_name = appendWhere(chain, filter_vector);
+        filter_column_name = appendWhere(chain, filters);
     }
     /// remove useless columns to avoid duplicate columns
     /// as when compiling the key/filter expression, the origin

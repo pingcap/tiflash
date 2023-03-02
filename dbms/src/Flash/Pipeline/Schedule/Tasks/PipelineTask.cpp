@@ -21,17 +21,21 @@ namespace DB
 {
 PipelineTask::PipelineTask(
     MemoryTrackerPtr mem_tracker_,
+    const String & req_id,
     PipelineExecutorStatus & exec_status_,
     const EventPtr & event_,
     PipelineExecPtr && pipeline_exec_)
-    : EventTask(std::move(mem_tracker_), exec_status_, event_)
+    : EventTask(std::move(mem_tracker_), req_id, exec_status_, event_)
     , pipeline_exec(std::move(pipeline_exec_))
 {
     assert(pipeline_exec);
+    pipeline_exec->executePrefix();
 }
 
-void PipelineTask::finalize()
+void PipelineTask::finalizeImpl()
 {
+    assert(pipeline_exec);
+    pipeline_exec->executeSuffix();
     pipeline_exec.reset();
 }
 

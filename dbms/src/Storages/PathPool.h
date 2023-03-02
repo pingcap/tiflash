@@ -18,6 +18,7 @@
 #include <Common/nocopyable.h>
 #include <Core/Types.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <Storages/PathPool_fwd.h>
 
 #include <mutex>
 #include <unordered_map>
@@ -29,17 +30,6 @@ using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 
-/// A class to manage global paths.
-class PathPool;
-/// A class to manage paths for the specified storage.
-class StoragePathPool;
-
-/// ===== Delegators to StoragePathPool ===== ///
-/// Delegators to StoragePathPool. Use for managing the path of DTFiles.
-class StableDiskDelegator;
-/// Delegators to StoragePathPool. Use by PageStorage for managing the path of PageFiles.
-class PSDiskDelegator;
-using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 class PSDiskDelegatorMulti;
 class PSDiskDelegatorSingle;
 class PSDiskDelegatorRaft;
@@ -56,14 +46,10 @@ public:
         const Strings & latest_data_paths,
         const Strings & kvstore_paths,
         PathCapacityMetricsPtr global_capacity_,
-        FileProviderPtr file_provider_,
-        bool enable_raft_compatible_mode_ = false);
+        FileProviderPtr file_provider_);
 
     // Constructor to create PathPool for one Storage
     StoragePathPool withTable(const String & database_, const String & table_, bool path_need_database_name_) const;
-
-    // TODO: remove this outdated code
-    bool isRaftCompatibleModeEnabled() const { return enable_raft_compatible_mode; }
 
     // Generate a delegator for managing the paths of `RegionPersister`.
     // Those paths are generated from `kvstore_paths`.
@@ -80,6 +66,12 @@ public:
     const Strings & listKVStorePaths() const { return kvstore_paths; }
 
     const Strings & listGlobalPagePaths() const { return global_page_paths; }
+
+    static const String log_path_prefix;
+    static const String data_path_prefix;
+    static const String meta_path_prefix;
+    static const String kvstore_path_prefix;
+    static const String write_uni_path_prefix;
 
 public:
     // A thread safe wrapper for storing a map of <page data file id, path index>
@@ -132,8 +124,6 @@ private:
     Strings latest_data_paths;
     Strings kvstore_paths;
     Strings global_page_paths;
-
-    bool enable_raft_compatible_mode;
 
     PathCapacityMetricsPtr global_capacity;
 

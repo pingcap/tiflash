@@ -19,6 +19,7 @@ namespace DB
 namespace tests
 {
 TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
+try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -128,7 +129,7 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
             auto r1 = proxy_instance->getRegion(region_id);
             applied_index = r1->getLatestAppliedIndex();
             ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
-            LOG_INFO(&Poco::Logger::get("kvstore"), "applied_index {}", applied_index);
+            LOG_INFO(Logger::get(), "applied_index {}", applied_index);
             auto [index, term] = proxy_instance->normalWrite(region_id, {35}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
             // KVStore succeed. Proxy failed before advance.
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
@@ -153,8 +154,10 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
         }
     }
 }
+CATCH
 
 TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
+try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -188,8 +191,10 @@ TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
         }
     }
 }
+CATCH
 
 TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
+try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -244,8 +249,10 @@ TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(response), 1999, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
     }
 }
+CATCH
 
 TEST_F(RegionKVStoreTest, KVStoreSnapshot)
+try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -270,7 +277,7 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
                 };
                 auto ssts = default_cf.ssts();
                 ASSERT_EQ(ssts.size(), sst_size);
-                MultiSSTReader<MonoSSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, ssts};
+                MultiSSTReader<MonoSSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, ssts, Logger::get()};
                 size_t counter = 0;
                 while (reader.remained())
                 {
@@ -403,6 +410,7 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
         }
     }
 }
+CATCH
 
 } // namespace tests
 } // namespace DB
