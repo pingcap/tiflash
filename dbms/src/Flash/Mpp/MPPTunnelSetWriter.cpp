@@ -28,7 +28,7 @@ namespace
 void checkPacketSize(size_t size)
 {
     static constexpr size_t max_packet_size = 1u << 31;
-    RUNTIME_CHECK(size < max_packet_size, fmt::format("Packet is too large to send, size : {}", size));
+    RUNTIME_CHECK_MSG(size < max_packet_size, "Packet is too large to send, size : {}", size);
 }
 
 void updatePartitionWriterMetrics(size_t packet_bytes, bool is_local)

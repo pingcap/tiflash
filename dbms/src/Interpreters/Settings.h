@@ -32,9 +32,6 @@ inline static constexpr UInt64 MB = 1024UL * 1024UL;
   */
 struct Settings
 {
-    /// For initialization from empty initializer-list to be "value initialization", not "aggregate initialization" in C++14.
-    /// http://en.cppreference.com/w/cpp/language/aggregate_initialization
-    Settings() = default;
     /** List of settings: type, name, default value.
       *
       * This looks rather unconvenient. It is done that way to avoid repeating settings in different places.
