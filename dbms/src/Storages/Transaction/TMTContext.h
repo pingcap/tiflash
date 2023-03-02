@@ -116,6 +116,8 @@ public:
 
     const OwnerManagerPtr & getS3GCOwnerManager() const;
 
+    DM::Remote::DisaggregatedSnapshotManager * getDisaggregatedSnapshotManager() const;
+
     MPPTaskManagerPtr getMPPTaskManager();
 
     void shutdown();

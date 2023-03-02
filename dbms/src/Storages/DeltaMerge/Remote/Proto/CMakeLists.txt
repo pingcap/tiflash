@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+file(GLOB PROTO_FILES CONFIGURE_DEPENDS *.proto)
 protobuf_generate_cpp(
         rtproto_srcs rtproto_hdrs
-        remote.proto
+        ${PROTO_FILES}
 )
 
 add_library(RemoteTaskProto

@@ -87,6 +87,31 @@ DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMet
     initOutputInfo();
 }
 
+DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggregatedTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_)
+    : dag_request(&dag_request_)
+    , dummy_query_string(dag_request->DebugString())
+    , dummy_ast(makeDummyQuery())
+    , tidb_host(compute_node_host_)
+    , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
+    , is_mpp_task(false)
+    , is_root_mpp_task(false)
+    , is_batch_cop(false)
+    , is_disaggregated_task(true)
+    , tables_regions_info(std::move(tables_regions_info_))
+    , log(std::move(log_))
+    , flags(dag_request->flags())
+    , sql_mode(dag_request->sql_mode())
+    , disaggregated_id(std::make_unique<DM::DisaggregatedTaskId>(task_id_))
+    , max_recorded_error_count(getMaxErrorCount(*dag_request))
+    , warnings(max_recorded_error_count)
+    , warning_count(0)
+{
+    RUNTIME_CHECK(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
+    return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
+
+    initOutputInfo();
+}
+
 // for test
 DAGContext::DAGContext(UInt64 max_error_count_)
     : dag_request(nullptr)

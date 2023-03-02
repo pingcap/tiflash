@@ -21,6 +21,7 @@
 #include <Common/setThreadName.h>
 #include <Debug/MockStorage.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/Disaggregated/EstablishDisaggregatedTask.h>
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
@@ -45,7 +46,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
-}
+extern const int UNKNOWN_EXCEPTION;
+} // namespace ErrorCodes
 
 #define CATCH_FLASHSERVICE_EXCEPTION                                                                                                        \
     catch (Exception & e)                                                                                                                   \
@@ -591,6 +593,147 @@ grpc::Status FlashService::tryMarkDelete(grpc::ServerContext * grpc_context, con
         return check_result;
 
     return s3_lock_service->tryMarkDelete(request, response);
+}
+
+grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggregatedTaskRequest * request, disaggregated::EstablishDisaggregatedTaskResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    LOG_DEBUG(log, "Handling EstablishDisaggregatedTask request: {}", request->ShortDebugString());
+    if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
+        return check_result;
+    // TODO metrics
+    auto [db_context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+        return status;
+    db_context->setMockStorage(mock_storage);
+    db_context->setMockMPPServerInfo(mpp_test_info);
+
+    RUNTIME_CHECK(context->isDisaggregatedStorageMode());
+
+    const auto & meta = request->meta();
+    DM::DisaggregatedTaskId task_id(meta);
+    auto task = std::make_shared<DB::EstablishDisaggregatedTask>(db_context, task_id);
+    SCOPE_EXIT({
+        current_memory_tracker = nullptr;
+    });
+
+    grpc::Status ret_status = grpc::Status::OK;
+    auto record_error = [&](grpc::StatusCode err_code, int flash_err_code, const String & err_msg) {
+        auto * err = response->mutable_error();
+        err->set_code(flash_err_code);
+        err->set_msg(err_msg);
+        ret_status = grpc::Status(err_code, err_msg);
+    };
+
+    try
+    {
+        task->prepare(request);
+        task->execute(response);
+    }
+    catch (Exception & e)
+    {
+        LOG_ERROR(task->log, "DB Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        record_error(grpc::StatusCode::INTERNAL, e.code(), e.message());
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(log, "KV Client Exception: {}", e.message());
+        record_error(grpc::StatusCode::INTERNAL, ErrorCodes::UNKNOWN_EXCEPTION, e.message());
+    }
+    catch (std::exception & e)
+    {
+        LOG_ERROR(task->log, "std exception: {}", e.what());
+        record_error(grpc::StatusCode::INTERNAL, ErrorCodes::UNKNOWN_EXCEPTION, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(task->log, "other exception");
+        record_error(grpc::StatusCode::INTERNAL, ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
+    }
+
+    if (auto * dag_ctx = db_context->getDAGContext(); dag_ctx)
+    {
+        // There may be region errors. Add information about which region to retry.
+        for (const auto & region : dag_ctx->retry_regions)
+        {
+            auto * retry_region = response->add_retry_regions();
+            retry_region->set_id(region.region_id);
+            retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+            retry_region->mutable_region_epoch()->set_version(region.region_version);
+        }
+    }
+
+    LOG_DEBUG(log, "Handle EstablishDisaggregatedTask request done, resp_err={}", response->error().ShortDebugString());
+    return ret_status;
+}
+
+grpc::Status FlashService::FetchDisaggregatedPages(
+    grpc::ServerContext * grpc_context,
+    const disaggregated::FetchDisaggregatedPagesRequest * request,
+    grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer)
+{
+    LOG_DEBUG(log, "Handling fetch pages request: {}", request->ShortDebugString());
+    if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
+        return check_result;
+
+    disaggregated::PagesPacket err_response;
+    auto record_error = [&](grpc::StatusCode err_code, const String & err_msg) {
+        auto * err = err_response.mutable_error();
+        err->set_code(ErrorCodes::UNKNOWN_EXCEPTION);
+        err->set_msg(err_msg);
+        sync_writer->Write(err_response);
+
+        return grpc::Status(err_code, err_msg);
+    };
+
+    const DM::DisaggregatedTaskId task_id(request->meta());
+    LOG_DEBUG(log, "Fetching pages, task_id={}", task_id);
+    try
+    {
+        PageIdU64s read_ids;
+        read_ids.reserve(request->pages_size());
+        for (auto page_id : request->pages())
+            read_ids.emplace_back(page_id);
+
+#if 0
+        auto tunnel = PageTunnel::build(
+            *context,
+            task_id,
+            request->table_id(),
+            request->segment_id(),
+            read_ids);
+
+        tunnel->connect(sync_writer);
+        return grpc::Status::OK;
+#endif
+
+        return record_error(grpc::StatusCode::UNIMPLEMENTED, "unimplemented");
+    }
+    catch (const TiFlashException & e)
+    {
+        LOG_ERROR(log, "TiFlash Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        return record_error(grpc::StatusCode::INTERNAL, e.standardText());
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        return record_error(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(log, "KV Client Exception: {}", e.message());
+        return record_error(grpc::StatusCode::INTERNAL, e.message());
+    }
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(log, "std exception: {}", e.what());
+        return record_error(grpc::StatusCode::INTERNAL, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "other exception");
+        return record_error(grpc::StatusCode::INTERNAL, "other exception");
+    }
 }
 
 void FlashService::setMockStorage(MockStorage * mock_storage_)

@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/ScanContext.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
@@ -33,6 +32,8 @@
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -132,6 +133,9 @@ public:
     // for mpp
     DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
 
+    // for disaggregated task
+    DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggregatedTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_);
+
     // for test
     explicit DAGContext(UInt64 max_error_count_);
 
@@ -187,6 +191,10 @@ public:
     const MPPTaskId & getMPPTaskId() const
     {
         return mpp_task_id;
+    }
+    const std::unique_ptr<DM::DisaggregatedTaskId> & getDisaggregatedTaskId() const
+    {
+        return disaggregated_id;
     }
 
     std::pair<bool, double> getTableScanThroughput();
@@ -278,13 +286,17 @@ public:
     Clock::time_point read_wait_index_start_timestamp{Clock::duration::zero()};
     Clock::time_point read_wait_index_end_timestamp{Clock::duration::zero()};
     String table_scan_executor_id;
+
+    // For mpp/cop/batchcop this is the host of tidb
+    // For disaggregated read, this is the host of compute node
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
     bool return_executor_id{};
-    String root_executor_id = "";
+    String root_executor_id;
     /* const */ bool is_mpp_task = false;
     /* const */ bool is_root_mpp_task = false;
     /* const */ bool is_batch_cop = false;
+    /* const */ bool is_disaggregated_task = false;
     // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;
     TablesRegionsInfo tables_regions_info;
@@ -334,6 +346,8 @@ private:
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
     const MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
+    // The task id for disaggregated read
+    const std::unique_ptr<DM::DisaggregatedTaskId> disaggregated_id;
     /// max_recorded_error_count is the max error/warning need to be recorded in warnings
     UInt64 max_recorded_error_count;
     ConcurrentBoundedQueue<tipb::Error> warnings;

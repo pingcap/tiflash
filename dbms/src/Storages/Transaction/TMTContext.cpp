@@ -253,6 +253,11 @@ const OwnerManagerPtr & TMTContext::getS3GCOwnerManager() const
     return s3gc_owner;
 }
 
+DM::Remote::DisaggregatedSnapshotManager * TMTContext::getDisaggregatedSnapshotManager() const
+{
+    return snapshot_manager.get();
+}
+
 MPPTaskManagerPtr TMTContext::getMPPTaskManager()
 {
     return mpp_task_manager;

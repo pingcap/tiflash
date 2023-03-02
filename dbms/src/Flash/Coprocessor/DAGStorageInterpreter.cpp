@@ -31,8 +31,11 @@
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
+#include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Interpreters/Context.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
+#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshotManager.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
@@ -51,6 +54,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int REGION_EPOCH_NOT_MATCH;
+} // namespace ErrorCodes
+
 namespace FailPoints
 {
 extern const char region_exception_after_read_from_storage_some_error[];
@@ -276,21 +284,31 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     }
 }
 
-// Apply learner read to ensure we can get strong consistent with TiKV Region
-// leaders. If the local Regions do not match the requested Regions, then build
-// request to retry fetching data from other nodes.
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 {
-    prepare();
+    prepare(); // learner read
 
     executeImpl(pipeline);
 }
 
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
+    auto & dag_context = dagContext();
+
     auto scan_context = std::make_shared<DM::ScanContext>();
-    dagContext().scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+    dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
     mvcc_query_info->scan_context = scan_context;
+
+    auto remote_requests = buildRemoteRequests(scan_context);
+
+    if (dag_context.is_disaggregated_task && !remote_requests.empty())
+    {
+        // This means RN is sending requests with stale region info, we simply reject the request
+        // and ask RN to send requests again with correct region info. When RN updates region info,
+        // RN may be sending requests to other WN.
+
+        throw Exception("Rejected disaggregated DAG execute because RN region info does not match", DB::ErrorCodes::REGION_EPOCH_NOT_MATCH);
+    }
 
     if (!mvcc_query_info->regions_query_info.empty())
     {
@@ -299,8 +317,6 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
     // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
     auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
-
-    auto remote_requests = buildRemoteRequests(scan_context);
 
     // A failpoint to test pause before alter lock released
     FAIL_POINT_PAUSE(FailPoints::pause_with_alter_locks_acquired);
@@ -348,6 +364,9 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 }
 
+// Apply learner read to ensure we can get strong consistent with TiKV Region
+// leaders. If the local Regions do not match the requested Regions, then build
+// request to retry fetching data from other nodes.
 void DAGStorageInterpreter::prepare()
 {
     // About why we do learner read before acquiring structure lock on Storage(s).
@@ -600,6 +619,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(mvcc_query_info->resolve_locks, mvcc_query_info->read_tso, mvcc_query_info->scan_context);
             ret.emplace(physical_table_id, std::move(query_info));
         }
+        // Dispatch the regions_query_info to different physical table's query_info
         for (auto & r : mvcc_query_info->regions_query_info)
         {
             ret[r.physical_table_id].mvcc_query_info->regions_query_info.push_back(r);
@@ -675,15 +695,17 @@ bool DAGStorageInterpreter::checkRetriableForBatchCopOrMPP(
     }
 }
 
-void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
+DM::Remote::DisaggPhysicalTableReadSnapshotPtr
+DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
     const TableID & table_id,
     const SelectQueryInfo & query_info,
     DAGPipeline & pipeline,
     size_t max_block_size)
 {
+    DM::Remote::DisaggPhysicalTableReadSnapshotPtr table_snap;
     size_t region_num = query_info.mvcc_query_info->regions_query_info.size();
     if (region_num == 0)
-        return;
+        return table_snap;
 
     assert(storages_with_structure_lock.find(table_id) != storages_with_structure_lock.end());
     auto & storage = storages_with_structure_lock[table_id].storage;
@@ -693,8 +715,25 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
     {
         try
         {
-            QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
-            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+            if (!dag_context.is_disaggregated_task)
+            {
+                // build local inputstreams
+                QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
+                pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+            }
+            else
+            {
+                // build a snapshot
+                StorageDeltaMergePtr delta_merge_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+                RUNTIME_CHECK_MSG(delta_merge_storage != nullptr, "delta_merge_storage which cast from storage is null");
+                table_snap = delta_merge_storage->buildRemoteReadSnapshot(required_columns, query_info, context, max_streams);
+                // TODO: could be shared on the logical table level
+                table_snap->output_field_types = std::make_shared<std::vector<tipb::FieldType>>();
+                *table_snap->output_field_types = collectOutputFieldTypes(*dag_context.dag_request);
+                RUNTIME_CHECK(table_snap->output_field_types->size() == table_snap->column_defines->size(),
+                              table_snap->output_field_types->size(),
+                              table_snap->column_defines->size());
+            }
 
             injectFailPointForLocalRead(query_info);
 
@@ -731,6 +770,7 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
             throw;
         }
     }
+    return table_snap;
 }
 
 void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size)
@@ -739,22 +779,49 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
     if (total_local_region_num == 0)
         return;
-    mvcc_query_info->scan_context->total_local_region_num = total_local_region_num;
     const auto table_query_infos = generateSelectQueryInfos();
     bool has_multiple_partitions = table_query_infos.size() > 1;
     // MultiPartitionStreamPool will be disabled in no partition mode or single-partition case
     std::shared_ptr<MultiPartitionStreamPool> stream_pool = has_multiple_partitions ? std::make_shared<MultiPartitionStreamPool>() : nullptr;
+
+    auto disaggregated_snap = std::make_shared<DM::Remote::DisaggregatedReadSnapshot>();
     for (const auto & table_query_info : table_query_infos)
     {
         DAGPipeline current_pipeline;
         const TableID table_id = table_query_info.first;
         const SelectQueryInfo & query_info = table_query_info.second;
-        buildLocalStreamsForPhysicalTable(table_id, query_info, current_pipeline, max_block_size);
+        auto table_snap = buildLocalStreamsForPhysicalTable(table_id, query_info, current_pipeline, max_block_size);
+        if (!table_snap)
+        {
+            disaggregated_snap->addTask(table_id, std::move(table_snap));
+        }
+
         if (has_multiple_partitions)
             stream_pool->addPartitionStreams(current_pipeline.streams);
         else
             pipeline.streams.insert(pipeline.streams.end(), current_pipeline.streams.begin(), current_pipeline.streams.end());
     }
+
+    LOG_INFO(
+        log,
+        "DAGStorageInterpreter::buildLocalStreams, is_disaggregated_task={} snap_id={}",
+        dag_context.is_disaggregated_task,
+        dag_context.is_disaggregated_task ? *dag_context.getDisaggregatedTaskId() : DM::DisaggregatedTaskId::unknown_disaggregated_task_id);
+
+    if (dag_context.is_disaggregated_task)
+    {
+        // register the snapshot to manager
+        auto & tmt = context.getTMTContext();
+        auto * snap_manager = tmt.getDisaggregatedSnapshotManager();
+        const auto & snap_id = *dag_context.getDisaggregatedTaskId();
+        auto [ok, err_msg] = snap_manager->registerSnapshot(snap_id, std::move(disaggregated_snap));
+        if (!ok)
+        {
+            throw Exception(err_msg, ErrorCodes::LOGICAL_ERROR);
+        }
+        LOG_INFO(log, "task snapshot registered, snapshot_id={}", snap_id);
+    }
+
     if (has_multiple_partitions)
     {
         String req_info = dag_context.isMPPTask() ? dag_context.getMPPTaskId().toString() : "";
