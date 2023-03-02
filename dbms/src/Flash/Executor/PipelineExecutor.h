@@ -49,8 +49,9 @@ class PipelineExecutor : public QueryExecutor
 {
 public:
     PipelineExecutor(
-        const ProcessListEntryPtr & process_list_entry_,
+        const MemoryTrackerPtr & memory_tracker_,
         Context & context_,
+        const String & req_id,
         const PipelinePtr & root_pipeline_);
 
     String toString() const override;
