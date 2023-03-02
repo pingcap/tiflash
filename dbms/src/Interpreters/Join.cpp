@@ -681,7 +681,9 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             continue;
         }
         auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
+        SCOPE_EXIT(keyHolderDiscardKey(key_holder));
         auto key = keyHolderGetKey(key_holder);
+
         size_t segment_index = 0;
         size_t hash_value = 0;
         if (!ZeroTraits::check(key))
@@ -690,7 +692,6 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             segment_index = hash_value % segment_size;
         }
         segment_index_info[segment_index].push_back(i);
-        keyHolderDiscardKey(key_holder);
     }
     for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
     {
@@ -1243,7 +1244,9 @@ void NO_INLINE joinBlockImplTypeCase(
         else
         {
             auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
+            SCOPE_EXIT(keyHolderDiscardKey(key_holder));
             auto key = keyHolderGetKey(key_holder);
+
             size_t hash_value = 0;
             bool zero_flag = ZeroTraits::check(key);
             if (!zero_flag)
@@ -1297,7 +1300,6 @@ void NO_INLINE joinBlockImplTypeCase(
                     current_offset,
                     offsets_to_replicate.get(),
                     probe_process_info);
-            keyHolderDiscardKey(key_holder);
         }
 
         // if block_full is true means that the current offset is greater than max_block_size, we need break the loop.
@@ -2018,7 +2020,7 @@ void Join::checkTypes(const Block & block) const
     checkTypesOfKeys(block, sample_block_with_keys);
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map, bool has_filter_null_map>
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map, bool has_filter_map>
 void NO_INLINE joinBlockImplNullAwareInternal(
     const Map & map,
     Block & block,
@@ -2030,7 +2032,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     const ConstNullMapPtr & null_map,
-    const ConstNullMapPtr & filter_null_map,
+    const ConstNullMapPtr & filter_map,
     const ConstNullMapPtr & all_key_null_map,
     const TiDB::TiDBCollators & collators,
     bool right_has_all_key_null_row,
@@ -2053,9 +2055,9 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     std::list<NASemiJoinResult<KIND, STRICTNESS> *> res_list;
     for (size_t i = 0; i < rows; ++i)
     {
-        if constexpr (has_filter_null_map)
+        if constexpr (has_filter_map)
         {
-            if ((*filter_null_map)[i])
+            if ((*filter_map)[i])
             {
                 /// Filter out by left_conditions so the result set is empty.
                 res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
@@ -2104,13 +2106,15 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         SCOPE_EXIT(keyHolderDiscardKey(key_holder));
         auto key = keyHolderGetKey(key_holder);
 
+        size_t segment_index = 0;
         size_t hash_value = 0;
         if (!ZeroTraits::check(key))
         {
             hash_value = map.hash(key);
+            segment_index = hash_value % segment_size;
         }
 
-        auto & internal_map = map.getSegmentTable(hash_value % segment_size);
+        auto & internal_map = map.getSegmentTable(segment_index);
         /// do not require segment lock because in join, the hash table can not be changed in probe stage.
         auto it = internal_map.find(key, hash_value);
         if (it != internal_map.end())
@@ -2270,33 +2274,33 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     const ConstNullMapPtr & null_map,
-    const ConstNullMapPtr & filter_null_map,
+    const ConstNullMapPtr & filter_map,
     const ConstNullMapPtr & all_key_null_map,
     const TiDB::TiDBCollators & collators,
     bool right_has_all_key_null_row,
     bool right_table_is_empty)
 {
-#define impl(has_null_map, has_filter_null_map)                                                          \
-    joinBlockImplNullAwareInternal<KIND, STRICTNESS, KeyGetter, Map, has_null_map, has_filter_null_map>( \
-        map,                                                                                             \
-        block,                                                                                           \
-        left_columns,                                                                                    \
-        right_blocks,                                                                                    \
-        null_rows,                                                                                       \
-        max_block_size,                                                                                  \
-        conditions,                                                                                      \
-        key_columns,                                                                                     \
-        key_sizes,                                                                                       \
-        null_map,                                                                                        \
-        filter_null_map,                                                                                 \
-        all_key_null_map,                                                                                \
-        collators,                                                                                       \
-        right_has_all_key_null_row,                                                                      \
+#define impl(has_null_map, has_filter_map)                                                          \
+    joinBlockImplNullAwareInternal<KIND, STRICTNESS, KeyGetter, Map, has_null_map, has_filter_map>( \
+        map,                                                                                        \
+        block,                                                                                      \
+        left_columns,                                                                               \
+        right_blocks,                                                                               \
+        null_rows,                                                                                  \
+        max_block_size,                                                                             \
+        conditions,                                                                                 \
+        key_columns,                                                                                \
+        key_sizes,                                                                                  \
+        null_map,                                                                                   \
+        filter_map,                                                                                 \
+        all_key_null_map,                                                                           \
+        collators,                                                                                  \
+        right_has_all_key_null_row,                                                                 \
         right_table_is_empty);
 
     if (null_map)
     {
-        if (filter_null_map)
+        if (filter_map)
         {
             impl(true, true);
         }
@@ -2307,7 +2311,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     }
     else
     {
-        if (filter_null_map)
+        if (filter_map)
         {
             impl(false, true);
         }
@@ -2350,9 +2354,9 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
     ConstNullMapPtr null_map{};
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
 
-    ColumnPtr filter_null_map_holder;
-    ConstNullMapPtr filter_null_map{};
-    recordFilteredRows(block, left_filter_column, filter_null_map_holder, filter_null_map);
+    ColumnPtr filter_map_holder;
+    ConstNullMapPtr filter_map{};
+    recordFilteredRows(block, left_filter_column, filter_map_holder, filter_map);
 
     size_t existing_columns = block.columns();
 
@@ -2381,7 +2385,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             key_columns,                                                                                                                                \
             key_sizes,                                                                                                                                  \
             null_map,                                                                                                                                   \
-            filter_null_map,                                                                                                                            \
+            filter_map,                                                                                                                                 \
             all_key_null_map,                                                                                                                           \
             collators,                                                                                                                                  \
             right_has_all_key_null_row.load(std::memory_order_relaxed),                                                                                 \
