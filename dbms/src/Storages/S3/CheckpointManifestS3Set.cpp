@@ -21,11 +21,11 @@ namespace DB::S3
 CheckpointManifestS3Set
 CheckpointManifestS3Set::getFromS3(const S3::TiFlashS3Client & client, StoreID store_id)
 {
-    const auto store_prefix = S3::S3Filename::fromStoreId(store_id).toManifestPrefix();
+    const auto manifest_prefix = S3::S3Filename::fromStoreId(store_id).toManifestPrefix();
 
     std::vector<CheckpointManifestS3Object> manifests;
 
-    listPrefix(client, client.bucket(), store_prefix, [&](const Aws::S3::Model::ListObjectsV2Result & result) {
+    listPrefix(client, client.bucket(), manifest_prefix, [&](const Aws::S3::Model::ListObjectsV2Result & result) {
         const auto & objects = result.GetContents();
         manifests.reserve(manifests.size() + objects.size());
         for (const auto & object : objects)

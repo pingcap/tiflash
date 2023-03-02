@@ -46,7 +46,6 @@ public:
     void SetUp() override
     {
         S3GCConfig config{
-            .manifest_expired_hour = 1,
             .delmark_expired_hour = 1,
             .temp_path = ::DB::tests::TiFlashTestEnv::getTemporaryPath(),
         };

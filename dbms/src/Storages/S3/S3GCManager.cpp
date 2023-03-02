@@ -81,7 +81,6 @@ getStoresFromPD(const pingcap::pd::ClientPtr & pd_client)
 bool S3GCManager::runOnAllStores()
 {
     // Only the GC Manager node run the GC logic
-    // TODO: keep a pointer of OwnerManager and check it here
     if (bool is_gc_owner = gc_owner_manager->isOwner(); !is_gc_owner)
     {
         return false;
@@ -389,7 +388,7 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const String &
     LOG_INFO(log, "Download manifest, from={} to={}", manifest_key, local_manifest_path);
 
     // parse lock from manifest
-    PS::V3::CheckpointProto::StringsInternMap strings_cache; // TODO: Is there global cache?
+    PS::V3::CheckpointProto::StringsInternMap strings_cache;
     using ManifestReader = DB::PS::V3::CPManifestFileReader;
     auto reader = ManifestReader::create(ManifestReader::Options{.file_path = local_manifest_path});
     auto mf_prefix = reader->readPrefix();
@@ -417,7 +416,7 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const String &
 void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime * const timepoint)
 {
     // clean the outdated manifest files
-    auto expired_bound_sec = config.manifest_expired_hour * 3600;
+    size_t num_manifest_on_s3 = manifests.objects().size();
     for (const auto & mf : manifests.objects())
     {
         if (timepoint == nullptr)
@@ -433,19 +432,17 @@ void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifes
         }
 
         assert(timepoint != nullptr);
-        auto diff_sec = Aws::Utils::DateTime::Diff(*timepoint, mf.second.last_modification).count() / 1000.0;
-        if (diff_sec <= expired_bound_sec)
+        if (num_manifest_on_s3 <= config.manifest_reserve_count)
         {
-            continue;
+            break;
         }
         // expired manifest, remove
         deleteObject(*client, client->bucket(), mf.second.key);
+        num_manifest_on_s3 -= 1;
         LOG_INFO(
             log,
-            "remove outdated manifest, key={} mtime={} diff_sec={:.3f}",
-            mf.second.key,
-            mf.second.last_modification.ToGmtString(Aws::Utils::DateFormat::ISO_8601),
-            diff_sec);
+            "remove outdated manifest, key={}",
+            mf.second.key);
     }
 }
 

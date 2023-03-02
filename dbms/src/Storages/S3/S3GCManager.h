@@ -61,8 +61,13 @@ using S3GCManagerServicePtr = std::unique_ptr<S3GCManagerService>;
 
 struct S3GCConfig
 {
+    // The interval of the S3 GC routine runs
     Int64 interval_seconds = 600;
-    Int64 manifest_expired_hour = 1;
+
+    // The maximun number of manifest files preserve
+    // for each store
+    size_t manifest_preserve_count = 10;
+
     Int64 delmark_expired_hour = 1;
 
     Int64 mark_delete_timeout_seconds = 10;
