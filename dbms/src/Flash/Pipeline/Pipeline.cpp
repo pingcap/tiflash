@@ -73,8 +73,8 @@ void mapEvents(const Events & inputs, const Events & outputs)
          *     ```
          *     FineGrainedPipelineEvent◄──┐ ┌──FineGrainedPipelineEvent
          *     FineGrainedPipelineEvent◄──┼─┼──FineGrainedPipelineEvent
-         *     FineGrainedPipelineEvent◄──┤ ├──FineGrainedPipelineEvent
-         *     FineGrainedPipelineEvent◄──┘ └──FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄──┤ └──FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄──┘
          *     ```
          * 2. for non fine grained inputs and non fine grained outputs
          *     This is not possible, the size of inputs and outputs must be the same and 1.
