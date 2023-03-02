@@ -234,7 +234,7 @@ protected:
 
     DMFilePtr restoreDMFile(const DMFileOID & oid)
     {
-        return DMFile::restore(db_context->getFileProvider(), oid.file_id, oid.file_id, S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKey(), DMFile::ReadMetaMode::all());
+        return DMFile::restore(db_context->getFileProvider(), oid.file_id, oid.file_id, S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKeyWithPrefix(), DMFile::ReadMetaMode::all());
     }
 
     LoggerPtr log;

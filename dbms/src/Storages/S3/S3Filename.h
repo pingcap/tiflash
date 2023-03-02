@@ -119,6 +119,8 @@ public:
     static S3FilenameView fromKey(std::string_view fullpath);
 
     static S3FilenameView fromStoreKeyPrefix(std::string_view prefix);
+
+    static S3FilenameView fromKeyWithPrefix(std::string_view fullpath);
 };
 
 // Use for generating the S3 object key
@@ -135,6 +137,11 @@ struct S3Filename
     static S3Filename newCheckpointManifest(StoreID store_id, UInt64 upload_seq);
 
     String toFullKey() const;
+
+    // `toFullKeyWithPrefix` will as a `s3:://` prefix in full key.
+    // You can pass a full key with prefix to `FileProvider` as file path,
+    // if you want to read/write S3 object as file.
+    String toFullKeyWithPrefix() const;
 
     String toManifestPrefix() const;
 

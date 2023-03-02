@@ -22,6 +22,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
+#include <Poco/Path.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/S3/S3Filename.h>
@@ -139,9 +140,10 @@ DMFilePtr DMFile::restore(
     const String & parent_path,
     const ReadMetaMode & read_meta_mode)
 {
-    auto is_s3_file = S3::S3FilenameView::fromKey(parent_path).isDataFile();
+    auto is_s3_file = S3::S3FilenameView::fromKeyWithPrefix(parent_path).isDataFile();
     if (!is_s3_file)
     {
+        RUNTIME_CHECK(Poco::Path(parent_path).isAbsolute(), parent_path);
         String path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
         // The path may be dropped by another thread in some cases
         auto poco_file = Poco::File(path);

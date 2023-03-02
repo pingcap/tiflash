@@ -22,6 +22,8 @@
 #include <magic_enum.hpp>
 #include <string_view>
 
+#include "Common/StringUtils/StringUtils.h"
+
 namespace DB::S3
 {
 //==== Serialize/Deserialize ====//
@@ -61,6 +63,8 @@ constexpr static std::string_view fmt_lock_prefix = "lock/";
 constexpr static std::string_view fmt_lock_datafile_prefix = "lock/s{store_id}/{subpath}.lock_";
 constexpr static std::string_view fmt_lock_file = "lock/s{store_id}/{subpath}.lock_s{lock_store}_{lock_seq}";
 
+// If you want to read/write S3 object as file throught `FileProvider`, file path must starts with `s3_filename_prefix`. 
+constexpr static std::string_view s3_filename_prefix = "s3://";
 // clang-format on
 
 
@@ -90,6 +94,11 @@ String S3FilenameView::toFullKey() const
 String S3Filename::toFullKey() const
 {
     return details::toFullKey(type, store_id, data_subpath);
+}
+
+String S3Filename::toFullKeyWithPrefix() const
+{
+    return fmt::format("{}{}", details::s3_filename_prefix, toFullKey());
 }
 
 String S3Filename::toManifestPrefix() const
@@ -187,6 +196,15 @@ S3FilenameView S3FilenameView::fromStoreKeyPrefix(const std::string_view prefix)
 
     res.type = S3FilenameType::StorePrefix;
     return res;
+}
+
+S3FilenameView S3FilenameView::fromKeyWithPrefix(std::string_view fullpath)
+{
+    if (startsWith(fullpath, details::s3_filename_prefix))
+    {
+        return fromKey(fullpath.substr(details::s3_filename_prefix.size()));
+    }
+    return S3FilenameView{}; // Invalid
 }
 
 //==== Data file utils ====//
