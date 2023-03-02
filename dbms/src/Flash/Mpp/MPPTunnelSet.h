@@ -95,6 +95,7 @@ private:
     std::vector<tipb::FieldType> result_field_types;
 
     int external_thread_cnt = 0;
+    size_t local_tunnel_cnt = 0;
 };
 
 class MPPTunnelSet : public MPPTunnelSetBase<MPPTunnel>
