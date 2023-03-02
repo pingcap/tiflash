@@ -41,12 +41,12 @@ PhysicalPlanNodePtr PhysicalExchangeSender::build(
     auto physical_exchange_sender = std::make_shared<PhysicalExchangeSender>(
         executor_id,
         child->getSchema(),
+        fine_grained_shuffle,
         log->identifier(),
         child,
         partition_col_ids,
         partition_col_collators,
         exchange_sender.tp(),
-        fine_grained_shuffle,
         exchange_sender.compression());
     // executeUnion will be call after sender.transform, so don't need to restore concurrency.
     physical_exchange_sender->disableRestoreConcurrency();
@@ -87,11 +87,12 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
     });
 }
 
-void PhysicalExchangeSender::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
+void PhysicalExchangeSender::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t /*concurrency*/)
 {
-    // TODO support fine grained shuffle
-    RUNTIME_CHECK(!fine_grained_shuffle.enable());
-
     group_builder.transform([&](auto & builder) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
@@ -108,7 +109,7 @@ void PhysicalExchangeSender::buildPipelineExec(PipelineExecGroupBuilder & group_
             context.getSettingsRef().batch_send_min_limit_compression,
             log->identifier(),
             /*is_async=*/true);
-        builder.setSinkOp(std::make_unique<ExchangeSenderSinkOp>(group_builder.exec_status, log->identifier(), std::move(response_writer)));
+        builder.setSinkOp(std::make_unique<ExchangeSenderSinkOp>(exec_status, log->identifier(), std::move(response_writer)));
     });
 }
 

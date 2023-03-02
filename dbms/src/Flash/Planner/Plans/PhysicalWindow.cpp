@@ -54,10 +54,10 @@ PhysicalPlanNodePtr PhysicalWindow::build(
     auto physical_window = std::make_shared<PhysicalWindow>(
         executor_id,
         schema,
+        fine_grained_shuffle,
         log->identifier(),
         child,
-        window_description,
-        fine_grained_shuffle);
+        window_description);
     return physical_window;
 }
 

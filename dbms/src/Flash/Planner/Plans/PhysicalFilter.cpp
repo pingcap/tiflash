@@ -42,6 +42,7 @@ PhysicalPlanNodePtr PhysicalFilter::build(
     auto physical_filter = std::make_shared<PhysicalFilter>(
         executor_id,
         child->getSchema(),
+        child->getFineGrainedShuffle(),
         log->identifier(),
         child,
         filter_column_name,
@@ -57,11 +58,15 @@ void PhysicalFilter::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, before_filter_actions, filter_column, log->identifier()); });
 }
 
-void PhysicalFilter::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalFilter::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
     auto input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<FilterTransformOp>(group_builder.exec_status, log->identifier(), input_header, before_filter_actions, filter_column));
+        builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_filter_actions, filter_column));
     });
 }
 

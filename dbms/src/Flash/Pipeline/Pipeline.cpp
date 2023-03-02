@@ -76,16 +76,16 @@ void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
 void Pipeline::addGetResultSink(ResultHandler && result_handler)
 {
     assert(!plan_nodes.empty());
-    auto get_result_sink = PhysicalGetResultSink::build(std::move(result_handler), plan_nodes.back());
+    auto get_result_sink = PhysicalGetResultSink::build(std::move(result_handler), log, plan_nodes.back());
     addPlanNode(get_result_sink);
 }
 
 PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
 {
     assert(!plan_nodes.empty());
-    PipelineExecGroupBuilder builder{exec_status};
+    PipelineExecGroupBuilder builder;
     for (const auto & plan_node : plan_nodes)
-        plan_node->buildPipelineExec(builder, context, concurrency);
+        plan_node->buildPipelineExecGroup(exec_status, builder, context, concurrency);
     return builder.build();
 }
 
@@ -128,12 +128,6 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
     traverseExecutors(
         &dag_request,
         [&](const tipb::Executor & executor) {
-            // TODO support fine grained shuffle.
-            if (FineGrainedShuffle(&executor).enable())
-            {
-                is_supported = false;
-                return false;
-            }
             switch (executor.tp())
             {
             case tipb::ExecType::TypeProjection:

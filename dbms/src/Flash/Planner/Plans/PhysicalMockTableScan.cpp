@@ -76,11 +76,12 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
 PhysicalMockTableScan::PhysicalMockTableScan(
     const String & executor_id_,
     const NamesAndTypes & schema_,
+    const FineGrainedShuffle & fine_grained_shuffle_,
     const String & req_id,
     const Block & sample_block_,
     const BlockInputStreams & mock_streams_,
     Int64 table_id_)
-    : PhysicalLeaf(executor_id_, PlanType::MockTableScan, schema_, req_id)
+    : PhysicalLeaf(executor_id_, PlanType::MockTableScan, schema_, fine_grained_shuffle_, req_id)
     , sample_block(sample_block_)
     , mock_streams(mock_streams_)
     , table_id(table_id_)
@@ -98,6 +99,7 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
     auto physical_mock_table_scan = std::make_shared<PhysicalMockTableScan>(
         executor_id,
         schema,
+        FineGrainedShuffle{},
         log->identifier(),
         Block(schema),
         mock_streams,
@@ -111,12 +113,16 @@ void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Co
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalMockTableScan::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
     group_builder.init(mock_streams.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(group_builder.exec_status, log->identifier(), mock_streams[i++]));
+        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
     });
 }
 

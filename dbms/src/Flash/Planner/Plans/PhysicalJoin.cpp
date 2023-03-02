@@ -141,14 +141,14 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     auto physical_join = std::make_shared<PhysicalJoin>(
         executor_id,
         join_output_schema,
+        fine_grained_shuffle,
         log->identifier(),
         probe_plan,
         build_plan,
         join_ptr,
         probe_side_prepare_actions,
         build_side_prepare_actions,
-        Block(join_output_schema),
-        fine_grained_shuffle);
+        Block(join_output_schema));
     return physical_join;
 }
 

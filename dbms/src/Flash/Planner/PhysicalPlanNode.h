@@ -18,6 +18,7 @@
 #include <Core/Block.h>
 #include <Core/Names.h>
 #include <Core/NamesAndTypes.h>
+#include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Planner/PlanType.h>
 
 #include <memory>
@@ -28,6 +29,9 @@ struct DAGPipeline;
 class Context;
 class DAGContext;
 
+class PipelineExecutorStatus;
+
+struct PipelineExecBuilder;
 struct PipelineExecGroupBuilder;
 
 class Pipeline;
@@ -44,6 +48,7 @@ public:
         const String & executor_id_,
         const PlanType & type_,
         const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id);
 
     virtual ~PhysicalPlanNode() = default;
@@ -60,7 +65,16 @@ public:
 
     virtual void buildBlockInputStream(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
-    virtual void buildPipelineExec(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/);
+    virtual void buildPipelineExecGroup(
+        PipelineExecutorStatus & /*exec_status*/,
+        PipelineExecGroupBuilder & /*group_builder*/,
+        Context & /*context*/,
+        size_t /*concurrency*/);
+    virtual void buildPipelineExec(
+        PipelineExecutorStatus & /*exec_status*/,
+        PipelineExecBuilder & /*exec_builder*/,
+        Context & /*context*/,
+        size_t /*partition_id*/);
 
     virtual void buildPipeline(PipelineBuilder & builder);
 
@@ -76,6 +90,8 @@ public:
 
     void disableRestoreConcurrency() { is_restore_concurrency = false; }
 
+    const FineGrainedShuffle & getFineGrainedShuffle() const { return fine_grained_shuffle; }
+
     String toString();
 
     String toSimpleString();
@@ -88,6 +104,11 @@ protected:
     String executor_id;
     PlanType type;
     NamesAndTypes schema;
+
+    //Most operators are not aware of whether they are fine-grained shuffles or not;
+    //whether they are fine-grained shuffles or not, their execution remains unchanged.
+    // Only a few operators need to sense fine-grained shuffle, such as exchange sender/receiver, join, aggregate, window and window sort.
+    FineGrainedShuffle fine_grained_shuffle;
 
     bool is_tidb_operator = true;
     bool is_restore_concurrency = true;

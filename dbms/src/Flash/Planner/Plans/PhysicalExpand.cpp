@@ -64,11 +64,11 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     auto physical_expand = std::make_shared<PhysicalExpand>(
         executor_id,
         expand_output_columns,
+        child->getFineGrainedShuffle(),
         log->identifier(),
         child,
         expand_action.expand,
         before_expand_actions);
-
     return physical_expand;
 }
 
@@ -82,10 +82,14 @@ void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
     });
 }
 
-void PhysicalExpand::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context &, size_t)
+void PhysicalExpand::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), expand_actions));
+        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expand_actions));
     });
 }
 

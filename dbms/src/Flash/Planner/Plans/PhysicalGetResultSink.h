@@ -26,15 +26,17 @@ class PhysicalGetResultSink : public PhysicalUnary
 public:
     static PhysicalPlanNodePtr build(
         ResultHandler && result_handler,
+        const LoggerPtr & log,
         const PhysicalPlanNodePtr & child);
 
     PhysicalGetResultSink(
         const String & executor_id_,
         const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
         ResultHandler && result_handler_)
-        : PhysicalUnary(executor_id_, PlanType::GetResult, schema_, req_id, child_)
+        : PhysicalUnary(executor_id_, PlanType::GetResult, schema_, fine_grained_shuffle_, req_id, child_)
         , result_handler(std::move(result_handler_))
     {
         assert(!result_handler.isIgnored());
@@ -50,7 +52,11 @@ public:
         throw Exception("Unsupport");
     }
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
+    void buildPipelineExecGroup(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        Context & /*context*/,
+        size_t /*concurrency*/) override;
 
 private:
     friend class GetResultSinkOp;

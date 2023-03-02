@@ -28,6 +28,11 @@ inline bool enableFineGrainedShuffle(uint64_t stream_count)
 
 struct FineGrainedShuffle
 {
+    FineGrainedShuffle()
+        : stream_count(0)
+        , batch_size(0)
+    {}
+
     explicit FineGrainedShuffle(const tipb::Executor * executor)
         : stream_count(executor ? executor->fine_grained_shuffle_stream_count() : 0)
         , batch_size(executor ? executor->fine_grained_shuffle_batch_size() : 0)

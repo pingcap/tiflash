@@ -33,11 +33,12 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::ExchangeReceiver & exchange_receiver,
-        size_t fine_grained_stream_count);
+        const FineGrainedShuffle & fine_grained_shuffle);
 
     PhysicalMockExchangeReceiver(
         const String & executor_id_,
         const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const Block & sample_block_,
         const BlockInputStreams & mock_streams,
@@ -49,7 +50,11 @@ public:
 
     size_t getSourceNum() const { return source_num; };
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
+    void buildPipelineExecGroup(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        Context & /*context*/,
+        size_t /*concurrency*/) override;
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;

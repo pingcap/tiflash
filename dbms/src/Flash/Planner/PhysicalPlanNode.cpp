@@ -28,10 +28,12 @@ PhysicalPlanNode::PhysicalPlanNode(
     const String & executor_id_,
     const PlanType & type_,
     const NamesAndTypes & schema_,
+    const FineGrainedShuffle & fine_grained_shuffle_,
     const String & req_id)
     : executor_id(executor_id_)
     , type(type_)
     , schema(schema_)
+    , fine_grained_shuffle(fine_grained_shuffle_)
     , log(Logger::get(req_id, type_.toString(), executor_id_))
 {}
 
@@ -88,7 +90,20 @@ void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & c
     }
 }
 
-void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalPlanNode::buildPipelineExecGroup(
+    PipelineExecutorStatus & /*exec_status*/,
+    PipelineExecGroupBuilder & /*group_builder*/,
+    Context & /*context*/,
+    size_t /*concurrency*/)
+{
+    throw Exception("Unsupport");
+}
+
+void PhysicalPlanNode::buildPipelineExec(
+    PipelineExecutorStatus & /*exec_status*/,
+    PipelineExecBuilder & /*exec_builder*/,
+    Context & /*context*/,
+    size_t /*partition_id*/)
 {
     throw Exception("Unsupport");
 }

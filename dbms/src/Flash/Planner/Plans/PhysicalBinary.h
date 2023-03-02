@@ -30,10 +30,11 @@ public:
         const String & executor_id_,
         const PlanType & type_,
         const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const PhysicalPlanNodePtr & left_,
         const PhysicalPlanNodePtr & right_)
-        : PhysicalPlanNode(executor_id_, type_, schema_, req_id)
+        : PhysicalPlanNode(executor_id_, type_, schema_, fine_grained_shuffle_, req_id)
         , left(left_)
         , right(right_)
     {
