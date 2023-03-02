@@ -113,6 +113,38 @@ public:
 
     DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot);
 
+    struct DumpCheckpointOptions
+    {
+        /**
+         * The data file id and path. Available placeholders: {sequence}, {sub_file_index}.
+         * We accept "/" in the file name.
+         *
+         * File path is where the data file is put in the local FS. It should be a valid FS path.
+         * File ID is how that file is referenced by other Files, which can be anything you want.
+         */
+        const std::string & data_file_id_pattern;
+        const std::string & data_file_path_pattern;
+
+        /**
+         * The manifest file id and path. Available placeholders: {sequence}.
+         * We accept "/" in the file name.
+         *
+         * File path is where the manifest file is put in the local FS. It should be a valid FS path.
+         * File ID is how that file is referenced by other Files, which can be anything you want.
+         */
+        const std::string & manifest_file_id_pattern;
+        const std::string & manifest_file_path_pattern;
+
+        /**
+         * The writer info field in the dumped files.
+         */
+        const PS::V3::CheckpointProto::WriterInfo & writer_info;
+    };
+
+    using DumpCheckpointResult = PS::V3::universal::PageDirectoryType::DumpCheckpointResult;
+
+    DumpCheckpointResult dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+
     PageIdU64 getMaxIdAfterRestart() const;
 
     // We may skip the GC to reduce useless reading by default.

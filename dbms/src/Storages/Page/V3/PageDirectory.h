@@ -45,6 +45,10 @@ extern const Metric PSMVCCNumSnapshots;
 
 namespace DB::PS::V3
 {
+
+class CPWriteDataSource;
+using CPWriteDataSourcePtr = std::shared_ptr<CPWriteDataSource>;
+
 class PageDirectorySnapshot : public DB::PageStorageSnapshot
 {
 public:
@@ -185,6 +189,8 @@ public:
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
     std::optional<PageEntryV3> getLastEntry(std::optional<UInt64> seq) const;
+
+    void copyCheckpointInfoFromEdit(const typename PageEntriesEdit::EditRecord & edit);
 
     bool isVisible(UInt64 seq) const;
 
@@ -353,6 +359,51 @@ public:
     /// And we don't restore the entries in blob store, because this PageDirectory is just read only for its entries.
     bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
 
+    void copyCheckpointInfoFromEdit(PageEntriesEdit & edit);
+
+    struct DumpCheckpointOptions
+    {
+        /**
+         * The data file id and path. Available placeholders: {sequence}, {sub_file_index}.
+         * We accept "/" in the file name.
+         *
+         * File path is where the data file is put in the local FS. It should be a valid FS path.
+         * File ID is how that file is referenced by other Files, which can be anything you want.
+         */
+        const std::string & data_file_id_pattern;
+        const std::string & data_file_path_pattern;
+
+        /**
+         * The manifest file id and path. Available placeholders: {sequence}.
+         * We accept "/" in the file name.
+         *
+         * File path is where the manifest file is put in the local FS. It should be a valid FS path.
+         * File ID is how that file is referenced by other Files, which can be anything you want.
+         */
+        const std::string & manifest_file_id_pattern;
+        const std::string & manifest_file_path_pattern;
+
+        /**
+         * The writer info field in the dumped files.
+         */
+        const CheckpointProto::WriterInfo & writer_info;
+
+        const CPWriteDataSourcePtr data_source;
+    };
+
+    struct DumpCheckpointResult
+    {
+        struct FileInfo
+        {
+            const String id;
+            const String path;
+        };
+        std::vector<FileInfo> new_data_files;
+        std::vector<FileInfo> new_manifest_files;
+    };
+
+    DumpCheckpointResult dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
     PageEntries gcInMemEntries(bool return_removed_entries = true);
@@ -444,6 +495,11 @@ private:
     WALStorePtr wal;
     const UInt64 max_persisted_log_files;
     LoggerPtr log;
+
+    std::mutex checkpoint_mu;
+
+    // TODO: We should restore this from WAL. Otherwise the "last_sequence" in the files is not reliable
+    UInt64 last_checkpoint_sequence = 0;
 };
 
 namespace u128

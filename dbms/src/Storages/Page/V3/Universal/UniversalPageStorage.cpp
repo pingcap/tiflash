@@ -16,6 +16,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
@@ -202,10 +203,25 @@ void UniversalPageStorage::registerUniversalExternalPagesCallbacks(const Univers
 {
     manager.registerExternalPagesCallbacks(callbacks);
 }
+
 void UniversalPageStorage::unregisterUniversalExternalPagesCallbacks(const String & prefix)
 {
     manager.unregisterExternalPagesCallbacks(prefix);
     // clean all external ids ptrs
     page_directory->unregisterNamespace(prefix);
 }
+
+UniversalPageStorage::DumpCheckpointResult
+UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
+{
+    return page_directory->dumpIncrementalCheckpoint({
+        .data_file_id_pattern = options.data_file_id_pattern,
+        .data_file_path_pattern = options.data_file_path_pattern,
+        .manifest_file_id_pattern = options.manifest_file_id_pattern,
+        .manifest_file_path_pattern = options.manifest_file_path_pattern,
+        .writer_info = options.writer_info,
+        .data_source = PS::V3::CPWriteDataSourceBlobStore::create(*blob_store),
+    });
+}
+
 } // namespace DB

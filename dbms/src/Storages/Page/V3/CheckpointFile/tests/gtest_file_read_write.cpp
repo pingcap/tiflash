@@ -99,7 +99,7 @@ try
     edits.appendRecord({.type = EditRecordType::DEL});
 
     ASSERT_THROW({
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     },
                  DB::Exception);
 }
@@ -124,7 +124,7 @@ try
     {
         auto edits = universal::PageEntriesEdit{};
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "water"});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
@@ -180,7 +180,7 @@ try
     {
         auto edits = universal::PageEntriesEdit{};
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "water"});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     {
         auto edits = universal::PageEntriesEdit{};
@@ -188,7 +188,7 @@ try
         edits.appendRecord({.type = EditRecordType::VAR_REF, .page_id = "foo", .ori_page_id = "abc"});
         edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "rain"});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
@@ -290,7 +290,7 @@ try
         edits.appendRecord({.type = EditRecordType::VAR_REF, .page_id = "foo", .ori_page_id = "abc"});
         edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "sun"});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
@@ -379,7 +379,7 @@ try
         .sequence = 5,
         .last_sequence = 3,
     });
-    writer->writeEditsAndApplyRemoteInfo(edits);
+    writer->writeEditsAndApplyCheckpointInfo(edits);
     writer->writeSuffix();
     writer.reset();
 
@@ -461,12 +461,12 @@ try
     });
     {
         auto edits = universal::PageEntriesEdit{};
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     {
         auto edits = universal::PageEntriesEdit{};
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "snow"});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
@@ -562,7 +562,7 @@ try
             },
         });
         edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
@@ -621,7 +621,7 @@ try
                 .page_id = fmt::format("record_{}", i),
                 .entry = {.size = 22, .offset = 10},
             });
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
