@@ -53,7 +53,9 @@ public:
     Task()
         : mem_tracker(nullptr)
         , log(Logger::get())
-    {}
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
+    }
 
     Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
         : mem_tracker(std::move(mem_tracker_))
