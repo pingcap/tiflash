@@ -211,7 +211,7 @@ try
 }
 CATCH
 
-TEST_F(FilterExecutorTestRunner, convert_bool)
+TEST_F(FilterExecutorTestRunner, ConvertBool)
 try
 {
     {
@@ -282,10 +282,11 @@ try
 {
     context.mockStorage()->setUseDeltaMerge(true);
     context.addMockDeltaMerge({"test_db", "test_table1"},
-                              {{"i1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeString}, {"b3", TiDB::TP::TypeTiny}},
+                              {{"i1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeString}, {"b3", TiDB::TP::TypeTiny}, {"t4", TiDB::TP::TypeTimestamp}},
                               {toVec<Int64>("i1", {1, 2, 3}),
                                toNullableVec<String>("s2", {"apple", {}, "banana"}),
-                               toVec<Int8>("b3", {true, false, true})});
+                               toVec<Int8>("b3", {true, false, true}),
+                               toNullableVec<MyDateTime>("t4", {{}, 0, 1000000})});
 
     // Do not support push down filter test for DAGQueryBlockInterpreter
     enablePlanner(true);
@@ -307,7 +308,8 @@ Expression: <final projection>
         request,
         {toNullableVec<Int64>({1}),
          toNullableVec<String>({"apple"}),
-         toNullableVec<Int8>({true})});
+         toNullableVec<Int8>({true}),
+         toNullableVec<MyDateTime>({{}})});
 
     request = context
                   .scan("test_db", "test_table1")
@@ -318,7 +320,22 @@ Expression: <final projection>
         request,
         {toNullableVec<Int64>({1, 3}),
          toNullableVec<String>({"apple", "banana"}),
-         toNullableVec<Int8>({true, true})});
+         toNullableVec<Int8>({true, true}),
+         toNullableVec<MyDateTime>({{}, 1000000})});
+
+    request = context
+                  .scan("test_db", "test_table1")
+                  .filter(lt(col("t4"), lit(Field(static_cast<Int64>(3)))))
+                  .build(context);
+
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<Int64>({2}),
+         toNullableVec<String>({{}}),
+         toNullableVec<Int8>({false}),
+         toNullableVec<MyDateTime>({0})});
+
+    //TODO: add MyDuration test, test framework does not support MyDuration yet.
 
     request = context
                   .scan("test_db", "test_table1")
@@ -329,7 +346,8 @@ Expression: <final projection>
         request,
         {toNullableVec<Int64>({1, 2}),
          toNullableVec<String>({"apple", {}}),
-         toNullableVec<Int8>({true, false})});
+         toNullableVec<Int8>({true, false}),
+         toNullableVec<MyDateTime>({{}, 0})});
 
     for (size_t i = 4; i < 10; ++i)
     {
@@ -342,7 +360,8 @@ Expression: <final projection>
             request,
             {toNullableVec<Int64>({1, 2, 3}),
              toNullableVec<String>({"apple", {}, "banana"}),
-             toNullableVec<Int8>({true, false, true})});
+             toNullableVec<Int8>({true, false, true}),
+             toNullableVec<MyDateTime>({{}, 0, 1000000})});
     }
 
     for (size_t i = 0; i < 10; ++i)
@@ -356,7 +375,8 @@ Expression: <final projection>
             request,
             {toNullableVec<Int64>({1, 2, 3}),
              toNullableVec<String>({"apple", {}, "banana"}),
-             toNullableVec<Int8>({true, false, true})});
+             toNullableVec<Int8>({true, false, true}),
+             toNullableVec<MyDateTime>({{}, 0, 1000000})});
     }
 
     for (size_t i = 0; i < 10; ++i)

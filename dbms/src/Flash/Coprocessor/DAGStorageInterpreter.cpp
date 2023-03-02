@@ -42,6 +42,8 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 
+#include "common/logger_useful.h"
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/coprocessor.pb.h>
@@ -252,6 +254,27 @@ String genErrMsgForLocalRead(
             table_id,
             logical_table_id);
 }
+
+bool needRewriteTimeStampLiteral(const std::vector<Int64> & col_idxs, const std::vector<ExtraCastAfterTSMode> & need_cast_column)
+{
+    for (auto idx : col_idxs)
+    {
+        if (need_cast_column[idx] == ExtraCastAfterTSMode::AppendTimeZoneCast)
+            return true;
+    }
+    return false;
+}
+
+bool needrewriteTimeLiteral(const std::vector<Int64> & col_idxs, const std::vector<ExtraCastAfterTSMode> & need_cast_column)
+{
+    for (auto idx : col_idxs)
+    {
+        if (need_cast_column[idx] == ExtraCastAfterTSMode::AppendDurationCast)
+            return true;
+    }
+    return false;
+}
+
 } // namespace
 
 DAGStorageInterpreter::DAGStorageInterpreter(
@@ -334,8 +357,6 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
-    /// handle timezone/duration cast for local and remote table scan.
-    executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
     /// handle generated column if necessary.
     executeGeneratedColumnPlaceholder(remote_read_streams_start_index, generated_column_infos, log, pipeline);
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
@@ -343,9 +364,30 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     /// handle filter conditions for local and remote table scan.
     if (filter_conditions.hasValue())
     {
-        ::DB::executePushedDownFilter(remote_read_streams_start_index, filter_conditions, *analyzer, log, pipeline);
-        recordProfileStreams(pipeline, filter_conditions.executor_id);
+        google::protobuf::RepeatedPtrField<tipb::Expr> rewrote_conditions;
+        /// rewrite timestamp literal, like when timezone is +08:00, 2019-01-01 00:00:00 +08:00 -> 2019-01-01 00:00:00 +00:00
+        /// rewrite time literal, like 00:00:00 -> 00000000
+        for (const auto & condition : filter_conditions.conditions)
+        {
+            const auto res = getColumnsForExpr(condition, analyzer->getCurrentInputColumns());
+            tipb::Expr expr = condition;
+            if (!context.getTimezoneInfo().is_utc_timezone && needRewriteTimeStampLiteral(res, is_need_add_cast_column))
+            {
+                expr = rewriteTimeStampLiteral(condition, context.getTimezoneInfo());
+            }
+            if (needrewriteTimeLiteral(res, is_need_add_cast_column))
+            {
+                expr = rewriteTimeLiteral(condition);
+            }
+            rewrote_conditions.Add(std::move(expr));
+        }
+
+        ::DB::executePushedDownFilter(remote_read_streams_start_index, rewrote_conditions, *analyzer, log, pipeline);
     }
+
+    /// handle timezone/duration cast for local and remote table scan.
+    executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
+    recordProfileStreams(pipeline, filter_conditions.executor_id);
 }
 
 void DAGStorageInterpreter::prepare()
@@ -406,6 +448,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
             stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log->identifier());
             stream->setExtraInfo("cast after remote tableScan");
         }
+        LOG_ERROR(log, "extra_cast: {}, project_for_cop_read: {}", extra_cast->dumpActions(), project_for_cop_read->dumpActions());
     }
 }
 

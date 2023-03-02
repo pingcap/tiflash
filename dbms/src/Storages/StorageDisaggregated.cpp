@@ -268,7 +268,7 @@ void StorageDisaggregated::filterConditions(DAGPipeline & pipeline)
     if (filter_conditions.hasValue())
     {
         // No need to cast, because already done by tiflash_storage node.
-        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), filter_conditions, *analyzer, log, pipeline);
+        ::DB::executePushedDownFilter(/*remote_read_streams_start_index=*/pipeline.streams.size(), filter_conditions.conditions, *analyzer, log, pipeline);
 
         auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[filter_conditions.executor_id];
         pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });

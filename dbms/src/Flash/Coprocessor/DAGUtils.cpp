@@ -27,6 +27,8 @@
 #include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
+
+#include "Interpreters/TimezoneInfo.h"
 namespace DB
 {
 const Int8 VAR_SIZE = 0;
@@ -1139,6 +1141,82 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
         throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
     }
     return input_col[column_index].name;
+}
+
+std::vector<Int64> getColumnsForExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
+{
+    if (isLiteralExpr(expr))
+    {
+        return {};
+    }
+    else if (isColumnExpr(expr))
+    {
+        return {decodeDAGInt64(expr.val())};
+    }
+    else if (isScalarFunctionExpr(expr))
+    {
+        std::vector<Int64> cols;
+        for (const auto & child : expr.children())
+        {
+            auto child_col = getColumnsForExpr(child, input_col);
+            cols.insert(cols.end(), child_col.begin(), child_col.end());
+        }
+        return cols;
+    }
+    else
+    {
+        throw TiFlashException("Should not reach here: not a column or literal expression", Errors::Coprocessor::Internal);
+    }
+}
+
+tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, TimezoneInfo timezone_info)
+{
+    tipb::Expr ret_expr = expr;
+    if (isLiteralExpr(expr) && expr.tp() == tipb::ExprType::MysqlTime)
+    {
+        Field f = decodeLiteral(expr);
+        // substract timezone offset
+        // like: when timezone is +08:00
+        //       2019-01-01 00:00:00 +08:00 -> 2019-01-01 00:00:00 +00:00
+        UInt64 t = f.get<UInt64>();
+        WriteBufferFromOwnString ss;
+        encodeDAGInt64(t - timezone_info.timezone_offset, ss);
+        ret_expr.set_val(ss.releaseStr());
+    }
+    else if (isScalarFunctionExpr(expr))
+    {
+        ret_expr.clear_children();
+        ret_expr.mutable_children()->Reserve(expr.children().size());
+        for (const auto & child : expr.children())
+        {
+            ret_expr.mutable_children()->Add(rewriteTimeStampLiteral(child, timezone_info));
+        }
+    }
+    return ret_expr;
+}
+
+tipb::Expr rewriteTimeLiteral(const tipb::Expr & expr)
+{
+    tipb::Expr ret_expr = expr;
+    // for duration type literal, we need to convert it to int64
+    if (isLiteralExpr(expr) && expr.tp() == tipb::ExprType::MysqlDuration)
+    {
+        Field f = decodeLiteral(expr);
+        Int64 t = f.get<Int64>();
+        WriteBufferFromOwnString ss;
+        encodeDAGInt64(t, ss);
+        ret_expr.set_val(ss.releaseStr());
+    }
+    else if (isScalarFunctionExpr(expr))
+    {
+        ret_expr.clear_children();
+        ret_expr.mutable_children()->Reserve(expr.children().size());
+        for (const auto & child : expr.children())
+        {
+            ret_expr.mutable_children()->Add(rewriteTimeLiteral(child));
+        }
+    }
+    return ret_expr;
 }
 
 NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)

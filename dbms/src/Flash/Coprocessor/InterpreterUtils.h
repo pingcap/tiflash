@@ -69,12 +69,12 @@ void executeCreatingSets(
     const LoggerPtr & log);
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-    const FilterConditions & filter_conditions,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filter_conditions,
     DAGExpressionAnalyzer & analyzer);
 
 void executePushedDownFilter(
     size_t remote_read_streams_start_index,
-    const FilterConditions & filter_conditions,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log,
     DAGPipeline & pipeline);

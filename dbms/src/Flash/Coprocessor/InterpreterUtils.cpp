@@ -176,14 +176,14 @@ void executeCreatingSets(
 }
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-    const FilterConditions & filter_conditions,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filter_conditions,
     DAGExpressionAnalyzer & analyzer)
 {
-    assert(filter_conditions.hasValue());
+    assert(!filter_conditions.empty());
 
     ExpressionActionsChain chain;
     analyzer.initChain(chain);
-    String filter_column_name = analyzer.appendWhere(chain, filter_conditions.conditions);
+    String filter_column_name = analyzer.appendWhere(chain, filter_conditions);
     ExpressionActionsPtr before_where = chain.getLastActions();
     chain.addStep();
 
@@ -202,7 +202,7 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilt
 
 void executePushedDownFilter(
     size_t remote_read_streams_start_index,
-    const FilterConditions & filter_conditions,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log,
     DAGPipeline & pipeline)
