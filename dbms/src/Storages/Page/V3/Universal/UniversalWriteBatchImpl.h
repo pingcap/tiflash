@@ -108,6 +108,13 @@ public:
         writes.emplace_back(std::move(w));
     }
 
+    void updateRemotePage(const UniversalPageId & page_id, const ReadBufferPtr & read_buffer, PageSize size)
+    {
+        Write w{WriteBatchWriteType::UPDATE_REMOTE, page_id, 0, read_buffer, size, "", {}};
+        total_data_size += size;
+        writes.emplace_back(std::move(w));
+    }
+
     void putExternal(const UniversalPageId & page_id, UInt64 tag)
     {
         // External page's data is not managed by PageStorage, which means data is empty.

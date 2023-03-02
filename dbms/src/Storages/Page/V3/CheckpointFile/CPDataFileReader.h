@@ -37,7 +37,9 @@ public:
     UniversalPageMap read(const UniversalPageIdAndEntries & page_id_and_entries);
 
     using FieldReadInfos = PS::V3::universal::BlobStoreType::FieldReadInfos;
-    UniversalPageMap read(const FieldReadInfos & to_read);
+    // return two page_maps, the first contains the whole page for given page id which is used to update local cache,
+    // the second just contains read fields data.
+    std::pair<UniversalPageMap, UniversalPageMap> read(const FieldReadInfos & to_read);
 
 private:
     String remote_directory;

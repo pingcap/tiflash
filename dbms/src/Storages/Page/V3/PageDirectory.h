@@ -175,6 +175,10 @@ public:
 
     void createDelete(const PageVersion & ver);
 
+    // Update the local cache info for remote page,
+    // Must a hold snap to prevent the page being deleted.
+    bool updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry);
+
     std::shared_ptr<PageId> fromRestored(const typename PageEntriesEdit::EditRecord & rec);
 
     std::tuple<ResolveResult, PageId, PageVersion>
@@ -342,6 +346,9 @@ public:
     std::optional<PageId> getLowerBound(const PageId & start, const DB::PageStorageSnapshotPtr & snap_);
 
     void apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
+
+    // return ignored entries, and the corresponding space in BlobFile should be reclaimed
+    PageEntries updateLocalCacheForRemotePages(PageEntriesEdit && edit, const DB::PageStorageSnapshotPtr & snap_, const WriteLimiterPtr & write_limiter = nullptr);
 
     std::pair<GcEntriesMap, PageSize>
     getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;

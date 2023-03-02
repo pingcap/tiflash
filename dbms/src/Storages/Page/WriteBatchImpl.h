@@ -44,6 +44,8 @@ enum class WriteBatchWriteType : UInt8
     PUT_EXTERNAL = 4,
     // Put a remote page which data is stored on remote storage
     PUT_REMOTE = 5,
+    // Update local cache for remote page
+    UPDATE_REMOTE = 6,
 };
 
 class WriteBatch : private boost::noncopyable

@@ -90,6 +90,7 @@ enum class EditRecordType
     VAR_REF,
     VAR_EXTERNAL,
     VAR_DELETE,
+    UPDATE_REMOTE,
 };
 
 inline const char * typeToString(EditRecordType t)
@@ -172,6 +173,15 @@ public:
     {
         EditRecord record{};
         record.type = EditRecordType::PUT;
+        record.page_id = page_id;
+        record.entry = entry;
+        records.emplace_back(record);
+    }
+
+    void updateRemote(const PageId & page_id, const PageEntryV3 & entry)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::UPDATE_REMOTE;
         record.page_id = page_id;
         record.entry = entry;
         records.emplace_back(record);

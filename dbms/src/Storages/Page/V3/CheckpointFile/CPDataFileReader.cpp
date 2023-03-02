@@ -54,44 +54,47 @@ UniversalPageMap CPDataFileReader::read(const UniversalPageIdAndEntries & page_i
     return page_map;
 }
 
-UniversalPageMap CPDataFileReader::read(const FieldReadInfos & to_read)
+std::pair<UniversalPageMap, UniversalPageMap> CPDataFileReader::read(const FieldReadInfos & to_read)
 {
-    UniversalPageMap page_map;
+    UniversalPageMap complete_page_map;
+    size_t read_fields_size = 0;
     for (const auto & read_info : to_read)
     {
         const auto & page_entry = read_info.entry;
-        RUNTIME_CHECK(page_entry.checkpoint_info.has_value());
-        auto location = page_entry.checkpoint_info->data_location;
-        size_t buf_size = 0;
+        complete_page_map.emplace(read_info.page_id, read(std::make_pair(read_info.page_id, page_entry)));
         for (const auto field_index : read_info.fields)
         {
-            buf_size += page_entry.getFieldSize(field_index);
+            read_fields_size += page_entry.getFieldSize(field_index);
         }
-        RUNTIME_CHECK(buf_size <= location.size_in_file);
-        char * data_buf = static_cast<char *>(alloc(buf_size));
-        MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
-            free(p, buf_size);
-        });
-        auto buf = std::make_shared<ReadBufferFromFile>(remote_directory + "/" + *location.data_file_id);
-        size_t data_buf_pos = 0;
+    }
+    char * read_fields_buf = static_cast<char *>(alloc(read_fields_size));
+    MemHolder read_fields_mem_holder = createMemHolder(read_fields_buf, [&, read_fields_size](char * p) {
+        free(p, read_fields_size);
+    });
+    size_t data_pos = 0;
+    UniversalPageMap read_fields_page_map;
+    for (const auto & read_info : to_read)
+    {
+        const auto & complete_page = complete_page_map.at(read_info.page_id);
+        const auto & page_entry = read_info.entry;
         std::set<FieldOffsetInsidePage> fields_offset_in_page;
-        // TODO: read continuous field in one read
+        size_t page_begin = data_pos;
         for (const auto field_index : read_info.fields)
         {
             const auto [beg_offset, end_offset] = page_entry.getFieldOffsets(field_index);
             const auto size_to_read = end_offset - beg_offset;
-            buf->seek(location.offset_in_file + beg_offset);
-            buf->readStrict(data_buf + data_buf_pos, size_to_read);
-            fields_offset_in_page.emplace(field_index, data_buf_pos);
-            data_buf_pos += size_to_read;
+            // TODO: copy continuous fields in one operation
+            memcpy(read_fields_buf + data_pos, complete_page.data.begin() + beg_offset, size_to_read);
+            fields_offset_in_page.emplace(field_index, data_pos);
+            data_pos += size_to_read;
         }
-        RUNTIME_CHECK(data_buf_pos == buf_size);
         Page page{UniversalPageIdFormat::getU64ID(read_info.page_id)};
-        page.data = ByteBuffer(data_buf, data_buf + buf_size);
-        page.mem_holder = mem_holder;
+        page.data = ByteBuffer(read_fields_buf + page_begin, read_fields_buf + data_pos);
+        page.mem_holder = read_fields_mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
-        page_map.emplace(read_info.page_id, page);
+        read_fields_page_map.emplace(read_info.page_id, page);
     }
-    return page_map;
+    RUNTIME_CHECK(data_pos == read_fields_size);
+    return std::make_pair(complete_page_map, read_fields_page_map);
 }
 } // namespace DB::PS::V3

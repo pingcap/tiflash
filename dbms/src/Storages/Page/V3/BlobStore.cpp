@@ -173,6 +173,7 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
         switch (write.type)
         {
         case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::UPDATE_REMOTE:
         {
             ChecksumClass digest;
             PageEntryV3 entry;
@@ -220,8 +221,15 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
                 LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, write.size);
                 throw e;
             }
+            if (write.type == WriteBatchWriteType::PUT)
+            {
+                edit.put(wb.getFullPageId(write.page_id), entry);
+            }
+            else
+            {
+                edit.updateRemote(wb.getFullPageId(write.page_id), entry);
+            }
 
-            edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
         case WriteBatchWriteType::PUT_REMOTE:
@@ -312,6 +320,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
             }
             case WriteBatchWriteType::PUT:
             case WriteBatchWriteType::UPSERT:
+            case WriteBatchWriteType::UPDATE_REMOTE:
                 throw Exception(fmt::format("write batch have a invalid total size == 0 while this kind of entry exist, write_type={}", static_cast<Int32>(write.type)),
                                 ErrorCodes::LOGICAL_ERROR);
             }
@@ -352,6 +361,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
         switch (write.type)
         {
         case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::UPDATE_REMOTE:
         {
             ChecksumClass digest;
             PageEntryV3 entry;
@@ -392,7 +402,14 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
             }
 
             buffer_pos += write.size;
-            edit.put(wb.getFullPageId(write.page_id), entry);
+            if (write.type == WriteBatchWriteType::PUT)
+            {
+                edit.put(wb.getFullPageId(write.page_id), entry);
+            }
+            else
+            {
+                edit.updateRemote(wb.getFullPageId(write.page_id), entry);
+            }
             break;
         }
         case WriteBatchWriteType::PUT_REMOTE:
