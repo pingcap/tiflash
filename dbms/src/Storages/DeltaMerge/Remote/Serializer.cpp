@@ -191,9 +191,9 @@ RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileTiny & cf_tin
     return ret;
 }
 
-ColumnFileTinyPtr Serializer::deserializeCFTiny(const RemotePb::ColumnFileTiny & proto, const Remote::PageOID & oid)
+ColumnFileTinyPtr Serializer::deserializeCFTiny(const RemotePb::ColumnFileTiny & proto)
 {
-    UNUSED(proto, oid);
+    UNUSED(proto);
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "");
 }
 
@@ -229,9 +229,9 @@ RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileBig & cf_big)
     return ret;
 }
 
-ColumnFileBigPtr Serializer::deserializeCFBig(const RemotePb::ColumnFileBig & proto, const Remote::DMFileOID & oid, const RowKeyRange & segment_range)
+ColumnFileBigPtr Serializer::deserializeCFBig(const RemotePb::ColumnFileBig & proto)
 {
-    UNUSED(proto, oid, segment_range);
+    UNUSED(proto);
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "");
 }
 

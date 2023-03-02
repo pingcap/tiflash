@@ -91,12 +91,12 @@ struct Serializer
     static ColumnFileInMemoryPtr deserializeCFInMemory(const RemotePb::ColumnFileInMemory & proto);
 
     static RemotePb::ColumnFileRemote serializeTo(const ColumnFileTiny & cf_tiny);
-    static ColumnFileTinyPtr deserializeCFTiny(const RemotePb::ColumnFileTiny & proto, const Remote::PageOID & oid);
+    static ColumnFileTinyPtr deserializeCFTiny(const RemotePb::ColumnFileTiny & proto);
 
     static RemotePb::ColumnFileRemote serializeTo(const ColumnFileDeleteRange & cf_delete_range);
     static ColumnFileDeleteRangePtr deserializeCFDeleteRange(const RemotePb::ColumnFileDeleteRange & proto);
 
     static RemotePb::ColumnFileRemote serializeTo(const ColumnFileBig & cf_big);
-    static ColumnFileBigPtr deserializeCFBig(const RemotePb::ColumnFileBig & proto, const Remote::DMFileOID & oid, const RowKeyRange & segment_range);
+    static ColumnFileBigPtr deserializeCFBig(const RemotePb::ColumnFileBig & proto);
 };
 } // namespace DB::DM::Remote
