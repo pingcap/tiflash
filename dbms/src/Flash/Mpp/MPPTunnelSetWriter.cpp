@@ -205,8 +205,8 @@ void MPPTunnelSetWriterBase::write(tipb::SelectResponse & response)
 void MPPTunnelSetWriterBase::broadcastWrite(Blocks & blocks)
 {
     return broadcastOrPassThroughWriteV0<true>(
-        mpp_tunnel_set->getLocalTunnelCnt(),
         mpp_tunnel_set->getTunnels().size(),
+        mpp_tunnel_set->getLocalTunnelCnt(),
         blocks,
         result_field_types,
         [&](size_t i) { return mpp_tunnel_set->isLocal(i); },
@@ -218,8 +218,8 @@ void MPPTunnelSetWriterBase::broadcastWrite(Blocks & blocks)
 void MPPTunnelSetWriterBase::passThroughWrite(Blocks & blocks)
 {
     return broadcastOrPassThroughWriteV0<false>(
-        mpp_tunnel_set->getLocalTunnelCnt(),
         mpp_tunnel_set->getTunnels().size(),
+        mpp_tunnel_set->getLocalTunnelCnt(),
         blocks,
         result_field_types,
         [&](size_t i) { return mpp_tunnel_set->isLocal(i); },
@@ -274,8 +274,8 @@ void MPPTunnelSetWriterBase::broadcastWrite(Blocks & blocks, MPPDataPacketVersio
     if (MPPDataPacketV0 == version)
         return broadcastWrite(blocks);
     return broadcastOrPassThroughWrite<true>(
-        mpp_tunnel_set->getLocalTunnelCnt(),
         mpp_tunnel_set->getTunnels().size(),
+        mpp_tunnel_set->getLocalTunnelCnt(),
         blocks,
         version,
         compression_method,
@@ -290,8 +290,8 @@ void MPPTunnelSetWriterBase::passThroughWrite(Blocks & blocks, MPPDataPacketVers
     if (MPPDataPacketV0 == version)
         return passThroughWrite(blocks);
     return broadcastOrPassThroughWrite<false>(
-        mpp_tunnel_set->getLocalTunnelCnt(),
         mpp_tunnel_set->getTunnels().size(),
+        mpp_tunnel_set->getLocalTunnelCnt(),
         blocks,
         version,
         compression_method,
