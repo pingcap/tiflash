@@ -42,8 +42,6 @@ public:
 
     String getName() const override { return "TotalsHaving"; }
 
-    Block getTotals() override;
-
     Block getHeader() const override;
 
 protected:

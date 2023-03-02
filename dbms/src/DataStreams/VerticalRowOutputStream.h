@@ -41,7 +41,6 @@ public:
 
     void flush() override;
 
-    void setTotals(const Block & totals_) override { totals = totals_; }
     void setExtremes(const Block & extremes_) override { extremes = extremes_; }
 
 protected:
@@ -77,5 +76,4 @@ protected:
     void writeValue(const IColumn & column, const IDataType & type, size_t row_num) const override;
 };
 
-}
-
+} // namespace DB

@@ -1048,10 +1048,6 @@ private:
             onProfileInfo(packet.profile_info);
             return true;
 
-        case Protocol::Server::Totals:
-            onTotals(packet.block);
-            return true;
-
         case Protocol::Server::Extremes:
             onExtremes(packet.block);
             return true;
@@ -1168,12 +1164,6 @@ private:
         block_out_stream->flush();
     }
 
-
-    void onTotals(Block & block)
-    {
-        initBlockOutputStream(block);
-        block_out_stream->setTotals(block);
-    }
 
     void onExtremes(Block & block)
     {

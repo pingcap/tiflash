@@ -41,7 +41,6 @@ public:
 
     void flush() override;
 
-    void setTotals(const Block & totals_) override { totals = totals_; }
     void setExtremes(const Block & extremes_) override { extremes = extremes_; }
 
     /// https://www.iana.org/assignments/media-types/text/tab-separated-values
@@ -59,5 +58,4 @@ protected:
     Block extremes;
 };
 
-}
-
+} // namespace DB

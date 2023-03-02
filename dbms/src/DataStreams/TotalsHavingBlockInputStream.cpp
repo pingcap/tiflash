@@ -82,22 +82,6 @@ static void finalize(Block & block)
     }
 }
 
-
-Block TotalsHavingBlockInputStream::getTotals()
-{
-    if (!totals)
-    {
-        totals = children.at(0)->getHeader().cloneWithColumns(std::move(current_totals));
-        finalize(totals);
-    }
-
-    if (totals && expression)
-        expression->execute(totals);
-
-    return totals;
-}
-
-
 Block TotalsHavingBlockInputStream::getHeader() const
 {
     Block res = children.at(0)->getHeader();
