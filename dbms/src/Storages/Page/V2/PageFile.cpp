@@ -122,6 +122,9 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         case WriteBatchWriteType::PUT_EXTERNAL:
             throw Exception("Should not serialize with `PUT_EXTERNAL`");
             break;
+        default:
+            throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(write.type)), ErrorCodes::LOGICAL_ERROR);
+            break;
         }
     }
 
@@ -232,6 +235,9 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             PageUtil::put(meta_pos, static_cast<PageId>(write.ori_page_id));
 
             edit.ref(write.page_id, write.ori_page_id);
+            break;
+        default:
+            throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(write.type)), ErrorCodes::LOGICAL_ERROR);
             break;
         }
     }
@@ -438,6 +444,9 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
             pos += sizeof(PageId);
             break;
         }
+        default:
+            throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(write_type)), ErrorCodes::LOGICAL_ERROR);
+            break;
         }
     }
 
@@ -685,6 +694,9 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
             curr_edit.ref(ref_id, page_id);
             break;
         }
+        default:
+            throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(write_type)), ErrorCodes::LOGICAL_ERROR);
+            break;
         }
     }
     // move `pos` over the checksum of WriteBatch

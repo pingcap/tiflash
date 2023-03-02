@@ -16,6 +16,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CPDataFileReader.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
@@ -27,7 +28,8 @@ UniversalPageStoragePtr UniversalPageStorage::create(
     const String & name,
     PSDiskDelegatorPtr delegator,
     const PageStorageConfig & config,
-    const FileProviderPtr & file_provider)
+    const FileProviderPtr & file_provider,
+    const String & remote_dir)
 {
     UniversalPageStoragePtr storage = std::make_shared<UniversalPageStorage>(name, delegator, config, file_provider);
     storage->blob_store = std::make_unique<PS::V3::universal::BlobStoreType>(
@@ -35,6 +37,10 @@ UniversalPageStoragePtr UniversalPageStorage::create(
         file_provider,
         delegator,
         PS::V3::BlobConfig::from(config));
+    if (!remote_dir.empty())
+    {
+        storage->remote_reader = std::make_unique<PS::V3::CPDataFileReader>(remote_dir);
+    }
     return storage;
 }
 
@@ -72,7 +78,15 @@ Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimit
     }
 
     auto page_entry = throw_on_not_exist ? page_directory->getByID(page_id, snapshot) : page_directory->getByIDOrNull(page_id, snapshot);
-    return blob_store->read(page_entry, read_limiter);
+    auto & checkpoint_info = page_entry.second.checkpoint_info;
+    if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+    {
+        return remote_reader->read(page_entry);
+    }
+    else
+    {
+        return blob_store->read(page_entry, read_limiter);
+    }
 }
 
 UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
@@ -85,17 +99,54 @@ UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, c
     if (throw_on_not_exist)
     {
         auto page_entries = page_directory->getByIDs(page_ids, snapshot);
-        return blob_store->read(page_entries, read_limiter);
+        UniversalPageIdAndEntries local_entries, remote_entries;
+        for (auto & entry : page_entries)
+        {
+            auto & checkpoint_info = entry.second.checkpoint_info;
+            if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+            {
+                remote_entries.emplace_back(std::move(entry));
+            }
+            else
+            {
+                local_entries.emplace_back(std::move(entry));
+            }
+        }
+        auto local_page_map = blob_store->read(local_entries, read_limiter);
+        auto remote_page_map = remote_reader->read(remote_entries);
+        for (const auto & [page_id, page] : remote_page_map)
+        {
+            local_page_map.emplace(page_id, page);
+        }
+        return local_page_map;
     }
     else
     {
         auto [page_entries, page_ids_not_found] = page_directory->getByIDsOrNull(page_ids, snapshot);
-        UniversalPageMap page_map = blob_store->read(page_entries, read_limiter);
+        UniversalPageIdAndEntries local_entries, remote_entries;
+        for (auto & entry : page_entries)
+        {
+            auto & checkpoint_info = entry.second.checkpoint_info;
+            if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+            {
+                remote_entries.emplace_back(std::move(entry));
+            }
+            else
+            {
+                local_entries.emplace_back(std::move(entry));
+            }
+        }
+        auto local_page_map = blob_store->read(local_entries, read_limiter);
+        auto remote_page_map = remote_reader->read(remote_entries);
+        for (const auto & [page_id, page] : remote_page_map)
+        {
+            local_page_map.emplace(page_id, page);
+        }
         for (const auto & page_id_not_found : page_ids_not_found)
         {
-            page_map.emplace(page_id_not_found, Page::invalidPage());
+            local_page_map.emplace(page_id_not_found, Page::invalidPage());
         }
-        return page_map;
+        return local_page_map;
     }
 }
 
@@ -109,7 +160,7 @@ UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & 
     // get the entries from directory, keep track
     // for not found page_ids
     UniversalPageIds page_ids_not_found;
-    PS::V3::universal::BlobStoreType::FieldReadInfos read_infos;
+    PS::V3::universal::BlobStoreType::FieldReadInfos local_read_infos, remote_read_infos;
     for (const auto & [page_id, field_indices] : page_fields)
     {
         const auto & [id, entry] = throw_on_not_exist ? page_directory->getByID(page_id, snapshot) : page_directory->getByIDOrNull(page_id, snapshot);
@@ -117,21 +168,33 @@ UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & 
         if (entry.isValid())
         {
             auto info = PS::V3::universal::BlobStoreType::FieldReadInfo(page_id, entry, field_indices);
-            read_infos.emplace_back(info);
+            const auto & checkpoint_info = entry.checkpoint_info;
+            if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+            {
+                remote_read_infos.emplace_back(info);
+            }
+            else
+            {
+                local_read_infos.emplace_back(info);
+            }
         }
         else
         {
             page_ids_not_found.emplace_back(id);
         }
     }
-
     // read page data from blob_store
-    UniversalPageMap page_map = blob_store->read(read_infos, read_limiter);
+    auto local_page_map = blob_store->read(local_read_infos, read_limiter);
+    auto remote_page_map = remote_reader->read(remote_read_infos);
+    for (const auto & [page_id, page] : remote_page_map)
+    {
+        local_page_map.emplace(page_id, page);
+    }
     for (const auto & page_id_not_found : page_ids_not_found)
     {
-        page_map.emplace(page_id_not_found, Page::invalidPage());
+        local_page_map.emplace(page_id_not_found, Page::invalidPage());
     }
-    return page_map;
+    return local_page_map;
 }
 
 void UniversalPageStorage::traverse(const String & prefix, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot) const
@@ -160,7 +223,7 @@ UniversalPageId UniversalPageStorage::getNormalPageId(const UniversalPageId & pa
     return page_directory->getNormalPageId(page_id, snapshot, throw_on_not_exist);
 }
 
-DB::PageEntry UniversalPageStorage::getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot)
+DB::PageEntry UniversalPageStorage::getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot) const
 {
     if (!snapshot)
     {

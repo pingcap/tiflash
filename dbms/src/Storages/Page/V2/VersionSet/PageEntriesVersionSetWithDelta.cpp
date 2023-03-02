@@ -456,6 +456,9 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
         case WriteBatchWriteType::UPSERT:
             throw Exception("WriteType::UPSERT should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
             break;
+        default:
+            throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(rec.type)), ErrorCodes::LOGICAL_ERROR);
+            break;
         }
     }
 }
@@ -593,6 +596,9 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
             break;
         case WriteBatchWriteType::UPSERT:
             current->upsertPage(rec.page_id, rec.entry);
+            break;
+        default:
+            throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(rec.type)), ErrorCodes::LOGICAL_ERROR);
             break;
         }
     }

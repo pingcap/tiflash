@@ -1619,8 +1619,16 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
     auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
     files_snap.num_records = edit_from_disk.size();
     files_snap.read_elapsed_ms = watch.elapsedMilliseconds();
-    bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), write_limiter);
-    return done_any_io;
+    if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
+    {
+        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), write_limiter);
+        return done_any_io;
+    }
+    else if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+    {
+        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeInCompressedFormTo(edit_from_disk), write_limiter);
+        return done_any_io;
+    }
 }
 
 template <typename Trait>

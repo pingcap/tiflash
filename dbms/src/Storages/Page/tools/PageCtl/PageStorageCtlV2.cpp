@@ -272,6 +272,9 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                            page_file.getFileId(),
                            page_file.getLevel());
                     break;
+                default:
+                    throw DB::Exception(fmt::format("Unknown write {}", static_cast<Int32>(record.type)), DB::ErrorCodes::LOGICAL_ERROR);
+                    break;
                 }
             }
         }

@@ -22,6 +22,7 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CPDataFileReader.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <common/defines.h>
@@ -45,6 +46,8 @@ class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 using UniversalPageMap = std::map<UniversalPageId, Page>;
+using UniversalPageIdAndEntry = std::pair<UniversalPageId, PS::V3::PageEntryV3>;
+using UniversalPageIdAndEntries = std::vector<UniversalPageIdAndEntry>;
 
 class UniversalPageStorage final
 {
@@ -57,7 +60,8 @@ public:
         const String & name,
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config,
-        const FileProviderPtr & file_provider);
+        const FileProviderPtr & file_provider,
+        const String & remote_dir = "");
 
     UniversalPageStorage(
         String name,
@@ -111,7 +115,7 @@ public:
 
     UniversalPageId getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
 
-    DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot);
+    DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot) const;
 
     PageIdU64 getMaxIdAfterRestart() const;
 
@@ -137,6 +141,8 @@ public:
 
     using BlobStorePtr = std::unique_ptr<PS::V3::universal::BlobStoreType>;
     BlobStorePtr blob_store;
+
+    PS::V3::CPDataFileReaderPtr remote_reader;
 
     PS::V3::universal::ExternalPageCallbacksManager manager;
 

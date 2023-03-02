@@ -53,7 +53,10 @@ public:
         return size + padded_size;
     }
 
-    inline bool isValid() const { return file_id != INVALID_BLOBFILE_ID; }
+    inline bool isValid() const
+    {
+        return file_id != INVALID_BLOBFILE_ID || checkpoint_info.has_value();
+    }
 
     size_t getFieldSize(size_t index) const
     {

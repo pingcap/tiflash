@@ -224,6 +224,23 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
             edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
+        case WriteBatchWriteType::PUT_REMOTE:
+        {
+            PageEntryV3 entry;
+            entry.file_id = INVALID_BLOBFILE_ID;
+            entry.size = write.data_location->size_in_file;
+            entry.tag = write.tag;
+            entry.checkpoint_info = CheckpointInfo{
+                .data_location = *write.data_location,
+                .is_local_data_reclaimed = true,
+            };
+            if (!write.offsets.empty())
+            {
+                entry.field_offsets.swap(write.offsets);
+            }
+            edit.put(wb.getFullPageId(write.page_id), entry);
+            break;
+        }
         case WriteBatchWriteType::DEL:
         {
             edit.del(wb.getFullPageId(write.page_id));
@@ -258,10 +275,27 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
     if (all_page_data_size == 0)
     {
         // Shortcut for WriteBatch that don't need to persist blob data.
-        for (auto & write : wb.getWrites())
+        for (auto & write : wb.getMutWrites())
         {
             switch (write.type)
             {
+            case WriteBatchWriteType::PUT_REMOTE:
+            {
+                PageEntryV3 entry;
+                entry.file_id = INVALID_BLOBFILE_ID;
+                entry.size = write.data_location->size_in_file;
+                entry.tag = write.tag;
+                entry.checkpoint_info = CheckpointInfo{
+                    .data_location = *write.data_location,
+                    .is_local_data_reclaimed = true,
+                };
+                if (!write.offsets.empty())
+                {
+                    entry.field_offsets.swap(write.offsets);
+                }
+                edit.put(wb.getFullPageId(write.page_id), entry);
+                break;
+            }
             case WriteBatchWriteType::DEL:
             {
                 edit.del(wb.getFullPageId(write.page_id));
@@ -360,6 +394,23 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
             }
 
             buffer_pos += write.size;
+            edit.put(wb.getFullPageId(write.page_id), entry);
+            break;
+        }
+        case WriteBatchWriteType::PUT_REMOTE:
+        {
+            PageEntryV3 entry;
+            entry.file_id = INVALID_BLOBFILE_ID;
+            entry.size = write.data_location->size_in_file;
+            entry.tag = write.tag;
+            entry.checkpoint_info = CheckpointInfo{
+                .data_location = *write.data_location,
+                .is_local_data_reclaimed = true,
+            };
+            if (!write.offsets.empty())
+            {
+                entry.field_offsets.swap(write.offsets);
+            }
             edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
