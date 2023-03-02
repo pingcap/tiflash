@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Block.h>
 
 #include <memory>
@@ -48,8 +49,9 @@ class PipelineExecutorStatus;
 class Operator
 {
 public:
-    explicit Operator(PipelineExecutorStatus & exec_status_)
+    Operator(PipelineExecutorStatus & exec_status_, const String & req_id)
         : exec_status(exec_status_)
+        , log(Logger::get(req_id))
     {}
 
     virtual ~Operator() = default;
@@ -80,6 +82,7 @@ public:
 
 protected:
     PipelineExecutorStatus & exec_status;
+    const LoggerPtr log;
     Block header;
 };
 
@@ -87,8 +90,8 @@ protected:
 class SourceOp : public Operator
 {
 public:
-    explicit SourceOp(PipelineExecutorStatus & exec_status_)
-        : Operator(exec_status_)
+    SourceOp(PipelineExecutorStatus & exec_status_, const String & req_id)
+        : Operator(exec_status_, req_id)
     {}
     // read will inplace the block when return status is HAS_OUTPUT;
     // Even after source has finished, source op still needs to return an empty block and HAS_OUTPUT,
@@ -103,8 +106,8 @@ using SourceOpPtr = std::unique_ptr<SourceOp>;
 class TransformOp : public Operator
 {
 public:
-    explicit TransformOp(PipelineExecutorStatus & exec_status_)
-        : Operator(exec_status_)
+    TransformOp(PipelineExecutorStatus & exec_status_, const String & req_id)
+        : Operator(exec_status_, req_id)
     {}
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
     // tryOutput will inplace the block when return status is HAS_OUPUT; do nothing to the block when NEED_INPUT or others.
@@ -134,8 +137,8 @@ using TransformOps = std::vector<TransformOpPtr>;
 class SinkOp : public Operator
 {
 public:
-    explicit SinkOp(PipelineExecutorStatus & exec_status_)
-        : Operator(exec_status_)
+    SinkOp(PipelineExecutorStatus & exec_status_, const String & req_id)
+        : Operator(exec_status_, req_id)
     {}
     OperatorStatus prepare();
     virtual OperatorStatus prepareImpl() { return OperatorStatus::NEED_INPUT; }

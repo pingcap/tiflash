@@ -18,6 +18,7 @@
 #include <Server/MockComputeClient.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/MPPTaskTestUtils.h>
+#include <fmt/core.h>
 
 namespace DB::tests
 {
@@ -136,7 +137,7 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
 {
     FmtBuffer buf;
     buf.fmtAppend("server id: {}, tasks: ", server_id);
-    buf.fmtAppend(TiFlashTestEnv::getGlobalContext(server_id).getTMTContext().getMPPTaskManager()->toString());
+    buf.fmtAppend(fmt::runtime(TiFlashTestEnv::getGlobalContext(server_id).getTMTContext().getMPPTaskManager()->toString()));
     return buf.toString();
 }
 

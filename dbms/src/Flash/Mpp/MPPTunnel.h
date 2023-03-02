@@ -560,6 +560,7 @@ private:
     TunnelStatus status;
 
     std::chrono::seconds timeout;
+    UInt64 timeout_nanoseconds{0};
     mutable std::optional<Stopwatch> timeout_stopwatch;
 
     // tunnel id is in the format like "tunnel[sender]+[receiver]"

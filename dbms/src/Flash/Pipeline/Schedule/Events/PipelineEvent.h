@@ -28,9 +28,10 @@ public:
     PipelineEvent(
         PipelineExecutorStatus & exec_status_,
         MemoryTrackerPtr mem_tracker_,
+        const String & req_id,
         Context & context_,
         const PipelinePtr & pipeline_)
-        : Event(exec_status_, std::move(mem_tracker_))
+        : Event(exec_status_, std::move(mem_tracker_), req_id)
         , context(context_)
         , pipeline(pipeline_)
     {}

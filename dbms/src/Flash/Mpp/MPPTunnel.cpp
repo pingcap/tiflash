@@ -27,6 +27,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char random_tunnel_wait_timeout_failpoint[];
+extern const char random_tunnel_write_failpoint[];
 } // namespace FailPoints
 
 namespace
@@ -85,6 +86,7 @@ MPPTunnel::MPPTunnel(
     const String & req_id)
     : status(TunnelStatus::Unconnected)
     , timeout(timeout_)
+    , timeout_nanoseconds(timeout_.count() * 1000000000ULL)
     , tunnel_id(tunnel_id_)
     , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
     , queue_size(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
@@ -161,6 +163,8 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
         RUNTIME_CHECK_MSG(tunnel_sender != nullptr, "write to tunnel {} which is already closed.", tunnel_id);
     }
 
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_write_failpoint);
+
     auto pushed_data_size = data->getPacket().ByteSizeLong();
     if (tunnel_sender->push(std::move(data)))
     {
@@ -174,6 +178,9 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
 void MPPTunnel::nonBlockingWrite(TrackedMppDataPacketPtr && data)
 {
     LOG_TRACE(log, "start non blocking writing");
+
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_write_failpoint);
+
     auto pushed_data_size = data->getPacket().ByteSizeLong();
     if (tunnel_sender->nonBlockingPush(std::move(data)))
     {
@@ -222,7 +229,7 @@ void MPPTunnel::connectLocalV2(size_t source_index, LocalRequestHandler & local_
 {
     {
         std::unique_lock lk(mu);
-        RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, fmt::format("MPPTunnel {} has connected or finished: {}", tunnel_id, statusToString()));
+        RUNTIME_CHECK_MSG(status == TunnelStatus::Unconnected, "MPPTunnel {} has connected or finished: {}", tunnel_id, statusToString());
         RUNTIME_CHECK_MSG(mode == TunnelSenderMode::LOCAL, "{} should be a local tunnel", tunnel_id);
 
         LOG_TRACE(log, "ready to connect local tunnel version 2");
@@ -340,7 +347,7 @@ bool MPPTunnel::isReadyForWrite() const
             fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, throw Exception(tunnel_id + " is timeout"););
             if (unlikely(!timeout_stopwatch))
                 timeout_stopwatch.emplace(CLOCK_MONOTONIC_COARSE);
-            if (timeout_stopwatch->elapsedSeconds() > timeout.count())
+            if (unlikely(timeout_stopwatch->elapsed() > timeout_nanoseconds))
                 throw Exception(tunnel_id + " is timeout");
         }
         return false;
