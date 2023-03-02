@@ -37,7 +37,7 @@ TaskScheduler::~TaskScheduler()
     wait_reactor.waitForStop();
 }
 
-void TaskScheduler::submit(std::vector<TaskPtr> & tasks)
+void TaskScheduler::submit(std::vector<TaskPtr> & tasks) noexcept
 {
     if (unlikely(tasks.empty()))
         return;

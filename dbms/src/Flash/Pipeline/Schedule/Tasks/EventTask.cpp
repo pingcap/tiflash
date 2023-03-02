@@ -44,7 +44,7 @@ EventTask::~EventTask()
     event.reset();
 }
 
-void EventTask::finalize()
+void EventTask::finalize() noexcept
 {
     try
     {
@@ -59,12 +59,12 @@ void EventTask::finalize()
     }
 }
 
-ExecTaskStatus EventTask::executeImpl()
+ExecTaskStatus EventTask::executeImpl() noexcept
 {
     return doTaskAction([&] { return doExecuteImpl(); });
 }
 
-ExecTaskStatus EventTask::awaitImpl()
+ExecTaskStatus EventTask::awaitImpl() noexcept
 {
     return doTaskAction([&] { return doAwaitImpl(); });
 }

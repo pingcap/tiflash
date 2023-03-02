@@ -59,14 +59,12 @@ public:
     static constexpr auto task_num = 10;
 
 protected:
-    // Returns true meaning no task is scheduled.
-    bool scheduleImpl() override
+    std::vector<TaskPtr> scheduleImpl() override
     {
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<BaseTask>(exec_status, shared_from_this(), counter));
-        scheduleTasks(tasks);
-        return false;
+        return tasks;
     }
 
     void finishImpl() override
@@ -110,17 +108,15 @@ public:
     {}
 
 protected:
-    // Returns true meaning no task is scheduled.
-    bool scheduleImpl() override
+    std::vector<TaskPtr> scheduleImpl() override
     {
         if (!with_tasks)
-            return true;
+            return {};
 
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
             tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
-        scheduleTasks(tasks);
-        return false;
+        return tasks;
     }
 
 private:
@@ -155,21 +151,19 @@ public:
     {}
 
 protected:
-    // Returns true meaning no task is scheduled.
-    bool scheduleImpl() override
+    std::vector<TaskPtr> scheduleImpl() override
     {
         if (!with_tasks)
         {
             while (!exec_status.isCancelled())
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            return true;
+            return {};
         }
 
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
             tasks.push_back(std::make_unique<DeadLoopTask>(exec_status, shared_from_this()));
-        scheduleTasks(tasks);
-        return false;
+        return tasks;
     }
 
 private:
@@ -186,11 +180,10 @@ public:
     static constexpr auto err_msg = "error from OnErrEvent";
 
 protected:
-    // Returns true meaning no task is scheduled.
-    bool scheduleImpl() override
+    std::vector<TaskPtr> scheduleImpl() override
     {
         exec_status.onErrorOccurred(err_msg);
-        return true;
+        return {};
     }
 };
 
@@ -202,11 +195,10 @@ public:
     {}
 
 protected:
-    // Returns true meaning no task is scheduled.
-    bool scheduleImpl() override
+    std::vector<TaskPtr> scheduleImpl() override
     {
         assert(mem_tracker.get() == current_memory_tracker);
-        return true;
+        return {};
     }
 
     void finishImpl() override
@@ -242,7 +234,7 @@ public:
     {}
 
 protected:
-    bool scheduleImpl() override
+    std::vector<TaskPtr> scheduleImpl() override
     {
         if (!with_task)
             throw Exception("throw exception in scheduleImpl");
@@ -250,8 +242,7 @@ protected:
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < 10; ++i)
             tasks.push_back(std::make_unique<ThrowExceptionTask>(exec_status, shared_from_this()));
-        scheduleTasks(tasks);
-        return false;
+        return tasks;
     }
 
     void finishImpl() override
@@ -275,17 +266,15 @@ public:
     {}
 
 protected:
-    // Returns true meaning no task is scheduled.
-    bool scheduleImpl() override
+    std::vector<TaskPtr> scheduleImpl() override
     {
         if (0 == task_num)
-            return true;
+            return {};
 
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<RunTask>(exec_status, shared_from_this()));
-        scheduleTasks(tasks);
-        return false;
+        return tasks;
     }
 
 private:

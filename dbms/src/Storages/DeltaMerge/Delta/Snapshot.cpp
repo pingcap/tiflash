@@ -36,7 +36,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
 
     auto snap = std::make_shared<DeltaValueSnapshot>(type);
     snap->is_update = for_update;
-    snap->_delta = this->shared_from_this();
+    snap->delta = this->shared_from_this();
 
     auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), context.tracing_id, /*snapshot_read*/ true);
     snap->persisted_files_snap = persisted_file_set->createSnapshot(storage_snap);
@@ -73,7 +73,7 @@ DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & n
 {
     auto * new_reader = new DeltaValueReader();
     new_reader->delta_snap = delta_snap;
-    new_reader->_compacted_delta_index = _compacted_delta_index;
+    new_reader->compacted_delta_index = compacted_delta_index;
     new_reader->persisted_files_reader = persisted_files_reader->createNewReader(new_col_defs);
     new_reader->mem_table_reader = mem_table_reader->createNewReader(new_col_defs);
     new_reader->col_defs = new_col_defs;

@@ -64,7 +64,7 @@ public:
     }
 
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         while ((--loop_count) > 0)
             return ExecTaskStatus::RUNNING;
@@ -89,7 +89,7 @@ public:
     }
 
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         if (loop_count > 0)
         {
@@ -104,7 +104,7 @@ protected:
         return ExecTaskStatus::FINISHED;
     }
 
-    ExecTaskStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() noexcept override
     {
         if (loop_count > 0)
         {
@@ -147,7 +147,7 @@ public:
     static constexpr Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 1024 * 1024; // 1 MiB
 
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         switch (status)
         {
@@ -165,7 +165,7 @@ protected:
         }
     }
 
-    ExecTaskStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() noexcept override
     {
         if (status == TraceTaskStatus::waiting)
             CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
@@ -180,12 +180,12 @@ private:
 class DeadLoopTask : public Task
 {
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         return ExecTaskStatus::WAITING;
     }
 
-    ExecTaskStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() noexcept override
     {
         return ExecTaskStatus::RUNNING;
     }

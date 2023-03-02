@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FailPoint.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
@@ -21,6 +22,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_pipeline_model_task_run_failpoint[];
+} // namespace FailPoints
+
 // The base class of event related task.
 class EventTask : public Task
 {
@@ -37,14 +43,14 @@ public:
     ~EventTask();
 
 protected:
-    ExecTaskStatus executeImpl() override;
+    ExecTaskStatus executeImpl() noexcept override;
     virtual ExecTaskStatus doExecuteImpl() = 0;
 
-    ExecTaskStatus awaitImpl() override;
+    ExecTaskStatus awaitImpl() noexcept override;
     virtual ExecTaskStatus doAwaitImpl() { return ExecTaskStatus::RUNNING; };
 
     // Used to release held resources, just like `Event::finishImpl`.
-    void finalize();
+    void finalize() noexcept;
     virtual void finalizeImpl(){};
 
 private:

@@ -61,23 +61,23 @@ public:
     bool withoutInput();
 
 protected:
-    // Returns true meaning no task is scheduled.
-    virtual bool scheduleImpl() { return true; }
+    // Returns the tasks ready to be scheduled.
+    virtual std::vector<TaskPtr> scheduleImpl() { return {}; }
 
     // So far the ownership and the life-cycle of the resources are not very well-defined so we still rely on things like "A must be released before B".
     // And this is the explicit place to release all the resources that need to be cleaned up before event destruction, so that we can satisfy the above constraints.
     virtual void finishImpl() {}
 
-    void scheduleTasks(std::vector<TaskPtr> & tasks);
-
 private:
+    void scheduleTasks(std::vector<TaskPtr> & tasks) noexcept;
+
     void finish() noexcept;
 
     void addOutput(const EventPtr & output);
 
-    void onInputFinish();
+    void onInputFinish() noexcept;
 
-    void switchStatus(EventStatus from, EventStatus to);
+    void switchStatus(EventStatus from, EventStatus to) noexcept;
 
 protected:
     PipelineExecutorStatus & exec_status;
