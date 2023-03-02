@@ -29,7 +29,7 @@ enum class NASemiJoinStep : UInt8
     /// The join keys of this left row must not have null.
     NOT_NULL_KEY_CHECK_OTHER_COND,
     /// Check join key equal condition and other conditions(if any) for the right rows
-    /// in null rows(i.e. all rows in right table with null join key).
+    /// with at least one null join key.
     /// The join keys of this left row must not have null.
     NOT_NULL_KEY_CHECK_NULL_ROWS,
     /// Like `CHECK_NULL_ROWS_NOT_NULL` except the join keys of this left row must have null.
@@ -130,7 +130,7 @@ public:
         const BlocksList & right_blocks,
         const PaddedPODArray<Join::RowRef> & null_rows,
         size_t max_block_size,
-        const JoinConditions & conditions);
+        const JoinOtherConditions & other_conditions);
 
     void joinResult(std::list<Result *> & res_list);
 
@@ -151,7 +151,7 @@ private:
     const PaddedPODArray<Join::RowRef> & null_rows;
     size_t max_block_size;
 
-    const JoinConditions & conditions;
+    const JoinOtherConditions & other_conditions;
 };
 
 } // namespace DB

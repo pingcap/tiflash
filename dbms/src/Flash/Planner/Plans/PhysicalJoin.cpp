@@ -112,7 +112,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         tiflash_join.getBuildConditions());
     RUNTIME_ASSERT(build_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
 
-    auto join_conditions = tiflash_join.genJoinConditionsAction(context, left_input_header, right_input_header, probe_side_prepare_actions, original_probe_key_names, original_build_key_names);
+    auto join_other_conditions = tiflash_join.genJoinOtherConditionsAction(context, left_input_header, right_input_header, probe_side_prepare_actions, original_probe_key_names, original_build_key_names);
 
     const Settings & settings = context.getSettingsRef();
     size_t max_block_size = settings.max_block_size;
@@ -129,7 +129,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,
-        join_conditions,
+        join_other_conditions,
         max_block_size,
         match_helper_name);
 

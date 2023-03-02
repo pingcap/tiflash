@@ -25,9 +25,9 @@ namespace DB
   */
 void extractNestedColumnsAndNullMap(ColumnRawPtrs & key_columns, ColumnPtr & null_map_holder, ConstNullMapPtr & null_map);
 
-/** In 'all_key_null_map' return a map of positions where all key columns are NULL.
- *  null_map_holder could take ownership of null_map, if required.
+/** @all_key_null_map_holder: take ownership of all_key_null_map, if required.
+ *  @all_key_null_map: a map of positions where all key columns are NULL.
  */
-void extractAllKeyNullMap(ColumnRawPtrs & key_columns, ColumnPtr & all_key_null_map_holder, ConstNullMapPtr & all_key_null_map);
+std::tuple<ColumnPtr, ConstNullMapPtr> extractAllKeyNullMap(ColumnRawPtrs & key_columns);
 
 } // namespace DB

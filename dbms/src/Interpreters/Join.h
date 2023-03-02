@@ -99,7 +99,7 @@ public:
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const String & left_filter_column = "",
          const String & right_filter_column = "",
-         const JoinConditions & conditions = {},
+         const JoinOtherConditions & conditions = {},
          size_t max_block_size = 0,
          const String & match_helper_name = "");
 
@@ -317,7 +317,7 @@ private:
     String left_filter_column;
     String right_filter_column;
 
-    const JoinConditions conditions;
+    const JoinOtherConditions other_conditions;
 
     /// For null-aware semi join with no other condition.
     /// Indicate if the right table is empty.

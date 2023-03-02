@@ -175,14 +175,14 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     const BlocksList & right_blocks_,
     const PaddedPODArray<Join::RowRef> & null_rows_,
     size_t max_block_size_,
-    const JoinConditions & conditions_)
+    const JoinOtherConditions & other_conditions_)
     : block(block_)
     , left_columns(left_columns_)
     , right_columns(right_columns_)
     , right_blocks(right_blocks_)
     , null_rows(null_rows_)
     , max_block_size(max_block_size_)
-    , conditions(conditions_)
+    , other_conditions(other_conditions_)
 {
     static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                   || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
@@ -202,7 +202,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NASemiJoin
 {
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
     {
-        /// Step of CHECK_OTHER_COND only exist when strictness is all.
+        /// Step of NOT_NULL_KEY_CHECK_OTHER_COND only exist when strictness is all.
         std::list<NASemiJoinHelper::Result *> next_step_res_list;
         runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_OTHER_COND>(res_list, next_step_res_list);
         res_list.swap(next_step_res_list);
@@ -262,7 +262,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NASemiJoinHel
             columns[i]->popBack(columns[i]->size());
         }
 
-        size_t max_pace = max_block_size / res_list.size();
+        size_t max_pace = std::max(1, max_block_size / res_list.size());
         size_t current_offset = 0;
         offsets.clear();
 
@@ -344,33 +344,33 @@ template <NASemiJoinStep STEP>
 void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<NASemiJoinHelper::Result *> & res_list, std::list<NASemiJoinHelper::Result *> & next_res_list)
 {
     /// Attention: other_cond_expr must be executed first then null_aware_eq_cond_expr can be executed.
-    /// Because the execution order must be the same as the construction order in compiling(in TiFlashJoin::genJoinConditionsAction).
+    /// Because the execution order must be the same as the construction order in compiling(in TiFlashJoin::genJoinOtherConditionsAction).
     /// Otherwise a certain expression will throw exception if these two expressions have one added column with the same name.
     ///
     /// There are three cases:
     /// 1. Strictness: Any, which means no other_cond_expr
     ///    - order: null_aware_eq_cond_expr
-    /// 2. Strictness: All, Step is CHECK_OTHER_COND
+    /// 2. Strictness: All, Step is NOT_NULL_KEY_CHECK_OTHER_COND
     ///    - order: other_cond_expr
-    /// 3. Strictness: All, Step is not CHECK_OTHER_COND
+    /// 3. Strictness: All, Step is not NOT_NULL_KEY_CHECK_OTHER_COND
     ///    - order: other_cond_expr -> null_aware_eq_cond_expr
     ///
     /// In summary, it's correct as long as null_aware_eq_cond_expr is not executed solely when other_cond_expr exists.
 
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
-        conditions.other_cond_expr->execute(exec_block);
+        other_conditions.other_cond_expr->execute(exec_block);
 
     ConstNullMapPtr eq_null_map = nullptr;
     if constexpr (STEP != NASemiJoinStep::NOT_NULL_KEY_CHECK_OTHER_COND)
     {
-        conditions.null_aware_eq_cond_expr->execute(exec_block);
+        other_conditions.null_aware_eq_cond_expr->execute(exec_block);
 
-        auto eq_column = exec_block.getByName(conditions.null_aware_eq_cond_name).column;
+        auto eq_column = exec_block.getByName(other_conditions.null_aware_eq_cond_name).column;
         if (eq_column->isColumnConst())
         {
             eq_column = eq_column->convertToFullColumnIfConst();
             /// Attention: must set the full column to the original column otherwise eq_null_map will be a dangling pointer.
-            exec_block.getByName(conditions.null_aware_eq_cond_name).column = eq_column;
+            exec_block.getByName(other_conditions.null_aware_eq_cond_name).column = eq_column;
         }
 
         RUNTIME_CHECK_MSG(eq_column->isColumnNullable(), "The null-aware equal condition column should be nullable, otherwise Anti/LeftAnti/LeftSemi should be used instead");
@@ -380,7 +380,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
     }
     else
     {
-        /// If STEP is CHECK_OTHER_COND, it means these right rows have the same join keys to the corresponding left row.
+        /// If STEP is NOT_NULL_KEY_CHECK_OTHER_COND, it means these right rows have the same join keys to the corresponding left row.
         /// So do not need to run null_aware_eq_cond_expr.
         /// And other conditions must exist so STRICTNESS must be all.
         static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
@@ -409,7 +409,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
     }
     else
     {
-        auto other_column = exec_block.getByName(conditions.other_cond_name).column;
+        auto other_column = exec_block.getByName(other_conditions.other_cond_name).column;
         if (other_column->isColumnConst())
             other_column = other_column->convertToFullColumnIfConst();
 

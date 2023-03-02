@@ -904,15 +904,13 @@ ColumnsWithTypeAndName genNullAwareJoinResult(tipb::JoinType type, const Columns
         const auto & nested_column_data = static_cast<const ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr().get())->getData();
         for (size_t i = 0; i < nullable_column->size(); ++i)
         {
-            if (nullable_column->isNullAt(i))
-                filter[i] = 0;
-            else if (nested_column_data[i])
+            if (nullable_column->isNullAt(i) || nested_column_data[i])
                 filter[i] = 0;
             else
                 filter[i] = 1;
         }
-        for (size_t i = 0; i < res.size(); ++i)
-            res[i].column = res[i].column->filter(filter, -1);
+        for (auto & r : res)
+            r.column = r.column->filter(filter, -1);
     }
     return res;
 }

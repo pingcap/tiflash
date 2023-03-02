@@ -36,7 +36,7 @@ struct JoinKeyType
 };
 using JoinKeyTypes = std::vector<JoinKeyType>;
 
-struct JoinConditions
+struct JoinOtherConditions
 {
     String other_cond_name;
     String other_eq_cond_from_in_name;
@@ -50,7 +50,7 @@ struct JoinConditions
     String validate(bool is_null_aware_semi_join) const
     {
         if ((!other_cond_name.empty() || !other_eq_cond_from_in_name.empty()) && other_cond_expr == nullptr)
-            return "other_cond_name and/or other_eq_cond_from_in_name are/is not empty but other_cond_expr is nullptr";
+            return "other_cond_name and/or other_eq_cond_from_in_name are not empty but other_cond_expr is nullptr";
         if (other_cond_name.empty() && other_eq_cond_from_in_name.empty() && other_cond_expr != nullptr)
             return "other_cond_name and other_eq_cond_from_in_name are empty but other_cond_expr is not nullptr";
 
@@ -58,6 +58,8 @@ struct JoinConditions
         {
             if (null_aware_eq_cond_name.empty() || null_aware_eq_cond_expr == nullptr)
                 return "null-aware semi join does not have null_aware_eq_cond_name or null_aware_eq_cond_expr is nullptr";
+            if (!other_eq_cond_from_in_name.empty())
+                return "null-aware semi join should not have other_eq_cond_from_in_name";
         }
 
         return "";
@@ -145,7 +147,7 @@ struct TiFlashJoin
     /// Note that new columns from build side prepare join actions cannot be appended.
     /// because the input that other filter accepts is
     /// {left_input_columns, right_input_columns, new_columns_from_probe_side_prepare, match_helper_name}.
-    JoinConditions genJoinConditionsAction(
+    JoinOtherConditions genJoinOtherConditionsAction(
         const Context & context,
         const Block & left_input_header,
         const Block & right_input_header,

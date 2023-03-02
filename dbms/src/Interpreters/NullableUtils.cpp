@@ -61,15 +61,17 @@ void extractNestedColumnsAndNullMap(ColumnRawPtrs & key_columns, ColumnPtr & nul
     }
 }
 
-void extractAllKeyNullMap(ColumnRawPtrs & key_columns, ColumnPtr & all_key_null_map_holder, ConstNullMapPtr & all_key_null_map)
+std::tuple<ColumnPtr, ConstNullMapPtr> extractAllKeyNullMap(ColumnRawPtrs & key_columns)
 {
     for (auto & column : key_columns)
     {
         /// If one column is not nullable, just return.
         if (!column->isColumnNullable())
-            return;
+            return {};
     }
 
+    ColumnPtr all_key_null_map_holder;
+    ConstNullMapPtr all_key_null_map;
     if (key_columns.size() == 1)
     {
         auto & column = key_columns[0];
@@ -102,9 +104,10 @@ void extractAllKeyNullMap(ColumnRawPtrs & key_columns, ColumnPtr & all_key_null_
     }
 
     if (!all_key_null_map_holder)
-        return;
+        return {};
 
     all_key_null_map = &static_cast<const ColumnUInt8 &>(*all_key_null_map_holder).getData();
+    return {all_key_null_map_holder, all_key_null_map};
 }
 
 } // namespace DB

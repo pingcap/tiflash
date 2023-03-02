@@ -135,7 +135,7 @@ Join::Join(
     const TiDB::TiDBCollators & collators_,
     const String & left_filter_column_,
     const String & right_filter_column_,
-    const JoinConditions & conditions_,
+    const JoinOtherConditions & other_conditions,
     size_t max_block_size_,
     const String & match_helper_name)
     : match_helper_name(match_helper_name)
@@ -150,14 +150,14 @@ Join::Join(
     , collators(collators_)
     , left_filter_column(left_filter_column_)
     , right_filter_column(right_filter_column_)
-    , conditions(conditions_)
+    , other_conditions(other_conditions)
     , original_strictness(strictness)
     , max_block_size(max_block_size_)
     , log(Logger::get(req_id))
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
-    if (conditions.other_cond_expr != nullptr)
+    if (other_conditions.other_cond_expr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
         if (strictness == ASTTableJoin::Strictness::Any)
@@ -170,7 +170,7 @@ Join::Join(
     if (unlikely(!right_filter_column.empty() && !isRightJoin(kind)))
         throw Exception("Not supported: non right join with right conditions");
 
-    String err = conditions.validate(isNullAwareSemiFamily(kind));
+    String err = other_conditions.validate(isNullAwareSemiFamily(kind));
     if (unlikely(!err.empty()))
         throw Exception("Validate join conditions error: {}" + err);
 
@@ -913,9 +913,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
             {
                 /// Note that `extractAllKeyNullMap` must be done before `extractNestedColumnsAndNullMap`
                 /// because `extractNestedColumnsAndNullMap` will change the nullable column to its nested column.
-                ColumnPtr all_key_null_map_holder;
-                ConstNullMapPtr all_key_null_map{};
-                extractAllKeyNullMap(key_columns, all_key_null_map_holder, all_key_null_map);
+                auto [all_key_null_map_holder, all_key_null_map] = extractAllKeyNullMap(key_columns);
 
                 if (all_key_null_map)
                 {
@@ -1408,14 +1406,14 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
  */
 void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & anti_filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_columns) const
 {
-    conditions.other_cond_expr->execute(block);
+    other_conditions.other_cond_expr->execute(block);
 
     auto filter_column = ColumnUInt8::create();
     auto & filter = filter_column->getData();
     filter.assign(block.rows(), static_cast<UInt8>(1));
-    if (!conditions.other_cond_name.empty())
+    if (!other_conditions.other_cond_name.empty())
     {
-        mergeNullAndFilterResult(block, filter, conditions.other_cond_name, false);
+        mergeNullAndFilterResult(block, filter, other_conditions.other_cond_name, false);
     }
 
     ColumnUInt8::Container row_filter(filter.size(), 0);
@@ -1444,9 +1442,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
         /// nullmap and data of `other_eq_filter_from_in_column`.
         const ColumnUInt8::Container *eq_in_vec = nullptr, *eq_in_nullmap = nullptr;
-        if (!conditions.other_eq_cond_from_in_name.empty())
+        if (!other_conditions.other_eq_cond_from_in_name.empty())
         {
-            auto orig_filter_column = block.getByName(conditions.other_eq_cond_from_in_name).column;
+            auto orig_filter_column = block.getByName(other_conditions.other_eq_cond_from_in_name).column;
             if (orig_filter_column->isColumnConst())
                 orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
             if (orig_filter_column->isColumnNullable())
@@ -1502,13 +1500,13 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         return;
     }
 
-    if (!conditions.other_eq_cond_from_in_name.empty())
+    if (!other_conditions.other_eq_cond_from_in_name.empty())
     {
         /// other_eq_filter_from_in_column is used in anti semi join:
         /// if there is a row that return null or false for other_condition, then for anti semi join, this row should be returned.
         /// otherwise, it will check other_eq_filter_from_in_column, if other_eq_filter_from_in_column return false, this row should
         /// be returned, if other_eq_filter_from_in_column return true or null this row should not be returned.
-        mergeNullAndFilterResult(block, filter, conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
+        mergeNullAndFilterResult(block, filter, other_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
     }
 
     if (isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All)
@@ -1758,7 +1756,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     }
 
     /// handle other conditions
-    if (!conditions.other_cond_name.empty() || !conditions.other_eq_cond_from_in_name.empty())
+    if (!other_conditions.other_cond_name.empty() || !other_conditions.other_eq_cond_from_in_name.empty())
     {
         if (!offsets_to_replicate)
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
@@ -1931,7 +1929,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
         right_table_rows += block_right.rows();
 
     size_t left_rows_per_iter = std::max(rows_left, 1);
-    if (max_block_size > 0 && right_table_rows > 0 && conditions.other_cond_expr != nullptr
+    if (max_block_size > 0 && right_table_rows > 0 && other_conditions.other_cond_expr != nullptr
         && CrossJoinAdder<KIND, STRICTNESS>::allRightRowsMaybeAdded())
     {
         /// if other_condition is not null, and all right columns maybe added during join, try to use multiple iter
@@ -1981,7 +1979,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
             }
         }
         auto block_per_iter = block.cloneWithColumns(std::move(dst_columns));
-        if (conditions.other_cond_expr != nullptr)
+        if (other_conditions.other_cond_expr != nullptr)
             handleOtherConditions(block_per_iter, is_row_matched, expanded_row_size_after_join, right_column_index);
         if (start == 0 || block_per_iter.rows() > 0)
             /// always need to generate at least one block
@@ -2028,7 +2026,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const BlocksList & right_blocks,
     const PaddedPODArray<Join::RowRef> & null_rows,
     size_t max_block_size,
-    const JoinConditions & conditions,
+    const JoinOtherConditions & other_conditions,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     const ConstNullMapPtr & null_map,
@@ -2180,7 +2178,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             right_blocks,
             null_rows,
             max_block_size,
-            conditions);
+            other_conditions);
 
         helper.joinResult(res_list);
 
@@ -2260,7 +2258,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
     {
         for (size_t i = 0; i < left_columns; ++i)
-            block.getByPosition(i).column = block.getByPosition(i).column->filter(*filter, -1);
+            block.getByPosition(i).column = block.getByPosition(i).column->filter(*filter, rows_for_anti);
     }
 }
 
@@ -2272,7 +2270,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const BlocksList & right_blocks,
     const PaddedPODArray<Join::RowRef> & null_rows,
     size_t max_block_size,
-    const JoinConditions & conditions,
+    const JoinOtherConditions & other_conditions,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     const ConstNullMapPtr & null_map,
@@ -2290,7 +2288,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
         right_blocks,                                                                               \
         null_rows,                                                                                  \
         max_block_size,                                                                             \
-        conditions,                                                                                 \
+        other_conditions,                                                                           \
         key_columns,                                                                                \
         key_sizes,                                                                                  \
         null_map,                                                                                   \
@@ -2348,9 +2346,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
 
     /// Note that `extractAllKeyNullMap` must be done before `extractNestedColumnsAndNullMap`
     /// because `extractNestedColumnsAndNullMap` will change the nullable column to its nested column.
-    ColumnPtr all_key_null_map_holder;
-    ConstNullMapPtr all_key_null_map{};
-    extractAllKeyNullMap(key_columns, all_key_null_map_holder, all_key_null_map);
+    auto [all_key_null_map_holder, all_key_null_map] = extractAllKeyNullMap(key_columns);
 
     ColumnPtr null_map_holder;
     ConstNullMapPtr null_map{};
@@ -2383,7 +2379,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             blocks,                                                                                                                                     \
             rows_with_null_keys,                                                                                                                        \
             max_block_size,                                                                                                                             \
-            conditions,                                                                                                                                 \
+            other_conditions,                                                                                                                           \
             key_columns,                                                                                                                                \
             key_sizes,                                                                                                                                  \
             null_map,                                                                                                                                   \

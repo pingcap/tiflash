@@ -190,7 +190,7 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTy
     return collators;
 }
 
-JoinConditions doGenJoinConditionsAction(
+JoinOtherConditions doGenJoinOtherConditionsAction(
     const Context & context,
     const TiFlashJoin & tiflash_join,
     const NamesAndTypes & source_columns,
@@ -204,7 +204,7 @@ JoinConditions doGenJoinConditionsAction(
     DAGExpressionAnalyzer dag_analyzer(source_columns, context);
     ExpressionActionsChain chain;
 
-    JoinConditions cond;
+    JoinOtherConditions cond;
     if (join.other_conditions_size() > 0)
         cond.other_cond_name = dag_analyzer.appendWhere(chain, join.other_conditions());
 
@@ -347,7 +347,7 @@ NamesAndTypes TiFlashJoin::genJoinOutputColumns(
     return join_output_columns;
 }
 
-JoinConditions TiFlashJoin::genJoinConditionsAction(
+JoinOtherConditions TiFlashJoin::genJoinOtherConditionsAction(
     const Context & context,
     const Block & left_input_header,
     const Block & right_input_header,
@@ -361,7 +361,7 @@ JoinConditions TiFlashJoin::genJoinConditionsAction(
             right_input_header,
             probe_side_prepare_join);
 
-    return doGenJoinConditionsAction(context, *this, columns_for_other_join_filter, probe_key_names, build_key_names);
+    return doGenJoinOtherConditionsAction(context, *this, columns_for_other_join_filter, probe_key_names, build_key_names);
 }
 
 std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
