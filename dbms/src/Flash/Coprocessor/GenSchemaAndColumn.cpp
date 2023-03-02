@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -80,6 +81,48 @@ NamesAndTypes genNamesAndTypes(const ColumnInfos & column_infos, const StringRef
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix)
 {
     return genNamesAndTypes(table_scan.getColumns(), column_prefix);
+}
+
+std::tuple<DM::ColumnDefinesPtr, size_t> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan)
+{
+    const String column_prefix = "exchange_receiver";
+    auto column_defines = std::make_shared<DM::ColumnDefines>();
+    size_t extra_table_id_index = InvalidColumnID;
+    column_defines->reserve(table_scan.getColumnSize());
+    for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
+    {
+        const auto & column_info = table_scan.getColumns()[i];
+        // Even if the id is pk_column or extra_table_id, we still output it as
+        // a exchange receiver output column
+        const auto output_name = fmt::format("{}_{}", column_prefix, i);
+        switch (column_info.id)
+        {
+        case TiDBPkColumnID:
+            column_defines->emplace_back(DM::ColumnDefine{
+                TiDBPkColumnID,
+                output_name, // MutableSupport::tidb_pk_column_name
+                getPkType(column_info)});
+            break;
+        case ExtraTableIDColumnID:
+        {
+            column_defines->emplace_back(DM::ColumnDefine{
+                ExtraTableIDColumnID,
+                output_name, // MutableSupport::extra_table_id_column_name
+                MutableSupport::extra_table_id_column_type});
+            extra_table_id_index = i;
+            break;
+        }
+        default:
+            // TODO: Is it ok to use the default value here?
+            column_defines->emplace_back(DM::ColumnDefine{
+                column_info.id,
+                output_name,
+                getDataTypeByColumnInfoForComputingLayer(column_info),
+                column_info.defaultValueToField()});
+            break;
+        }
+    }
+    return {std::move(column_defines), extra_table_id_index};
 }
 
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types)

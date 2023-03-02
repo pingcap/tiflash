@@ -49,6 +49,10 @@
 #define DEFAULT_MPP_TASK_RUNNING_TIMEOUT (DEFAULT_MPP_TASK_TIMEOUT + 30)
 #define DEFAULT_MPP_TASK_WAITING_TIMEOUT 36000
 
+// Timeout for building one disagg task in the TiFlash write node.
+// Including read index / wait index / generate segments snapshots.
+static constexpr UInt64 DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC = 10;
+// Timeout for how long one disagg task is valid in the TiFlash write node.
 static constexpr UInt64 DEFAULT_DISAGG_TASK_TIMEOUT_SEC = 3600;
 
 #define DEFAULT_DAG_RECORDS_PER_CHUNK 1024L

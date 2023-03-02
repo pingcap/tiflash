@@ -39,11 +39,19 @@ StorageDisaggregated::StorageDisaggregated(
 BlockInputStreams StorageDisaggregated::read(
     const Names &,
     const SelectQueryInfo &,
-    const Context &,
+    const Context & db_context,
     QueryProcessingStage::Enum &,
     size_t,
     unsigned num_streams)
 {
+    /// S3 config is enabled on the TiFlash compute node, let's read
+    /// data from S3.
+    bool remote_data_read = S3::ClientFactory::instance().isEnabled();
+    if (remote_data_read)
+        return readFromWriteNode(db_context, num_streams);
+
+    /// Fetch all data from write node through MPP exchange sender/receiver
+
     auto remote_table_ranges = buildRemoteTableRanges();
 
     auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
@@ -56,7 +64,10 @@ BlockInputStreams StorageDisaggregated::read(
 
     DAGPipeline pipeline;
     buildReceiverStreams(dispatch_reqs, num_streams, pipeline);
-    filterConditions(pipeline);
+
+    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
+    assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
+    filterConditions(std::move(source_columns), pipeline);
 
     return pipeline.streams;
 }
@@ -235,7 +246,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
             context.getTMTContext().getMPPTaskManager(),
             context.getSettingsRef().enable_local_tunnel,
             context.getSettingsRef().enable_async_grpc_client),
-        receiver.encoded_task_meta_size(),
+        /*source_num=*/receiver.encoded_task_meta_size(),
         num_streams,
         log->identifier(),
         executor_id,
@@ -268,13 +279,8 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     });
 }
 
-void StorageDisaggregated::filterConditions(DAGPipeline & pipeline)
+void StorageDisaggregated::filterConditions(NamesAndTypes && source_columns, DAGPipeline & pipeline)
 {
-    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
-    const auto & receiver_dag_schema = exchange_receiver->getOutputSchema();
-    assert(receiver_dag_schema.size() == source_columns.size());
-    UNUSED(receiver_dag_schema);
-
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     if (filter_conditions.hasValue())
