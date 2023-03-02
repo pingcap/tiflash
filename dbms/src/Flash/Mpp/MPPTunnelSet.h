@@ -24,12 +24,6 @@ namespace DB
 class DAGContext;
 
 template <typename Tunnel>
-static inline bool isLocalTunnel(const std::shared_ptr<Tunnel> & tunnel)
-{
-    return tunnel->isLocal();
-}
-
-template <typename Tunnel>
 class MPPTunnelSetBase : private boost::noncopyable
 {
 public:
@@ -74,6 +68,8 @@ public:
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
 
     bool isReadyForWrite() const;
+
+    bool isLocal(size_t index) const;
 
 private:
     std::vector<TunnelPtr> tunnels;

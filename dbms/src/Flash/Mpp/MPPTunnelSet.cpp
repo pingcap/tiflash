@@ -88,11 +88,11 @@ void MPPTunnelSetBase<Tunnel>::registerTunnel(const MPPTaskId & receiver_task_id
 
     receiver_task_id_to_index_map[receiver_task_id] = tunnels.size();
     tunnels.push_back(tunnel);
-    if (!isLocalTunnel(tunnel) && !tunnel->isAsync())
+    if (!tunnel->isLocal() && !tunnel->isAsync())
     {
         ++external_thread_cnt;
     }
-    if (isLocalTunnel(tunnel))
+    if (tunnel->isLocal())
     {
         ++local_tunnel_cnt;
     }
@@ -123,6 +123,13 @@ typename MPPTunnelSetBase<Tunnel>::TunnelPtr MPPTunnelSetBase<Tunnel>::getTunnel
         return nullptr;
     }
     return tunnels[it->second];
+}
+
+template <typename Tunnel>
+bool MPPTunnelSetBase<Tunnel>::isLocal(size_t index) const
+{
+    assert(getPartitionNum() > index);
+    return getTunnels()[index]->isLocal();
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
