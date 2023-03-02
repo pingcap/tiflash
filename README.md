@@ -41,7 +41,7 @@ The following packages are required:
 - Rust
 - Python 3.0+
 - Ninja-Build or GNU Make
-- Ccache (not necessary but highly recommand to reduce rebuild time)
+- Ccache (not necessary but highly recommended to reduce rebuild time)
 
 Detailed steps for each platform are listed below.
 
