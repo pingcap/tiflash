@@ -13,19 +13,19 @@
 // limitations under the License.
 
 #include <Columns/ColumnConst.h>
-#include <Interpreters/NullAwareSemiJoin.h>
+#include <Interpreters/NullAwareSemiJoinHelper.h>
 
 namespace DB
 {
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
-NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num, NASemiJoinStep step, const void * map_it)
-    : row_num(row_num)
-    , step(step)
+NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoinStep step_, const void * map_it_)
+    : row_num(row_num_)
+    , step(step_)
     , step_end(false)
     , result(NASemiJoinResultType::NULL_VALUE)
     , null_rows_pos(0)
-    , map_it(map_it)
+    , map_it(map_it_)
 {
     static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                   || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
@@ -169,20 +169,20 @@ void NASemiJoinResult<KIND, STRICTNESS>::checkStepEnd()
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
 NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
-    Block & block,
-    size_t left_columns,
-    size_t right_columns,
-    const BlocksList & right_blocks,
-    const PaddedPODArray<Join::RowRef> & null_rows,
-    size_t max_block_size,
-    const JoinConditions & conditions)
-    : block(block)
-    , left_columns(left_columns)
-    , right_columns(right_columns)
-    , right_blocks(right_blocks)
-    , null_rows(null_rows)
-    , max_block_size(max_block_size)
-    , conditions(conditions)
+    Block & block_,
+    size_t left_columns_,
+    size_t right_columns_,
+    const BlocksList & right_blocks_,
+    const PaddedPODArray<Join::RowRef> & null_rows_,
+    size_t max_block_size_,
+    const JoinConditions & conditions_)
+    : block(block_)
+    , left_columns(left_columns_)
+    , right_columns(right_columns_)
+    , right_blocks(right_blocks_)
+    , null_rows(null_rows_)
+    , max_block_size(max_block_size_)
+    , conditions(conditions_)
 {
     static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                   || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
@@ -373,7 +373,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(Block & exec
             exec_block.getByName(conditions.null_aware_eq_cond_name).column = eq_column;
         }
 
-        RUNTIME_CHECK_MSG(eq_column->isColumnNullable(), "The equal column of null-aware semi join should be nullable, otherwise Anti/LeftAnti/LeftSemi should be used instead");
+        RUNTIME_CHECK_MSG(eq_column->isColumnNullable(), "The null-aware equal condition column should be nullable, otherwise Anti/LeftAnti/LeftSemi should be used instead");
 
         const auto * nullable_eq_column = static_cast<const ColumnNullable *>(eq_column.get());
         eq_null_map = &nullable_eq_column->getNullMapData();

@@ -28,7 +28,7 @@
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Join.h>
-#include <Interpreters/NullAwareSemiJoin.h>
+#include <Interpreters/NullAwareSemiJoinHelper.h>
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
 
@@ -135,7 +135,7 @@ Join::Join(
     const TiDB::TiDBCollators & collators_,
     const String & left_filter_column_,
     const String & right_filter_column_,
-    const JoinConditions & conditions,
+    const JoinConditions & conditions_,
     size_t max_block_size_,
     const String & match_helper_name)
     : match_helper_name(match_helper_name)
@@ -150,7 +150,7 @@ Join::Join(
     , collators(collators_)
     , left_filter_column(left_filter_column_)
     , right_filter_column(right_filter_column_)
-    , conditions(conditions)
+    , conditions(conditions_)
     , original_strictness(strictness)
     , max_block_size(max_block_size_)
     , log(Logger::get(req_id))
@@ -2156,21 +2156,22 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             }
             else if (key_columns.size() == 1)
             {
-                /// If key size is 1 and all key in right table row is not NULL, the result is false.
+                /// If key size is 1 and all key in right table row is not NULL(has_all_key_null_row is false),
+                /// the result is false.
                 /// I.e. (1) in () or (1) in (1,2,3,4,5).
                 res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
                 res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
                 continue;
             }
-            /// Then key size is greater than 2 and right table has no all-key-null row, we must
-            /// compare the rows one by one.
-            /// I.e. (1,2) in ((1,3),(1,null),(null,2)).
+            /// Then key size is greater than 2 and right table does not have a all-key-null row.
+            /// We have to compare them to the null rows one by one.
+            /// I.e. (1,2) in ((1,3),(1,null)) => NULL, (1,2) in ((1,3),(2,null)) => false.
         }
         /// Check null rows first to speed up getting the NULL result if possible.
         res.emplace_back(i, NASemiJoinStep::CHECK_NULL_ROWS_NOT_NULL, nullptr);
         res_list.push_back(&res.back());
     }
-    RUNTIME_ASSERT(res.size() == rows, "NullAwareSemiJoinResult size {} must be equal to block size {}", res.size(), rows);
+    RUNTIME_ASSERT(res.size() == rows, "NASemiJoinResult size {} must be equal to block size {}", res.size(), rows);
 
     size_t right_columns = block.columns() - left_columns;
 
@@ -2187,7 +2188,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 
         helper.joinResult(res_list);
 
-        RUNTIME_CHECK_MSG(res_list.empty(), "SemiJoinResult list must be empty after calculating join result");
+        RUNTIME_CHECK_MSG(res_list.empty(), "NASemiJoinResult list must be empty after calculating join result");
     }
 
     std::unique_ptr<IColumn::Filter> filter;
@@ -2196,9 +2197,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 
     MutableColumns added_columns(right_columns);
     for (size_t i = 0; i < right_columns; ++i)
-    {
         added_columns[i] = block.getByPosition(i + left_columns).column->cloneEmpty();
-    }
 
     for (size_t i = 0; i < rows; ++i)
     {
