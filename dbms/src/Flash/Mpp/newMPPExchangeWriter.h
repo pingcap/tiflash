@@ -96,7 +96,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
                 dag_context,
                 data_codec_version,
                 compression_mode,
-                exchange_type == tipb::ExchangeType::Broadcast);
+                exchange_type);
         }
     }
 }

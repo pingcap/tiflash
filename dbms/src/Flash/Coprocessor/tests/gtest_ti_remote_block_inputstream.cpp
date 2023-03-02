@@ -86,7 +86,7 @@ struct MockWriter
         return summary;
     }
 
-    void broadcastOrPassThroughWrite(Blocks & blocks, bool /*is_broadcast*/)
+    void broadcastOrPassThroughWriteV0(Blocks & blocks)
     {
         auto && packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
         ++total_packets;
@@ -97,10 +97,18 @@ struct MockWriter
         queue->push(std::move(packet));
     }
 
-    void broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method, bool is_broadcast = false)
+    void broadcastWrite(Blocks & blocks)
+    {
+        return broadcastOrPassThroughWriteV0(blocks);
+    }
+    void passThroughWrite(Blocks & blocks)
+    {
+        return broadcastOrPassThroughWriteV0(blocks);
+    }
+    void broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
     {
         if (version == MPPDataPacketV0)
-            return broadcastOrPassThroughWrite(blocks, is_broadcast);
+            return broadcastOrPassThroughWriteV0(blocks);
 
         size_t original_size{};
         auto && packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
@@ -110,6 +118,14 @@ struct MockWriter
 
         total_bytes += packet->packet.ByteSizeLong();
         queue->push(std::move(packet));
+    }
+    void broadcastWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        return broadcastOrPassThroughWrite(blocks, version, compression_method);
+    }
+    void passThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        return broadcastOrPassThroughWrite(blocks, version, compression_method);
     }
 
     void write(tipb::SelectResponse & response)
@@ -375,7 +391,7 @@ public:
             *dag_context_ptr,
             MPPDataPacketVersion::MPPDataPacketV1,
             tipb::CompressionMode::FAST,
-            false);
+            tipb::ExchangeType::Broadcast);
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)

@@ -166,14 +166,24 @@ struct MockExchangeWriter
             original_size);
         checker(tracked_packet, part_id);
     }
-    void broadcastOrPassThroughWrite(Blocks & blocks, bool)
+
+    void broadcastOrPassThroughWriteV0(Blocks & blocks)
     {
         checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), 0);
     }
-    void broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method, bool is_broadcast = false)
+
+    void broadcastWrite(Blocks & blocks)
+    {
+        return broadcastOrPassThroughWriteV0(blocks);
+    }
+    void passThroughWrite(Blocks & blocks)
+    {
+        return broadcastOrPassThroughWriteV0(blocks);
+    }
+    void broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
     {
         if (version == MPPDataPacketV0)
-            return broadcastOrPassThroughWrite(blocks, is_broadcast);
+            return broadcastOrPassThroughWriteV0(blocks);
 
         size_t original_size{};
         auto && packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
@@ -182,6 +192,15 @@ struct MockExchangeWriter
 
         checker(packet, 0);
     }
+    void broadcastWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        return broadcastOrPassThroughWrite(blocks, version, compression_method);
+    }
+    void passThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        return broadcastOrPassThroughWrite(blocks, version, compression_method);
+    }
+
     void partitionWrite(Blocks & blocks, uint16_t part_id)
     {
         checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), part_id);
@@ -524,7 +543,7 @@ try
         *dag_context_ptr,
         MPPDataPacketVersion::MPPDataPacketV0,
         tipb::CompressionMode::NONE,
-        false);
+        tipb::ExchangeType::Broadcast);
 
     for (const auto & block : blocks)
         dag_writer->write(block);
@@ -577,7 +596,7 @@ try
             *dag_context_ptr,
             MPPDataPacketVersion::MPPDataPacketV1,
             mode,
-            true);
+            tipb::ExchangeType::Broadcast);
 
         for (const auto & block : blocks)
             dag_writer->write(block);

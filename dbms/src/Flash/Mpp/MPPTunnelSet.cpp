@@ -127,11 +127,10 @@ static inline bool isLocalTunnel(const std::shared_ptr<Tunnel> & tunnel)
     return tunnel->isLocal();
 }
 
-template <typename Tunnel>
-static void BroadcastOrPassThroughWriteImpl(
-    std::vector<std::shared_ptr<Tunnel>> & tunnels,
+template <bool is_broadcast, typename Tunnel>
+static void broadcastOrPassThroughWriteImpl(
+    const std::vector<std::shared_ptr<Tunnel>> & tunnels,
     size_t local_tunnel_cnt, // can be 0 for PassThrough writer
-    bool is_broadcast,
     TrackedMppDataPacketPtr && ori_tracked_packet, // can be NULL if there is no local tunnel
     size_t ori_tracked_packet_bytes,
     TrackedMppDataPacketPtr && remote_tracked_packet,
@@ -177,7 +176,7 @@ static void BroadcastOrPassThroughWriteImpl(
         }
     }
 
-    if (is_broadcast)
+    if constexpr (is_broadcast)
     {
         UPDATE_EXCHANGE_MATRIC(broadcast, CompressionMethod::NONE, local_tunnel_cnt * ori_tracked_packet_bytes, local_tunnel_cnt * ori_tracked_packet_bytes, true);
         UPDATE_EXCHANGE_MATRIC(broadcast, compression_method, remote_tunnel_cnt * ori_tracked_packet_bytes, remote_tunnel_cnt * remote_tracked_packet_bytes, false);
@@ -189,8 +188,11 @@ static void BroadcastOrPassThroughWriteImpl(
     }
 }
 
-template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool is_broadcast)
+template <bool is_broadcast, typename Tunnel>
+static void broadcastOrPassThroughWriteV0(
+    const std::vector<std::shared_ptr<Tunnel>> & tunnels,
+    Blocks & blocks,
+    const std::vector<tipb::FieldType> & result_field_types)
 {
     RUNTIME_CHECK(!tunnels.empty());
     auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
@@ -200,10 +202,9 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool
         return res + tunnel->isLocal();
     });
     size_t tracked_packet_bytes = tracked_packet->getPacket().ByteSizeLong();
-    BroadcastOrPassThroughWriteImpl(
+    broadcastOrPassThroughWriteImpl<is_broadcast>(
         tunnels,
         local_tunnel_cnt,
-        is_broadcast,
         std::move(tracked_packet),
         tracked_packet_bytes,
         nullptr,
@@ -211,10 +212,27 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, bool
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method, bool is_broadcast)
+void MPPTunnelSetBase<Tunnel>::broadcastWrite(Blocks & blocks)
+{
+    return broadcastOrPassThroughWriteV0<true>(tunnels, blocks, result_field_types);
+}
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::passThroughWrite(Blocks & blocks)
+{
+    return broadcastOrPassThroughWriteV0<false>(tunnels, blocks, result_field_types);
+}
+
+template <bool is_broadcast, typename Tunnel>
+static void broadcastOrPassThroughWrite(
+    const std::vector<std::shared_ptr<Tunnel>> & tunnels,
+    Blocks & blocks,
+    MPPDataPacketVersion version,
+    CompressionMethod compression_method,
+    const std::vector<tipb::FieldType> & result_field_types)
 {
     if (MPPDataPacketV0 == version)
-        return broadcastOrPassThroughWrite(blocks, is_broadcast);
+        return broadcastOrPassThroughWriteV0<is_broadcast>(tunnels, blocks, result_field_types);
 
     RUNTIME_CHECK(!tunnels.empty());
     const size_t local_tunnel_cnt = std::accumulate(tunnels.begin(), tunnels.end(), 0, [](auto res, auto && tunnel) {
@@ -229,12 +247,11 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPD
     size_t tracked_packet_bytes = ori_tracked_packet->getPacket().ByteSizeLong();
 
     // Only if all tunnels are local mode or compression method is NONE
-    if (local_tunnel_cnt == getPartitionNum() || compression_method == CompressionMethod::NONE)
+    if (local_tunnel_cnt == tunnels.size() || compression_method == CompressionMethod::NONE)
     {
-        return BroadcastOrPassThroughWriteImpl(
+        return broadcastOrPassThroughWriteImpl<is_broadcast>(
             tunnels,
             local_tunnel_cnt,
-            is_broadcast,
             std::move(ori_tracked_packet),
             tracked_packet_bytes,
             nullptr,
@@ -249,14 +266,25 @@ void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(Blocks & blocks, MPPD
         ori_tracked_packet = nullptr;
     }
 
-    return BroadcastOrPassThroughWriteImpl(
+    return broadcastOrPassThroughWriteImpl<is_broadcast>(
         tunnels,
         local_tunnel_cnt,
-        is_broadcast,
         std::move(ori_tracked_packet),
         tracked_packet_bytes,
         std::move(remote_tunnel_tracked_packet),
         compression_method);
+}
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::broadcastWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+{
+    return broadcastOrPassThroughWrite<true>(tunnels, blocks, version, compression_method, result_field_types);
+}
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::passThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+{
+    return broadcastOrPassThroughWrite<false>(tunnels, blocks, version, compression_method, result_field_types);
 }
 
 template <typename Tunnel>

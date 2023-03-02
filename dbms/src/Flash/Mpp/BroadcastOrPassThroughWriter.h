@@ -35,7 +35,7 @@ public:
         DAGContext & dag_context_,
         MPPDataPacketVersion data_codec_version_,
         tipb::CompressionMode compression_mode_,
-        bool is_broadcast_);
+        tipb::ExchangeType exchange_type_);
     void write(const Block & block) override;
     void flush() override;
 
@@ -47,9 +47,9 @@ private:
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     size_t rows_in_blocks;
+    const tipb::ExchangeType exchange_type;
 
     // support data compression
-    bool is_broadcast;
     DataTypes expected_types;
     MPPDataPacketVersion data_codec_version;
     CompressionMethod compression_method{};
