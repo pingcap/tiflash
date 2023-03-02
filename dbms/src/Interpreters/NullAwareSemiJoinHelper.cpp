@@ -236,9 +236,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NASemiJoinHel
     {
         if ((*it)->getStep() != STEP)
         {
-            if ((*it)->getStep() != NASemiJoinStep::DONE)
-                next_res_list.emplace_back(*it);
-
+            next_res_list.emplace_back(*it);
             it = res_list.erase(it);
             continue;
         }
