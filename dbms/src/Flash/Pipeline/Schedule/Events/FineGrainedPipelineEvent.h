@@ -39,7 +39,7 @@ protected:
     std::vector<TaskPtr> scheduleImpl() override;
 
 private:
-    // The pipeline exec for executing the specific fine-grained shuffle partition id.
+    // The pipeline exec for executing the specific fine-grained partition.
     PipelineExecPtr pipeline_exec;
 };
 } // namespace DB
