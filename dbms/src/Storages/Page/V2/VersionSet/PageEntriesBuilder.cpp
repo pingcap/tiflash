@@ -51,10 +51,6 @@ void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
         case WriteBatchWriteType::UPSERT:
             current_version->upsertPage(rec.page_id, rec.entry);
             break;
-        case WriteBatchWriteType::PUT_REMOTE:
-        case WriteBatchWriteType::PUT_REMOTE_EXTERNAL:
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "PageEntriesBuilder::apply with invalid type {}", magic_enum::enum_name(rec.type));
-            break;
         }
     }
 }

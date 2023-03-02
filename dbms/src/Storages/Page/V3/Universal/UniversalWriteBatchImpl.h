@@ -16,7 +16,6 @@
 
 #include <IO/ReadBufferFromString.h>
 #include <Storages/Page/PageDefinesBase.h>
-#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/WriteBatchImpl.h>
@@ -43,7 +42,6 @@ private:
         UniversalPageId ori_page_id;
         // Fields' offset inside Page's data
         PageFieldOffsetChecksums offsets;
-        std::optional<PS::V3::CheckpointLocation> remote;
     };
     using Writes = std::vector<Write>;
 
@@ -92,7 +90,7 @@ public:
                           size,
                           off);
 
-        Write w{WriteBatchWriteType::PUT, page_id, tag, read_buffer, size, "", std::move(offsets), std::nullopt};
+        Write w{WriteBatchWriteType::PUT, page_id, tag, read_buffer, size, "", std::move(offsets)};
         total_data_size += size;
         writes.emplace_back(std::move(w));
     }
@@ -106,56 +104,20 @@ public:
     void putExternal(const UniversalPageId & page_id, UInt64 tag)
     {
         // External page's data is not managed by PageStorage, which means data is empty.
-        Write w{WriteBatchWriteType::PUT_EXTERNAL, page_id, tag, nullptr, 0, "", {}, std::nullopt};
+        Write w{WriteBatchWriteType::PUT_EXTERNAL, page_id, tag, nullptr, 0, "", {}};
         writes.emplace_back(std::move(w));
-    }
-
-    void putRemotePage(PageIdU64 page_id, const PS::V3::CheckpointLocation & loc, PageSize size, const PageFieldSizes & data_sizes = {})
-    {
-        putRemotePage(UniversalPageIdFormat::toFullPageId(prefix, page_id), loc, size, data_sizes);
-    }
-
-    void putRemotePage(const UniversalPageId & page_id, const PS::V3::CheckpointLocation & loc, PageSize size, const PageFieldSizes & data_sizes)
-    {
-        // Convert from data_sizes to the offset of each field
-        PageFieldOffsetChecksums offsets;
-        PageFieldOffset off = 0;
-        for (auto data_sz : data_sizes)
-        {
-            offsets.emplace_back(off, 0);
-            off += data_sz;
-        }
-
-        RUNTIME_CHECK_MSG(data_sizes.empty() || off == size,
-                          "Try to put Page with fields, but page size and fields total size not match "
-                          "[page_id={}] [num_fields={}] [page_size={}] [all_fields_size={}]",
-                          page_id,
-                          data_sizes.size(),
-                          size,
-                          off);
-
-        Write w{WriteBatchWriteType::PUT_REMOTE, page_id, /*tag*/ 0, nullptr, size, "", offsets, loc};
-        writes.emplace_back(std::move(w));
-        has_remote = true;
-    }
-
-    void putRemoteExternal(const UniversalPageId & page_id, const PS::V3::CheckpointLocation & loc)
-    {
-        Write w{WriteBatchWriteType::PUT_REMOTE_EXTERNAL, page_id, /*tag*/ 0, nullptr, /*size*/ 0, "", {}, loc};
-        writes.emplace_back(std::move(w));
-        has_remote = true;
     }
 
     // Add RefPage{ref_id} -> Page{page_id}
     void putRefPage(const UniversalPageId & ref_id, const UniversalPageId & page_id)
     {
-        Write w{WriteBatchWriteType::REF, ref_id, 0, nullptr, 0, page_id, {}, std::nullopt};
+        Write w{WriteBatchWriteType::REF, ref_id, 0, nullptr, 0, page_id, {}};
         writes.emplace_back(std::move(w));
     }
 
     void delPage(const UniversalPageId & page_id)
     {
-        Write w{WriteBatchWriteType::DEL, page_id, 0, nullptr, 0, "", {}, std::nullopt};
+        Write w{WriteBatchWriteType::DEL, page_id, 0, nullptr, 0, "", {}};
         writes.emplace_back(std::move(w));
     }
 
@@ -233,14 +195,12 @@ public:
         Writes tmp;
         writes.swap(tmp);
         total_data_size = 0;
-        has_remote = false;
     }
 
     UniversalWriteBatch(UniversalWriteBatch && rhs) noexcept
         : prefix(std::move(rhs.prefix))
         , writes(std::move(rhs.writes))
         , total_data_size(rhs.total_data_size)
-        , has_remote(rhs.has_remote)
     {}
 
     void swap(UniversalWriteBatch & o)
@@ -248,14 +208,11 @@ public:
         prefix.swap(o.prefix);
         writes.swap(o.writes);
         std::swap(total_data_size, o.total_data_size);
-        has_remote = o.has_remote;
     }
 
 private:
     String prefix;
     Writes writes;
     size_t total_data_size = 0;
-    // this writebatch contains PUT_REMOTE/PUT_REMOTE_EXTERNAL or not
-    size_t has_remote = false;
 };
 } // namespace DB

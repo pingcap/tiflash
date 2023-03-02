@@ -41,10 +41,6 @@ enum class WriteBatchWriteType : UInt8
     // In V2, it is the same as `PUT`; In V3, we treated it as a different type from `PUT`
     // to get its lifetime management correct.
     PUT_EXTERNAL = 4,
-    // Create a page but its data is stored on remote storage system (e.g. S3)
-    PUT_REMOTE = 5,
-    // Create an external page. Its data is stored on remote storage system.
-    PUT_REMOTE_EXTERNAL = 6,
 };
 
 class WriteBatch : private boost::noncopyable
