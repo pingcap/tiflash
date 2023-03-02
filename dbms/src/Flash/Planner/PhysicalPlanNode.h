@@ -31,7 +31,6 @@ class DAGContext;
 
 class PipelineExecutorStatus;
 
-struct PipelineExecBuilder;
 struct PipelineExecGroupBuilder;
 
 class Pipeline;
@@ -70,11 +69,6 @@ public:
         PipelineExecGroupBuilder & /*group_builder*/,
         Context & /*context*/,
         size_t /*concurrency*/);
-    virtual void buildPipelineExec(
-        PipelineExecutorStatus & /*exec_status*/,
-        PipelineExecBuilder & /*exec_builder*/,
-        Context & /*context*/,
-        size_t /*partition_id*/);
 
     virtual void buildPipeline(PipelineBuilder & builder);
 
@@ -105,8 +99,8 @@ protected:
     PlanType type;
     NamesAndTypes schema;
 
-    //Most operators are not aware of whether they are fine-grained shuffles or not;
-    //whether they are fine-grained shuffles or not, their execution remains unchanged.
+    // Most operators are not aware of whether they are fine-grained shuffles or not.
+    // Whether they are fine-grained shuffles or not, their execution remains unchanged.
     // Only a few operators need to sense fine-grained shuffle, such as exchange sender/receiver, join, aggregate, window and window sort.
     FineGrainedShuffle fine_grained_shuffle;
 

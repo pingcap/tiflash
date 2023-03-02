@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Flash/Pipeline/Schedule/Events/PipelineEvent.h>
 
 namespace DB
@@ -27,15 +28,18 @@ public:
         const String & req_id,
         Context & context_,
         const PipelinePtr & pipeline_,
-        size_t partition_id_)
+        PipelineExecPtr && pipeline_exec_)
         : PipelineEvent(exec_status_, std::move(mem_tracker_), req_id, context_, pipeline_)
-        , partition_id(partition_id_)
-    {}
+        , pipeline_exec(std::move(pipeline_exec_))
+    {
+        assert(pipeline_exec);
+    }
 
 protected:
     std::vector<TaskPtr> scheduleImpl() override;
 
 private:
-    size_t partition_id;
+    // The pipeline exec for executing the specific fine-grained shuffle partition id.
+    PipelineExecPtr pipeline_exec;
 };
 } // namespace DB

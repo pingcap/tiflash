@@ -20,13 +20,9 @@ namespace DB
 {
 std::vector<TaskPtr> FineGrainedPipelineEvent::scheduleImpl()
 {
-    assert(pipeline);
-    auto pipeline_exec_group = pipeline->buildExecGroup(exec_status, context, partition_id);
-    assert(!pipeline_exec_group.empty());
     std::vector<TaskPtr> tasks;
-    tasks.reserve(pipeline_exec_group.size());
-    for (auto & pipline_exec : pipeline_exec_group)
-        tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipline_exec)));
+    tasks.reserve(1);
+    tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
     return tasks;
 }
 } // namespace DB

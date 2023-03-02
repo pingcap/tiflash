@@ -93,6 +93,12 @@ void PhysicalExchangeSender::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    if (fine_grained_shuffle.enable())
+    {
+        RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_type));
+        RUNTIME_CHECK(fine_grained_shuffle.stream_count <= 1024, fine_grained_shuffle.stream_count);
+    }
+
     group_builder.transform([&](auto & builder) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(

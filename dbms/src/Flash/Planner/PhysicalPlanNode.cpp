@@ -99,15 +99,6 @@ void PhysicalPlanNode::buildPipelineExecGroup(
     throw Exception("Unsupport");
 }
 
-void PhysicalPlanNode::buildPipelineExec(
-    PipelineExecutorStatus & /*exec_status*/,
-    PipelineExecBuilder & /*exec_builder*/,
-    Context & /*context*/,
-    size_t /*partition_id*/)
-{
-    throw Exception("Unsupport");
-}
-
 void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder)
 {
     assert(childrenSize() <= 1);

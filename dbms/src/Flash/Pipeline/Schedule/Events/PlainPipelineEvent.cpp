@@ -25,8 +25,8 @@ std::vector<TaskPtr> PlainPipelineEvent::scheduleImpl()
     assert(!pipeline_exec_group.empty());
     std::vector<TaskPtr> tasks;
     tasks.reserve(pipeline_exec_group.size());
-    for (auto & pipline_exec : pipeline_exec_group)
-        tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipline_exec)));
+    for (auto & pipeline_exec : pipeline_exec_group)
+        tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
     return tasks;
 }
 } // namespace DB
