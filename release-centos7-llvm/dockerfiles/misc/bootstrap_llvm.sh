@@ -17,7 +17,7 @@
 
 # Boostrap LLVM envriroment for CI/CD.
 # Require: git, ninja, cmake, compiler(devtoolset-10)
-# LLVM License: https://releases.llvm.org/15.0.7/LICENSE.TXT
+# LLVM License: https://releases.llvm.org/13.0.0/LICENSE.TXT
 
 function bootstrap_llvm() {
     # $1: llvm_version
