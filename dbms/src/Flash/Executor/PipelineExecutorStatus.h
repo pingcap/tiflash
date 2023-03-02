@@ -27,19 +27,19 @@ class PipelineExecutorStatus : private boost::noncopyable
 public:
     static constexpr auto timeout_err_msg = "error with timeout";
 
-    ExecutionResult toExecutionResult();
+    ExecutionResult toExecutionResult() noexcept;
 
-    std::exception_ptr getExceptionPtr();
-    String getExceptionMsg();
+    std::exception_ptr getExceptionPtr() noexcept;
+    String getExceptionMsg() noexcept;
 
-    void onEventSchedule();
+    void onEventSchedule() noexcept;
 
-    void onEventFinish();
+    void onEventFinish() noexcept;
 
-    void onErrorOccurred(const String & err_msg);
-    void onErrorOccurred(const std::exception_ptr & exception_ptr_);
+    void onErrorOccurred(const String & err_msg) noexcept;
+    void onErrorOccurred(const std::exception_ptr & exception_ptr_) noexcept;
 
-    void wait();
+    void wait() noexcept;
 
     template <typename Duration>
     void waitFor(const Duration & timeout_duration)
@@ -56,9 +56,9 @@ public:
         }
     }
 
-    void cancel();
+    void cancel() noexcept;
 
-    bool isCancelled()
+    bool isCancelled() noexcept
     {
         return is_cancelled.load(std::memory_order_acquire);
     }

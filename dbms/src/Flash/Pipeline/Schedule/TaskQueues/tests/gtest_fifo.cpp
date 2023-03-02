@@ -31,7 +31,7 @@ public:
         , index(index_)
     {}
 
-    ExecTaskStatus executeImpl() override { return ExecTaskStatus::FINISHED; }
+    ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }
 
     size_t index;
 };

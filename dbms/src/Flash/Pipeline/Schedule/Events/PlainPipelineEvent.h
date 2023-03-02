@@ -32,7 +32,7 @@ public:
     {}
 
 protected:
-    bool scheduleImpl() override;
+    std::vector<TaskPtr> scheduleImpl() override;
 
 private:
     size_t concurrency;
