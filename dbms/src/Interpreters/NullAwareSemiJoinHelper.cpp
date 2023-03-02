@@ -382,7 +382,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(Block & exec
     {
         /// If STEP is CHECK_OTHER_COND, it means these right rows have the same join keys to the corresponding left row.
         /// So do not need to run null_aware_eq_cond_expr.
-        /// And other condition must exist so STRICTNESS must be all.
+        /// And other conditions must exist so STRICTNESS must be all.
         static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
     }
 

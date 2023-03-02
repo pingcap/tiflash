@@ -217,8 +217,6 @@ JoinConditions doGenJoinConditionsAction(
         chain.addStep();
     }
 
-    String column_for_null_aware_eq_condition;
-    ExpressionActionsPtr null_aware_eq_expr;
     if (join.is_null_aware_semi_join())
     {
         cond.null_aware_eq_cond_name = dag_analyzer.appendNullAwareSemiJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
