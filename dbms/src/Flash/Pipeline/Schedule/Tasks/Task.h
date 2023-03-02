@@ -85,6 +85,7 @@ public:
 
 protected:
     virtual ExecTaskStatus executeImpl() noexcept = 0;
+    // Avoid allocating memory in `await` if possible.
     virtual ExecTaskStatus awaitImpl() noexcept { return ExecTaskStatus::RUNNING; }
 
 private:

@@ -138,10 +138,10 @@ void Event::scheduleTasks(std::vector<TaskPtr> & tasks) noexcept
 void Event::onTaskFinish() noexcept
 {
     assert(status != EventStatus::FINISHED);
-    auto cur_value = unfinished_tasks.fetch_sub(1);
-    assert(cur_value >= 1);
-    LOG_DEBUG(log, "one task finished, {} tasks remaining", cur_value - 1);
-    if (1 == cur_value)
+    int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
+    assert(remaining_tasks >= 0);
+    LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);
+    if (0 == remaining_tasks)
         finish();
 }
 

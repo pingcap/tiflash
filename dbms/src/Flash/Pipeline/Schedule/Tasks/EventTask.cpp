@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Flash/Pipeline/Schedule/Tasks/EventTask.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_pipeline_model_task_run_failpoint[];
+} // namespace FailPoints
+
 EventTask::EventTask(
     PipelineExecutorStatus & exec_status_,
     const EventPtr & event_)
@@ -79,6 +85,7 @@ ExecTaskStatus EventTask::doTaskAction(std::function<ExecTaskStatus()> && action
     try
     {
         auto status = action();
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_run_failpoint);
         switch (status)
         {
         case FINISH_STATUS:

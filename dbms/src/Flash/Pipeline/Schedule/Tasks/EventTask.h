@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/FailPoint.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
@@ -22,11 +21,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char random_pipeline_model_task_run_failpoint[];
-} // namespace FailPoints
-
 // The base class of event related task.
 class EventTask : public Task
 {

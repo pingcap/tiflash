@@ -75,7 +75,7 @@ public:
     }
 
 private:
-    bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
+    bool setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept;
 
 private:
     LoggerPtr log;
