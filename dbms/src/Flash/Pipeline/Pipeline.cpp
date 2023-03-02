@@ -111,7 +111,7 @@ EventPtr Pipeline::toEvent(PipelineExecutorStatus & status, Context & context, s
     //     ```
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
 
-    auto plain_pipeline_event = std::make_shared<PlainPipelineEvent>(status, memory_tracker, context, shared_from_this(), concurrency);
+    auto plain_pipeline_event = std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency);
     for (const auto & child : children)
     {
         auto input = child->toEvent(status, context, concurrency, all_events);
