@@ -67,6 +67,9 @@ struct S3GCConfig
     // The maximun number of manifest files preserve
     // for each store
     size_t manifest_preserve_count = 10;
+    // Only preserve the manifest that is created
+    // recently.
+    Int64 manifest_expired_hour = 1;
 
     Int64 delmark_expired_hour = 1;
 

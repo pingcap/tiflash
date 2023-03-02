@@ -23,6 +23,8 @@
 #include <map>
 #include <vector>
 
+#include "common/defines.h"
+
 namespace DB::S3
 {
 struct CheckpointManifestS3Object
@@ -38,6 +40,8 @@ public:
 
     static CheckpointManifestS3Set create(std::vector<CheckpointManifestS3Object> manifest_keys);
 
+    ALWAYS_INLINE bool empty() const { return manifests.empty(); }
+
     UInt64 latestUploadSequence() const
     {
         assert(!manifests.empty());
@@ -50,9 +54,15 @@ public:
         return manifests.rbegin()->second.key;
     }
 
-    Strings perservedManifests() const;
+    // The number of preserved manifest file is 1 <= num <= max_preserved.
+    // If the manifest modification time is older than timepoint - expired_hour,
+    // we won't preserve it.
+    Strings preservedManifests(size_t max_preserved, Int64 expired_hour, const Aws::Utils::DateTime & timepoint) const;
 
-    std::map<UInt64, CheckpointManifestS3Object> objects() const { return manifests; }
+    // The manifest objects that should be removed from S3
+    std::vector<CheckpointManifestS3Object> outdatedObjects(size_t max_preserved, Int64 expired_hour, const Aws::Utils::DateTime & timepoint) const;
+
+    const std::map<UInt64, CheckpointManifestS3Object> & objects() const { return manifests; }
 
 private:
     // a order map to let values sorted by upload_seq

@@ -129,6 +129,12 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
 
     // Get the latest manifest
     const auto manifests = CheckpointManifestS3Set::getFromS3(*client, gc_store_id);
+    if (manifests.empty())
+    {
+        LOG_INFO(log, "no manifest on this store, skip gc_store_id={}", gc_store_id);
+        return;
+    }
+
     LOG_INFO(log, "latest manifest, gc_store_id={} upload_seq={} key={}", gc_store_id, manifests.latestUploadSequence(), manifests.latestManifestKey());
     // Parse from the latest manifest and collect valid lock files
     // TODO: collect valid lock files in multiple manifest?
@@ -415,11 +421,9 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const String &
 
 void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime * const timepoint)
 {
-    // clean the outdated manifest files
-    size_t num_manifest_on_s3 = manifests.objects().size();
-    for (const auto & mf : manifests.objects())
+    if (timepoint == nullptr)
     {
-        if (timepoint == nullptr)
+        for (const auto & mf : manifests.objects())
         {
             // store tombstoned, remove all manifests
             deleteObject(*client, client->bucket(), mf.second.key);
@@ -428,21 +432,22 @@ void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifes
                 "remove outdated manifest because of store tombstone, key={} mtime={}",
                 mf.second.key,
                 mf.second.last_modification.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
-            continue;
         }
+        return;
+    }
 
-        assert(timepoint != nullptr);
-        if (num_manifest_on_s3 <= config.manifest_reserve_count)
-        {
-            break;
-        }
+    assert(timepoint != nullptr);
+    // clean the outdated manifest files
+    const auto outdated_mfs = manifests.outdatedObjects(config.manifest_preserve_count, config.manifest_expired_hour, *timepoint);
+    for (const auto & mf : outdated_mfs)
+    {
         // expired manifest, remove
-        deleteObject(*client, client->bucket(), mf.second.key);
-        num_manifest_on_s3 -= 1;
+        deleteObject(*client, client->bucket(), mf.key);
         LOG_INFO(
             log,
-            "remove outdated manifest, key={}",
-            mf.second.key);
+            "remove outdated manifest, key={} mtime={}",
+            mf.key,
+            mf.last_modification.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
     }
 }
 

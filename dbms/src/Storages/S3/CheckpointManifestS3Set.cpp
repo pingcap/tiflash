@@ -55,10 +55,52 @@ CheckpointManifestS3Set::create(std::vector<CheckpointManifestS3Object> manifest
     return set;
 }
 
-Strings CheckpointManifestS3Set::perservedManifests() const
+Strings CheckpointManifestS3Set::preservedManifests(size_t max_preserved, Int64 expired_hour, const Aws::Utils::DateTime & timepoint) const
 {
-    // Now only perserve the latest manifest
-    return {manifests.rbegin()->second.key};
+    assert(!manifests.empty());
+
+    Strings preserved_mf;
+    // the latest manifest
+    auto iter = manifests.rbegin();
+    preserved_mf.emplace_back(iter->second.key);
+    const auto expired_bound_sec = expired_hour * 3600;
+    for (; iter != manifests.rend(); ++iter)
+    {
+        auto diff_sec = Aws::Utils::DateTime::Diff(timepoint, iter->second.last_modification).count() / 1000.0;
+        if (diff_sec > expired_bound_sec)
+        {
+            break;
+        }
+
+        preserved_mf.emplace_back(iter->second.key);
+        if (preserved_mf.size() >= max_preserved)
+        {
+            break;
+        }
+    }
+    return preserved_mf;
+}
+
+std::vector<CheckpointManifestS3Object>
+CheckpointManifestS3Set::outdatedObjects(
+    size_t max_preserved,
+    Int64 expired_hour,
+    const Aws::Utils::DateTime & timepoint) const
+{
+    auto preserved_mfs = preservedManifests(max_preserved, expired_hour, timepoint);
+    std::set<String> preserved_set;
+    for (const auto & s : preserved_mfs)
+        preserved_set.emplace(s);
+
+    // the manifest object that does not appear in reserved set
+    std::vector<CheckpointManifestS3Object> outdated;
+    for (const auto & [seq, obj] : manifests)
+    {
+        if (preserved_set.count(obj.key) > 0)
+            continue;
+        outdated.emplace_back(obj);
+    }
+    return outdated;
 }
 
 } // namespace DB::S3
