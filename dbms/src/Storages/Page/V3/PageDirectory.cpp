@@ -495,91 +495,40 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
     // (the checkpoint info) each page's data was dumped.
     // In this case, there is a living snapshot protecting the data.
 
-    // Pre-check: All ENTRY edit record must contain checkpoint info.
-    if (edit.type == EditRecordType::VAR_ENTRY)
-        RUNTIME_CHECK(edit.entry.checkpoint_info.has_value());
+    // Pre-check: All ENTRY edit record must contain checkpoint info for copying.
+    RUNTIME_CHECK(edit.type == EditRecordType::VAR_ENTRY);
+    RUNTIME_CHECK(edit.entry.checkpoint_info.has_value());
 
     auto page_lock = acquireLock();
 
-    switch (type)
+    if (type != EditRecordType::VAR_ENTRY)
     {
-    case EditRecordType::VAR_DELETE:
-    {
-        // For the same page this must not happen:
-        // Impossible case #A: Edit is delete and current is delete:
-        //      VAR_DELETE will not create an edit.
-        // Impossible case #B: Edit is not delete and current is delete:
-        //      VAR_EXTERNAL / VAR_REF / VAR_ENTRY page will not turn into VAR_DELETE.
-
-        // TODO: May be possible? Put X -> Delete X -> Full GC -> Delete X
-
-        // If this really happens, it means we are applying checkpoint info over a wrong PageStorage instance.
-        // May be we should provide a better message instead.
-        RUNTIME_CHECK(false,
-                      toDebugString(),
-                      edit);
-        break;
+        // For example, Put X -> Delete X -> dumpSnapshotToEdit -> Full GC -> Delete X -> copyCheckpointInfoFromEdit.
+        // In this case, we have X=VAR_ENTRY in the `edit`, but will get X=VAR_DELETE in the page directory.
+        return;
     }
-    case EditRecordType::VAR_EXTERNAL:
-    {
-        // TODO: May be possible? Put X -> Delete X -> Full GC -> External X
 
-        RUNTIME_CHECK(
-            edit.type == EditRecordType::VAR_DELETE || edit.type == EditRecordType::VAR_EXTERNAL,
-            toDebugString(),
-            edit);
-        break;
+    // Due to GC movement, (sequence, epoch) may be changed to (sequence, epoch+x), so
+    // we search within [  (sequence, 0),  (sequence+1, 0)  ), and assign checkpoint info for all of it.
+    auto iter = MapUtils::findMutLess(entries, PageVersion(edit.version.sequence + 1));
+    if (iter == entries.end())
+    {
+        // The referenced version may be GCed so that we cannot find any matching entry.
+        return;
     }
-    case EditRecordType::VAR_REF:
+
+    RUNTIME_CHECK(iter->first.sequence == edit.version.sequence); // TODO: If there is a full GC this may be false?
+
+    // Discard epoch, and only check sequence.
+    while (iter->first.sequence == edit.version.sequence)
     {
-        // TODO: May be possible? Put X -> Delete X -> Full GC -> Ref X
+        // We will never meet the same Version mapping to one entry and one delete, so let's verify it is an entry.
+        RUNTIME_CHECK(iter->second.isEntry());
+        iter->second.entry.checkpoint_info = edit.entry.checkpoint_info;
 
-        RUNTIME_CHECK(
-            edit.type == EditRecordType::VAR_DELETE || edit.type == EditRecordType::VAR_REF,
-            toDebugString(),
-            edit);
-        break;
-    }
-    case EditRecordType::VAR_ENTRY:
-    {
-        // TODO: May be possible? Ref X -> Delete X -> Full GC -> Put X
-
-        RUNTIME_CHECK(
-            edit.type == EditRecordType::VAR_DELETE || edit.type == EditRecordType::VAR_ENTRY,
-            toDebugString(),
-            edit);
-
-        if (edit.type == EditRecordType::VAR_DELETE)
+        if (iter == entries.begin())
             break;
-
-        // Due to GC movement, (sequence, epoch) may be changed to (sequence, epoch+x), so
-        // we search within [  (sequence, 0),  (sequence+1, 0)  ), and assign checkpoint info for all of it.
-        auto iter = MapUtils::findMutLess(entries, PageVersion(edit.version.sequence + 1));
-        RUNTIME_CHECK(iter != entries.end());
-        RUNTIME_CHECK(iter->first.sequence == edit.version.sequence); // TODO: If there is a full GC this may be false?
-
-        // Discard epoch, and only check sequence.
-        while (iter->first.sequence == edit.version.sequence)
-        {
-            // We will never meet the same Version mapping to one entry and one delete, so let's verify it is an entry.
-            RUNTIME_CHECK(iter->second.isEntry());
-            iter->second.entry.checkpoint_info = edit.entry.checkpoint_info;
-
-            if (iter == entries.begin())
-                break;
-            --iter;
-        }
-
-        // TODO: Check whether this is fine: Put X -> Delete X -> Full GC -> Put X
-        //                                   ↑ A                             ↑ B
-        //       The checkpoint info of A must not be recovered into B.
-
-        break;
-    }
-    default:
-        throw Exception(fmt::format(
-            "Calling VersionedPageEntries::copyCheckpointInfoFromEdit() with unexpected type: {}",
-            magic_enum::enum_name(type)));
+        --iter;
     }
 }
 
@@ -1727,7 +1676,7 @@ void PageDirectory<Trait>::copyCheckpointInfoFromEdit(PageEntriesEdit & edit)
     if (records.empty())
         return;
 
-    // Pre-check: All ENTRY edit record must contain remote info.
+    // Pre-check: All ENTRY edit record must contain checkpoint info.
     // We do the pre-check before copying any remote info to avoid partial completion.
     for (const auto & rec : records)
     {
@@ -1737,6 +1686,10 @@ void PageDirectory<Trait>::copyCheckpointInfoFromEdit(PageEntriesEdit & edit)
 
     for (const auto & rec : records)
     {
+        // Only VAR_ENTRY will contain checkpoint info.
+        if (rec.type != EditRecordType::VAR_ENTRY)
+            continue;
+
         // TODO: Improve from O(nlogn) to O(n).
 
         typename MVCCMapType::iterator iter;
@@ -1793,14 +1746,13 @@ PageDirectory<universal::PageDirectoryTrait>::dumpIncrementalCheckpoint(const Du
         data_file_path,
         manifest_file_path);
 
-    auto writer = CPFilesWriter::create(
-        {
-            .data_file_path = data_file_path,
-            .data_file_id = data_file_id,
-            .manifest_file_path = manifest_file_path,
-            .manifest_file_id = manifest_file_id,
-            .data_source = options.data_source,
-        });
+    auto writer = CPFilesWriter::create({
+        .data_file_path = data_file_path,
+        .data_file_id = data_file_id,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
+        .data_source = options.data_source,
+    });
 
     writer->writePrefix({
         .writer = options.writer_info,
@@ -1810,6 +1762,8 @@ PageDirectory<universal::PageDirectoryTrait>::dumpIncrementalCheckpoint(const Du
     bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem);
     writer->writeSuffix();
     writer.reset();
+
+    SYNC_FOR("before_PageDirectory::dumpIncrementalCheckpoint_copyInfo");
 
     // TODO: Currently, even when has_new_data == false,
     //   something will be written to DataFile (i.e., the file prefix).

@@ -29,7 +29,7 @@ public:
     void SetUp() override
     {
         dir = getTemporaryPath();
-        DB::tests::TiFlashTestEnv::tryRemovePath(dir);
+        dropDataOnDisk(dir);
         createIfNotExist(dir);
     }
 

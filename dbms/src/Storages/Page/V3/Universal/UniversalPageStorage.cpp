@@ -212,7 +212,7 @@ void UniversalPageStorage::unregisterUniversalExternalPagesCallbacks(const Strin
 }
 
 UniversalPageStorage::DumpCheckpointResult
-UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
+UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options) const
 {
     return page_directory->dumpIncrementalCheckpoint({
         .data_file_id_pattern = options.data_file_id_pattern,
