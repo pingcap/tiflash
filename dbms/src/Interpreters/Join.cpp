@@ -2070,7 +2070,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             if (right_table_is_empty)
             {
                 /// If right table is empty, the result is false.
-                /// I.e. (1,2) in ().
+                /// E.g. (1,2) in ().
                 res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
                 res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
                 continue;
@@ -2087,16 +2087,16 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                         /// Note that right_table_is_empty must be false to reach here so the right table
                         /// is not empty.
                         /// The result is NULL if
-                        ///   1. key column size is 1, i.e. (null) in (1,2).
-                        ///   2. right table has a all-key-null row, i.e. (1,null) in ((2,2),(null,null)).
-                        ///   3. this row is all-key-null, i.e. (null,null) in ((1,1),(2,2)).
+                        ///   1. key column size is 1. E.g. (null) in (1,2).
+                        ///   2. right table has a all-key-null row. E.g. (1,null) in ((2,2),(null,null)).
+                        ///   3. this row is all-key-null. E.g. (null,null) in ((1,1),(2,2)).
                         res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
                         res.back().template setResult<NASemiJoinResultType::NULL_VALUE>();
                         continue;
                     }
                 }
                 /// Check null rows first to speed up getting the NULL result if possible.
-                res.emplace_back(i, NASemiJoinStep::CHECK_NULL_ROWS_NULL, nullptr);
+                res.emplace_back(i, NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS, nullptr);
                 res_list.push_back(&res.back());
                 continue;
             }
@@ -2123,7 +2123,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             if (STRICTNESS == ASTTableJoin::Strictness::Any)
             {
                 /// If strictness is any, the result is true.
-                /// I.e. (1,2) in ((1,2),(1,3),(null,3))
+                /// E.g. (1,2) in ((1,2),(1,3),(null,3))
                 res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
                 res.back().template setResult<NASemiJoinResultType::TRUE_VALUE>();
             }
@@ -2131,7 +2131,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             {
                 /// Else the other condition must be checked for these matched right row(s).
                 auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-                res.emplace_back(i, NASemiJoinStep::CHECK_OTHER_COND, static_cast<const void *>(map_it));
+                res.emplace_back(i, NASemiJoinStep::NOT_NULL_KEY_CHECK_OTHER_COND, static_cast<const void *>(map_it));
                 res_list.push_back(&res.back());
             }
             continue;
@@ -2143,7 +2143,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             if (right_has_all_key_null_row)
             {
                 /// If right table has a all-key-null row, the result is NULL.
-                /// I.e. (1) in (null) or (1,2) in ((1,3),(null,null)).
+                /// E.g. (1) in (null) or (1,2) in ((1,3),(null,null)).
                 res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
                 res.back().template setResult<NASemiJoinResultType::NULL_VALUE>();
                 continue;
@@ -2152,17 +2152,17 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             {
                 /// If key size is 1 and all key in right table row is not NULL(right_has_all_key_null_row is false),
                 /// the result is false.
-                /// I.e. (1) in () or (1) in (1,2,3,4,5).
+                /// E.g. (1) in () or (1) in (1,2,3,4,5).
                 res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
                 res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
                 continue;
             }
             /// Then key size is greater than 2 and right table does not have a all-key-null row.
             /// We have to compare them to the null rows one by one.
-            /// I.e. (1,2) in ((1,3),(1,null)) => NULL, (1,2) in ((1,3),(2,null)) => false.
+            /// E.g. (1,2) in ((1,3),(1,null)) => NULL, (1,2) in ((1,3),(2,null)) => false.
         }
         /// Check null rows first to speed up getting the NULL result if possible.
-        res.emplace_back(i, NASemiJoinStep::CHECK_NULL_ROWS_NOT_NULL, nullptr);
+        res.emplace_back(i, NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS, nullptr);
         res_list.push_back(&res.back());
     }
     RUNTIME_ASSERT(res.size() == rows, "NASemiJoinResult size {} must be equal to block size {}", res.size(), rows);

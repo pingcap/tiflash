@@ -27,16 +27,16 @@ enum class NASemiJoinStep : UInt8
 {
     /// Check other conditions for the right rows whose join key are equal to this left row.
     /// The join keys of this left row must not have null.
-    CHECK_OTHER_COND,
+    NOT_NULL_KEY_CHECK_OTHER_COND,
     /// Check join key equal condition and other conditions(if any) for the right rows
     /// in null rows(i.e. all rows in right table with null join key).
     /// The join keys of this left row must not have null.
-    CHECK_NULL_ROWS_NOT_NULL,
+    NOT_NULL_KEY_CHECK_NULL_ROWS,
     /// Like `CHECK_NULL_ROWS_NOT_NULL` except the join keys of this left row must have null.
-    CHECK_NULL_ROWS_NULL,
+    NULL_KEY_CHECK_NULL_ROWS,
     /// Check join key equal condition and other conditions(if any) for all right rows in blocks.
     /// The join keys of this left row must have null.
-    CHECK_ALL_BLOCKS,
+    NULL_KEY_CHECK_ALL_BLOCKS,
     /// Work is done.
     DONE,
 };
