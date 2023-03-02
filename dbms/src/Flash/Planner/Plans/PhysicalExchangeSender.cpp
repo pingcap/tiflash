@@ -108,7 +108,7 @@ void PhysicalExchangeSender::buildPipelineExec(PipelineExecGroupBuilder & group_
             context.getSettingsRef().batch_send_min_limit_compression,
             log->identifier(),
             /*is_async=*/true);
-        builder.setSinkOp(std::make_unique<ExchangeSenderSinkOp>(group_builder.exec_status, std::move(response_writer), log->identifier()));
+        builder.setSinkOp(std::make_unique<ExchangeSenderSinkOp>(group_builder.exec_status, log->identifier(), std::move(response_writer)));
     });
 }
 

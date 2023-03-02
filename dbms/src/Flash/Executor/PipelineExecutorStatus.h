@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Flash/Executor/ExecutionResult.h>
 
 #include <atomic>
@@ -26,6 +27,14 @@ class PipelineExecutorStatus : private boost::noncopyable
 {
 public:
     static constexpr auto timeout_err_msg = "error with timeout";
+
+    PipelineExecutorStatus()
+        : log(Logger::get())
+    {}
+
+    explicit PipelineExecutorStatus(const String & req_id)
+        : log(Logger::get(req_id))
+    {}
 
     ExecutionResult toExecutionResult() noexcept;
 
@@ -51,9 +60,11 @@ public:
         }
         if (is_timeout)
         {
+            LOG_WARNING(log, "wait timeout");
             onErrorOccurred(timeout_err_msg);
             throw Exception(timeout_err_msg);
         }
+        LOG_DEBUG(log, "query finished and wait done");
     }
 
     void cancel() noexcept;
@@ -64,6 +75,11 @@ public:
     }
 
 private:
+    bool setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept;
+
+private:
+    LoggerPtr log;
+
     std::mutex mu;
     std::condition_variable cv;
     std::exception_ptr exception_ptr;

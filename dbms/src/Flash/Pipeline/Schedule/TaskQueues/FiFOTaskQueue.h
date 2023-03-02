@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 
 #include <deque>
@@ -40,7 +39,5 @@ private:
     std::condition_variable cv;
     bool is_closed = false;
     std::deque<TaskPtr> task_queue;
-
-    LoggerPtr logger = Logger::get();
 };
 } // namespace DB

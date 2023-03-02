@@ -15,8 +15,12 @@
 #pragma once
 
 #include <Common/FailPoint.h>
+#include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
+#include <common/logger_useful.h>
 #include <memory.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -35,6 +39,7 @@ extern const char random_pipeline_model_task_construct_failpoint[];
  */
 enum class ExecTaskStatus
 {
+    INIT,
     WAITING,
     RUNNING,
     FINISHED,
@@ -45,15 +50,23 @@ enum class ExecTaskStatus
 class Task
 {
 public:
-    explicit Task(MemoryTrackerPtr mem_tracker_)
+    Task()
+        : mem_tracker(nullptr)
+        , log(Logger::get())
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
+    }
+
+    Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
         : mem_tracker(std::move(mem_tracker_))
+        , log(Logger::get(req_id))
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
     }
 
     virtual ~Task() = default;
 
-    MemoryTrackerPtr getMemTracker()
+    MemoryTrackerPtr getMemTracker() const
     {
         return mem_tracker;
     }
@@ -61,21 +74,38 @@ public:
     ExecTaskStatus execute() noexcept
     {
         assert(getMemTracker().get() == current_memory_tracker);
-        return executeImpl();
+        switchStatus(executeImpl());
+        return exec_status;
     }
-    // Avoid allocating memory in `await` if possible.
+
     ExecTaskStatus await() noexcept
     {
         assert(getMemTracker().get() == current_memory_tracker);
-        return awaitImpl();
+        switchStatus(awaitImpl());
+        return exec_status;
     }
 
 protected:
     virtual ExecTaskStatus executeImpl() noexcept = 0;
+    // Avoid allocating memory in `await` if possible.
     virtual ExecTaskStatus awaitImpl() noexcept { return ExecTaskStatus::RUNNING; }
 
 private:
+    void switchStatus(ExecTaskStatus to) noexcept
+    {
+        if (exec_status != to)
+        {
+            LOG_TRACE(log, "switch status: {} --> {}", magic_enum::enum_name(exec_status), magic_enum::enum_name(to));
+            exec_status = to;
+        }
+    }
+
+protected:
     MemoryTrackerPtr mem_tracker;
+    LoggerPtr log;
+
+private:
+    ExecTaskStatus exec_status{ExecTaskStatus::INIT};
 };
 using TaskPtr = std::unique_ptr<Task>;
 

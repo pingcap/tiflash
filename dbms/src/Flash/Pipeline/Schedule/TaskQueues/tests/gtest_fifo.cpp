@@ -27,8 +27,7 @@ class IndexTask : public Task
 {
 public:
     explicit IndexTask(size_t index_)
-        : Task(nullptr)
-        , index(index_)
+        : index(index_)
     {}
 
     ExecTaskStatus executeImpl() noexcept override { return ExecTaskStatus::FINISHED; }

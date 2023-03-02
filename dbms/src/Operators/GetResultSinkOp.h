@@ -27,8 +27,9 @@ class GetResultSinkOp : public SinkOp
 public:
     GetResultSinkOp(
         PipelineExecutorStatus & exec_status_,
+        const String & req_id,
         const PhysicalGetResultSinkPtr & physical_sink_)
-        : SinkOp(exec_status_)
+        : SinkOp(exec_status_, req_id)
         , physical_sink(physical_sink_)
     {
         assert(physical_sink);

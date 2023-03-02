@@ -55,8 +55,7 @@ class SimpleTask : public Task
 {
 public:
     explicit SimpleTask(Waiter & waiter_)
-        : Task(nullptr)
-        , waiter(waiter_)
+        : waiter(waiter_)
     {}
 
     ~SimpleTask()
@@ -81,8 +80,7 @@ class SimpleWaitingTask : public Task
 {
 public:
     explicit SimpleWaitingTask(Waiter & waiter_)
-        : Task(nullptr)
-        , waiter(waiter_)
+        : waiter(waiter_)
     {}
 
     ~SimpleWaitingTask()
@@ -136,7 +134,7 @@ class MemoryTraceTask : public Task
 {
 public:
     MemoryTraceTask(MemoryTrackerPtr mem_tracker_, Waiter & waiter_)
-        : Task(std::move(mem_tracker_))
+        : Task(std::move(mem_tracker_), "")
         , waiter(waiter_)
     {}
 
@@ -181,11 +179,6 @@ private:
 
 class DeadLoopTask : public Task
 {
-public:
-    DeadLoopTask()
-        : Task(nullptr)
-    {}
-
 protected:
     ExecTaskStatus executeImpl() noexcept override
     {
