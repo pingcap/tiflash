@@ -41,6 +41,7 @@ The following packages are required:
 - Rust
 - Python 3.0+
 - Ninja-Build or GNU Make
+- Ccache (not necessary but highly recommended to reduce rebuild time)
 
 Detailed steps for each platform are listed below.
 
@@ -61,7 +62,7 @@ chmod +x llvm.sh
 sudo ./llvm.sh 15 all
 
 # Install other dependencies
-sudo apt install -y cmake ninja-build zlib1g-dev libcurl4-openssl-dev
+sudo apt install -y cmake ninja-build zlib1g-dev libcurl4-openssl-dev ccache
 ```
 
 **Note for Ubuntu 18.04 and Ubuntu 20.04:**
@@ -97,7 +98,7 @@ curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
 source $HOME/.cargo/env
 
 # Install compilers and dependencies
-sudo pacman -S clang lld libc++ libc++abi compiler-rt openmp lcov cmake ninja curl openssl zlib llvm
+sudo pacman -S clang lld libc++ libc++abi compiler-rt openmp lcov cmake ninja curl openssl zlib llvm ccache
 ```
 
 </details>
@@ -121,7 +122,7 @@ source $HOME/.cargo/env
 xcode-select --install
 
 # Install other dependencies
-brew install ninja cmake openssl@1.1
+brew install ninja cmake openssl@1.1 ccache
 ```
 
 </details>
