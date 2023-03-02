@@ -36,13 +36,55 @@ namespace DB
 using Chars_t = ColumnString::Chars_t;
 using Offsets = ColumnString::Offsets;
 
-struct IlikeHelper
+class IlikeLowerHelper
 {
+public:
+    static void convertCollatorToBin(TiDB::TiDBCollatorPtr & collator)
+    {
+        if (collator == nullptr)
+            return;
+
+        switch (collator->getCollatorType())
+        {
+        case TiDB::ITiDBCollator::CollatorType::UTF8_GENERAL_CI:
+        case TiDB::ITiDBCollator::CollatorType::UTF8_UNICODE_CI:
+            collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN);
+            break;
+        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_GENERAL_CI:
+        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_UNICODE_CI:
+            collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
+            break;
+        default:
+            break;
+        }
+    }
+
+    // Only lower 'A', 'B', 'C'... 'Z', excluding the escape char
+    static void lowerAlphaASCII(Block & block, const ColumnNumbers & arguments)
+    {
+        MutableColumnPtr column_expr = block.getByPosition(arguments[0]).column->assumeMutable();
+        MutableColumnPtr column_pat = block.getByPosition(arguments[1]).column->assumeMutable();
+        const ColumnPtr & column_escape = block.getByPosition(arguments[2]).column;
+
+        auto * col_haystack_const = typeid_cast<ColumnConst *>(&*column_expr);
+        auto * col_needle_const = typeid_cast<ColumnConst *>(&*column_pat);
+
+        if (col_haystack_const != nullptr)
+            lowerColumnConst(col_haystack_const, nullptr);
+        else
+            lowerColumnString(column_expr, nullptr);
+
+        if (col_needle_const != nullptr)
+            lowerColumnConst(col_needle_const, column_escape);
+        else
+            lowerColumnString(column_pat, column_escape);
+    }
+
+private:
     static void lowerStrings(Chars_t & chars)
     {
         size_t size = chars.size();
-        size_t i = 0;
-        while (i < size)
+        for (size_t i = 0; i < size; ++i)
         {
             if (isUpperAlphaASCII(chars[i]))
             {
@@ -52,45 +94,78 @@ struct IlikeHelper
             else
             {
                 size_t utf8_len = UTF8::seqLength(chars[i]);
-                i += utf8_len;
+                i += utf8_len - 1;
             }
         }
     }
 
-    static void lowerColumnConst(ColumnConst * lowered_col_const)
+    static void lowerStringsExcludeEscapeChar(Chars_t & chars, char escape_char)
+    {
+        if (!(escape_char >= 'A' && escape_char <= 'Z'))
+        {
+            lowerStrings(chars);
+            return;
+        }
+
+        size_t size = chars.size();
+        bool escaped = false;
+        for (size_t i = 0; i < size; ++i)
+        {
+            char char_to_lower = chars[i];
+            if (isUpperAlphaASCII(char_to_lower))
+            {
+                // Do not lower the escape char, however when a char is equal to
+                // an escape char and it's after an escape char, we still lower it
+                // For example: "AA" (escape 'A'), -> "Aa"
+                if (char_to_lower != escape_char || escaped) {
+                    chars[i] = toLowerIfAlphaASCII(char_to_lower);
+                } else {
+                    escaped = true;
+                    continue;
+                }
+            }
+            else
+            {
+                size_t utf8_len = UTF8::seqLength(char_to_lower);
+                i += utf8_len - 1;
+            }
+            escaped = false;
+        }
+    }
+
+    static void lowerColumnConst(ColumnConst * lowered_col_const, const ColumnPtr & column_escape)
     {
         auto * col_data = typeid_cast<ColumnString *>(&lowered_col_const->getDataColumn());
         RUNTIME_ASSERT(col_data != nullptr, "Invalid column type, should be ColumnString");
 
-        lowerStrings(col_data->getChars());
+        lowerColumnStringImpl(col_data, column_escape);
     }
 
-    static void lowerColumnString(MutableColumnPtr & col)
+    static void lowerColumnString(MutableColumnPtr & col, const ColumnPtr & column_escape)
     {
         auto * col_vector = typeid_cast<ColumnString *>(&*col);
         RUNTIME_ASSERT(col_vector != nullptr, "Invalid column type, should be ColumnString");
 
-        lowerStrings(col_vector->getChars());
+        lowerColumnStringImpl(col_vector, column_escape);
     }
 
-    // Only lower the 'A', 'B', 'C'...
-    static void lowerAlphaASCII(Block & block, const ColumnNumbers & arguments)
+    static void lowerColumnStringImpl(ColumnString * lowered_col_data, const ColumnPtr & column_escape)
     {
-        MutableColumnPtr column_haystack = block.getByPosition(arguments[0]).column->assumeMutable();
-        MutableColumnPtr column_needle = block.getByPosition(arguments[1]).column->assumeMutable();
+        if (column_escape == nullptr)
+        {
+            lowerStrings(lowered_col_data->getChars());
+            return;
+        }
 
-        auto * col_haystack_const = typeid_cast<ColumnConst *>(&*column_haystack);
-        auto * col_needle_const = typeid_cast<ColumnConst *>(&*column_needle);
+        const auto * col_escape_const = typeid_cast<const ColumnConst *>(&*column_escape);
+        if (col_escape_const != nullptr)
+        {
+            char escape_char = static_cast<Int32>(col_escape_const->getValue<Int32>());
+            lowerStringsExcludeEscapeChar(lowered_col_data->getChars(), escape_char);
+            return;
+        }
 
-        if (col_haystack_const != nullptr)
-            lowerColumnConst(col_haystack_const);
-        else
-            lowerColumnString(column_haystack);
-
-        if (col_needle_const != nullptr)
-            lowerColumnConst(col_needle_const);
-        else
-            lowerColumnString(column_needle);
+        lowerStrings(lowered_col_data->getChars());
     }
 };
 
@@ -197,13 +272,11 @@ public:
         auto block = result_block;
         if constexpr (name == std::string_view(NameIlike3Args::name))
         {
-            if (!collator->isCI())
-            {
-                block.getByPosition(arguments[0]).column = (*std::move(result_block.getByPosition(arguments[0]).column)).mutate();
-                block.getByPosition(arguments[1]).column = (*std::move(result_block.getByPosition(arguments[1]).column)).mutate();
+            block.getByPosition(arguments[0]).column = (*std::move(result_block.getByPosition(arguments[0]).column)).mutate();
+            block.getByPosition(arguments[1]).column = (*std::move(result_block.getByPosition(arguments[1]).column)).mutate();
 
-                IlikeHelper::lowerAlphaASCII(block, arguments);
-            }
+            IlikeLowerHelper::lowerAlphaASCII(block, arguments);
+            IlikeLowerHelper::convertCollatorToBin(collator);
         }
 
         using ResultType = typename Impl::ResultType;
@@ -302,7 +375,7 @@ public:
     }
 
 private:
-    TiDB::TiDBCollatorPtr collator = nullptr;
+    mutable TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
 

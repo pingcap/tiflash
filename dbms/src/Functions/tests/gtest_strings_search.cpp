@@ -16,6 +16,7 @@
 #include <Functions/registerFunctions.h>
 #include <Storages/Transaction/Collator.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include "magic_enum.hpp"
 
 namespace DB
 {
@@ -664,6 +665,136 @@ TEST_F(StringMatch, IlikeConstWithConst)
             executeFunction(
                 func_ilike_name,
                 {toConst("我爱tiflAsh"), toConst("%不爱tIf%"), escape},
+                collator));
+    }
+}
+
+TEST_F(StringMatch, CheckEscape)
+{
+    std::vector<TiDB::TiDBCollatorPtr> collators{
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_GENERAL_CI),
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI),
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_UNICODE_CI),
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI),
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN),
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::LATIN1_BIN),
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY),
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::ASCII_BIN),
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN)
+    };
+
+    // std::vector<std::optional<String>> expr_vec{"", "aaz", "aaz", "AAz", "aAz", "a啊啊啊aa啊Zz", "ü", "á"};
+    // std::vector<std::optional<String>> pat_vec{"", "AAAAz", "Aaaz", "AAAAZ", "aAaAz", "a啊啊啊AaaA啊Zz", "Ü", "a"};
+    std::vector<std::optional<String>> expr_vec{"aaz", "AAz", "aAz", "a啊啊啊aa啊Zz", "ü", "á"};
+    std::vector<std::optional<String>> pat_vec{"Aaaz", "AAAAZ", "aAaAz", "a啊啊啊AaaA啊Zz", "Ü", "a"};
+    std::vector<std::optional<UInt64>> vec_vec_lower_a_expect = {1, 0, 1, 0, 1, 0, 0, 0}; // escape 'a'
+    std::vector<std::optional<UInt64>> vec_vec_capital_a_expect = {1, 1, 1, 1, 1, 1, 0, 0}; // escape 'A'
+    ColumnWithTypeAndName escape_lower_a = createConstColumn<Int32>(1, static_cast<Int32>('a'));
+    ColumnWithTypeAndName escape_capital_a = createConstColumn<Int32>(1, static_cast<Int32>('A'));
+    for (const auto * collator : collators)
+    {
+        std::cout << magic_enum::enum_name(collator->getCollatorType()) << std::endl;
+        // vec vec
+        ASSERT_COLUMN_EQ(
+            toNullableVec(vec_vec_lower_a_expect),
+            executeFunction(
+                "ilike3Args",
+                {toNullableVec(expr_vec), toNullableVec(pat_vec), escape_lower_a},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            toNullableVec(vec_vec_capital_a_expect),
+            executeFunction(
+                "ilike3Args",
+                {toNullableVec(expr_vec), toNullableVec(pat_vec), escape_capital_a},
+                collator));
+
+        // const const
+        ASSERT_COLUMN_EQ(
+            toConst(0),
+            executeFunction(
+                "ilike3Args",
+                {toConst("aa"), toConst("aa"), escape_lower_a},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            toConst(1),
+            executeFunction(
+                "ilike3Args",
+                {toConst("aa"), toConst("aa"), escape_capital_a},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            toConst(1),
+            executeFunction(
+                "ilike3Args",
+                {toConst("Aa"), toConst("aaA"), escape_lower_a},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            toConst(0),
+            executeFunction(
+                "ilike3Args",
+                {toConst("Aa"), toConst("aaA"), escape_capital_a},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            toConst(0),
+            executeFunction(
+                "ilike3Args",
+                {toConst("a啊啊a"), toConst("a啊啊A"), escape_lower_a},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            toConst(1),
+            executeFunction(
+                "ilike3Args",
+                {toConst("a啊啊a"), toConst("a啊啊A"), escape_capital_a},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            toConst(0),
+            executeFunction(
+                "ilike3Args",
+                {toConst("ü"), toConst("Ü"), escape},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            toConst(0),
+            executeFunction(
+                "ilike3Args",
+                {toConst("a"), toConst("á"), escape},
+                collator));
+
+        // vec const
+        ASSERT_COLUMN_EQ(
+            toNullableVec({0, 1, 1, 1, 1, 0, 0, 0}),
+            executeFunction(
+                "ilike3Args",
+                {toNullableVec(expr_vec), toConst("Aaaz"), escape_lower_a},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            toNullableVec({0, 1, 1, 1, 1, 0, 0, 0}),
+            executeFunction(
+                "ilike3Args",
+                {toNullableVec(expr_vec), toConst("aAaZ"), escape_capital_a},
+                collator));
+
+        // const vec
+        // "", "AAAAz", "Aaaz", "AAAAZ", "aAaAz", "a啊啊啊AaaA啊Zz", "Ü", "a"};
+        ASSERT_COLUMN_EQ(
+            toNullableVec({0, 0, 1, 0, 1, 0, 0, 0}),
+            executeFunction(
+                "ilike3Args",
+                {toConst("aAz"), toNullableVec(pat_vec), escape_lower_a},
+                collator));
+
+        ASSERT_COLUMN_EQ(
+            toNullableVec({0, 1, 1, 1, 1, 0, 0, 0}),
+            executeFunction(
+                "ilike3Args",
+                {toConst("AaZ"), toNullableVec(pat_vec), escape_capital_a},
                 collator));
     }
 }
