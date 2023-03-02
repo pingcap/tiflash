@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/FineGrainedPipelineEvent.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipelineTask.h>
 

@@ -71,7 +71,8 @@ public:
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
-    EventPtr toEvent(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events);
+    Events toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
+    Events doToEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events);
 
 private:
     const UInt32 id;

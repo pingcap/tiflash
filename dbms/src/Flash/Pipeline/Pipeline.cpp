@@ -18,6 +18,7 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Flash/Pipeline/Schedule/Events/FineGrainedPipelineEvent.h>
 #include <Flash/Pipeline/Schedule/Events/PlainPipelineEvent.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
@@ -31,6 +32,73 @@ namespace
 FmtBuffer & addPrefix(FmtBuffer & buffer, size_t level)
 {
     return buffer.append(String(level, ' '));
+}
+
+void mapEvents(const Events & inputs, const Events & outputs)
+{
+    assert(!inputs.empty());
+    assert(!outputs.empty());
+    if (inputs.size() == outputs.size())
+    {
+        /**
+         * 1. for fine grained inputs and fine grained outputs
+         *     ```
+         *     FineGrainedPipelineEvent<────FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent<────FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent<────FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent<────FineGrainedPipelineEvent
+         *     ```
+         * 2. for non fine grained inputs and non fine grained outputs
+         *     ```
+         *     PlainPipelineEvent<────PlainPipelineEvent
+         *     ```
+         * 3. for non fine grained inputs and fine grained outputs
+         *     ```
+         *     PlainPipelineEvent<────FineGrainedPipelineEvent
+         *     ```
+         * 4. for fine grained inputs and non fine grained outputs
+         *     ```
+         *     FineGrainedPipelineEvent<────PlainPipelineEvent
+         *     ```
+         */
+        size_t partition_num = inputs.size();
+        for (size_t index = 0; index < partition_num; ++index)
+            outputs[index]->addInput(inputs[index]);
+    }
+    else
+    {
+        /**
+         * 1. for fine grained inputs and fine grained outputs
+         *     If the number of partitions does not match, it is safer to use full mapping.
+         *     ```
+         *     FineGrainedPipelineEvent◄──┐ ┌──FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄──┼─┼──FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄──┤ ├──FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄──┘ └──FineGrainedPipelineEvent
+         *     ```
+         * 2. for non fine grained inputs and non fine grained outputs
+         *     This is not possible, the size of inputs and outputs must be the same and 1.
+         * 3. for non fine grained inputs and fine grained outputs
+         *     ```
+         *     FineGrainedPipelineEvent◄──┐
+         *     FineGrainedPipelineEvent◄──┼──PlainPipelineEvent
+         *     FineGrainedPipelineEvent◄──┤
+         *     FineGrainedPipelineEvent◄──┘
+         *     ```
+         * 4. for fine grained inputs and non fine grained outputs
+         *     ```
+         *                          ┌──FineGrainedPipelineEvent
+         *     PlainPipelineEvent◄──┼──FineGrainedPipelineEvent
+         *                          ├──FineGrainedPipelineEvent
+         *                          └──FineGrainedPipelineEvent
+         *     ```
+         */
+        for (const auto & output : outputs)
+        {
+            for (const auto & input : inputs)
+                output->addInput(input);
+        }
+    }
 }
 } // namespace
 
@@ -92,34 +160,40 @@ PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status,
 Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
 {
     Events all_events;
-    toEvent(status, context, concurrency, all_events);
+    doToEvents(status, context, concurrency, all_events);
     assert(!all_events.empty());
     return all_events;
 }
 
-EventPtr Pipeline::toEvent(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events)
+Events Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
 {
-    // TODO support fine grained shuffle
-    //     - a fine grained partition maps to an event
-    //     - the event flow will be
-    //     ```
-    //     disable fine grained partition pipeline   enable fine grained partition pipeline   enable fine grained partition pipeline
-    //                                       ┌───────────────FineGrainedPipelineEvent<────────────────FineGrainedPipelineEvent
-    //            PlainPipelineEvent<────────┼───────────────FineGrainedPipelineEvent<────────────────FineGrainedPipelineEvent
-    //                                       ├───────────────FineGrainedPipelineEvent<────────────────FineGrainedPipelineEvent
-    //                                       └───────────────FineGrainedPipelineEvent<────────────────FineGrainedPipelineEvent
-    //     ```
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
+    Events self_events;
+    assert(!plan_nodes.empty());
+    if (plan_nodes.front()->getFineGrainedShuffle().enable())
+    {
+        auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
+        assert(!fine_grained_exec_group.empty());
+        for (auto & pipeline_exec : fine_grained_exec_group)
+            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), std::move(pipeline_exec)));
+    }
+    else
+    {
+        self_events.push_back(std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency));
+    }
+    return self_events;
+}
 
-    auto plain_pipeline_event = std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency);
+Events Pipeline::doToEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events)
+{
+    auto self_events = toSelfEvents(status, context, concurrency);
     for (const auto & child : children)
     {
-        auto input = child->toEvent(status, context, concurrency, all_events);
-        assert(input);
-        plain_pipeline_event->addInput(input);
+        auto inputs = child->doToEvents(status, context, concurrency, all_events);
+        mapEvents(inputs, self_events);
     }
-    all_events.push_back(plain_pipeline_event);
-    return plain_pipeline_event;
+    all_events.insert(all_events.end(), self_events.cbegin(), self_events.cend());
+    return self_events;
 }
 
 bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
