@@ -302,7 +302,7 @@ void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & conte
 PipelinePtr PhysicalPlan::toPipeline()
 {
     assert(root_node);
-    PipelineBuilder builder;
+    PipelineBuilder builder{log->identifier()};
     root_node->buildPipeline(builder);
     root_node.reset();
     auto pipeline = builder.build();
