@@ -46,7 +46,6 @@ public:
 protected:
     virtual void writeValue(const IColumn & column, const IDataType & type, size_t row_num) const;
 
-    void writeTotals();
     void writeExtremes();
     /// For totals and extremes.
     void writeSpecialRow(const Block & block, size_t row_num, const char * title);
@@ -60,7 +59,6 @@ protected:
     using NamesAndPaddings = std::vector<String>;
     NamesAndPaddings names_and_paddings;
 
-    Block totals;
     Block extremes;
 };
 

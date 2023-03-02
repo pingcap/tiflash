@@ -52,7 +52,6 @@ public:
     }
 
 protected:
-    void writeTotals();
     void writeExtremes();
 
     WriteBuffer & ostr;
@@ -60,7 +59,6 @@ protected:
     bool with_names;
     bool with_types;
     DataTypes data_types;
-    Block totals;
     Block extremes;
 };
 

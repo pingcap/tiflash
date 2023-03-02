@@ -42,7 +42,6 @@ public:
     void setExtremes(const Block & extremes_) override { extremes = extremes_; }
 
 protected:
-    void writeTotals();
     void writeExtremes();
 
     WriteBuffer & ostr;
@@ -53,7 +52,6 @@ protected:
 
     bool no_escapes;
 
-    Block totals;
     Block extremes;
 
     const Context & context;

@@ -59,7 +59,6 @@ public:
 
 protected:
     void writeRowsBeforeLimitAtLeast();
-    virtual void writeTotals();
     virtual void writeExtremes();
     void writeStatistics();
 
@@ -73,7 +72,6 @@ protected:
     size_t rows_before_limit = 0;
     NamesAndTypes fields;
     Names field_tag_names;
-    Block totals;
     Block extremes;
 
     Progress progress;

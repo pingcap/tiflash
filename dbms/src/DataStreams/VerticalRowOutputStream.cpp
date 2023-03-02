@@ -12,20 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <cmath>
-
-#include <IO/WriteHelpers.h>
-#include <IO/WriteBufferFromString.h>
-#include <DataStreams/VerticalRowOutputStream.h>
 #include <Common/UTF8Helpers.h>
+#include <DataStreams/VerticalRowOutputStream.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
+
+#include <cmath>
 
 
 namespace DB
 {
 
 VerticalRowOutputStream::VerticalRowOutputStream(
-    WriteBuffer & ostr_, const Block & sample_, size_t max_rows_)
-    : ostr(ostr_), sample(sample_), max_rows(max_rows_)
+    WriteBuffer & ostr_,
+    const Block & sample_,
+    size_t max_rows_)
+    : ostr(ostr_)
+    , sample(sample_)
+    , max_rows(max_rows_)
 {
     size_t columns = sample.columns();
 
@@ -135,7 +139,6 @@ void VerticalRowOutputStream::writeSuffix()
     if (totals || extremes)
     {
         writeCString("\n", ostr);
-        writeTotals();
         writeExtremes();
     }
 }
@@ -168,16 +171,6 @@ void VerticalRowOutputStream::writeSpecialRow(const Block & block, size_t row_nu
     }
 }
 
-
-void VerticalRowOutputStream::writeTotals()
-{
-    if (totals)
-    {
-        writeSpecialRow(totals, 0, "Totals");
-    }
-}
-
-
 void VerticalRowOutputStream::writeExtremes()
 {
     if (extremes)
@@ -188,4 +181,4 @@ void VerticalRowOutputStream::writeExtremes()
 }
 
 
-}
+} // namespace DB

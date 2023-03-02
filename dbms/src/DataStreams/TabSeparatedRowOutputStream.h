@@ -47,14 +47,12 @@ public:
     String getContentType() const override { return "text/tab-separated-values; charset=UTF-8"; }
 
 protected:
-    void writeTotals();
     void writeExtremes();
 
     WriteBuffer & ostr;
     const Block sample;
     bool with_names;
     bool with_types;
-    Block totals;
     Block extremes;
 };
 
