@@ -20,7 +20,6 @@
 
 namespace DB
 {
-
 /// Stream from not joined earlier rows of the right table.
 class NonJoinedBlockInputStream : public IProfilingBlockInputStream
 {
@@ -30,6 +29,8 @@ public:
     String getName() const override { return "NonJoined"; }
 
     Block getHeader() const override { return result_sample_block; };
+
+    size_t getNonJoinedIndex() const { return index; }
 
 
 protected:

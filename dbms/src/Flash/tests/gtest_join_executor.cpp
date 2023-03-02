@@ -136,6 +136,7 @@ try
                                .build(context);
 
             {
+                context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
                 executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
 
                 // for spill to disk tests
@@ -846,6 +847,7 @@ try
                           .scan("outer_join_test", left_table_name)
                           .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")})
                           .build(context);
+            context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
             auto result_columns = executeStreams(request, original_max_streams);
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
             // test spill to disk
@@ -860,7 +862,6 @@ try
             {
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
             }
-            context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
         }
     }
     /// case 1.2 table scan join fine grained exchange receiver
@@ -872,6 +873,7 @@ try
                           .scan("outer_join_test", left_table_name)
                           .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {}, {}, {}, exchange_concurrency)
                           .build(context);
+            context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
             auto result_columns = executeStreams(request, original_max_streams);
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
 
@@ -886,7 +888,6 @@ try
                 context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
             }
-            context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
         }
     }
     /// case 2, right join with right condition
@@ -907,6 +908,7 @@ try
                           .scan("outer_join_test", left_table_name)
                           .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
                           .build(context);
+            context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
             auto result_columns = executeStreams(request, original_max_streams);
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
 
@@ -920,7 +922,6 @@ try
             {
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
             }
-            context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
         }
     }
     /// case 2.2 table scan join fine grained exchange receiver
@@ -933,6 +934,7 @@ try
                           .scan("outer_join_test", left_table_name)
                           .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(exchange_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, exchange_concurrency)
                           .build(context);
+            context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
             auto result_columns = executeStreams(request, original_max_streams);
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
 
@@ -947,7 +949,6 @@ try
                 context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
             }
-            context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
         }
     }
 }

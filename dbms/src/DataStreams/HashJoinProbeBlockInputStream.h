@@ -20,7 +20,6 @@
 
 namespace DB
 {
-
 /** Executes a certain expression over the block.
   * Basically the same as ExpressionBlockInputStream,
   * but requires that there must be a join probe action in the Expression.
@@ -38,7 +37,7 @@ public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
         const JoinPtr & join_,
-        size_t probe_index,
+        size_t non_joined_stream_index,
         const String & req_id,
         UInt64 max_block_size_);
 
@@ -64,22 +63,24 @@ private:
     };
 
     void readSuffixImpl() override;
-    void finishOneProbe();
-
     const LoggerPtr log;
+    /// join/non_joined_stream/restore_build_stream/restore_probe_stream can be modified during the runtime
+    /// although read/write to those are almost only in 1 thread, but an exception is cancel thread will
+    /// read them, so need to protect the multi-threads access
+    std::mutex mutex;
+    JoinPtr original_join;
     JoinPtr join;
-    size_t probe_index;
+    size_t current_non_joined_stream_index;
     UInt64 max_block_size;
     ProbeProcessInfo probe_process_info;
     BlockInputStreamPtr non_joined_stream;
-    BlockInputStreamPtr restore_stream;
+    BlockInputStreamPtr restore_build_stream;
+    BlockInputStreamPtr restore_probe_stream;
     ProbeStatus status{ProbeStatus::PROBE};
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;
     std::list<JoinPtr> parents;
     std::list<std::tuple<size_t, Block>> probe_partition_blocks;
-    std::atomic<bool> probe_finished = false;
-    std::atomic<bool> non_join_finished = false;
 };
 
 } // namespace DB

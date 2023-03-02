@@ -208,9 +208,9 @@ public:
 
     bool isRestoreJoin() const;
 
-    void insertBlockToBuildPartition(Block & block, size_t partition_index);
+    void insertBlockToBuildPartition(Block && block, size_t partition_index);
 
-    void insertBlockToProbePartition(Block & block, size_t partition_index);
+    void insertBlockToProbePartition(Block && block, size_t partition_index);
 
     void tryMarkBuildSpillFinish();
 
@@ -222,7 +222,7 @@ public:
 
     bool hasPartitionSpilled();
 
-    std::tuple<JoinPtr, BlockInputStreamPtr, BlockInputStreamPtr> getOneRestoreStream();
+    std::tuple<JoinPtr, BlockInputStreamPtr, BlockInputStreamPtr, BlockInputStreamPtr> getOneRestoreStream(size_t max_block_size);
 
     void dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>> & partition_blocks_list);
 
@@ -255,11 +255,6 @@ public:
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
         active_probe_concurrency = probe_concurrency;
-    }
-
-    std::mutex & getJoinLock()
-    {
-        return join_mutex;
     }
 
     void cancel()
@@ -441,14 +436,11 @@ private:
     size_t active_build_concurrency;
 
     mutable std::mutex probe_mutex;
-    mutable std::mutex non_join_mutex;
-    mutable std::condition_variable non_join_cv;
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
     size_t active_probe_concurrency;
 
 
-    mutable std::mutex join_mutex;
     bool is_canceled = false;
     bool meet_error = false;
     String error_message;
@@ -487,6 +479,7 @@ private:
 
     BlockInputStreams restore_build_streams;
     BlockInputStreams restore_probe_streams;
+    BlockInputStreams restore_non_joined_data_streams;
     Int64 restore_join_build_concurrency = -1;
 
     JoinPtr restore_join;
@@ -580,9 +573,9 @@ private:
     IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
-    void trySpillBuildPartition(size_t partition_index, bool force);
+    Blocks trySpillBuildPartition(size_t partition_index, bool force);
     void trySpillBuildPartitions(bool force);
-    void trySpillProbePartition(size_t partition_index, bool force);
+    Blocks trySpillProbePartition(size_t partition_index, bool force);
     void trySpillProbePartitions(bool force);
 
     void releaseBuildPartitionBlocks(size_t partition_index);
