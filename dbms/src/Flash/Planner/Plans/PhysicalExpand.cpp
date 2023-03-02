@@ -85,7 +85,7 @@ void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
 void PhysicalExpand::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context &, size_t)
 {
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, expand_actions, log->identifier()));
+        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), expand_actions));
     });
 }
 

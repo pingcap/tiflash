@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
@@ -39,9 +40,13 @@ class PipelineExecutorStatus;
 class Event : public std::enable_shared_from_this<Event>
 {
 public:
-    Event(PipelineExecutorStatus & exec_status_, MemoryTrackerPtr mem_tracker_)
+    Event(
+        PipelineExecutorStatus & exec_status_,
+        MemoryTrackerPtr mem_tracker_,
+        const String & req_id = "")
         : exec_status(exec_status_)
         , mem_tracker(std::move(mem_tracker_))
+        , log(Logger::get(req_id))
     {}
     virtual ~Event() = default;
 
@@ -78,6 +83,8 @@ protected:
     PipelineExecutorStatus & exec_status;
 
     MemoryTrackerPtr mem_tracker;
+
+    LoggerPtr log;
 
 private:
     Events outputs;
