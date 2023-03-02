@@ -54,8 +54,8 @@ class NASemiJoinResult
 public:
     NASemiJoinResult(size_t row_num, NASemiJoinStep step, const void * map_it);
 
-    /// For convenience, caller can only consider the result of semi join.
-    /// This function will correct the result if it's not semi join.
+    /// For convenience, caller can only consider the result of left semi join.
+    /// This function will correct the result if it's not left semi join.
     template <NASemiJoinResultType RES>
     void setResult()
     {

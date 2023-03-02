@@ -860,6 +860,7 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
 /// the block should be valid.
 void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
+    std::shared_lock lock(rwlock);
     assert(stream_index < getBuildConcurrency());
 
     if (unlikely(!initialized))
@@ -907,7 +908,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
             if (rows > 0 && right_table_is_empty.load(std::memory_order_acquire))
                 right_table_is_empty.store(false, std::memory_order_release);
 
-            if (!has_all_key_null_row.load(std::memory_order_acquire))
+            if (!right_has_all_key_null_row.load(std::memory_order_acquire))
             {
                 /// Note that `extractAllKeyNullMap` must be done before `extractNestedColumnsAndNullMap`
                 /// because `extractNestedColumnsAndNullMap` will change the nullable column to its nested column.
@@ -921,7 +922,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
                     {
                         if (is_null)
                         {
-                            has_all_key_null_row.store(true, std::memory_order_release);
+                            right_has_all_key_null_row.store(true, std::memory_order_release);
                             break;
                         }
                     }
@@ -1245,7 +1246,7 @@ void NO_INLINE joinBlockImplTypeCase(
             auto key = keyHolderGetKey(key_holder);
             size_t hash_value = 0;
             bool zero_flag = ZeroTraits::check(key);
-            if (segment_size > 0 && !zero_flag)
+            if (!zero_flag)
             {
                 hash_value = map.hash(key);
             }
@@ -1253,7 +1254,6 @@ void NO_INLINE joinBlockImplTypeCase(
             size_t segment_index = 0;
             if (enable_fine_grained_shuffle)
             {
-                RUNTIME_CHECK(segment_size > 0);
                 /// Need to calculate the correct segment_index so that rows with same key will map to the same segment_index both in Build and Prob
                 /// The "reproduce" of segment_index generated in Build phase relies on the facts that:
                 /// Possible pipelines(FineGrainedShuffleWriter => ExchangeReceiver => HashBuild)
@@ -1268,15 +1268,12 @@ void NO_INLINE joinBlockImplTypeCase(
             }
             else
             {
-                if (segment_size > 0 && !zero_flag)
-                {
-                    segment_index = hash_value % segment_size;
-                }
+                segment_index = hash_value % segment_size;
             }
 
             auto & internal_map = map.getSegmentTable(segment_index);
             /// do not require segment lock because in join, the hash table can not be changed in probe stage.
-            auto it = segment_size > 0 ? internal_map.find(key, hash_value) : internal_map.find(key);
+            auto it = internal_map.find(key, hash_value);
             if (it != internal_map.end())
             {
                 it->getMapped().setUsed();
@@ -2036,7 +2033,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const ConstNullMapPtr & filter_null_map,
     const ConstNullMapPtr & all_key_null_map,
     const TiDB::TiDBCollators & collators,
-    bool has_all_key_null_row,
+    bool right_has_all_key_null_row,
     bool right_table_is_empty)
 {
     static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
@@ -2083,7 +2080,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             {
                 if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
                 {
-                    if (key_columns.size() == 1 || has_all_key_null_row || (all_key_null_map && (*all_key_null_map)[i]))
+                    if (key_columns.size() == 1 || right_has_all_key_null_row || (all_key_null_map && (*all_key_null_map)[i]))
                     {
                         /// Note that right_table_is_empty must be false to reach here so the right table
                         /// is not empty.
@@ -2105,24 +2102,17 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 
         auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
         SCOPE_EXIT(keyHolderDiscardKey(key_holder));
-
         auto key = keyHolderGetKey(key_holder);
+
         size_t hash_value = 0;
-        bool zero_flag = ZeroTraits::check(key);
-        if (segment_size > 0 && !zero_flag)
+        if (!ZeroTraits::check(key))
         {
             hash_value = map.hash(key);
         }
 
-        size_t segment_index = 0;
-        if (segment_size > 0 && !zero_flag)
-        {
-            segment_index = hash_value % segment_size;
-        }
-
-        auto & internal_map = map.getSegmentTable(segment_index);
+        auto & internal_map = map.getSegmentTable(hash_value % segment_size);
         /// do not require segment lock because in join, the hash table can not be changed in probe stage.
-        auto it = segment_size > 0 ? internal_map.find(key, hash_value) : internal_map.find(key);
+        auto it = internal_map.find(key, hash_value);
         if (it != internal_map.end())
         {
             /// Find the matched row(s).
@@ -2146,7 +2136,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         /// Not find the matched row.
         if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
         {
-            if (has_all_key_null_row)
+            if (right_has_all_key_null_row)
             {
                 /// If right table has a all-key-null row, the result is NULL.
                 /// I.e. (1) in (null) or (1,2) in ((1,3),(null,null)).
@@ -2156,7 +2146,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             }
             else if (key_columns.size() == 1)
             {
-                /// If key size is 1 and all key in right table row is not NULL(has_all_key_null_row is false),
+                /// If key size is 1 and all key in right table row is not NULL(right_has_all_key_null_row is false),
                 /// the result is false.
                 /// I.e. (1) in () or (1) in (1,2,3,4,5).
                 res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
@@ -2199,6 +2189,19 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     for (size_t i = 0; i < right_columns; ++i)
         added_columns[i] = block.getByPosition(i + left_columns).column->cloneEmpty();
 
+    PaddedPODArray<UInt8> * left_semi_column_data = nullptr;
+    PaddedPODArray<UInt8> * left_semi_null_map = nullptr;
+
+    if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi || KIND == ASTTableJoin::Kind::NullAware_LeftAnti)
+    {
+        auto * left_semi_column = static_cast<ColumnNullable *>(added_columns[right_columns - 1].get());
+        left_semi_column_data = &static_cast<ColumnVector<UInt8> &>(left_semi_column->getNestedColumn()).getData();
+        left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
+        left_semi_column_data->reserve(rows);
+        left_semi_null_map->reserve(rows);
+    }
+
+    size_t rows_for_anti = 0;
     for (size_t i = 0; i < rows; ++i)
     {
         auto result = res[i].getResult();
@@ -2208,8 +2211,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             {
                 // If the result is true, this row should be kept.
                 (*filter)[i] = 1;
-                for (size_t j = 0; j < right_columns; ++j)
-                    added_columns[j]->insertDefault();
+                ++rows_for_anti;
             }
             else
             {
@@ -2219,18 +2221,19 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         }
         else
         {
-            for (size_t j = 0; j < right_columns - 1; ++j)
-                added_columns[j]->insertDefault();
             switch (result)
             {
             case NASemiJoinResultType::FALSE_VALUE:
-                added_columns[right_columns - 1]->insert(FIELD_INT8_0);
+                left_semi_column_data->push_back(0);
+                left_semi_null_map->push_back(0);
                 break;
             case NASemiJoinResultType::TRUE_VALUE:
-                added_columns[right_columns - 1]->insert(FIELD_INT8_1);
+                left_semi_column_data->push_back(1);
+                left_semi_null_map->push_back(0);
                 break;
             case NASemiJoinResultType::NULL_VALUE:
-                added_columns[right_columns - 1]->insert(FIELD_NULL);
+                left_semi_column_data->push_back(0);
+                left_semi_null_map->push_back(1);
                 break;
             }
         }
@@ -2238,6 +2241,13 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 
     for (size_t i = 0; i < right_columns; ++i)
     {
+        if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+            added_columns[i]->insertManyDefaults(rows_for_anti);
+        else if (i < right_columns - 1)
+        {
+            /// The last column is match_helper_name.
+            added_columns[i]->insertManyDefaults(rows);
+        }
         block.getByPosition(i + left_columns).column = std::move(added_columns[i]);
     }
 
@@ -2263,7 +2273,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const ConstNullMapPtr & filter_null_map,
     const ConstNullMapPtr & all_key_null_map,
     const TiDB::TiDBCollators & collators,
-    bool has_all_key_null_row,
+    bool right_has_all_key_null_row,
     bool right_table_is_empty)
 {
 #define impl(has_null_map, has_filter_null_map)                                                          \
@@ -2281,7 +2291,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
         filter_null_map,                                                                                 \
         all_key_null_map,                                                                                \
         collators,                                                                                       \
-        has_all_key_null_row,                                                                            \
+        right_has_all_key_null_row,                                                                      \
         right_table_is_empty);
 
     if (null_map)
@@ -2374,7 +2384,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             filter_null_map,                                                                                                                            \
             all_key_null_map,                                                                                                                           \
             collators,                                                                                                                                  \
-            has_all_key_null_row.load(std::memory_order_relaxed),                                                                                       \
+            right_has_all_key_null_row.load(std::memory_order_relaxed),                                                                                 \
             right_table_is_empty.load(std::memory_order_relaxed));                                                                                      \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)

@@ -320,10 +320,10 @@ private:
     const JoinConditions conditions;
 
     /// For null-aware semi join with no other condition.
-    /// Indicate if the right table is empty after filtering.
+    /// Indicate if the right table is empty.
     std::atomic<bool> right_table_is_empty{true};
-    /// Indicate if the right table has a all-key-null row after filtering.
-    std::atomic<bool> has_all_key_null_row{false};
+    /// Indicate if the right table has a all-key-null row.
+    std::atomic<bool> right_has_all_key_null_row{false};
 
     ASTTableJoin::Strictness original_strictness;
     size_t max_block_size;
