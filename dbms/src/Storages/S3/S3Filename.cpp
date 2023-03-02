@@ -22,7 +22,7 @@
 #include <magic_enum.hpp>
 #include <string_view>
 
-#include "Common/StringUtils/StringUtils.h"
+#include <Common/StringUtils/StringUtils.h>
 
 namespace DB::S3
 {
