@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringRefUtils.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/S3/S3Filename.h>
 #include <re2/re2.h>
@@ -21,8 +22,6 @@
 
 #include <magic_enum.hpp>
 #include <string_view>
-
-#include <Common/StringUtils/StringUtils.h>
 
 namespace DB::S3
 {
