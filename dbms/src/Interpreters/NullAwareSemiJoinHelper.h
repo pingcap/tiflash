@@ -141,7 +141,7 @@ private:
     void runStepAllBlocks(std::list<Result *> & res_list);
 
     template <NASemiJoinStep STEP>
-    void checkAllExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<Result *> & res_list, std::list<Result *> & next_res_list);
+    void runAndCheckExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<Result *> & res_list, std::list<Result *> & next_res_list);
 
 private:
     Block & block;

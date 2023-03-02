@@ -2084,8 +2084,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                 {
                     if (key_columns.size() == 1 || right_has_all_key_null_row || (all_key_null_map && (*all_key_null_map)[i]))
                     {
-                        /// Note that right_table_is_empty must be false to reach here so the right table
-                        /// is not empty.
+                        /// Note that right_table_is_empty must be false here so the right table is not empty.
                         /// The result is NULL if
                         ///   1. key column size is 1. E.g. (null) in (1,2).
                         ///   2. right table has a all-key-null row. E.g. (1,null) in ((2,2),(null,null)).
@@ -2096,6 +2095,8 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                     }
                 }
                 /// Check null rows first to speed up getting the NULL result if possible.
+                /// In the worse case, all rows in the right table will be checked.
+                /// E.g. (1,null) in ((2,1),(2,3),(2,null),(3,null)) => false.
                 res.emplace_back(i, NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS, nullptr);
                 res_list.push_back(&res.back());
                 continue;
@@ -2158,10 +2159,11 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                 continue;
             }
             /// Then key size is greater than 2 and right table does not have a all-key-null row.
-            /// We have to compare them to the null rows one by one.
             /// E.g. (1,2) in ((1,3),(1,null)) => NULL, (1,2) in ((1,3),(2,null)) => false.
         }
-        /// Check null rows first to speed up getting the NULL result if possible.
+        /// We have to compare them to the null rows one by one.
+        /// In the worse case, all null rows in the right table will be checked.
+        /// E.g. (1,2) in ((2,null),(3,null),(null,1),(null,3)) => false.
         res.emplace_back(i, NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS, nullptr);
         res_list.push_back(&res.back());
     }

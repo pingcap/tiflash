@@ -257,7 +257,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NASemiJoinHel
             /// Reuse the column to avoid memory allocation.
             /// Correctness depends on the fact that equal and other condition expressions do not
             /// removed any column, namely, the columns will not out of order.
-            /// TODO: Maybe we can reuse the memory of new columns added from expressions?
+            /// TODO: Maybe we can reuse the memory of new columns added by expressions?
             columns[i] = exec_block.safeGetByPosition(i).column->assumeMutable();
             columns[i]->popBack(columns[i]->size());
         }
@@ -284,7 +284,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NASemiJoinHel
         /// from equal and other condition expressions.
         exec_block = block.cloneWithColumns(std::move(columns));
 
-        checkAllExprResult<STEP>(
+        runAndCheckExprResult<STEP>(
             exec_block,
             offsets,
             res_list,
@@ -321,7 +321,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStepAllBlocks(std::list<NASe
             for (size_t i = 0; i < right_columns; ++i)
                 exec_block.getByPosition(i + left_columns).column = right_block.getByPosition(i).column;
 
-            checkAllExprResult<NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS>(
+            runAndCheckExprResult<NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS>(
                 exec_block,
                 offsets,
                 res_list,
@@ -341,7 +341,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStepAllBlocks(std::list<NASe
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
 template <NASemiJoinStep STEP>
-void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::checkAllExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<NASemiJoinHelper::Result *> & res_list, std::list<NASemiJoinHelper::Result *> & next_res_list)
+void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<NASemiJoinHelper::Result *> & res_list, std::list<NASemiJoinHelper::Result *> & next_res_list)
 {
     /// Attention: other_cond_expr must be executed first then null_aware_eq_cond_expr can be executed.
     /// Because the execution order must be the same as the construction order in compiling(in TiFlashJoin::genJoinConditionsAction).
