@@ -68,7 +68,6 @@ void PhysicalFilter::buildPipelineExec(PipelineExecGroupBuilder & group_builder,
     auto input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<FilterTransformOp>(group_builder.exec_status, input_header, before_filter_actions, filter_column, log->identifier()));
-        std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
         PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
     });
     context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);

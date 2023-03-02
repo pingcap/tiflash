@@ -44,7 +44,10 @@ struct OperatorProfileInfo
         execution_time += time;
     }
 
-    void start() { total_stopwatch.start(); }
+    void start()
+    {
+        total_stopwatch.start();
+    }
 };
 
 using OperatorProfileInfoPtr = std::shared_ptr<OperatorProfileInfo>;

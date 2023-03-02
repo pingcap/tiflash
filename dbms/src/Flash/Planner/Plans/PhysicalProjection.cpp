@@ -151,7 +151,6 @@ void PhysicalProjection::buildPipelineExec(PipelineExecGroupBuilder & group_buil
         profile_group.reserve(group_builder.concurrency);
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, project_actions, log->identifier()));
-            std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
             PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
         });
         context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);

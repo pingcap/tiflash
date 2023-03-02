@@ -53,10 +53,12 @@ private:
         const BlockInputStreams & streams,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
-    void fillLocalExecutionSummaryForPipeline(
+    // fill the ExecutionSummary for one executor and return the time spend on the executor and it's children.
+    UInt64 fillLocalExecutionSummaryForPipeline(
         tipb::SelectResponse & response,
         const String & executor_id,
         const ExecutorProfileInfo & executor_profile,
+        UInt64 accumulated_time,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
 private:

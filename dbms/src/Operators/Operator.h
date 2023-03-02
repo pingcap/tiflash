@@ -77,6 +77,7 @@ public:
     void setProfileInfo(OperatorProfileInfoPtr profile_info_)
     {
         profile_info = profile_info_;
+        profile_info->start();
     }
 
     // void updateProfileInfo(const Block & block, UInt64 time)

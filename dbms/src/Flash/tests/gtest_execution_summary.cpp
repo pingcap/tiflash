@@ -34,6 +34,12 @@ public:
                                     {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s1", {"banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana"}),
                                      toNullableVec<String>("s2", {"apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana"})});
+
+        context.addMockTable({"test_db", "empty_table"},
+                             {{"s1", TiDB::TP::TypeString},
+                              {"s2", TiDB::TP::TypeString}},
+                             {toNullableVec<Int32>("s1", {}),
+                              toNullableVec<String>("s2", {})});
     }
 
     static constexpr size_t concurrency = 10;
@@ -90,10 +96,33 @@ try
     {
         auto request = context
                            .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .limit(2)
+                           .build(context);
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}, {"limit_2", {2, 1}}};
+        Expect expect_pipeline{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}, {"limit_2", {2, concurrency}}};
+
+        testForPipelineExecutionSummary(request, expect_pipeline, expect);
+    }
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .limit(2)
+                           .project({col("s1")})
+                           .build(context);
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}, {"limit_2", {2, 1}}, {"project_3", {2, concurrency}}};
+        Expect expect_pipeline{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}, {"limit_2", {2, concurrency}}, {"project_3", {2, concurrency}}};
+
+        testForPipelineExecutionSummary(request, expect_pipeline, expect);
+    }
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
                            .limit(5)
                            .build(context);
         Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"limit_1", {5, 1}}};
-        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"limit_1", {5, 10}}};
+        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"limit_1", {5, concurrency}}};
 
         testForPipelineExecutionSummary(request, expect_pipeline, expect);
     }
@@ -103,7 +132,19 @@ try
                            .topN("s1", true, 12) // hack to pass the test
                            .build(context);
         Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {12, 1}}};
-        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {12, 10}}};
+        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {12, concurrency}}};
+
+        testForPipelineExecutionSummary(request, expect_pipeline, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .topN("s1", true, 12) // hack to pass the test
+                           .project({col("s2")})
+                           .build(context);
+        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {12, 1}}, {"project_2", {12, concurrency}}};
+        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {12, concurrency}}, {"project_2", {12, concurrency}}};
 
         testForPipelineExecutionSummary(request, expect_pipeline, expect);
     }
@@ -116,6 +157,39 @@ try
 
         testForPipelineExecutionSummary(request, expect, expect);
     }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .project({col("s2")})
+                           .project({col("s2")})
+                           .build(context);
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"project_1", {12, concurrency}}, {"project_2", {12, concurrency}}};
+        testForPipelineExecutionSummary(request, expect, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "empty_table")
+                           .project({col("s2")})
+                           .build(context);
+        Expect expect{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}};
+
+        testForPipelineExecutionSummary(request, expect, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "empty_table")
+                           .project({col("s2")})
+                           .topN("s2", true, 12)
+                           .build(context);
+        Expect expect{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}, {"topn_2", {0, 1}}};
+        Expect expect_pipeline{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}, {"topn_2", {0, concurrency}}};
+
+        testForPipelineExecutionSummary(request, expect_pipeline, expect);
+    }
+
     {
         auto request = context
                            .scan("test_db", "test_table")

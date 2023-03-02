@@ -89,20 +89,9 @@ void PhysicalPlanNode::buildBlockInputStream(DAGPipeline & pipeline, Context & c
     }
 }
 
-void PhysicalPlanNode::buildPipelineExecImpl(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & /*group_builder*/, Context & /*context*/, size_t /*concurrency*/)
 {
     throw Exception("Unsupport");
-}
-void PhysicalPlanNode::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t concurrency)
-{
-    buildPipelineExecImpl(group_builder, context, concurrency);
-    // if (is_tidb_operator)
-    // {
-    //      group_builder.transform([&](auto &) {
-    //         context.getDAGContext()->pipeline_profiles[executor_id].back().emplace_back(std::make_unique<BaseRuntimeStatistics>());
-    //      });
-    // }
-    // recordPipelineProfile..
 }
 
 void PhysicalPlanNode::buildPipeline(PipelineBuilder & builder, Context & context)

@@ -119,7 +119,6 @@ void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_b
     profile_group.reserve(group_builder.concurrency);
     group_builder.transform([&](auto & builder) {
         auto source = std::make_unique<BlockInputStreamSourceOp>(group_builder.exec_status, mock_streams[i++]);
-        std::cout << "is_tidb_operator: " << is_tidb_operator << ", executor_id::" << executor_id << std::endl;
         auto profile = std::make_shared<OperatorProfileInfo>();
         source->setProfileInfo(profile);
         profile_group.emplace_back(profile);

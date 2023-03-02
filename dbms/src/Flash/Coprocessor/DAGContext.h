@@ -66,7 +66,7 @@ class ProcessListEntry;
 using OperatorProfileInfoGroup = std::vector<OperatorProfileInfoPtr>;
 // a group of profile for same operator
 using ExecutorProfileInfo = std::vector<OperatorProfileInfoGroup>;
-// a group of profile for same executor, one executor can have multiple operators when it is Pipeline Breaker
+// a group of profile for same executor
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 {

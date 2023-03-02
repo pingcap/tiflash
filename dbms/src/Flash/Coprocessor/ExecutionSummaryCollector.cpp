@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
+#include <Flash/Statistics/traverseExecutors.h>
 
 namespace DB
 {
@@ -70,7 +71,6 @@ tipb::SelectResponse ExecutionSummaryCollector::genExecutionSummaryResponseForPi
     addExecuteSummariesForPipeline(response);
     return response;
 }
-
 
 void ExecutionSummaryCollector::fillLocalExecutionSummary(
     tipb::SelectResponse & response,
@@ -155,72 +155,92 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
     }
 }
 
-void ExecutionSummaryCollector::addExecuteSummariesForPipeline(tipb::SelectResponse & response [[maybe_unused]])
+void ExecutionSummaryCollector::addExecuteSummariesForPipeline(tipb::SelectResponse & response)
 {
     if (!dag_context.collect_execution_summaries)
         return;
-
+    UInt64 accumulated_time = 0;
     /// fill execution_summary for local executor
     if (dag_context.return_executor_id)
     {
-        for (auto & p : dag_context.pipeline_profiles)
-            fillLocalExecutionSummaryForPipeline(response, p.first, p.second, dag_context.scan_context_map);
+        assert(dag_context.dag_request->has_root_executor());
+        UInt64 accumulated_time = 0;
+
+        traverseExecutorsReverse(dag_context.dag_request, [&](const tipb::Executor & executor) {
+            auto && executor_id = executor.executor_id();
+            accumulated_time = fillLocalExecutionSummaryForPipeline(
+                response,
+                executor_id,
+                dag_context.pipeline_profiles[executor_id],
+                accumulated_time,
+                dag_context.scan_context_map);
+        });
     }
     else
     {
+        /// collect list based executor's excution summary
         const auto & profile_map = dag_context.pipeline_profiles;
         assert(profile_map.size() == dag_context.list_based_executors_order.size());
         for (const auto & executor_id : dag_context.list_based_executors_order)
         {
             auto it = profile_map.find(executor_id);
             assert(it != profile_map.end());
-            fillLocalExecutionSummaryForPipeline(response, executor_id, it->second, dag_context.scan_context_map);
+            accumulated_time = fillLocalExecutionSummaryForPipeline(
+                response,
+                executor_id,
+                it->second,
+                accumulated_time,
+                dag_context.scan_context_map);
         }
     }
 
     // TODO: consider cop remote read and disaggregated mode.
 }
 
-void ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
+UInt64 ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
     tipb::SelectResponse & response,
     const String & executor_id,
     const ExecutorProfileInfo & executor_profile,
-    const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map [[maybe_unused]]) const
+    UInt64 accumulated_time,
+    const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const
 {
-    std::cout << "executor id: " << executor_id << std::endl;
-    std::cout << "ywq test executor operator size: " << executor_profile.size() << std::endl;
     ExecutionSummary current;
-    UInt64 time = 0;
     for (size_t i = 0; i < executor_profile.size(); ++i)
     {
+        auto && operator_profile_group = executor_profile[i];
+        auto concurrency = operator_profile_group.size();
         if (i == executor_profile.size() - 1)
         {
-            auto && operator_profile_group = executor_profile[i];
             ExecutionSummary current_operator;
             UInt64 time_processed_ns = 0;
-            current.concurrency = operator_profile_group.size();
+            current.concurrency = concurrency;
             for (const auto & operator_profile : operator_profile_group)
             {
                 time_processed_ns = std::max(time_processed_ns, operator_profile->execution_time);
                 current.num_produced_rows += operator_profile->rows;
                 current.num_iterations += operator_profile->blocks;
             }
-            current.time_processed_ns = time + time_processed_ns;
+            accumulated_time += time_processed_ns;
+            current.time_processed_ns = accumulated_time;
         }
         else
         {
-            auto && operator_profile_group = executor_profile[i];
             ExecutionSummary current_operator;
-            current_operator.concurrency = operator_profile_group.size();
+            current_operator.concurrency = concurrency;
             for (const auto & operator_profile : operator_profile_group)
             {
                 current_operator.time_processed_ns = std::max(current.time_processed_ns, operator_profile->execution_time);
             }
-            time += current_operator.time_processed_ns;
+            accumulated_time += current_operator.time_processed_ns;
         }
     }
-    std::cout << "current rows: " << current.num_produced_rows << ", blocks: " << current.num_iterations << ", concurrency: " << current.concurrency << std::endl;
-    // TODO get execution info from scan_context
+    // get execution info from scan_context
+    if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
+    {
+        current.scan_context->merge(*(iter->second));
+    }
     fillTiExecutionSummary(response.add_execution_summaries(), current, executor_id);
+
+    return accumulated_time;
 }
 } // namespace DB

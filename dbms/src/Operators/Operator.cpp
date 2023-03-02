@@ -33,8 +33,6 @@ OperatorStatus Operator::await()
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    // todo update time.
-
     if (profile_info)
         profile_info->updateTime(profile_info->total_stopwatch.elapsed() - start_time);
     return op_status;
