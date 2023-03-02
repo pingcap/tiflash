@@ -143,7 +143,7 @@ public:
 
     using DumpCheckpointResult = PS::V3::universal::PageDirectoryType::DumpCheckpointResult;
 
-    DumpCheckpointResult dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+    DumpCheckpointResult dumpIncrementalCheckpoint(const DumpCheckpointOptions & options) const;
 
     PageIdU64 getMaxIdAfterRestart() const;
 
