@@ -268,10 +268,15 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNameVec col_names)
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchange_type)
+DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchange_type, MockColumnNameVec part_keys, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
-    root = mock::compileExchangeSender(root, getExecutorIndex(), exchange_type);
+    auto partition_key_list = std::make_shared<ASTExpressionList>();
+    for (const auto & part_key : part_keys)
+    {
+        partition_key_list->children.push_back(col(part_key));
+    }
+    root = mock::compileExchangeSender(root, getExecutorIndex(), exchange_type, partition_key_list, fine_grained_shuffle_stream_count);
     return *this;
 }
 

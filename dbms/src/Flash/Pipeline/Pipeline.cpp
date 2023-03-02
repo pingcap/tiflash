@@ -43,22 +43,22 @@ void mapEvents(const Events & inputs, const Events & outputs)
         /**
          * 1. for fine grained inputs and fine grained outputs
          *     ```
-         *     FineGrainedPipelineEvent<────FineGrainedPipelineEvent
-         *     FineGrainedPipelineEvent<────FineGrainedPipelineEvent
-         *     FineGrainedPipelineEvent<────FineGrainedPipelineEvent
-         *     FineGrainedPipelineEvent<────FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
          *     ```
          * 2. for non fine grained inputs and non fine grained outputs
          *     ```
-         *     PlainPipelineEvent<────PlainPipelineEvent
+         *     PlainPipelineEvent◄────PlainPipelineEvent
          *     ```
          * 3. for non fine grained inputs and fine grained outputs
          *     ```
-         *     PlainPipelineEvent<────FineGrainedPipelineEvent
+         *     PlainPipelineEvent◄────FineGrainedPipelineEvent
          *     ```
          * 4. for fine grained inputs and non fine grained outputs
          *     ```
-         *     FineGrainedPipelineEvent<────PlainPipelineEvent
+         *     FineGrainedPipelineEvent◄────PlainPipelineEvent
          *     ```
          */
         size_t partition_num = inputs.size();
@@ -170,16 +170,19 @@ Events Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     Events self_events;
     assert(!plan_nodes.empty());
+    // The source plan node determines whether the execution mode is fine grained or non-fine grained.
     if (plan_nodes.front()->getFineGrainedShuffle().enable())
     {
         auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
         assert(!fine_grained_exec_group.empty());
         for (auto & pipeline_exec : fine_grained_exec_group)
             self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), std::move(pipeline_exec)));
+        LOG_DEBUG(log, "generate {} fine grained pipeline event", self_events.size());
     }
     else
     {
         self_events.push_back(std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency));
+        LOG_DEBUG(log, "generate one plain pipeline event");
     }
     return self_events;
 }

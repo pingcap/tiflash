@@ -114,8 +114,7 @@ public:
     }
     DAGRequestBuilder & project(MockColumnNameVec col_names);
 
-
-    DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
+    DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type, MockColumnNameVec part_keys = {}, uint64_t fine_grained_shuffle_stream_count = 0);
 
     /// User should prefer using other simplified join buidler API instead of this one unless he/she have to test
     /// join conditional expressions and knows how TiDB translates sql's `join on` clause to conditional expressions.

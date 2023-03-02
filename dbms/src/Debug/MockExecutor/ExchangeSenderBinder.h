@@ -22,7 +22,12 @@ namespace DB::mock
 class ExchangeSenderBinder : public ExecutorBinder
 {
 public:
-    ExchangeSenderBinder(size_t & index, const DAGSchema & output, tipb::ExchangeType type_, const std::vector<size_t> & partition_keys_ = {}, uint64_t fine_grained_shuffle_stream_count_ = 0)
+    ExchangeSenderBinder(
+        size_t & index,
+        const DAGSchema & output,
+        tipb::ExchangeType type_,
+        const std::vector<size_t> & partition_keys_ = {},
+        uint64_t fine_grained_shuffle_stream_count_ = 0)
         : ExecutorBinder(index, "exchange_sender_" + std::to_string(index), output)
         , type(type_)
         , partition_keys(partition_keys_)
@@ -42,5 +47,10 @@ private:
     uint64_t fine_grained_shuffle_stream_count;
 };
 
-ExecutorBinderPtr compileExchangeSender(ExecutorBinderPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
+ExecutorBinderPtr compileExchangeSender(
+    ExecutorBinderPtr input,
+    size_t & executor_index,
+    tipb::ExchangeType exchange_type,
+    ASTPtr partition_key_list = {},
+    uint64_t fine_grained_shuffle_stream_count = 0);
 } // namespace DB::mock
