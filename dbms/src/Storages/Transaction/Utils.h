@@ -39,6 +39,7 @@ struct AlignedStruct
     Base & operator*() { return inner; }
     const Base & operator*() const { return inner; }
 
+private:
     // Wrapped with struct to guarantee that it is aligned to `alignment`
     // DO NOT need padding byte
     alignas(alignment) Base inner;
