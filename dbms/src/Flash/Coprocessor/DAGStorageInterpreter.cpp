@@ -42,7 +42,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 
-#include "common/logger_useful.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -448,7 +447,6 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
             stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log->identifier());
             stream->setExtraInfo("cast after remote tableScan");
         }
-        LOG_ERROR(log, "extra_cast: {}, project_for_cop_read: {}", extra_cast->dumpActions(), project_for_cop_read->dumpActions());
     }
 }
 

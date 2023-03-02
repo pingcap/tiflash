@@ -28,7 +28,6 @@
 
 #include <unordered_map>
 
-#include "Interpreters/TimezoneInfo.h"
 namespace DB
 {
 const Int8 VAR_SIZE = 0;
@@ -1172,7 +1171,7 @@ std::vector<Int64> getColumnsForExpr(const tipb::Expr & expr, const std::vector<
 tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, TimezoneInfo timezone_info)
 {
     tipb::Expr ret_expr = expr;
-    if (isLiteralExpr(expr) && expr.tp() == tipb::ExprType::MysqlTime)
+    if (expr.tp() == tipb::ExprType::MysqlTime && expr.has_field_type())
     {
         Field f = decodeLiteral(expr);
         // substract timezone offset
@@ -1199,7 +1198,7 @@ tipb::Expr rewriteTimeLiteral(const tipb::Expr & expr)
 {
     tipb::Expr ret_expr = expr;
     // for duration type literal, we need to convert it to int64
-    if (isLiteralExpr(expr) && expr.tp() == tipb::ExprType::MysqlDuration)
+    if (expr.tp() == tipb::ExprType::MysqlDuration && expr.has_field_type())
     {
         Field f = decodeLiteral(expr);
         Int64 t = f.get<Int64>();
