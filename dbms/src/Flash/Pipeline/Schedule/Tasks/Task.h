@@ -14,11 +14,17 @@
 
 #pragma once
 
+#include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <memory.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_pipeline_model_task_construct_failpoint[];
+} // namespace FailPoints
+
 /**
  *    CANCELLED/ERROR/FINISHED
  *               ▲
@@ -41,7 +47,9 @@ class Task
 public:
     explicit Task(MemoryTrackerPtr mem_tracker_)
         : mem_tracker(std::move(mem_tracker_))
-    {}
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
+    }
 
     virtual ~Task() = default;
 
@@ -63,8 +71,8 @@ public:
     }
 
 protected:
-    virtual ExecTaskStatus executeImpl() = 0;
-    virtual ExecTaskStatus awaitImpl() { return ExecTaskStatus::RUNNING; }
+    virtual ExecTaskStatus executeImpl() noexcept = 0;
+    virtual ExecTaskStatus awaitImpl() noexcept { return ExecTaskStatus::RUNNING; }
 
 private:
     MemoryTrackerPtr mem_tracker;

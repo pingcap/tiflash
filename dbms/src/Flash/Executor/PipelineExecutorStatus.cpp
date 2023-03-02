@@ -17,7 +17,7 @@
 
 namespace DB
 {
-ExecutionResult PipelineExecutorStatus::toExecutionResult()
+ExecutionResult PipelineExecutorStatus::toExecutionResult() noexcept
 {
     std::lock_guard lock(mu);
     return exception_ptr
@@ -25,13 +25,13 @@ ExecutionResult PipelineExecutorStatus::toExecutionResult()
         : ExecutionResult::success();
 }
 
-std::exception_ptr PipelineExecutorStatus::getExceptionPtr()
+std::exception_ptr PipelineExecutorStatus::getExceptionPtr() noexcept
 {
     std::lock_guard lock(mu);
     return exception_ptr;
 }
 
-String PipelineExecutorStatus::getExceptionMsg()
+String PipelineExecutorStatus::getExceptionMsg() noexcept
 {
     std::lock_guard lock(mu);
     try
@@ -50,13 +50,13 @@ String PipelineExecutorStatus::getExceptionMsg()
     }
 }
 
-void PipelineExecutorStatus::onErrorOccurred(const String & err_msg)
+void PipelineExecutorStatus::onErrorOccurred(const String & err_msg) noexcept
 {
     DB::Exception e(err_msg);
     onErrorOccurred(std::make_exception_ptr(e));
 }
 
-void PipelineExecutorStatus::onErrorOccurred(const std::exception_ptr & exception_ptr_)
+void PipelineExecutorStatus::onErrorOccurred(const std::exception_ptr & exception_ptr_) noexcept
 {
     assert(exception_ptr_ != nullptr);
     {
@@ -68,19 +68,19 @@ void PipelineExecutorStatus::onErrorOccurred(const std::exception_ptr & exceptio
     cancel();
 }
 
-void PipelineExecutorStatus::wait()
+void PipelineExecutorStatus::wait() noexcept
 {
     std::unique_lock lock(mu);
     cv.wait(lock, [&] { return 0 == active_event_count; });
 }
 
-void PipelineExecutorStatus::onEventSchedule()
+void PipelineExecutorStatus::onEventSchedule() noexcept
 {
     std::lock_guard lock(mu);
     ++active_event_count;
 }
 
-void PipelineExecutorStatus::onEventFinish()
+void PipelineExecutorStatus::onEventFinish() noexcept
 {
     std::lock_guard lock(mu);
     assert(active_event_count > 0);
@@ -89,7 +89,7 @@ void PipelineExecutorStatus::onEventFinish()
         cv.notify_all();
 }
 
-void PipelineExecutorStatus::cancel()
+void PipelineExecutorStatus::cancel() noexcept
 {
     is_cancelled.store(true, std::memory_order_release);
 }
