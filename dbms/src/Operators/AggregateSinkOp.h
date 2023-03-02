@@ -27,10 +27,9 @@ public:
         size_t index_,
         AggregateContextPtr agg_context_,
         const String & req_id)
-        : SinkOp(exec_status_)
+        : SinkOp(exec_status_, req_id)
         , index(index_)
         , agg_context(agg_context_)
-        , log(Logger::get(req_id))
     {
     }
 
@@ -44,6 +43,5 @@ public:
 private:
     size_t index{};
     AggregateContextPtr agg_context;
-    const LoggerPtr log;
 };
 } // namespace DB

@@ -20,6 +20,8 @@ void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_t
 {
     RUNTIME_CHECK(!inited_build && !inited_convergent);
     max_threads = max_threads_;
+    empty_result_for_aggregation_by_empty_set = params.empty_result_for_aggregation_by_empty_set;
+    keys_size = params.keys_size;
     many_data.reserve(max_threads);
     threads_data.reserve(max_threads);
     for (size_t i = 0; i < max_threads; ++i)
@@ -45,9 +47,31 @@ void AggregateContext::executeOnBlock(size_t task_index, const Block & block)
 void AggregateContext::initConvergent()
 {
     RUNTIME_CHECK(inited_build && !inited_convergent);
+    size_t total_src_rows = 0;
+    size_t total_src_bytes = 0;
+    size_t rows = 0;
+    for (size_t i = 0; i < max_threads; ++i)
+    {
+        rows += many_data[i]->size();
+        total_src_rows += threads_data[i].src_rows;
+        total_src_bytes += threads_data[i].src_bytes;
+    }
+    LOG_TRACE(
+        log,
+        "Total aggregated {} rows to {} rows (from {:.3f} MiB))",
+        total_src_rows,
+        rows,
+        (total_src_bytes / 1048576.0));
+
+    if (total_src_rows == 0 && keys_size == 0 && !empty_result_for_aggregation_by_empty_set)
+        aggregator->executeOnBlock(
+            this->getHeader(),
+            *many_data[0],
+            threads_data[0].key_columns,
+            threads_data[0].aggregate_columns);
+
     merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, is_final, max_threads);
     inited_convergent = true;
-
     RUNTIME_CHECK(!merging_buckets || merging_buckets->getConcurrency() > 0);
 }
 

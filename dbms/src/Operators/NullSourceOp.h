@@ -25,8 +25,7 @@ public:
         PipelineExecutorStatus & exec_status_,
         const Block & header_,
         const String & req_id)
-        : SourceOp(exec_status_)
-        , log(Logger::get(req_id))
+        : SourceOp(exec_status_, req_id)
     {
         setHeader(header_);
     }
@@ -42,8 +41,5 @@ protected:
         block = {};
         return OperatorStatus::HAS_OUTPUT;
     }
-
-private:
-    const LoggerPtr log;
 };
 } // namespace DB

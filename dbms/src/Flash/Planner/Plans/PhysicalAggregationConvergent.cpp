@@ -49,7 +49,7 @@ void PhysicalAggregationConvergent::buildPipelineExec(PipelineExecGroupBuilder &
     if (!expr_after_agg->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, expr_after_agg, log->identifier()));
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), expr_after_agg));
         });
     }
 }

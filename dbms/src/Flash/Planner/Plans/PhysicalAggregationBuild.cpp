@@ -24,7 +24,7 @@ void PhysicalAggregationBuild::buildPipelineExec(PipelineExecGroupBuilder & grou
     if (!before_agg_actions->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, before_agg_actions, log->identifier()));
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), before_agg_actions));
         });
     }
 

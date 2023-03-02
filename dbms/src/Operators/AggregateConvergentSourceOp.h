@@ -27,9 +27,8 @@ public:
         const AggregateContextPtr & agg_context_,
         size_t index_,
         const String & req_id)
-        : SourceOp(exec_status_)
+        : SourceOp(exec_status_, req_id)
         , agg_context(agg_context_)
-        , log(Logger::get(req_id))
         , index(index_)
     {
         setHeader(agg_context->getHeader());
@@ -45,7 +44,6 @@ protected:
 
 private:
     AggregateContextPtr agg_context;
-    const LoggerPtr log;
     const size_t index;
 };
 } // namespace DB

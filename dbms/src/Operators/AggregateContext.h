@@ -65,6 +65,9 @@ private:
 
 private:
     std::unique_ptr<Aggregator> aggregator;
+    bool keys_size = false;
+    bool empty_result_for_aggregation_by_empty_set = false;
+
     std::atomic_bool inited_build = false;
     std::atomic_bool inited_convergent = false;
 
