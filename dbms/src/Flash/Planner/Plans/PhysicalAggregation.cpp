@@ -181,7 +181,7 @@ void PhysicalAggregation::buildPipeline(PipelineBuilder & builder, Context & con
     // Break the pipeline for agg_build.
     auto agg_build_builder = builder.breakPipeline(agg_build);
     // agg_build pipeline.
-    child->buildPipeline(agg_build_builder);
+    child->buildPipeline(agg_build_builder, context);
     agg_build_builder.build();
     // agg_convergent pipeline.
     auto agg_convergent = std::make_shared<PhysicalAggregationConvergent>(

@@ -168,6 +168,7 @@ void ExecutionSummaryCollector::addExecuteSummariesForPipeline(tipb::SelectRespo
 
         traverseExecutorsReverse(dag_context.dag_request, [&](const tipb::Executor & executor) {
             auto && executor_id = executor.executor_id();
+            std::cout << "executor_id: " << executor_id << std::endl;
             accumulated_time = fillLocalExecutionSummaryForPipeline(
                 response,
                 executor_id,
@@ -205,6 +206,7 @@ UInt64 ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
     const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const
 {
     ExecutionSummary current;
+    std::cout << "operators size: " << executor_profile.size() << std::endl;
     for (size_t i = 0; i < executor_profile.size(); ++i)
     {
         auto && operator_profile_group = executor_profile[i];
@@ -229,6 +231,7 @@ UInt64 ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
             current_operator.concurrency = concurrency;
             for (const auto & operator_profile : operator_profile_group)
             {
+                // std::cout <<
                 current_operator.time_processed_ns = std::max(current.time_processed_ns, operator_profile->execution_time);
             }
             accumulated_time += current_operator.time_processed_ns;

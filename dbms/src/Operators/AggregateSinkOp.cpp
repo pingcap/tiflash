@@ -30,8 +30,6 @@ OperatorStatus AggregateSinkOp::writeImpl(Block && block)
 void AggregateSinkOp::operateSuffix()
 {
     LOG_DEBUG(log, "finish write with {} rows", total_rows);
-
-    agg_context->writeSuffix();
 }
 
 } // namespace DB

@@ -50,8 +50,6 @@ public:
 
     void initConvergent();
 
-    void writeSuffix();
-
     size_t getConvergentConcurrency();
 
     Block readForConvergent(size_t index);
@@ -62,6 +60,8 @@ public:
 
 private:
     bool isTwoLevel();
+
+    void writeSuffix();
 
 private:
     std::unique_ptr<Aggregator> aggregator;

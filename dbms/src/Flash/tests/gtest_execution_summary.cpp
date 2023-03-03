@@ -196,7 +196,7 @@ try
                            .aggregation({col("s2")}, {col("s2")})
                            .build(context);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, concurrency}}};
-        testForExecutionSummary(request, expect);
+        testForPipelineExecutionSummary(request, expect, expect);
     }
     {
         auto t1 = context.scan("test_db", "test_table");

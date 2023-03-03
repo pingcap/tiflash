@@ -78,6 +78,7 @@ void AggregateContext::writeSuffix()
 void AggregateContext::initConvergent()
 {
     RUNTIME_CHECK(inited_build && !inited_convergent);
+    writeSuffix();
 
     merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, true, max_threads);
     inited_convergent = true;

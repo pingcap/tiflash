@@ -17,7 +17,7 @@
 namespace DB
 {
 #define DISABLE_USELESS_FUNCTION_FOR_BREAKER                                  \
-    void buildPipeline(PipelineBuilder &) override                            \
+    void buildPipeline(PipelineBuilder &, Context &) override                 \
     {                                                                         \
         throw Exception("Unsupport");                                         \
     }                                                                         \

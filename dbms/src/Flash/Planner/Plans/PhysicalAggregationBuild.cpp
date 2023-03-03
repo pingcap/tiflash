@@ -13,9 +13,11 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
+#include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Operators/AggregateSinkOp.h>
 #include <Operators/ExpressionTransformOp.h>
+#include <Operators/OperatorProfileInfo.h>
 
 namespace DB
 {
@@ -23,15 +25,27 @@ void PhysicalAggregationBuild::buildPipelineExec(PipelineExecGroupBuilder & grou
 {
     if (!before_agg_actions->getActions().empty())
     {
+        OperatorProfileInfoGroup profile_group;
+        profile_group.resize(group_builder.concurrency);
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), before_agg_actions));
+            PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
         });
+        std::cout << "test3" << std::endl;
+
+        context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);
     }
 
+    OperatorProfileInfoGroup profile_group;
+    profile_group.resize(group_builder.concurrency);
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {
         builder.setSinkOp(std::make_unique<AggregateSinkOp>(group_builder.exec_status, build_index++, aggregate_context, log->identifier()));
+        PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
     });
+    std::cout << "test4" << std::endl;
+
+    context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);
 
     Block before_agg_header = group_builder.getCurrentHeader();
     size_t concurrency = group_builder.concurrency;
