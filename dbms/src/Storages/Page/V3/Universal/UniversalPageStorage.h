@@ -141,9 +141,18 @@ public:
         const PS::V3::CheckpointProto::WriterInfo & writer_info;
     };
 
-    using DumpCheckpointResult = PS::V3::universal::PageDirectoryType::DumpCheckpointResult;
+    struct DumpCheckpointResult
+    {
+        struct FileInfo
+        {
+            const String id;
+            const String path;
+        };
+        std::vector<FileInfo> new_data_files;
+        std::vector<FileInfo> new_manifest_files;
+    };
 
-    DumpCheckpointResult dumpIncrementalCheckpoint(const DumpCheckpointOptions & options) const;
+    DumpCheckpointResult dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
 
     PageIdU64 getMaxIdAfterRestart() const;
 
@@ -173,6 +182,10 @@ public:
     PS::V3::universal::ExternalPageCallbacksManager manager;
 
     LoggerPtr log;
+
+    std::mutex checkpoint_mu;
+    // TODO: We should restore this from WAL. Otherwise the "last_sequence" in the files is not reliable
+    UInt64 last_checkpoint_sequence = 0;
 };
 
 } // namespace DB

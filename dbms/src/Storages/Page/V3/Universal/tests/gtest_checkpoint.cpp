@@ -386,7 +386,7 @@ try
         page_storage->write(std::move(batch));
     }
     {
-        auto sp_before_apply = SyncPointCtl::enableInScope("before_PageDirectory::dumpIncrementalCheckpoint_copyInfo");
+        auto sp_before_apply = SyncPointCtl::enableInScope("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
         auto th_cp = std::async([&]() {
             dumpCheckpoint();
         });
@@ -453,7 +453,7 @@ try
         page_storage->write(std::move(batch));
     }
     {
-        auto sp_before_apply = SyncPointCtl::enableInScope("before_PageDirectory::dumpIncrementalCheckpoint_copyInfo");
+        auto sp_before_apply = SyncPointCtl::enableInScope("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
         auto th_cp = std::async([&]() {
             dumpCheckpoint();
         });
@@ -530,7 +530,7 @@ try
         page_storage->write(std::move(batch));
     }
     {
-        auto sp_before_apply = SyncPointCtl::enableInScope("before_PageDirectory::dumpIncrementalCheckpoint_copyInfo");
+        auto sp_before_apply = SyncPointCtl::enableInScope("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
         auto th_cp = std::async([&]() {
             dumpCheckpoint();
         });

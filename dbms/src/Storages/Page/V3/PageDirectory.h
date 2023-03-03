@@ -391,19 +391,6 @@ public:
         const CPWriteDataSourcePtr data_source;
     };
 
-    struct DumpCheckpointResult
-    {
-        struct FileInfo
-        {
-            const String id;
-            const String path;
-        };
-        std::vector<FileInfo> new_data_files;
-        std::vector<FileInfo> new_manifest_files;
-    };
-
-    DumpCheckpointResult dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
-
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
     PageEntries gcInMemEntries(bool return_removed_entries = true);
@@ -495,11 +482,6 @@ private:
     WALStorePtr wal;
     const UInt64 max_persisted_log_files;
     LoggerPtr log;
-
-    std::mutex checkpoint_mu;
-
-    // TODO: We should restore this from WAL. Otherwise the "last_sequence" in the files is not reliable
-    UInt64 last_checkpoint_sequence = 0;
 };
 
 namespace u128

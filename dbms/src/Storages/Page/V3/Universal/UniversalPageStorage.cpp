@@ -16,6 +16,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -212,16 +213,77 @@ void UniversalPageStorage::unregisterUniversalExternalPagesCallbacks(const Strin
 }
 
 UniversalPageStorage::DumpCheckpointResult
-UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options) const
+UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
 {
-    return page_directory->dumpIncrementalCheckpoint({
-        .data_file_id_pattern = options.data_file_id_pattern,
-        .data_file_path_pattern = options.data_file_path_pattern,
-        .manifest_file_id_pattern = options.manifest_file_id_pattern,
-        .manifest_file_path_pattern = options.manifest_file_path_pattern,
-        .writer_info = options.writer_info,
+    std::scoped_lock lock(checkpoint_mu);
+
+    // Let's keep this snapshot until all finished, so that blob data will not be GCed.
+    auto snap = page_directory->createSnapshot(/*tracing_id*/ "dumpIncrementalCheckpoint");
+
+    if (snap->sequence == last_checkpoint_sequence)
+        return {};
+
+    auto edit_from_mem = page_directory->dumpSnapshotToEdit(snap);
+
+    // As a checkpoint, we write both entries (in manifest) and its data.
+    // Some entries' data may be already written by a previous checkpoint. These data will not be written again.
+
+    auto data_file_id = fmt::format(
+        options.data_file_id_pattern,
+        fmt::arg("sequence", snap->sequence),
+        fmt::arg("sub_file_index", 0));
+    auto data_file_path = fmt::format(
+        options.data_file_path_pattern,
+        fmt::arg("sequence", snap->sequence),
+        fmt::arg("sub_file_index", 0));
+
+    auto manifest_file_id = fmt::format(
+        options.manifest_file_id_pattern,
+        fmt::arg("sequence", snap->sequence));
+    auto manifest_file_path = fmt::format(
+        options.manifest_file_path_pattern,
+        fmt::arg("sequence", snap->sequence));
+
+    RUNTIME_CHECK(
+        data_file_path != manifest_file_path,
+        data_file_path,
+        manifest_file_path);
+
+    auto writer = PS::V3::CPFilesWriter::create({
+        .data_file_path = data_file_path,
+        .data_file_id = data_file_id,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = PS::V3::CPWriteDataSourceBlobStore::create(*blob_store),
     });
+
+    writer->writePrefix({
+        .writer = options.writer_info,
+        .sequence = snap->sequence,
+        .last_sequence = last_checkpoint_sequence,
+    });
+    bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem);
+    writer->writeSuffix();
+    writer.reset();
+
+    SYNC_FOR("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
+
+    // TODO: Currently, even when has_new_data == false,
+    //   something will be written to DataFile (i.e., the file prefix).
+    //   This can be avoided, as its content is useless.
+    if (has_new_data)
+    {
+        // Copy back the checkpoint info to the current PageStorage.
+        // New checkpoint infos are attached in `writeEditsAndApplyCheckpointInfo`.
+        page_directory->copyCheckpointInfoFromEdit(edit_from_mem);
+    }
+
+    last_checkpoint_sequence = snap->sequence;
+
+    return DumpCheckpointResult{
+        .new_data_files = {{.id = data_file_id, .path = data_file_path}},
+        .new_manifest_files = {{.id = manifest_file_id, .path = manifest_file_path}},
+    };
 }
 
 } // namespace DB
