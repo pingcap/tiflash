@@ -63,7 +63,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid)
     auto remote_meta_fname = fmt::format("{}/{}", remote_dir, DMFile::metav2FileName());
     S3::uploadFile(*s3_client, bucket, local_meta_fname, remote_meta_fname);
 
-    LOG_DEBUG(log, "Upload DMFile finished, remote={}, cost={}ms", remote_dir, sw.elapsedMilliseconds());
+    LOG_INFO(log, "Upload DMFile finished, key={}, cost={}ms", remote_dir, sw.elapsedMilliseconds());
 }
 
 void DataStoreS3::copyDMFileMetaToLocalPath(const S3::DMFileOID & remote_oid, const String & local_dir)
