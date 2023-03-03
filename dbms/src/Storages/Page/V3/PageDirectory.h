@@ -361,36 +361,6 @@ public:
 
     void copyCheckpointInfoFromEdit(PageEntriesEdit & edit);
 
-    struct DumpCheckpointOptions
-    {
-        /**
-         * The data file id and path. Available placeholders: {sequence}, {sub_file_index}.
-         * We accept "/" in the file name.
-         *
-         * File path is where the data file is put in the local FS. It should be a valid FS path.
-         * File ID is how that file is referenced by other Files, which can be anything you want.
-         */
-        const std::string & data_file_id_pattern;
-        const std::string & data_file_path_pattern;
-
-        /**
-         * The manifest file id and path. Available placeholders: {sequence}.
-         * We accept "/" in the file name.
-         *
-         * File path is where the manifest file is put in the local FS. It should be a valid FS path.
-         * File ID is how that file is referenced by other Files, which can be anything you want.
-         */
-        const std::string & manifest_file_id_pattern;
-        const std::string & manifest_file_path_pattern;
-
-        /**
-         * The writer info field in the dumped files.
-         */
-        const CheckpointProto::WriterInfo & writer_info;
-
-        const CPWriteDataSourcePtr data_source;
-    };
-
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
     PageEntries gcInMemEntries(bool return_removed_entries = true);
