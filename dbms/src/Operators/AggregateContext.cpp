@@ -73,8 +73,6 @@ void AggregateContext::readPrefix()
             *many_data[0],
             threads_data[0].key_columns,
             threads_data[0].aggregate_columns);
-
-    inited_for_read = true;
 }
 
 void AggregateContext::initConvergent()
