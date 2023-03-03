@@ -67,7 +67,16 @@ public:
                                         field_offsets.size()),
                             ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
-            return size - field_offsets.back().first;
+        {
+            if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+            {
+                return checkpoint_info->data_location.size_in_file - field_offsets.back().first;
+            }
+            else
+            {
+                return size - field_offsets.back().first;
+            }
+        }
         else
             return field_offsets[index + 1].first - field_offsets[index].first;
     }
@@ -80,7 +89,16 @@ public:
                 fmt::format("Try to getFieldOffsets with invalid index [index={}] [fields_size={}]", index, field_offsets.size()),
                 ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
-            return {field_offsets.back().first, size};
+        {
+            if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+            {
+                return {field_offsets.back().first, checkpoint_info->data_location.size_in_file};
+            }
+            else
+            {
+                return {field_offsets.back().first, size};
+            }
+        }
         else
             return {field_offsets[index].first, field_offsets[index + 1].first};
     }

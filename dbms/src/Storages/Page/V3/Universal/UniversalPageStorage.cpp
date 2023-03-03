@@ -29,7 +29,8 @@ UniversalPageStoragePtr UniversalPageStorage::create(
     PSDiskDelegatorPtr delegator,
     const PageStorageConfig & config,
     const FileProviderPtr & file_provider,
-    const String & remote_dir)
+    std::shared_ptr<Aws::S3::S3Client> s3_client,
+    const String & bucket)
 {
     UniversalPageStoragePtr storage = std::make_shared<UniversalPageStorage>(name, delegator, config, file_provider);
     storage->blob_store = std::make_unique<PS::V3::universal::BlobStoreType>(
@@ -37,9 +38,9 @@ UniversalPageStoragePtr UniversalPageStorage::create(
         file_provider,
         delegator,
         PS::V3::BlobConfig::from(config));
-    if (!remote_dir.empty())
+    if (s3_client != nullptr)
     {
-        storage->remote_reader = std::make_unique<PS::V3::CPDataFileReader>(remote_dir);
+        storage->remote_reader = std::make_unique<PS::V3::CPDataFileReader>(s3_client, bucket);
     }
     return storage;
 }
@@ -187,7 +188,6 @@ UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & 
     {
         auto buf = std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size());
         wb.updateRemotePage(page_id, buf, page.data.size());
-        local_page_map.emplace(page_id, page);
     }
     tryUpdateLocalCacheForRemotePages(wb, snapshot);
     for (const auto & [page_id, page] : remote_page_map)

@@ -19,6 +19,13 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
+#include <aws/s3/model/GetObjectResult.h>
+
+namespace Aws::S3
+{
+class S3Client;
+}
+
 namespace DB::PS::V3
 {
 using UniversalPageMap = std::map<UniversalPageId, Page>;
@@ -28,8 +35,9 @@ using UniversalPageIdAndEntries = std::vector<UniversalPageIdAndEntry>;
 class CPDataFileReader : private Allocator<false>
 {
 public:
-    explicit CPDataFileReader(const String & remote_directory_)
-        : remote_directory(remote_directory_)
+    explicit CPDataFileReader(std::shared_ptr<Aws::S3::S3Client> s3_client_, const String & bucket_)
+        : s3_client(s3_client_)
+        , bucket(bucket_)
     {}
 
     Page read(const UniversalPageIdAndEntry & page_id_and_entry);
@@ -42,7 +50,8 @@ public:
     std::pair<UniversalPageMap, UniversalPageMap> read(const FieldReadInfos & to_read);
 
 private:
-    String remote_directory;
+    std::shared_ptr<Aws::S3::S3Client> s3_client;
+    String bucket;
 };
 
 using CPDataFileReaderPtr = std::unique_ptr<CPDataFileReader>;

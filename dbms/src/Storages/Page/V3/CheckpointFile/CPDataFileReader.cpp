@@ -15,6 +15,7 @@
 #include <IO/ReadBufferFromFile.h>
 #include <Storages/Page/V3/CheckpointFile/CPDataFileReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
+#include <Storages/S3/S3RandomAccessFile.h>
 
 namespace DB::PS::V3
 {
@@ -23,15 +24,20 @@ Page CPDataFileReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
     const auto & page_entry = page_id_and_entry.second;
     RUNTIME_CHECK(page_entry.checkpoint_info.has_value());
     auto location = page_entry.checkpoint_info->data_location;
-    auto buf = std::make_shared<ReadBufferFromFile>(remote_directory + "/" + *location.data_file_id);
-    buf->seek(location.offset_in_file);
+    S3::S3RandomAccessFile file(s3_client, bucket, *location.data_file_id);
+    file.seek(location.offset_in_file, SEEK_SET);
     auto buf_size = location.size_in_file;
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
         free(p, buf_size);
     });
     // TODO: support checksum verification
-    buf->readStrict(data_buf, buf_size);
+    size_t pos = 0;
+    while (pos < buf_size)
+    {
+        auto n = file.read(data_buf + pos, buf_size - pos);
+        pos += n;
+    }
     Page page{UniversalPageIdFormat::getU64ID(page_id_and_entry.first)};
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;

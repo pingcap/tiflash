@@ -115,6 +115,8 @@ inline const char * typeToString(EditRecordType t)
         return "VAR_EXT";
     case EditRecordType::VAR_DELETE:
         return "VAR_DEL";
+    case EditRecordType::UPDATE_REMOTE:
+        return "UPDATE_REMOTE";
     default:
         return "INVALID";
     }
