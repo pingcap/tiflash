@@ -473,7 +473,7 @@ std::optional<PageEntryV3> VersionedPageEntries<Trait>::getLastEntry(std::option
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
     {
-        for (auto it_r = entries.rbegin(); it_r != entries.rend(); it_r++)
+        for (auto it_r = entries.rbegin(); it_r != entries.rend(); it_r++) // NOLINT(modernize-loop-convert)
         {
             if (seq.has_value() && it_r->first.sequence > seq.value())
                 continue;
