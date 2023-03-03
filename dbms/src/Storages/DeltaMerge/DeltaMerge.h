@@ -32,7 +32,7 @@ namespace DM
 /// Note that the columns in stable input stream and value space must exactly the same, including name, type, and id.
 /// The first column must be PK column.
 /// This class does not guarantee that the rows in the return blocks are filltered by range.
-template <class DeltaValueReader, class IndexIterator, bool skippable_place = false>
+template <class DeltaValueReader, class IndexIterator, bool skippable_place = false, bool need_row_id = false>
 class DeltaMergeBlockInputStream final : public SkippableBlockInputStream
     , Allocator<false>
 {
@@ -77,6 +77,7 @@ private:
     Columns cur_stable_block_columns;
     size_t cur_stable_block_rows = 0;
     size_t cur_stable_block_pos = 0;
+    UInt64 cur_stable_block_start_offset = 0;
 
     bool stable_done = false;
     bool delta_done = false;
@@ -85,10 +86,17 @@ private:
     size_t num_read = 0;
 
     RowKeyValue last_value;
-    RowKeyValueRef last_value_ref;
+    RowKeyValueRef last_value_ref{};
     UInt64 last_version = 0;
     size_t last_handle_pos = 0;
     size_t last_handle_read_num = 0;
+
+    // Use for calculating MVCC-bitmap-filter when `need_row_id` is true.
+    ColumnUInt32::MutablePtr seg_row_id_col;
+    // `stable_rows` is the total rows of the underlying DMFiles, includes not valid rows.
+    UInt64 stable_rows;
+    // `delta_row_ids` is used to return the row id of delta.
+    std::vector<UInt32> delta_row_ids;
 
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
@@ -96,7 +104,8 @@ public:
                                const IndexIterator & delta_index_start_,
                                const IndexIterator & delta_index_end_,
                                const RowKeyRange rowkey_range_,
-                               size_t max_block_size_)
+                               size_t max_block_size_,
+                               UInt64 stable_rows_)
         : stable_input_stream(stable_input_stream_)
         , delta_value_reader(delta_value_reader_)
         , delta_index_it(delta_index_start_)
@@ -105,6 +114,7 @@ public:
         , is_common_handle(rowkey_range.is_common_handle)
         , rowkey_column_size(rowkey_range.rowkey_column_size)
         , max_block_size(max_block_size_)
+        , stable_rows(stable_rows_)
     {
         if constexpr (skippable_place)
         {
@@ -154,6 +164,9 @@ public:
         sk_skip_total_rows = 0;
         return true;
     }
+
+    size_t skipNextBlock() override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
+    Block readWithFilter(const IColumn::Filter &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
 
     Block read() override
     {
@@ -214,6 +227,14 @@ private:
             /// become invalid, so need to update last_value here
             last_value = last_value_ref.toRowKeyValue();
             last_value_ref = last_value.toRowKeyValueRef();
+
+            if constexpr (need_row_id)
+            {
+                RUNTIME_CHECK_MSG(block.rows() == block.segmentRowIdCol()->size(),
+                                  "Build bitmap error: block.rows {} != segmentRowId.size() {}",
+                                  block.rows(),
+                                  block.segmentRowIdCol()->size());
+            }
         }
     }
 
@@ -247,7 +268,12 @@ private:
             if (limit == max_block_size)
                 continue;
 
-            return header.cloneWithColumns(std::move(columns));
+            auto block = header.cloneWithColumns(std::move(columns));
+            if constexpr (need_row_id)
+            {
+                block.setSegmentRowIdCol(std::move(seg_row_id_col));
+            }
+            return block;
         }
         return {};
     }
@@ -255,6 +281,27 @@ private:
 private:
     inline bool finished() { return stable_done && delta_done; }
 
+    inline void fillSegmentRowId(UInt64 start, UInt64 limit)
+    {
+        ColumnUInt32::Container & v = seg_row_id_col->getData();
+        auto offset = v.size();
+        v.resize(v.size() + limit);
+        for (UInt64 i = 0; i < limit; ++i)
+        {
+            v[offset + i] = start + i;
+        }
+    }
+
+    inline void fillSegmentRowId(const std::vector<UInt32> & row_ids)
+    {
+        ColumnUInt32::Container & v = seg_row_id_col->getData();
+        auto offset = v.size();
+        v.resize(v.size() + row_ids.size());
+        for (UInt32 i = 0; i < row_ids.size(); ++i)
+        {
+            v[offset + i] = row_ids[i] + stable_rows;
+        }
+    }
     template <bool c_stable_done, bool c_delta_done>
     inline void next(MutableColumns & output_columns, size_t & output_write_limit)
     {
@@ -310,10 +357,14 @@ private:
     inline void initOutputColumns(MutableColumns & columns)
     {
         columns.resize(num_columns);
-
         for (size_t i = 0; i < num_columns; ++i)
         {
             columns[i] = header.safeGetByPosition(i).column->cloneEmpty();
+        }
+        if constexpr (need_row_id)
+        {
+            seg_row_id_col = ColumnUInt32::create();
+            seg_row_id_col->reserve(max_block_size);
         }
     }
 
@@ -335,11 +386,13 @@ private:
         cur_stable_block_columns.clear();
         cur_stable_block_rows = 0;
         cur_stable_block_pos = 0;
+        cur_stable_block_start_offset = 0;
         auto block = stable_input_stream->read();
         if (!block || !block.rows())
             return false;
 
         cur_stable_block_rows = block.rows();
+        cur_stable_block_start_offset = block.startOffset();
         for (size_t column_id = 0; column_id < num_columns; ++column_id)
             cur_stable_block_columns.push_back(block.getByPosition(column_id).column);
         return true;
@@ -374,7 +427,7 @@ private:
 
         if (stable_ignore < 0)
         {
-            size_t stable_ignore_abs = static_cast<size_t>(std::abs(stable_ignore));
+            auto stable_ignore_abs = static_cast<size_t>(std::abs(stable_ignore));
             if (use_stable_rows > stable_ignore_abs)
             {
                 use_stable_rows += stable_ignore;
@@ -474,6 +527,11 @@ private:
             output_write_limit -= std::min(final_limit, output_write_limit);
         }
 
+        if constexpr (need_row_id)
+        {
+            fillSegmentRowId(final_offset + cur_stable_block_start_offset, final_limit);
+        }
+
         cur_stable_block_pos += copy_rows;
         use_stable_rows -= copy_rows;
     }
@@ -491,7 +549,18 @@ private:
 
         // Note that the rows between [use_delta_offset, use_delta_offset + write_rows) are guaranteed sorted,
         // otherwise we won't read them in the same range.
-        auto actual_write = delta_value_reader->readRows(output_columns, use_delta_offset, write_rows, &rowkey_range);
+        size_t actual_write = 0;
+        if constexpr (need_row_id)
+        {
+            delta_row_ids.clear();
+            delta_row_ids.reserve(write_rows);
+            actual_write = delta_value_reader->readRows(output_columns, use_delta_offset, write_rows, &rowkey_range, &delta_row_ids);
+            fillSegmentRowId(delta_row_ids);
+        }
+        else
+        {
+            actual_write = delta_value_reader->readRows(output_columns, use_delta_offset, write_rows, &rowkey_range);
+        }
 
         if constexpr (skippable_place)
         {

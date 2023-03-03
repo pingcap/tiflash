@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 
 namespace DB
 {
@@ -41,6 +42,10 @@ Block ExchangeSenderBlockInputStream::readImpl()
     {
         total_rows += block.rows();
         writer->write(block);
+    }
+    else
+    {
+        writer->flush();
     }
     return block;
 }

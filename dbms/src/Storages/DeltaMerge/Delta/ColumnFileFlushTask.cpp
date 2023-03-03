@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/Delta/ColumnFileFlushTask.h>
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>
 #include <Storages/DeltaMerge/Delta/MemTableSet.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 
 namespace DB
 {
@@ -91,7 +92,7 @@ bool ColumnFileFlushTask::commit(ColumnFilePersistedSetPtr & persisted_file_set,
     }
 
     // serialize metadata and update persisted_file_set
-    if (!persisted_file_set->appendPersistedColumnFilesToLevel0(new_column_files, wbs))
+    if (!persisted_file_set->appendPersistedColumnFiles(new_column_files, wbs))
         return false;
 
     mem_table_set->removeColumnFilesInFlushTask(*this);

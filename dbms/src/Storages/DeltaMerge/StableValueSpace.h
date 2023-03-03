@@ -16,18 +16,19 @@
 
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
-#include <Storages/Page/Page.h>
-#include <Storages/Page/PageStorage.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/PageStorage_fwd.h>
 
 namespace DB
 {
 namespace DM
 {
+
 struct WriteBatches;
+
 struct DMContext;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
@@ -38,12 +39,12 @@ using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
-    StableValueSpace(PageId id_)
+    StableValueSpace(PageIdU64 id_)
         : id(id_)
         , log(Logger::get())
     {}
 
-    static StableValueSpacePtr restore(DMContext & context, PageId id);
+    static StableValueSpacePtr restore(DMContext & context, PageIdU64 id);
 
     /**
      * Resets the logger by using the one from the segment.
@@ -60,8 +61,8 @@ public:
     // bytes and rows.
     void setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context = nullptr);
 
-    PageId getId() const { return id; }
-    void saveMeta(WriteBatch & meta_wb);
+    PageIdU64 getId() const { return id; }
+    void saveMeta(WriteBatchWrapper & meta_wb);
 
     size_t getRows() const;
     size_t getBytes() const;
@@ -140,7 +141,7 @@ public:
     {
         StableValueSpacePtr stable;
 
-        PageId id;
+        PageIdU64 id;
         UInt64 valid_rows;
         UInt64 valid_bytes;
 
@@ -171,7 +172,7 @@ public:
             return c;
         }
 
-        PageId getId() const { return id; }
+        PageIdU64 getId() const { return id; }
 
         size_t getRows() const { return valid_rows; }
         size_t getBytes() const { return valid_bytes; }
@@ -214,7 +215,9 @@ public:
                                                     size_t expected_block_size,
                                                     bool enable_handle_clean_read,
                                                     bool is_fast_scan = false,
-                                                    bool enable_del_clean_read = false);
+                                                    bool enable_del_clean_read = false,
+                                                    const std::vector<IdSetPtr> & read_packs = {},
+                                                    bool need_row_id = false);
 
         RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 
@@ -241,7 +244,7 @@ public:
     void drop(const FileProviderPtr & file_provider);
 
 private:
-    const PageId id;
+    const PageIdU64 id;
 
     // Valid rows is not always the sum of rows in file,
     // because after logical split, two segments could reference to a same file.

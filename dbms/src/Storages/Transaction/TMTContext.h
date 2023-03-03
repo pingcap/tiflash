@@ -48,18 +48,33 @@ struct TiFlashRaftConfig;
 // `share` the resource of cluster.
 using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
 
+namespace Etcd
+{
+class Client;
+using ClientPtr = std::shared_ptr<Client>;
+} // namespace Etcd
+class OwnerManager;
+using OwnerManagerPtr = std::shared_ptr<OwnerManager>;
+namespace S3
+{
+class IS3LockClient;
+using S3LockClientPtr = std::shared_ptr<IS3LockClient>;
+class S3GCManagerService;
+using S3GCManagerServicePtr = std::unique_ptr<S3GCManagerService>;
+} // namespace S3
+
 class TMTContext : private boost::noncopyable
 {
 public:
     enum class StoreStatus : uint8_t
     {
-        _MIN = 0,
+        _MIN = 0, // NOLINT(bugprone-reserved-identifier)
         Idle,
         Ready,
         Running,
         Stopping,
         Terminated,
-        _MAX,
+        _MAX, // NOLINT(bugprone-reserved-identifier)
     };
 
 public:
@@ -81,15 +96,24 @@ public:
 
     const Context & getContext() const;
 
-    explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);
+    explicit TMTContext(Context & context_,
+                        const TiFlashRaftConfig & raft_config,
+                        const pingcap::ClusterConfig & cluster_config_);
+    ~TMTContext();
 
     SchemaSyncerPtr getSchemaSyncer() const;
+
+    void updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config);
 
     pingcap::pd::ClientPtr getPDClient() const;
 
     pingcap::kv::Cluster * getKVCluster() { return cluster.get(); }
 
+    const OwnerManagerPtr & getS3GCOwnerManager() const;
+
     MPPTaskManagerPtr getMPPTaskManager();
+
+    void shutdown();
 
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
@@ -108,9 +132,6 @@ public:
     bool checkTerminated(std::memory_order = std::memory_order_seq_cst) const;
     bool checkRunning(std::memory_order = std::memory_order_seq_cst) const;
 
-    const KVClusterPtr & getCluster() const { return cluster; }
-
-    UInt64 replicaReadMaxThread() const;
     UInt64 batchReadIndexTimeout() const;
     // timeout for wait index (ms). "0" means wait infinitely
     UInt64 waitIndexTimeout() const;
@@ -126,6 +147,10 @@ private:
     GCManager gc_manager;
 
     KVClusterPtr cluster;
+    Etcd::ClientPtr etcd_client;
+
+    OwnerManagerPtr s3gc_owner;
+    S3::S3LockClientPtr s3_lock_client;
 
     mutable std::mutex mutex;
 
@@ -137,7 +162,6 @@ private:
 
     ::TiDB::StorageEngine engine;
 
-    std::atomic_uint64_t replica_read_max_thread;
     std::atomic_uint64_t batch_read_index_timeout_ms;
     std::atomic_uint64_t wait_index_timeout_ms;
     std::atomic_uint64_t read_index_worker_tick_ms;

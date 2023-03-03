@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,12 @@
 
 #pragma once
 
-#include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
-#include <Interpreters/Context.h>
+#include <Flash/Executor/QueryExecutor.h>
 
 namespace DB
 {
-BlockIO executeQuery(Context & context, bool internal = false);
+class Context;
+
+QueryExecutorPtr queryExecute(Context & context, bool internal = false);
 } // namespace DB

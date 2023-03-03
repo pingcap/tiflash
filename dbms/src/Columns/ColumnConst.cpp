@@ -55,16 +55,18 @@ ColumnPtr ColumnConst::filter(const Filter & filt, ssize_t /*result_size_hint*/)
     return ColumnConst::create(data, countBytesInFilter(filt));
 }
 
-ColumnPtr ColumnConst::replicate(const Offsets & offsets) const
+ColumnPtr ColumnConst::replicateRange(size_t /*start_row*/, size_t end_row, const IColumn::Offsets & offsets) const
 {
     if (s != offsets.size())
         throw Exception(
             fmt::format("Size of offsets ({}) doesn't match size of column ({})", offsets.size(), s),
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-    size_t replicated_size = 0 == s ? 0 : offsets.back();
+    assert(end_row <= s);
+    size_t replicated_size = 0 == s ? 0 : (offsets[end_row - 1]);
     return ColumnConst::create(data, replicated_size);
 }
+
 
 ColumnPtr ColumnConst::permute(const Permutation & perm, size_t limit) const
 {
@@ -95,6 +97,20 @@ MutableColumns ColumnConst::scatter(ColumnIndex num_columns, const Selector & se
         res[i] = cloneResized(counts[i]);
 
     return res;
+}
+
+void ColumnConst::scatterTo(ScatterColumns & columns, const Selector & selector) const
+{
+    if (s != selector.size())
+        throw Exception(
+            fmt::format("Size of selector ({}) doesn't match size of column ({})", selector.size(), s),
+            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    ColumnIndex num_columns = columns.size();
+    std::vector<size_t> counts = countColumnsSizeInSelector(num_columns, selector);
+
+    for (size_t i = 0; i < num_columns; ++i)
+        columns[i]->insertRangeFrom(*this, 0, counts[i]);
 }
 
 void ColumnConst::getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_direction_hint*/, Permutation & res) const

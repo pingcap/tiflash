@@ -220,6 +220,22 @@ public:
         data.push_back(static_cast<const Self &>(src).getData()[n]);
     }
 
+    void insertManyFrom(const IColumn & src, size_t position, size_t length) override
+    {
+        const auto & value = static_cast<const Self &>(src).getData()[position];
+        data.resize_fill(data.size() + length, value);
+    }
+
+    void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) override
+    {
+        const auto & src_container = static_cast<const Self &>(src).getData();
+        size_t old_size = data.size();
+        size_t to_add_size = position_vec.size();
+        data.resize(old_size + to_add_size);
+        for (size_t i = 0; i < to_add_size; ++i)
+            data[i + old_size] = src_container[position_vec[i]];
+    }
+
     void insertData(const char * pos, size_t /*length*/) override
     {
         data.push_back(*reinterpret_cast<const T *>(pos));
@@ -285,6 +301,11 @@ public:
         data.push_back(T());
     }
 
+    void insertManyDefaults(size_t length) override
+    {
+        data.resize_fill(data.size() + length, T());
+    }
+
     void popBack(size_t n) override
     {
         data.resize_assume_reserved(data.size() - n);
@@ -292,7 +313,11 @@ public:
 
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
 
-    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
+    inline const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override
+    {
+        data.push_back(*reinterpret_cast<const T *>(pos));
+        return pos + sizeof(T);
+    }
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
@@ -362,13 +387,18 @@ public:
 
     ColumnPtr permute(const IColumn::Permutation & perm, size_t limit) const override;
 
-    ColumnPtr replicate(const IColumn::Offsets & offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const override;
 
     void getExtremes(Field & min, Field & max) const override;
 
     MutableColumns scatter(IColumn::ColumnIndex num_columns, const IColumn::Selector & selector) const override
     {
         return this->template scatterImpl<Self>(num_columns, selector);
+    }
+
+    void scatterTo(IColumn::ScatterColumns & columns, const IColumn::Selector & selector) const override
+    {
+        this->template scatterToImpl<Self>(columns, selector);
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;

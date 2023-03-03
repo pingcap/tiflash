@@ -14,29 +14,10 @@
 
 #pragma once
 
-#include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
-#include <Debug/MockExecutor/AggregationBinder.h>
-#include <Debug/MockExecutor/AstToPB.h>
-#include <Debug/MockExecutor/ExchangeReceiverBinder.h>
-#include <Debug/MockExecutor/ExchangeSenderBinder.h>
-#include <Debug/MockExecutor/ExecutorBinder.h>
-#include <Debug/MockExecutor/JoinBinder.h>
-#include <Debug/MockExecutor/LimitBinder.h>
-#include <Debug/MockExecutor/ProjectBinder.h>
-#include <Debug/MockExecutor/SelectionBinder.h>
-#include <Debug/MockExecutor/SortBinder.h>
-#include <Debug/MockExecutor/TableScanBinder.h>
-#include <Debug/MockExecutor/TopNBinder.h>
-#include <Debug/MockExecutor/WindowBinder.h>
-#include <Flash/Coprocessor/ChunkCodec.h>
-#include <Parsers/IAST.h>
-#include <Storages/Transaction/Types.h>
-
 namespace DB
 {
 class Context;
-using MockServerConfig = tests::MockServerConfig;
 
 // Coprocessor debug tools
 
@@ -45,62 +26,13 @@ using MockServerConfig = tests::MockServerConfig;
 //   ./storages-client.sh "DBGInvoke dag(query[, region_id])"
 BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args);
 
-void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInvoker::Printer output);
-
 // Mock a DAG request using given query that will be compiled (with the metadata from MockTiDB) to DAG request, with the given region ID and (optional) start ts.
 // Usage:
 //   ./storages-client.sh "DBGInvoke mock_dag(query, region_id[, start_ts])"
 BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args);
 
-DAGProperties getDAGProperties(const String & prop_string);
-
-enum QueryTaskType
-{
-    DAG,
-    MPP_DISPATCH
-};
-
-struct QueryTask
-{
-    std::shared_ptr<tipb::DAGRequest> dag_request;
-    TableID table_id;
-    DAGSchema result_schema;
-    QueryTaskType type;
-    Int64 task_id;
-    Int64 partition_id;
-    bool is_root_task;
-    QueryTask(std::shared_ptr<tipb::DAGRequest> request, TableID table_id_, const DAGSchema & result_schema_, QueryTaskType type_, Int64 task_id_, Int64 partition_id_, bool is_root_task_)
-        : dag_request(std::move(request))
-        , table_id(table_id_)
-        , result_schema(result_schema_)
-        , type(type_)
-        , task_id(task_id_)
-        , partition_id(partition_id_)
-        , is_root_task(is_root_task_)
-    {}
-};
-
-using QueryTasks = std::vector<QueryTask>;
-using MakeResOutputStream = std::function<BlockInputStreamPtr(BlockInputStreamPtr)>;
-using SchemaFetcher = std::function<TiDB::TableInfo(const String &, const String &)>;
-
-std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
-    Context & context,
-    const String & query,
-    SchemaFetcher schema_fetcher,
-    const DAGProperties & properties);
-
-QueryTasks queryPlanToQueryTasks(
-    const DAGProperties & properties,
-    mock::ExecutorBinderPtr root_executor,
-    size_t & executor_index,
-    const Context & context);
-
-BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
-BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
-std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map);
-DAGSchema getSelectSchema(Context & context);
-std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type);
+// Not used right now.
+void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 namespace Debug
 {

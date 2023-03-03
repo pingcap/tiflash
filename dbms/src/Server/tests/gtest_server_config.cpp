@@ -27,9 +27,11 @@
 #include <Poco/Logger.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
@@ -139,7 +141,7 @@ dt_enable_rough_set_filter = false
             EXPECT_EQ(settings.use_uncompressed_cache, 1U);
             if (i == 2)
             {
-                EXPECT_EQ(settings.max_memory_usage, 123456UL);
+                EXPECT_EQ(settings.max_memory_usage.getActualBytes(0), 123456UL);
                 EXPECT_FALSE(settings.dt_enable_rough_set_filter);
             }
             QuotaForIntervals * quota_raw_ptr = nullptr;
@@ -151,6 +153,89 @@ dt_enable_rough_set_filter = false
             ASSERT_NO_THROW(ctx.checkDatabaseAccessRights("test"));
         }
     }
+}
+CATCH
+
+TEST_F(UsersConfigParserTest, MemoryLimit)
+try
+{
+    UInt64 total = 1'000'000;
+
+    std::vector<std::pair<String, Int64>> tests = {
+        {R"(
+[profiles]
+[profiles.default]
+# default
+        )",
+         800'000},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 0
+        )",
+         0},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 0.0
+        )",
+         0},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 0.001
+        )",
+         1'000},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 0.1
+        )",
+         100'000},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 0.999
+        )",
+         999'000},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 1
+        )",
+         1},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 1.0
+        )",
+         -1},
+        {R"(
+[profiles]
+[profiles.default]
+max_memory_usage_for_all_queries = 10000
+        )",
+         10000},
+    };
+    auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+    for (const auto & [cfg_string, limit] : tests)
+    {
+        LOG_INFO(log, "parsing [content={}]", cfg_string);
+        auto config = loadConfigFromString(cfg_string);
+        auto settings = Settings();
+
+        try
+        {
+            settings.setProfile("default", *config);
+            EXPECT_EQ(settings.max_memory_usage_for_all_queries.getActualBytes(total), limit);
+        }
+        catch (const Exception & e)
+        {
+            EXPECT_EQ(limit, -1);
+            EXPECT_EQ(e.code(), ErrorCodes::INVALID_CONFIG_PARAMETER);
+        }
+    }
+    global_ctx.setSettings(origin_settings);
 }
 CATCH
 
@@ -218,7 +303,7 @@ dt_compression_level = 1
         ASSERT_EQ(global_ctx.getSettingsRef().max_rows_in_set, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_enable_rough_set_filter, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_limit_rows, 1000005);
-        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage, 0);
+        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage.getActualBytes(0), 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_file_num, 8);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
@@ -286,6 +371,11 @@ dt_open_file_max_idle_seconds = 20
 dt_page_gc_low_write_prob = 0.2
         )"};
     auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+    if (global_ctx.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
+    {
+        // don't support reload uni ps config through region persister
+        return;
+    }
     auto & global_path_pool = global_ctx.getPathPool();
     RegionManager region_manager;
     RegionPersister persister(global_ctx, region_manager);
@@ -327,7 +417,7 @@ dt_page_gc_low_write_prob = 0.2
         ASSERT_EQ(global_ctx.getSettingsRef().max_rows_in_set, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_enable_rough_set_filter, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_limit_rows, 1000005);
-        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage, 0);
+        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage.getActualBytes(0), 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_file_num, 8);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
@@ -362,6 +452,11 @@ dt_page_gc_low_write_prob = 0.2
         )"};
 
     auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+    if (global_ctx.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
+    {
+        // don't support reload uni ps config through storage pool
+        return;
+    }
     std::unique_ptr<StoragePathPool> path_pool = std::make_unique<StoragePathPool>(global_ctx.getPathPool().withTable("test", "t1", false));
     std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>(global_ctx, /*ns_id*/ 100, *path_pool, "test.t1");
 
@@ -402,7 +497,7 @@ dt_page_gc_low_write_prob = 0.2
         ASSERT_EQ(global_ctx.getSettingsRef().max_rows_in_set, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_enable_rough_set_filter, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_limit_rows, 1000005);
-        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage, 0);
+        ASSERT_EQ(global_ctx.getSettingsRef().max_memory_usage.getActualBytes(0), 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_file_num, 8);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);

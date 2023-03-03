@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h>
 #include <Common/config_version.h>
 #include <common/config_common.h>
 #include <fmt/core.h>
@@ -66,8 +67,10 @@ std::string getEnabledFeatures()
 #endif
 
 // sm4
-#if OPENSSL_VERSION_NUMBER >= 0x1010100fL && !defined(OPENSSL_NO_SM4)
-            "sm4",
+#if USE_GM_SSL
+            "sm4(GmSSL)",
+#elif OPENSSL_VERSION_NUMBER >= 0x1010100fL && !defined(OPENSSL_NO_SM4)
+            "sm4(OpenSSL)",
 #endif
 
 // mem-profiling
@@ -82,7 +85,7 @@ std::string getEnabledFeatures()
 
 // SIMD related
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            "avx",
+            "avx2",
 #endif
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
             "avx512",

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnVector.h>
+#include <Columns/ColumnsCommon.h>
 #include <Common/Arena.h>
 #include <Common/Exception.h>
 #include <Common/HashTable/Hash.h>
@@ -45,13 +46,6 @@ StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char
     auto * pos = arena.allocContinue(sizeof(T), begin);
     memcpy(pos, &data[n], sizeof(T));
     return StringRef(pos, sizeof(T));
-}
-
-template <typename T>
-const char * ColumnVector<T>::deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &)
-{
-    data.push_back(*reinterpret_cast<const T *>(pos));
-    return pos + sizeof(T);
 }
 
 template <typename T>
@@ -220,7 +214,11 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
     Container & res_data = res->getData();
 
     if (result_size_hint)
-        res_data.reserve(result_size_hint > 0 ? result_size_hint : size);
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filt);
+        res_data.reserve(result_size_hint);
+    }
 
     const UInt8 * filt_pos = &filt[0];
     const UInt8 * filt_end = filt_pos + size;
@@ -295,27 +293,34 @@ ColumnPtr ColumnVector<T>::permute(const IColumn::Permutation & perm, size_t lim
 }
 
 template <typename T>
-ColumnPtr ColumnVector<T>::replicate(const IColumn::Offsets & offsets) const
+ColumnPtr ColumnVector<T>::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
 {
     size_t size = data.size();
     if (size != offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    assert(start_row < end_row);
+    assert(end_row <= size);
 
     if (0 == size)
         return this->create();
 
     auto res = this->create();
     typename Self::Container & res_data = res->getData();
-    res_data.reserve(offsets.back());
+
+    res_data.reserve(offsets[end_row - 1]);
 
     IColumn::Offset prev_offset = 0;
-    for (size_t i = 0; i < size; ++i)
+
+    for (size_t i = start_row; i < end_row; ++i)
     {
         size_t size_to_replicate = offsets[i] - prev_offset;
         prev_offset = offsets[i];
 
         for (size_t j = 0; j < size_to_replicate; ++j)
+        {
             res_data.push_back(data[i]);
+        }
     }
 
     return res;

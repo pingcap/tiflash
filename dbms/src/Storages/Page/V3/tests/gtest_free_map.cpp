@@ -13,9 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Storages/Page/V3/spacemap/RBTree.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
-#include <Storages/Page/V3/spacemap/SpaceMapRBTree.h>
 #include <Storages/Page/V3/spacemap/SpaceMapSTDMap.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -292,13 +290,13 @@ TEST_P(SpaceMapTest, TestSearch)
 
     std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
 
-    ASSERT_EQ(offset, 0);
-    ASSERT_EQ(max_cap, 40);
-    ASSERT_EQ(expansion, false);
+    ASSERT_EQ(offset, 60);
+    ASSERT_EQ(max_cap, 50);
+    ASSERT_EQ(expansion, true);
 
-    Range ranges1[] = {{.start = 20,
+    Range ranges1[] = {{.start = 0,
                         .end = 50},
-                       {.start = 60,
+                       {.start = 80,
                         .end = 100}};
     ASSERT_TRUE(smap->check(genChecker(ranges1, 2), 2));
 
@@ -309,13 +307,13 @@ TEST_P(SpaceMapTest, TestSearch)
     ASSERT_TRUE(smap->markUsed(50, 10));
 
     std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(5);
-    ASSERT_EQ(offset, 0);
-    ASSERT_EQ(max_cap, 45);
-    ASSERT_EQ(expansion, false);
+    ASSERT_EQ(offset, 60);
+    ASSERT_EQ(max_cap, 50);
+    ASSERT_EQ(expansion, true);
 
-    Range ranges2[] = {{.start = 5,
+    Range ranges2[] = {{.start = 0,
                         .end = 50},
-                       {.start = 60,
+                       {.start = 65,
                         .end = 100}};
     ASSERT_TRUE(smap->check(genChecker(ranges2, 2), 2));
 
@@ -372,6 +370,7 @@ TEST_P(SpaceMapTest, TestSearchIsExpansion)
     ASSERT_EQ(expansion, true);
 
     ASSERT_TRUE(smap->markUsed(90, 10));
+    smap->updateAccurateMaxCapacity();
     std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
     ASSERT_EQ(expansion, false);
     std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
@@ -467,8 +466,62 @@ TEST_P(SpaceMapTest, TestGetUsedBoundary)
 INSTANTIATE_TEST_CASE_P(
     Type,
     SpaceMapTest,
-    testing::Values(
-        SpaceMap::SMAP64_RBTREE,
-        SpaceMap::SMAP64_STD_MAP));
+    testing::Values(SpaceMap::SMAP64_STD_MAP));
 
+TEST(SpaceMapSTDMapTest, TestMarkFreeSearch)
+{
+    auto smap = SpaceMap::createSpaceMap(SpaceMap::SMAP64_STD_MAP, 0, 100);
+    STDMapSpaceMapPtr smap_std = std::dynamic_pointer_cast<STDMapSpaceMap>(smap);
+    UInt64 offset;
+    UInt64 max_cap;
+    bool expansion = true;
+    {
+        std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(25);
+        ASSERT_EQ(offset, 0);
+        ASSERT_EQ(max_cap, 75);
+        ASSERT_EQ(expansion, true);
+
+        std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(25);
+        ASSERT_EQ(offset, 25);
+        ASSERT_EQ(max_cap, 50);
+        ASSERT_EQ(expansion, true);
+    }
+    {
+        ASSERT_TRUE(smap->markFree(25, 25));
+        auto iter = smap_std->free_map_invert_index.rbegin();
+        ASSERT_EQ(*(iter->second.begin()), 25);
+        ASSERT_EQ(iter->first, 75);
+
+        // Allocate a space the same size as current actual `biggest_cap`
+        std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(75);
+        ASSERT_EQ(offset, 25);
+        ASSERT_EQ(max_cap, 0);
+        ASSERT_EQ(expansion, true);
+    }
+
+    ASSERT_TRUE(smap->markFree(0, 100));
+    {
+        std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(25);
+        ASSERT_EQ(offset, 0);
+        ASSERT_EQ(max_cap, 75);
+        ASSERT_EQ(expansion, true);
+
+        std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(25);
+        ASSERT_EQ(offset, 25);
+        ASSERT_EQ(max_cap, 50);
+        ASSERT_EQ(expansion, true);
+    }
+    {
+        ASSERT_TRUE(smap->markFree(25, 25));
+        auto iter = smap_std->free_map_invert_index.rbegin();
+        ASSERT_EQ(*(iter->second.begin()), 25);
+        ASSERT_EQ(iter->first, 75);
+
+        // Allocate a space smaller than current actual `biggest_cap`
+        std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(50);
+        ASSERT_EQ(offset, 25);
+        ASSERT_EQ(max_cap, 25);
+        ASSERT_EQ(expansion, true);
+    }
+}
 } // namespace DB::PS::V3::tests

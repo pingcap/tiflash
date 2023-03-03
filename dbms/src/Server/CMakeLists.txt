@@ -17,13 +17,13 @@
 # each of them is built and linked as a separate library, defined below.
 
 
-option(ENABLE_CLICKHOUSE_ALL "Enable all tools" ON)
-option(ENABLE_CLICKHOUSE_SERVER "Enable server" ${ENABLE_CLICKHOUSE_ALL})
-option(ENABLE_CLICKHOUSE_CLIENT "Enable client" ${ENABLE_CLICKHOUSE_ALL})
-option(ENABLE_TIFLASH_DTTOOL "Enable dttool: tools to manage dmfile" ${ENABLE_CLICKHOUSE_ALL})
-option(ENABLE_TIFLASH_DTWORKLOAD "Enable dtworkload: tools to test and stress DeltaTree" ${ENABLE_CLICKHOUSE_ALL})
-option(ENABLE_TIFLASH_PAGEWORKLOAD "Enable pageworkload: tools to test and stress PageStorage" ${ENABLE_CLICKHOUSE_ALL})
-option(ENABLE_TIFLASH_PAGECTL "Enable pagectl: tools to debug page storage" ${ENABLE_CLICKHOUSE_ALL})
+option(ENABLE_TIFLASH_ALL "Enable all tools" ON)
+option(ENABLE_TIFLASH_SERVER "Enable server" ${ENABLE_TIFLASH_ALL})
+option(ENABLE_TIFLASH_CLIENT "Enable client" ${ENABLE_TIFLASH_ALL})
+option(ENABLE_TIFLASH_DTTOOL "Enable dttool: tools to manage dmfile" ${ENABLE_TIFLASH_ALL})
+option(ENABLE_TIFLASH_DTWORKLOAD "Enable dtworkload: tools to test and stress DeltaTree" ${ENABLE_TIFLASH_ALL})
+option(ENABLE_TIFLASH_PAGEWORKLOAD "Enable pageworkload: tools to test and stress PageStorage" ${ENABLE_TIFLASH_ALL})
+option(ENABLE_TIFLASH_PAGECTL "Enable pagectl: tools to debug page storage" ${ENABLE_TIFLASH_ALL})
 
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
@@ -31,11 +31,12 @@ add_library(server_for_test
     FlashGrpcServerHolder.cpp
 )
 
-target_link_libraries (server_for_test PUBLIC clickhouse_common_io clickhouse_storages_system)
+target_link_libraries (server_for_test PUBLIC tiflash_common_io tiflash_storages_system)
+target_include_directories (server_for_test PRIVATE ${TiFlash_SOURCE_DIR}/contrib/grpc/)
 
-add_library (clickhouse-server-lib
+add_library (tiflash-server-lib
     HTTPHandler.cpp
-    FlashGrpcServerHolder.cpp
+    CertificateReloader.cpp
     MetricsTransmitter.cpp
     MetricsPrometheus.cpp
     NotFoundHandler.cpp
@@ -49,17 +50,17 @@ add_library (clickhouse-server-lib
     UserConfigParser.cpp
     RaftConfigParser.cpp)
 
-target_link_libraries(clickhouse-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
+target_link_libraries(tiflash-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
 
-target_link_libraries (clickhouse-server-lib PUBLIC clickhouse_common_io daemon clickhouse_storages_system clickhouse_functions clickhouse_aggregate_functions clickhouse_table_functions)
-target_include_directories (clickhouse-server-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
+target_link_libraries (tiflash-server-lib PUBLIC server_for_test tiflash_common_io daemon tiflash_storages_system tiflash_functions tiflash_aggregate_functions tiflash_table_functions)
+target_include_directories (tiflash-server-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
 
-add_library (clickhouse-client-lib Client.cpp)
-target_link_libraries (clickhouse-client-lib clickhouse_functions clickhouse_aggregate_functions ${LINE_EDITING_LIBS} ${Boost_PROGRAM_OPTIONS_LIBRARY})
-target_include_directories (clickhouse-client-lib PRIVATE ${READLINE_INCLUDE_DIR})
+add_library (tiflash-client-lib Client.cpp)
+target_link_libraries (tiflash-client-lib tiflash_functions tiflash_aggregate_functions ${LINE_EDITING_LIBS} ${Boost_PROGRAM_OPTIONS_LIBRARY})
+target_include_directories (tiflash-client-lib PRIVATE ${READLINE_INCLUDE_DIR})
 
 add_library(tiflash-dttool-lib ${SPLIT_SHARED} DTTool/DTToolBench.cpp DTTool/DTToolMigrate.cpp DTTool/DTToolInspect.cpp)
-target_link_libraries(tiflash-dttool-lib PUBLIC dbms daemon clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
+target_link_libraries(tiflash-dttool-lib PUBLIC dbms daemon tiflash_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_include_directories(tiflash-dttool-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
 
 add_library(tiflash-dttool-entry-object STATIC DTTool/DTTool.cpp)
@@ -80,7 +81,7 @@ cmake_path(
     BASE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     OUTPUT_VARIABLE TIFLASH_PROXY_LIB_RPATH)
 
-if (ARCH_LINUX)
+if (OS_LINUX)
     if (ARCH_AARCH64)
         set(TIFLASH_ARCH_NAME "aarch64")
     elseif(ARCH_AMD64)
@@ -119,6 +120,11 @@ if (ARCH_LINUX)
                 "ld-linux-aarch64.*"
                 "libpthread.*"# exclude libc dependencies
             DIRECTORIES ${TIFLASH_DEPENDENCY_DIRECTORIES})
+    if (USE_GM_SSL)
+        install (TARGETS gmssl
+                COMPONENT tiflash-release
+                DESTINATION ".")
+    endif()
 
     if (NOT (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG" OR SAN_DEBUG))
         install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
@@ -140,15 +146,15 @@ endif ()
 include(CMakePrintHelpers)
 cmake_print_properties(TARGETS tiflash PROPERTIES BUILD_RPATH INSTALL_RPATH)
 
-target_link_libraries (tiflash clickhouse_common_io)
+target_link_libraries (tiflash tiflash_common_io)
 target_include_directories (tiflash BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
 target_include_directories (tiflash PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
-if (ENABLE_CLICKHOUSE_SERVER)
-    target_link_libraries (tiflash clickhouse-server-lib)
+if (ENABLE_TIFLASH_SERVER)
+    target_link_libraries (tiflash tiflash-server-lib)
 endif ()
-if (ENABLE_CLICKHOUSE_CLIENT)
-    target_link_libraries (tiflash clickhouse-client-lib)
+if (ENABLE_TIFLASH_CLIENT)
+    target_link_libraries (tiflash tiflash-client-lib)
 endif ()
 if (ENABLE_TIFLASH_DTTOOL)
     target_link_libraries(tiflash tiflash-dttool-entry-object)

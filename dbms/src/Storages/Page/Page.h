@@ -17,7 +17,7 @@
 #include <IO/BufferBase.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageDefinesBase.h>
 
 #include <map>
 #include <set>
@@ -52,30 +52,35 @@ struct FieldOffsetInsidePage
 struct Page
 {
 public:
-    // only take the low u64, ignoring the high u64(NamespaceId)
-    explicit Page(const PageIdV3Internal & page_id_v3_)
-        : page_id(page_id_v3_.low)
+    static Page invalidPage()
     {
+        Page page{INVALID_PAGE_U64_ID};
+        page.is_valid = false;
+        return page;
     }
 
-    Page()
-        : page_id(INVALID_PAGE_ID)
+    explicit Page(PageIdU64 page_id_)
+        : page_id(page_id_)
+        , is_valid(true)
     {}
 
-    PageId page_id;
+    PageIdU64 page_id;
     ByteBuffer data;
     MemHolder mem_holder;
     // Field offsets inside this page.
     std::set<FieldOffsetInsidePage> field_offsets;
 
+private:
+    bool is_valid;
+
 public:
-    inline bool isValid() const { return page_id != INVALID_PAGE_ID; }
+    inline bool isValid() const { return is_valid; }
 
     ByteBuffer getFieldData(size_t index) const
     {
         auto iter = field_offsets.find(FieldOffsetInsidePage(index));
         if (unlikely(iter == field_offsets.end()))
-            throw Exception(fmt::format("Try to getFieldData with invalid field index [page_id={}] [field_index={}]", page_id, index),
+            throw Exception(fmt::format("Try to getFieldData with invalid field index [page_id={}] [valid={}] [field_index={}]", page_id, is_valid, index),
                             ErrorCodes::LOGICAL_ERROR);
 
         PageFieldOffset beg = iter->offset;
@@ -107,10 +112,8 @@ public:
 };
 
 using Pages = std::vector<Page>;
-using PageMap = std::map<PageId, Page>;
-using PageHandler = std::function<void(PageId page_id, const Page &)>;
+using PageMapU64 = std::map<PageIdU64, Page>;
 
-// TODO: Move it into V2
 // Indicate the page size && offset in PageFile.
 struct PageEntry
 {
@@ -188,8 +191,6 @@ public:
         return true;
     }
 };
-using PageIdAndEntry = std::pair<PageId, PageEntry>;
-using PageIdAndEntries = std::vector<PageIdAndEntry>;
-
-
+using PageIdU64AndEntry = std::pair<PageIdU64, PageEntry>;
+using PageIdU64AndEntries = std::vector<PageIdU64AndEntry>;
 } // namespace DB

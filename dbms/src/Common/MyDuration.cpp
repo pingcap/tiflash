@@ -43,17 +43,17 @@ Int32 MyDuration::hours() const
 
 Int32 MyDuration::minutes() const
 {
-    return std::abs(nanos) / NANOS_PER_MINUTE % 60;
+    return (std::abs(nanos) / NANOS_PER_MINUTE) % 60;
 }
 
 Int32 MyDuration::seconds() const
 {
-    return std::abs(nanos) / NANOS_PER_SECOND % 60;
+    return (std::abs(nanos) / NANOS_PER_SECOND) % 60;
 }
 
 Int32 MyDuration::microSecond() const
 {
-    return std::abs(nanos) / NANOS_PER_MICRO % 1000000;
+    return (std::abs(nanos) / NANOS_PER_MICRO) % 1000000;
 }
 
 String MyDuration::toString() const
@@ -65,6 +65,6 @@ String MyDuration::toString() const
     }
     auto fmt_str = fmt::format("{}{}{}", "{}{:02}:{:02}:{:02}.{:.", fsp, "}");
     auto frac_str = fmt::format("{:06}", microsecond);
-    return FmtBuffer().fmtAppend(fmt_str, sign > 0 ? "" : "-", hour, minute, second, frac_str).toString();
+    return FmtBuffer().fmtAppend(fmt::runtime(fmt_str), sign > 0 ? "" : "-", hour, minute, second, frac_str).toString();
 }
 } // namespace DB

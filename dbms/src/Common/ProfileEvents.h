@@ -42,6 +42,11 @@ inline void increment(Event event, Count amount = 1)
     counters[event].fetch_add(amount, std::memory_order_relaxed);
 }
 
+inline Count get(Event event)
+{
+    return counters[event].load();
+}
+
 /// Get index just after last event identifier.
 Event end();
 } // namespace ProfileEvents

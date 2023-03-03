@@ -107,6 +107,7 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("init_fail_point", DbgFailPointFunc::dbgInitFailPoint);
     regSchemalessFunc("enable_fail_point", DbgFailPointFunc::dbgEnableFailPoint);
+    regSchemalessFunc("enable_pause_fail_point", DbgFailPointFunc::dbgEnablePauseFailPoint);
     regSchemalessFunc("disable_fail_point", DbgFailPointFunc::dbgDisableFailPoint);
     regSchemalessFunc("wait_fail_point", DbgFailPointFunc::dbgDisableFailPoint);
 
@@ -126,6 +127,8 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("gc_global_storage_pool", dbgFuncTriggerGlobalPageStorageGC);
 
     regSchemalessFunc("read_index_stress_test", ReadIndexStressTest::dbgFuncStressTest);
+
+    regSchemalessFunc("get_active_threads_in_dynamic_thread_pool", dbgFuncActiveThreadsInDynamicThreadPool);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

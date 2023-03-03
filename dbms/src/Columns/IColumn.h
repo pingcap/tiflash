@@ -137,6 +137,12 @@ public:
     /// Could be used to concatenate columns.
     virtual void insertRangeFrom(const IColumn & src, size_t start, size_t length) = 0;
 
+    /// Appends one element from other column with the same type multiple times.
+    virtual void insertManyFrom(const IColumn & src, size_t position, size_t length) = 0;
+
+    /// Appends disjunctive elements from other column with the same type.
+    virtual void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) = 0;
+
     /// Appends data located in specified memory chunk if it is possible (throws an exception if it cannot be implemented).
     /// Is used to optimize some computations (in aggregation, for example).
     /// Parameter length could be ignored if column values have fixed size.
@@ -163,6 +169,9 @@ public:
     /// Is used when there are need to increase column size, but inserting value doesn't make sense.
     /// For example, ColumnNullable(Nested) absolutely ignores values of nested column if it is marked as NULL.
     virtual void insertDefault() = 0;
+
+    /// Appends "default value" multiple times.
+    virtual void insertManyDefaults(size_t length) = 0;
 
     /** Removes last n elements.
       * Is used to support exeption-safety of several operations.
@@ -216,7 +225,7 @@ public:
       * Is used in WHERE and HAVING operations.
       * If result_size_hint > 0, then makes advance reserve(result_size_hint) for the result column;
       *  if 0, then don't makes reserve(),
-      *  otherwise (i.e. < 0), makes reserve() using size of source column.
+      *  otherwise (i.e. < 0), makes reserve() using size of filtered column.
       */
     using Filter = PaddedPODArray<UInt8>;
     virtual Ptr filter(const Filter & filt, ssize_t result_size_hint) const = 0;
@@ -259,19 +268,41 @@ public:
 
     /** Copies each element according offsets parameter.
       * (i-th element should be copied offsets[i] - offsets[i - 1] times.)
-      * It is necessary in ARRAY JOIN operation.
       */
     using Offset = UInt64;
     using Offsets = PaddedPODArray<Offset>;
-    virtual Ptr replicate(const Offsets & offsets) const = 0;
+
+    virtual Ptr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const = 0;
+
+    Ptr replicate(const Offsets & offsets) const
+    {
+        return replicateRange(0, offsets.size(), offsets);
+    }
 
     /** Split column to smaller columns. Each value goes to column index, selected by corresponding element of 'selector'.
       * Selector must contain values from 0 to num_columns - 1.
       * For default implementation, see scatterImpl.
       */
     using ColumnIndex = UInt64;
+    using ScatterColumns = std::vector<MutablePtr>;
     using Selector = PaddedPODArray<ColumnIndex>;
-    virtual std::vector<MutablePtr> scatter(ColumnIndex num_columns, const Selector & selector) const = 0;
+    virtual ScatterColumns scatter(ColumnIndex num_columns, const Selector & selector) const = 0;
+
+    void initializeScatterColumns(ScatterColumns & columns, ColumnIndex num_columns, size_t num_rows) const
+    {
+        columns.reserve(num_columns);
+        for (ColumnIndex i = 0; i < num_columns; ++i)
+            columns.emplace_back(cloneEmpty());
+
+        size_t reserve_size = num_rows * 1.1 / num_columns; /// 1.1 is just a guess. Better to use n-sigma rule.
+
+        if (reserve_size > 1)
+            for (auto & column : columns)
+                column->reserve(reserve_size);
+    }
+
+    /// Different from scatter, scatterTo appends the scattered data to 'columns' instead of creating ScatterColumns
+    virtual void scatterTo(ScatterColumns & columns, const Selector & selector) const = 0;
 
     /// Insert data from several other columns according to source mask (used in vertical merge).
     /// For now it is a helper to de-virtualize calls to insert*() functions inside gather loop
@@ -293,6 +324,9 @@ public:
 
     /// Size of column data in memory (may be approximate) - for profiling. Zero, if could not be determined.
     virtual size_t byteSize() const = 0;
+
+    /// Size of the column if it is spilled, the same as byteSize() except for ColumnAggregateFunction
+    virtual size_t estimateByteSizeForSpill() const { return byteSize(); }
 
     /// Size of column data between [offset, offset+limit) in memory (may be approximate) - for profiling.
     /// This method throws NOT_IMPLEMENTED exception if it is called with unimplemented subclass.
@@ -388,7 +422,7 @@ public:
     String dumpStructure() const;
 
 protected:
-    /// Template is to devirtualize calls to insertFrom method.
+    /// Template is to de-virtualize calls to insertFrom method.
     /// In derived classes (that use final keyword), implement scatter method as call to scatterImpl.
     template <typename Derived>
     std::vector<MutablePtr> scatterImpl(ColumnIndex num_columns, const Selector & selector) const
@@ -400,22 +434,27 @@ protected:
                 fmt::format("Size of selector: {} doesn't match size of column: {}", selector.size(), num_rows),
                 ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-        std::vector<MutablePtr> columns(num_columns);
-        for (auto & column : columns)
-            column = cloneEmpty();
-
-        {
-            size_t reserve_size = num_rows * 1.1 / num_columns; /// 1.1 is just a guess. Better to use n-sigma rule.
-
-            if (reserve_size > 1)
-                for (auto & column : columns)
-                    column->reserve(reserve_size);
-        }
+        ScatterColumns columns;
+        initializeScatterColumns(columns, num_columns, num_rows);
 
         for (size_t i = 0; i < num_rows; ++i)
             static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, i);
 
         return columns;
+    }
+
+    template <typename Derived>
+    void scatterToImpl(ScatterColumns & columns, const Selector & selector) const
+    {
+        size_t num_rows = size();
+
+        if (num_rows != selector.size())
+            throw Exception(
+                fmt::format("Size of selector: {} doesn't match size of column: {}", selector.size(), num_rows),
+                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+        for (size_t i = 0; i < num_rows; ++i)
+            static_cast<Derived &>(*columns[selector[i]]).insertFrom(*this, i);
     }
 };
 

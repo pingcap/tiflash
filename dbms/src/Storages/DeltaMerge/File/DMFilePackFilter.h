@@ -19,10 +19,12 @@
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 namespace ProfileEvents
 {
@@ -51,15 +53,17 @@ public:
         const IdSetPtr & read_packs,
         const FileProviderPtr & file_provider,
         const ReadLimiterPtr & read_limiter,
+        const ScanContextPtr & scan_context,
         const String & tracing_id)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, tracing_id);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, scan_context, tracing_id);
         pack_filter.init();
         return pack_filter;
     }
 
     inline const std::vector<RSResult> & getHandleRes() const { return handle_res; }
     inline const std::vector<UInt8> & getUsePacks() const { return use_packs; }
+    inline std::vector<UInt8> & getUsePacks() { return use_packs; }
 
     Handle getMinHandle(size_t pack_id)
     {
@@ -111,6 +115,7 @@ private:
                      const IdSetPtr & read_packs_, // filter by pack index
                      const FileProviderPtr & file_provider_,
                      const ReadLimiterPtr & read_limiter_,
+                     const ScanContextPtr & scan_context_,
                      const String & tracing_id)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
@@ -121,6 +126,7 @@ private:
         , file_provider(file_provider_)
         , handle_res(dmfile->getPacks(), RSResult::All)
         , use_packs(dmfile->getPacks())
+        , scan_context(scan_context_)
         , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
     {
@@ -230,7 +236,7 @@ private:
         const auto file_name_base = DMFile::getFileNameBase(col_id);
 
         auto load = [&]() {
-            auto index_file_size = dmfile->colIndexSize(file_name_base);
+            auto index_file_size = dmfile->colIndexSize(col_id);
             if (index_file_size == 0)
                 return std::make_shared<MinMaxIndex>(*type);
             if (!dmfile->configuration)
@@ -241,19 +247,17 @@ private:
                     dmfile->encryptionIndexPath(file_name_base),
                     std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), index_file_size),
                     read_limiter);
-                index_buf.seek(dmfile->colIndexOffset(file_name_base));
-                return MinMaxIndex::read(*type, index_buf, dmfile->colIndexSize(file_name_base));
+                return MinMaxIndex::read(*type, index_buf, index_file_size);
             }
             else
             {
                 auto index_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
                                                                             dmfile->colIndexPath(file_name_base),
                                                                             dmfile->encryptionIndexPath(file_name_base),
-                                                                            dmfile->colIndexSize(file_name_base),
+                                                                            index_file_size,
                                                                             read_limiter,
                                                                             dmfile->configuration->getChecksumAlgorithm(),
                                                                             dmfile->configuration->getChecksumFrameLength());
-                index_buf->seek(dmfile->colIndexOffset(file_name_base));
                 auto header_size = dmfile->configuration->getChecksumHeaderLength();
                 auto frame_total_size = dmfile->configuration->getChecksumFrameLength() + header_size;
                 auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
@@ -284,7 +288,10 @@ private:
         if (!dmfile->isColIndexExist(col_id))
             return;
 
+        Stopwatch watch;
         loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter);
+
+        scan_context->total_dmfile_rough_set_index_load_time_ns += watch.elapsed();
     }
 
 private:
@@ -300,6 +307,8 @@ private:
 
     std::vector<RSResult> handle_res;
     std::vector<UInt8> use_packs;
+
+    const ScanContextPtr scan_context;
 
     LoggerPtr log;
     ReadLimiterPtr read_limiter;

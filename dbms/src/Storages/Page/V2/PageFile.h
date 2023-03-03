@@ -18,10 +18,9 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V2/PageEntries.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesEdit.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 
 #include <unordered_map>
 #include <vector>
@@ -33,6 +32,10 @@ class Logger;
 
 namespace DB::PS::V2
 {
+using PageIdAndEntry = PageIdU64AndEntry;
+using PageIdAndEntries = PageIdU64AndEntries;
+using PageMap = PageMapU64;
+
 /// A light-weight object which can be created and copied cheaply.
 /// Use createWriter()/createReader() to open write/read system file.
 class PageFile : public Allocator<false>
@@ -81,8 +84,6 @@ public:
         /// Read pages from files.
         /// After return, the items in to_read could be reordered, but won't be removed or added.
         PageMap read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
-
-        void read(PageIdAndEntries & to_read, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr);
 
         struct FieldReadInfo
         {

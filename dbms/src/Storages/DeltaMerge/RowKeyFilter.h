@@ -15,9 +15,11 @@
 #pragma once
 
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnsCommon.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+
 
 namespace DB
 {
@@ -32,7 +34,7 @@ getPosRangeOfSorted(const RowKeyRange & rowkey_range, const ColumnPtr & rowkey_c
     return rowkey_range.getPosRange(rowkey_column, offset, limit);
 }
 
-inline Block cutBlock(Block && block, std::vector<std::pair<size_t, size_t>> offset_and_limits)
+inline Block cutBlock(Block && block, const std::vector<std::pair<size_t, size_t>> & offset_and_limits)
 {
     size_t rows = block.rows();
     if (offset_and_limits.size() == 1)
@@ -46,22 +48,28 @@ inline Block cutBlock(Block && block, std::vector<std::pair<size_t, size_t>> off
         if (offset == 0)
         {
             size_t pop_size = rows - limit;
-            for (size_t i = 0; i < block.columns(); i++)
+            for (auto & col : block)
             {
-                auto & column = block.getByPosition(i);
-                auto mutate_col = (*std::move(column.column)).mutate();
+                auto mutate_col = (*std::move(col.column)).mutate();
                 mutate_col->popBack(pop_size);
-                column.column = std::move(mutate_col);
+                col.column = std::move(mutate_col);
+            }
+            if (block.segmentRowIdCol() != nullptr)
+            {
+                auto mut_col = (*std::move(block.segmentRowIdCol())).mutate();
+                mut_col->popBack(pop_size);
+                block.setSegmentRowIdCol(std::move(mut_col));
             }
         }
         else
         {
-            for (size_t i = 0; i < block.columns(); i++)
+            for (auto & col : block)
             {
-                auto & column = block.getByPosition(i);
-                auto new_column = column.column->cloneEmpty();
-                new_column->insertRangeFrom(*column.column, offset, limit);
-                column.column = std::move(new_column);
+                col.column = col.column->cut(offset, limit);
+            }
+            if (block.segmentRowIdCol() != nullptr)
+            {
+                block.setSegmentRowIdCol(block.segmentRowIdCol()->cut(offset, limit));
             }
         }
         return std::move(block);
@@ -69,17 +77,28 @@ inline Block cutBlock(Block && block, std::vector<std::pair<size_t, size_t>> off
     else
     {
         auto new_columns = block.cloneEmptyColumns();
-        for (auto & [offset, limit] : offset_and_limits)
+        MutableColumnPtr new_seg_row_id_col;
+        if (block.segmentRowIdCol() != nullptr)
+        {
+            new_seg_row_id_col = block.segmentRowIdCol()->cloneEmpty();
+        }
+        for (const auto & [offset, limit] : offset_and_limits)
         {
             if (!limit)
                 continue;
 
-            for (size_t i = 0; i < block.columns(); i++)
+            for (size_t i = 0; i < block.columns(); ++i)
             {
                 new_columns[i]->insertRangeFrom(*block.getByPosition(i).column, offset, limit);
             }
+            if (block.segmentRowIdCol() != nullptr)
+            {
+                new_seg_row_id_col->insertRangeFrom(*block.segmentRowIdCol(), offset, limit);
+            }
         }
-        return block.cloneWithColumns(std::move(new_columns));
+        auto new_block = block.cloneWithColumns(std::move(new_columns));
+        new_block.setSegmentRowIdCol(std::move(new_seg_row_id_col));
+        return new_block;
     }
 }
 
@@ -88,8 +107,11 @@ inline Block filterSorted(const RowKeyRanges & rowkey_ranges, Block && block, si
     if (rowkey_ranges.empty())
         return {};
 
+    RUNTIME_CHECK(handle_pos < block.columns(), handle_pos, block.columns());
+
     std::vector<std::pair<size_t, size_t>> offset_and_limits;
-    for (auto rowkey_range : rowkey_ranges)
+    offset_and_limits.reserve(rowkey_ranges.size());
+    for (const auto & rowkey_range : rowkey_ranges)
     {
         offset_and_limits.emplace_back(getPosRangeOfSorted(rowkey_range, block.getByPosition(handle_pos).column, 0, block.rows()));
     }
@@ -101,6 +123,7 @@ inline Block filterSorted(const RowKeyRanges & rowkey_ranges, Block && block, si
     size_t current_offset = offset_and_limits[0].first;
     size_t current_limit = offset_and_limits[0].second;
     std::vector<std::pair<size_t, size_t>> combined_offset_and_limits;
+    combined_offset_and_limits.reserve(offset_and_limits.size());
     for (size_t i = 1; i < offset_and_limits.size(); i++)
     {
         auto [offset, limit] = offset_and_limits[i];
@@ -110,12 +133,12 @@ inline Block filterSorted(const RowKeyRanges & rowkey_ranges, Block && block, si
         }
         else
         {
-            combined_offset_and_limits.emplace_back(std::make_pair(current_offset, current_limit));
+            combined_offset_and_limits.emplace_back(current_offset, current_limit);
             current_offset = offset;
             current_limit = limit;
         }
     }
-    combined_offset_and_limits.emplace_back(std::make_pair(current_offset, current_limit));
+    combined_offset_and_limits.emplace_back(current_offset, current_limit);
 
     if (combined_offset_and_limits.empty())
         return {};
@@ -128,35 +151,42 @@ inline Block filterUnsorted(const RowKeyRanges & rowkey_ranges, Block && block, 
     size_t rows = block.rows();
     auto rowkey_column = RowKeyColumnContainer(block.getByPosition(handle_pos).column, rowkey_ranges[0].is_common_handle);
 
-    IColumn::Filter filter(rows);
-    size_t passed_count = 0;
+    IColumn::Filter filter(rows, 0);
     for (size_t i = 0; i < rows; ++i)
     {
-        bool ok = false;
-        for (auto & rowkey_range : rowkey_ranges)
+        for (const auto & rowkey_range : rowkey_ranges)
         {
-            ok = rowkey_range.check(rowkey_column.getRowKeyValue(i));
-            if (ok)
+            if (rowkey_range.check(rowkey_column.getRowKeyValue(i)))
+            {
+                filter[i] = 1;
                 break;
+            }
         }
-        filter[i] = ok;
-        passed_count += ok;
     }
+    size_t passed_count = countBytesInFilter(filter);
 
     if (!passed_count)
         return {};
     if (passed_count == rows)
         return std::move(block);
 
-    for (size_t i = 0; i < block.columns(); ++i)
+    for (auto & col : block)
     {
-        auto & column = block.getByPosition(i);
-        column.column = column.column->filter(filter, passed_count);
+        col.column = col.column->filter(filter, passed_count);
+    }
+    if (block.segmentRowIdCol() != nullptr)
+    {
+        block.setSegmentRowIdCol(block.segmentRowIdCol()->filter(filter, passed_count));
     }
     return std::move(block);
 }
 } // namespace RowKeyFilter
 
+/**
+  * DMRowKeyFilterBlockInputStream is used to filter block by rowkey ranges.
+  * Rows whose rowkey is not in the rowkey ranges will be filtered.
+  * Basically, only the rows in first and the last block of the child stream will be filtered.
+  */
 template <bool is_block_sorted>
 class DMRowKeyFilterBlockInputStream : public IBlockInputStream
 {
@@ -185,7 +215,7 @@ public:
             /// If clean read optimized, only first row's (the smallest) handle is returned as a ColumnConst.
             if (rowkey_column.column->isColumnConst())
             {
-                for (auto rowkey_range : rowkey_ranges)
+                for (const auto & rowkey_range : rowkey_ranges)
                 {
                     if (rowkey_range.check(rowkey_column.getRowKeyValue(0)))
                         return block;
@@ -193,8 +223,13 @@ public:
                 return {};
             }
 
-            Block res = is_block_sorted ? RowKeyFilter::filterSorted(rowkey_ranges, std::move(block), handle_col_pos)
-                                        : RowKeyFilter::filterUnsorted(rowkey_ranges, std::move(block), handle_col_pos);
+            Block res;
+
+            if constexpr (is_block_sorted)
+                res = RowKeyFilter::filterSorted(rowkey_ranges, std::move(block), handle_col_pos);
+            else
+                res = RowKeyFilter::filterUnsorted(rowkey_ranges, std::move(block), handle_col_pos);
+
             if (!res || !res.rows())
                 continue;
             else

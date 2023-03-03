@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnsCommon.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
@@ -77,6 +78,32 @@ void ColumnFixedString::insertFrom(const IColumn & src_, size_t index)
     size_t old_size = chars.size();
     chars.resize(old_size + n);
     memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[n * index], n);
+}
+
+void ColumnFixedString::insertManyFrom(const IColumn & src_, size_t position, size_t length)
+{
+    const auto & src = static_cast<const ColumnFixedString &>(src_);
+    if (n != src.getN())
+        throw Exception("Size of FixedString doesn't match", ErrorCodes::SIZE_OF_FIXED_STRING_DOESNT_MATCH);
+    size_t old_size = chars.size();
+    size_t new_size = old_size + n * length;
+    chars.resize(new_size);
+    const auto * src_char_ptr = &src.chars[n * position];
+    for (size_t i = old_size; i < new_size; i += n)
+        memcpySmallAllowReadWriteOverflow15(&chars[i], src_char_ptr, n);
+}
+
+void ColumnFixedString::insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec)
+{
+    const auto & src = static_cast<const ColumnFixedString &>(src_);
+    if (n != src.getN())
+        throw Exception("Size of FixedString doesn't match", ErrorCodes::SIZE_OF_FIXED_STRING_DOESNT_MATCH);
+    size_t old_size = chars.size();
+    size_t new_size = old_size + position_vec.size() * n;
+    chars.resize(new_size);
+    const auto & src_chars = src.chars;
+    for (size_t i = old_size, j = 0; i < new_size; i += n, ++j)
+        memcpySmallAllowReadWriteOverflow15(&chars[i], &src_chars[position_vec[j] * n], n);
 }
 
 void ColumnFixedString::insertData(const char * pos, size_t length)
@@ -205,7 +232,11 @@ ColumnPtr ColumnFixedString::filter(const IColumn::Filter & filt, ssize_t result
     auto res = ColumnFixedString::create(n);
 
     if (result_size_hint)
-        res->chars.reserve(result_size_hint > 0 ? result_size_hint * n : chars.size());
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filt);
+        res->chars.reserve(result_size_hint * n);
+    }
 
     const UInt8 * filt_pos = &filt[0];
     const UInt8 * filt_end = filt_pos + col_size;
@@ -301,22 +332,25 @@ ColumnPtr ColumnFixedString::permute(const Permutation & perm, size_t limit) con
     return res;
 }
 
-ColumnPtr ColumnFixedString::replicate(const Offsets & offsets) const
+ColumnPtr ColumnFixedString::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
 {
-    size_t col_size = size();
-    if (col_size != offsets.size())
+    size_t col_rows = size();
+    if (col_rows != offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    assert(start_row < end_row);
+    assert(end_row <= col_rows);
 
     auto res = ColumnFixedString::create(n);
 
-    if (0 == col_size)
+    if (0 == col_rows)
         return res;
 
     Chars_t & res_chars = res->chars;
-    res_chars.resize(n * offsets.back());
+    res_chars.resize(n * (offsets[end_row - 1]));
 
     Offset curr_offset = 0;
-    for (size_t i = 0; i < col_size; ++i)
+    for (size_t i = start_row; i < end_row; ++i)
         for (size_t next_offset = offsets[i]; curr_offset < next_offset; ++curr_offset)
             memcpySmallAllowReadWriteOverflow15(&res->chars[curr_offset * n], &chars[i * n], n);
 

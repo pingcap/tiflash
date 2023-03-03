@@ -22,8 +22,10 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashTestEnv.h>
 
 #include <boost/program_options.hpp>
+#include <magic_enum.hpp>
 
 namespace DB::PS::V3
 {
@@ -32,20 +34,20 @@ void run_raftstore_proxy_ffi(int argc, const char * const * argv, const DB::Engi
 }
 struct ControlOptions
 {
-    enum DisplayType
+    enum class DisplayType
     {
         DISPLAY_SUMMARY_INFO = 1,
         DISPLAY_DIRECTORY_INFO = 2,
         DISPLAY_BLOBS_INFO = 3,
         CHECK_ALL_DATA_CRC = 4,
+        DISPLAY_WAL_ENTRIES = 5,
     };
 
     std::vector<std::string> paths;
-    int display_mode = DisplayType::DISPLAY_SUMMARY_INFO;
-    UInt64 query_page_id = UINT64_MAX;
-    UInt32 query_blob_id = UINT32_MAX;
-    UInt64 query_ns_id = DB::TEST_NAMESPACE_ID;
-    UInt64 check_page_id = UINT64_MAX;
+    DisplayType mode = DisplayType::DISPLAY_SUMMARY_INFO;
+    UInt64 page_id = UINT64_MAX;
+    UInt32 blob_id = UINT32_MAX;
+    UInt64 namespace_id = DB::TEST_NAMESPACE_ID;
     bool enable_fo_check = true;
     bool is_imitative = true;
     String config_file_path;
@@ -62,20 +64,22 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     po::options_description desc("Allowed options");
     desc.add_options()("help,h", "produce help message") //
         ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
-        ("display_mode,D", value<int>()->default_value(1), "Display Mode: 1 is summary information,\n"
-                                                           " 2 is display all of stored page and version chain(will be very long),\n"
-                                                           " 3 is display all blobs(in disk) data distribution. \n"
-                                                           " 4 is check every data is valid.") //
+        ("mode", value<int>()->default_value(1), R"(Display Mode:
+ 1 is summary information
+ 2 is display all of stored page and version chain(will be very long)
+ 3 is display all blobs(in disk) data distribution
+ 4 is check every data is valid
+ 5 is dump entries in WAL log files
+)") //
         ("enable_fo_check,E", value<bool>()->default_value(true), "Also check the evert field offsets. This options only works when `display_mode` is 4.") //
-        ("query_ns_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `check_page_id`/`query_page_id`/`query_blob_id` to query results. You can specify a namespace id.") //
-        ("check_page_id,C", value<UInt64>()->default_value(UINT64_MAX), "Check a single Page id, display the exception if meet. And also will check the field offsets.") //
-        ("query_page_id,W", value<UInt64>()->default_value(UINT64_MAX), "Query a single Page id, and print its version chain.") //
-        ("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Query a single Blob id, and print its data distribution.") //
+        ("namespace_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `page_id`/`blob_id` to query results. You can specify a namespace id.") //
+        ("page_id", value<UInt64>()->default_value(UINT64_MAX), "Query a single Page id, and print its version chain.") //
+        ("blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Query a single Blob id, and print its data distribution.") //
         ("imitative,I", value<bool>()->default_value(true), "Use imitative context instead. (encryption is not supported in this mode so that no need to set config_file_path)") //
         ("config_file_path", value<std::string>(), "Path to TiFlash config (tiflash.toml).");
 
 
-    static_assert(sizeof(DB::PageId) == sizeof(UInt64));
+    static_assert(sizeof(DB::PageIdU64) == sizeof(UInt64));
     static_assert(sizeof(DB::BlobFileId) == sizeof(UInt64));
 
     po::variables_map options;
@@ -97,12 +101,11 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
         exit(0);
     }
     opt.paths = options["paths"].as<std::vector<std::string>>();
-    opt.display_mode = options["display_mode"].as<int>();
-    opt.query_page_id = options["query_page_id"].as<UInt64>();
-    opt.query_blob_id = options["query_blob_id"].as<UInt32>();
+    auto mode_int = options["mode"].as<int>();
+    opt.page_id = options["page_id"].as<UInt64>();
+    opt.blob_id = options["blob_id"].as<UInt32>();
     opt.enable_fo_check = options["enable_fo_check"].as<bool>();
-    opt.check_page_id = options["check_page_id"].as<UInt64>();
-    opt.query_ns_id = options["query_ns_id"].as<UInt64>();
+    opt.namespace_id = options["namespace_id"].as<UInt64>();
     opt.is_imitative = options["imitative"].as<bool>();
     if (opt.is_imitative && options.count("config_file_path") != 0)
     {
@@ -119,11 +122,15 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
         opt.config_file_path = options["config_file_path"].as<std::string>();
     }
 
-    if (opt.display_mode < DisplayType::DISPLAY_SUMMARY_INFO || opt.display_mode > DisplayType::CHECK_ALL_DATA_CRC)
+    if (auto mode = magic_enum::enum_cast<DisplayType>(mode_int); !mode)
     {
-        std::cerr << "Invalid display mode: " << opt.display_mode << std::endl;
+        std::cerr << "Invalid display mode: " << mode_int << std::endl;
         std::cerr << desc << std::endl;
         exit(0);
+    }
+    else
+    {
+        opt.mode = mode.value();
     }
 
     return opt;
@@ -148,7 +155,6 @@ public:
             }
             else
             {
-                PageDirectory::MVCCMapType type;
                 CLIService service(getPageStorageV3Info, options, options.config_file_path, run_raftstore_proxy_ffi);
                 service.run({""});
             }
@@ -173,49 +179,59 @@ private:
             delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(options.paths);
         }
 
-        FileProviderPtr file_provider_ptr;
+        FileProviderPtr provider;
         if (options.is_imitative)
         {
             auto key_manager = std::make_shared<DB::MockKeyManager>(false);
-            file_provider_ptr = std::make_shared<DB::FileProvider>(key_manager, false);
+            provider = std::make_shared<DB::FileProvider>(key_manager, false);
         }
         else
         {
-            file_provider_ptr = context.getFileProvider();
+            provider = context.getFileProvider();
         }
-        BlobConfig blob_config;
 
+        constexpr static std::string_view NAME = "PageStorageControlV3";
         PageStorageConfig config;
-        PageStorageImpl ps_v3("PageStorageControlV3", delegator, config, file_provider_ptr);
-        ps_v3.restore();
-        PageDirectory::MVCCMapType & mvcc_table_directory = ps_v3.page_directory->mvcc_table_directory;
+        if (options.mode == ControlOptions::DisplayType::DISPLAY_WAL_ENTRIES)
+        {
+            // Only restore the PageDirectory
+            PageDirectoryFactory<u128::FactoryTrait> factory;
+            factory.dump_entries = true;
+            factory.create(String(NAME), provider, delegator, WALConfig::from(config));
+            return 0;
+        }
 
-        switch (options.display_mode)
+        // Other display mode need to restore ps instance
+        PageStorageImpl ps(String(NAME), delegator, config, provider);
+        ps.restore();
+        PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory = ps.page_directory->mvcc_table_directory;
+
+        switch (options.mode)
         {
         case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
         {
-            std::cout << getSummaryInfo(mvcc_table_directory, ps_v3.blob_store) << std::endl;
+            std::cout << getSummaryInfo(mvcc_table_directory, ps.blob_store) << std::endl;
             break;
         }
         case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
         {
-            std::cout << getDirectoryInfo(mvcc_table_directory, options.query_ns_id, options.query_page_id) << std::endl;
+            std::cout << getDirectoryInfo(mvcc_table_directory, options.namespace_id, options.page_id) << std::endl;
             break;
         }
         case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
         {
-            std::cout << getBlobsInfo(ps_v3.blob_store, options.query_blob_id) << std::endl;
+            std::cout << getBlobsInfo(ps.blob_store, options.blob_id) << std::endl;
             break;
         }
         case ControlOptions::DisplayType::CHECK_ALL_DATA_CRC:
         {
-            if (options.check_page_id != UINT64_MAX)
+            if (options.page_id != UINT64_MAX)
             {
-                std::cout << checkSinglePage(mvcc_table_directory, ps_v3.blob_store, options.query_ns_id, options.check_page_id) << std::endl;
+                std::cout << checkSinglePage(mvcc_table_directory, ps.blob_store, options.namespace_id, options.page_id) << std::endl;
             }
             else
             {
-                std::cout << checkAllDataCrc(mvcc_table_directory, ps_v3.blob_store, options.enable_fo_check) << std::endl;
+                std::cout << checkAllDataCrc(mvcc_table_directory, ps.blob_store, options.enable_fo_check) << std::endl;
             }
             break;
         }
@@ -226,7 +242,7 @@ private:
         return 0;
     }
 
-    static String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
+    static String getBlobsInfo(BlobStore<u128::BlobStoreTrait> & blob_store, UInt32 blob_id)
     {
         auto stat_info = [](const BlobStats::BlobStatPtr & stat, const String & path) {
             FmtBuffer stat_str;
@@ -276,9 +292,9 @@ private:
         return stats_info.toString();
     }
 
-    static String getDirectoryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
+    static String getDirectoryInfo(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
     {
-        auto page_info = [](UInt128 page_internal_id_, const VersionedPageEntriesPtr & versioned_entries) {
+        auto page_info = [](UInt128 page_internal_id_, const u128::VersionedPageEntriesPtr & versioned_entries) {
             FmtBuffer page_str;
             page_str.fmtAppend("    page id {}\n", page_internal_id_);
             page_str.fmtAppend("      {}\n", versioned_entries->toDebugString());
@@ -341,7 +357,7 @@ private:
         return directory_info.toString();
     }
 
-    static String getSummaryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store)
+    static String getSummaryInfo(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, BlobStore<u128::BlobStoreTrait> & blob_store)
     {
         UInt64 longest_version_chaim = 0;
         UInt64 shortest_version_chaim = UINT64_MAX;
@@ -388,7 +404,7 @@ private:
         return dir_summary_info.toString();
     }
 
-    static String checkSinglePage(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, UInt64 ns_id, UInt64 page_id)
+    static String checkSinglePage(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, BlobStore<u128::BlobStoreTrait> & blob_store, UInt64 ns_id, UInt64 page_id)
     {
         const auto & page_internal_id = buildV3Id(ns_id, page_id);
         const auto & it = mvcc_table_directory.find(page_internal_id);
@@ -420,8 +436,8 @@ private:
                         DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
                         std::iota(std::begin(indices), std::end(indices), 0);
 
-                        BlobStore::FieldReadInfos infos;
-                        BlobStore::FieldReadInfo info(page_internal_id, entry, indices);
+                        BlobStore<u128::BlobStoreTrait>::FieldReadInfos infos;
+                        BlobStore<u128::BlobStoreTrait>::FieldReadInfo info(page_internal_id, entry, indices);
                         infos.emplace_back(info);
                         blob_store.read(infos);
                     }
@@ -444,7 +460,7 @@ private:
         return error_msg.toString();
     }
 
-    static String checkAllDataCrc(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, bool enable_fo_check)
+    static String checkAllDataCrc(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, BlobStore<u128::BlobStoreTrait> & blob_store, bool enable_fo_check)
     {
         size_t total_pages = mvcc_table_directory.size();
         size_t cut_index = 0;
@@ -482,8 +498,8 @@ private:
                             DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
                             std::iota(std::begin(indices), std::end(indices), 0);
 
-                            BlobStore::FieldReadInfos infos;
-                            BlobStore::FieldReadInfo info(internal_id, entry, indices);
+                            BlobStore<u128::BlobStoreTrait>::FieldReadInfos infos;
+                            BlobStore<u128::BlobStoreTrait>::FieldReadInfo info(internal_id, entry, indices);
                             infos.emplace_back(info);
                             blob_store.read(infos);
                         }
@@ -508,7 +524,7 @@ private:
         {
             error_msg.fmtAppend("id: {}, sequence: {}, epoch: {} \n", internal_id, versioned.sequence, versioned.epoch);
         }
-        error_msg.append("Please use `--query_table_id` + `--check_page_id` to get the more error info.");
+        error_msg.append("Please use `--query_table_id` + `--page_id` to get the more error info.");
 
         return error_msg.toString();
     }
@@ -524,6 +540,7 @@ using namespace DB::PS::V3;
 
 void pageStorageV3CtlEntry(int argc, char ** argv)
 {
+    DB::tests::TiFlashTestEnv::setupLogger();
     const auto & options = ControlOptions::parse(argc, argv);
     PageStorageControlV3(options).run();
 }

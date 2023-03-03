@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnNothing.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/Row.h>
@@ -102,6 +104,16 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     ASSERT_EQUAL(expected->getName(), actual->getName(), "Column name mismatch");
     ASSERT_EQUAL(expected->size(), actual->size(), "Column size mismatch");
 
+    if unlikely (typeid_cast<const ColumnNothing *>(expected.get()) || typeid_cast<const ColumnNothing *>(actual.get()))
+    {
+        /// ColumnNothing compares size only
+        const ColumnNothing * expected_nothing = typeid_cast<const ColumnNothing *>(expected.get());
+        const ColumnNothing * actual_nothing = typeid_cast<const ColumnNothing *>(actual.get());
+        ASSERT_EQUAL(expected_nothing && actual_nothing, true, "One of columns is ColumnNothing, while the other is not");
+        ASSERT_EQUAL(expected_nothing->size(), actual_nothing->size(), fmt::format("Column size not match, expected {} actual {}", actual_nothing->size(), expected_nothing->size()));
+        return ::testing::AssertionSuccess();
+    }
+
     for (size_t i = 0, size = expected->size(); i < size; ++i)
     {
         auto expected_field = (*expected)[i];
@@ -177,7 +189,7 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
         r.resize(cols_size, true);
     }
 
-    for (auto const & [col_id, col] : ext::enumerate(cols))
+    for (auto && [col_id, col] : ext::enumerate(cols))
     {
         for (size_t i = 0, size = col.column->size(); i < size; ++i)
         {
@@ -288,7 +300,7 @@ ColumnsWithTypeAndName toColumnsWithUniqueName(const ColumnsWithTypeAndName & co
 ColumnsWithTypeAndName toColumnsReordered(const ColumnsWithTypeAndName & columns, const ColumnNumbers & new_offsets)
 {
     ColumnsWithTypeAndName columns_reordered(columns.size());
-    for (const auto & [i, offset] : ext::enumerate(new_offsets))
+    for (auto && [i, offset] : ext::enumerate(new_offsets))
     {
         columns_reordered[offset] = columns[i];
     }
@@ -449,11 +461,13 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
         return "";
 
     const size_t col_size = cols[0].column->size();
+    if (col_size <= 0)
+        return "";
     assert(begin <= end);
     assert(col_size >= end);
     assert(col_size > begin);
 
-    bool is_same = true;
+    bool is_same [[maybe_unused]] = true;
 
     for (size_t i = 1; i < col_num; ++i)
     {

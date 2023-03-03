@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/OneBlockInputStream.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
 #include <TestUtils/InputStreamTestUtils.h>
@@ -25,6 +28,13 @@ extern const char skip_check_segment_update[];
 
 namespace DM
 {
+
+extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
+                                    const ColumnDefinesPtr & schema_snap,
+                                    const BlockInputStreamPtr & input_stream,
+                                    UInt64 file_id,
+                                    const String & parent_path);
+
 namespace tests
 {
 void SimplePKTestBasic::reload()
@@ -156,8 +166,11 @@ std::pair<Int64, Int64> SimplePKTestBasic::parseRange(const RowKeyRange & range)
     return {start_key, end_key};
 }
 
-Block SimplePKTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted)
+Block SimplePKTestBasic::fillBlock(const FillBlockOptions & options)
 {
+    auto start_key = options.range.first;
+    auto end_key = options.range.second;
+
     RUNTIME_CHECK(start_key <= end_key);
     if (end_key == start_key)
         return Block{};
@@ -173,7 +186,7 @@ Block SimplePKTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool 
         is_common_handle,
         1,
         true,
-        is_deleted);
+        options.is_deleted);
 }
 
 void SimplePKTestBasic::fill(Int64 start_key, Int64 end_key)
@@ -184,7 +197,7 @@ void SimplePKTestBasic::fill(Int64 start_key, Int64 end_key)
         start_key,
         end_key);
 
-    auto block = prepareWriteBlock(start_key, end_key);
+    auto block = fillBlock({.range = {start_key, end_key}});
     store->write(*db_context, db_context->getSettingsRef(), block);
 }
 
@@ -196,7 +209,7 @@ void SimplePKTestBasic::fillDelete(Int64 start_key, Int64 end_key)
         start_key,
         end_key);
 
-    auto block = prepareWriteBlock(start_key, end_key, /* delete */ true);
+    auto block = fillBlock({.range = {start_key, end_key}, .is_deleted = true});
     store->write(*db_context, db_context->getSettingsRef(), block);
 }
 
@@ -249,6 +262,35 @@ void SimplePKTestBasic::mergeDelta()
     store->mergeDeltaAll(*db_context);
 }
 
+bool SimplePKTestBasic::merge(Int64 start_key, Int64 end_key)
+{
+    LOG_INFO(
+        logger_op,
+        "merge [{}, {})",
+        start_key,
+        end_key);
+
+    std::vector<SegmentPtr> to_merge;
+    auto range = buildRowRange(start_key, end_key);
+    {
+        std::shared_lock lock(store->read_write_mutex);
+        while (!range.none())
+        {
+            auto segment_it = store->segments.upper_bound(range.getStart());
+            RUNTIME_CHECK(segment_it != store->segments.end());
+            const auto & segment = segment_it->second;
+            to_merge.emplace_back(segment);
+            range.setStart(segment->getRowKeyRange().end);
+        }
+    }
+
+    if (to_merge.size() < 2)
+        return false;
+
+    auto merged = store->segmentMerge(*dm_context, to_merge, DeltaMergeStore::SegmentMergeReason::BackgroundGCThread);
+    return merged != nullptr;
+}
+
 void SimplePKTestBasic::deleteRange(Int64 start_key, Int64 end_key)
 {
     LOG_INFO(
@@ -261,13 +303,57 @@ void SimplePKTestBasic::deleteRange(Int64 start_key, Int64 end_key)
     store->deleteRange(*db_context, db_context->getSettingsRef(), range);
 }
 
-size_t SimplePKTestBasic::getRowsN()
+ExternalDTFileInfo genDMFile(DeltaMergeStorePtr store, DMContext & context, const Block & block)
 {
-    const auto & columns = store->getTableColumns();
+    auto input_stream = std::make_shared<OneBlockInputStream>(block);
+    auto [store_path, file_id] = store->preAllocateIngestFile();
+
+    auto dmfile = writeIntoNewDMFile(
+        context,
+        std::make_shared<ColumnDefines>(store->getTableColumns()),
+        input_stream,
+        file_id,
+        store_path);
+
+    store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
+
+    const auto & pk_column = block.getByPosition(0).column;
+    auto min_pk = pk_column->getInt(0);
+    auto max_pk = pk_column->getInt(block.rows() - 1);
+    HandleRange range(min_pk, max_pk + 1);
+    auto handle_range = RowKeyRange::fromHandleRange(range);
+    auto external_file = ExternalDTFileInfo{.id = file_id, .range = handle_range};
+    return external_file;
+}
+
+void SimplePKTestBasic::ingestFiles(const IngestFilesOptions & options)
+{
+    LOG_INFO(
+        logger_op,
+        "ingestFiles range=[{}, {}), clear={}",
+        options.range.first,
+        options.range.second,
+        options.clear);
+
+    auto range = buildRowRange(options.range.first, options.range.second);
+
+    std::vector<DM::ExternalDTFileInfo> external_files;
+    external_files.reserve(options.blocks.size());
+    for (const auto & block : options.blocks)
+    {
+        auto f = genDMFile(store, *dm_context, block);
+        external_files.emplace_back(std::move(f));
+    }
+
+    store->ingestFiles(dm_context, range, external_files, options.clear);
+}
+
+size_t SimplePKTestBasic::getRowsN() const
+{
     auto in = store->read(
         *db_context,
         db_context->getSettingsRef(),
-        columns,
+        store->getTableColumns(),
         {RowKeyRange::newAll(is_common_handle, 1)},
         /* num_streams= */ 1,
         /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -279,13 +365,12 @@ size_t SimplePKTestBasic::getRowsN()
     return getInputStreamNRows(in);
 }
 
-size_t SimplePKTestBasic::getRowsN(Int64 start_key, Int64 end_key)
+size_t SimplePKTestBasic::getRowsN(Int64 start_key, Int64 end_key) const
 {
-    const auto & columns = store->getTableColumns();
     auto in = store->read(
         *db_context,
         db_context->getSettingsRef(),
-        columns,
+        store->getTableColumns(),
         {buildRowRange(start_key, end_key)},
         /* num_streams= */ 1,
         /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -295,6 +380,23 @@ size_t SimplePKTestBasic::getRowsN(Int64 start_key, Int64 end_key)
         /* is_fast_scan= */ false,
         /* expected_block_size= */ 1024)[0];
     return getInputStreamNRows(in);
+}
+
+size_t SimplePKTestBasic::getRawRowsN() const
+{
+    auto in = store->readRaw(
+        *db_context,
+        db_context->getSettingsRef(),
+        store->getTableColumns(),
+        /* num_streams= */ 1,
+        false)[0];
+    return getInputStreamNRows(in);
+}
+
+bool SimplePKTestBasic::isFilled(Int64 start_key, Int64 end_key) const
+{
+    RUNTIME_CHECK(start_key <= end_key);
+    return getRowsN(start_key, end_key) == static_cast<size_t>(end_key - start_key);
 }
 
 void SimplePKTestBasic::debugDumpAllSegments() const
@@ -324,11 +426,6 @@ CATCH
 TEST_F(SimplePKTestBasic, SegmentBreakpoints)
 try
 {
-    FailPointHelper::enableFailPoint(FailPoints::skip_check_segment_update);
-    SCOPE_EXIT({
-        FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
-    });
-
     for (auto ch : {true, false})
     {
         is_common_handle = ch;
@@ -369,6 +466,23 @@ try
 }
 CATCH
 
+TEST_F(SimplePKTestBasic, Merge)
+try
+{
+    ensureSegmentBreakpoints({100, 10, -40, 500});
+    ASSERT_EQ(std::vector<Int64>({-40, 10, 100, 500}), getSegmentBreakpoints());
+
+    ASSERT_FALSE(merge(100, -100));
+    ASSERT_FALSE(merge(100, 101));
+    ASSERT_EQ(std::vector<Int64>({-40, 10, 100, 500}), getSegmentBreakpoints());
+
+    ASSERT_TRUE(merge(90, 110));
+    ASSERT_EQ(std::vector<Int64>({-40, 10, 500}), getSegmentBreakpoints());
+
+    ASSERT_TRUE(merge(-100, 100));
+    ASSERT_EQ(std::vector<Int64>({500}), getSegmentBreakpoints());
+}
+CATCH
 
 } // namespace tests
 } // namespace DM

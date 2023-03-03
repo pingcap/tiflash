@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/LimitTransformAction.h>
 
 namespace DB
 {
@@ -34,8 +35,7 @@ public:
         const BlockInputStreamPtr & input,
         size_t limit_,
         size_t offset_,
-        const String & req_id,
-        bool always_read_till_end_ = false);
+        const String & req_id);
 
     String getName() const override { return NAME; }
 
@@ -46,11 +46,11 @@ protected:
     void appendInfo(FmtBuffer & buffer) const override;
 
 private:
+    LoggerPtr log;
     size_t limit;
     size_t offset;
+    /// how many lines were read, including the last read block
     size_t pos = 0;
-    bool always_read_till_end;
-    LoggerPtr log;
 };
 
 } // namespace DB

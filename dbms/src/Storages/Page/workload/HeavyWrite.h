@@ -50,16 +50,12 @@ private:
         DB::PageStorageConfig config;
         initPageStorage(config, name());
 
-        metrics_dumper = std::make_shared<PSMetricsDumper>(1);
-        metrics_dumper->start();
-
-        stress_time = std::make_shared<StressTimeout>(60);
-        stress_time->start();
+        startBackgroundTimer();
         {
             stop_watch.start();
             startWriter<PSCommonWriter>(options.num_writers, [](std::shared_ptr<PSCommonWriter> writer) -> void {
                 writer->setBatchBufferNums(4);
-                writer->setBatchBufferRange(1, 2 * DB::MB);
+                writer->setBufferSizeRange(1, 2 * DB::MB);
             });
 
             pool.joinAll();

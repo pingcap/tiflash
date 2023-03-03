@@ -62,7 +62,7 @@ private:
     bool isStop() const;
     bool schedule();
     void schedLoop();
-
+    bool needScheduleToRead(const SegmentReadTaskPoolPtr & pool);
     SegmentReadTaskPools getPoolsUnlock(const std::vector<uint64_t> & pool_ids);
     // <seg_id, pool_ids>
     std::optional<std::pair<uint64_t, std::vector<uint64_t>>> scheduleSegmentUnlock(const SegmentReadTaskPoolPtr & pool);
@@ -78,6 +78,6 @@ private:
     std::atomic<bool> stop;
     std::thread sched_thread;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 } // namespace DB::DM

@@ -72,11 +72,20 @@ public:
 
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src, size_t n) override;
+    void insertManyFrom(const IColumn & src, size_t n, size_t length) override;
+    void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) override;
 
     void insertDefault() override
     {
         getNestedColumn().insertDefault();
         getNullMapData().push_back(1);
+    }
+
+    void insertManyDefaults(size_t length) override
+    {
+        getNestedColumn().insertManyDefaults(length);
+        auto & map = getNullMapData();
+        map.resize_fill(map.size() + length, 1);
     }
 
     void popBack(size_t n) override;
@@ -92,7 +101,7 @@ public:
     size_t byteSize() const override;
     size_t byteSize(size_t offset, size_t limit) const override;
     size_t allocatedBytes() const override;
-    ColumnPtr replicate(const Offsets & replicate_offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets) const override;
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
@@ -101,6 +110,11 @@ public:
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {
         return scatterImpl<ColumnNullable>(num_columns, selector);
+    }
+
+    void scatterTo(ScatterColumns & columns, const Selector & selector) const override
+    {
+        scatterToImpl<ColumnNullable>(columns, selector);
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;

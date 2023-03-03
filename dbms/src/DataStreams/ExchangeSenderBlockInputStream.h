@@ -17,7 +17,7 @@
 #include <Common/Logger.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
-#include <Interpreters/ExpressionAnalyzer.h>
+
 namespace DB
 {
 /// read blocks directly from Union, then broadcast or partition blocks and encode them, later put them into sending tunnels
@@ -40,9 +40,12 @@ public:
 
 protected:
     Block readImpl() override;
+    void readPrefixImpl() override
+    {
+        writer->prepare(getHeader());
+    }
     void readSuffixImpl() override
     {
-        writer->finishWrite();
         LOG_DEBUG(log, "finish write with {} rows", total_rows);
     }
 

@@ -14,7 +14,8 @@
 
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
-#include <Debug/dbgFuncCoprocessor.h>
+#include <Debug/dbgFuncCoprocessorUtils.h>
+#include <Debug/dbgQueryCompiler.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
@@ -82,17 +83,13 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
         },
         getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
-    DAGContext dag_context(dag_request);
+    DAGContext dag_context(dag_request, {}, "", false, log);
     ctx.setDAGContext(&dag_context);
     // Don't care about regions information in this test
     DAGQuerySource dag(ctx);
     auto query_block = *dag.getRootQueryBlock();
-    std::vector<const tipb::Expr *> conditions;
-    if (query_block.children[0]->selection != nullptr)
-    {
-        for (const auto & condition : query_block.children[0]->selection->selection().conditions())
-            conditions.push_back(&condition);
-    }
+    google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions = query_block.children[0]->selection != nullptr ? query_block.children[0]->selection->selection().conditions() : empty_condition;
 
     std::unique_ptr<DAGQueryInfo> dag_query;
     DM::ColumnDefines columns_to_read;

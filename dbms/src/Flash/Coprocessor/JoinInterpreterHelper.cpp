@@ -15,6 +15,7 @@
 #include <Common/TiFlashException.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -26,7 +27,14 @@
 
 #include <unordered_map>
 
-namespace DB::JoinInterpreterHelper
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int NO_COMMON_TYPE;
+} // namespace ErrorCodes
+
+namespace JoinInterpreterHelper
 {
 namespace
 {
@@ -99,32 +107,59 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
     return {kind, build_side_index};
 }
 
-DataTypes getJoinKeyTypes(const tipb::Join & join)
+JoinKeyType geCommonTypeForJoinOn(const DataTypePtr & left_type, const DataTypePtr & right_type)
+{
+    try
+    {
+        return {getLeastSupertype({left_type, right_type}), false};
+    }
+    catch (DB::Exception & e)
+    {
+        if (e.code() == ErrorCodes::NO_COMMON_TYPE
+            && removeNullable(left_type)->isDecimal()
+            && removeNullable(right_type)->isDecimal())
+        {
+            // fix https://github.com/pingcap/tiflash/issues/4519
+            // String is the common type for all types, it is always safe to choose String.
+            // But then we need to use `FunctionFormatDecimal` to format decimal.
+            // For example 0.1000000000 is equal to 0.10000000000000000000, but the original strings are not equal.
+            RUNTIME_ASSERT(!left_type->onlyNull() || !right_type->onlyNull());
+            auto fall_back_type = std::make_shared<DataTypeString>();
+            bool make_nullable = left_type->isNullable() || right_type->isNullable();
+            return {make_nullable ? makeNullable(fall_back_type) : fall_back_type, true};
+        }
+        else
+        {
+            throw;
+        }
+    }
+}
+
+JoinKeyTypes getJoinKeyTypes(const tipb::Join & join)
 {
     if (unlikely(join.left_join_keys_size() != join.right_join_keys_size()))
         throw TiFlashException("size of join.left_join_keys != size of join.right_join_keys", Errors::Coprocessor::BadRequest);
-    DataTypes key_types;
+    JoinKeyTypes join_key_types;
     for (int i = 0; i < join.left_join_keys_size(); ++i)
     {
         if (unlikely(!exprHasValidFieldType(join.left_join_keys(i)) || !exprHasValidFieldType(join.right_join_keys(i))))
             throw TiFlashException("Join key without field type", Errors::Coprocessor::BadRequest);
-        DataTypes types;
-        types.emplace_back(getDataTypeByFieldTypeForComputingLayer(join.left_join_keys(i).field_type()));
-        types.emplace_back(getDataTypeByFieldTypeForComputingLayer(join.right_join_keys(i).field_type()));
-        DataTypePtr common_type = getLeastSupertype(types);
-        key_types.emplace_back(common_type);
+        auto left_type = getDataTypeByFieldTypeForComputingLayer(join.left_join_keys(i).field_type());
+        auto right_type = getDataTypeByFieldTypeForComputingLayer(join.right_join_keys(i).field_type());
+        join_key_types.emplace_back(geCommonTypeForJoinOn(left_type, right_type));
     }
-    return key_types;
+    return join_key_types;
 }
 
-TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const DataTypes & join_key_types)
+TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTypes & join_key_types)
 {
     TiDB::TiDBCollators collators;
     size_t join_key_size = join_key_types.size();
     if (join.probe_types_size() == static_cast<int>(join_key_size) && join.build_types_size() == join.probe_types_size())
         for (size_t i = 0; i < join_key_size; ++i)
         {
-            if (removeNullable(join_key_types[i])->isString())
+            // Don't need to check the collate for decimal format string.
+            if (removeNullable(join_key_types[i].key_type)->isString() && !join_key_types[i].is_incompatible_decimal)
             {
                 if (unlikely(join.probe_types(i).collate() != join.build_types(i).collate()))
                     throw TiFlashException("Join with different collators on the join key", Errors::Coprocessor::BadRequest);
@@ -150,23 +185,13 @@ std::tuple<ExpressionActionsPtr, String, String> doGenJoinOtherConditionAction(
     String filter_column_for_other_condition;
     if (join.other_conditions_size() > 0)
     {
-        std::vector<const tipb::Expr *> condition_vector;
-        for (const auto & c : join.other_conditions())
-        {
-            condition_vector.push_back(&c);
-        }
-        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, condition_vector);
+        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, join.other_conditions());
     }
 
     String filter_column_for_other_eq_condition;
     if (join.other_eq_conditions_from_in_size() > 0)
     {
-        std::vector<const tipb::Expr *> condition_vector;
-        for (const auto & c : join.other_eq_conditions_from_in())
-        {
-            condition_vector.push_back(&c);
-        }
-        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
+        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, join.other_eq_conditions_from_in());
     }
 
     return {chain.getLastActions(), std::move(filter_column_for_other_condition), std::move(filter_column_for_other_eq_condition)};
@@ -265,24 +290,6 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
     return columns_for_other_join_filter;
 }
 
-/// all the columns from build side streams should be added after join, even for the join key.
-NamesAndTypesList TiFlashJoin::genColumnsAddedByJoin(
-    const Block & build_side_header,
-    const String & match_helper_name) const
-{
-    NamesAndTypesList columns_added_by_join;
-    bool make_nullable = isTiFlashLeftJoin();
-    for (auto const & p : build_side_header)
-    {
-        columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-    }
-    if (!match_helper_name.empty())
-    {
-        columns_added_by_join.emplace_back(match_helper_name, Join::match_helper_type);
-    }
-    return columns_added_by_join;
-}
-
 NamesAndTypes TiFlashJoin::genJoinOutputColumns(
     const Block & left_input_header,
     const Block & right_input_header,
@@ -330,7 +337,7 @@ std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
     const Context & context,
     const Block & input_header,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types,
+    const JoinKeyTypes & join_key_types,
     bool left,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters)
@@ -342,15 +349,8 @@ std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
     ExpressionActionsChain chain;
     Names key_names;
     String filter_column_name;
-    dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name);
+    dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, join_key_types, key_names, left, is_right_out_join, filters, filter_column_name);
     return {chain.getLastActions(), std::move(key_names), std::move(filter_column_name)};
 }
-
-std::function<size_t()> concurrencyBuildIndexGenerator(size_t join_build_concurrency)
-{
-    size_t init_value = 0;
-    return [init_value, join_build_concurrency]() mutable {
-        return (init_value++) % join_build_concurrency;
-    };
-}
-} // namespace DB::JoinInterpreterHelper
+} // namespace JoinInterpreterHelper
+} // namespace DB

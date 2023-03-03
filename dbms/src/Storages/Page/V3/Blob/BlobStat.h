@@ -16,7 +16,6 @@
 
 #include <Common/Logger.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
@@ -79,9 +78,14 @@ public:
             , sm_max_caps(sm_max_caps_)
         {}
 
-        [[nodiscard]] std::lock_guard<std::mutex> lock()
+        [[nodiscard]] std::unique_lock<std::mutex> lock()
         {
-            return std::lock_guard(sm_lock);
+            return std::unique_lock(sm_lock);
+        }
+
+        [[nodiscard]] std::unique_lock<std::mutex> defer_lock()
+        {
+            return std::unique_lock(sm_lock, std::defer_lock);
         }
 
         bool isNormal() const
@@ -99,12 +103,12 @@ public:
             type.store(BlobStatType::READ_ONLY);
         }
 
-        BlobFileOffset getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &);
+        BlobFileOffset getPosFromStat(size_t buf_size, const std::unique_lock<std::mutex> &);
 
         /**
              * The return value is the valid data size remained in the BlobFile after the remove
              */
-        size_t removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::lock_guard<std::mutex> &);
+        size_t removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::unique_lock<std::mutex> &);
 
         /**
              * This method is only used when blobstore restore
@@ -182,6 +186,7 @@ private:
 #endif
     void restoreByEntry(const PageEntryV3 & entry);
     void restore();
+    template <typename>
     friend class PageDirectoryFactory;
 
 #ifndef DBMS_PUBLIC_GTEST

@@ -18,8 +18,8 @@
 #include <Common/FmtUtils.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -44,7 +44,7 @@ inline String toString(const PageIDAndEntriesV3 & entries)
         entries.begin(),
         entries.end(),
         [](const PageIDAndEntryV3 & id_entry, FmtBuffer & buf) {
-            buf.fmtAppend("<{}.{},{}>", id_entry.first.high, id_entry.first.low, toDebugString(id_entry.second));
+            buf.fmtAppend("<{}.{},{}>", id_entry.first.high, id_entry.first.low, id_entry.second);
         },
         ", ");
     buf.append("]");
@@ -69,7 +69,7 @@ inline ::testing::AssertionResult entryCompare(
     {
         return ::testing::AssertionSuccess();
     }
-    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, toDebugString(lhs), toDebugString(rhs), false);
+    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, fmt::format("{}", lhs), fmt::format("{}", rhs), false);
 }
 
 #define ASSERT_SAME_ENTRY(val1, val2) ASSERT_PRED_FORMAT2(entryCompare, val1, val2)
@@ -81,7 +81,7 @@ inline ::testing::AssertionResult getEntryCompare(
     const char * page_id_expr,
     const char * snap_expr,
     const PageEntryV3 & expected_entry,
-    const PageDirectoryPtr & dir,
+    const u128::PageDirectoryPtr & dir,
     const PageIdV3Internal page_id,
     const PageDirectorySnapshotPtr & snap)
 {
@@ -102,8 +102,8 @@ inline ::testing::AssertionResult getEntryCompare(
         return testing::internal::EqFailure(
             expected_entry_expr,
             actual_expr.c_str(),
-            toDebugString(expected_entry),
-            toDebugString(entry),
+            fmt::format("{}", expected_entry),
+            fmt::format("{}", entry),
             false);
     };
     String error;
@@ -140,7 +140,7 @@ inline ::testing::AssertionResult getEntriesCompare(
     const char * page_ids_expr,
     const char * snap_expr,
     const PageIDAndEntriesV3 & expected_entries,
-    const PageDirectoryPtr & dir,
+    const u128::PageDirectoryPtr & dir,
     const PageIdV3Internals page_ids,
     const PageDirectorySnapshotPtr & snap)
 {
@@ -165,8 +165,8 @@ inline ::testing::AssertionResult getEntriesCompare(
                     return testing::internal::EqFailure(
                         expect_expr.c_str(),
                         actual_expr.c_str(),
-                        toDebugString(expected_id_entry.second),
-                        toDebugString(actual_id_entry.second),
+                        fmt::format("{}", expected_id_entry.second),
+                        fmt::format("{}", actual_id_entry.second),
                         false);
                 }
             }
@@ -214,7 +214,7 @@ inline ::testing::AssertionResult getEntryNotExist(
     const char * dir_expr,
     const char * page_id_expr,
     const char * snap_expr,
-    const PageDirectoryPtr & dir,
+    const u128::PageDirectoryPtr & dir,
     const PageIdV3Internal page_id,
     const PageDirectorySnapshotPtr & snap)
 {
@@ -231,7 +231,7 @@ inline ::testing::AssertionResult getEntryNotExist(
             snap_expr,
             id_entry.first.high,
             id_entry.first.low,
-            toDebugString(id_entry.second));
+            id_entry.second);
     }
     catch (DB::Exception & ex)
     {
@@ -254,7 +254,7 @@ inline ::testing::AssertionResult getEntriesNotExist(
     const char * dir_expr,
     const char * page_ids_expr,
     const char * snap_expr,
-    const PageDirectoryPtr & dir,
+    const u128::PageDirectoryPtr & dir,
     const PageIdV3Internals page_ids,
     const PageDirectorySnapshotPtr & snap)
 {

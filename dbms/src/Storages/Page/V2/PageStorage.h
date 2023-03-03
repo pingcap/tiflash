@@ -15,12 +15,13 @@
 #pragma once
 
 #include <Interpreters/SettingsCommon.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V2/PageDefines.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 
 #include <condition_variable>
 #include <functional>
@@ -89,8 +90,9 @@ public:
                 PSDiskDelegatorPtr delegator, //
                 const PageStorageConfig & config_,
                 const FileProviderPtr & file_provider_,
+                BackgroundProcessingPool & ver_compact_pool_,
                 bool no_more_insert_ = false);
-    ~PageStorage() override = default;
+    ~PageStorage() override { shutdown(); } // NOLINT(clang-analyzer-optin.cplusplus.VirtualCall)
 
     void restore() override;
 
@@ -120,8 +122,6 @@ public:
 
     PageMap readImpl(NamespaceId ns_id, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
-    PageIds readImpl(NamespaceId ns_id, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
-
     PageMap readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
     DB::Page readImpl(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) override;
@@ -129,6 +129,8 @@ public:
     void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
 
     bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
+
+    void shutdown() override;
 
     void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) override;
 
@@ -209,7 +211,6 @@ public:
     DB::Page read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) { return readImpl(TEST_NAMESPACE_ID, page_id, read_limiter, snapshot, true); }
     PageMap read(const PageIds & page_ids) { return readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, true); }
     PageMap read(const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) { return readImpl(TEST_NAMESPACE_ID, page_ids, read_limiter, snapshot, true); };
-    PageIds read(const PageIds & page_ids, const PageHandler & handler) { return readImpl(TEST_NAMESPACE_ID, page_ids, handler, nullptr, nullptr, true); }
     PageMap read(const std::vector<PageReadFields> & page_fields) { return readImpl(TEST_NAMESPACE_ID, page_fields, nullptr, nullptr, true); }
     void traverse(const std::function<void(const DB::Page & page)> & acceptor) { return traverseImpl(acceptor, nullptr); }
     bool gc() { return gcImpl(false, nullptr, nullptr); }
@@ -240,6 +241,10 @@ private:
 
     template <typename SnapshotPtr>
     friend class DataCompactor;
+
+    // Try compact in memory versions.
+    // Return true if compact is executed.
+    bool compactInMemVersions();
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -274,6 +279,10 @@ private:
     ExternalPageCallbacks::ExternalPagesRemover external_pages_remover = nullptr;
 
     StatisticsInfo last_gc_statistics;
+
+    // background pool for running compact on `versioned_page_entries`
+    BackgroundProcessingPool & ver_compact_pool;
+    BackgroundProcessingPool::TaskHandle ver_compact_handle = nullptr;
 
     // true means this instance runs under mix mode
     bool no_more_insert = false;

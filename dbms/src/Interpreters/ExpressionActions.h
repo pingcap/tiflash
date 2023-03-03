@@ -17,7 +17,7 @@
 #include <Core/Block.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/Names.h>
-#include <Interpreters/Settings.h>
+#include <Interpreters/Expand.h>
 #include <Storages/Transaction/Collator.h>
 
 #include <unordered_map>
@@ -35,6 +35,7 @@ using NameWithAlias = std::pair<std::string, std::string>;
 using NamesWithAliases = std::vector<NameWithAlias>;
 
 class Join;
+class Expand;
 
 class IFunctionBase;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
@@ -62,16 +63,12 @@ public:
 
         APPLY_FUNCTION,
 
-        /** Replaces the specified columns with arrays into columns with elements.
-            * Duplicates the values in the remaining columns by the number of elements in the arrays.
-            * Arrays must be parallel (have the same lengths).
-            */
-        ARRAY_JOIN,
-
         JOIN,
 
         /// Reorder and rename the columns, delete the extra ones. The same column names are allowed in the result.
         PROJECT,
+
+        EXPAND,
     };
 
     Type type;
@@ -84,15 +81,11 @@ public:
     /// For ADD_COLUMN.
     ColumnPtr added_column;
 
-    /// For APPLY_FUNCTION and LEFT ARRAY JOIN.
+    /// For APPLY_FUNCTION.
     FunctionBuilderPtr function_builder;
     FunctionBasePtr function;
     Names argument_names;
     TiDB::TiDBCollatorPtr collator = nullptr;
-
-    /// For ARRAY_JOIN
-    NameSet array_joined_columns;
-    bool array_join_is_left = false;
 
     /// For JOIN
     std::shared_ptr<const Join> join;
@@ -100,6 +93,9 @@ public:
 
     /// For PROJECT.
     NamesWithAliases projections;
+
+    /// For EXPAND.
+    std::shared_ptr<const Expand> expand;
 
     /// If result_name_ == "", as name "function_name(arguments separated by commas) is used".
     static ExpressionAction applyFunction(
@@ -113,8 +109,8 @@ public:
     static ExpressionAction copyColumn(const std::string & from_name, const std::string & to_name);
     static ExpressionAction project(const NamesWithAliases & projected_columns_);
     static ExpressionAction project(const Names & projected_columns_);
-    static ExpressionAction arrayJoin(const NameSet & array_joined_columns, bool array_join_is_left, const Context & context);
     static ExpressionAction ordinaryJoin(std::shared_ptr<const Join> join_, const NamesAndTypesList & columns_added_by_join_);
+    static ExpressionAction expandSource(GroupingSets grouping_sets);
 
     /// Which columns necessary to perform this action.
     Names getNeededColumns() const;
@@ -137,25 +133,22 @@ class ExpressionActions
 public:
     using Actions = std::vector<ExpressionAction>;
 
-    ExpressionActions(const NamesAndTypesList & input_columns_, const Settings & settings_)
+    explicit ExpressionActions(const NamesAndTypesList & input_columns_)
         : input_columns(input_columns_)
-        , settings(settings_)
     {
         for (const auto & input_elem : input_columns)
             sample_block.insert(ColumnWithTypeAndName(nullptr, input_elem.type, input_elem.name));
     }
 
-    ExpressionActions(const NamesAndTypes & input_columns_, const Settings & settings_)
+    explicit ExpressionActions(const NamesAndTypes & input_columns_)
         : input_columns(input_columns_.cbegin(), input_columns_.cend())
-        , settings(settings_)
     {
         for (const auto & input_elem : input_columns)
             sample_block.insert(ColumnWithTypeAndName(nullptr, input_elem.type, input_elem.name));
     }
 
     /// For constant columns the columns themselves can be contained in `input_columns_`.
-    ExpressionActions(const ColumnsWithTypeAndName & input_columns_, const Settings & settings_)
-        : settings(settings_)
+    explicit ExpressionActions(const ColumnsWithTypeAndName & input_columns_)
     {
         for (const auto & input_elem : input_columns_)
         {
@@ -177,14 +170,6 @@ public:
 
     /// Adds to the beginning the removal of all extra columns.
     void prependProjectInput();
-
-    /// Add the specified ARRAY JOIN action to the beginning. Change the appropriate input types to arrays.
-    /// If there are unknown columns in the ARRAY JOIN list, take their types from sample_block, and immediately after ARRAY JOIN remove them.
-    void prependArrayJoin(const ExpressionAction & action, const Block & sample_block);
-
-    /// If the last action is ARRAY JOIN, and it does not affect the columns from required_columns, discard and return it.
-    /// Change the corresponding output types to arrays.
-    bool popUnusedArrayJoin(const Names & required_columns, ExpressionAction & out_action);
 
     /// - Adds actions to delete all but the specified columns.
     /// - Removes unused input columns.
@@ -228,16 +213,8 @@ private:
     NamesAndTypesList input_columns;
     Actions actions;
     Block sample_block;
-    Settings settings;
-
-    void checkLimits(Block & block) const;
 
     void addImpl(ExpressionAction action, Names & new_names);
-
-    /// Try to improve something without changing the lists of input and output columns.
-    void optimize();
-    /// Move all arrayJoin as close as possible to the end.
-    void optimizeArrayJoin();
 };
 
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
@@ -267,7 +244,6 @@ struct ExpressionActionsChain
 
     using Steps = std::vector<Step>;
 
-    Settings settings;
     Steps steps;
 
     void addStep();

@@ -49,7 +49,8 @@ extern void GenMockSSTData(const TiDB::TableInfo & table_info,
 namespace FailPoints
 {
 extern const char skip_check_segment_update[];
-}
+extern const char force_fail_in_flush_region_data[];
+} // namespace FailPoints
 
 namespace RegionBench
 {
@@ -57,7 +58,6 @@ extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const Ti
 extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
 } // namespace RegionBench
 
-extern void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoList & data_list_read, bool lock_region = true);
 extern void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state);
 extern void ChangeRegionStateRange(RegionState & region_state, bool source_at_left, const RegionState & source_region_state);
 
@@ -78,7 +78,6 @@ public:
     {
         // clean data and create path pool instance
         path_pool = createCleanPathPool(test_path);
-
         reloadKVSFromDisk();
 
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
@@ -101,7 +100,8 @@ protected:
     {
         kvstore.reset();
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
-        kvstore = std::make_unique<KVStore>(global_ctx, TiDB::SnapshotApplyMethod::DTFile_Directory);
+        global_ctx.initializeWriteNodePageStorageIfNeed(*path_pool);
+        kvstore = std::make_unique<KVStore>(global_ctx);
         // only recreate kvstore and restore data from disk, don't recreate proxy instance
         kvstore->restore(*path_pool, proxy_helper.get());
         return *kvstore;
@@ -112,6 +112,9 @@ protected:
     }
     void initStorages()
     {
+        bool v = false;
+        if (!has_init.compare_exchange_strong(v, true))
+            return;
         try
         {
             registerStorages();
@@ -122,9 +125,9 @@ protected:
         }
         String path = TiFlashTestEnv::getContext().getPath();
         auto p = path + "/metadata/";
-        TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
+        TiFlashTestEnv::tryCreatePath(p);
         p = path + "/data/";
-        TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
+        TiFlashTestEnv::tryCreatePath(p);
     }
 
 protected:
@@ -149,6 +152,7 @@ protected:
         return std::make_unique<PathPool>(main_data_paths, main_data_paths, Strings{}, path_capacity, provider);
     }
 
+    std::atomic_bool has_init{false};
     std::string test_path;
 
     std::unique_ptr<PathPool> path_pool;

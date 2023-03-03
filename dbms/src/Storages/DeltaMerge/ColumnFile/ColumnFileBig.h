@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 
 namespace DB
@@ -67,25 +68,19 @@ public:
 
     auto getFile() const { return file; }
 
-    PageId getDataPageId() { return file->pageId(); }
+    PageIdU64 getDataPageId() { return file->pageId(); }
 
     size_t getRows() const override { return valid_rows; }
     size_t getBytes() const override { return valid_bytes; };
 
-    void removeData(WriteBatches & wbs) const override
-    {
-        // Here we remove the data id instead of file_id.
-        // Because a dmfile could be used in several places, and only after all page ids are removed,
-        // then the file_id got removed.
-        wbs.removed_data.delPage(file->pageId());
-    }
+    void removeData(WriteBatches & wbs) const override;
 
     ColumnFileReaderPtr
     getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const override;
 
     void serializeMetadata(WriteBuffer & buf, bool save_schema) const override;
 
-    static ColumnFilePersistedPtr deserializeMetadata(DMContext & context, //
+    static ColumnFilePersistedPtr deserializeMetadata(const DMContext & context, //
                                                       const RowKeyRange & segment_range,
                                                       ReadBuffer & buf);
 
@@ -94,6 +89,14 @@ public:
         String s = "{big_file,rows:" + DB::toString(getRows()) //
             + ",bytes:" + DB::toString(getBytes()) + "}"; //
         return s;
+    }
+
+    bool mayBeFlushedFrom(ColumnFile * from_file) const override
+    {
+        if (const auto * other = from_file->tryToBigFile(); other)
+            return file->pageId() == other->file->pageId();
+        else
+            return false;
     }
 };
 
@@ -125,8 +128,8 @@ private:
 
 private:
     void initStream();
-    size_t readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
-    size_t readRowsOnce(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
+    std::pair<size_t, size_t> readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
+    std::pair<size_t, size_t> readRowsOnce(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range);
 
 public:
     ColumnFileBigReader(const DMContext & context_, const ColumnFileBig & column_file_, const ColumnDefinesPtr & col_defs_)
@@ -154,11 +157,14 @@ public:
         }
     }
 
-    size_t readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
+    std::pair<size_t, size_t> readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
 
     Block readNextBlock() override;
 
+    size_t skipNextBlock() override;
+
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
 };
+
 } // namespace DM
 } // namespace DB

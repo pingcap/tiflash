@@ -52,7 +52,7 @@ TEST_F(RegionKVStoreTest, NewProxy)
         ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(request), std::move(response), 1, 5, 1, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
 
         // Filter
-        ASSERT_EQ(kvs.tryFlushRegionData(1, false, ctx.getTMTContext(), 0, 0), false);
+        ASSERT_EQ(kvs.tryFlushRegionData(1, false, false, ctx.getTMTContext(), 0, 0), false);
     }
 }
 
@@ -969,16 +969,9 @@ TEST_F(RegionKVStoreTest, KVStore)
         testRaftChangePeer(kvs, ctx.getTMTContext());
     }
     {
-        auto ori_snapshot_apply_method = kvs.snapshot_apply_method;
-        kvs.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
-        SCOPE_EXIT({
-            kvs.snapshot_apply_method = ori_snapshot_apply_method;
-        });
-
-
         auto region_id = 19;
         auto region = makeRegion(region_id, RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60));
-        auto region_id_str = std::to_string(19);
+        auto region_id_str = std::to_string(region_id);
         auto & mmp = MockSSTReader::getMockSSTData();
         MockSSTReader::getMockSSTData().clear();
         MockSSTReader::Data default_kv_list;
@@ -1002,7 +995,7 @@ TEST_F(RegionKVStoreTest, KVStore)
                 8,
                 5,
                 ctx.getTMTContext());
-            ASSERT_EQ(kvs.getRegion(19)->checkIndex(8), true);
+            ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(8), true);
             try
             {
                 kvs.handleApplySnapshot(
@@ -1016,7 +1009,7 @@ TEST_F(RegionKVStoreTest, KVStore)
             }
             catch (Exception & e)
             {
-                ASSERT_EQ(e.message(), "[region 19] already has newer apply-index 8 than 6, should not happen");
+                ASSERT_EQ(e.message(), fmt::format("[region {}] already has newer apply-index 8 than 6, should not happen", region_id));
             }
         }
 
@@ -1098,7 +1091,7 @@ TEST_F(RegionKVStoreTest, KVStore)
 
     {
         auto region_id = 19;
-        auto region_id_str = std::to_string(19);
+        auto region_id_str = std::to_string(region_id);
         auto & mmp = MockSSTReader::getMockSSTData();
         MockSSTReader::getMockSSTData().clear();
         MockSSTReader::Data default_kv_list;
@@ -1126,7 +1119,7 @@ TEST_F(RegionKVStoreTest, KVStore)
                 100,
                 1,
                 ctx.getTMTContext());
-            ASSERT_EQ(kvs.getRegion(19)->checkIndex(100), true);
+            ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(100), true);
         }
     }
 
@@ -1146,20 +1139,6 @@ TEST_F(RegionKVStoreTest, KVStore)
         {
             ASSERT_EQ(e.message(), "unsupported admin command type InvalidAdmin");
         }
-    }
-    {
-        // There shall be data to flush.
-        ASSERT_EQ(kvs.needFlushRegionData(19, ctx.getTMTContext()), true);
-        // Force flush until succeed only for testing.
-        ASSERT_EQ(kvs.tryFlushRegionData(19, true, ctx.getTMTContext(), 0, 0), true);
-        // Non existing region.
-        // Flush and CompactLog will not panic.
-        ASSERT_EQ(kvs.tryFlushRegionData(1999, true, ctx.getTMTContext(), 0, 0), true);
-        raft_cmdpb::AdminRequest request;
-        raft_cmdpb::AdminResponse response;
-        request.mutable_compact_log();
-        request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
-        ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(response), 1999, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
     }
 }
 

@@ -13,13 +13,17 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -28,6 +32,7 @@
 #include <common/logger_useful.h>
 
 #include <ctime>
+#include <future>
 #include <memory>
 
 namespace CurrentMetrics
@@ -48,8 +53,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
+                                    const String & parent_path);
 namespace tests
 {
 class SegmentTest : public DB::base::TiFlashStorageTestBasic
@@ -626,8 +630,6 @@ try
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString()); // Add trace msg when ASSERT failed
         check_segment_squash_delete_range(segment, HandleRange{70, 100});
-
-        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -645,9 +647,8 @@ try
         HandleRange del{63, 70};
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
-        check_segment_squash_delete_range(segment, HandleRange{63, 100});
 
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        check_segment_squash_delete_range(segment, HandleRange{63, 100});
     }
 
     {
@@ -666,7 +667,6 @@ try
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
         check_segment_squash_delete_range(segment, HandleRange{1, 100});
-        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -689,7 +689,6 @@ try
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
         check_segment_squash_delete_range(segment, HandleRange{1, 100});
-        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -711,7 +710,6 @@ try
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
         check_segment_squash_delete_range(segment, HandleRange{0, 100});
-        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -1040,18 +1038,15 @@ public:
         SegmentTest::SetUp();
     }
 
-    std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
+    std::pair<RowKeyRange, PageIdU64s> genDMFile(DMContext & context, const Block & block)
     {
         auto delegator = context.path_pool.getStableDiskDelegator();
         auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto store_path = delegator.choosePath();
 
-        DMFileBlockOutputStream::Flags flags;
-        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
-
         auto dmfile
-            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path, flags);
+            = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*tableColumns()), input_stream, file_id, store_path);
 
         delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
@@ -1089,12 +1084,11 @@ try
                 auto file_id = file_ids[0];
                 auto file_parent_path = delegate.getDTFilePath(file_id);
                 auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
-                auto column_file = std::make_shared<ColumnFileBig>(dmContext(), file, range);
                 WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
-                segment->ingestColumnFiles(dmContext(), range, {column_file}, false);
+                segment->ingestDataToDelta(dmContext(), range, {file}, false);
                 break;
             }
             default:
@@ -1522,9 +1516,12 @@ try
         const auto & dmfile = dmfiles[0];
         auto file_path = dmfile->path();
         // check property file exists and then delete it
-        ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
-        Poco::File(file_path + "/property").remove();
-        ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
+        if (!dmfile->useMetaV2())
+        {
+            ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
+            Poco::File(file_path + "/property").remove();
+            ASSERT_EQ(Poco::File(file_path + "/property").exists(), false);
+        }
         // clear PackProperties to force it to calculate from scratch
         dmfile->getPackProperties().clear_property();
         ASSERT_EQ(dmfile->getPackProperties().property_size(), 0);
@@ -1551,6 +1548,100 @@ INSTANTIATE_TEST_CASE_P(SegmentWriteType,
                             ::testing::Values(SegmentWriteType::ToDisk, SegmentWriteType::ToCache),
                             ::testing::Bool()),
                         paramToString);
+
+
+TEST_F(SimplePKTestBasic, FlushWhileMerging)
+try
+{
+    ensureSegmentBreakpoints({0, 50, 100});
+
+    // Everything in memtable
+    fill(-1000, 1000);
+    ASSERT_EQ(1000, getSegmentAt(-10)->getDelta()->getMemTableSet()->getRows());
+
+    auto sp_merge_prepared = SyncPointCtl::enableInScope("after_DeltaMergeStore::segmentMerge|prepare_merge");
+
+    auto th_merge = std::async([&]() {
+        ASSERT_TRUE(merge(-10, 20));
+    });
+
+    sp_merge_prepared.waitAndPause();
+    flush(-10, -9); // Flush the first segment
+    sp_merge_prepared.next();
+    th_merge.get();
+
+    ASSERT_EQ(2000, getRowsN());
+    ASSERT_EQ(2000, getRowsN(-1000, 1000));
+}
+CATCH
+
+TEST_F(SimplePKTestBasic, MultipleFlushAndWriteWhileMerging)
+try
+{
+    ensureSegmentBreakpoints({0, 50, 100});
+
+    fill(-1000, 1000);
+
+    auto sp_merge_prepared = SyncPointCtl::enableInScope("after_DeltaMergeStore::segmentMerge|prepare_merge");
+
+    auto th_merge = std::async([&]() {
+        ASSERT_TRUE(merge(-10, 110));
+    });
+
+    sp_merge_prepared.waitAndPause();
+
+    ASSERT_EQ(2000, getRowsN());
+
+    flush(-10, -9);
+    ASSERT_EQ(2000, getRowsN());
+
+    fill(0, 100);
+    ASSERT_EQ(2000, getRowsN());
+
+    flush(50, 51);
+    ASSERT_EQ(2000, getRowsN());
+
+    deleteRange(30, 70);
+    ASSERT_EQ(1960, getRowsN());
+
+    sp_merge_prepared.next();
+    th_merge.get();
+
+    ASSERT_EQ(1960, getRowsN());
+    ASSERT_EQ(1960, getRowsN(-1000, 1000));
+}
+CATCH
+
+TEST_F(SimplePKTestBasic, MergeWhileFlushing)
+try
+{
+    ensureSegmentBreakpoints({0, 50, 100});
+
+    fill(-1000, 1000);
+    ASSERT_EQ(2000, getRowsN());
+
+    auto sp_flush_prepared = SyncPointCtl::enableInScope("after_DeltaValueSpace::flush|prepare_flush");
+
+    auto th_flush = std::async([&]() {
+        flush(10, 11);
+    });
+
+    sp_flush_prepared.waitAndPause();
+
+    ASSERT_TRUE(merge(-10, 110));
+    ASSERT_EQ(std::vector<Int64>({}), getSegmentBreakpoints());
+    ASSERT_EQ(2000, getRowsN());
+
+    deleteRange(30, 70);
+    ASSERT_EQ(1960, getRowsN());
+
+    sp_flush_prepared.next();
+    sp_flush_prepared.waitAndNext(); // We expect one flush retry
+    th_flush.get();
+
+    ASSERT_EQ(1960, getRowsN());
+}
+CATCH
 
 } // namespace tests
 } // namespace DM

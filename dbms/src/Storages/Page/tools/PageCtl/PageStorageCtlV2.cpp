@@ -20,9 +20,10 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V2/gc/DataCompactor.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
 
@@ -45,10 +46,10 @@ Usage: <path> <mode>
             )HELP");
 }
 
-void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
+void printPageEntry(const DB::PageIdU64 pid, const DB::PageEntry & entry)
 {
-    printf("\tpid:%9lld\t\t"
-           "%9llu\t%9u\t%9u\t%9llu\t%9llu\t%016llx\n",
+    printf("\tpid:%9llu\t\t"
+           "%9llu\t%9u\t%9llu\t%9llu\t%9llu\t%016llu\n",
            pid, //
            entry.file_id,
            entry.level,
@@ -173,8 +174,9 @@ try
         return 0;
     }
 
+    auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
     DB::PageStorageConfig config = parse_storage_config(argc, argv, logger);
-    PageStorage storage("PageCtl", delegator, config, file_provider);
+    PageStorage storage("PageCtl", delegator, config, file_provider, *bkg_pool);
     storage.restore();
     switch (mode)
     {
@@ -232,7 +234,7 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
     for (const auto & page_file : page_files)
     {
         PageEntriesEdit edit;
-        DB::PageIdAndEntries id_and_caches;
+        DB::PageIdU64AndEntries id_and_caches;
 
         auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
 
@@ -258,13 +260,13 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
                 case DB::WriteBatchWriteType::DEL:
-                    printf("DEL\t%lld\t%llu\t%u\n", //
+                    printf("DEL\t%llu\t%llu\t%u\n", //
                            record.page_id,
                            page_file.getFileId(),
                            page_file.getLevel());
                     break;
                 case DB::WriteBatchWriteType::REF:
-                    printf("REF\t%lld\t%lld\t\t%llu\t%u\n", //
+                    printf("REF\t%llu\t%llu\t\t%llu\t%u\n", //
                            record.page_id,
                            record.ori_page_id,
                            page_file.getFileId(),
@@ -318,7 +320,7 @@ void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, co
 
         const size_t total_size = page_file.getDataFileSize();
         size_t valid_size = 0;
-        DB::PageIdSet valid_pages;
+        DB::PageIdU64Set valid_pages;
         if (auto iter = file_valid_pages.find(page_file.fileIdLevel()); iter != file_valid_pages.end())
         {
             valid_size = iter->second.first;

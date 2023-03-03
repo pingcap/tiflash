@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Debug/MockSchemaGetter.h>
@@ -50,12 +51,12 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     explicit TiDBSchemaSyncer(KVClusterPtr cluster_)
         : cluster(std::move(cluster_))
         , cur_version(0)
-        , log(&Poco::Logger::get("SchemaSyncer"))
+        , log(Logger::get())
     {}
 
     bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
@@ -159,6 +160,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     // Return Values
     // - if latest schema diff is not empty, return the (latest_version)
     // - if latest schema diff is empty, return the (latest_version - 1)
+    // - if schema_diff.regenerate_schema_map == true, need reload all schema info from TiKV, return (-1)
     // - if error happend, return (-1)
     Int64 tryLoadSchemaDiffs(Getter & getter, Int64 latest_version, Context & context)
     {
@@ -213,6 +215,14 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     LOG_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
                     continue;
                 }
+
+                if (schema_diff->regenerate_schema_map)
+                {
+                    // If `schema_diff.regenerate_schema_map` == true, return `-1` direclty, let TiFlash reload schema info from TiKV.
+                    LOG_INFO(log, "Meets a schema diff with regenerate_schema_map flag");
+                    return -1;
+                }
+
                 builder.applyDiff(*schema_diff);
             }
         }

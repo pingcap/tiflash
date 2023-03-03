@@ -17,6 +17,9 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -52,49 +55,63 @@ public:
      * When `check_rows` is true, it will compare the rows num before and after the segment update.
      * So if there is some write during the segment update, it will report false failure if `check_rows` is true.
      */
-    std::optional<PageId> splitSegment(PageId segment_id, Segment::SplitMode split_mode = Segment::SplitMode::Auto, bool check_rows = true);
-    std::optional<PageId> splitSegmentAt(PageId segment_id, Int64 split_at, Segment::SplitMode split_mode = Segment::SplitMode::Auto, bool check_rows = true);
-    void mergeSegment(const std::vector<PageId> & segments, bool check_rows = true);
-    void mergeSegmentDelta(PageId segment_id, bool check_rows = true);
-    void flushSegmentCache(PageId segment_id);
+    std::optional<PageIdU64> splitSegment(PageIdU64 segment_id, Segment::SplitMode split_mode = Segment::SplitMode::Auto, bool check_rows = true);
+    std::optional<PageIdU64> splitSegmentAt(PageIdU64 segment_id, Int64 split_at, Segment::SplitMode split_mode = Segment::SplitMode::Auto, bool check_rows = true);
+    void mergeSegment(const std::vector<PageIdU64> & segments, bool check_rows = true);
+    void mergeSegmentDelta(PageIdU64 segment_id, bool check_rows = true);
+    void flushSegmentCache(PageIdU64 segment_id);
 
     /**
      * When begin_key is specified, new rows will be written from specified key. Otherwise, new rows may be
      * written randomly in the segment range.
      */
-    void writeSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
-    void ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
-    void writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
-    void deleteRangeSegment(PageId segment_id);
+    void writeSegment(PageIdU64 segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void ingestDTFileIntoDelta(PageIdU64 segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt, bool clear = false);
+    void ingestDTFileByReplace(PageIdU64 segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt, bool clear = false);
+    void writeSegmentWithDeletedPack(PageIdU64 segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void deleteRangeSegment(PageIdU64 segment_id);
 
     /**
      * This function does not check rows.
      */
-    void replaceSegmentData(const std::vector<PageId> & segments_id, const DMFilePtr & file);
-    void replaceSegmentData(const std::vector<PageId> & segments_id, const Block & block);
+    void replaceSegmentData(PageIdU64 segment_id, const DMFilePtr & file, SegmentSnapshotPtr snapshot = nullptr);
+    void replaceSegmentData(PageIdU64 segment_id, const Block & block, SegmentSnapshotPtr snapshot = nullptr);
 
     Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
-    std::vector<Block> prepareWriteBlocksInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key = std::nullopt, bool is_deleted = false);
+    Block prepareWriteBlockInSegmentRange(PageIdU64 segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key = std::nullopt, bool is_deleted = false);
 
-    size_t getSegmentRowNumWithoutMVCC(PageId segment_id);
-    size_t getSegmentRowNum(PageId segment_id);
+    size_t getSegmentRowNumWithoutMVCC(PageIdU64 segment_id);
+    size_t getSegmentRowNum(PageIdU64 segment_id);
+    bool isSegmentDefinitelyEmpty(PageIdU64 segment_id);
 
-    PageId getRandomSegmentId();
+    PageIdU64 getRandomSegmentId();
 
     /**
      * You must pass at least 2 segments. Checks whether all segments passed in are sharing the same stable.
      */
-    [[nodiscard]] bool areSegmentsSharingStable(const std::vector<PageId> & segments_id);
+    [[nodiscard]] bool areSegmentsSharingStable(const PageIdU64s & segments_id) const;
 
-    std::pair<Int64, Int64> getSegmentKeyRange(PageId segment_id);
+    std::pair<Int64, Int64> getSegmentKeyRange(PageIdU64 segment_id) const;
 
-    void printFinishedOperations();
+    void printFinishedOperations() const;
+
+    std::vector<Block> readSegment(PageIdU64 segment_id, bool need_row_id, const RowKeyRanges & ranges);
+    ColumnPtr getSegmentRowId(PageIdU64 segment_id, const RowKeyRanges & ranges);
+    ColumnPtr getSegmentHandle(PageIdU64 segment_id, const RowKeyRanges & ranges);
+    void writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end);
+    RowKeyValue buildRowKeyValue(Int64 key);
+    static RowKeyRange buildRowKeyRange(Int64 begin, Int64 end);
+
+    size_t getPageNumAfterGC(StorageType type, NamespaceId ns_id) const;
+
+    std::set<PageIdU64> getAliveExternalPageIdsWithoutGC(NamespaceId ns_id) const;
+    std::set<PageIdU64> getAliveExternalPageIdsAfterGC(NamespaceId ns_id) const;
 
 protected:
     std::mt19937 random;
 
     // <segment_id, segment_ptr>
-    std::map<PageId, SegmentPtr> segments;
+    std::map<PageIdU64, SegmentPtr> segments;
 
     // <name, number_of_success_runs>
     std::map<std::string, size_t> operation_statistics;
@@ -112,8 +129,10 @@ protected:
      */
     void reloadDMContext();
 
+    std::pair<SegmentPtr, SegmentSnapshotPtr> getSegmentForRead(PageIdU64 segment_id);
+
 protected:
-    inline static constexpr PageId NAMESPACE_ID = 100;
+    inline static constexpr PageIdU64 NAMESPACE_ID = 100;
 
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePathPool> storage_path_pool;

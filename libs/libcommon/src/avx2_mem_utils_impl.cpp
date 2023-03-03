@@ -16,9 +16,7 @@
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 
-#ifndef TIFLASH_USE_AVX2_COMPILE_FLAG
-static_assert(false, "`libs/libcommon/src/avx2_mem_utils_impl.cpp` need flag `-mavx2` to inline related functions");
-#endif
+ASSERT_USE_AVX2_COMPILE_FLAG
 
 namespace mem_utils
 {
@@ -44,6 +42,11 @@ int avx2_mem_cmp(const char * p1, const char * p2, size_t n)
 const char * avx2_memchr(const char * src, size_t n, char target)
 {
     return details::avx2_memchr(src, n, target);
+}
+
+uint64_t avx2_byte_count(const char * src, size_t size, char target)
+{
+    return details::avx2_byte_count(src, size, target);
 }
 
 } // namespace mem_utils

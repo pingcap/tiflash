@@ -19,7 +19,10 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
+
+
 namespace DB
 {
 class Context;
@@ -40,7 +43,7 @@ public:
         }
     }
 
-    ~DMFileBlockInputStream()
+    ~DMFileBlockInputStream() override
     {
         if (enable_read_thread)
         {
@@ -54,7 +57,17 @@ public:
 
     bool getSkippedRows(size_t & skip_rows) override { return reader.getSkippedRows(skip_rows); }
 
-    Block read() override { return reader.read(); }
+    size_t skipNextBlock() override { return reader.skipNextBlock(); }
+
+    Block read() override
+    {
+        return reader.read();
+    }
+
+    Block readWithFilter(const IColumn::Filter & filter) override
+    {
+        return reader.readWithFilter(filter);
+    }
 
 private:
     DMFileReader reader;
@@ -72,7 +85,7 @@ public:
     // - current settings from this context
     // - current read limiter form this context
     // - current file provider from this context
-    explicit DMFileBlockInputStreamBuilder(const Context & context);
+    explicit DMFileBlockInputStreamBuilder(const Context & dm_context);
 
     // Build the final stream ptr.
     // Empty `rowkey_ranges` means not filter by rowkey
@@ -80,7 +93,8 @@ public:
     DMFileBlockInputStreamPtr build(
         const DMFilePtr & dmfile,
         const ColumnDefines & read_columns,
-        const RowKeyRanges & rowkey_ranges);
+        const RowKeyRanges & rowkey_ranges,
+        const ScanContextPtr & scan_context);
 
     // **** filters **** //
 
@@ -168,7 +182,7 @@ private:
     // Rough set filter
     RSOperatorPtr rs_filter;
     // packs filter (filter by pack index)
-    IdSetPtr read_packs;
+    IdSetPtr read_packs{};
     MarkCachePtr mark_cache;
     MinMaxIndexCachePtr index_cache;
     // column cache
@@ -204,7 +218,7 @@ inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context 
     return builder
         .setRowsThreshold(DMFILE_READ_ROWS_THRESHOLD)
         .onlyReadOnePackEveryTime()
-        .build(file, cols, DB::DM::RowKeyRanges{});
+        .build(file, cols, DB::DM::RowKeyRanges{}, std::make_shared<ScanContext>());
 }
 
 } // namespace DM

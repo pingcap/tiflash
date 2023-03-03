@@ -211,13 +211,13 @@ ColumnPtr ColumnTuple::permute(const Permutation & perm, size_t limit) const
     return ColumnTuple::create(new_columns);
 }
 
-ColumnPtr ColumnTuple::replicate(const Offsets & offsets) const
+ColumnPtr ColumnTuple::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
 {
     const size_t tuple_size = columns.size();
     Columns new_columns(tuple_size);
 
     for (size_t i = 0; i < tuple_size; ++i)
-        new_columns[i] = columns[i]->replicate(offsets);
+        new_columns[i] = columns[i]->replicateRange(start_row, end_row, offsets);
 
     return ColumnTuple::create(new_columns);
 }
@@ -241,6 +241,30 @@ MutableColumns ColumnTuple::scatter(ColumnIndex num_columns, const Selector & se
     }
 
     return res;
+}
+
+void ColumnTuple::scatterTo(ScatterColumns & scatterColumns, const Selector & selector) const
+{
+    const size_t tuple_size = columns.size();
+    ColumnIndex scattered_num_columns = scatterColumns.size();
+    std::vector<MutableColumns> scattered_tuple_elements(tuple_size);
+    for (size_t tuple_element_idx = 0; tuple_element_idx < tuple_size; ++tuple_element_idx)
+    {
+        for (size_t scatter_idx = 0; scatter_idx < scattered_num_columns; ++scatter_idx)
+        {
+            auto col = static_cast<ColumnTuple &>(scatterColumns[scatter_idx]->assumeMutableRef()).columns[tuple_element_idx]->assumeMutable();
+            scattered_tuple_elements[tuple_element_idx].push_back(std::move(col));
+        }
+        columns[tuple_element_idx]->scatterTo(scattered_tuple_elements[tuple_element_idx], selector);
+    }
+
+    for (size_t scattered_idx = 0; scattered_idx < scattered_num_columns; ++scattered_idx)
+    {
+        MutableColumns new_columns(tuple_size);
+        for (size_t tuple_element_idx = 0; tuple_element_idx < tuple_size; ++tuple_element_idx)
+            new_columns[tuple_element_idx] = std::move(scattered_tuple_elements[tuple_element_idx][scattered_idx]);
+        scatterColumns[scattered_idx] = ColumnTuple::create(std::move(new_columns));
+    }
 }
 
 int ColumnTuple::compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const

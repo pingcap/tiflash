@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MarkCache.h>
 #include <Storages/Page/FileUsage.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -82,8 +83,8 @@ void AsynchronousMetrics::run()
 
     /// Next minute + 30 seconds. To be distant with moment of transmission of metrics, see MetricsTransmitter.
     const auto get_next_minute = [] {
-        return std::chrono::time_point_cast<std::chrono::minutes, std::chrono::system_clock>(
-                   std::chrono::system_clock::now() + std::chrono::minutes(1))
+        return std::chrono::time_point_cast<std::chrono::minutes, std::chrono::steady_clock>(
+                   std::chrono::steady_clock::now() + std::chrono::minutes(1))
             + std::chrono::seconds(30);
     };
 
@@ -121,6 +122,7 @@ static void calculateMaxAndSum(Max & max, Sum & sum, T x)
 
 FileUsageStatistics AsynchronousMetrics::getPageStorageFileUsage()
 {
+    RUNTIME_ASSERT(!(context.isDisaggregatedComputeMode() && context.useAutoScaler()));
     // Get from RegionPersister
     auto & tmt = context.getTMTContext();
     auto & kvstore = tmt.getKVStore();
@@ -133,9 +135,9 @@ FileUsageStatistics AsynchronousMetrics::getPageStorageFileUsage()
         const auto meta_usage = global_storage_pool->meta_storage->getFileUsageStatistics();
         const auto data_usage = global_storage_pool->data_storage->getFileUsageStatistics();
 
-        usage.total_file_num += log_usage.total_file_num + meta_usage.total_file_num + data_usage.total_file_num;
-        usage.total_disk_size += log_usage.total_disk_size + meta_usage.total_disk_size + data_usage.total_disk_size;
-        usage.total_valid_size += log_usage.total_valid_size + meta_usage.total_valid_size + data_usage.total_valid_size;
+        usage.merge(log_usage)
+            .merge(meta_usage)
+            .merge(data_usage);
     }
     return usage;
 }
@@ -195,11 +197,15 @@ void AsynchronousMetrics::update()
         set("MaxDTBackgroundTasksLength", max_dt_background_tasks_length);
     }
 
+    if (!(context.isDisaggregatedComputeMode() && context.useAutoScaler()))
     {
         const FileUsageStatistics usage = getPageStorageFileUsage();
         set("BlobFileNums", usage.total_file_num);
         set("BlobDiskBytes", usage.total_disk_size);
         set("BlobValidBytes", usage.total_valid_size);
+        set("LogNums", usage.total_log_file_num);
+        set("LogDiskBytes", usage.total_log_disk_size);
+        set("PagesInMem", usage.num_pages);
     }
 
 #if USE_MIMALLOC

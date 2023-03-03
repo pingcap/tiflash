@@ -14,25 +14,37 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
+#include <common/types.h>
 #include <tipb/select.pb.h>
 
 namespace DB
 {
+class DAGContext;
+
 class DAGResponseWriter
 {
 public:
     DAGResponseWriter(
         Int64 records_per_chunk_,
         DAGContext & dag_context_);
+    /// prepared with sample block
+    virtual void prepare(const Block &){};
     virtual void write(const Block & block) = 0;
-    virtual void finishWrite() = 0;
+
+    // For async writer, `isReadyForWrite` need to be called before calling `write`.
+    // ```
+    // while (!isReadyForWrite()) {}
+    // write(block);
+    // ```
+    virtual bool isReadyForWrite() const { throw Exception("Unsupport"); }
+
+    /// flush cached blocks for batch writer
+    virtual void flush() = 0;
     virtual ~DAGResponseWriter() = default;
     const DAGContext & dagContext() const { return dag_context; }
 
 protected:
     Int64 records_per_chunk;
-    ExecutionSummaryCollector summary_collector;
     DAGContext & dag_context;
 };
 

@@ -25,7 +25,6 @@
 
 #include <chrono>
 
-
 namespace DB
 {
 namespace ErrorCodes
@@ -83,7 +82,8 @@ ProcessList::EntryPtr ProcessList::insert(
     const String & query_,
     const IAST * ast,
     const ClientInfo & client_info,
-    const Settings & settings)
+    const Settings & settings,
+    const UInt64 total_memory)
 {
     EntryPtr res;
 
@@ -141,7 +141,7 @@ ProcessList::EntryPtr ProcessList::insert(
 
         ++cur_size;
 
-        res = std::make_shared<Entry>(*this, cont.emplace(cont.end(), query_, client_info, settings.max_memory_usage, settings.memory_tracker_fault_probability, priorities.insert(settings.priority)));
+        res = std::make_shared<Entry>(*this, cont.emplace(cont.end(), query_, client_info, settings.max_memory_usage.getActualBytes(total_memory), settings.memory_tracker_fault_probability, priorities.insert(settings.priority)));
 
         ProcessListForUser & user_process_list = user_to_queries[client_info.current_user];
         user_process_list.queries.emplace(client_info.current_query_id, &res->get());
@@ -153,7 +153,7 @@ ProcessList::EntryPtr ProcessList::insert(
             ///  setting from one query effectively sets values for all other queries.
 
             /// Track memory usage for all simultaneously running queries from single user.
-            user_process_list.user_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_user);
+            user_process_list.user_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_user.getActualBytes(total_memory));
             user_process_list.user_memory_tracker->setDescription("(for user)");
             current_memory_tracker->setNext(user_process_list.user_memory_tracker.get());
 
@@ -161,7 +161,7 @@ ProcessList::EntryPtr ProcessList::insert(
             /// You should specify this value in configuration for default profile,
             ///  not for specific users, sessions or queries,
             ///  because this setting is effectively global.
-            total_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_all_queries);
+            total_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_all_queries.getActualBytes(total_memory));
             total_memory_tracker->setBytesThatRssLargerThanLimit(settings.bytes_that_rss_larger_than_limit);
             total_memory_tracker->setDescription("(total)");
             total_memory_tracker->setAccuracyDiffForTest(settings.memory_tracker_accuracy_diff_for_test);

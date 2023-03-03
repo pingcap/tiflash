@@ -13,16 +13,22 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
+#include <future>
+#include <limits>
 #include <memory>
 
 namespace CurrentMetrics
@@ -37,8 +43,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
+                                    const String & parent_path);
 namespace tests
 {
 void assertBlocksEqual(const Blocks & blocks1, const Blocks & blocks2)
@@ -67,8 +72,6 @@ void assertBlocksEqual(const Blocks & blocks1, const Blocks & blocks2)
 class DeltaValueSpaceTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    static void SetUpTestCase() {}
-
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
@@ -123,7 +126,7 @@ protected:
     DeltaValueSpacePtr delta;
 
     static constexpr TableID table_id = 100;
-    static constexpr PageId delta_id = 1;
+    static constexpr PageIdU64 delta_id = 1;
     static constexpr size_t num_rows_write_per_batch = 100;
 };
 
@@ -151,7 +154,7 @@ Block appendColumnFileBigToDeltaValueSpace(DMContext & context, ColumnDefinesPtr
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
     auto store_path = delegator.choosePath();
     auto dmfile
-        = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*column_defines), input_stream, file_id, store_path, {});
+        = writeIntoNewDMFile(context, std::make_shared<ColumnDefines>(*column_defines), input_stream, file_id, store_path);
     delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
     auto & pk_column = block.getByPosition(0).column;
@@ -333,25 +336,33 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         {
             delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write_per_batch)));
         }
+        {
+            appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
+            total_rows_write += num_rows_write_per_batch;
+        }
         delta->flush(dmContext());
     }
     // build compaction task and finish prepare stage
     MinorCompactionPtr compaction_task;
     {
-        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+        PageReaderPtr reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
-        ASSERT_EQ(compaction_task->getCompactionSourceLevel(), 0);
-        // There should be two compaction sub_tasks.
-        // The first task try to compact the first three column files to a larger one,
-        // and the second task is just a trivial move for the last column file which is a delete range.
+        // There should be three compaction sub_tasks.
+        // The first task try to compact the first three column files to a larger one.
+        // The second task is a trivial move for a ColumnFileDeleteRange.
+        // The third task is a trivial move for and a ColumnFileTiny.
         const auto & tasks = compaction_task->getTasks();
-        ASSERT_EQ(tasks.size(), 2);
+        ASSERT_EQ(compaction_task->getFirsCompactIndex(), 0);
+        ASSERT_EQ(tasks.size(), 3);
         ASSERT_EQ(tasks[0].to_compact.size(), 3);
         ASSERT_EQ(tasks[0].is_trivial_move, false);
         ASSERT_EQ(tasks[1].to_compact.size(), 1);
         ASSERT_EQ(tasks[1].is_trivial_move, true);
-        compaction_task->prepare(dmContext(), wbs, reader);
+        ASSERT_EQ(tasks[2].to_compact.size(), 1);
+        ASSERT_EQ(tasks[2].is_trivial_move, true);
+        compaction_task->prepare(dmContext(), wbs, *reader);
     }
+
     // another thread write more data to the delta value space and flush it
     {
         appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
@@ -360,18 +371,31 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         ASSERT_EQ(delta->getUnsavedRows(), 0);
         ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
         ASSERT_EQ(persisted_file_set->getDeletes(), 1);
-        ASSERT_EQ(persisted_file_set->getColumnFileCount(), 5);
+        ASSERT_EQ(persisted_file_set->getColumnFileCount(), 6);
     }
     // commit the compaction task and check the status
     {
         ASSERT_TRUE(compaction_task->commit(persisted_file_set, wbs));
         ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
         ASSERT_EQ(persisted_file_set->getDeletes(), 1);
+        ASSERT_EQ(persisted_file_set->getColumnFileCount(), 4);
+    }
+    // now the column files in persisted_file_set should be: T_300, D_0_100, T_100, T_100
+    {
+        // generate but not commit
+        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
+        EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
+        // generate and commit
+        PageReaderPtr reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
+        EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
+        compaction_task->prepare(dmContext(), wbs, *reader);
+        ASSERT_TRUE(compaction_task->commit(persisted_file_set, wbs));
+        ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
+        ASSERT_EQ(persisted_file_set->getDeletes(), 1);
         ASSERT_EQ(persisted_file_set->getColumnFileCount(), 3);
     }
-    // after compaction, the column file in persisted_file_set should be like the following:
-    // level 0: T_100
-    // level 1: T_300, D_0_100
+    // now the column files in persisted_file_set should be: T_300, D_0_100, T_200
     // so there is no compaction task to do
     {
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
@@ -386,11 +410,12 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             delta->flush(dmContext());
             while (true)
             {
-                PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+                PageReaderPtr reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
                 auto minor_compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
                 if (!minor_compaction_task)
                     break;
-                minor_compaction_task->prepare(dmContext(), wbs, reader);
+                ASSERT_NE(minor_compaction_task->getFirsCompactIndex(), std::numeric_limits<size_t>::max());
+                minor_compaction_task->prepare(dmContext(), wbs, *reader);
                 minor_compaction_task->commit(persisted_file_set, wbs);
             }
             wbs.writeRemoves();
@@ -430,7 +455,6 @@ TEST_F(DeltaValueSpaceTest, Restore)
             total_rows_write += num_rows_write_per_batch;
         }
         delta->flush(dmContext());
-        ASSERT_EQ(persisted_file_set->getColumnFileLevelCount(), 2);
         ASSERT_EQ(delta->getColumnFileCount(), 3);
         ASSERT_EQ(delta->getRows(), total_rows_write);
     }
@@ -469,14 +493,12 @@ TEST_F(DeltaValueSpaceTest, Restore)
     }
 }
 
-TEST_F(DeltaValueSpaceTest, CheckHeadAndCloneTail)
+TEST_F(DeltaValueSpaceTest, CloneNewlyAppendedColumnFiles)
 {
     auto persisted_file_set = delta->getPersistedFileSet();
     size_t total_rows_write = 0;
     WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
-    // create three levels in persisted_file_set
     {
-        // one column file in level 1
         {
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
             total_rows_write += num_rows_write_per_batch;
@@ -488,8 +510,6 @@ TEST_F(DeltaValueSpaceTest, CheckHeadAndCloneTail)
         delta->flush(dmContext());
         delta->compact(dmContext());
         ASSERT_EQ(delta->getColumnFileCount(), 1);
-        ASSERT_EQ(persisted_file_set->getColumnFileLevelCount(), 2);
-        // one column files in level 2
         {
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
             total_rows_write += num_rows_write_per_batch;
@@ -499,13 +519,8 @@ TEST_F(DeltaValueSpaceTest, CheckHeadAndCloneTail)
             total_rows_write += num_rows_write_per_batch;
         }
         delta->flush(dmContext());
-        // compact two level 0 files to level 1
-        delta->compact(dmContext());
-        // compact two level 1 files to level 2
         delta->compact(dmContext());
         ASSERT_EQ(delta->getColumnFileCount(), 1);
-        ASSERT_EQ(persisted_file_set->getColumnFileLevelCount(), 3);
-        // one column files in level 1 and one column files in level 2
         {
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
             total_rows_write += num_rows_write_per_batch;
@@ -516,8 +531,7 @@ TEST_F(DeltaValueSpaceTest, CheckHeadAndCloneTail)
         }
         delta->flush(dmContext());
         delta->compact(dmContext());
-        ASSERT_EQ(delta->getColumnFileCount(), 2);
-        ASSERT_EQ(persisted_file_set->getColumnFileLevelCount(), 3);
+        ASSERT_EQ(delta->getColumnFileCount(), 1);
     }
     {
         auto snapshot = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
@@ -540,7 +554,13 @@ TEST_F(DeltaValueSpaceTest, CheckHeadAndCloneTail)
             if (i == 0)
                 delta->flush(dmContext());
         }
-        auto [persisted_column_files, in_memory_files] = delta->checkHeadAndCloneTail(dmContext(), RowKeyRange::newAll(false, 1), snapshot->getColumnFilesInSnapshot(), wbs);
+        auto lock = delta->getLock();
+        auto [persisted_column_files, in_memory_files] = delta->cloneNewlyAppendedColumnFiles(
+            *lock,
+            dmContext(),
+            RowKeyRange::newAll(false, 1),
+            *snapshot,
+            wbs);
         wbs.writeLogAndData();
         ASSERT_EQ(persisted_column_files.size(), 4);
         ASSERT_EQ(in_memory_files.size(), 4);
@@ -621,6 +641,403 @@ TEST_F(DeltaValueSpaceTest, ShouldPlace)
         ASSERT_FALSE(reader->shouldPlace(dmContext(), snapshot->getSharedDeltaIndex(), RowKeyRange::newAll(false, 1), RowKeyRange::fromHandleRange(HandleRange(0, 100)), tso - 1));
     }
 }
+
+
+TEST_F(DeltaValueSpaceTest, CreateSnapshotForUpdate)
+try
+{
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 1000);
+    auto snapshot_1 = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+    ASSERT_TRUE(snapshot_1);
+    // Snapshot includes data in memtable
+    ASSERT_EQ(1000, snapshot_1->getRows());
+    ASSERT_EQ(1000, snapshot_1->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_1->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_1->getDeletes());
+
+    // When for_update snapshot is alive, flush is allowed;
+    ASSERT_TRUE(delta->flush(dmContext()));
+
+    auto snapshot_2 = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+    // Only one for update snapshot is allowed
+    ASSERT_FALSE(snapshot_2);
+
+    // Snapshot_1 is unchanged
+    ASSERT_EQ(1000, snapshot_1->getRows());
+    ASSERT_EQ(1000, snapshot_1->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_1->getMemTableSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(1000, snapshot_1->getMemTableSetSnapshot()->getColumnFiles()[0]->tryToInMemoryFile()->getCache()->block.rows());
+    ASSERT_EQ(0, snapshot_1->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_1->getDeletes());
+
+    snapshot_1.reset();
+
+    snapshot_2 = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+    ASSERT_TRUE(snapshot_2);
+    ASSERT_EQ(1000, snapshot_2->getRows());
+    ASSERT_EQ(0, snapshot_2->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1000, snapshot_2->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_2->getDeletes());
+
+    appendBlockToDeltaValueSpace(dmContext(), delta, 100, 200);
+    // Snapshot_2 is unchanged
+    ASSERT_EQ(1000, snapshot_2->getRows());
+    ASSERT_EQ(0, snapshot_2->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1000, snapshot_2->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_2->getDeletes());
+
+    snapshot_2.reset();
+    auto snapshot_3 = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+    ASSERT_TRUE(snapshot_3);
+    ASSERT_EQ(1200, snapshot_3->getRows());
+    ASSERT_EQ(200, snapshot_3->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_3->getMemTableSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(200, snapshot_3->getMemTableSetSnapshot()->getColumnFiles()[0]->tryToInMemoryFile()->getCache()->block.rows());
+    ASSERT_EQ(1000, snapshot_3->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_3->getPersistedFileSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(1000, snapshot_3->getPersistedFileSetSnapshot()->getColumnFiles()[0]->getRows());
+    ASSERT_EQ(0, snapshot_3->getDeletes());
+    ASSERT_EQ(2, snapshot_3->getColumnFileCount());
+
+    // Append again. Snapshot 3 is unchanged. The data is unchanged and the statistics is unchanged.
+    appendBlockToDeltaValueSpace(dmContext(), delta, 400, 200);
+    ASSERT_EQ(1200, snapshot_3->getRows());
+    ASSERT_EQ(200, snapshot_3->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_3->getMemTableSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(200, snapshot_3->getMemTableSetSnapshot()->getColumnFiles()[0]->tryToInMemoryFile()->getCache()->block.rows());
+    ASSERT_EQ(1000, snapshot_3->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_3->getPersistedFileSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(1000, snapshot_3->getPersistedFileSetSnapshot()->getColumnFiles()[0]->getRows());
+    ASSERT_EQ(0, snapshot_3->getDeletes());
+    ASSERT_EQ(2, snapshot_3->getColumnFileCount());
+
+    // The new snapshot will see our just-appended value.
+    snapshot_3.reset();
+    auto snapshot_4 = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+    ASSERT_TRUE(snapshot_4);
+    ASSERT_EQ(1400, snapshot_4->getRows());
+    ASSERT_EQ(400, snapshot_4->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(2, snapshot_4->getMemTableSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(1000, snapshot_4->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_4->getPersistedFileSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(0, snapshot_4->getDeletes());
+    ASSERT_EQ(3, snapshot_4->getColumnFileCount());
+}
+CATCH
+
+TEST_F(DeltaValueSpaceTest, CreateSnapshotNotForUpdate)
+try
+{
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 1000);
+    auto snapshot_1 = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+    ASSERT_TRUE(snapshot_1);
+    ASSERT_EQ(1000, snapshot_1->getRows());
+    ASSERT_EQ(1000, snapshot_1->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_1->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_1->getDeletes());
+
+    delta->flush(dmContext());
+    auto snapshot_2 = delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+    // For for_update = false, the creation will success even when there is a snapshot with for_update = true.
+    ASSERT_TRUE(snapshot_2);
+    ASSERT_EQ(1000, snapshot_2->getRows());
+    ASSERT_EQ(0, snapshot_2->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1000, snapshot_2->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_2->getDeletes());
+    // Snapshot_1 is unchanged
+    ASSERT_EQ(1000, snapshot_1->getRows());
+    ASSERT_EQ(1000, snapshot_1->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_1->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_1->getDeletes());
+
+    // Append something. Snapshot_1 and Snapshot_2 are unchanged.
+    // For snapshot_1, it is a for_update snapshot, will never change.
+    // For snapshot_2, it does not contain memtable cf, so it will not change as well.
+    appendBlockToDeltaValueSpace(dmContext(), delta, 100, 200);
+    ASSERT_EQ(1000, snapshot_1->getRows());
+    ASSERT_EQ(1000, snapshot_1->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_1->getMemTableSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(1000, snapshot_1->getMemTableSetSnapshot()->getColumnFiles()[0]->tryToInMemoryFile()->getCache()->block.rows());
+    ASSERT_EQ(0, snapshot_1->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_1->getDeletes());
+    ASSERT_EQ(1000, snapshot_2->getRows());
+    ASSERT_EQ(0, snapshot_2->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1000, snapshot_2->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_2->getDeletes());
+
+    auto snapshot_3 = delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+    ASSERT_TRUE(snapshot_3);
+    ASSERT_EQ(1200, snapshot_3->getRows());
+    ASSERT_EQ(200, snapshot_3->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_3->getMemTableSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(200, snapshot_3->getMemTableSetSnapshot()->getColumnFiles()[0]->getRows());
+    ASSERT_EQ(200, snapshot_3->getMemTableSetSnapshot()->getColumnFiles()[0]->tryToInMemoryFile()->getCache()->block.rows());
+    ASSERT_EQ(1000, snapshot_3->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_3->getPersistedFileSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(1000, snapshot_3->getPersistedFileSetSnapshot()->getColumnFiles()[0]->getRows());
+    ASSERT_EQ(0, snapshot_3->getDeletes());
+    ASSERT_EQ(2, snapshot_3->getColumnFileCount());
+
+    // Append again. This time, the data of existing memtable is changed... No new column file is appended.
+    appendBlockToDeltaValueSpace(dmContext(), delta, 400, 200);
+    // snapshot_1 - always unchanged
+    ASSERT_EQ(1000, snapshot_1->getRows());
+    ASSERT_EQ(1000, snapshot_1->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_1->getMemTableSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(1000, snapshot_1->getMemTableSetSnapshot()->getColumnFiles()[0]->tryToInMemoryFile()->getCache()->block.rows());
+    ASSERT_EQ(0, snapshot_1->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_1->getDeletes());
+    // snapshot_2 - unchanged
+    ASSERT_EQ(1000, snapshot_2->getRows());
+    ASSERT_EQ(0, snapshot_2->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1000, snapshot_2->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(0, snapshot_2->getDeletes());
+    // snapshot_3 - statistics are unchanged but the underlying data is changed!
+    ASSERT_EQ(1200, snapshot_3->getRows());
+    ASSERT_EQ(200, snapshot_3->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_3->getMemTableSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(200, snapshot_3->getMemTableSetSnapshot()->getColumnFiles()[0]->getRows());
+    //        ↑↑↑
+    // The tricky thing is, the block data is changed.
+    // We treat this as a "feature" of for_update=false snapshot, and let's verify it anyway.
+    //        ↓↓↓
+    ASSERT_EQ(400, snapshot_3->getMemTableSetSnapshot()->getColumnFiles()[0]->tryToInMemoryFile()->getCache()->block.rows());
+    ASSERT_EQ(1000, snapshot_3->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_3->getPersistedFileSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(1000, snapshot_3->getPersistedFileSetSnapshot()->getColumnFiles()[0]->getRows());
+    ASSERT_EQ(0, snapshot_3->getDeletes());
+    ASSERT_EQ(2, snapshot_3->getColumnFileCount());
+
+    // The new snapshot will have correct statistics and see all data as well
+    auto snapshot_4 = delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+    ASSERT_TRUE(snapshot_4);
+    ASSERT_EQ(1400, snapshot_4->getRows());
+    ASSERT_EQ(400, snapshot_4->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_4->getMemTableSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(1000, snapshot_4->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot_4->getPersistedFileSetSnapshot()->getColumnFileCount());
+    ASSERT_EQ(0, snapshot_4->getDeletes());
+    ASSERT_EQ(2, snapshot_4->getColumnFileCount());
+}
+CATCH
+
+class DeltaValueSpaceCloneNewlyAppendedTest : public DeltaValueSpaceTest
+{
+};
+
+TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, SnapshotIsNotForUpdate)
+try
+{
+    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    wbs.setRollback();
+
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 1000);
+    auto snapshot = delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+
+    auto lock = delta->getLock();
+    ASSERT_THROW(
+        {
+            delta->cloneNewlyAppendedColumnFiles(
+                *lock,
+                dmContext(),
+                RowKeyRange::newAll(false, 1),
+                *snapshot,
+                wbs);
+        },
+        DB::Exception);
+}
+CATCH
+
+TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, NoChangeAfterSnapshot)
+try
+{
+    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    wbs.setRollback();
+
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 1000);
+    auto snapshot = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+
+    auto lock = delta->getLock();
+    auto [new_mem, new_persisted] = delta->cloneNewlyAppendedColumnFiles(
+        *lock,
+        dmContext(),
+        RowKeyRange::newAll(false, 1),
+        *snapshot,
+        wbs);
+    ASSERT_EQ(0, new_mem.size());
+    ASSERT_EQ(0, new_persisted.size());
+}
+CATCH
+
+TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, WriteAfterSnapshot)
+try
+{
+    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    wbs.setRollback();
+
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 1000);
+    auto snapshot = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 42);
+
+    auto lock = delta->getLock();
+    auto [new_mem, new_persisted] = delta->cloneNewlyAppendedColumnFiles(
+        *lock,
+        dmContext(),
+        RowKeyRange::newAll(false, 1),
+        *snapshot,
+        wbs);
+    ASSERT_EQ(1, new_mem.size());
+    ASSERT_EQ(42, new_mem[0]->getRows());
+    ASSERT_EQ(0, new_persisted.size());
+}
+CATCH
+
+TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, FlushAfterSnapshot)
+try
+{
+    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    wbs.setRollback();
+
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 1000);
+    auto snapshot = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+
+    ASSERT_TRUE(delta->flush(dmContext()));
+
+    auto lock = delta->getLock();
+    auto [new_mem, new_persisted] = delta->cloneNewlyAppendedColumnFiles(
+        *lock,
+        dmContext(),
+        RowKeyRange::newAll(false, 1),
+        *snapshot,
+        wbs);
+    ASSERT_EQ(0, new_mem.size());
+    ASSERT_EQ(0, new_persisted.size());
+}
+CATCH
+
+TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, MultipleFlushWriteAfterSnapshot)
+try
+{
+    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    wbs.setRollback();
+
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 200);
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 300);
+    auto snapshot = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+
+    ASSERT_TRUE(delta->flush(dmContext()));
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 100);
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 37);
+    ASSERT_TRUE(delta->flush(dmContext()));
+    appendBlockToDeltaValueSpace(dmContext(), delta, 200, 42);
+    appendBlockToDeltaValueSpace(dmContext(), delta, 200, 5);
+
+    auto lock = delta->getLock();
+    auto [new_mem, new_persisted] = delta->cloneNewlyAppendedColumnFiles(
+        *lock,
+        dmContext(),
+        RowKeyRange::newAll(false, 1),
+        *snapshot,
+        wbs);
+    ASSERT_EQ(1, new_mem.size());
+    ASSERT_EQ(47, new_mem[0]->getRows());
+    ASSERT_EQ(1, new_persisted.size());
+    ASSERT_EQ(137, new_persisted[0]->getRows());
+}
+CATCH
+
+TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, PersistedIsNotEmptyWhenSnapshot)
+try
+{
+    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    wbs.setRollback();
+
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 42);
+    delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(10, 50)));
+    ASSERT_TRUE(delta->flush(dmContext()));
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 100);
+    delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(-5, 20)));
+
+    auto snapshot = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+    ASSERT_EQ(100, snapshot->getMemTableSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot->getMemTableSetSnapshot()->getDeletes());
+    ASSERT_EQ(42, snapshot->getPersistedFileSetSnapshot()->getRows());
+    ASSERT_EQ(1, snapshot->getPersistedFileSetSnapshot()->getDeletes());
+
+    ASSERT_TRUE(delta->flush(dmContext()));
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 100);
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 37);
+    delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(3, 7)));
+    ASSERT_TRUE(delta->flush(dmContext()));
+    appendBlockToDeltaValueSpace(dmContext(), delta, 200, 42);
+    delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(42, 101)));
+    appendBlockToDeltaValueSpace(dmContext(), delta, 200, 5);
+
+    auto lock = delta->getLock();
+    auto [new_mem, new_persisted] = delta->cloneNewlyAppendedColumnFiles(
+        *lock,
+        dmContext(),
+        RowKeyRange::newAll(false, 1),
+        *snapshot,
+        wbs);
+    ASSERT_EQ(3, new_mem.size());
+    ASSERT_EQ(42, new_mem[0]->getRows());
+    ASSERT_TRUE(new_mem[1]->isDeleteRange());
+    ASSERT_EQ(5, new_mem[2]->getRows());
+    ASSERT_EQ(2, new_persisted.size());
+    ASSERT_EQ(137, new_persisted[0]->getRows());
+    ASSERT_TRUE(new_persisted[1]->isDeleteRange());
+}
+CATCH
+
+TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, FlushPartially)
+try
+{
+    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    wbs.setRollback();
+
+    // 2 CF in mem
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 42);
+    delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(10, 50)));
+
+    // Prepare flushing the 2 CF in mem
+    auto sp_flush_prepared = SyncPointCtl::enableInScope("after_DeltaValueSpace::flush|prepare_flush");
+
+    auto th_flush = std::async([&]() {
+        ASSERT_TRUE(delta->flush(dmContext()));
+    });
+
+    sp_flush_prepared.waitAndPause();
+
+    // Append another 2 CF in mem
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 10);
+    delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(1, 2)));
+
+    auto snapshot = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+
+    // Append 1 more CF after the snapshot. Now there are 2+2+1 CF in mem.
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 7);
+
+    // Continue the flush
+    sp_flush_prepared.next();
+    th_flush.get();
+
+    // Now let's checkout which CFs are newly appended..
+    // We only have 1 CF newly appended since the snapshot.
+    auto lock = delta->getLock();
+    auto [new_mem, new_persisted] = delta->cloneNewlyAppendedColumnFiles(
+        *lock,
+        dmContext(),
+        RowKeyRange::newAll(false, 1),
+        *snapshot,
+        wbs);
+    ASSERT_EQ(1, new_mem.size());
+    ASSERT_EQ(7, new_mem[0]->getRows());
+    ASSERT_EQ(0, new_persisted.size());
+}
+CATCH
+
 } // namespace tests
 } // namespace DM
 } // namespace DB

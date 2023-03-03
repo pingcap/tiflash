@@ -73,9 +73,23 @@ class MPMCQueue
 public:
     using Status = MPMCQueueStatus;
     using Result = MPMCQueueResult;
+    using ElementAuxiliaryMemoryUsageFunc = std::function<Int64(const T & element)>;
 
     explicit MPMCQueue(size_t capacity_)
         : capacity(capacity_)
+        , max_auxiliary_memory_usage(std::numeric_limits<Int64>::max())
+        , get_auxiliary_memory_usage([](const T &) { return 0; })
+        , element_auxiliary_memory(capacity, 0)
+        , data(capacity * sizeof(T))
+    {
+    }
+
+    /// max_auxiliary_memory_usage_ <= 0 means no limit on auxiliary memory usage
+    MPMCQueue(size_t capacity_, Int64 max_auxiliary_memory_usage_, ElementAuxiliaryMemoryUsageFunc && get_auxiliary_memory_usage_)
+        : capacity(capacity_)
+        , max_auxiliary_memory_usage(max_auxiliary_memory_usage_ <= 0 ? std::numeric_limits<Int64>::max() : max_auxiliary_memory_usage_)
+        , get_auxiliary_memory_usage(std::move(get_auxiliary_memory_usage_))
+        , element_auxiliary_memory(capacity, 0)
         , data(capacity * sizeof(T))
     {
     }
@@ -108,8 +122,7 @@ public:
     template <typename Duration>
     ALWAYS_INLINE Result popTimeout(T & obj, const Duration & timeout)
     {
-        /// std::condition_variable::wait_until will always use system_clock.
-        auto deadline = std::chrono::system_clock::now() + timeout;
+        auto deadline = SteadyClock::now() + timeout;
         return popObj<true>(obj, &deadline);
     }
 
@@ -138,8 +151,7 @@ public:
     template <typename U, typename Duration>
     ALWAYS_INLINE Result pushTimeout(U && u, const Duration & timeout)
     {
-        /// std::condition_variable::wait_until will always use system_clock.
-        auto deadline = std::chrono::system_clock::now() + timeout;
+        auto deadline = SteadyClock::now() + timeout;
         return pushObj<true>(std::forward<U>(u), &deadline);
     }
 
@@ -162,8 +174,7 @@ public:
     template <typename... Args, typename Duration>
     ALWAYS_INLINE Result emplaceTimeout(Args &&... args, const Duration & timeout)
     {
-        /// std::condition_variable::wait_until will always use system_clock.
-        auto deadline = std::chrono::system_clock::now() + timeout;
+        auto deadline = SteadyClock::now() + timeout;
         return emplaceObj<true>(&deadline, std::forward<Args>(args)...);
     }
 
@@ -214,6 +225,13 @@ public:
         return static_cast<size_t>(write_pos - read_pos);
     }
 
+    bool isFull() const
+    {
+        std::unique_lock lock(mu);
+        assert(write_pos >= read_pos && current_auxiliary_memory_usage >= 0);
+        return (write_pos - read_pos >= capacity || current_auxiliary_memory_usage >= max_auxiliary_memory_usage);
+    }
+
     const String & getCancelReason() const
     {
         std::unique_lock lock(mu);
@@ -222,7 +240,8 @@ public:
     }
 
 private:
-    using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
+    using SteadyClock = std::chrono::steady_clock;
+    using TimePoint = SteadyClock::time_point;
     using WaitingNode = MPMCQueueDetail::WaitingNode;
 
     void notifyAll()
@@ -283,6 +302,7 @@ private:
         thread_local WaitingNode node;
 #endif
         std::unique_lock lock(mu);
+        bool is_timeout = false;
 
         if constexpr (need_wait)
         {
@@ -291,16 +311,22 @@ private:
                 return read_pos < write_pos || !isNormal();
             };
             if (!wait(lock, reader_head, node, pred, deadline))
-                return Result::TIMEOUT;
+                is_timeout = true;
         }
+        /// double check status after potential wait
         if (!isCancelled() && read_pos < write_pos)
         {
             auto & obj = getObj(read_pos);
             res = std::move(obj);
             destruct(obj);
+            updateElementAuxiliaryMemory<true>(read_pos);
 
             /// update pos only after all operations that may throw an exception.
             ++read_pos;
+            /// assert so in debug mode, we can get notified if some bugs happens when updating current_auxiliary_memory_usage
+            assert(read_pos != write_pos || current_auxiliary_memory_usage == 0);
+            if (read_pos == write_pos)
+                current_auxiliary_memory_usage = 0;
 
             /// Notify next writer within the critical area because:
             /// 1. If we remove the next writer node and notify it later,
@@ -308,8 +334,14 @@ private:
             ///    This need carefully procesing in `assignObj`.
             /// 2. If we do not remove the next writer, only obtain its pointer and notify it later,
             ///    deadlock can be possible because different readers may notify one writer.
-            notifyNext(writer_head);
+            if (current_auxiliary_memory_usage < max_auxiliary_memory_usage)
+                notifyNext(writer_head);
             return Result::OK;
+        }
+        if constexpr (need_wait)
+        {
+            if (is_timeout)
+                return Result::TIMEOUT;
         }
         switch (status)
         {
@@ -331,22 +363,24 @@ private:
         thread_local WaitingNode node;
 #endif
         std::unique_lock lock(mu);
+        bool is_timeout = false;
 
         if constexpr (need_wait)
         {
             auto pred = [&] {
-                return write_pos - read_pos < capacity || !isNormal();
+                return (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage) || !isNormal();
             };
             if (!wait(lock, writer_head, node, pred, deadline))
-                return Result::TIMEOUT;
+                is_timeout = true;
         }
 
         /// double check status after potential wait
         /// check write_pos because timeouted will also reach here.
-        if (isNormal() && write_pos - read_pos < capacity)
+        if (isNormal() && (write_pos - read_pos < capacity && current_auxiliary_memory_usage < max_auxiliary_memory_usage))
         {
             void * addr = getObjAddr(write_pos);
             assigner(addr);
+            updateElementAuxiliaryMemory<false>(write_pos);
 
             /// update pos only after all operations that may throw an exception.
             ++write_pos;
@@ -354,6 +388,11 @@ private:
             /// See comments in `popObj`.
             notifyNext(reader_head);
             return Result::OK;
+        }
+        if constexpr (need_wait)
+        {
+            if (is_timeout)
+                return Result::TIMEOUT;
         }
         switch (status)
         {
@@ -413,6 +452,7 @@ private:
 
         read_pos = 0;
         write_pos = 0;
+        current_auxiliary_memory_usage = 0;
     }
 
     template <typename F>
@@ -428,8 +468,36 @@ private:
         return false;
     }
 
+    template <bool read>
+    ALWAYS_INLINE void updateElementAuxiliaryMemory(size_t pos)
+    {
+        if constexpr (read)
+        {
+            auto & elem_value = element_auxiliary_memory[pos % capacity];
+            current_auxiliary_memory_usage -= elem_value;
+            elem_value = 0;
+        }
+        else
+        {
+            auto auxiliary_memory = get_auxiliary_memory_usage(getObj(pos));
+            current_auxiliary_memory_usage += auxiliary_memory;
+            element_auxiliary_memory[pos % capacity] = auxiliary_memory;
+        }
+    }
+
 private:
     const Int64 capacity;
+    /// max_auxiliary_memory_usage is the bound of all the element's auxiliary memory
+    /// for an element stored in the queue, it will take two kinds of memory
+    /// 1. the memory took by the element itself: sizeof(T) bytes, it is a constant value and already reserved in `data`
+    /// 2. the auxiliary memory of the element, for example, if the element type is std::vector<Int64>,
+    ///    then the auxiliary memory for each element is sizeof(Int64) * element.capacity()
+    /// If the element stored in the queue has auxiliary memory usage, and the user wants to set a bound for the total
+    /// auxiliary memory usage, then the user should provide the function to calculate the auxiliary memory usage
+    /// Note: unlike capacity, max_auxiliary_memory_usage is actually a soft-limit because we need to make at least
+    /// one element can be pushed to the queue even if its auxiliary memory exceeds max_auxiliary_memory_usage
+    const Int64 max_auxiliary_memory_usage;
+    const ElementAuxiliaryMemoryUsageFunc get_auxiliary_memory_usage;
 
     mutable std::mutex mu;
     WaitingNode reader_head;
@@ -438,7 +506,9 @@ private:
     Int64 write_pos = 0;
     Status status = Status::NORMAL;
     String cancel_reason;
+    Int64 current_auxiliary_memory_usage = 0;
 
+    std::vector<Int64> element_auxiliary_memory;
     std::vector<UInt8> data;
 };
 

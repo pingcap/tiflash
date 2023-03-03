@@ -30,7 +30,7 @@ public:
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "r_table"}, {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "l_table"}, {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
-        context.addExchangeRelationSchema("sender_1", {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
+        context.addExchangeReceiver("sender_1", {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
     }
 };
 
@@ -314,6 +314,40 @@ try
     {
         String expected = "topn_1 | order_by: {(<0, String>, desc: false)}, limit: 10\n"
                           " exchange_receiver_0 | type:PassThrough, {<0, String>, <1, String>, <2, String>}\n";
+        ASSERT_DAGREQUEST_EQAUL(expected, request);
+    }
+}
+CATCH
+
+TEST_F(MockDAGRequestTest, Expand)
+try
+{
+    auto request = context.scan("test_db", "test_table").expand(MockVVecColumnNameVec{
+                                                                    MockVecColumnNameVec{
+                                                                        MockColumnNameVec{"s1"},
+                                                                    },
+                                                                    MockVecColumnNameVec{
+                                                                        MockColumnNameVec{"s2"},
+                                                                    },
+                                                                })
+                       .build(context);
+    {
+        String expected = "expand_1 | expanded_by: [<{<0, String>}><{<1, String>}>]\n"
+                          " table_scan_0 | {<0, String>, <1, String>}";
+        ASSERT_DAGREQUEST_EQAUL(expected, request);
+    }
+    request = context.receive("sender_1").expand(MockVVecColumnNameVec{
+                                                     MockVecColumnNameVec{
+                                                         MockColumnNameVec{"s1"},
+                                                     },
+                                                     MockVecColumnNameVec{
+                                                         MockColumnNameVec{"s2"},
+                                                     },
+                                                 })
+                  .build(context);
+    {
+        String expected = "expand_1 | expanded_by: [<{<0, String>}><{<1, String>}>]\n"
+                          " exchange_receiver_0 | type:PassThrough, {<0, String>, <1, String>, <2, String>}";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
 }

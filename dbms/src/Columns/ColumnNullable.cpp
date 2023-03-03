@@ -239,6 +239,27 @@ void ColumnNullable::insertFrom(const IColumn & src, size_t n)
     getNullMapData().push_back(src_concrete.getNullMapData()[n]);
 }
 
+void ColumnNullable::insertManyFrom(const IColumn & src, size_t n, size_t length)
+{
+    const auto & src_concrete = static_cast<const ColumnNullable &>(src);
+    getNestedColumn().insertManyFrom(src_concrete.getNestedColumn(), n, length);
+    auto & map = getNullMapData();
+    map.resize_fill(map.size() + length, src_concrete.getNullMapData()[n]);
+}
+
+void ColumnNullable::insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec)
+{
+    const auto & src_concrete = static_cast<const ColumnNullable &>(src);
+    getNestedColumn().insertDisjunctFrom(src_concrete.getNestedColumn(), position_vec);
+    auto & map = getNullMapData();
+    const auto & src_map = src_concrete.getNullMapData();
+    size_t old_size = map.size();
+    size_t to_add_size = position_vec.size();
+    map.resize(old_size + to_add_size);
+    for (size_t i = 0; i < to_add_size; ++i)
+        map[i + old_size] = src_map[position_vec[i]];
+}
+
 void ColumnNullable::popBack(size_t n)
 {
     getNestedColumn().popBack(n);
@@ -524,13 +545,12 @@ void ColumnNullable::getExtremes(Field & min, Field & max) const
     });
 }
 
-ColumnPtr ColumnNullable::replicate(const Offsets & offsets) const
+ColumnPtr ColumnNullable::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
 {
-    ColumnPtr replicated_data = getNestedColumn().replicate(offsets);
-    ColumnPtr replicated_null_map = getNullMapColumn().replicate(offsets);
+    ColumnPtr replicated_data = getNestedColumn().replicateRange(start_row, end_row, offsets);
+    ColumnPtr replicated_null_map = getNullMapColumn().replicateRange(start_row, end_row, offsets);
     return ColumnNullable::create(replicated_data, replicated_null_map);
 }
-
 
 template <bool negative>
 void ColumnNullable::applyNullMapImpl(const ColumnUInt8 & map)

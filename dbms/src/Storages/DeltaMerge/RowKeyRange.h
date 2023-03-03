@@ -130,12 +130,16 @@ struct RowKeyValue
         return std::make_shared<DecodedTiKVKey>(prefix + *value);
     }
 
-    bool operator==(const RowKeyValue & v)
+    bool operator==(const RowKeyValue & v) const
     {
         return is_common_handle == v.is_common_handle && (*value) == (*v.value) && int_value == v.int_value;
     }
 
-    RowKeyValue toPrefixNext()
+    /**
+     * Returns the key so that the range [this, this.toPrefixNext()) contains
+     * all keys with the prefix `this`.
+     */
+    RowKeyValue toPrefixNext() const
     {
         std::vector<UInt8> keys(value->begin(), value->end());
         int index = keys.size() - 1;
@@ -162,6 +166,22 @@ struct RowKeyValue
             prefix_int_value++;
         }
         return RowKeyValue(is_common_handle, prefix_value, prefix_int_value);
+    }
+
+    /**
+     * Returns the smallest row key which is larger than the current row key.
+     */
+    RowKeyValue toNext() const
+    {
+        // We want to always ensure that the IntHandle.stringValue == IntHandle.intValue.
+        if (!is_common_handle)
+            return toPrefixNext();
+
+        HandleValuePtr next_value = std::make_shared<String>(value->begin(), value->end());
+        next_value->push_back(0x0);
+
+        // For common handle, int_value will not be used in compare. Let's keep it unchanged.
+        return RowKeyValue(/* is_common_handle */ true, next_value, int_value);
     }
 
     void serialize(WriteBuffer & buf) const

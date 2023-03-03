@@ -14,10 +14,15 @@
 
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <Columns/ColumnAggregateFunction.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Functions/FunctionHelpers.h>
 #include <IO/WriteBufferFromArena.h>
 #include <fmt/format.h>
 
@@ -143,7 +148,11 @@ ColumnPtr ColumnAggregateFunction::filter(const Filter & filter, ssize_t result_
     auto & res_data = res->getData();
 
     if (result_size_hint)
-        res_data.reserve(result_size_hint > 0 ? result_size_hint : size);
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filter);
+        res_data.reserve(result_size_hint);
+    }
 
     for (size_t i = 0; i < size; ++i)
         if (filter[i])
@@ -237,6 +246,26 @@ size_t ColumnAggregateFunction::allocatedBytes() const
         res += arena->size();
 
     return res;
+}
+
+size_t ColumnAggregateFunction::estimateByteSizeForSpill() const
+{
+    static const std::unordered_set<String> trivial_agg_func_name{"sum", "min", "max", "count", "avg", "first_row", "any"};
+    if (trivial_agg_func_name.find(func->getName()) != trivial_agg_func_name.end())
+    {
+        size_t res = func->sizeOfData() * size();
+        /// For trivial agg, we can estimate each element's size as `func->sizeofData()`, and
+        /// if the result is String, use `APPROX_STRING_SIZE` as the average size of the String
+        if (removeNullable(func->getReturnType())->isString())
+            res += size() * ColumnString::APPROX_STRING_SIZE;
+        return res;
+    }
+    else
+    {
+        /// For non-trivial agg like uniqXXX/group_concat, can't estimate the memory usage, so just return byteSize(),
+        /// it will highly overestimates size of a column if it was produced in AggregatingBlockInputStream (it contains size of other columns)
+        return byteSize();
+    }
 }
 
 MutableColumnPtr ColumnAggregateFunction::cloneEmpty() const
@@ -372,21 +401,24 @@ void ColumnAggregateFunction::popBack(size_t n)
     data.resize_assume_reserved(new_size);
 }
 
-ColumnPtr ColumnAggregateFunction::replicate(const IColumn::Offsets & offsets) const
+ColumnPtr ColumnAggregateFunction::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
 {
     size_t size = data.size();
     if (size != offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    assert(start_row < end_row);
+    assert(end_row <= size);
 
     if (size == 0)
         return cloneEmpty();
 
     auto res = createView();
     auto & res_data = res->getData();
-    res_data.reserve(offsets.back());
+    res_data.reserve(offsets[end_row - 1]);
 
     IColumn::Offset prev_offset = 0;
-    for (size_t i = 0; i < size; ++i)
+    for (size_t i = start_row; i < end_row; ++i)
     {
         size_t size_to_replicate = offsets[i] - prev_offset;
         prev_offset = offsets[i];
@@ -419,6 +451,11 @@ MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns
         static_cast<ColumnAggregateFunction &>(*columns[selector[i]]).data.push_back(data[i]);
 
     return columns;
+}
+
+void ColumnAggregateFunction::scatterTo(ScatterColumns & columns [[maybe_unused]], const Selector & selector [[maybe_unused]]) const
+{
+    throw TiFlashException("ColumnAggregateFunction does not support scatterTo", Errors::Coprocessor::Unimplemented);
 }
 
 void ColumnAggregateFunction::getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_direction_hint*/, IColumn::Permutation & res) const

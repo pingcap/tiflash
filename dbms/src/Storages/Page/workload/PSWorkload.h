@@ -17,12 +17,15 @@
 #include <Common/Stopwatch.h>
 #include <Common/nocopyable.h>
 #include <Poco/ThreadPool.h>
-#include <Storages/Page/PageDefines.h>
+#include <Storages/BackgroundProcessingPool.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/workload/PSBackground.h>
 #include <Storages/Page/workload/PSRunnable.h>
 #include <Storages/Page/workload/PSStressEnv.h>
 #include <fmt/format.h>
+
+#include <memory>
 
 #define NORMAL_WORKLOAD 0
 namespace DB::PS::tests
@@ -64,10 +67,24 @@ public:
     virtual void onFailed() {}
     virtual void onDumpResult();
 
+    void stop()
+    {
+        if (stress_time)
+            stress_time->stop();
+        if (scanner)
+            scanner->stop();
+        if (gc)
+            gc->stop();
+        if (metrics_dumper)
+            metrics_dumper->stop();
+    }
+
 protected:
     void initPageStorage(DB::PageStorageConfig & config, String path_prefix = "");
 
     void startBackgroundTimer();
+
+    void initPages(const DB::PageIdU64 & max_page_id);
 
     template <typename T>
     void startWriter(size_t nums_writers, std::function<void(std::shared_ptr<T>)> writer_configure = nullptr)
@@ -75,7 +92,7 @@ protected:
         writers.clear();
         for (size_t i = 0; i < nums_writers; ++i)
         {
-            auto writer = std::make_shared<T>(ps, i);
+            auto writer = std::make_shared<T>(ps, i, runtime_stat);
             if (writer_configure)
             {
                 writer_configure(writer);
@@ -91,7 +108,7 @@ protected:
         readers.clear();
         for (size_t i = 0; i < nums_readers; ++i)
         {
-            auto reader = std::make_shared<T>(ps, i);
+            auto reader = std::make_shared<T>(ps, i, runtime_stat);
             if (reader_configure)
             {
                 reader_configure(reader);
@@ -105,8 +122,11 @@ protected:
     StressEnv options;
     Poco::ThreadPool pool;
 
+    std::shared_ptr<DB::BackgroundProcessingPool> bkg_pool;
     PSPtr ps;
     DB::PSDiskDelegatorPtr delegator;
+
+    std::unique_ptr<GlobalStat> runtime_stat;
 
     std::list<std::shared_ptr<PSRunnable>> writers;
     std::list<std::shared_ptr<PSRunnable>> readers;
@@ -114,13 +134,13 @@ protected:
     Stopwatch stop_watch;
 
     StressTimeoutPtr stress_time;
-    PSScannerPtr scanner;
+    PSSnapStatGetterPtr scanner;
     PSGcPtr gc;
     PSMetricsDumperPtr metrics_dumper;
 };
 
 
-class StressWorkloadManger
+class PageWorkloadFactory
 {
 private:
     using WorkloadCreator = std::function<std::shared_ptr<StressWorkload>(const StressEnv &)>;
@@ -128,14 +148,14 @@ private:
     std::map<UInt64, std::pair<String, WorkloadCreator>> funcs;
     UInt64 registed_masks = 0;
 
-    StressWorkloadManger() = default;
+    PageWorkloadFactory() = default;
 
 public:
-    DISALLOW_COPY_AND_MOVE(StressWorkloadManger);
+    DISALLOW_COPY_AND_MOVE(PageWorkloadFactory);
 
-    static StressWorkloadManger & getInstance()
+    static PageWorkloadFactory & getInstance()
     {
-        static StressWorkloadManger instance;
+        static PageWorkloadFactory instance;
         return instance;
     }
 
@@ -189,14 +209,21 @@ public:
 
     void runWorkload();
 
+    void stopWorkload()
+    {
+        if (running_workload)
+            running_workload->stop();
+    }
+
 private:
     StressEnv options;
+    std::shared_ptr<StressWorkload> running_workload;
 };
 
 template <class Workload>
 void work_load_register()
 {
-    StressWorkloadManger::getInstance().reg(
+    PageWorkloadFactory::getInstance().reg(
         Workload::nameFunc(),
         Workload::maskFunc(),
         [](const StressEnv & opts) -> std::shared_ptr<StressWorkload> {

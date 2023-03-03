@@ -38,10 +38,14 @@ extern const int LOGICAL_ERROR;
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
-KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_)
+namespace FailPoints
+{
+extern const char force_fail_in_flush_region_data[];
+} // namespace FailPoints
+
+KVStore::KVStore(Context & context)
     : region_persister(std::make_unique<RegionPersister>(context, region_manager))
     , raft_cmd_res(std::make_unique<RaftCommandResult>())
-    , snapshot_apply_method(snapshot_apply_method_)
     , log(Logger::get())
     , region_compact_log_period(120)
     , region_compact_log_min_rows(40 * 1024)
@@ -131,6 +135,7 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
 
 bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed)
 {
+    fiu_do_on(FailPoints::force_fail_in_flush_region_data, { return false; });
     auto table_id = region.getMappedTableID();
     auto storage = tmt.getStorages().get(table_id);
     if (unlikely(storage == nullptr))
@@ -145,7 +150,7 @@ bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     try
     {
         // Acquire `drop_lock` so that no other threads can drop the storage during `flushCache`. `alter_lock` is not required.
-        auto storage_lock = storage->lockForShare(getThreadName());
+        auto storage_lock = storage->lockForShare(getThreadNameAndID());
         auto rowkey_range = DM::RowKeyRange::fromRegionRange(
             region.getRange(),
             region.getRange()->getMappedTableID(),
@@ -335,7 +340,7 @@ bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
     return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock, 0, 0);
 }
 
-bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term)
+bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
@@ -348,7 +353,20 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTCo
         LOG_WARNING(log, "region {} [index: {}, term {}], not exist when flushing, maybe have exec `RemoveNode` first", region_id, index, term);
         return true;
     }
-    return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
+    if (force_persist)
+    {
+        auto & curr_region = *curr_region_ptr;
+        LOG_DEBUG(log, "{} flush region due to tryFlushRegionData by force, index {} term {}", curr_region.toString(false), index, term);
+        if (!forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term))
+        {
+            throw Exception("Force flush region " + std::to_string(region_id) + " failed", ErrorCodes::LOGICAL_ERROR);
+        }
+        return true;
+    }
+    else
+    {
+        return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
+    }
 }
 
 bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
@@ -379,25 +397,32 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     }
     if (can_flush && flush_if_possible)
     {
-        LOG_DEBUG(log, "{} flush region due to canFlushRegionData, index {} term {}", curr_region.toString(false), index, term);
-        if (index)
-        {
-            // We set actual index when handling CompactLog.
-            curr_region.handleWriteRaftCmd({}, index, term, tmt);
-        }
-        if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
-        {
-            persistRegion(curr_region, region_task_lock, "canFlushRegionData before compact raft log");
-            curr_region.markCompactLog();
-            curr_region.cleanApproxMemCacheInfo();
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+        LOG_DEBUG(log, "{} flush region due to tryFlushRegionData, index {} term {}", curr_region.toString(false), index, term);
+        return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
     }
     return can_flush;
+}
+
+bool KVStore::forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
+{
+    Stopwatch watch;
+    if (index)
+    {
+        // We set actual index when handling CompactLog.
+        curr_region.handleWriteRaftCmd({}, index, term, tmt);
+    }
+    if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
+    {
+        persistRegion(curr_region, region_task_lock, "tryFlushRegionData");
+        curr_region.markCompactLog();
+        curr_region.cleanApproxMemCacheInfo();
+        GET_METRIC(tiflash_raft_apply_write_command_duration_seconds, type_flush_region).Observe(watch.elapsedSeconds());
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
@@ -435,6 +460,12 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     }
 
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
+    if (cmd_type == raft_cmdpb::AdminCmdType::PrepareFlashback || cmd_type == raft_cmdpb::AdminCmdType::FinishFlashback)
+    {
+        tryFlushRegionCacheInStorage(tmt, curr_region, log);
+        persistRegion(curr_region, region_task_lock, "admin cmd flashback");
+        return EngineStoreApplyRes::Persist;
+    }
     return EngineStoreApplyRes::None;
 }
 
@@ -677,11 +708,17 @@ void WaitCheckRegionReady(
                 const auto & region_error = resp.region_error();
                 if (region_error.has_region_not_found() || region_error.has_epoch_not_match())
                     need_retry = false;
+                LOG_DEBUG(log,
+                          "neglect error region {} not found {} epoch not match {}",
+                          region_id,
+                          region_error.has_region_not_found(),
+                          region_error.has_epoch_not_match());
             }
             if (!need_retry)
             {
+                // `read_index` can be zero if region error happens.
+                // It is not worthy waiting applying and reading index again.
                 // if region is able to get latest commit-index from TiKV, we should make it available only after it has caught up.
-                assert(resp.read_index() != 0);
                 regions_to_check.emplace(region_id, resp.read_index());
                 remain_regions.erase(region_id);
             }
@@ -791,7 +828,7 @@ void KVStore::setStore(metapb::Store store_)
     LOG_INFO(log, "Set store info {}", getStore().base.ShortDebugString());
 }
 
-uint64_t KVStore::getStoreID(std::memory_order memory_order) const
+StoreID KVStore::getStoreID(std::memory_order memory_order) const
 {
     return getStore().store_id.load(memory_order);
 }

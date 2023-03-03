@@ -19,7 +19,7 @@
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
-#include <string.h>
+#include <common/memcpy.h>
 
 
 class ICollator;
@@ -33,6 +33,7 @@ class ColumnString final : public COWPtrHelper<IColumn, ColumnString>
 {
 public:
     using Chars_t = PaddedPODArray<UInt8>;
+    static const auto APPROX_STRING_SIZE = 64;
 
 private:
     friend class COWPtrHelper<IColumn, ColumnString>;
@@ -61,6 +62,41 @@ private:
         : COWPtrHelper<IColumn, ColumnString>(src)
         , offsets(src.offsets.begin(), src.offsets.end())
         , chars(src.chars.begin(), src.chars.end()){};
+
+    void ALWAYS_INLINE insertFromImpl(const ColumnString & src, size_t n)
+    {
+        if likely (n != 0)
+        {
+            const size_t size_to_append = src.offsets[n] - src.offsets[n - 1];
+
+            if (size_to_append == 1)
+            {
+                /// shortcut for empty string
+                chars.push_back(0);
+                offsets.push_back(chars.size());
+            }
+            else
+            {
+                const size_t old_size = chars.size();
+                const size_t offset = src.offsets[n - 1];
+                const size_t new_size = old_size + size_to_append;
+
+                chars.resize(new_size);
+                memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[offset], size_to_append);
+                offsets.push_back(new_size);
+            }
+        }
+        else
+        {
+            const size_t old_size = chars.size();
+            const size_t size_to_append = src.offsets[0];
+            const size_t new_size = old_size + size_to_append;
+
+            chars.resize(new_size);
+            memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[0], size_to_append);
+            offsets.push_back(new_size);
+        }
+    }
 
 public:
     const char * getFamilyName() const override { return "String"; }
@@ -119,13 +155,7 @@ public:
     void insert(const Field & x) override
     {
         const auto & s = DB::get<const String &>(x);
-        const size_t old_size = chars.size();
-        const size_t size_to_append = s.size() + 1;
-        const size_t new_size = old_size + size_to_append;
-
-        chars.resize(new_size);
-        memcpy(&chars[old_size], s.c_str(), size_to_append);
-        offsets.push_back(new_size);
+        insertData(s.data(), s.size());
     }
 
 #if !__clang__
@@ -135,49 +165,43 @@ public:
     void insertFrom(const IColumn & src_, size_t n) override
     {
         const auto & src = static_cast<const ColumnString &>(src_);
+        insertFromImpl(src, n);
+    }
 
-        if (n != 0)
-        {
-            const size_t size_to_append = src.offsets[n] - src.offsets[n - 1];
+    /// TODO: might be further optimized by using the same char* and offeset
+    void insertManyFrom(const IColumn & src_, size_t position, size_t length) override
+    {
+        const auto & src = static_cast<const ColumnString &>(src_);
+        offsets.reserve(offsets.size() + length);
+        for (size_t i = 0; i < length; ++i)
+            insertFromImpl(src, position);
+    }
 
-            if (size_to_append == 1)
-            {
-                /// shortcut for empty string
-                chars.push_back(0);
-                offsets.push_back(chars.size());
-            }
-            else
-            {
-                const size_t old_size = chars.size();
-                const size_t offset = src.offsets[n - 1];
-                const size_t new_size = old_size + size_to_append;
+    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override
+    {
+        const auto & src = static_cast<const ColumnString &>(src_);
+        offsets.reserve(offsets.size() + position_vec.size());
+        for (auto position : position_vec)
+            insertFromImpl(src, position);
+    }
 
-                chars.resize(new_size);
-                memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[offset], size_to_append);
-                offsets.push_back(new_size);
-            }
-        }
-        else
-        {
-            const size_t old_size = chars.size();
-            const size_t size_to_append = src.offsets[0];
-            const size_t new_size = old_size + size_to_append;
+    template <bool add_terminating_zero>
+    ALWAYS_INLINE inline void insertDataImpl(const char * pos, size_t length)
+    {
+        const size_t old_size = chars.size();
+        const size_t new_size = old_size + length + (add_terminating_zero ? 1 : 0);
 
-            chars.resize(new_size);
-            memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[0], size_to_append);
-            offsets.push_back(new_size);
-        }
+        chars.resize(new_size);
+        inline_memcpy(&chars[old_size], pos, length);
+
+        if constexpr (add_terminating_zero)
+            chars[old_size + length] = 0;
+        offsets.push_back(new_size);
     }
 
     void insertData(const char * pos, size_t length) override
     {
-        const size_t old_size = chars.size();
-        const size_t new_size = old_size + length + 1;
-
-        chars.resize(new_size);
-        memcpy(&chars[old_size], pos, length);
-        chars[old_size + length] = 0;
-        offsets.push_back(new_size);
+        return insertDataImpl<true>(pos, length);
     }
 
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool /* force_decode */) override
@@ -188,12 +212,7 @@ public:
 
     void insertDataWithTerminatingZero(const char * pos, size_t length) override
     {
-        const size_t old_size = chars.size();
-        const size_t new_size = old_size + length;
-
-        chars.resize(new_size);
-        memcpy(&chars[old_size], pos, length);
-        offsets.push_back(new_size);
+        return insertDataImpl<false>(pos, length);
     }
 
     void popBack(size_t n) override
@@ -220,24 +239,30 @@ public:
         }
         res.size = sizeof(string_size) + string_size;
         char * pos = arena.allocContinue(res.size, begin);
-        memcpy(pos, &string_size, sizeof(string_size));
-        memcpy(pos + sizeof(string_size), src, string_size);
+        std::memcpy(pos, &string_size, sizeof(string_size));
+        inline_memcpy(pos + sizeof(string_size), src, string_size);
         res.data = pos;
         return res;
     }
 
-    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override
+    inline const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) override
     {
         const size_t string_size = *reinterpret_cast<const size_t *>(pos);
         pos += sizeof(string_size);
 
-        const size_t old_size = chars.size();
-        const size_t new_size = old_size + string_size;
-        chars.resize(new_size);
-        memcpy(&chars[old_size], pos, string_size);
-
-        offsets.push_back(new_size);
-        return pos + string_size;
+        if (likely(collator))
+        {
+            // https://github.com/pingcap/tiflash/pull/6135
+            // - Generate empty string column
+            // - Make size of `offsets` as previous way for func `ColumnString::size()`
+            offsets.push_back(0);
+            return pos + string_size;
+        }
+        else
+        {
+            insertDataWithTerminatingZero(pos, string_size);
+            return pos + string_size;
+        }
     }
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
@@ -275,6 +300,16 @@ public:
         offsets.push_back(offsets.empty() ? 1 : (offsets.back() + 1));
     }
 
+    void insertManyDefaults(size_t length) override
+    {
+        chars.resize_fill(chars.size() + length);
+        offsets.reserve(offsets.size() + length);
+        for (size_t i = 0; i < length; ++i)
+        {
+            offsets.push_back(offsets.empty() ? 1 : (offsets.back() + 1));
+        }
+    }
+
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int /*nan_direction_hint*/) const override
     {
         const auto & rhs = static_cast<const ColumnString &>(rhs_);
@@ -298,11 +333,16 @@ public:
     /// Sorting with respect of collation.
     void getPermutationWithCollationImpl(const ICollator & collator, bool reverse, size_t limit, Permutation & res) const;
 
-    ColumnPtr replicate(const Offsets & replicate_offsets) const override;
+    ColumnPtr replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & replicate_offsets) const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
     {
         return scatterImpl<ColumnString>(num_columns, selector);
+    }
+
+    void scatterTo(ScatterColumns & columns, const Selector & selector) const override
+    {
+        scatterToImpl<ColumnString>(columns, selector);
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;
@@ -312,14 +352,29 @@ public:
     void getExtremes(Field & min, Field & max) const override;
 
 
-    bool canBeInsideNullable() const override { return true; }
+    bool canBeInsideNullable() const override
+    {
+        return true;
+    }
 
 
-    Chars_t & getChars() { return chars; }
-    const Chars_t & getChars() const { return chars; }
+    Chars_t & getChars()
+    {
+        return chars;
+    }
+    const Chars_t & getChars() const
+    {
+        return chars;
+    }
 
-    Offsets & getOffsets() { return offsets; }
-    const Offsets & getOffsets() const { return offsets; }
+    Offsets & getOffsets()
+    {
+        return offsets;
+    }
+    const Offsets & getOffsets() const
+    {
+        return offsets;
+    }
 };
 
 

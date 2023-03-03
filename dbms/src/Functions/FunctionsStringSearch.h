@@ -16,13 +16,84 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
+#include <Columns/IColumn.h>
+#include <Common/Exception.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Common/UTF8Helpers.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
+#include <Functions/StringUtil.h>
+#include <common/defines.h>
+
+#include <cstring>
+#include <string_view>
 
 namespace DB
 {
+using Chars_t = ColumnString::Chars_t;
+using Offsets = ColumnString::Offsets;
+
+struct IlikeHelper
+{
+    static void lowerStrings(Chars_t & chars)
+    {
+        size_t size = chars.size();
+        size_t i = 0;
+        while (i < size)
+        {
+            if (isUpperAlphaASCII(chars[i]))
+            {
+                chars[i] = toLowerIfAlphaASCII(chars[i]);
+                ++i;
+            }
+            else
+            {
+                size_t utf8_len = UTF8::seqLength(chars[i]);
+                i += utf8_len;
+            }
+        }
+    }
+
+    static void lowerColumnConst(ColumnConst * lowered_col_const)
+    {
+        auto * col_data = typeid_cast<ColumnString *>(&lowered_col_const->getDataColumn());
+        RUNTIME_ASSERT(col_data != nullptr, "Invalid column type, should be ColumnString");
+
+        lowerStrings(col_data->getChars());
+    }
+
+    static void lowerColumnString(MutableColumnPtr & col)
+    {
+        auto * col_vector = typeid_cast<ColumnString *>(&*col);
+        RUNTIME_ASSERT(col_vector != nullptr, "Invalid column type, should be ColumnString");
+
+        lowerStrings(col_vector->getChars());
+    }
+
+    // Only lower the 'A', 'B', 'C'...
+    static void lowerAlphaASCII(Block & block, const ColumnNumbers & arguments)
+    {
+        MutableColumnPtr column_haystack = block.getByPosition(arguments[0]).column->assumeMutable();
+        MutableColumnPtr column_needle = block.getByPosition(arguments[1]).column->assumeMutable();
+
+        auto * col_haystack_const = typeid_cast<ColumnConst *>(&*column_haystack);
+        auto * col_needle_const = typeid_cast<ColumnConst *>(&*column_needle);
+
+        if (col_haystack_const != nullptr)
+            lowerColumnConst(col_haystack_const);
+        else
+            lowerColumnString(column_haystack);
+
+        if (col_needle_const != nullptr)
+            lowerColumnConst(col_needle_const);
+        else
+            lowerColumnString(column_needle);
+    }
+};
+
 /** Search and replace functions in strings:
   *
   * position(haystack, needle)     - the normal search for a substring in a string, returns the position (in bytes) of the found substring starting with 1, or 0 if no substring is found.
@@ -56,6 +127,11 @@ extern const int ILLEGAL_COLUMN;
 }
 
 static const UInt8 CH_ESCAPE_CHAR = '\\';
+
+struct NameIlike3Args
+{
+    static constexpr auto name = "ilike3Args";
+};
 
 template <typename Impl, typename Name>
 class FunctionsStringSearch : public IFunction
@@ -116,18 +192,30 @@ public:
         return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    void executeImpl(Block & result_block, const ColumnNumbers & arguments, size_t result) const override
     {
+        auto block = result_block;
+        if constexpr (name == std::string_view(NameIlike3Args::name))
+        {
+            if (!collator->isCI())
+            {
+                block.getByPosition(arguments[0]).column = (*std::move(result_block.getByPosition(arguments[0]).column)).mutate();
+                block.getByPosition(arguments[1]).column = (*std::move(result_block.getByPosition(arguments[1]).column)).mutate();
+
+                IlikeHelper::lowerAlphaASCII(block, arguments);
+            }
+        }
+
         using ResultType = typename Impl::ResultType;
 
         const ColumnPtr & column_haystack = block.getByPosition(arguments[0]).column;
         const ColumnPtr & column_needle = block.getByPosition(arguments[1]).column;
 
-        const ColumnConst * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
-        const ColumnConst * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
+        const auto * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
+        const auto * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
 
         UInt8 escape_char = CH_ESCAPE_CHAR;
-        String match_type = "";
+        String match_type;
         if constexpr (Impl::need_customized_escape_char)
         {
             const auto * col_escape_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
@@ -158,7 +246,7 @@ public:
         {
             if (arguments.size() > 2)
             {
-                auto * col_match_type_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
+                const auto * col_match_type_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
                 if (col_match_type_const == nullptr)
                     throw Exception("Match type argument of function " + getName() + " must be constant");
                 match_type = col_match_type_const->getValue<String>();
@@ -168,9 +256,9 @@ public:
         if (col_haystack_const && col_needle_const)
         {
             ResultType res{};
-            String needle_string = col_needle_const->getValue<String>();
+            auto needle_string = col_needle_const->getValue<String>();
             Impl::constantConstant(col_haystack_const->getValue<String>(), needle_string, escape_char, match_type, collator, res);
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
+            result_block.getByPosition(result).column = result_block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
             return;
         }
 
@@ -179,8 +267,8 @@ public:
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
         vec_res.resize(column_haystack->size());
 
-        const ColumnString * col_haystack_vector = checkAndGetColumn<ColumnString>(&*column_haystack);
-        const ColumnString * col_needle_vector = checkAndGetColumn<ColumnString>(&*column_needle);
+        const auto * col_haystack_vector = checkAndGetColumn<ColumnString>(&*column_haystack);
+        const auto * col_needle_vector = checkAndGetColumn<ColumnString>(&*column_needle);
 
         if (col_haystack_vector && col_needle_vector)
             Impl::vectorVector(col_haystack_vector->getChars(),
@@ -193,7 +281,7 @@ public:
                                vec_res);
         else if (col_haystack_vector && col_needle_const)
         {
-            String needle_string = col_needle_const->getValue<String>();
+            auto needle_string = col_needle_const->getValue<String>();
             Impl::vectorConstant(col_haystack_vector->getChars(), col_haystack_vector->getOffsets(), needle_string, escape_char, match_type, collator, vec_res);
         }
         else if (col_haystack_const && col_needle_vector)
@@ -210,7 +298,7 @@ public:
                                 + getName(),
                             ErrorCodes::ILLEGAL_COLUMN);
 
-        block.getByPosition(result).column = std::move(col_res);
+        result_block.getByPosition(result).column = std::move(col_res);
     }
 
 private:
@@ -261,11 +349,11 @@ public:
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
         const ColumnPtr column_needle = block.getByPosition(arguments[1]).column;
 
-        const ColumnConst * col_needle = typeid_cast<const ColumnConst *>(&*column_needle);
+        const auto * col_needle = typeid_cast<const ColumnConst *>(&*column_needle);
         if (!col_needle)
             throw Exception("Second argument of function " + getName() + " must be constant string.", ErrorCodes::ILLEGAL_COLUMN);
 
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column.get()))
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
         {
             auto col_res = ColumnString::create();
 

@@ -19,6 +19,7 @@ namespace DB
 namespace tests
 {
 TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
+try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -128,7 +129,7 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
             auto r1 = proxy_instance->getRegion(region_id);
             applied_index = r1->getLatestAppliedIndex();
             ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
-            LOG_INFO(&Poco::Logger::get("kvstore"), "applied_index {}", applied_index);
+            LOG_INFO(Logger::get(), "applied_index {}", applied_index);
             auto [index, term] = proxy_instance->normalWrite(region_id, {35}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
             // KVStore succeed. Proxy failed before advance.
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
@@ -153,8 +154,47 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
         }
     }
 }
+CATCH
+
+TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
+try
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    {
+        auto region_id = 1;
+        {
+            initStorages();
+            KVStore & kvs = getKVS();
+            proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+
+            MockRaftStoreProxy::FailCond cond;
+
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_NE(r1, nullptr);
+            ASSERT_NE(kvr1, nullptr);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
+            {
+                r1->getLatestAppliedIndex();
+                // This key has empty PK which is actually truncated.
+                std::string k = "7480000000000001FFBD5F720000000000FAF9ECEFDC3207FFFC";
+                std::string v = "4486809092ACFEC38906";
+                auto strKey = Redact::hexStringToKey(k.data(), k.size());
+                auto strVal = Redact::hexStringToKey(v.data(), v.size());
+
+                auto [index, term] = proxy_instance->rawWrite(region_id, {strKey}, {strVal}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+                EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
+                UNUSED(term);
+                EXPECT_THROW(ReadRegionCommitCache(kvr1, true), Exception);
+            }
+        }
+    }
+}
+CATCH
 
 TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
+try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -180,15 +220,39 @@ TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
             kvs.setRegionCompactLogConfig(0, 0, 0);
             auto [index2, term2] = proxy_instance->compactLog(region_id, index);
             // In tryFlushRegionData we will call handleWriteRaftCmd, which will already cause an advance.
-            ASSERT_TRUE(kvs.tryFlushRegionData(region_id, true, ctx.getTMTContext(), index2, term));
+            // Notice kvs is not tmt->getKVStore(), so we can't use the ProxyFFI version.
+            ASSERT_TRUE(kvs.tryFlushRegionData(region_id, false, true, ctx.getTMTContext(), index2, term));
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index2);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 2);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 2);
         }
     }
+    {
+        KVStore & kvs = getKVS();
+        auto region_id = 1;
+        proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+        // There shall be data to flush.
+        ASSERT_EQ(kvs.needFlushRegionData(region_id, ctx.getTMTContext()), true);
+        // If flush fails, and we don't insist a success.
+        FailPointHelper::enableFailPoint(FailPoints::force_fail_in_flush_region_data);
+        ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0), false);
+        FailPointHelper::disableFailPoint(FailPoints::force_fail_in_flush_region_data);
+        // Force flush until succeed only for testing.
+        ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, true, ctx.getTMTContext(), 0, 0), true);
+        // Non existing region.
+        // Flush and CompactLog will not panic.
+        ASSERT_EQ(kvs.tryFlushRegionData(1999, false, true, ctx.getTMTContext(), 0, 0), true);
+        raft_cmdpb::AdminRequest request;
+        raft_cmdpb::AdminResponse response;
+        request.mutable_compact_log();
+        request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
+        ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(response), 1999, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
+    }
 }
+CATCH
 
 TEST_F(RegionKVStoreTest, KVStoreSnapshot)
+try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
@@ -213,7 +277,7 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
                 };
                 auto ssts = default_cf.ssts();
                 ASSERT_EQ(ssts.size(), sst_size);
-                MultiSSTReader<MonoSSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, ssts};
+                MultiSSTReader<MonoSSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, ssts, Logger::get()};
                 size_t counter = 0;
                 while (reader.remained())
                 {
@@ -346,6 +410,7 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
         }
     }
 }
+CATCH
 
 } // namespace tests
 } // namespace DB

@@ -15,45 +15,66 @@
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/types.h>
 
+namespace DB::HashBaseWriterHelper
+{
+struct HashPartitionWriterHelperV1;
+}
+
 namespace DB
 {
-template <class StreamWriterPtr>
+class DAGContext;
+enum class CompressionMethod;
+enum MPPDataPacketVersion : int64_t;
+
+template <class ExchangeWriterPtr>
 class FineGrainedShuffleWriter : public DAGResponseWriter
 {
 public:
     FineGrainedShuffleWriter(
-        StreamWriterPtr writer_,
+        ExchangeWriterPtr writer_,
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
-        bool should_send_exec_summary_at_last,
         DAGContext & dag_context_,
         UInt64 fine_grained_shuffle_stream_count_,
-        UInt64 fine_grained_shuffle_batch_size);
+        UInt64 fine_grained_shuffle_batch_size,
+        MPPDataPacketVersion data_codec_version_,
+        tipb::CompressionMode compression_mode_);
+    void prepare(const Block & sample_block) override;
     void write(const Block & block) override;
-    void finishWrite() override;
+    bool isReadyForWrite() const override;
+    void flush() override;
 
 private:
-    template <bool send_exec_summary_at_last>
     void batchWriteFineGrainedShuffle();
+    void initScatterColumns();
+    template <MPPDataPacketVersion version>
+    void batchWriteFineGrainedShuffleImpl();
 
-    template <bool send_exec_summary_at_last>
-    void writePackets(std::vector<TrackedMppDataPacket> & packets);
-
-    bool should_send_exec_summary_at_last;
-    StreamWriterPtr writer;
+private:
+    ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
-    size_t rows_in_blocks;
+    size_t rows_in_blocks = 0;
     uint16_t partition_num;
-    std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     UInt64 fine_grained_shuffle_stream_count;
     UInt64 fine_grained_shuffle_batch_size;
+
+    Block header;
+    bool prepared = false;
+    size_t num_columns = 0, num_bucket = 0, batch_send_row_limit = 0; // Assign they initial values to pass clang-tidy check, they will be initialized in prepare method
+    std::vector<String> partition_key_containers_for_reuse;
+    WeakHash32 hash;
+    IColumn::Selector selector;
+    std::vector<IColumn::ScatterColumns> scattered; // size = num_columns
+    // support data compression
+    DataTypes expected_types;
+    MPPDataPacketVersion data_codec_version;
+    CompressionMethod compression_method{};
 };
 
 } // namespace DB

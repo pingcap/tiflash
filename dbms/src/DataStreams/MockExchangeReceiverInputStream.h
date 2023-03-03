@@ -29,13 +29,15 @@ public:
     MockExchangeReceiverInputStream(ColumnsWithTypeAndName columns, size_t max_block_size);
     Block getHeader() const override
     {
-        return Block(columns);
+        return Block(columns).cloneEmpty();
     }
     String getName() const override { return "MockExchangeReceiver"; }
+    size_t getSourceNum() const { return source_num; }
     ColumnsWithTypeAndName columns;
     size_t output_index;
     size_t max_block_size;
     size_t rows;
+    size_t source_num = 0;
 
 protected:
     Block readImpl() override;

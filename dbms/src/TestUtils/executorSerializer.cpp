@@ -49,13 +49,15 @@ String getColumnTypeName(const Column column)
 template <typename Columns>
 void toString(const Columns & columns, FmtBuffer & buf)
 {
-    assert(columns.size() > 0);
-    int bound = columns.size() - 1;
-    for (int i = 0; i < bound; ++i)
+    if (!columns.empty())
     {
-        buf.fmtAppend("<{}, {}>, ", i, getColumnTypeName(columns.at(i)));
+        int bound = columns.size() - 1;
+        for (int i = 0; i < bound; ++i)
+        {
+            buf.fmtAppend("<{}, {}>, ", i, getColumnTypeName(columns.at(i)));
+        }
+        buf.fmtAppend("<{}, {}>", bound, getColumnTypeName(columns.at(bound)));
     }
-    buf.fmtAppend("<{}, {}>", bound, getColumnTypeName(columns.at(bound)));
 }
 
 void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, FmtBuffer & buf)
@@ -156,6 +158,31 @@ void serializeTopN(const String & executor_id, const tipb::TopN & top_n, FmtBuff
         },
         ", ");
     buf.fmtAppend("}}, limit: {}\n", top_n.limit());
+}
+
+void serializeExpandSource(const String & executor_id, const tipb::Expand & expand, FmtBuffer & buf)
+{
+    buf.fmtAppend("{} | expanded_by: [", executor_id);
+    for (const auto & grouping_set : expand.grouping_sets())
+    {
+        buf.append("<");
+        for (const auto & grouping_exprs : grouping_set.grouping_exprs())
+        {
+            buf.append("{");
+            for (auto i = 0; i < grouping_exprs.grouping_expr().size(); ++i)
+            {
+                if (i != 0)
+                {
+                    buf.append(",");
+                }
+                auto expr = grouping_exprs.grouping_expr().Get(i);
+                serializeExpression(expr, buf);
+            }
+            buf.append("}");
+        }
+        buf.append(">");
+    }
+    buf.append("]\n");
 }
 
 void serializeJoin(const String & executor_id, const tipb::Join & join, FmtBuffer & buf)
@@ -280,6 +307,9 @@ void ExecutorSerializer::serializeListStruct(const tipb::DAGRequest * dag_reques
         case tipb::ExecType::TypeLimit:
             serializeLimit("Limit", executor.limit(), buf);
             break;
+        case tipb::ExecType::TypeExpand:
+            serializeExpandSource("Expand", executor.expand(), buf);
+            break;
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
         }
@@ -336,6 +366,9 @@ void ExecutorSerializer::serializeTreeStruct(const tipb::Executor & root_executo
             break;
         case tipb::ExecType::TypeWindow:
             serializeWindow(executor.executor_id(), executor.window(), buf);
+            break;
+        case tipb::ExecType::TypeExpand:
+            serializeExpandSource(executor.executor_id(), executor.expand(), buf);
             break;
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);

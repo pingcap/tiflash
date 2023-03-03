@@ -15,6 +15,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/CoprocessorHandler.h>
@@ -73,13 +74,15 @@ grpc::Status CoprocessorHandler::execute()
 
     try
     {
+        RUNTIME_CHECK_MSG(!cop_context.db_context.isDisaggregatedComputeMode(), "cannot run cop or batchCop request on tiflash_compute node");
+
         switch (cop_request->tp())
         {
         case COP_REQ_TYPE_DAG:
         {
-            GET_METRIC(tiflash_coprocessor_request_count, type_cop_dag).Increment();
-            GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_dag).Increment();
-            SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_dag).Decrement(); });
+            GET_METRIC(tiflash_coprocessor_request_count, type_cop_executing).Increment();
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_executing).Increment();
+            SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop_executing).Decrement(); });
 
             tipb::DAGRequest dag_request = getDAGRequestFromStringWithRetry(cop_request->data());
             LOG_DEBUG(log, "Handling DAG request: {}", dag_request.DebugString());
@@ -103,10 +106,12 @@ grpc::Status CoprocessorHandler::execute()
                     genCopKeyRange(cop_request->ranges()),
                     &bypass_lock_ts));
 
-            DAGContext dag_context(dag_request);
-            dag_context.tables_regions_info = std::move(tables_regions_info);
-            dag_context.log = Logger::get("CoprocessorHandler");
-            dag_context.tidb_host = cop_context.db_context.getClientInfo().current_address.toString();
+            DAGContext dag_context(
+                dag_request,
+                std::move(tables_regions_info),
+                cop_context.db_context.getClientInfo().current_address.toString(),
+                /*is_batch_cop=*/false,
+                Logger::get("CoprocessorHandler"));
             cop_context.db_context.setDAGContext(&dag_context);
 
             DAGDriver driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), &dag_response);

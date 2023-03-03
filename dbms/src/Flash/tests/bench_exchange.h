@@ -23,7 +23,6 @@
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/tests/WindowTestUtil.h>
@@ -126,7 +125,7 @@ struct MockReceiverContext
         return {index, index, -1};
     }
 
-    std::shared_ptr<Reader> makeReader(const Request & request)
+    std::shared_ptr<Reader> makeSyncReader(const Request & request)
     {
         return std::make_shared<Reader>(queues[request.send_task_id]);
     }
@@ -140,6 +139,7 @@ struct MockReceiverContext
     void makeAsyncReader(
         const Request &,
         std::shared_ptr<AsyncReader> &,
+        grpc::CompletionQueue *,
         UnaryCallback<bool> *) const {}
 
     std::vector<PacketQueuePtr> queues;

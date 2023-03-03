@@ -14,7 +14,6 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <common/defines.h>
@@ -23,10 +22,10 @@
 #include <boost/core/noncopyable.hpp>
 #include <condition_variable>
 #include <mutex>
+#include <optional>
 
 namespace DB
 {
-std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
 #define APPLY_FOR_FAILPOINTS_ONCE(M)                              \
     M(exception_between_drop_meta_and_data)                       \
     M(exception_between_alter_data_and_meta)                      \
@@ -43,8 +42,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(region_exception_after_read_from_storage_all_error)         \
     M(exception_before_dmfile_remove_encryption)                  \
     M(exception_before_dmfile_remove_from_disk)                   \
-    M(force_enable_region_persister_compatible_mode)              \
-    M(force_disable_region_persister_compatible_mode)             \
     M(force_triggle_background_merge_delta)                       \
     M(force_triggle_foreground_flush)                             \
     M(exception_before_mpp_register_non_root_mpp_task)            \
@@ -58,7 +55,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_during_mpp_root_task_run)                         \
     M(exception_during_write_to_storage)                          \
     M(force_set_sst_to_dtfile_block_size)                         \
-    M(force_set_sst_decode_rand)                                  \
     M(exception_before_page_file_write_sync)                      \
     M(force_set_segment_ingest_packs_fail)                        \
     M(segment_merge_after_ingest_packs)                           \
@@ -67,9 +63,14 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_in_creating_set_input_stream)                     \
     M(exception_when_read_from_log)                               \
     M(exception_mpp_hash_build)                                   \
+    M(exception_mpp_hash_probe)                                   \
     M(exception_before_drop_segment)                              \
     M(exception_after_drop_segment)                               \
-    M(exception_between_schema_change_in_the_same_diff)
+    M(exception_between_schema_change_in_the_same_diff)           \
+    M(force_ps_wal_compact)                                       \
+    M(pause_before_full_gc_prepare)                               \
+    M(force_owner_mgr_state)                                      \
+    M(exception_during_spill)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -89,8 +90,12 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \
     M(force_change_all_blobs_to_read_only)                   \
+    M(force_ingest_via_delta)                                \
+    M(force_ingest_via_replace)                              \
     M(unblock_query_init_after_write)                        \
-    M(exception_in_merged_task_init)
+    M(exception_in_merged_task_init)                         \
+    M(invalid_mpp_version)                                   \
+    M(force_fail_in_flush_region_data)
 
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
@@ -101,7 +106,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_before_apply_raft_cmd)             \
     M(pause_before_apply_raft_snapshot)        \
     M(pause_until_apply_raft_snapshot)         \
-    M(pause_after_copr_streams_acquired_once)
+    M(pause_after_copr_streams_acquired_once)  \
+    M(pause_before_register_non_root_mpp_task)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
     M(pause_when_reading_from_dt_stream)  \
@@ -114,7 +120,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
 
 #define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \
     M(random_tunnel_wait_timeout_failpoint)             \
+    M(random_tunnel_write_failpoint)                    \
     M(random_tunnel_init_rpc_failure_failpoint)         \
+    M(random_receiver_local_msg_push_failure_failpoint) \
     M(random_receiver_sync_msg_push_failure_failpoint)  \
     M(random_receiver_async_msg_push_failure_failpoint) \
     M(random_limit_check_failpoint)                     \
@@ -125,7 +133,13 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(random_sharedquery_failpoint)                     \
     M(random_interpreter_failpoint)                     \
     M(random_task_manager_find_task_failure_failpoint)  \
-    M(random_min_tso_scheduler_failpoint)
+    M(random_min_tso_scheduler_failpoint)               \
+    M(random_pipeline_model_task_run_failpoint)         \
+    M(random_pipeline_model_task_construct_failpoint)   \
+    M(random_pipeline_model_event_schedule_failpoint)   \
+    M(random_pipeline_model_event_finish_failpoint)     \
+    M(random_pipeline_model_operator_run_failpoint)     \
+    M(random_pipeline_model_cancel_failpoint)
 
 namespace FailPoints
 {
@@ -139,16 +153,28 @@ APPLY_FOR_RANDOM_FAILPOINTS(M)
 } // namespace FailPoints
 
 #ifdef FIU_ENABLE
+std::unordered_map<String, std::any> FailPointHelper::fail_point_val;
+std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
 class FailPointChannel : private boost::noncopyable
 {
 public:
     // wake up all waiting threads when destroy
     ~FailPointChannel() { notifyAll(); }
 
+    explicit FailPointChannel(UInt64 timeout_)
+        : timeout(timeout_)
+    {}
+    FailPointChannel()
+        : timeout(0)
+    {}
+
     void wait()
     {
         std::unique_lock lock(m);
-        cv.wait(lock);
+        if (timeout == 0)
+            cv.wait(lock);
+        else
+            cv.wait_for(lock, std::chrono::seconds(timeout));
     }
 
     void notifyAll()
@@ -158,17 +184,45 @@ public:
     }
 
 private:
+    UInt64 timeout;
     std::mutex m;
     std::condition_variable cv;
 };
 
-void FailPointHelper::enableFailPoint(const String & fail_point_name)
+void FailPointHelper::enablePauseFailPoint(const String & fail_point_name, UInt64 time)
 {
 #define SUB_M(NAME, flags)                                                                                  \
     if (fail_point_name == FailPoints::NAME)                                                                \
     {                                                                                                       \
         /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
         fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
+        fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>(time));   \
+        return;                                                                                             \
+    }
+
+#define M(NAME) SUB_M(NAME, FIU_ONETIME)
+    APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M)
+#undef M
+
+#define M(NAME) SUB_M(NAME, 0)
+    APPLY_FOR_PAUSEABLE_FAILPOINTS(M)
+#undef M
+#undef SUB_M
+
+    throw Exception(fmt::format("Cannot find fail point {}", fail_point_name), ErrorCodes::FAIL_POINT_ERROR);
+}
+
+void FailPointHelper::enableFailPoint(const String & fail_point_name, std::optional<std::any> v)
+{
+#define SUB_M(NAME, flags)                                                                                  \
+    if (fail_point_name == FailPoints::NAME)                                                                \
+    {                                                                                                       \
+        /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
+        fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
+        if (v.has_value())                                                                                  \
+        {                                                                                                   \
+            fail_point_val.try_emplace(FailPoints::NAME, v.value());                                        \
+        }                                                                                                   \
         return;                                                                                             \
     }
 
@@ -186,6 +240,10 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
         /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
         fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
         fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>());       \
+        if (v.has_value())                                                                                  \
+        {                                                                                                   \
+            fail_point_val.try_emplace(FailPoints::NAME, v.value());                                        \
+        }                                                                                                   \
         return;                                                                                             \
     }
 
@@ -201,6 +259,18 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
     throw Exception(fmt::format("Cannot find fail point {}", fail_point_name), ErrorCodes::FAIL_POINT_ERROR);
 }
 
+std::optional<std::any>
+FailPointHelper::getFailPointVal(const String & fail_point_name)
+{
+    if (auto iter = fail_point_val.find(fail_point_name); iter != fail_point_val.end())
+    {
+        auto v = iter->second;
+        fail_point_val.erase(iter);
+        return v;
+    }
+    return std::nullopt;
+}
+
 void FailPointHelper::disableFailPoint(const String & fail_point_name)
 {
     if (auto iter = fail_point_wait_channels.find(fail_point_name); iter != fail_point_wait_channels.end())
@@ -209,6 +279,7 @@ void FailPointHelper::disableFailPoint(const String & fail_point_name)
         /// if someone wait on this, the deconstruct will never be called.
         iter->second->notifyAll();
         fail_point_wait_channels.erase(iter);
+        fail_point_val.erase(fail_point_name);
     }
     fiu_disable(fail_point_name.c_str());
 }
@@ -263,7 +334,14 @@ class FailPointChannel
 {
 };
 
-void FailPointHelper::enableFailPoint(const String &) {}
+void FailPointHelper::enableFailPoint(const String &, std::optional<std::any>) {}
+
+std::optional<std::any> FailPointHelper::getFailPointVal(const String &)
+{
+    return std::nullopt;
+}
+
+void FailPointHelper::enablePauseFailPoint(const String &, UInt64) {}
 
 void FailPointHelper::disableFailPoint(const String &) {}
 

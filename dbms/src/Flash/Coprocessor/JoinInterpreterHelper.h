@@ -29,6 +29,13 @@ namespace DB
 {
 class Context;
 
+struct JoinKeyType
+{
+    DataTypePtr key_type;
+    bool is_incompatible_decimal;
+};
+using JoinKeyTypes = std::vector<JoinKeyType>;
+
 namespace JoinInterpreterHelper
 {
 struct TiFlashJoin
@@ -40,7 +47,7 @@ struct TiFlashJoin
     ASTTableJoin::Kind kind;
     size_t build_side_index = 0;
 
-    DataTypes join_key_types;
+    JoinKeyTypes join_key_types;
     TiDB::TiDBCollators join_key_collators;
 
     ASTTableJoin::Strictness strictness;
@@ -79,13 +86,6 @@ struct TiFlashJoin
     /// return "" for everything else.
     String genMatchHelperName(const Block & header1, const Block & header2) const;
 
-    /// columns_added_by_join
-    /// = join_output_columns - probe_side_columns
-    /// = build_side_columns + match_helper_name
-    NamesAndTypesList genColumnsAddedByJoin(
-        const Block & build_side_header,
-        const String & match_helper_name) const;
-
     /// The columns output by join will be:
     /// {columns of left_input, columns of right_input, match_helper_name}
     NamesAndTypes genJoinOutputColumns(
@@ -97,8 +97,8 @@ struct TiFlashJoin
     /// @other_filter_column_name: column name of `and(other_cond1, other_cond2, ...)`
     /// @other_eq_filter_from_in_column_name: column name of `and(other_eq_cond1_from_in, other_eq_cond2_from_in, ...)`
     /// such as
-    ///   `select * from t1 where col1 in (select col2 from t2 where t1.col2 = t2.col3)`
-    ///   - other_filter is `t1.col2 = t2.col3`
+    ///   `select * from t1 where col1 not in (select col2 from t2 where t1.col2 > t2.col3)`
+    ///   - other_filter is `t1.col2 > t2.col3`
     ///   - other_eq_filter_from_in_column is `t1.col1 = t2.col2`
     ///
     /// new columns from build side prepare join actions cannot be appended.
@@ -123,11 +123,9 @@ std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
     const Context & context,
     const Block & input_header,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types,
+    const JoinKeyTypes & join_key_types,
     bool left,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters);
-
-std::function<size_t()> concurrencyBuildIndexGenerator(size_t join_build_concurrency);
 } // namespace JoinInterpreterHelper
 } // namespace DB

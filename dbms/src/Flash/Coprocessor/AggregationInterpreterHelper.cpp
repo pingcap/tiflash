@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/ThresholdUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/ColumnNumbers.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
@@ -76,10 +77,12 @@ Aggregator::Params buildParams(
     const Context & context,
     const Block & before_agg_header,
     size_t before_agg_streams_size,
+    size_t agg_streams_size,
     const Names & key_names,
     const TiDB::TiDBCollators & collators,
     const AggregateDescriptions & aggregate_descriptions,
-    bool is_final_agg)
+    bool is_final_agg,
+    const SpillConfig & spill_config)
 {
     ColumnNumbers keys;
     for (const auto & name : key_names)
@@ -90,6 +93,7 @@ Aggregator::Params buildParams(
     const Settings & settings = context.getSettingsRef();
 
     bool allow_to_use_two_level_group_by = isAllowToUseTwoLevelGroupBy(before_agg_streams_size, settings);
+    auto total_two_level_threshold_bytes = allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0);
 
     bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
 
@@ -97,14 +101,14 @@ Aggregator::Params buildParams(
         before_agg_header,
         keys,
         aggregate_descriptions,
-        false,
-        settings.max_rows_to_group_by,
-        settings.group_by_overflow_mode,
+        /// do not use the average value for key count threshold, because for a random distributed data, the key count
+        /// in every threads should almost be the same
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
-        allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-        settings.max_bytes_before_external_group_by,
+        getAverageThreshold(total_two_level_threshold_bytes, agg_streams_size),
+        getAverageThreshold(settings.max_bytes_before_external_group_by, agg_streams_size),
         !is_final_agg,
-        context.getTemporaryPath(),
+        spill_config,
+        context.getSettingsRef().max_block_size,
         has_collator ? collators : TiDB::dummy_collators);
 }
 
