@@ -44,6 +44,6 @@ namespace ext
     std::decay_t<To> safe_bit_cast(const From & from)
     {
         static_assert(sizeof(To) == sizeof(From), "bit cast on types of different width");
-        return bit_cast<To, From>(from);
+        return ext::bit_cast<To, From>(from);
     };
 }
