@@ -812,6 +812,7 @@ private:
 
 void initThreadPool(const Settings & settings, size_t logical_cores)
 {
+    // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
     size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
     // Currently, `GlobalThreadPool` is only used by `IOThreadPool`, so they have the same number of threads.
     GlobalThreadPool::initialize(
