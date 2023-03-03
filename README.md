@@ -168,13 +168,15 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG \
 
 In MacOS, if you install llvm clang, you need to explicitly specify to use llvm clang.
 
+Add the following line to your shell environment, e.g. ~/.bash_profile
 ```shell
-# Add the following line to your shell environment, e.g. ~/.bash_profile
 export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
 export CC="/opt/homebrew/opt/llvm/bin/clang"
 export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+```
 
-# or use `CMAKE_C_COMPILER` and `CMAKE_CXX_COMPILER` to specify the compiler, like this:
+Or use `CMAKE_C_COMPILER` and `CMAKE_CXX_COMPILER` to specify the compiler, like this:
+```shell
 cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++
 ```
 
