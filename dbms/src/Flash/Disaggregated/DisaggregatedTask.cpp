@@ -23,7 +23,7 @@
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
-#include "disaggregated.pb.h"
+#include <kvproto/disaggregated.pb.h>
 
 namespace DB
 {

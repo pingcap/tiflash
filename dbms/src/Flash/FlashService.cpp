@@ -481,7 +481,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
 grpc::Status FlashService::checkGrpcContext(const grpc::ServerContext * grpc_context) const
 {
     // For coprocessor/mpp test, we don't care about security config.
-    if likely (!context->isMPPTest() && !context->isCopTest())
+    if (likely(!context->isMPPTest() && !context->isCopTest()))
     {
         if (!context->getSecurityConfig()->checkGrpcContext(grpc_context))
         {
@@ -672,7 +672,7 @@ grpc::Status FlashService::FetchDisaggregatedPages(
     const disaggregated::FetchDisaggregatedPagesRequest * request,
     grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer)
 {
-    LOG_DEBUG(log, "Handling fetch pages request: {}", request->ShortDebugString());
+    LOG_DEBUG(log, "Handling FetchDisaggregatedPages request: {}", request->ShortDebugString());
     if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
         return check_result;
 

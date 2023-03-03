@@ -814,11 +814,8 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         auto & tmt = context.getTMTContext();
         auto * snap_manager = tmt.getDisaggregatedSnapshotManager();
         const auto & snap_id = *dag_context.getDisaggregatedTaskId();
-        auto [ok, err_msg] = snap_manager->registerSnapshot(snap_id, std::move(disaggregated_snap));
-        if (!ok)
-        {
-            throw Exception(err_msg, ErrorCodes::LOGICAL_ERROR);
-        }
+        bool register_snapshot_ok = snap_manager->registerSnapshot(snap_id, std::move(disaggregated_snap));
+        RUNTIME_CHECK_MSG(register_snapshot_ok, "disaggregated task has been registered {}", snap_id);
         LOG_INFO(log, "task snapshot registered, snapshot_id={}", snap_id);
     }
 

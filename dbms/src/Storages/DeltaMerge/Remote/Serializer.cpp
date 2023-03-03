@@ -124,7 +124,7 @@ Serializer::serializeTo(const ColumnFileSetSnapshotPtr & snap)
         }
         else
         {
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown ColumnFile, type={}", magic_enum::enum_name(file->getType()));
+            RUNTIME_CHECK_MSG(false, "Unknown ColumnFile, type={}", magic_enum::enum_name(file->getType()));
         }
     }
     return ret;

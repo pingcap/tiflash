@@ -38,16 +38,16 @@ public:
         : log(Logger::get())
     {}
 
-    std::tuple<bool, String> registerSnapshot(const DisaggregatedTaskId & task_id, DisaggregatedReadSnapshotPtr && snap)
+    bool registerSnapshot(const DisaggregatedTaskId & task_id, DisaggregatedReadSnapshotPtr && snap)
     {
         LOG_DEBUG(log, "Register Disaggregated Snapshot, task_id={}", task_id);
 
         std::unique_lock lock(mtx);
         if (auto iter = snapshots.find(task_id); iter != snapshots.end())
-            return {false, "disaggregated task has been registered"};
+            return false;
 
         snapshots.emplace(task_id, std::move(snap));
-        return {true, ""};
+        return true;
     }
 
     DisaggregatedReadSnapshotPtr getSnapshot(const DisaggregatedTaskId & task_id) const
