@@ -27,7 +27,6 @@
 #include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
-#include "common/logger_useful.h"
 
 namespace DB
 {

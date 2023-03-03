@@ -39,7 +39,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-#include "common/types.h"
 
 namespace DB
 {
@@ -921,7 +920,6 @@ bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
     const ColumnInfos & table_scan_columns)
 {
-
     bool has_cast = false;
 
     // For TimeZone
