@@ -516,7 +516,11 @@ void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename Page
         return;
     }
 
-    RUNTIME_CHECK(iter->first.sequence == edit.version.sequence); // TODO: If there is a full GC this may be false?
+    // TODO: Not sure if there is a full GC this may be false? Let's keep it here for now.
+    RUNTIME_CHECK(
+        iter->first.sequence == edit.version.sequence,
+        iter->first.sequence,
+        edit.version.sequence);
 
     // Discard epoch, and only check sequence.
     while (iter->first.sequence == edit.version.sequence)

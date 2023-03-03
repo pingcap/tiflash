@@ -46,9 +46,6 @@ extern const Metric PSMVCCNumSnapshots;
 namespace DB::PS::V3
 {
 
-class CPWriteDataSource;
-using CPWriteDataSourcePtr = std::shared_ptr<CPWriteDataSource>;
-
 class PageDirectorySnapshot : public DB::PageStorageSnapshot
 {
 public:
