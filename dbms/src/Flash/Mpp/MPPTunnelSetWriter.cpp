@@ -247,10 +247,20 @@ static void broadcastOrPassThroughWrite(
         return;
 
     size_t tracked_packet_bytes = ori_tracked_packet->getPacket().ByteSizeLong();
-    auto remote_tunnel_tracked_packet = local_tunnel_cnt == tunnel_cnt ? nullptr : ori_tracked_packet;
 
-    if (compression_method != CompressionMethod::NONE)
-        remote_tunnel_tracked_packet = MPPTunnelSetHelper::ToCompressedPacket(ori_tracked_packet, version, compression_method);
+    TrackedMppDataPacketPtr remote_tunnel_tracked_packet = nullptr;
+
+    if (local_tunnel_cnt != tunnel_cnt)
+    {
+        if (compression_method != CompressionMethod::NONE)
+            remote_tunnel_tracked_packet = MPPTunnelSetHelper::ToCompressedPacket(ori_tracked_packet, version, compression_method);
+        else
+            remote_tunnel_tracked_packet = ori_tracked_packet;
+    }
+    else
+    {
+        // remote packet will be NULL if local_tunnel_cnt == tunnel_cnt
+    }
 
     if (0 == local_tunnel_cnt)
     {
