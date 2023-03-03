@@ -40,14 +40,15 @@ extern const Metric LocalThreadActive;
 namespace DB
 {
 template <typename Thread>
-ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_)
-    : ThreadPoolImpl(max_threads_, max_threads_, max_threads_)
+ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_, const std::string & thread_name_)
+    : ThreadPoolImpl(max_threads_, max_threads_, max_threads_, /*shutdown_on_exception_*/ true, thread_name_)
 {
 }
 
 template <typename Thread>
-ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_)
-    : max_threads(max_threads_)
+ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_, const std::string & thread_name_)
+    : thread_name(thread_name_)
+    , max_threads(max_threads_)
     , max_free_threads(max_free_threads_)
     , queue_size(queue_size_)
     , shutdown_on_exception(shutdown_on_exception_)
@@ -256,7 +257,7 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
     while (true)
     {
         /// This is inside the loop to also reset previous thread names set inside the jobs.
-        setThreadName("ThreadPool");
+        setThreadName(thread_name.c_str());
 
         Job job;
         bool need_shutdown = false;

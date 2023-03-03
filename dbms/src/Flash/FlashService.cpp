@@ -89,12 +89,12 @@ void FlashService::init(Context & context_)
     auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with {} threads to handle cop requests.", cop_pool_size);
-    cop_pool = std::make_unique<ThreadPool>(cop_pool_size);
+    cop_pool = std::make_unique<ThreadPool>(cop_pool_size, "cop-pool");
 
     auto batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
-    batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size);
+    batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, "batch-cop-pool");
 }
 
 FlashService::~FlashService() = default;
