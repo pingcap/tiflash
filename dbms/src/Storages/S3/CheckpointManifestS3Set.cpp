@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Filename.h>
+#include <unordered_set>
 
 namespace DB::S3
 {
@@ -89,7 +90,7 @@ CheckpointManifestS3Set::outdatedObjects(
     const Aws::Utils::DateTime & timepoint) const
 {
     auto preserved_mfs = preservedManifests(max_preserved, expired_hour, timepoint);
-    std::set<String> preserved_set;
+    std::unordered_set<String> preserved_set;
     for (const auto & s : preserved_mfs)
         preserved_set.emplace(s);
 

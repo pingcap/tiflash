@@ -116,6 +116,39 @@ try
     CheckpointManifestS3Set set = CheckpointManifestS3Set::create(objs);
     ASSERT_EQ(set.latestUploadSequence(), 81);
     ASSERT_EQ(set.latestManifestKey(), S3Filename::newCheckpointManifest(store_id, 81).toFullKey());
+    {
+        auto preserved = set.preservedManifests(4, 1, timepoint);
+        ASSERT_EQ(preserved.size(), 3);
+        EXPECT_EQ(preserved[0], S3Filename::newCheckpointManifest(store_id, 81).toFullKey());
+        EXPECT_EQ(preserved[1], S3Filename::newCheckpointManifest(store_id, 80).toFullKey());
+        EXPECT_EQ(preserved[2], S3Filename::newCheckpointManifest(store_id, 70).toFullKey());
+        auto outdated = set.outdatedObjects(4, 1, timepoint);
+        ASSERT_EQ(outdated.size(), 2);
+        EXPECT_EQ(outdated[0].key, S3Filename::newCheckpointManifest(store_id, 4).toFullKey());
+        EXPECT_EQ(outdated[1].key, S3Filename::newCheckpointManifest(store_id, 5).toFullKey());
+    }
+    {
+        auto preserved = set.preservedManifests(3, 1, timepoint);
+        ASSERT_EQ(preserved.size(), 3);
+        EXPECT_EQ(preserved[0], S3Filename::newCheckpointManifest(store_id, 81).toFullKey());
+        EXPECT_EQ(preserved[1], S3Filename::newCheckpointManifest(store_id, 80).toFullKey());
+        EXPECT_EQ(preserved[2], S3Filename::newCheckpointManifest(store_id, 70).toFullKey());
+        auto outdated = set.outdatedObjects(3, 1, timepoint);
+        ASSERT_EQ(outdated.size(), 2);
+        EXPECT_EQ(outdated[0].key, S3Filename::newCheckpointManifest(store_id, 4).toFullKey());
+        EXPECT_EQ(outdated[1].key, S3Filename::newCheckpointManifest(store_id, 5).toFullKey());
+    }
+    {
+        auto preserved = set.preservedManifests(2, 1, timepoint);
+        ASSERT_EQ(preserved.size(), 2);
+        EXPECT_EQ(preserved[0], S3Filename::newCheckpointManifest(store_id, 81).toFullKey());
+        EXPECT_EQ(preserved[1], S3Filename::newCheckpointManifest(store_id, 80).toFullKey());
+        auto outdated = set.outdatedObjects(2, 1, timepoint);
+        ASSERT_EQ(outdated.size(), 3);
+        EXPECT_EQ(outdated[0].key, S3Filename::newCheckpointManifest(store_id, 4).toFullKey());
+        EXPECT_EQ(outdated[1].key, S3Filename::newCheckpointManifest(store_id, 5).toFullKey());
+        EXPECT_EQ(outdated[2].key, S3Filename::newCheckpointManifest(store_id, 70).toFullKey());
+    }
 
     gc_mgr->removeOutdatedManifest(set, &timepoint);
 
