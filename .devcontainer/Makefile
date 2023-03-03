@@ -47,7 +47,7 @@ release-in-container:
 	&& cmake --install . --prefix=artifacts
 
 .PHONY: release
-dev: rebuild-docker release-in-container
+release: rebuild-docker release-in-container
 
 .PHONY: test-in-container
 test-in-container: SHELL := $(CONTAINER_SHELL)
@@ -61,7 +61,7 @@ test-in-container:
 		&& dbms/gtests_dbms
 
 .PHONY: test
-dev: rebuild-docker test-in-container
+test: rebuild-docker test-in-container
 
 .PHONY: clean-all
 clean-all:

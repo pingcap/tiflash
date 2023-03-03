@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
-FROM breezewish/tiflash-dev:0.0.2
+# See `DockerImageSource` about how this image is built.
+FROM breezewish/tiflash-dev:0.0.3
 
 # Create directories to mount as volumes. These directories will be persisted
 # after the container is recreated.
