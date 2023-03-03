@@ -23,7 +23,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int ILLEGAL_COLUMN;
@@ -42,7 +41,9 @@ PrettyBlockOutputStream::PrettyBlockOutputStream(
     , no_escapes(no_escapes_)
     , context(context_)
 {
-    struct winsize w;
+    struct winsize w
+    {
+    };
     if (0 == ioctl(STDOUT_FILENO, TIOCGWINSZ, &w))
         terminal_width = w.ws_col;
 }
@@ -216,20 +217,20 @@ void PrettyBlockOutputStream::write(const Block & block)
 
 void PrettyBlockOutputStream::writeValueWithPadding(const ColumnWithTypeAndName & elem, size_t row_num, size_t value_width, size_t pad_to_width)
 {
-    auto writePadding = [&]() {
+    auto write_padding = [&]() {
         for (size_t k = 0; k < pad_to_width - value_width; ++k)
             writeChar(' ', ostr);
     };
 
     if (elem.type->shouldAlignRightInPrettyFormats())
     {
-        writePadding();
+        write_padding();
         elem.type->serializeTextEscaped(*elem.column.get(), row_num, ostr);
     }
     else
     {
         elem.type->serializeTextEscaped(*elem.column.get(), row_num, ostr);
-        writePadding();
+        write_padding();
     }
 }
 

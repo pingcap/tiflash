@@ -19,7 +19,6 @@
 
 namespace DB
 {
-
 XMLRowOutputStream::XMLRowOutputStream(WriteBuffer & ostr_, const Block & sample_, bool write_statistics_)
     : dst_ostr(ostr_)
     , write_statistics(write_statistics_)
@@ -75,15 +74,15 @@ void XMLRowOutputStream::writePrefix()
     writeCString("\t<meta>\n", *ostr);
     writeCString("\t\t<columns>\n", *ostr);
 
-    for (size_t i = 0; i < fields.size(); ++i)
+    for (auto & field : fields)
     {
         writeCString("\t\t\t<column>\n", *ostr);
 
         writeCString("\t\t\t\t<name>", *ostr);
-        writeXMLString(fields[i].name, *ostr);
+        writeXMLString(field.name, *ostr);
         writeCString("</name>\n", *ostr);
         writeCString("\t\t\t\t<type>", *ostr);
-        writeXMLString(fields[i].type->getName(), *ostr);
+        writeXMLString(field.type->getName(), *ostr);
         writeCString("</type>\n", *ostr);
 
         writeCString("\t\t\t</column>\n", *ostr);
