@@ -155,6 +155,7 @@ PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status,
 
 bool Pipeline::isFineGrainedPipeline() const
 {
+    assert(!plan_nodes.empty());
     // The source plan node determines whether the execution mode is fine grained or non-fine grained.
     return plan_nodes.front()->getFineGrainedShuffle().enable();
 }
