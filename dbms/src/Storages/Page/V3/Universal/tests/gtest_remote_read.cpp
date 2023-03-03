@@ -143,7 +143,7 @@ try
     {
         auto edits = PS::V3::universal::PageEntriesEdit{};
         edits.appendRecord({.type = PS::V3::EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
@@ -202,7 +202,7 @@ try
     {
         auto edits = PS::V3::universal::PageEntriesEdit{};
         edits.appendRecord({.type = PS::V3::EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
@@ -269,7 +269,7 @@ try
         auto edits = PS::V3::universal::PageEntriesEdit{};
         edits.appendRecord({.type = PS::V3::EditRecordType::VAR_ENTRY, .page_id = page_id1, .entry = {.size = 29, .offset = 5}});
         edits.appendRecord({.type = PS::V3::EditRecordType::VAR_ENTRY, .page_id = page_id2, .entry = {.size = 22, .offset = 10}});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
@@ -342,7 +342,7 @@ try
         .sequence = 5,
         .last_sequence = 3,
     });
-    writer->writeEditsAndApplyRemoteInfo(edits);
+    writer->writeEditsAndApplyCheckpointInfo(edits);
     writer->writeSuffix();
     writer.reset();
     uploadFile(remote_dir, "data_1");
