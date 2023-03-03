@@ -40,7 +40,7 @@ public:
          * The list of lock files that will be always appended to the checkpoint file.
          *
          * Note: In addition to the specified lock files, the checkpoint file will also contain
-         * lock files from `writeEditsAndApplyRemoteInfo`.
+         * lock files from `writeEditsAndApplyCheckpointInfo`.
          */
         const std::unordered_set<String> & must_locked_files = {};
     };
@@ -71,7 +71,7 @@ public:
      *
      * You must call `writeSuffix` finally, if you don't plan to write edits anymore.
      */
-    bool /* has_new_data */ writeEditsAndApplyRemoteInfo(universal::PageEntriesEdit & edit);
+    bool /* has_new_data */ writeEditsAndApplyCheckpointInfo(universal::PageEntriesEdit & edit);
 
     /**
      * This function must be called, and must be called last, after other `writeXxx`.
