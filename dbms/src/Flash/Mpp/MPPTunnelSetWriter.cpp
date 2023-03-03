@@ -94,10 +94,10 @@ template <bool is_broadcast, typename FuncIsLocalTunnel, typename FuncWriteToTun
 static void broadcastOrPassThroughWriteImpl(
     const size_t tunnel_cnt,
     const size_t local_tunnel_cnt, // can be 0 for PassThrough writer
-    size_t ori_packet_bytes, // original data packet size
+    const size_t ori_packet_bytes, // original data packet size
     TrackedMppDataPacketPtr && local_tracked_packet, // can be NULL if there is no local tunnel
     TrackedMppDataPacketPtr && remote_tracked_packet, // can be NULL if all tunnels are local mode
-    CompressionMethod compression_method,
+    const CompressionMethod compression_method,
     FuncIsLocalTunnel && isLocalTunnel,
     FuncWriteToTunnel && writeToTunnel)
 {
@@ -168,16 +168,24 @@ static void broadcastOrPassThroughWriteV0(
     FuncIsLocalTunnel && isLocalTunnel,
     FuncWriteToTunnel && writeToTunnel)
 {
-    auto && tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
-    if (!tracked_packet)
+    auto && ori_tracked_packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
+    if (!ori_tracked_packet)
         return;
-    size_t tracked_packet_bytes = tracked_packet->getPacket().ByteSizeLong();
-    auto && remote_tracked_packet = local_tunnel_cnt == tunnel_cnt ? nullptr : tracked_packet;
+    size_t tracked_packet_bytes = ori_tracked_packet->getPacket().ByteSizeLong();
+    TrackedMppDataPacketPtr remote_tracked_packet = nullptr;
+    if (local_tunnel_cnt != tunnel_cnt)
+    {
+        remote_tracked_packet = ori_tracked_packet;
+    }
+    if (0 == local_tunnel_cnt)
+    {
+        ori_tracked_packet = nullptr;
+    }
     broadcastOrPassThroughWriteImpl<is_broadcast>(
         tunnel_cnt,
         local_tunnel_cnt,
         tracked_packet_bytes,
-        std::move(tracked_packet),
+        std::move(ori_tracked_packet),
         std::move(remote_tracked_packet),
         CompressionMethod::NONE,
         std::forward<FuncIsLocalTunnel>(isLocalTunnel),
