@@ -814,11 +814,27 @@ void initThreadPool(const Settings & settings, size_t logical_cores)
 {
     // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
     size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
-    // Currently, `GlobalThreadPool` is only used by `IOThreadPool`, so they have the same number of threads.
+
+    // Currently, `GlobalThreadPool` is used by
+    // - `IOThreadPool`
+    // - `FlashService::cop_pool`
+    // - `FlashService::batch_cop_pool`
+    // - `ManualCompactManager::worker_pool`
+    size_t max_total_thread_count = max_io_thread_count;
+    if (settings.cop_pool_size > 0)
+        max_total_thread_count += settings.cop_pool_size;
+    else
+        max_total_thread_count += logical_cores;
+    if (settings.batch_cop_pool_size > 0)
+        max_total_thread_count += settings.batch_cop_pool_size;
+    else
+        max_total_thread_count += logical_cores;
+    max_total_thread_count += settings.manual_compact_pool_size;
+
     GlobalThreadPool::initialize(
-        /*max_threads*/ max_io_thread_count,
-        /*max_free_threads*/ max_io_thread_count / 2,
-        /*queue_size*/ max_io_thread_count * 2);
+        /*max_threads*/ max_total_thread_count,
+        /*max_free_threads*/ max_total_thread_count / 2,
+        /*queue_size*/ max_total_thread_count * 2);
     IOThreadPool::initialize(
         /*max_threads*/ max_io_thread_count,
         /*max_free_threads*/ max_io_thread_count / 2,
