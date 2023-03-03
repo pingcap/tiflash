@@ -39,6 +39,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
+#include "common/types.h"
 
 namespace DB
 {
@@ -898,11 +899,29 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
     return cast_expr_name;
 }
 
+/**
+  * For example, we have a table with schema:
+  * CREATE TABLE `t` (
+  *   `a` timestamp DEFAULT NULL
+  *   `b` time DEFAULT NULL
+  * );
+  * And we have a query:
+  *   SELECT a, b FROM t;
+  * When timezone is set to `Asia/Shanghai`
+  * The function `buildExtraCastsAfterTS` will be called with `need_cast_column` as [true, true].
+  * The function will add three extra actions to `actions`:
+  * 1. Cast `a` to `ConvertTimeZoneFromUTC(a, Asia/Shanghai_String)_xxx`
+  * 2. Cast `b` to `FunctionConvertDurationFromNanos(b)_xxx`
+  * 3. Project `ConvertTimeZoneFromUTC(a, Asia/Shanghai_String)_xxx` to `a` 
+  *    and `FunctionConvertDurationFromNanos(b)_xxx` to `b`
+  * The function will return true.
+  */
 bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     const ExpressionActionsPtr & actions,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
     const ColumnInfos & table_scan_columns)
 {
+
     bool has_cast = false;
 
     // For TimeZone
@@ -915,12 +934,15 @@ bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     // For Duration
     String fsp_col;
     static const String dur_func_name = "FunctionConvertDurationFromNanos";
+
+    // For Projection
+    NamesWithAliases project_to_origin_names;
     for (size_t i = 0; i < need_cast_column.size(); ++i)
     {
+        String casted_name = source_columns[i].name;
         if (!context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTSMode::AppendTimeZoneCast)
         {
-            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
-            source_columns[i].name = casted_name;
+            casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
             has_cast = true;
         }
 
@@ -931,16 +953,14 @@ bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
             const auto fsp = table_scan_columns[i].decimal < 0 ? 0 : table_scan_columns[i].decimal;
             tipb::Expr fsp_expr = constructInt64LiteralTiExpr(fsp);
             fsp_col = getActions(fsp_expr, actions);
-            String casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
-            source_columns[i].name = casted_name;
+            casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
             source_columns[i].type = actions->getSampleBlock().getByName(casted_name).type;
             has_cast = true;
         }
+
+        project_to_origin_names.emplace_back(casted_name, source_columns[i].name);
     }
-    NamesWithAliases project_cols;
-    for (auto & col : source_columns)
-        project_cols.emplace_back(col.name, col.name);
-    actions->add(ExpressionAction::project(project_cols));
+    actions->add(ExpressionAction::project(project_to_origin_names));
 
     return has_cast;
 }

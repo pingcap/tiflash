@@ -27,6 +27,7 @@
 #include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
+#include "common/logger_useful.h"
 
 namespace DB
 {
@@ -1168,18 +1169,25 @@ std::vector<Int64> getColumnsForExpr(const tipb::Expr & expr, const std::vector<
     }
 }
 
-tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, TimezoneInfo timezone_info)
+tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, TimezoneInfo & timezone_info)
 {
     tipb::Expr ret_expr = expr;
     if (expr.tp() == tipb::ExprType::MysqlTime && expr.has_field_type())
     {
-        Field f = decodeLiteral(expr);
-        // substract timezone offset
-        // like: when timezone is +08:00
-        //       2019-01-01 00:00:00 +08:00 -> 2019-01-01 00:00:00 +00:00
-        UInt64 t = f.get<UInt64>();
+        Field value = decodeLiteral(expr);
+        // for example:
+        //      when timezone is +08:00
+        //      2019-01-01 00:00:00 +08:00 -> 2019-01-01 00:00:00 +00:00
+        static const auto & time_zone_utc = DateLUT::instance("UTC");
+        (void)time_zone_utc;
+        UInt64 from_time = value.get<UInt64>();
+        UInt64 result_time = from_time;
+        if (timezone_info.is_name_based)
+            convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
+        else if (timezone_info.timezone_offset != 0)
+            convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
         WriteBufferFromOwnString ss;
-        encodeDAGInt64(t - timezone_info.timezone_offset, ss);
+        encodeDAGInt64(result_time, ss);
         ret_expr.set_val(ss.releaseStr());
     }
     else if (isScalarFunctionExpr(expr))
@@ -1189,30 +1197,6 @@ tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, TimezoneInfo timezon
         for (const auto & child : expr.children())
         {
             ret_expr.mutable_children()->Add(rewriteTimeStampLiteral(child, timezone_info));
-        }
-    }
-    return ret_expr;
-}
-
-tipb::Expr rewriteTimeLiteral(const tipb::Expr & expr)
-{
-    tipb::Expr ret_expr = expr;
-    // for duration type literal, we need to convert it to int64
-    if (expr.tp() == tipb::ExprType::MysqlDuration && expr.has_field_type())
-    {
-        Field f = decodeLiteral(expr);
-        Int64 t = f.get<Int64>();
-        WriteBufferFromOwnString ss;
-        encodeDAGInt64(t, ss);
-        ret_expr.set_val(ss.releaseStr());
-    }
-    else if (isScalarFunctionExpr(expr))
-    {
-        ret_expr.clear_children();
-        ret_expr.mutable_children()->Reserve(expr.children().size());
-        for (const auto & child : expr.children())
-        {
-            ret_expr.mutable_children()->Add(rewriteTimeLiteral(child));
         }
     }
     return ret_expr;

@@ -171,8 +171,8 @@ bool hasRegionToRead(const DAGContext & dag_context, const TiDBTableScan & table
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-// <has_cast, extra_cast, project_for_remote_read>
-std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterTs(
+// <has_cast, extra_cast>
+std::pair<bool, ExpressionActionsPtr> addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
     const TiDBTableScan & table_scan)
@@ -181,7 +181,7 @@ std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterT
     for (auto b : need_cast_column)
         has_need_cast_column |= (b != ExtraCastAfterTSMode::None);
     if (!has_need_cast_column)
-        return {false, nullptr, nullptr};
+        return {false, nullptr};
 
     ExpressionActionsChain chain;
     analyzer.initChain(chain);
@@ -193,23 +193,11 @@ std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterT
         assert(extra_cast);
         chain.finalize();
         chain.clear();
-
-        // After `analyzer.appendExtraCastsAfterTS`, analyzer.getCurrentInputColumns() has been modified.
-        // For remote read, `timezone cast and duration cast` had been pushed down, don't need to execute cast expressions.
-        // To keep the schema of local read streams and remote read streams the same, do project action for remote read streams.
-        NamesWithAliases project_for_remote_read;
-        const auto & after_cast_source_columns = analyzer.getCurrentInputColumns();
-        for (size_t i = 0; i < after_cast_source_columns.size(); ++i)
-            project_for_remote_read.emplace_back(original_source_columns[i].name, after_cast_source_columns[i].name);
-        assert(!project_for_remote_read.empty());
-        ExpressionActionsPtr project_for_cop_read = std::make_shared<ExpressionActions>(original_source_columns);
-        project_for_cop_read->add(ExpressionAction::project(project_for_remote_read));
-
-        return {true, extra_cast, project_for_cop_read};
+        return {true, extra_cast};
     }
     else
     {
-        return {false, nullptr, nullptr};
+        return {false, nullptr};
     }
 }
 
@@ -252,26 +240,6 @@ String genErrMsgForLocalRead(
             storage->getTableName(),
             table_id,
             logical_table_id);
-}
-
-bool needRewriteTimeStampLiteral(const std::vector<Int64> & col_idxs, const std::vector<ExtraCastAfterTSMode> & need_cast_column)
-{
-    for (auto idx : col_idxs)
-    {
-        if (need_cast_column[idx] == ExtraCastAfterTSMode::AppendTimeZoneCast)
-            return true;
-    }
-    return false;
-}
-
-bool needrewriteTimeLiteral(const std::vector<Int64> & col_idxs, const std::vector<ExtraCastAfterTSMode> & need_cast_column)
-{
-    for (auto idx : col_idxs)
-    {
-        if (need_cast_column[idx] == ExtraCastAfterTSMode::AppendDurationCast)
-            return true;
-    }
-    return false;
 }
 
 } // namespace
@@ -364,19 +332,20 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     if (filter_conditions.hasValue())
     {
         google::protobuf::RepeatedPtrField<tipb::Expr> rewrote_conditions;
-        /// rewrite timestamp literal, like when timezone is +08:00, 2019-01-01 00:00:00 +08:00 -> 2019-01-01 00:00:00 +00:00
-        /// rewrite time literal, like 00:00:00 -> 00000000
+        /// For `SET time_zone = '+08:00'; WHERE ts = '2019-01-01 08:00:00'` and `SET time_zone = '+00:00'; WHERE ts = '2019-01-01 00:00:00'` are equivalent.
+        /// Rather than convert timestamp first and then compare, we rewrite `SET time_zone = '+08:00'; WHERE ts = '2019-01-01 08:00:00'` to `SET time_zone = '+00:00'; WHERE ts = '2019-01-01 00:00:00'`,
+        /// and then we can compare timestamp directly, which is more efficient.
         for (const auto & condition : filter_conditions.conditions)
         {
-            const auto res = getColumnsForExpr(condition, analyzer->getCurrentInputColumns());
+            const auto col_idxs = getColumnsForExpr(condition, analyzer->getCurrentInputColumns());
             tipb::Expr expr = condition;
-            if (!context.getTimezoneInfo().is_utc_timezone && needRewriteTimeStampLiteral(res, is_need_add_cast_column))
+            for (const auto idx : col_idxs)
             {
-                expr = rewriteTimeStampLiteral(condition, context.getTimezoneInfo());
-            }
-            if (needrewriteTimeLiteral(res, is_need_add_cast_column))
-            {
-                expr = rewriteTimeLiteral(condition);
+                if (!context.getTimezoneInfo().is_utc_timezone && is_need_add_cast_column[idx] == ExtraCastAfterTSMode::AppendTimeZoneCast)
+                {
+                    expr = rewriteTimeStampLiteral(expr, context.getTimezoneInfo());
+                    break;
+                }
             }
             rewrote_conditions.Add(std::move(expr));
         }
@@ -428,7 +397,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     DAGPipeline & pipeline)
 {
     // execute timezone cast or duration cast if needed for local table scan
-    auto [has_cast, extra_cast, project_for_cop_read] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
+    auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
     if (has_cast)
     {
         assert(remote_read_streams_start_index <= pipeline.streams.size());
@@ -439,13 +408,6 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
             auto & stream = pipeline.streams[i++];
             stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
             stream->setExtraInfo("cast after local tableScan");
-        }
-        // remote streams
-        while (i < pipeline.streams.size())
-        {
-            auto & stream = pipeline.streams[i++];
-            stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log->identifier());
-            stream->setExtraInfo("cast after remote tableScan");
         }
     }
 }
