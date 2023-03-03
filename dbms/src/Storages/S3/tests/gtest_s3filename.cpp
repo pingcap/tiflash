@@ -139,6 +139,88 @@ TEST(S3FilenameTest, StableFile)
     check(r.toView());
 }
 
+TEST(S3FilenameTest, Prefix)
+{
+    String dmf = "s2077/data/t_44/dmf_57";
+    String dmf_with_prefix = "s3://s2077/data/t_44/dmf_57";
+    ASSERT_FALSE(S3FilenameView::fromKeyWithPrefix(dmf).isValid());
+    ASSERT_TRUE(S3FilenameView::fromKey(dmf).isValid());
+    ASSERT_TRUE(S3FilenameView::fromKeyWithPrefix(dmf_with_prefix).isValid());
+    ASSERT_FALSE(S3FilenameView::fromKey(dmf_with_prefix).isValid());
+
+    {
+        auto meta = fmt::format("{}/meta", dmf_with_prefix);
+        auto v = S3FilenameView::fromKeyWithPrefix(meta);
+        ASSERT_TRUE(v.isValid());
+        ASSERT_EQ(v.data_subpath, "t_44/dmf_57/meta");
+    }
+
+    {
+        auto data = fmt::format("{}/1.dat", dmf_with_prefix);
+        auto v = S3FilenameView::fromKeyWithPrefix(data);
+        ASSERT_TRUE(v.isValid());
+        ASSERT_EQ(v.data_subpath, "t_44/dmf_57/1.dat");
+    }
+
+    {
+        auto mark = fmt::format("{}/1.mrk", dmf_with_prefix);
+        auto v = S3FilenameView::fromKeyWithPrefix(mark);
+        ASSERT_TRUE(v.isValid());
+        ASSERT_EQ(v.data_subpath, "t_44/dmf_57/1.mrk");
+    }
+
+    {
+        auto null_map = fmt::format("{}/1.null.dat", dmf_with_prefix);
+        auto v = S3FilenameView::fromKeyWithPrefix(null_map);
+        ASSERT_TRUE(v.isValid());
+        ASSERT_EQ(v.data_subpath, "t_44/dmf_57/1.null.dat");
+    }
+
+    {
+        auto null_mrk = fmt::format("{}/1.null.mrk", dmf_with_prefix);
+        auto v = S3FilenameView::fromKeyWithPrefix(null_mrk);
+        ASSERT_TRUE(v.isValid());
+        ASSERT_EQ(v.data_subpath, "t_44/dmf_57/1.null.mrk");
+    }
+
+    {
+        auto index = fmt::format("{}/1.idx", dmf_with_prefix);
+        auto v = S3FilenameView::fromKeyWithPrefix(index);
+        ASSERT_TRUE(v.isValid());
+        ASSERT_EQ(v.data_subpath, "t_44/dmf_57/1.idx");
+    }
+
+    DMFileOID oid{.store_id = 2077, .table_id = 44, .file_id = 57};
+    {
+        auto s3_fname = S3Filename::fromDMFileOID(oid);
+        ASSERT_EQ(s3_fname.toFullKey(), dmf);
+        ASSERT_EQ(s3_fname.toFullKeyWithPrefix(), dmf_with_prefix);
+    }
+    {
+        String table = "s2077/data/t_44";
+        String table_with_prefix = "s3://s2077/data/t_44";
+        auto s3_fname = S3Filename::fromTableID(oid.store_id, oid.table_id);
+        ASSERT_EQ(s3_fname.toFullKey(), table);
+        ASSERT_EQ(s3_fname.toFullKeyWithPrefix(), table_with_prefix);
+    }
+}
+
+TEST(S3FilenameTest, StableTable)
+{
+    UInt64 test_store_id = 2077;
+    Int64 test_table_id = 44;
+    String table_key = "s2077/data/t_44";
+
+    auto name = S3Filename::fromTableID(test_store_id, test_table_id);
+    ASSERT_EQ(name.toFullKey(), table_key);
+
+    auto view = S3FilenameView::fromKey(table_key);
+    ASSERT_TRUE(view.isValid()) << table_key;
+    ASSERT_TRUE(view.isDataFile()) << table_key;
+    ASSERT_EQ(view.store_id, test_store_id) << table_key;
+    ASSERT_EQ(view.data_subpath, "t_44") << table_key;
+}
+
 TEST(S3FilenameTest, StorePrefix)
 {
     {

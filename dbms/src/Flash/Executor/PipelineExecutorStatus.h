@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Flash/Executor/ExecutionResult.h>
 
 #include <atomic>
@@ -27,19 +28,27 @@ class PipelineExecutorStatus : private boost::noncopyable
 public:
     static constexpr auto timeout_err_msg = "error with timeout";
 
-    ExecutionResult toExecutionResult();
+    PipelineExecutorStatus()
+        : log(Logger::get())
+    {}
 
-    std::exception_ptr getExceptionPtr();
-    String getExceptionMsg();
+    explicit PipelineExecutorStatus(const String & req_id)
+        : log(Logger::get(req_id))
+    {}
 
-    void onEventSchedule();
+    ExecutionResult toExecutionResult() noexcept;
 
-    void onEventFinish();
+    std::exception_ptr getExceptionPtr() noexcept;
+    String getExceptionMsg() noexcept;
 
-    void onErrorOccurred(const String & err_msg);
-    void onErrorOccurred(const std::exception_ptr & exception_ptr_);
+    void onEventSchedule() noexcept;
 
-    void wait();
+    void onEventFinish() noexcept;
+
+    void onErrorOccurred(const String & err_msg) noexcept;
+    void onErrorOccurred(const std::exception_ptr & exception_ptr_) noexcept;
+
+    void wait() noexcept;
 
     template <typename Duration>
     void waitFor(const Duration & timeout_duration)
@@ -51,19 +60,26 @@ public:
         }
         if (is_timeout)
         {
+            LOG_WARNING(log, "wait timeout");
             onErrorOccurred(timeout_err_msg);
             throw Exception(timeout_err_msg);
         }
+        LOG_DEBUG(log, "query finished and wait done");
     }
 
-    void cancel();
+    void cancel() noexcept;
 
-    bool isCancelled()
+    bool isCancelled() noexcept
     {
         return is_cancelled.load(std::memory_order_acquire);
     }
 
 private:
+    bool setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept;
+
+private:
+    LoggerPtr log;
+
     std::mutex mu;
     std::condition_variable cv;
     std::exception_ptr exception_ptr;
