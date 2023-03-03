@@ -307,7 +307,7 @@ COPY misc/cargo-config.toml /root/.cargo/config
 
 RUN --mount=type=cache,target=/var/cache/yum,sharing=locked \
     yum install -y vim screen less \
-                   make ninja-build gcc
+                   make ninja-build gcc libcurl-devel
 
 # Use dump-init as the default entry point.
 RUN wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.5/dumb-init_1.2.5_x86_64

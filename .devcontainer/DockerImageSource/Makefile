@@ -2,7 +2,7 @@ BUILD_TAG := breezewish/tiflash-dev:0.0.3
 
 .PHONY: build
 build:
-	docker buildx build --build-arg -t ${BUILD_TAG} .
+	docker buildx build -t ${BUILD_TAG} .
 
 .PHONY: build-cn
 build-cn:
