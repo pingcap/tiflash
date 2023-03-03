@@ -50,5 +50,6 @@ ignore_databases = "system,default"
 
 [profiles]
 [profiles.default]
+enable_planner = 1
 enable_pipeline = 1
 # max_memory_usage = 0
