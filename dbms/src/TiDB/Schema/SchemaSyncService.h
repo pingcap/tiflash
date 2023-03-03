@@ -19,6 +19,8 @@
 
 #include <boost/noncopyable.hpp>
 #include <memory>
+#include <shared_mutex>
+#include <unordered_map>
 
 namespace Poco
 {
@@ -54,6 +56,9 @@ private:
 
     bool gc(Timestamp gc_safe_point, KeyspaceID keyspace_id);
 
+    void addKeyspaceGCTasks();
+    void removeKeyspaceGCTasks();
+
 private:
     Context & context;
 
@@ -61,6 +66,10 @@ private:
 
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle handle;
+
+    mutable std::shared_mutex ks_map_mutex;
+    // Handles for each keyspace schema sync task.
+    std::unordered_map<KeyspaceID, BackgroundProcessingPool::TaskHandle> ks_handle_map;
 
     Poco::Logger * log;
 };
