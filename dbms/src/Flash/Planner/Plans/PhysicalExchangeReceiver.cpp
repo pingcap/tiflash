@@ -101,10 +101,9 @@ void PhysicalExchangeReceiver::buildPipelineExec(PipelineExecGroupBuilder & grou
     group_builder.transform([&](auto & builder) {
         builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(
             group_builder.exec_status,
-            mpp_exchange_receiver,
-            /*stream_id=*/0,
             log->identifier(),
-            execId()));
+            mpp_exchange_receiver,
+            /*stream_id=*/0));
     });
 }
 

@@ -121,7 +121,9 @@
     M(S3CompleteMultipartUpload)               \
     M(S3PutObject)                             \
     M(S3GetObject)                             \
-    M(S3HeadObject)
+    M(S3HeadObject)                            \
+    M(S3ListObjects)                           \
+    M(S3DeleteObject)
 
 namespace ProfileEvents
 {

@@ -61,7 +61,7 @@ void PhysicalFilter::buildPipelineExec(PipelineExecGroupBuilder & group_builder,
 {
     auto input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<FilterTransformOp>(group_builder.exec_status, input_header, before_filter_actions, filter_column, log->identifier()));
+        builder.appendTransformOp(std::make_unique<FilterTransformOp>(group_builder.exec_status, log->identifier(), input_header, before_filter_actions, filter_column));
     });
 }
 
