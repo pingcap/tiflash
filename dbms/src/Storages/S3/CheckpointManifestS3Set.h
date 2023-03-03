@@ -18,12 +18,11 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/Types.h>
 #include <aws/core/utils/DateTime.h>
+#include <common/defines.h>
 #include <common/types.h>
 
 #include <map>
 #include <vector>
-
-#include "common/defines.h"
 
 namespace DB::S3
 {
@@ -38,7 +37,7 @@ class CheckpointManifestS3Set
 public:
     static CheckpointManifestS3Set getFromS3(const S3::TiFlashS3Client & client, StoreID store_id);
 
-    static CheckpointManifestS3Set create(std::vector<CheckpointManifestS3Object> manifest_keys);
+    static CheckpointManifestS3Set create(const std::vector<CheckpointManifestS3Object> & manifest_keys);
 
     ALWAYS_INLINE bool empty() const { return manifests.empty(); }
 

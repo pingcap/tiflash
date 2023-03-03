@@ -181,7 +181,7 @@ void S3GCManager::runForTombstonedStore(UInt64 gc_store_id)
 
 void S3GCManager::cleanUnusedLocks(
     UInt64 gc_store_id,
-    String scan_prefix,
+    const String & scan_prefix,
     UInt64 safe_sequence,
     const std::unordered_set<String> & valid_lock_files,
     const Aws::Utils::DateTime & timepoint)
@@ -453,7 +453,7 @@ void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifes
 
 String S3GCManager::getTemporaryDownloadFile(String s3_key)
 {
-    // FIXME: Is there any other logic that download manifest?
+    // TODO: Use DataStoreS3 for downloading manifest files
     std::replace(s3_key.begin(), s3_key.end(), '/', '_');
     return fmt::format("{}/{}_{}", config.temp_path, s3_key, std::hash<std::thread::id>()(std::this_thread::get_id()));
 }

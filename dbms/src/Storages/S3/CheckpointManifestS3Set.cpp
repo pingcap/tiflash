@@ -37,11 +37,11 @@ CheckpointManifestS3Set::getFromS3(const S3::TiFlashS3Client & client, StoreID s
         }
         return DB::S3::PageResult{.num_keys = objects.size(), .more = true};
     });
-    return CheckpointManifestS3Set::create(std::move(manifests));
+    return CheckpointManifestS3Set::create(manifests);
 }
 
 CheckpointManifestS3Set
-CheckpointManifestS3Set::create(std::vector<CheckpointManifestS3Object> manifest_keys)
+CheckpointManifestS3Set::create(const std::vector<CheckpointManifestS3Object> & manifest_keys)
 {
     CheckpointManifestS3Set set;
     for (const auto & mf_obj : manifest_keys)

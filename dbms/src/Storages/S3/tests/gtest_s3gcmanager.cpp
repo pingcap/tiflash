@@ -23,6 +23,8 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/OwnerManager.h>
 #include <aws/core/utils/DateTime.h>
+#include <aws/s3/model/CreateBucketRequest.h>
+#include <aws/s3/model/CreateBucketResult.h>
 #include <gtest/gtest.h>
 #include <pingcap/pd/MockPDClient.h>
 
@@ -49,14 +51,37 @@ public:
             .delmark_expired_hour = 1,
             .temp_path = ::DB::tests::TiFlashTestEnv::getTemporaryPath(),
         };
-        mock_s3_client = std::make_shared<tests::MockS3Client>();
+        mock_s3_client = ClientFactory::instance().sharedTiFlashClient();
         auto mock_gc_owner = OwnerManager::createMockOwner("owner_0");
         auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_s3_client);
         auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
         gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_s3_client, mock_gc_owner, mock_lock_client, config);
+        createBucketIfNotExist();
     }
 
-    std::shared_ptr<tests::MockS3Client> mock_s3_client;
+    bool createBucketIfNotExist()
+    {
+        Aws::S3::Model::CreateBucketRequest request;
+        const auto & bucket = mock_s3_client->bucket();
+        request.SetBucket(bucket);
+        auto outcome = mock_s3_client->CreateBucket(request);
+        if (outcome.IsSuccess())
+        {
+            LOG_DEBUG(log, "Created bucket {}", bucket);
+        }
+        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
+        {
+            LOG_DEBUG(log, "Bucket {} already exist", bucket);
+        }
+        else
+        {
+            const auto & err = outcome.GetError();
+            LOG_ERROR(log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
+        }
+        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
+    }
+
+    std::shared_ptr<TiFlashS3Client> mock_s3_client;
     std::unique_ptr<S3GCManager> gc_mgr;
     LoggerPtr log;
 };
@@ -142,6 +167,7 @@ try
 CATCH
 
 #if 0
+// TODO: Fix this unit test
 TEST_F(S3GCManagerTest, RemoveLock)
 try
 {

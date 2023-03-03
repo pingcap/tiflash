@@ -103,7 +103,7 @@ public:
 
     void cleanUnusedLocks(
         UInt64 gc_store_id,
-        String scan_prefix,
+        const String & scan_prefix,
         UInt64 safe_sequence,
         const std::unordered_set<String> & valid_lock_files,
         const Aws::Utils::DateTime &);
