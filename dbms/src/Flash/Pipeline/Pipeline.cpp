@@ -53,12 +53,11 @@ void mapEvents(const Events & inputs, const Events & outputs)
          *     PlainPipelineEvent◄────PlainPipelineEvent
          *     ```
          * 3. for non fine grained inputs and fine grained outputs
-         *     ```
-         *     PlainPipelineEvent◄────FineGrainedPipelineEvent
-         *     ```
+         *     This is not possible, if fine-grained is enabled in outputs, then inputs must also be enabled.
+         *     Checked in `doToEvents`.
          * 4. for fine grained inputs and non fine grained outputs
          *     ```
-         *     FineGrainedPipelineEvent◄────PlainPipelineEvent
+         *     PlainPipelineEvent◄────FineGrainedPipelineEvent
          *     ```
          */
         size_t partition_num = inputs.size();
