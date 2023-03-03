@@ -125,6 +125,27 @@ xcode-select --install
 brew install ninja cmake openssl@1.1 ccache
 ```
 
+And we recommend you to install llvm clang rather than the default Apple clang.
+
+```shell
+brew install llvm
+
+# check llvm version
+clang --version # should be 15.0.0 or higher
+
+# Add the following line to your ~/.zshrc 
+# to make sure llvm first in your PATH
+export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+export CC="/opt/homebrew/opt/llvm/bin/clang"
+export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+
+# or use CMAKE_C_COMPILER and CMAKE_CXX_COMPILER to specify the compiler, like this:
+mkdir cmake-build-debug  # The directory name can be customized
+cd cmake-build-debug
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++
+ninja tiflash
+```
+
 </details>
 
 ### 2. Checkout Source Code
