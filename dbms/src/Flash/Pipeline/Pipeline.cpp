@@ -79,12 +79,8 @@ void mapEvents(const Events & inputs, const Events & outputs)
          * 2. for non fine grained inputs and non fine grained outputs
          *     This is not possible, the size of inputs and outputs must be the same and 1.
          * 3. for non fine grained inputs and fine grained outputs
-         *     ```
-         *     FineGrainedPipelineEvent◄──┐
-         *     FineGrainedPipelineEvent◄──┼──PlainPipelineEvent
-         *     FineGrainedPipelineEvent◄──┤
-         *     FineGrainedPipelineEvent◄──┘
-         *     ```
+         *     This is not possible, if fine-grained is enabled in outputs, then inputs must also be enabled.
+         *     Checked in `doToEvents`.
          * 4. for fine grained inputs and non fine grained outputs
          *     ```
          *                          ┌──FineGrainedPipelineEvent
@@ -157,6 +153,12 @@ PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status,
     return builder.build();
 }
 
+bool Pipeline::isFineGrainedPipeline() const
+{
+    // The source plan node determines whether the execution mode is fine grained or non-fine grained.
+    return plan_nodes.front()->getFineGrainedShuffle().enable();
+}
+
 Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
 {
     Events all_events;
@@ -170,8 +172,7 @@ Events Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     Events self_events;
     assert(!plan_nodes.empty());
-    // The source plan node determines whether the execution mode is fine grained or non-fine grained.
-    if (plan_nodes.front()->getFineGrainedShuffle().enable())
+    if (isFineGrainedPipeline())
     {
         auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
         assert(!fine_grained_exec_group.empty());
@@ -192,6 +193,8 @@ Events Pipeline::doToEvents(PipelineExecutorStatus & status, Context & context, 
     auto self_events = toSelfEvents(status, context, concurrency);
     for (const auto & child : children)
     {
+        // If fine-grained is enabled in the current pipeline, then the child must also be enabled.
+        RUNTIME_CHECK(!isFineGrainedPipeline() || child->isFineGrainedPipeline());
         auto inputs = child->doToEvents(status, context, concurrency, all_events);
         mapEvents(inputs, self_events);
     }

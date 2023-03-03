@@ -68,6 +68,8 @@ public:
 
     Block getSampleBlock() const;
 
+    bool isFineGrainedPipeline() const;
+
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
