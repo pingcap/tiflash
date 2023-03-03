@@ -29,8 +29,8 @@ dev-in-container:
 		&& cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG \
 				-DCMAKE_C_COMPILER=clang \
 				-DCMAKE_CXX_COMPILER=clang++ \
-		&& cmake --build . \
-		&& cmake --install . --prefix=artifacts
+		&& cmake --build . --target tiflash \
+		&& cmake --install . --target tiflash --prefix=artifacts
 
 .PHONY: dev
 dev: rebuild-docker dev-in-container
@@ -43,8 +43,8 @@ release-in-container:
 	&& cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
 			-DCMAKE_C_COMPILER=clang \
 			-DCMAKE_CXX_COMPILER=clang++ \
-	&& cmake --build . \
-	&& cmake --install . --prefix=artifacts
+	&& cmake --build . --target tiflash \
+	&& cmake --install . --target tiflash --prefix=artifacts
 
 .PHONY: release
 release: rebuild-docker release-in-container

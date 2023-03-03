@@ -49,7 +49,7 @@ if (NOT USE_INTERNAL_MEMCPY)
     list (APPEND bench_libcommon_sources bench_memcpy.cpp)
 endif ()
 
-add_executable(bench_libcommon EXCLUDE_FROM_ALL
+add_executable(bench_libcommon
     # TODO: need to fix broken src file if necessary
     # bench_logger.cpp
     ${bench_libcommon_sources}

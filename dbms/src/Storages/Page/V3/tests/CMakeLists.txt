@@ -22,7 +22,7 @@ endmacro()
 # attach all dm gtest sources
 grep_gtest_sources(${TiFlash_SOURCE_DIR}/dbms/src/Storages/Page/V3/tests ps_v3_gtest_sources)
 
-add_executable(gtests_page_storage_v3 EXCLUDE_FROM_ALL ${ps_v3_gtest_sources} ${TiFlash_SOURCE_DIR}/dbms/src/TestUtils/gtests_dbms_main.cpp)
+add_executable(gtests_page_storage_v3 ${ps_v3_gtest_sources} ${TiFlash_SOURCE_DIR}/dbms/src/TestUtils/gtests_dbms_main.cpp)
 target_link_libraries(gtests_page_storage_v3 page_storage_v3 gtest_main)
 target_compile_options(gtests_page_storage_v3 PRIVATE -Wno-unknown-pragmas)
 target_compile_definitions(gtests_page_storage_v3 PRIVATE DBMS_PUBLIC_GTEST)

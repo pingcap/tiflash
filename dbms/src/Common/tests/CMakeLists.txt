@@ -97,7 +97,7 @@ target_link_libraries (mpmc_queue_perftest clickhouse_common_io)
 add_executable (allocator_perf allocator_perf.cpp)
 target_link_libraries (allocator_perf clickhouse_common_io)
 
-add_executable(bench_common EXCLUDE_FROM_ALL
+add_executable(bench_common
     bench_logger.cpp
 )
 target_link_libraries(bench_common benchmark::benchmark_main clickhouse_common_io)
