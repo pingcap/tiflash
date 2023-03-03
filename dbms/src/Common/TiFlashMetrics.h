@@ -103,7 +103,7 @@ namespace DB
         F(type_passthrough_none_compression_local, {"type", "passthrough_none_compression_local"}),                                                 \
         F(type_passthrough_none_compression_remote, {"type", "passthrough_none_compression_remote"}),                                               \
         F(type_passthrough_lz4_compression, {"type", "passthrough_lz4_compression"}),                                                               \
-        F(type_passthrough_zstd_compression, {"type", "passthrough_zstd_compression"})),                                                            \
+        F(type_passthrough_zstd_compression, {"type", "passthrough_zstd_compression"}))                                                             \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                                    \
     M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                                       \
     M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                                   \
