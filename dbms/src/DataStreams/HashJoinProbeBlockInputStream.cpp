@@ -99,7 +99,7 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
     /// 2. the query is executed normally, and one of the data stream has read an empty block, the the data stream and all its children
     ///    will call `cancel(false)`, in this case, there is two sub-cases
     ///    a. the data stream read an empty block because of EOF, then it means there must be no threads waiting in Join, so cancel the join is safe
-    ///    b. the data stream read an empty block because of early exit of some executor(like topN and limit), in this case, just wake the waiting
+    ///    b. the data stream read an empty block because of early exit of some executor(like limit), in this case, just wake the waiting
     ///       threads is not 100% safe because if the probe thread is wake up when build is not finished yet, it may produce wrong results, for now
     ///       it is safe because when any of the data stream read empty block because of early exit, the execution framework ensures that no further
     ///       data will be used.

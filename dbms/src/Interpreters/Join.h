@@ -259,15 +259,10 @@ public:
 
     void cancel()
     {
-        is_canceled = true;
         std::unique_lock lk(build_probe_mutex);
+        is_canceled = true;
         probe_cv.notify_all();
         build_cv.notify_all();
-    }
-
-    bool isCanceled()
-    {
-        return is_canceled;
     }
 
     void finishOneBuild();
