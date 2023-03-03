@@ -35,6 +35,7 @@ struct ThreadData
     }
 };
 
+/// Aggregated data shared between AggBuild and AggConvergent Pipeline.
 class AggregateContext
 {
 public:
@@ -50,7 +51,8 @@ public:
 
     void initConvergent();
 
-    void writeSuffix();
+    // Called before convergent to trace aggregate statistics and handle empty table with result case.
+    void readPrefix();
 
     size_t getConvergentConcurrency();
 

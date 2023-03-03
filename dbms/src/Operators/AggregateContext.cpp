@@ -44,7 +44,7 @@ void AggregateContext::executeOnBlock(size_t task_index, const Block & block)
     threads_data[task_index].src_rows += block.rows();
 }
 
-void AggregateContext::writeSuffix()
+void AggregateContext::readPrefix()
 {
     size_t total_src_rows = 0;
     size_t total_src_bytes = 0;
@@ -73,11 +73,15 @@ void AggregateContext::writeSuffix()
             *many_data[0],
             threads_data[0].key_columns,
             threads_data[0].aggregate_columns);
+
+    inited_for_read = true;
 }
 
 void AggregateContext::initConvergent()
 {
     RUNTIME_CHECK(inited_build && !inited_convergent);
+
+    readPrefix();
 
     merging_buckets = aggregator->mergeAndConvertToBlocks(many_data, true, max_threads);
     inited_convergent = true;
