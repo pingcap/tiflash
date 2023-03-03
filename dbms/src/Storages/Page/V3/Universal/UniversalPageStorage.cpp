@@ -229,19 +229,19 @@ UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::Dump
     // Some entries' data may be already written by a previous checkpoint. These data will not be written again.
 
     auto data_file_id = fmt::format(
-        options.data_file_id_pattern,
+        fmt::runtime(options.data_file_id_pattern),
         fmt::arg("sequence", snap->sequence),
         fmt::arg("sub_file_index", 0));
     auto data_file_path = fmt::format(
-        options.data_file_path_pattern,
+        fmt::runtime(options.data_file_path_pattern),
         fmt::arg("sequence", snap->sequence),
         fmt::arg("sub_file_index", 0));
 
     auto manifest_file_id = fmt::format(
-        options.manifest_file_id_pattern,
+        fmt::runtime(options.manifest_file_id_pattern),
         fmt::arg("sequence", snap->sequence));
     auto manifest_file_path = fmt::format(
-        options.manifest_file_path_pattern,
+        fmt::runtime(options.manifest_file_path_pattern),
         fmt::arg("sequence", snap->sequence));
 
     RUNTIME_CHECK(
