@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
@@ -66,6 +67,7 @@ public:
 
         s3_client = S3::ClientFactory::instance().sharedClient();
         bucket = S3::ClientFactory::instance().bucket();
+        data_store = std::make_shared<DM::Remote::DataStoreS3>(dbContext().getFileProvider());
         ASSERT_TRUE(createBucketIfNotExist());
     }
 
@@ -157,70 +159,15 @@ protected:
         return res;
     }
 
-    static std::vector<String> getLocalFiles(const String & dir)
-    {
-        std::vector<String> filenames;
-        Poco::DirectoryIterator end;
-        for (auto itr = Poco::DirectoryIterator{dir}; itr != end; ++itr)
-        {
-            if (itr->isFile())
-            {
-                // `NGC` file is unused in Cloud-Native mode.
-                if (itr.name() != "NGC")
-                {
-                    filenames.push_back(itr.name());
-                }
-            }
-        }
-        return filenames;
-    }
-
     std::vector<String> uploadDMFile(DMFilePtr local_dmfile, const DMFileOID & oid)
     {
-        Stopwatch sw;
-        RUNTIME_CHECK(local_dmfile->fileId() == oid.file_id);
-
-        const auto local_dir = local_dmfile->path();
-        auto local_files = getLocalFiles(local_dir);
-        RUNTIME_CHECK(!local_files.empty());
-
-        const auto remote_dir = S3::S3Filename::fromDMFileOID(oid).toFullKey();
-        LOG_DEBUG(log, "Start upload DMFile, local_dir={} remote_dir={} local_files={}", local_dir, remote_dir, local_files);
-
-        std::vector<std::future<void>> upload_results;
-        for (const auto & fname : local_files)
-        {
-            if (fname == DMFile::metav2FileName())
-            {
-                // meta file will be upload at last.
-                continue;
-            }
-            auto local_fname = fmt::format("{}/{}", local_dir, fname);
-            auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
-            S3::uploadFile(*s3_client, bucket, local_fname, remote_fname);
-        }
-
-        // Only when the meta upload is successful, the dmfile upload can be considered successful.
-        auto local_meta_fname = fmt::format("{}/{}", local_dir, DMFile::metav2FileName());
-        auto remote_meta_fname = fmt::format("{}/{}", remote_dir, DMFile::metav2FileName());
-        S3::uploadFile(*s3_client, bucket, local_meta_fname, remote_meta_fname);
-
-        LOG_DEBUG(log, "Upload DMFile finished, remote={}, cost={}ms", remote_dir, sw.elapsedMilliseconds());
-        return local_files;
+        data_store->putDMFile(local_dmfile, oid);
+        return local_dmfile->listInternalFiles();
     }
 
     void downloadDMFile(const DMFileOID & remote_oid, const String & local_dir, const std::vector<String> & target_files)
     {
-        Stopwatch sw;
-        const auto remote_dir = S3::S3Filename::fromDMFileOID(remote_oid).toFullKey();
-        std::vector<std::future<void>> download_results;
-        for (const auto & name : target_files)
-        {
-            auto remote_fname = fmt::format("{}/{}", remote_dir, name);
-            auto local_fname = fmt::format("{}/{}", local_dir, name);
-            S3::downloadFile(*s3_client, bucket, local_fname, remote_fname);
-        }
-        LOG_DEBUG(log, "Download DMFile meta finished, remote_dir={}, local_dir={} cost={}ms", remote_dir, local_dir, sw.elapsedMilliseconds());
+        Remote::DataStoreS3::copyToLocal(remote_oid, target_files, local_dir);
     }
 
     std::unordered_map<String, size_t> listFiles(const DMFileOID & oid)
@@ -234,7 +181,7 @@ protected:
 
     DMFilePtr restoreDMFile(const DMFileOID & oid)
     {
-        return DMFile::restore(db_context->getFileProvider(), oid.file_id, oid.file_id, S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKeyWithPrefix(), DMFile::ReadMetaMode::all());
+        return data_store->prepareDMFile(oid)->restore(DMFile::ReadMetaMode::all());
     }
 
     LoggerPtr log;
@@ -242,6 +189,7 @@ protected:
     std::shared_ptr<Aws::S3::S3Client> s3_client;
     String bucket;
     S3WritableFile::UploadInfo last_upload_info;
+    Remote::IDataStorePtr data_store;
 };
 
 TEST_F(S3FileTest, SinglePart)
@@ -309,7 +257,26 @@ CATCH
 TEST_F(S3FileTest, WriteRead)
 try
 {
+    auto add_nullable_columns = [](Block & block, size_t beg, size_t end) {
+        auto num_rows = end - beg;
+        std::vector<UInt64> data(num_rows);
+        std::iota(data.begin(), data.end(), beg);
+        std::vector<Int32> null_map(num_rows, 0);
+        block.insert(DB::tests::createNullableColumn<UInt64>(
+            data,
+            null_map,
+            "Nullable(UInt64)",
+            3));
+    };
+
+    auto prepare_block = [&](size_t beg, size_t end) {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false);
+        add_nullable_columns(block, beg, end);
+        return block;
+    };
+
     auto cols = DMTestEnv::getDefaultColumns();
+    cols->emplace_back(ColumnDefine{3, "Nullable(UInt64)", DataTypeFactory::instance().get("Nullable(UInt64)")});
 
     const size_t num_rows_write = 128;
 
@@ -330,12 +297,13 @@ try
     oid.store_id = 1;
     oid.table_id = 1;
     oid.file_id = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
+
     {
         // Prepare for write
         // Block 1: [0, 64)
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
+        Block block1 = prepare_block(0, num_rows_write / 2);
         // Block 2: [64, 128)
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        Block block2 = prepare_block(num_rows_write / 2, num_rows_write);
 
         auto configuration = std::make_optional<DMChecksumConfig>();
         dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), DMFileFormat::V3);

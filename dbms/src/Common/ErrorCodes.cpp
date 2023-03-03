@@ -427,6 +427,7 @@ extern const int PS_ENTRY_NO_VALID_VERSION = 10016;
 extern const int PS_DIR_APPLY_INVALID_STATUS = 10017;
 
 extern const int S3_ERROR = 11000;
+extern const int CANNOT_SCHEDULE_TASK = 11001;
 } // namespace ErrorCodes
 
 } // namespace DB
