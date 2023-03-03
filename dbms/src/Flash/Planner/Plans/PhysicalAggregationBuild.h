@@ -37,7 +37,6 @@ public:
         const TiDB::TiDBCollators & aggregation_collators_,
         bool is_final_agg_,
         const AggregateDescriptions & aggregate_descriptions_,
-        const ExpressionActionsPtr & expr_after_agg_,
         const AggregateContextPtr & aggregate_context_)
         : PhysicalUnary(executor_id_, PlanType::AggregationBuild, schema_, req_id, child_)
         , before_agg_actions(before_agg_actions_)
@@ -45,7 +44,6 @@ public:
         , aggregation_collators(aggregation_collators_)
         , is_final_agg(is_final_agg_)
         , aggregate_descriptions(aggregate_descriptions_)
-        , expr_after_agg(expr_after_agg_)
         , aggregate_context(aggregate_context_)
     {}
 
@@ -60,7 +58,6 @@ private:
     TiDB::TiDBCollators aggregation_collators;
     bool is_final_agg;
     AggregateDescriptions aggregate_descriptions;
-    ExpressionActionsPtr expr_after_agg;
     AggregateContextPtr aggregate_context;
 };
 } // namespace DB

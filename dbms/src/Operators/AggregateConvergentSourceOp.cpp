@@ -18,7 +18,13 @@ namespace DB
 OperatorStatus AggregateConvergentSourceOp::readImpl(Block & block)
 {
     block = agg_context->readForConvergent(index);
+    total_rows += block.rows();
     return OperatorStatus::HAS_OUTPUT;
+}
+
+void AggregateConvergentSourceOp::operateSuffix()
+{
+    LOG_INFO(log, "finish read {} rows from aggregate context", total_rows);
 }
 
 } // namespace DB

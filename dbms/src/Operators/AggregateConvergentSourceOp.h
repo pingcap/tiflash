@@ -39,11 +39,14 @@ public:
         return "AggregateConvergentSourceOp";
     }
 
+    void operateSuffix() override;
+
 protected:
     OperatorStatus readImpl(Block & block) override;
 
 private:
     AggregateContextPtr agg_context;
+    uint64_t total_rows{};
     const size_t index;
 };
 } // namespace DB

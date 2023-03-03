@@ -22,8 +22,16 @@ OperatorStatus AggregateSinkOp::writeImpl(Block && block)
         return OperatorStatus::FINISHED;
     }
     agg_context->executeOnBlock(index, block);
+    total_rows += block.rows();
     block.clear();
     return OperatorStatus::NEED_INPUT;
+}
+
+void AggregateSinkOp::operateSuffix()
+{
+    LOG_DEBUG(log, "finish write with {} rows", total_rows);
+
+    agg_context->writeSuffix();
 }
 
 } // namespace DB

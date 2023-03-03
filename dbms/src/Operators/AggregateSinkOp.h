@@ -38,10 +38,14 @@ public:
         return "AggregateSinkOp";
     }
 
+    void operateSuffix() override;
+
+protected:
     OperatorStatus writeImpl(Block && block) override;
 
 private:
     size_t index{};
+    uint64_t total_rows{};
     AggregateContextPtr agg_context;
 };
 } // namespace DB

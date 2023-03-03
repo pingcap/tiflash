@@ -38,11 +38,9 @@ struct ThreadData
 class AggregateContext
 {
 public:
-    AggregateContext(
-        bool final_,
+    explicit AggregateContext(
         const String & req_id)
-        : is_final(final_)
-        , log(Logger::get(req_id))
+        : log(Logger::get(req_id))
     {
     }
 
@@ -51,6 +49,8 @@ public:
     void executeOnBlock(size_t task_index, const Block & block);
 
     void initConvergent();
+
+    void writeSuffix();
 
     size_t getConvergentConcurrency();
 
@@ -75,7 +75,6 @@ private:
     ManyAggregatedDataVariants many_data;
     std::vector<ThreadData> threads_data;
     size_t max_threads{};
-    bool is_final{};
 
     const LoggerPtr log;
 };
