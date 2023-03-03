@@ -310,7 +310,12 @@ RUN --mount=type=cache,target=/var/cache/yum,sharing=locked \
                    make ninja-build gcc libcurl-devel
 
 # Use dump-init as the default entry point.
-RUN wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.5/dumb-init_1.2.5_x86_64
+RUN if [[ "$(uname -m)" = @(x86_64|x64) ]]; then \
+      PLATFORM=x86_64 ; \
+    elif [[ "$(uname -m)" = @(arm64|aarch64|armv8b|armv8l) ]]; then \
+      PLATFORM=aarch64 ; \
+    fi \
+    wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.5/dumb-init_1.2.5_${PLATFORM}
 RUN chmod +x /usr/local/bin/dumb-init
 
 COPY --from=builder-cmake /cmake-artifacts /usr/local/
