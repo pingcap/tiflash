@@ -514,6 +514,55 @@ std::optional<PageEntryV3> VersionedPageEntries<Trait>::getLastEntry(std::option
     return std::nullopt;
 }
 
+template <typename Trait>
+void VersionedPageEntries<Trait>::copyCheckpointInfoFromEdit(const typename PageEntriesEdit::EditRecord & edit)
+{
+    // We have a running PageStorage instance, and did a checkpoint dump. The checkpoint dump is encoded using
+    // PageEntriesEdit. During the checkpoint dump, this function is invoked so that we can write back where
+    // (the checkpoint info) each page's data was dumped.
+    // In this case, there is a living snapshot protecting the data.
+
+    // Pre-check: All ENTRY edit record must contain checkpoint info for copying.
+    RUNTIME_CHECK(edit.type == EditRecordType::VAR_ENTRY);
+    RUNTIME_CHECK(edit.entry.checkpoint_info.has_value());
+
+    auto page_lock = acquireLock();
+
+    if (type != EditRecordType::VAR_ENTRY)
+    {
+        // For example, Put X -> Delete X -> dumpSnapshotToEdit -> Full GC -> Delete X -> copyCheckpointInfoFromEdit.
+        // In this case, we have X=VAR_ENTRY in the `edit`, but will get X=VAR_DELETE in the page directory.
+        return;
+    }
+
+    // Due to GC movement, (sequence, epoch) may be changed to (sequence, epoch+x), so
+    // we search within [  (sequence, 0),  (sequence+1, 0)  ), and assign checkpoint info for all of it.
+    auto iter = MapUtils::findMutLess(entries, PageVersion(edit.version.sequence + 1));
+    if (iter == entries.end())
+    {
+        // The referenced version may be GCed so that we cannot find any matching entry.
+        return;
+    }
+
+    // TODO: Not sure if there is a full GC this may be false? Let's keep it here for now.
+    RUNTIME_CHECK(
+        iter->first.sequence == edit.version.sequence,
+        iter->first.sequence,
+        edit.version.sequence);
+
+    // Discard epoch, and only check sequence.
+    while (iter->first.sequence == edit.version.sequence)
+    {
+        // We will never meet the same Version mapping to one entry and one delete, so let's verify it is an entry.
+        RUNTIME_CHECK(iter->second.isEntry());
+        iter->second.entry.checkpoint_info = edit.entry.checkpoint_info;
+
+        if (iter == entries.begin())
+            break;
+        --iter;
+    }
+}
+
 // Returns true when **this id** is "visible" by `seq`.
 // If this page id is marked as deleted or not created, it is "not visible".
 // Note that not visible does not means this id can be GC.
@@ -1685,6 +1734,45 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
     {
         bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeInCompressedFormTo(edit_from_disk), write_limiter);
         return done_any_io;
+    }
+}
+
+template <typename Trait>
+void PageDirectory<Trait>::copyCheckpointInfoFromEdit(PageEntriesEdit & edit)
+{
+    const auto & records = edit.getRecords();
+    if (records.empty())
+        return;
+
+    // Pre-check: All ENTRY edit record must contain checkpoint info.
+    // We do the pre-check before copying any remote info to avoid partial completion.
+    for (const auto & rec : records)
+    {
+        if (rec.type == EditRecordType::VAR_ENTRY)
+            RUNTIME_CHECK(rec.entry.checkpoint_info.has_value());
+    }
+
+    for (const auto & rec : records)
+    {
+        // Only VAR_ENTRY will contain checkpoint info.
+        if (rec.type != EditRecordType::VAR_ENTRY)
+            continue;
+
+        // TODO: Improve from O(nlogn) to O(n).
+
+        typename MVCCMapType::iterator iter;
+        {
+            std::shared_lock read_lock(table_rw_mutex);
+            iter = mvcc_table_directory.find(rec.page_id);
+            if (iter == mvcc_table_directory.end())
+                // There may be obsolete entries deleted.
+                // For example, if there is a `Put 1` with sequence 10, `Del 1` with sequence 11,
+                // and the snapshot sequence is 12, Page with id 1 may be deleted by the gc process.
+                continue;
+        }
+
+        auto & entries = iter->second;
+        entries->copyCheckpointInfoFromEdit(rec);
     }
 }
 
