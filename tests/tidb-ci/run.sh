@@ -54,6 +54,13 @@ docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml exec -T tiflas
 docker-compose -f cluster.yaml -f tiflash-dt-disable-planner.yaml down
 clean_data_log
 
+docker-compose -f cluster.yaml -f tiflash-dt-enable-pipeline.yaml up -d
+wait_env
+docker-compose -f cluster.yaml -f tiflash-dt-enable-pipeline.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/enable_pipeline'
+
+docker-compose -f cluster.yaml -f tiflash-dt-enable-pipeline.yaml down
+clean_data_log
+
 # run new_collation_fullstack tests
 docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml down
 clean_data_log
