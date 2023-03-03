@@ -292,11 +292,21 @@ namespace DB
         F(type_mpp, {{"type", "mpp"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
         F(type_cop, {{"type", "cop"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
         F(type_batch, {{"type", "batch"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()})) \
-    M(tiflash_shared_block_schemas, "statistics about shared block schemas of ColumnFiles", Gauge,                                                                 \
+    M(tiflash_shared_block_schemas, "statistics about shared block schemas of ColumnFiles", Gauge,                                                  \
         F(type_current_size, {{"type", "current_size"}}),                                                                                           \
-        F(type_still_used_when_evict, {{"type", "still_used_when_evict"}}),                                                                    \
-        F(type_miss_count, {{"type", "miss_count"}}),                                                                                          \
-        F(type_hit_count, {{"type", "hit_count"}}))
+        F(type_still_used_when_evict, {{"type", "still_used_when_evict"}}),                                                                         \
+        F(type_miss_count, {{"type", "miss_count"}}),                                                                                               \
+        F(type_hit_count, {{"type", "hit_count"}}))                                                                                                 \
+    M(tiflash_storage_s3_request_seconds, "S3 request duration in seconds", Histogram,                                                              \
+        F(type_put_object, {{"type", "put_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_get_object, {{"type", "get_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_create_multi_part_upload, {{"type", "create_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                         \
+        F(type_upload_part, {{"type", "upload_part"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
+        F(type_complete_multi_part_upload, {{"type", "complete_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                     \
+        F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
+        F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
+        F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))
+
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
