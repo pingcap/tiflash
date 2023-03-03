@@ -24,6 +24,7 @@
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
+#include <Common/ThreadPool.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
@@ -46,6 +47,7 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
+#include <IO/IOThreadPool.h>
 #include <IO/ReadHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
@@ -808,6 +810,20 @@ private:
     std::vector<std::unique_ptr<Poco::Net::TCPServer>> servers;
 };
 
+void initThreadPool(const Settings & settings, size_t logical_cores)
+{
+    size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
+    // Currently, `GlobalThreadPool` is only used by `IOThreadPool`, so they have the same number of threads.
+    GlobalThreadPool::initialize(
+        /*max_threads*/ max_io_thread_count,
+        /*max_free_threads*/ max_io_thread_count / 2,
+        /*queue_size*/ max_io_thread_count * 2);
+    IOThreadPool::initialize(
+        /*max_threads*/ max_io_thread_count,
+        /*max_free_threads*/ max_io_thread_count / 2,
+        /*queue_size*/ max_io_thread_count * 2);
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
@@ -1111,6 +1127,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
+    initThreadPool(settings, server_info.cpu_info.logical_cores);
 
     /// PageStorage run mode has been determined above
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
