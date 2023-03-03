@@ -328,6 +328,9 @@ public:
         return results;
     }
 
+    static String metav2FileName() { return "meta"; }
+    std::vector<String> listInternalFiles();
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -391,7 +394,6 @@ public:
     static String packStatFileName() { return "pack"; }
     static String packPropertyFileName() { return "property"; }
     static String configurationFileName() { return "config"; }
-    static String metav2FileName() { return "meta"; }
 
     static String colDataFileName(const FileNameBase & file_name_base);
     static String colIndexFileName(const FileNameBase & file_name_base);
