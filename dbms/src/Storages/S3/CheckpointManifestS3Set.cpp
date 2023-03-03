@@ -63,6 +63,7 @@ Strings CheckpointManifestS3Set::preservedManifests(size_t max_preserved, Int64 
     // the latest manifest
     auto iter = manifests.rbegin();
     preserved_mf.emplace_back(iter->second.key);
+    iter++; // move to next
     const auto expired_bound_sec = expired_hour * 3600;
     for (; iter != manifests.rend(); ++iter)
     {
