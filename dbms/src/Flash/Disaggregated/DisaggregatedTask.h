@@ -26,19 +26,19 @@ namespace DB
 {
 class Context;
 using ContextPtr = std::shared_ptr<Context>;
-class EstablishDisaggregatedTask;
-using EstablishDisaggregatedTaskPtr = std::shared_ptr<EstablishDisaggregatedTask>;
+class DisaggregatedTask;
+using DisaggregatedTaskPtr = std::shared_ptr<DisaggregatedTask>;
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 
-class EstablishDisaggregatedTask
+class DisaggregatedTask
 {
 public:
     void prepare(const disaggregated::EstablishDisaggregatedTaskRequest * request);
 
     void execute(disaggregated::EstablishDisaggregatedTaskResponse * response);
 
-    EstablishDisaggregatedTask(ContextPtr context_, const DM::DisaggregatedTaskId & task_id);
+    DisaggregatedTask(ContextPtr context_, const DM::DisaggregatedTaskId & task_id);
 
 private:
     ContextPtr context;

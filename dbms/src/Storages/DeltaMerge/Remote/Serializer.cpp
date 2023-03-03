@@ -104,6 +104,8 @@ Serializer::serializeTo(const ColumnFileSetSnapshotPtr & snap)
     ret.Reserve(snap->column_files.size());
     for (const auto & file : snap->column_files)
     {
+        // TODO: In order to make build snapshot return more quickly, we can return
+        //       the mem-table in another RPC call.
         if (auto * cf_in_mem = file->tryToInMemoryFile(); cf_in_mem)
         {
             ret.Add(serializeTo(*cf_in_mem));

@@ -802,7 +802,7 @@ BlockInputStreams StorageDeltaMerge::read(
 }
 
 DM::Remote::DisaggPhysicalTableReadSnapshotPtr
-StorageDeltaMerge::buildRemoteReadSnapshot(
+StorageDeltaMerge::writeNodeBuildRemoteReadSnapshot(
     const Names & column_names,
     const SelectQueryInfo & query_info,
     const Context & context,
@@ -822,7 +822,7 @@ StorageDeltaMerge::buildRemoteReadSnapshot(
     const auto & scan_context = mvcc_query_info.scan_context;
     auto read_segments = parseSegmentSet(select_query.segment_expression_list);
 
-    auto snap = store->buildRemoteReadSnapshot(
+    auto snap = store->writeNodeBuildRemoteReadSnapshot(
         context,
         context.getSettingsRef(),
         ranges,

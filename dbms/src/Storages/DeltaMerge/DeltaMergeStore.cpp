@@ -1064,7 +1064,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 }
 
 Remote::DisaggPhysicalTableReadSnapshotPtr
-DeltaMergeStore::buildRemoteReadSnapshot(
+DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
     const Context & db_context,
     const DB::Settings & db_settings,
     const RowKeyRanges & sorted_ranges,
@@ -1076,9 +1076,6 @@ DeltaMergeStore::buildRemoteReadSnapshot(
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
-
-    // In order to keep this function return quickly, we only create and hold
-    // the snapshot. The mem-table data will be returned in another RPC call.
 
     // Create segment snapshots for the given key ranges. The TiFlash compute node
     // could fetch the data segment by segment with these snapshots later.

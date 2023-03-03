@@ -68,7 +68,7 @@ public:
         unsigned num_streams) override;
 
     DM::Remote::DisaggPhysicalTableReadSnapshotPtr
-    buildRemoteReadSnapshot(
+    writeNodeBuildRemoteReadSnapshot(
         const Names & column_names,
         const SelectQueryInfo & query_info,
         const Context & context,

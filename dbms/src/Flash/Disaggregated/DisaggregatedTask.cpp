@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Disaggregated/EstablishDisaggregatedTask.h>
+#include <Flash/Disaggregated/DisaggregatedTask.h>
 #include <Flash/Executor/QueryExecutorHolder.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
+#include "disaggregated.pb.h"
 
 namespace DB
 {
@@ -32,7 +33,7 @@ namespace ErrorCodes
 extern const int REGION_EPOCH_NOT_MATCH;
 } // namespace ErrorCodes
 
-EstablishDisaggregatedTask::EstablishDisaggregatedTask(ContextPtr context_, const DM::DisaggregatedTaskId & task_id)
+DisaggregatedTask::DisaggregatedTask(ContextPtr context_, const DM::DisaggregatedTaskId & task_id)
     : context(std::move(context_))
     , log(Logger::get(fmt::format("{}", task_id)))
 {}
@@ -41,16 +42,15 @@ EstablishDisaggregatedTask::EstablishDisaggregatedTask(ContextPtr context_, cons
 // - Parse the encoded plan
 // - Build `dag_context`
 // - Set the read_tso, schema_version, timezone
-// - Register the task
-void EstablishDisaggregatedTask::prepare(const disaggregated::EstablishDisaggregatedTaskRequest * request)
+void DisaggregatedTask::prepare(const disaggregated::EstablishDisaggregatedTaskRequest * request)
 {
     const auto & meta = request->meta();
     DM::DisaggregatedTaskId task_id(meta);
-    auto task = std::make_shared<EstablishDisaggregatedTask>(context, task_id);
+    auto task = std::make_shared<DisaggregatedTask>(context, task_id);
 
     auto & tmt_context = context->getTMTContext();
     TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context);
-    LOG_DEBUG(task->log, "EstablishDisaggregatedTask handling {} regions from {} physical tables", tables_regions_info.regionCount(), tables_regions_info.tableCount());
+    LOG_DEBUG(task->log, "DisaggregatedTask handling {} regions from {} physical tables", tables_regions_info.regionCount(), tables_regions_info.tableCount());
 
     // set schema ver and start ts // TODO: set timeout
     auto schema_ver = request->schema_ver();
@@ -73,8 +73,9 @@ void EstablishDisaggregatedTask::prepare(const disaggregated::EstablishDisaggreg
     context->setDAGContext(task->dag_context.get());
 }
 
-void EstablishDisaggregatedTask::execute(disaggregated::EstablishDisaggregatedTaskResponse * response)
+void DisaggregatedTask::execute(disaggregated::EstablishDisaggregatedTaskResponse * response)
 {
+    // run into DAGStorageInterpreter and build the segment snapshots
     query_executor_holder.set(queryExecute(*context));
 
     auto & tmt = context->getTMTContext();

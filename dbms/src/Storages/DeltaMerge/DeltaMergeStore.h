@@ -326,13 +326,14 @@ public:
                            const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     Remote::DisaggPhysicalTableReadSnapshotPtr
-    buildRemoteReadSnapshot(const Context & db_context,
-                            const DB::Settings & db_settings,
-                            const RowKeyRanges & sorted_ranges,
-                            size_t num_streams,
-                            const String & tracing_id,
-                            const SegmentIdSet & read_segments = {},
-                            const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+    writeNodeBuildRemoteReadSnapshot(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const RowKeyRanges & sorted_ranges,
+        size_t num_streams,
+        const String & tracing_id,
+        const SegmentIdSet & read_segments = {},
+        const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
     bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)

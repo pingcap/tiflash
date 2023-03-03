@@ -723,10 +723,10 @@ DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
             }
             else
             {
-                // build a snapshot
+                // build a snapshot on write node
                 StorageDeltaMergePtr delta_merge_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 RUNTIME_CHECK_MSG(delta_merge_storage != nullptr, "delta_merge_storage which cast from storage is null");
-                table_snap = delta_merge_storage->buildRemoteReadSnapshot(required_columns, query_info, context, max_streams);
+                table_snap = delta_merge_storage->writeNodeBuildRemoteReadSnapshot(required_columns, query_info, context, max_streams);
                 // TODO: could be shared on the logical table level
                 table_snap->output_field_types = std::make_shared<std::vector<tipb::FieldType>>();
                 *table_snap->output_field_types = collectOutputFieldTypes(*dag_context.dag_request);
@@ -802,9 +802,9 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
             pipeline.streams.insert(pipeline.streams.end(), current_pipeline.streams.begin(), current_pipeline.streams.end());
     }
 
-    LOG_INFO(
+    LOG_DEBUG(
         log,
-        "DAGStorageInterpreter::buildLocalStreams, is_disaggregated_task={} snap_id={}",
+        "local streams built, is_disaggregated_task={} snap_id={}",
         dag_context.is_disaggregated_task,
         dag_context.is_disaggregated_task ? *dag_context.getDisaggregatedTaskId() : DM::DisaggregatedTaskId::unknown_disaggregated_task_id);
 

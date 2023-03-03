@@ -89,10 +89,11 @@ public:
     grpc::Status tryAddLock(grpc::ServerContext * /*context*/, const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response) override;
     grpc::Status tryMarkDelete(grpc::ServerContext * /*context*/, const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response) override;
 
-    // Build the disaggregated task on the TiFlash write node,
-    // returning the serialized remote segments info to the compute node.
+    // The TiFlash compute node call this RPC to build the disaggregated task
+    // on the TiFlash write node.
+    // It returns the serialized remote segments info to the compute node.
     grpc::Status EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggregatedTaskRequest * request, disaggregated::EstablishDisaggregatedTaskResponse * response) override;
-    // The TiFlash compute node use this RPC to fetch the delta-layer data
+    // The TiFlash compute node call this RPC to fetch the delta-layer data
     // from the TiFlash write node.
     grpc::Status FetchDisaggregatedPages(grpc::ServerContext * grpc_context, const disaggregated::FetchDisaggregatedPagesRequest * request, grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer) override;
 

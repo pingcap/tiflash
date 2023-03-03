@@ -133,7 +133,7 @@ public:
     // for mpp
     DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
 
-    // for disaggregated task
+    // for disaggregated task on write node
     DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggregatedTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_);
 
     // for test

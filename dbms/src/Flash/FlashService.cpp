@@ -21,7 +21,7 @@
 #include <Common/setThreadName.h>
 #include <Debug/MockStorage.h>
 #include <Flash/BatchCoprocessorHandler.h>
-#include <Flash/Disaggregated/EstablishDisaggregatedTask.h>
+#include <Flash/Disaggregated/DisaggregatedTask.h>
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
@@ -612,7 +612,7 @@ grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc
 
     const auto & meta = request->meta();
     DM::DisaggregatedTaskId task_id(meta);
-    auto task = std::make_shared<DB::EstablishDisaggregatedTask>(db_context, task_id);
+    auto task = std::make_shared<DisaggregatedTask>(db_context, task_id);
     SCOPE_EXIT({
         current_memory_tracker = nullptr;
     });
