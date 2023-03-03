@@ -125,7 +125,7 @@ xcode-select --install
 brew install ninja cmake openssl@1.1 ccache
 ```
 
-And we recommend you to install llvm clang rather than the default Apple clang.
+The default version of clang in MacOS 13.0 is Apple clang 14.0.0. If your operating system is lower than MacOS 13.0, you can install llvm clang.
 
 ```shell
 brew install llvm
