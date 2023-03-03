@@ -113,6 +113,47 @@ public:
 
     DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot);
 
+    struct DumpCheckpointOptions
+    {
+        /**
+         * The data file id and path. Available placeholders: {sequence}, {sub_file_index}.
+         * We accept "/" in the file name.
+         *
+         * File path is where the data file is put in the local FS. It should be a valid FS path.
+         * File ID is how that file is referenced by other Files, which can be anything you want.
+         */
+        const std::string & data_file_id_pattern;
+        const std::string & data_file_path_pattern;
+
+        /**
+         * The manifest file id and path. Available placeholders: {sequence}.
+         * We accept "/" in the file name.
+         *
+         * File path is where the manifest file is put in the local FS. It should be a valid FS path.
+         * File ID is how that file is referenced by other Files, which can be anything you want.
+         */
+        const std::string & manifest_file_id_pattern;
+        const std::string & manifest_file_path_pattern;
+
+        /**
+         * The writer info field in the dumped files.
+         */
+        const PS::V3::CheckpointProto::WriterInfo & writer_info;
+    };
+
+    struct DumpCheckpointResult
+    {
+        struct FileInfo
+        {
+            const String id;
+            const String path;
+        };
+        std::vector<FileInfo> new_data_files;
+        std::vector<FileInfo> new_manifest_files;
+    };
+
+    DumpCheckpointResult dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+
     PageIdU64 getMaxIdAfterRestart() const;
 
     // We may skip the GC to reduce useless reading by default.
@@ -144,6 +185,10 @@ public:
     PS::V3::universal::ExternalPageCallbacksManager manager;
 
     LoggerPtr log;
+
+    std::mutex checkpoint_mu;
+    // TODO: We should restore this from WAL. Otherwise the "last_sequence" in the files is not reliable
+    UInt64 last_checkpoint_sequence = 0;
 };
 
 } // namespace DB
