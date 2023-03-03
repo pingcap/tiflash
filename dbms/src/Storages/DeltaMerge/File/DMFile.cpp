@@ -22,8 +22,10 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
+#include <Poco/Path.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
+#include <Storages/S3/S3Filename.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -138,18 +140,23 @@ DMFilePtr DMFile::restore(
     const String & parent_path,
     const ReadMetaMode & read_meta_mode)
 {
-    String path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
-    // The path may be dropped by another thread in some cases
-    auto poco_file = Poco::File(path);
-    if (!poco_file.exists())
-        return nullptr;
+    auto is_s3_file = S3::S3FilenameView::fromKeyWithPrefix(parent_path).isDataFile();
+    if (!is_s3_file)
+    {
+        RUNTIME_CHECK(Poco::Path(parent_path).isAbsolute(), parent_path);
+        String path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
+        // The path may be dropped by another thread in some cases
+        auto poco_file = Poco::File(path);
+        if (!poco_file.exists())
+            return nullptr;
+    }
 
     DMFilePtr dmfile(new DMFile(
         file_id,
         page_id,
         parent_path,
         Status::READABLE));
-    if (Poco::File meta_file(dmfile->metav2Path()); meta_file.exists())
+    if (is_s3_file || Poco::File(dmfile->metav2Path()).exists())
     {
         auto s = dmfile->readMetaV2(file_provider);
         dmfile->parseMetaV2(std::string_view(s.data(), s.size()));

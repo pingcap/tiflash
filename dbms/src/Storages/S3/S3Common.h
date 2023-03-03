@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/nocopyable.h>
 #include <Server/StorageConfigParser.h>
 #include <aws/core/Aws.h>
@@ -22,8 +23,23 @@
 #include <aws/s3/S3Errors.h>
 #include <common/types.h>
 
+#include <magic_enum.hpp>
+
+namespace DB::ErrorCodes
+{
+extern const int S3_ERROR;
+}
+
 namespace DB::S3
 {
+template <typename... Args>
+Exception fromS3Error(const Aws::S3::S3Error & e, const std::string & fmt, Args &&... args)
+{
+    return DB::Exception(
+        ErrorCodes::S3_ERROR,
+        fmt + fmt::format(" s3error={} s3msg={}", magic_enum::enum_name(e.GetErrorType()), e.GetMessage()),
+        args...);
+}
 
 class TiFlashS3Client : public Aws::S3::S3Client
 {

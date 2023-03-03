@@ -17,6 +17,7 @@
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <fmt/core.h>
 #include <grpcpp/completion_queue.h>
 
 #include <cassert>
@@ -124,7 +125,7 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
 
 void checkLocalTunnel(const MPPTunnelPtr & tunnel, const String & err_msg)
 {
-    RUNTIME_CHECK_MSG(tunnel != nullptr, err_msg);
+    RUNTIME_CHECK_MSG(tunnel != nullptr, fmt::runtime(err_msg));
     RUNTIME_CHECK_MSG(tunnel->isLocal(), "EstablishMPPConnectionLocal into a remote channel!");
 }
 

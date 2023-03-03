@@ -215,6 +215,7 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
             case tipb::ExecType::TypeSelection:
             case tipb::ExecType::TypeLimit:
             case tipb::ExecType::TypeTopN:
+            case tipb::ExecType::TypeAggregation:
             case tipb::ExecType::TypeTableScan:
             case tipb::ExecType::TypeExchangeSender:
             case tipb::ExecType::TypeExchangeReceiver:
