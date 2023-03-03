@@ -14,6 +14,8 @@
 
 #include <Storages/Page/V2/VersionSet/PageEntriesBuilder.h>
 
+#include <magic_enum.hpp>
+
 namespace DB::PS::V2
 {
 void PageEntriesBuilder::apply(const PageEntriesEdit & edit)

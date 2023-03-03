@@ -58,7 +58,7 @@ void CPFilesWriter::writePrefix(const CPFilesWriter::PrefixInfo & info)
     write_stage = WriteStage::WritingEdits;
 }
 
-bool CPFilesWriter::writeEditsAndApplyRemoteInfo(universal::PageEntriesEdit & edits)
+bool CPFilesWriter::writeEditsAndApplyCheckpointInfo(universal::PageEntriesEdit & edits)
 {
     RUNTIME_CHECK_MSG(write_stage == WriteStage::WritingEdits, "unexpected write stage {}", magic_enum::enum_name(write_stage));
 

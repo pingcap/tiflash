@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Core/ColumnsWithTypeAndName.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Core/ColumnsWithTypeAndName.h>
 #include <pingcap/pd/IClient.h>
 
 namespace DB
@@ -37,11 +37,14 @@ using AdditionalBlockGenerators = std::vector<AdditionalBlockGeneratorPtr>;
 class AdditionalBlockGeneratorPD : public IAdditionalBlockGenerator
 {
 public:
-    AdditionalBlockGeneratorPD(const String name_, pingcap::pd::ClientPtr pd_) : name(name_), pd(pd_) {}
+    AdditionalBlockGeneratorPD(const String name_, pingcap::pd::ClientPtr pd_)
+        : name(name_)
+        , pd(pd_)
+    {}
 
     ColumnWithTypeAndName genColumn(const Block & ref) const override
     {
-        auto data_type = std::make_shared<DataTypeNumber<UInt64> >();
+        auto data_type = std::make_shared<DataTypeNumber<UInt64>>();
         auto column = data_type->createColumn();
         size_t size = ref.rows();
         for (size_t i = 0; i < size; i++)
@@ -69,7 +72,9 @@ class AdditionalBlockGeneratorConst : public IAdditionalBlockGenerator
 public:
     using AdditionalDataType = DataTypeNumber<T>;
 
-    AdditionalBlockGeneratorConst(const String name_, const T & value_) : name(name_), value(value_)
+    AdditionalBlockGeneratorConst(const String name_, const T & value_)
+        : name(name_)
+        , value(value_)
     {}
 
     ColumnWithTypeAndName genColumn(const Block & ref) const override
@@ -100,7 +105,9 @@ class AdditionalBlockGeneratorIncrease : public IAdditionalBlockGenerator
 public:
     using AdditionalDataType = DataTypeNumber<T>;
 
-    AdditionalBlockGeneratorIncrease(const String name_, const T & value_) : name(name_), value(value_)
+    AdditionalBlockGeneratorIncrease(const String name_, const T & value_)
+        : name(name_)
+        , value(value_)
     {}
 
     ColumnWithTypeAndName genColumn(const Block & ref) const override
@@ -127,16 +134,18 @@ private:
 };
 
 
-class AdditionalColumnsBlockOutputStream: public IBlockOutputStream
+class AdditionalColumnsBlockOutputStream : public IBlockOutputStream
 {
 public:
     AdditionalColumnsBlockOutputStream(BlockOutputStreamPtr output_, AdditionalBlockGenerators gens_)
-        : output(output_), gens(gens_) {}
+        : output(output_)
+        , gens(gens_)
+    {}
 
     Block getHeader() const override
     {
         Block block = output->getHeader();
-        for (auto it: gens)
+        for (auto it : gens)
         {
             if (!block.has(it->getName()))
                 block.insert(it->genColumn(block));
@@ -149,7 +158,7 @@ public:
         if (block)
         {
             Block clone = block;
-            for (auto it: gens)
+            for (auto it : gens)
             {
                 // TODO: dont' gen default columns
                 if (clone.has(it->getName()))
@@ -157,7 +166,8 @@ public:
                 clone.insert(it->genColumn(block));
             }
             output->write(clone);
-        } else
+        }
+        else
         {
             output->write(block);
         }
@@ -183,11 +193,6 @@ public:
         output->setRowsBeforeLimit(rows_before_limit);
     }
 
-    void setTotals(const Block & totals) override
-    {
-        output->setTotals(totals);
-    }
-
     void setExtremes(const Block & extremes) override
     {
         output->setExtremes(extremes);
@@ -208,4 +213,4 @@ private:
     AdditionalBlockGenerators gens;
 };
 
-}
+} // namespace DB

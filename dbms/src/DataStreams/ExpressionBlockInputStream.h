@@ -39,7 +39,6 @@ public:
         const String & req_id);
 
     String getName() const override { return NAME; }
-    Block getTotals() override;
     Block getHeader() const override;
 
 protected:
