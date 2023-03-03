@@ -720,14 +720,14 @@ CATCH
 
 std::pair<String, String> getS3Env()
 {
-    return {Poco::Environment::get("AWS_ACCESS_KEY_ID", /*default*/ ""),
-            Poco::Environment::get("AWS_SECRET_ACCESS_KEY", /*default*/ "")};
+    return {Poco::Environment::get(StorageS3Config::S3_ACCESS_KEY_ID, /*default*/ ""),
+            Poco::Environment::get(StorageS3Config::S3_SECRET_ACCESS_KEY, /*default*/ "")};
 }
 
 void setS3Env(const String & id, const String & key)
 {
-    Poco::Environment::set("AWS_ACCESS_KEY_ID", id);
-    Poco::Environment::set("AWS_SECRET_ACCESS_KEY", key);
+    Poco::Environment::set(StorageS3Config::S3_ACCESS_KEY_ID, id);
+    Poco::Environment::set(StorageS3Config::S3_SECRET_ACCESS_KEY, key);
 }
 
 TEST_F(StorageConfigTest, S3Config)
@@ -739,6 +739,8 @@ try
 [storage.main]
 dir = ["123"]
 [storage.s3]
+access_key_id = "11111111"
+secret_access_key = "22222222"
         )",
         R"(
 [storage]
@@ -747,25 +749,31 @@ dir = ["123"]
 [storage.s3]
 endpoint = "127.0.0.1:8080"
 bucket = "s3_bucket"
+access_key_id = "33333333"
+secret_access_key = "44444444"
         )",
     };
 
+    // Save env variables and restore when exit.
     auto id_key = getS3Env();
     SCOPE_EXIT({
         setS3Env(id_key.first, id_key.second);
     });
+
+
+    const String env_access_key_id{"abcdefgh"};
+    const String env_secret_access_key{"1234567890"};
+    setS3Env(env_access_key_id, env_secret_access_key);
+    // Env variables have been set, we except to use environment variables first.
     for (size_t i = 0; i < tests.size(); ++i)
     {
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
         LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
-        const String test_id{"abcdefgh"};
-        const String test_key{"1234567890"};
-        setS3Env(test_id, test_key);
         auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
         const auto & s3_config = storage.s3_config;
-        ASSERT_EQ(s3_config.access_key_id, test_id);
-        ASSERT_EQ(s3_config.secret_access_key, test_key);
+        ASSERT_EQ(s3_config.access_key_id, env_access_key_id);
+        ASSERT_EQ(s3_config.secret_access_key, env_secret_access_key);
         if (i == 0)
         {
             ASSERT_TRUE(s3_config.endpoint.empty());
@@ -777,6 +785,37 @@ bucket = "s3_bucket"
             ASSERT_EQ(s3_config.endpoint, "127.0.0.1:8080");
             ASSERT_EQ(s3_config.bucket, "s3_bucket");
             ASSERT_TRUE(s3_config.isS3Enabled());
+        }
+        else
+        {
+            throw Exception("Not support");
+        }
+    }
+
+    setS3Env("", "");
+    // Env variables have been cleared, we except to use configuration.
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+        const auto & s3_config = storage.s3_config;
+        if (i == 0)
+        {
+            ASSERT_TRUE(s3_config.endpoint.empty());
+            ASSERT_TRUE(s3_config.bucket.empty());
+            ASSERT_FALSE(s3_config.isS3Enabled());
+            ASSERT_EQ(s3_config.access_key_id, "11111111");
+            ASSERT_EQ(s3_config.secret_access_key, "22222222");
+        }
+        else if (i == 1)
+        {
+            ASSERT_EQ(s3_config.endpoint, "127.0.0.1:8080");
+            ASSERT_EQ(s3_config.bucket, "s3_bucket");
+            ASSERT_TRUE(s3_config.isS3Enabled());
+            ASSERT_EQ(s3_config.access_key_id, "33333333");
+            ASSERT_EQ(s3_config.secret_access_key, "44444444");
         }
         else
         {

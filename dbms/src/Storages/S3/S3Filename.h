@@ -23,7 +23,6 @@
 
 namespace DB::S3
 {
-
 struct DMFileOID
 {
     StoreID store_id = 0;
@@ -112,12 +111,16 @@ struct S3FilenameView
 
     ALWAYS_INLINE bool isDelMark() const { return type == S3FilenameType::DelMark; }
 
+    ALWAYS_INLINE bool isValid() const { return type != S3FilenameType::Invalid; }
+
 public:
     // The result return a view from the `fullpath`.
     // If parsing from a raw char ptr, do NOT create a temporary String object.
     static S3FilenameView fromKey(std::string_view fullpath);
 
     static S3FilenameView fromStoreKeyPrefix(std::string_view prefix);
+
+    static S3FilenameView fromKeyWithPrefix(std::string_view fullpath);
 };
 
 // Use for generating the S3 object key
@@ -129,10 +132,16 @@ struct S3Filename
 
     static S3Filename fromStoreId(StoreID store_id);
     static S3Filename fromDMFileOID(const DMFileOID & oid);
+    static S3Filename fromTableID(StoreID store_id, TableID table_id);
     static S3Filename newCheckpointData(StoreID store_id, UInt64 upload_seq, UInt64 file_idx);
     static S3Filename newCheckpointManifest(StoreID store_id, UInt64 upload_seq);
 
     String toFullKey() const;
+
+    // `toFullKeyWithPrefix` will as a `s3:://` prefix in full key.
+    // You can pass a full key with prefix to `FileProvider` as file path,
+    // if you want to read/write S3 object as file.
+    String toFullKeyWithPrefix() const;
 
     String toManifestPrefix() const;
 
