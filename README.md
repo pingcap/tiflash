@@ -132,18 +132,6 @@ brew install llvm
 
 # check llvm version
 clang --version # should be 15.0.0 or higher
-
-# Add the following line to your ~/.zshrc 
-# to make sure llvm first in your PATH
-export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
-export CC="/opt/homebrew/opt/llvm/bin/clang"
-export CXX="/opt/homebrew/opt/llvm/bin/clang++"
-
-# or use CMAKE_C_COMPILER and CMAKE_CXX_COMPILER to specify the compiler, like this:
-mkdir cmake-build-debug  # The directory name can be customized
-cd cmake-build-debug
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++
-ninja tiflash
 ```
 
 </details>
@@ -176,6 +164,19 @@ Note: In Linux, usually you need to explicitly specify to use LLVM.
 cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG \
   -DCMAKE_C_COMPILER=/usr/bin/clang-14 \
   -DCMAKE_CXX_COMPILER=/usr/bin/clang++-14
+```
+
+In MacOS, if you install llvm clang, you need to explicitly specify to use llvm clang.
+
+```shell
+# Add the following line to your ~/.zshrc
+# to make sure llvm first in your PATH
+export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+export CC="/opt/homebrew/opt/llvm/bin/clang"
+export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+
+# or use CMAKE_C_COMPILER and CMAKE_CXX_COMPILER to specify the compiler, like this:
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++
 ```
 
 After building, you can get TiFlash binary in `dbms/src/Server/tiflash` in the `cmake-build-debug` directory.
