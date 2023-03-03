@@ -37,7 +37,7 @@ And the following operating systems:
 The following packages are required:
 
 - CMake 3.21.0+
-- Clang 13.0.0+
+- Clang 15.0.0+
 - Rust
 - Python 3.0+
 - Ninja-Build or GNU Make
