@@ -23,8 +23,8 @@
 namespace ext
 {
 /** \brief Returns value `from` converted to type `To` while retaining bit representation.
-      *    `To` and `From` must satisfy `CopyConstructible`.
-      */
+  *    `To` and `From` must satisfy `CopyConstructible`.
+  */
 template <typename To, typename From>
 std::decay_t<To> bit_cast(const From & from)
 {
@@ -39,8 +39,8 @@ std::decay_t<To> bit_cast(const From & from)
 };
 
 /** \brief Returns value `from` converted to type `To` while retaining bit representation.
-      *    `To` and `From` must satisfy `CopyConstructible`.
-      */
+  *    `To` and `From` must satisfy `CopyConstructible`.
+  */
 template <typename To, typename From>
 std::decay_t<To> safe_bit_cast(const From & from)
 {
