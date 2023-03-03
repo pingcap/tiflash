@@ -78,20 +78,20 @@ using VersionedEntries = std::vector<VersionedEntry>;
 
 enum class EditRecordType
 {
-    PUT,
-    PUT_EXTERNAL,
-    REF,
-    DEL,
+    PUT = 0,
+    PUT_EXTERNAL = 1,
+    REF = 2,
+    DEL = 3,
     //
-    UPSERT,
+    UPSERT = 4,
     // Variant types for dumping the in-memory entries into
     // snapshot
-    VAR_ENTRY,
-    VAR_REF,
-    VAR_EXTERNAL,
-    VAR_DELETE,
+    VAR_ENTRY = 5,
+    VAR_REF = 6,
+    VAR_EXTERNAL = 7,
+    VAR_DELETE = 8,
     // Just used to update local cache info for VAR_ENTRY type
-    UPDATE_REMOTE,
+    UPDATE_REMOTE = 9,
 };
 
 inline const char * typeToString(EditRecordType t)
