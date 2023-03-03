@@ -913,7 +913,9 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
             {
                 /// Note that `extractAllKeyNullMap` must be done before `extractNestedColumnsAndNullMap`
                 /// because `extractNestedColumnsAndNullMap` will change the nullable column to its nested column.
-                auto [all_key_null_map_holder, all_key_null_map] = extractAllKeyNullMap(key_columns);
+                ColumnPtr all_key_null_map_holder;
+                ConstNullMapPtr all_key_null_map{};
+                extractAllKeyNullMap(key_columns, all_key_null_map_holder, all_key_null_map);
 
                 if (all_key_null_map)
                 {
@@ -2346,7 +2348,9 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
 
     /// Note that `extractAllKeyNullMap` must be done before `extractNestedColumnsAndNullMap`
     /// because `extractNestedColumnsAndNullMap` will change the nullable column to its nested column.
-    auto [all_key_null_map_holder, all_key_null_map] = extractAllKeyNullMap(key_columns);
+    ColumnPtr all_key_null_map_holder;
+    ConstNullMapPtr all_key_null_map{};
+    extractAllKeyNullMap(key_columns, all_key_null_map_holder, all_key_null_map);
 
     ColumnPtr null_map_holder;
     ConstNullMapPtr null_map{};

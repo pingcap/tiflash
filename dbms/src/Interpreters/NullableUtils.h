@@ -21,13 +21,13 @@ namespace DB
 {
 /** Replace Nullable key_columns to corresponding nested columns.
   * In 'null_map' return a map of positions where at least one column was NULL.
-  * null_map_holder could take ownership of null_map, if required.
+  * 'null_map_holder' could take ownership of null_map, if required.
   */
 void extractNestedColumnsAndNullMap(ColumnRawPtrs & key_columns, ColumnPtr & null_map_holder, ConstNullMapPtr & null_map);
 
-/** @all_key_null_map_holder: take ownership of all_key_null_map, if required.
- *  @all_key_null_map: a map of positions where all key columns are NULL.
+/** In 'all_key_null_map' return a map of positions where all key columns are NULL.
+ *  'all_key_null_map_holder' could take ownership of null_map, if required.
  */
-std::tuple<ColumnPtr, ConstNullMapPtr> extractAllKeyNullMap(ColumnRawPtrs & key_columns);
+void extractAllKeyNullMap(ColumnRawPtrs & key_columns, ColumnPtr & all_key_null_map_holder, ConstNullMapPtr & all_key_null_map);
 
 } // namespace DB
