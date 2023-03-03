@@ -37,7 +37,7 @@ And the following operating systems:
 The following packages are required:
 
 - CMake 3.21.0+
-- Clang 13.0.0+
+- Clang 14.0.0+
 - Rust
 - Python 3.0+
 - Ninja-Build or GNU Make
@@ -125,6 +125,15 @@ xcode-select --install
 brew install ninja cmake openssl@1.1 ccache
 ```
 
+If your MacOS is higher or equal to 13.0, it should work out of the box because by default Apple clang is 14.0.0. But if your MacOS is lower than 13.0, you should install llvm clang manually.
+
+```shell
+brew install llvm@15
+
+# check llvm version
+clang --version # should be 15.0.0 or higher
+```
+
 </details>
 
 ### 2. Checkout Source Code
@@ -155,6 +164,20 @@ Note: In Linux, usually you need to explicitly specify to use LLVM.
 cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG \
   -DCMAKE_C_COMPILER=/usr/bin/clang-14 \
   -DCMAKE_CXX_COMPILER=/usr/bin/clang++-14
+```
+
+In MacOS, if you install llvm clang, you need to explicitly specify to use llvm clang.
+
+Add the following lines to your shell environment, e.g. `~/.bash_profile`.
+```shell
+export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+export CC="/opt/homebrew/opt/llvm/bin/clang"
+export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+```
+
+Or use `CMAKE_C_COMPILER` and `CMAKE_CXX_COMPILER` to specify the compiler, like this:
+```shell
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++
 ```
 
 After building, you can get TiFlash binary in `dbms/src/Server/tiflash` in the `cmake-build-debug` directory.
