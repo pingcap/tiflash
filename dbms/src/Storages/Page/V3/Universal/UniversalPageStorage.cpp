@@ -67,7 +67,7 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
 
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
-    auto edit = blob_store->write(write_batch, write_limiter);
+    auto edit = blob_store->write(std::move(write_batch), write_limiter);
     page_directory->apply(std::move(edit), write_limiter);
 }
 
@@ -278,7 +278,7 @@ void UniversalPageStorage::unregisterUniversalExternalPagesCallbacks(const Strin
 
 void UniversalPageStorage::tryUpdateLocalCacheForRemotePages(UniversalWriteBatch & wb, SnapshotPtr snapshot) const
 {
-    auto edit = blob_store->write(wb);
+    auto edit = blob_store->write(std::move(wb));
     auto ignored_entries = page_directory->updateLocalCacheForRemotePages(std::move(edit), snapshot);
     if (!ignored_entries.empty())
     {

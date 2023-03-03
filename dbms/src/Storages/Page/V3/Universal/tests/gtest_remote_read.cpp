@@ -325,7 +325,7 @@ try
     {
         UniversalWriteBatch wb;
         wb.putPage("page_foo", 0, "The flower carriage rocked", {4, 10, 12});
-        auto blob_store_edits = blob_store.write(wb, nullptr);
+        auto blob_store_edits = blob_store.write(std::move(wb), nullptr);
 
         edits.appendRecord({.type = PS::V3::EditRecordType::VAR_ENTRY, .page_id = "page_foo", .entry = blob_store_edits.getRecords()[0].entry});
     }
