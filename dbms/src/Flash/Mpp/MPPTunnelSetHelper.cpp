@@ -180,15 +180,15 @@ TrackedMppDataPacketPtr ToCompressedPacket(
     }
 
     // re-encode by specified compression method
-    auto remote_tunnel_tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
+    auto compressed_tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
     for (const auto & chunk : uncompressed_source->getPacket().chunks())
     {
         auto && compressed_buffer = CHBlockChunkCodecV1::encode({&chunk[1], chunk.size() - 1}, method);
         assert(!compressed_buffer.empty());
 
-        remote_tunnel_tracked_packet->addChunk(std::move(compressed_buffer));
+        compressed_tracked_packet->addChunk(std::move(compressed_buffer));
     }
-    return remote_tunnel_tracked_packet;
+    return compressed_tracked_packet;
 }
 
 
