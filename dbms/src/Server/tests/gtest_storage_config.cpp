@@ -720,14 +720,14 @@ CATCH
 
 std::pair<String, String> getS3Env()
 {
-    return {Poco::Environment::get("ACCESS_KEY_ID", /*default*/ ""),
-            Poco::Environment::get("SECRET_ACCESS_KEY", /*default*/ "")};
+    return {Poco::Environment::get(StorageS3Config::S3_ACCESS_KEY_ID, /*default*/ ""),
+            Poco::Environment::get(StorageS3Config::S3_SECRET_ACCESS_KEY, /*default*/ "")};
 }
 
 void setS3Env(const String & id, const String & key)
 {
-    Poco::Environment::set("ACCESS_KEY_ID", id);
-    Poco::Environment::set("SECRET_ACCESS_KEY", key);
+    Poco::Environment::set(StorageS3Config::S3_ACCESS_KEY_ID, id);
+    Poco::Environment::set(StorageS3Config::S3_SECRET_ACCESS_KEY, key);
 }
 
 TEST_F(StorageConfigTest, S3Config)
