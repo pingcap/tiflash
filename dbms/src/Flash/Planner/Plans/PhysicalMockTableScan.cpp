@@ -76,12 +76,11 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
 PhysicalMockTableScan::PhysicalMockTableScan(
     const String & executor_id_,
     const NamesAndTypes & schema_,
-    const FineGrainedShuffle & fine_grained_shuffle_,
     const String & req_id,
     const Block & sample_block_,
     const BlockInputStreams & mock_streams_,
     Int64 table_id_)
-    : PhysicalLeaf(executor_id_, PlanType::MockTableScan, schema_, fine_grained_shuffle_, req_id)
+    : PhysicalLeaf(executor_id_, PlanType::MockTableScan, schema_, FineGrainedShuffle{}, req_id)
     , sample_block(sample_block_)
     , mock_streams(mock_streams_)
     , table_id(table_id_)
@@ -99,7 +98,6 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
     auto physical_mock_table_scan = std::make_shared<PhysicalMockTableScan>(
         executor_id,
         schema,
-        FineGrainedShuffle{},
         log->identifier(),
         Block(schema),
         mock_streams,

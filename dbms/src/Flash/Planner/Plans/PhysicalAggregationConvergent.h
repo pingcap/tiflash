@@ -31,12 +31,16 @@ public:
         const String & req_id,
         const AggregateContextPtr & aggregate_context_,
         const ExpressionActionsPtr & expr_after_agg_)
-        : PhysicalLeaf(executor_id_, PlanType::AggregationConvergent, schema_, req_id)
+        : PhysicalLeaf(executor_id_, PlanType::AggregationConvergent, schema_, FineGrainedShuffle{}, req_id)
         , expr_after_agg(expr_after_agg_)
         , aggregate_context(aggregate_context_)
     {}
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t concurrency) override;
+    void buildPipelineExecGroup(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        Context & /*context*/,
+        size_t concurrency) override;
 
 private:
     DISABLE_USELESS_FUNCTION_FOR_BREAKER

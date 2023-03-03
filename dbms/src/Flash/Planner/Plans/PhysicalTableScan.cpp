@@ -28,11 +28,10 @@ namespace DB
 PhysicalTableScan::PhysicalTableScan(
     const String & executor_id_,
     const NamesAndTypes & schema_,
-    const FineGrainedShuffle & fine_grained_shuffle_,
     const String & req_id,
     const TiDBTableScan & tidb_table_scan_,
     const Block & sample_block_)
-    : PhysicalLeaf(executor_id_, PlanType::TableScan, schema_, fine_grained_shuffle_, req_id)
+    : PhysicalLeaf(executor_id_, PlanType::TableScan, schema_, FineGrainedShuffle{}, req_id)
     , tidb_table_scan(tidb_table_scan_)
     , sample_block(sample_block_)
 {}
@@ -46,7 +45,6 @@ PhysicalPlanNodePtr PhysicalTableScan::build(
     auto physical_table_scan = std::make_shared<PhysicalTableScan>(
         executor_id,
         schema,
-        FineGrainedShuffle{},
         log->identifier(),
         table_scan,
         Block(schema));

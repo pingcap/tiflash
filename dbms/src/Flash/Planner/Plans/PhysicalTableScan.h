@@ -30,7 +30,6 @@ public:
     PhysicalTableScan(
         const String & executor_id_,
         const NamesAndTypes & schema_,
-        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const TiDBTableScan & tidb_table_scan_,
         const Block & sample_block_);

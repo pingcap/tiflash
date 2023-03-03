@@ -39,7 +39,6 @@ public:
     PhysicalMockTableScan(
         const String & executor_id_,
         const NamesAndTypes & schema_,
-        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const Block & sample_block_,
         const BlockInputStreams & mock_streams_,

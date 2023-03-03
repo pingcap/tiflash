@@ -38,7 +38,7 @@ public:
         bool is_final_agg_,
         const AggregateDescriptions & aggregate_descriptions_,
         const AggregateContextPtr & aggregate_context_)
-        : PhysicalUnary(executor_id_, PlanType::AggregationBuild, schema_, req_id, child_)
+        : PhysicalUnary(executor_id_, PlanType::AggregationBuild, schema_, FineGrainedShuffle{}, req_id, child_)
         , before_agg_actions(before_agg_actions_)
         , aggregation_keys(aggregation_keys_)
         , aggregation_collators(aggregation_collators_)
@@ -47,7 +47,11 @@ public:
         , aggregate_context(aggregate_context_)
     {}
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/) override;
+    void buildPipelineExecGroup(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        Context & context,
+        size_t /*concurrency*/) override;
 
 private:
     DISABLE_USELESS_FUNCTION_FOR_BREAKER
