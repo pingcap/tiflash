@@ -15,6 +15,7 @@
 #pragma once
 
 #include <common/defines.h>
+#include <common/types.h>
 
 #define DBMS_NAME "ClickHouse"
 #define DBMS_VERSION_MAJOR 1
@@ -47,6 +48,8 @@
 #define DEFAULT_MPP_TASK_TIMEOUT 10
 #define DEFAULT_MPP_TASK_RUNNING_TIMEOUT (DEFAULT_MPP_TASK_TIMEOUT + 30)
 #define DEFAULT_MPP_TASK_WAITING_TIMEOUT 36000
+
+static constexpr UInt64 DEFAULT_DISAGG_TASK_TIMEOUT = 3600;
 
 #define DEFAULT_DAG_RECORDS_PER_CHUNK 1024L
 #define DEFAULT_BATCH_SEND_MIN_LIMIT (-1)

@@ -16,13 +16,22 @@
 
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
+#include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+#include <fmt/chrono.h>
 
 #include <memory>
+#include <mutex>
 #include <shared_mutex>
+
+namespace DB
+{
+class Context;
+}
 
 namespace DB::DM::Remote
 {
@@ -34,11 +43,18 @@ using DisaggSnapshotManagerPtr = std::unique_ptr<DisaggSnapshotManager>;
 class DisaggSnapshotManager
 {
 public:
-    DisaggSnapshotManager()
-        : log(Logger::get())
-    {}
+    struct SnapshotWithExpireTime
+    {
+        const DisaggReadSnapshotPtr snap;
+        const Timepoint expired_at;
+    };
 
-    bool registerSnapshot(const DisaggTaskId & task_id, DisaggReadSnapshotPtr && snap)
+public:
+    explicit DisaggSnapshotManager(Context & ctx);
+
+    ~DisaggSnapshotManager();
+
+    bool registerSnapshot(const DisaggTaskId & task_id, DisaggReadSnapshotPtr && snap, const Timepoint & expired_at)
     {
         LOG_DEBUG(log, "Register Disaggregated Snapshot, task_id={}", task_id);
 
@@ -46,7 +62,7 @@ public:
         if (auto iter = snapshots.find(task_id); iter != snapshots.end())
             return false;
 
-        snapshots.emplace(task_id, std::move(snap));
+        snapshots.emplace(task_id, SnapshotWithExpireTime{.snap = std::move(snap), .expired_at = expired_at});
         return true;
     }
 
@@ -54,7 +70,7 @@ public:
     {
         std::shared_lock read_lock(mtx);
         if (auto iter = snapshots.find(task_id); iter != snapshots.end())
-            return iter->second;
+            return iter->second.snap;
         return nullptr;
     }
 
@@ -71,11 +87,16 @@ public:
         return false;
     }
 
+    void clearExpiredSnapshots();
+
     DISALLOW_COPY_AND_MOVE(DisaggSnapshotManager);
 
 private:
     mutable std::shared_mutex mtx;
-    std::unordered_map<DisaggTaskId, DisaggReadSnapshotPtr> snapshots;
+    std::unordered_map<DisaggTaskId, SnapshotWithExpireTime> snapshots;
+
+    Context & global_ctx;
+    BackgroundProcessingPool::TaskHandle handle;
     LoggerPtr log;
 };
 } // namespace DB::DM::Remote

@@ -595,7 +595,7 @@ grpc::Status FlashService::tryMarkDelete(grpc::ServerContext * grpc_context, con
     return s3_lock_service->tryMarkDelete(request, response);
 }
 
-grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggTaskRequest * request, disaggregated::EstablishDisaggTaskResponse * response)
+grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggTaskRequest * request, disaggregated::EstablishDisaggTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_DEBUG(log, "Handling EstablishDisaggTask request: {}", request->ShortDebugString());
@@ -667,7 +667,7 @@ grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc
     return ret_status;
 }
 
-grpc::Status FlashService::FetchDisaggregatedPages(
+grpc::Status FlashService::FetchDisaggPages(
     grpc::ServerContext * grpc_context,
     const disaggregated::FetchDisaggPagesRequest * request,
     grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer)

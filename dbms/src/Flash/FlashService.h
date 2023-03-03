@@ -92,10 +92,10 @@ public:
     // The TiFlash read node call this RPC to build the disaggregated task
     // on the TiFlash write node.
     // It returns the serialized remote segments info to the compute node.
-    grpc::Status EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggTaskRequest * request, disaggregated::EstablishDisaggTaskResponse * response) override;
+    grpc::Status EstablishDisaggTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggTaskRequest * request, disaggregated::EstablishDisaggTaskResponse * response) override;
     // The TiFlash read node call this RPC to fetch the delta-layer data
     // from the TiFlash write node.
-    grpc::Status FetchDisaggregatedPages(grpc::ServerContext * grpc_context, const disaggregated::FetchDisaggPagesRequest * request, grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer) override;
+    grpc::Status FetchDisaggPages(grpc::ServerContext * grpc_context, const disaggregated::FetchDisaggPagesRequest * request, grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer) override;
 
     void setMockStorage(MockStorage * mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);

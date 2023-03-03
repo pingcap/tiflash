@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
+#include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Disaggregated/DisaggregatedTask.h>
 #include <Flash/Executor/QueryExecutorHolder.h>
@@ -52,11 +54,18 @@ void DisaggregatedTask::prepare(const disaggregated::EstablishDisaggTaskRequest 
     TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context);
     LOG_DEBUG(task->log, "DisaggregatedTask handling {} regions from {} physical tables", tables_regions_info.regionCount(), tables_regions_info.tableCount());
 
-    // set schema ver and start ts // TODO: set timeout
+    // set schema ver and start ts
     auto schema_ver = request->schema_ver();
     context->setSetting("schema_version", schema_ver);
     auto start_ts = meta.start_ts();
     context->setSetting("read_tso", start_ts);
+
+    if (request->timeout_s() < 0)
+        throw TiFlashException(Errors::Coprocessor::BadRequest, "invalid timeout={}", request->timeout_s());
+    else if (request->timeout_s() > 0)
+    {
+        context->setSetting("disagg_task_snapshot_timeout", request->timeout_s());
+    } // use default timeout if it is 0
 
     // Parse the encoded plan into `dag_req`
     task->dag_req = getDAGRequestFromStringWithRetry(request->encoded_plan());

@@ -105,7 +105,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
         gc_config.temp_path = context.getTemporaryPath() + "/s3_temp"; // TODO: unify the suffix for it?
         s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, cluster->pd_client, s3gc_owner, s3lock_client, gc_config);
 
-        snapshot_manager = std::make_unique<DM::Remote::DisaggSnapshotManager>();
+        snapshot_manager = std::make_unique<DM::Remote::DisaggSnapshotManager>(context);
     }
 }
 
