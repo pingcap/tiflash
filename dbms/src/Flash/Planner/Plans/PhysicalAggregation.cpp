@@ -25,6 +25,8 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalAggregation.h>
+#include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
+#include <Flash/Planner/Plans/PhysicalAggregationConvergent.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -94,7 +96,13 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
 
     Block before_agg_header = pipeline.firstStream()->getHeader();
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
-    SpillConfig spill_config(context.getTemporaryPath(), fmt::format("{}_aggregation", log->identifier()), context.getSettingsRef().max_cached_data_bytes_in_spiller, context.getSettingsRef().max_spilled_rows_per_file, context.getSettingsRef().max_spilled_bytes_per_file, context.getFileProvider());
+    SpillConfig spill_config(
+        context.getTemporaryPath(),
+        fmt::format("{}_aggregation", log->identifier()),
+        context.getSettingsRef().max_cached_data_bytes_in_spiller,
+        context.getSettingsRef().max_spilled_rows_per_file,
+        context.getSettingsRef().max_spilled_bytes_per_file,
+        context.getFileProvider());
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
@@ -155,16 +163,34 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
 
 void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)
 {
-    // Break the pipeline for pre-agg.
-    // FIXME: Should be newly created PhysicalPreAgg.
-    auto pre_agg_builder = builder.breakPipeline(shared_from_this());
-    // Pre-agg pipeline.
-    child->buildPipeline(pre_agg_builder);
-    pre_agg_builder.build();
-    // Final-agg pipeline.
-    // FIXME: Should be newly created PhysicalFinalAgg.
-    builder.addPlanNode(shared_from_this());
-    throw Exception("Unsupport");
+    auto aggregate_context = std::make_shared<AggregateContext>(
+        log->identifier());
+    // TODO support fine grained shuffle.
+    assert(!fine_grained_shuffle.enable());
+    auto agg_build = std::make_shared<PhysicalAggregationBuild>(
+        executor_id,
+        schema,
+        log->identifier(),
+        child,
+        before_agg_actions,
+        aggregation_keys,
+        aggregation_collators,
+        is_final_agg,
+        aggregate_descriptions,
+        aggregate_context);
+    // Break the pipeline for agg_build.
+    auto agg_build_builder = builder.breakPipeline(agg_build);
+    // agg_build pipeline.
+    child->buildPipeline(agg_build_builder);
+    agg_build_builder.build();
+    // agg_convergent pipeline.
+    auto agg_convergent = std::make_shared<PhysicalAggregationConvergent>(
+        executor_id,
+        schema,
+        log->identifier(),
+        aggregate_context,
+        expr_after_agg);
+    builder.addPlanNode(agg_convergent);
 }
 
 void PhysicalAggregation::finalize(const Names & parent_require)
