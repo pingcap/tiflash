@@ -29,7 +29,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int SYNTAX_ERROR;
@@ -140,7 +139,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (!s_totals.ignore(pos, expected))
             return false;
 
-        throw Exception("WITH TOTALS not supported");
+        throw Exception("WITH TOTALS is no longer supported");
     }
 
     /// HAVING expr
