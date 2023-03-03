@@ -98,9 +98,9 @@ private:
     std::condition_variable job_finished;
     std::condition_variable new_job_or_shutdown;
 
-    size_t max_threads;
-    size_t max_free_threads;
-    size_t queue_size;
+    size_t max_threads = 0;
+    size_t max_free_threads = 0;
+    size_t queue_size = 0;
 
     size_t scheduled_jobs = 0;
     bool shutdown = false;
