@@ -908,7 +908,13 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
       */
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
 
-    SpillConfig spill_config(context.getTemporaryPath(), "aggregation", settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
+    SpillConfig spill_config(
+        context.getTemporaryPath(),
+        "aggregation",
+        settings.max_cached_data_bytes_in_spiller,
+        settings.max_spilled_rows_per_file,
+        settings.max_spilled_bytes_per_file,
+        context.getFileProvider());
     Aggregator::Params params(header, keys, aggregates, allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0), allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0), settings.max_bytes_before_external_group_by, false, spill_config, settings.max_block_size);
 
     /// If there are several sources, then we perform parallel aggregation
