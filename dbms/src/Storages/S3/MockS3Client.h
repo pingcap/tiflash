@@ -20,27 +20,32 @@
 
 namespace DB::S3::tests
 {
+using namespace Aws::S3;
+
 class MockS3Client final : public S3::TiFlashS3Client
 {
 public:
-    MockS3Client()
-        : TiFlashS3Client("")
+    explicit MockS3Client(const String & bucket = "")
+        : TiFlashS3Client(bucket)
     {}
 
     ~MockS3Client() override = default;
 
-    void clear();
+    Model::GetObjectOutcome GetObject(const Model::GetObjectRequest & request) const override;
+    Model::PutObjectOutcome PutObject(const Model::PutObjectRequest & request) const override;
+    Model::ListObjectsV2Outcome ListObjectsV2(const Model::ListObjectsV2Request & request) const override;
+    Model::CreateMultipartUploadOutcome CreateMultipartUpload(const Model::CreateMultipartUploadRequest & request) const override;
+    Model::UploadPartOutcome UploadPart(const Model::UploadPartRequest & request) const override;
+    Model::CompleteMultipartUploadOutcome CompleteMultipartUpload(const Model::CompleteMultipartUploadRequest & request) const override;
+    Model::CreateBucketOutcome CreateBucket(const Model::CreateBucketRequest & request) const override;
+    Model::DeleteObjectOutcome DeleteObject(const Model::DeleteObjectRequest & request) const override;
+    Model::HeadObjectOutcome HeadObject(const Model::HeadObjectRequest & request) const override;
 
-    Aws::S3::Model::PutObjectOutcome PutObject(const Aws::S3::Model::PutObjectRequest & r) const override;
-    mutable Strings put_keys;
-
-    Aws::S3::Model::DeleteObjectOutcome DeleteObject(const Aws::S3::Model::DeleteObjectRequest & r) const override;
-    mutable Strings delete_keys;
-
-    Aws::S3::Model::ListObjectsV2Outcome ListObjectsV2(const Aws::S3::Model::ListObjectsV2Request & r) const override;
-    mutable Strings list_result;
-
-    std::optional<Aws::Utils::DateTime> head_result_mtime;
-    Aws::S3::Model::HeadObjectOutcome HeadObject(const Aws::S3::Model::HeadObjectRequest & request) const override;
+private:
+    using BucketStorage = std::map<String, String>;
+    using UploadParts = std::map<UInt64, String>;
+    mutable std::mutex mtx;
+    mutable std::unordered_map<String, BucketStorage> storage;
+    mutable std::unordered_map<String, UploadParts> upload_parts;
 };
 } // namespace DB::S3::tests
