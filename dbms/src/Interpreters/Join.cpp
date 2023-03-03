@@ -165,8 +165,8 @@ Join::Join(
             strictness = ASTTableJoin::Strictness::All;
         }
     }
-    if (unlikely(!left_filter_column.empty() && !isLeftJoin(kind)))
-        throw Exception("Not supported: non left join with left conditions");
+    if (unlikely(!left_filter_column.empty() && !isLeftJoin(kind) && !isLeftSemiFamily(kind)))
+        throw Exception("Not supported: non left join or left semi join with left conditions");
     if (unlikely(!right_filter_column.empty() && !isRightJoin(kind)))
         throw Exception("Not supported: non right join with right conditions");
 

@@ -1115,7 +1115,10 @@ try
         }
     }
 
-    /// Two join keys(t.a = s.a and t.b = s.b) and other condition(t.d > s.c or t.a = s.a)
+    /// Two join keys(t.a = s.a and t.b = s.b) and other condition(s.d > t.c or t.a = s.a)
+    /// Test the case that other condition has a condition that is same to one of join key equal conditions.
+    /// In other words, test if these two expression can be handled normally when column reuse happens.
+    /// For more details, see the comments in `NASemiJoinHelper::runAndCheckExprResult`.
     /// left table + right table + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t5 = {
         {
@@ -1152,7 +1155,52 @@ try
         }
     }
 
-    // TODO: add left condition cases.
+    /// Two join keys(t.a = s.a and t.b = s.b) + left condition(c > 0) + other condition(s.d > t.c).
+    /// left table + right table + result column.
+    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t6 = {
+        {
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 0, 1, 0, 1})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2})},
+            toNullableVec<Int8>({1, 0, 1, 0, 1}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 0, 1, 0, 1})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {6, 7, 8, 9, 10}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2})},
+            toNullableVec<Int8>({0, 0, 0, 0, 0}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 0, 1, 0, 1})},
+            {toNullableVec<Int32>("a", {1, {}, 3, {}, 4, 4}), toNullableVec<Int32>("b", {1, 2, {}, 4, {}, 4}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2, 2})},
+            toNullableVec<Int8>({1, 0, {}, 0, 0}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 6}), toNullableVec<Int32>("b", {1, 2, 3, {}, {}}), toNullableVec<Int32>("c", {1, 2, 0, 2, 0})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, {}}), toNullableVec<Int32>("d", {2, 1, 2, 1, 2})},
+            toNullableVec<Int8>({1, 0, 0, 0, 0}),
+        },
+    };
+
+    for (const auto & [left, right, res] : t6)
+    {
+        context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
+        context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}}, right);
+
+        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin})
+        {
+            auto request = context.scan("null_aware_semi", "t")
+                               .join(context.scan("null_aware_semi", "s"),
+                                     type,
+                                     {col("a"), col("b")},
+                                     {gt(col("t.c"), lit(Field(static_cast<Int64>(0))))},
+                                     {},
+                                     {gt(col("s.d"), col("t.c"))},
+                                     {},
+                                     0,
+                                     true)
+                               .build(context);
+            executeAndAssertColumnsEqual(request, genNullAwareJoinResult(type, left, res));
+        }
+    }
 }
 CATCH
 
