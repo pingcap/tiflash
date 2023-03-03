@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Stopwatch.h>
+#include <Common/ThreadPool.h>
 #include <Databases/DatabasesCommon.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
@@ -24,7 +25,6 @@
 #include <Poco/DirectoryIterator.h>
 #include <Storages/PrimaryKeyNotMatchException.h>
 #include <Storages/StorageFactory.h>
-#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 
@@ -423,7 +423,7 @@ void startupTables(IDatabase & database, const String & db_name, Tables & tables
         };
 
         if (thread_pool)
-            thread_pool->schedule(task);
+            thread_pool->scheduleOrThrowOnError(task);
         else
             task();
 

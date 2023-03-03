@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/HashTable/HashMap.h>
-#include <common/ThreadPool.h>
+#include <Common/ThreadPool.h>
 #include <gtest/gtest.h>
 
 #include <ext/singleton.h>

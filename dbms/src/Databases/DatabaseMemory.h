@@ -17,7 +17,10 @@
 #include <Databases/DatabasesCommon.h>
 
 
-namespace Poco { class Logger; }
+namespace Poco
+{
+class Logger;
+}
 
 
 namespace DB
@@ -31,7 +34,7 @@ namespace DB
 class DatabaseMemory : public DatabaseWithOwnTablesBase
 {
 public:
-    DatabaseMemory(String name_);
+    explicit DatabaseMemory(String name_);
 
     String getEngineName() const override { return "Memory"; }
 
@@ -77,4 +80,4 @@ private:
     Poco::Logger * log;
 };
 
-}
+} // namespace DB

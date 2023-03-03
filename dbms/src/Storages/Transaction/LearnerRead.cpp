@@ -14,6 +14,7 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
+#include <Common/ThreadPool.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -29,7 +30,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/Utils.h>
-#include <common/ThreadPool.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 #include <fmt/chrono.h>

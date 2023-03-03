@@ -15,6 +15,7 @@
 #include <Common/DynamicThreadPool.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
+#include <Common/ThreadPool.h>
 #include <Common/wrapInvocable.h>
 
 namespace DB
@@ -116,7 +117,7 @@ public:
 
     void schedule(bool propagate_memory_tracker, Job job) override
     {
-        pool.schedule(wrapInvocable(propagate_memory_tracker, std::move(job)));
+        pool.scheduleOrThrowOnError(wrapInvocable(propagate_memory_tracker, std::move(job)));
     }
 
     void wait() override

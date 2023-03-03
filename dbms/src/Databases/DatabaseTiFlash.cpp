@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
+#include <Common/ThreadPool.h>
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 #include <Databases/DatabaseTiFlash.h>
@@ -31,7 +32,6 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
-#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -156,7 +156,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
             task_function(begin, end);
         };
         if (thread_pool)
-            thread_pool->schedule(task);
+            thread_pool->scheduleOrThrowOnError(task);
         else
             task();
     }

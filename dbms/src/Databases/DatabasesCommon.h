@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/ThreadPool.h>
 #include <Core/Types.h>
 #include <Databases/IDatabase.h>
 #include <Parsers/IAST.h>

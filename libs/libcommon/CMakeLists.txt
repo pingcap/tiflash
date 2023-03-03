@@ -39,7 +39,6 @@ add_library (common ${SPLIT_SHARED}
     src/mremap.cpp
     src/JSON.cpp
     src/getMemoryAmount.cpp
-    src/ThreadPool.cpp
     src/demangle.cpp
     src/StringRef.cpp
     src/mem_utils_asimd.cpp
@@ -71,7 +70,6 @@ add_library (common ${SPLIT_SHARED}
     include/common/JSON.h
     include/common/simd.h
     include/common/getMemoryAmount.h
-    include/common/ThreadPool.h
     include/common/demangle.h
     include/common/mem_utils.h
     include/common/crc64_arch/crc64_aarch64.h

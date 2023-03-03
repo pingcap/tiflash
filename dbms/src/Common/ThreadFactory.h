@@ -17,7 +17,6 @@
 #include <Common/MemoryTrackerSetter.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
-#include <common/ThreadPool.h>
 
 #include <thread>
 

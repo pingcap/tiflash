@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/ThreadPool.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <Storages/ColumnsDescription.h>
@@ -51,7 +52,7 @@ public:
     virtual const String & name() const = 0;
     virtual StoragePtr & table() const = 0;
 
-    virtual ~IDatabaseIterator() {}
+    virtual ~IDatabaseIterator() = default;
 };
 
 using DatabaseIteratorPtr = std::unique_ptr<IDatabaseIterator>;
