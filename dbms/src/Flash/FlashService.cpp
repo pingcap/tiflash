@@ -595,10 +595,10 @@ grpc::Status FlashService::tryMarkDelete(grpc::ServerContext * grpc_context, con
     return s3_lock_service->tryMarkDelete(request, response);
 }
 
-grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggregatedTaskRequest * request, disaggregated::EstablishDisaggregatedTaskResponse * response)
+grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggTaskRequest * request, disaggregated::EstablishDisaggTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_DEBUG(log, "Handling EstablishDisaggregatedTask request: {}", request->ShortDebugString());
+    LOG_DEBUG(log, "Handling EstablishDisaggTask request: {}", request->ShortDebugString());
     if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
         return check_result;
     // TODO metrics
@@ -611,7 +611,7 @@ grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc
     RUNTIME_CHECK(context->isDisaggregatedStorageMode());
 
     const auto & meta = request->meta();
-    DM::DisaggregatedTaskId task_id(meta);
+    DM::DisaggTaskId task_id(meta);
     auto task = std::make_shared<DisaggregatedTask>(db_context, task_id);
     SCOPE_EXIT({
         current_memory_tracker = nullptr;
@@ -663,16 +663,16 @@ grpc::Status FlashService::EstablishDisaggregatedTask(grpc::ServerContext * grpc
         }
     }
 
-    LOG_DEBUG(log, "Handle EstablishDisaggregatedTask request done, resp_err={}", response->error().ShortDebugString());
+    LOG_DEBUG(log, "Handle EstablishDisaggTask request done, resp_err={}", response->error().ShortDebugString());
     return ret_status;
 }
 
 grpc::Status FlashService::FetchDisaggregatedPages(
     grpc::ServerContext * grpc_context,
-    const disaggregated::FetchDisaggregatedPagesRequest * request,
+    const disaggregated::FetchDisaggPagesRequest * request,
     grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer)
 {
-    LOG_DEBUG(log, "Handling FetchDisaggregatedPages request: {}", request->ShortDebugString());
+    LOG_DEBUG(log, "Handling FetchDisaggPages request: {}", request->ShortDebugString());
     if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
         return check_result;
 
@@ -686,13 +686,13 @@ grpc::Status FlashService::FetchDisaggregatedPages(
         return grpc::Status(err_code, err_msg);
     };
 
-    const DM::DisaggregatedTaskId task_id(request->meta());
+    const DM::DisaggTaskId task_id(request->snapshot_id());
     LOG_DEBUG(log, "Fetching pages, task_id={}", task_id);
     try
     {
         PageIdU64s read_ids;
-        read_ids.reserve(request->pages_size());
-        for (auto page_id : request->pages())
+        read_ids.reserve(request->page_ids_size());
+        for (auto page_id : request->page_ids())
             read_ids.emplace_back(page_id);
 
 #if 0
@@ -704,6 +704,7 @@ grpc::Status FlashService::FetchDisaggregatedPages(
             read_ids);
 
         tunnel->connect(sync_writer);
+        LOG_DEBUG(log, "Handle FetchDisaggPages request done");
         return grpc::Status::OK;
 #endif
 

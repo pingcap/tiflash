@@ -32,7 +32,7 @@
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/makeDummyQuery.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -134,7 +134,7 @@ public:
     DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
 
     // for disaggregated task on write node
-    DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggregatedTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_);
+    DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_);
 
     // for test
     explicit DAGContext(UInt64 max_error_count_);
@@ -192,7 +192,7 @@ public:
     {
         return mpp_task_id;
     }
-    const std::unique_ptr<DM::DisaggregatedTaskId> & getDisaggregatedTaskId() const
+    const std::unique_ptr<DM::DisaggTaskId> & getDisaggTaskId() const
     {
         return disaggregated_id;
     }
@@ -296,7 +296,7 @@ public:
     /* const */ bool is_mpp_task = false;
     /* const */ bool is_root_mpp_task = false;
     /* const */ bool is_batch_cop = false;
-    /* const */ bool is_disaggregated_task = false;
+    /* const */ bool is_disaggregated_task = false; // a disagg task handling by the write node
     // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;
     TablesRegionsInfo tables_regions_info;
@@ -347,7 +347,7 @@ private:
     mpp::TaskMeta mpp_task_meta;
     const MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
     // The task id for disaggregated read
-    const std::unique_ptr<DM::DisaggregatedTaskId> disaggregated_id;
+    const std::unique_ptr<DM::DisaggTaskId> disaggregated_id;
     /// max_recorded_error_count is the max error/warning need to be recorded in warnings
     UInt64 max_recorded_error_count;
     ConcurrentBoundedQueue<tipb::Error> warnings;

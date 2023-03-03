@@ -20,7 +20,7 @@
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot_fwd.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>

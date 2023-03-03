@@ -15,8 +15,8 @@
 #include <IO/CompressedStream.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot_fwd.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
+#include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/Page/PageDefinesBase.h>
@@ -54,7 +54,7 @@ namespace DB::DM::Remote
 struct Serializer
 {
     static RemotePb::RemotePhysicalTable
-    serializeTo(const DisaggPhysicalTableReadSnapshotPtr & snap, const DisaggregatedTaskId & task_id);
+    serializeTo(const DisaggPhysicalTableReadSnapshotPtr & snap, const DisaggTaskId & task_id);
 
     /// segment snapshot ///
 

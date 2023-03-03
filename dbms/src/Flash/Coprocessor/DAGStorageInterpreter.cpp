@@ -34,8 +34,8 @@
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Interpreters/Context.h>
 #include <Parsers/makeDummyQuery.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshotManager.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
@@ -784,7 +784,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     // MultiPartitionStreamPool will be disabled in no partition mode or single-partition case
     std::shared_ptr<MultiPartitionStreamPool> stream_pool = has_multiple_partitions ? std::make_shared<MultiPartitionStreamPool>() : nullptr;
 
-    auto disaggregated_snap = std::make_shared<DM::Remote::DisaggregatedReadSnapshot>();
+    auto disaggregated_snap = std::make_shared<DM::Remote::DisaggReadSnapshot>();
     for (const auto & table_query_info : table_query_infos)
     {
         DAGPipeline current_pipeline;
@@ -806,14 +806,14 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         log,
         "local streams built, is_disaggregated_task={} snap_id={}",
         dag_context.is_disaggregated_task,
-        dag_context.is_disaggregated_task ? *dag_context.getDisaggregatedTaskId() : DM::DisaggregatedTaskId::unknown_disaggregated_task_id);
+        dag_context.is_disaggregated_task ? *dag_context.getDisaggTaskId() : DM::DisaggTaskId::unknown_disaggregated_task_id);
 
     if (dag_context.is_disaggregated_task)
     {
         // register the snapshot to manager
         auto & tmt = context.getTMTContext();
-        auto * snap_manager = tmt.getDisaggregatedSnapshotManager();
-        const auto & snap_id = *dag_context.getDisaggregatedTaskId();
+        auto * snap_manager = tmt.getDisaggSnapshotManager();
+        const auto & snap_id = *dag_context.getDisaggTaskId();
         bool register_snapshot_ok = snap_manager->registerSnapshot(snap_id, std::move(disaggregated_snap));
         RUNTIME_CHECK_MSG(register_snapshot_ok, "disaggregated task has been registered {}", snap_id);
         LOG_INFO(log, "task snapshot registered, snapshot_id={}", snap_id);

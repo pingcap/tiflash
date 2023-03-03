@@ -17,9 +17,9 @@
 #include <Flash/Executor/QueryExecutorHolder.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshotManager.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshotManager.h>
+#include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -33,7 +33,7 @@ namespace ErrorCodes
 extern const int REGION_EPOCH_NOT_MATCH;
 } // namespace ErrorCodes
 
-DisaggregatedTask::DisaggregatedTask(ContextPtr context_, const DM::DisaggregatedTaskId & task_id)
+DisaggregatedTask::DisaggregatedTask(ContextPtr context_, const DM::DisaggTaskId & task_id)
     : context(std::move(context_))
     , log(Logger::get(fmt::format("{}", task_id)))
 {}
@@ -42,10 +42,10 @@ DisaggregatedTask::DisaggregatedTask(ContextPtr context_, const DM::Disaggregate
 // - Parse the encoded plan
 // - Build `dag_context`
 // - Set the read_tso, schema_version, timezone
-void DisaggregatedTask::prepare(const disaggregated::EstablishDisaggregatedTaskRequest * request)
+void DisaggregatedTask::prepare(const disaggregated::EstablishDisaggTaskRequest * request)
 {
     const auto & meta = request->meta();
-    DM::DisaggregatedTaskId task_id(meta);
+    DM::DisaggTaskId task_id(meta);
     auto task = std::make_shared<DisaggregatedTask>(context, task_id);
 
     auto & tmt_context = context->getTMTContext();
@@ -73,7 +73,7 @@ void DisaggregatedTask::prepare(const disaggregated::EstablishDisaggregatedTaskR
     context->setDAGContext(task->dag_context.get());
 }
 
-void DisaggregatedTask::execute(disaggregated::EstablishDisaggregatedTaskResponse * response)
+void DisaggregatedTask::execute(disaggregated::EstablishDisaggTaskResponse * response)
 {
     // run into DAGStorageInterpreter and build the segment snapshots
     query_executor_holder.set(queryExecute(*context));
@@ -84,8 +84,8 @@ void DisaggregatedTask::execute(disaggregated::EstablishDisaggregatedTaskRespons
         response->set_store_id(kvstore->getStoreID());
     }
 
-    auto * manager = tmt.getDisaggregatedSnapshotManager();
-    const auto & task_id = *dag_context->getDisaggregatedTaskId();
+    auto * manager = tmt.getDisaggSnapshotManager();
+    const auto & task_id = *dag_context->getDisaggTaskId();
     auto snap = manager->getSnapshot(task_id);
     if (!snap)
         throw Exception(fmt::format("Snapshot for {} was missing", task_id));

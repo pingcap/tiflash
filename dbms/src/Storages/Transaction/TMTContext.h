@@ -64,8 +64,8 @@ using S3GCManagerServicePtr = std::unique_ptr<S3GCManagerService>;
 } // namespace S3
 namespace DM::Remote
 {
-class DisaggregatedSnapshotManager;
-using DisaggregatedSnapshotManagerPtr = std::unique_ptr<DisaggregatedSnapshotManager>;
+class DisaggSnapshotManager;
+using DisaggSnapshotManagerPtr = std::unique_ptr<DisaggSnapshotManager>;
 } // namespace DM::Remote
 
 class TMTContext : private boost::noncopyable
@@ -116,7 +116,7 @@ public:
 
     const OwnerManagerPtr & getS3GCOwnerManager() const;
 
-    DM::Remote::DisaggregatedSnapshotManager * getDisaggregatedSnapshotManager() const;
+    DM::Remote::DisaggSnapshotManager * getDisaggSnapshotManager() const;
 
     MPPTaskManagerPtr getMPPTaskManager();
 
@@ -160,7 +160,7 @@ private:
     S3::S3LockClientPtr s3lock_client;
     S3::S3GCManagerServicePtr s3gc_manager;
 
-    DM::Remote::DisaggregatedSnapshotManagerPtr snapshot_manager;
+    DM::Remote::DisaggSnapshotManagerPtr snapshot_manager;
 
     mutable std::mutex mutex;
 

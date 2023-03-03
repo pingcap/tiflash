@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <common/logger_useful.h>
@@ -23,7 +23,7 @@
 namespace DB::DM::Remote
 {
 
-SegmentPagesFetchTask DisaggregatedReadSnapshot::popSegTask(TableID physical_table_id, UInt64 segment_id)
+SegmentPagesFetchTask DisaggReadSnapshot::popSegTask(TableID physical_table_id, UInt64 segment_id)
 {
     std::unique_lock lock(mtx);
     auto table_iter = table_snapshots.find(physical_table_id);
@@ -51,7 +51,7 @@ SegmentPagesFetchTask DisaggregatedReadSnapshot::popSegTask(TableID physical_tab
     return task;
 }
 
-bool DisaggregatedReadSnapshot::empty() const
+bool DisaggReadSnapshot::empty() const
 {
     for (const auto & tbl : table_snapshots)
     {

@@ -87,7 +87,7 @@ DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMet
     initOutputInfo();
 }
 
-DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggregatedTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_)
+DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_)
     : dag_request(&dag_request_)
     , dummy_query_string(dag_request->DebugString())
     , dummy_ast(makeDummyQuery())
@@ -101,7 +101,7 @@ DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const DM::Disaggre
     , log(std::move(log_))
     , flags(dag_request->flags())
     , sql_mode(dag_request->sql_mode())
-    , disaggregated_id(std::make_unique<DM::DisaggregatedTaskId>(task_id_))
+    , disaggregated_id(std::make_unique<DM::DisaggTaskId>(task_id_))
     , max_recorded_error_count(getMaxErrorCount(*dag_request))
     , warnings(max_recorded_error_count)
     , warning_count(0)

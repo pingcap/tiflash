@@ -17,7 +17,7 @@
 #include <Common/nocopyable.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -30,8 +30,8 @@
 namespace DB::DM::Remote
 {
 
-class DisaggregatedReadSnapshot;
-using DisaggregatedReadSnapshotPtr = std::shared_ptr<DisaggregatedReadSnapshot>;
+class DisaggReadSnapshot;
+using DisaggReadSnapshotPtr = std::shared_ptr<DisaggReadSnapshot>;
 class DisaggPhysicalTableReadSnapshot;
 using DisaggPhysicalTableReadSnapshotPtr = std::unique_ptr<DisaggPhysicalTableReadSnapshot>;
 
@@ -65,12 +65,12 @@ public:
 
 // The read snapshot stored on the write node.
 // It stores the segment tasks for reading a logical table.
-class DisaggregatedReadSnapshot
+class DisaggReadSnapshot
 {
 public:
     using TableSnapshotMap = std::unordered_map<TableID, DisaggPhysicalTableReadSnapshotPtr>;
 
-    DisaggregatedReadSnapshot() = default;
+    DisaggReadSnapshot() = default;
 
     // Add read tasks for a physical table.
     // This function is not thread safe
@@ -87,7 +87,7 @@ public:
     bool empty() const;
     const TableSnapshotMap & tableSnapshots() const { return table_snapshots; }
 
-    DISALLOW_COPY(DisaggregatedReadSnapshot);
+    DISALLOW_COPY(DisaggReadSnapshot);
 
 private:
     mutable std::mutex mtx;

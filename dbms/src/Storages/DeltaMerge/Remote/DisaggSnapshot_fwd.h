@@ -19,8 +19,8 @@
 namespace DB::DM::Remote
 {
 
-class DisaggregatedReadSnapshot;
-using DisaggregatedReadSnapshotPtr = std::shared_ptr<DisaggregatedReadSnapshot>;
+class DisaggReadSnapshot;
+using DisaggReadSnapshotPtr = std::shared_ptr<DisaggReadSnapshot>;
 class DisaggPhysicalTableReadSnapshot;
 using DisaggPhysicalTableReadSnapshotPtr = std::unique_ptr<DisaggPhysicalTableReadSnapshot>;
 

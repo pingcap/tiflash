@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <kvproto/mpp.pb.h>
 
 namespace DB::DM
 {
-const DisaggregatedTaskId DisaggregatedTaskId::unknown_disaggregated_task_id{};
+const DisaggTaskId DisaggTaskId::unknown_disaggregated_task_id{};
 
-DisaggregatedTaskId::DisaggregatedTaskId(const disaggregated::DisaggregatedTaskMeta & task_meta)
+DisaggTaskId::DisaggTaskId(const disaggregated::DisaggTaskMeta & task_meta)
     : mpp_task_id(
         task_meta.start_ts(),
         task_meta.task_id(),
@@ -30,9 +30,9 @@ DisaggregatedTaskId::DisaggregatedTaskId(const disaggregated::DisaggregatedTaskM
 {
 }
 
-disaggregated::DisaggregatedTaskMeta DisaggregatedTaskId::toMeta() const
+disaggregated::DisaggTaskMeta DisaggTaskId::toMeta() const
 {
-    disaggregated::DisaggregatedTaskMeta meta;
+    disaggregated::DisaggTaskMeta meta;
     meta.set_start_ts(mpp_task_id.query_id.start_ts);
     meta.set_server_id(mpp_task_id.query_id.server_id);
     meta.set_query_ts(mpp_task_id.query_id.query_ts);
@@ -42,7 +42,7 @@ disaggregated::DisaggregatedTaskMeta DisaggregatedTaskId::toMeta() const
     return meta;
 }
 
-bool operator==(const DisaggregatedTaskId & lhs, const DisaggregatedTaskId & rhs)
+bool operator==(const DisaggTaskId & lhs, const DisaggTaskId & rhs)
 {
     return lhs.mpp_task_id == rhs.mpp_task_id && lhs.executor_id == rhs.executor_id;
 }

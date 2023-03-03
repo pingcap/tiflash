@@ -17,7 +17,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshot.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -29,7 +29,7 @@
 namespace DB::DM::Remote
 {
 RemotePb::RemotePhysicalTable
-Serializer::serializeTo(const DisaggPhysicalTableReadSnapshotPtr & snap, const DisaggregatedTaskId & task_id)
+Serializer::serializeTo(const DisaggPhysicalTableReadSnapshotPtr & snap, const DisaggTaskId & task_id)
 {
     RemotePb::RemotePhysicalTable remote_table;
     remote_table.set_snapshot_id(task_id.toMeta().SerializeAsString());

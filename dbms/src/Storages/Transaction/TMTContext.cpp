@@ -19,7 +19,7 @@
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <Interpreters/Context.h>
 #include <Server/RaftConfigParser.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedSnapshotManager.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshotManager.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3GCManager.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -105,7 +105,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
         gc_config.temp_path = context.getTemporaryPath() + "/s3_temp"; // TODO: unify the suffix for it?
         s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, cluster->pd_client, s3gc_owner, s3lock_client, gc_config);
 
-        snapshot_manager = std::make_unique<DM::Remote::DisaggregatedSnapshotManager>();
+        snapshot_manager = std::make_unique<DM::Remote::DisaggSnapshotManager>();
     }
 }
 
@@ -253,7 +253,7 @@ const OwnerManagerPtr & TMTContext::getS3GCOwnerManager() const
     return s3gc_owner;
 }
 
-DM::Remote::DisaggregatedSnapshotManager * TMTContext::getDisaggregatedSnapshotManager() const
+DM::Remote::DisaggSnapshotManager * TMTContext::getDisaggSnapshotManager() const
 {
     return snapshot_manager.get();
 }

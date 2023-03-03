@@ -20,35 +20,35 @@
 
 namespace DB::DM
 {
-class DisaggregatedTaskId
+class DisaggTaskId
 {
 public:
-    static const DisaggregatedTaskId unknown_disaggregated_task_id;
+    static const DisaggTaskId unknown_disaggregated_task_id;
 
 public:
-    DisaggregatedTaskId()
-        : DisaggregatedTaskId(MPPTaskId::unknown_mpp_task_id, "")
+    DisaggTaskId()
+        : DisaggTaskId(MPPTaskId::unknown_mpp_task_id, "")
     {}
 
-    DisaggregatedTaskId(MPPTaskId task_id, String executor_id_)
+    DisaggTaskId(MPPTaskId task_id, String executor_id_)
         : mpp_task_id(std::move(task_id))
         , executor_id(std::move(executor_id_))
     {
     }
 
-    explicit DisaggregatedTaskId(const disaggregated::DisaggregatedTaskMeta & task_meta);
+    explicit DisaggTaskId(const disaggregated::DisaggTaskMeta & task_meta);
 
-    disaggregated::DisaggregatedTaskMeta toMeta() const;
+    disaggregated::DisaggTaskMeta toMeta() const;
 
     const MPPTaskId mpp_task_id;
     const String executor_id;
 };
 
-bool operator==(const DisaggregatedTaskId & lhs, const DisaggregatedTaskId & rhs);
+bool operator==(const DisaggTaskId & lhs, const DisaggTaskId & rhs);
 } // namespace DB::DM
 
 template <>
-struct fmt::formatter<DB::DM::DisaggregatedTaskId>
+struct fmt::formatter<DB::DM::DisaggTaskId>
 {
     static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
     {
@@ -61,7 +61,7 @@ struct fmt::formatter<DB::DM::DisaggregatedTaskId>
     }
 
     template <typename FormatContext>
-    auto format(const DB::DM::DisaggregatedTaskId & task_id, FormatContext & ctx) const -> decltype(ctx.out())
+    auto format(const DB::DM::DisaggTaskId & task_id, FormatContext & ctx) const -> decltype(ctx.out())
     {
         if (task_id.mpp_task_id.isUnknown())
             return format_to(ctx.out(), "DisTaskId<N/A>");
@@ -76,10 +76,10 @@ struct fmt::formatter<DB::DM::DisaggregatedTaskId>
 namespace std
 {
 template <>
-class hash<DB::DM::DisaggregatedTaskId>
+class hash<DB::DM::DisaggTaskId>
 {
 public:
-    size_t operator()(const DB::DM::DisaggregatedTaskId & id) const
+    size_t operator()(const DB::DM::DisaggTaskId & id) const
     {
         return hash<DB::MPPTaskId>()(id.mpp_task_id) ^ hash<String>()(id.executor_id);
     }

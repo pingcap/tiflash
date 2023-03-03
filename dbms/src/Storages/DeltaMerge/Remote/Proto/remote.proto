@@ -17,7 +17,7 @@ syntax = "proto3";
 package DB.DM.RemotePb;
 
 message RemotePhysicalTable {
-    bytes snapshot_id = 1; // disaggregated.DisaggregatedTaskMeta
+    bytes snapshot_id = 1; // disaggregated.DisaggTaskMeta
     uint64 table_id = 2;
     repeated RemoteSegment segments = 3;
 }

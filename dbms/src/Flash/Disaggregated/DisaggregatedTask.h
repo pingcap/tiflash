@@ -16,7 +16,7 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/QueryExecutorHolder.h>
-#include <Storages/DeltaMerge/Remote/DisaggregatedTaskId.h>
+#include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <kvproto/disaggregated.pb.h>
 #include <tipb/select.pb.h>
 
@@ -34,11 +34,11 @@ using LoggerPtr = std::shared_ptr<Logger>;
 class DisaggregatedTask
 {
 public:
-    void prepare(const disaggregated::EstablishDisaggregatedTaskRequest * request);
+    void prepare(const disaggregated::EstablishDisaggTaskRequest * request);
 
-    void execute(disaggregated::EstablishDisaggregatedTaskResponse * response);
+    void execute(disaggregated::EstablishDisaggTaskResponse * response);
 
-    DisaggregatedTask(ContextPtr context_, const DM::DisaggregatedTaskId & task_id);
+    DisaggregatedTask(ContextPtr context_, const DM::DisaggTaskId & task_id);
 
 private:
     ContextPtr context;
