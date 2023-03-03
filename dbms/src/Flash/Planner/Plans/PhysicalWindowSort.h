@@ -52,6 +52,5 @@ private:
 
 private:
     SortDescription order_descr;
-    FineGrainedShuffle fine_grained_shuffle;
 };
 } // namespace DB
