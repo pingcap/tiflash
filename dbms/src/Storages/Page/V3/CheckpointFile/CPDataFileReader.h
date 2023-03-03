@@ -32,6 +32,9 @@ using UniversalPageMap = std::map<UniversalPageId, Page>;
 using UniversalPageIdAndEntry = std::pair<UniversalPageId, PS::V3::PageEntryV3>;
 using UniversalPageIdAndEntries = std::vector<UniversalPageIdAndEntry>;
 
+/**
+ * Used to read checkpoint data from S3 according to the specified checkpoint info(including file_id, offset and size) in `PageEntry`.
+ */
 class CPDataFileReader : private Allocator<false>
 {
 public:

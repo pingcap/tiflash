@@ -90,6 +90,7 @@ enum class EditRecordType
     VAR_REF,
     VAR_EXTERNAL,
     VAR_DELETE,
+    // Just used to update local cache info for VAR_ENTRY type
     UPDATE_REMOTE,
 };
 
