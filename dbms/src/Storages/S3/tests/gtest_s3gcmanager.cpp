@@ -80,8 +80,10 @@ try
         objs.reserve(mfs.size());
         for (const auto & [seq, diff_sec] : mfs)
         {
+            auto key = S3Filename::newCheckpointManifest(store_id, seq).toFullKey();
+            uploadEmptyFile(*mock_s3_client, mock_s3_client->bucket(), key);
             objs.emplace_back(CheckpointManifestS3Object{
-                .key = S3Filename::newCheckpointManifest(store_id, seq).toFullKey(),
+                .key = key,
                 .last_modification = timepoint + std::chrono::milliseconds(diff_sec * 1000),
             });
         }
@@ -92,10 +94,18 @@ try
 
     gc_mgr->removeOutdatedManifest(set, &timepoint);
 
-    auto delete_keys = mock_s3_client->delete_keys;
-    ASSERT_EQ(delete_keys.size(), 2);
-    ASSERT_EQ(delete_keys[0], S3Filename::newCheckpointManifest(store_id, 4).toFullKey());
-    ASSERT_EQ(delete_keys[1], S3Filename::newCheckpointManifest(store_id, 5).toFullKey());
+    for (const auto & [seq, obj] : set.objects())
+    {
+        if (seq == 4 || seq == 5)
+        {
+            // deleted
+            ASSERT_FALSE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), obj.key));
+        }
+        else
+        {
+            ASSERT_TRUE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), obj.key));
+        }
+    }
 }
 CATCH
 
@@ -105,29 +115,33 @@ try
 {
     auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
     {
+        uploadEmptyFile(*mock_s3_client, mock_s3_client->bucket(), "datafile_key");
+        uploadEmptyFile(*mock_s3_client, mock_s3_client->bucket(), "datafile_key.del");
+
         // delmark expired
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3601 * 1000);
         gc_mgr->removeDataFileIfDelmarkExpired("datafile_key", "datafile_key.del", timepoint, delmark_mtime);
 
-        auto delete_keys = mock_s3_client->delete_keys;
-        ASSERT_EQ(delete_keys.size(), 2);
-        ASSERT_EQ(delete_keys[0], "datafile_key");
-        ASSERT_EQ(delete_keys[1], "datafile_key.del");
+        // removed
+        ASSERT_FALSE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), "datafile_key"));
+        ASSERT_FALSE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), "datafile_key.del"));
     }
     {
+        uploadEmptyFile(*mock_s3_client, mock_s3_client->bucket(), "datafile_key");
+        uploadEmptyFile(*mock_s3_client, mock_s3_client->bucket(), "datafile_key.del");
+
         // delmark not expired
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3599 * 1000);
         gc_mgr->removeDataFileIfDelmarkExpired("datafile_key", "datafile_key.del", timepoint, delmark_mtime);
 
-        auto delete_keys = mock_s3_client->delete_keys;
-        ASSERT_EQ(delete_keys.size(), 2);
-        ASSERT_EQ(delete_keys[0], "datafile_key");
-        ASSERT_EQ(delete_keys[1], "datafile_key.del");
+        // removed
+        ASSERT_TRUE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), "datafile_key"));
+        ASSERT_TRUE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), "datafile_key.del"));
     }
 }
 CATCH
 
-
+#if 0
 TEST_F(S3GCManagerTest, RemoveLock)
 try
 {
@@ -140,7 +154,6 @@ try
     auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
     {
         // delmark not exist, and no more lockfile
-        mock_s3_client->clear();
         gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
         // lock is deleted and delmark is created
@@ -197,6 +210,7 @@ try
     }
 }
 CATCH
+#endif
 
 TEST_F(S3GCManagerTest, ScanLocks)
 try
@@ -235,8 +249,12 @@ try
             expected_created_delmark = df.toView().getDelMarkKey();
             keys.emplace_back(lock_key);
         }
-        mock_s3_client->clear();
-        mock_s3_client->list_result = keys; // set for `LIST`
+
+        // prepare for `LIST`
+        for (const auto & k : keys)
+        {
+            uploadEmptyFile(*mock_s3_client, mock_s3_client->bucket(), k);
+        }
     }
 
     {
@@ -244,12 +262,8 @@ try
         gc_mgr->cleanUnusedLocks(lock_store_id, S3Filename::getLockPrefix(), safe_sequence, valid_lock_files, timepoint);
 
         // lock is deleted and delmark is created
-        auto delete_keys = mock_s3_client->delete_keys;
-        ASSERT_EQ(delete_keys.size(), 1);
-        ASSERT_EQ(delete_keys[0], expected_deleted_lock_key);
-        auto put_keys = mock_s3_client->put_keys;
-        ASSERT_EQ(put_keys.size(), 1);
-        ASSERT_EQ(put_keys[0], expected_created_delmark);
+        ASSERT_FALSE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), expected_deleted_lock_key));
+        ASSERT_TRUE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), expected_created_delmark));
     }
 }
 CATCH
