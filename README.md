@@ -128,7 +128,7 @@ brew install ninja cmake openssl@1.1 ccache
 The default version of clang in MacOS 13.0 is Apple clang 14.0.0. If your operating system is lower than MacOS 13.0, you can install llvm clang.
 
 ```shell
-brew install llvm
+brew install llvm@15
 
 # check llvm version
 clang --version # should be 15.0.0 or higher
