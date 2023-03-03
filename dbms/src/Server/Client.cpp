@@ -202,12 +202,12 @@ private:
     struct ConnectionParameters
     {
         String host;
-        UInt16 port;
+        UInt16 port = DBMS_DEFAULT_PORT;
         String default_database;
         String user;
         String password;
-        Protocol::Secure security;
-        Protocol::Compression compression;
+        Protocol::Secure security = Protocol::Secure::Disable;
+        Protocol::Compression compression = Protocol::Compression::Disable;
         ConnectionTimeouts timeouts;
 
         ConnectionParameters() = default;
@@ -242,7 +242,7 @@ private:
     ConnectionParameters connection_parameters;
 
 
-    void initialize(Poco::Util::Application & self)
+    void initialize(Poco::Util::Application & self) override
     {
         Poco::Util::Application::initialize(self);
 
@@ -272,7 +272,7 @@ private:
     }
 
 
-    int main(const std::vector<std::string> & /*args*/)
+    int main(const std::vector<std::string> & /*args*/) override
     {
         try
         {
@@ -568,7 +568,7 @@ private:
         while (char * line_read = readline(query.empty() ? prompt().c_str() : ":-] "))
         {
             String line = line_read;
-            free(line_read);
+            free(line_read); // NOLINT
 
             size_t ws = line.size();
             while (ws > 0 && isWhitespaceASCII(line[ws - 1]))
@@ -691,7 +691,7 @@ private:
                     return true;
                 }
 
-                ASTInsertQuery * insert = typeid_cast<ASTInsertQuery *>(&*ast);
+                auto * insert = typeid_cast<ASTInsertQuery *>(&*ast);
 
                 if (insert && insert->data)
                 {
@@ -773,10 +773,10 @@ private:
         written_progress_chars = 0;
         written_first_block = false;
 
-        const ASTSetQuery * set_query = typeid_cast<const ASTSetQuery *>(&*parsed_query);
-        const ASTUseQuery * use_query = typeid_cast<const ASTUseQuery *>(&*parsed_query);
+        const auto * set_query = typeid_cast<const ASTSetQuery *>(&*parsed_query);
+        const auto * use_query = typeid_cast<const ASTUseQuery *>(&*parsed_query);
         /// INSERT query for which data transfer is needed (not an INSERT SELECT) is processed separately.
-        const ASTInsertQuery * insert = typeid_cast<const ASTInsertQuery *>(&*parsed_query);
+        const auto * insert = typeid_cast<const ASTInsertQuery *>(&*parsed_query);
 
         connection->forceConnected();
 
@@ -919,7 +919,7 @@ private:
     void sendData(Block & sample)
     {
         /// If INSERT data must be sent.
-        const ASTInsertQuery * parsed_insert_query = typeid_cast<const ASTInsertQuery *>(&*parsed_query);
+        const auto * parsed_insert_query = typeid_cast<const ASTInsertQuery *>(&*parsed_query);
         if (!parsed_insert_query)
             return;
 
@@ -944,7 +944,7 @@ private:
         String current_format = insert_format;
 
         /// Data format can be specified in the INSERT query.
-        if (ASTInsertQuery * insert = typeid_cast<ASTInsertQuery *>(&*parsed_query))
+        if (auto * insert = typeid_cast<ASTInsertQuery *>(&*parsed_query))
             if (!insert->format.empty())
                 current_format = insert->format;
 
@@ -1048,10 +1048,6 @@ private:
             onProfileInfo(packet.profile_info);
             return true;
 
-        case Protocol::Server::Totals:
-            onTotals(packet.block);
-            return true;
-
         case Protocol::Server::Extremes:
             onExtremes(packet.block);
             return true;
@@ -1103,7 +1099,7 @@ private:
             String pager = config().getString("pager", "");
             if (!pager.empty())
             {
-                signal(SIGPIPE, SIG_IGN);
+                signal(SIGPIPE, SIG_IGN); // NOLINT
                 pager_cmd = ShellCommand::execute(pager, true);
                 out_buf = &pager_cmd->in;
             }
@@ -1115,7 +1111,7 @@ private:
             String current_format = format;
 
             /// The query can specify output format or output file.
-            if (ASTQueryWithOutput * query_with_output = dynamic_cast<ASTQueryWithOutput *>(&*parsed_query))
+            if (auto * query_with_output = dynamic_cast<ASTQueryWithOutput *>(&*parsed_query))
             {
                 if (query_with_output->out_file != nullptr)
                 {
@@ -1168,12 +1164,6 @@ private:
         block_out_stream->flush();
     }
 
-
-    void onTotals(Block & block)
-    {
-        initBlockOutputStream(block);
-        block_out_stream->setTotals(block);
-    }
 
     void onExtremes(Block & block)
     {

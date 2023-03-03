@@ -493,11 +493,6 @@ Connection::Packet Connection::receivePacket()
             res.profile_info = receiveProfileInfo();
             return res;
 
-        case Protocol::Server::Totals:
-            /// Block with total values is passed in same form as ordinary block. The only difference is packed id.
-            res.block = receiveData();
-            return res;
-
         case Protocol::Server::Extremes:
             /// Same as above.
             res.block = receiveData();
