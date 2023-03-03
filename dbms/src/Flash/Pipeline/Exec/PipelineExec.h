@@ -35,6 +35,9 @@ public:
         , sink_op(std::move(sink_op_))
     {}
 
+    void executePrefix();
+    void executeSuffix();
+
     OperatorStatus execute();
 
     OperatorStatus await();

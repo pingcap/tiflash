@@ -917,9 +917,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setUseAutoScaler(useAutoScaler(config()));
 
     /// Init File Provider
+    bool enable_encryption = false;
     if (proxy_conf.is_proxy_runnable)
     {
-        bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
         if (enable_encryption)
         {
             auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
@@ -949,6 +950,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (storage_config.s3_config.isS3Enabled())
     {
+        if (enable_encryption)
+        {
+            LOG_ERROR(log, "Cannot support S3 when encryption enabled.");
+            throw Exception("Cannot support S3 when encryption enabled.");
+        }
         S3::ClientFactory::instance().init(storage_config.s3_config);
     }
 
@@ -1211,7 +1217,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     DM::SegmentReaderPoolManager::instance().init(server_info.cpu_info.logical_cores, settings.dt_read_thread_count_scale);
     DM::SegmentReadTaskScheduler::instance();
 
-    global_context->initializeSharedBlockSchemas();
+    auto schema_cache_size = config().getInt("schema_cache_size", 10000);
+    global_context->initializeSharedBlockSchemas(schema_cache_size);
 
     // Load remaining databases
     loadMetadata(*global_context);

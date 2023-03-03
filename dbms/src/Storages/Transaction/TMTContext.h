@@ -55,6 +55,13 @@ using ClientPtr = std::shared_ptr<Client>;
 } // namespace Etcd
 class OwnerManager;
 using OwnerManagerPtr = std::shared_ptr<OwnerManager>;
+namespace S3
+{
+class IS3LockClient;
+using S3LockClientPtr = std::shared_ptr<IS3LockClient>;
+class S3GCManagerService;
+using S3GCManagerServicePtr = std::unique_ptr<S3GCManagerService>;
+} // namespace S3
 
 class TMTContext : private boost::noncopyable
 {
@@ -92,6 +99,7 @@ public:
     explicit TMTContext(Context & context_,
                         const TiFlashRaftConfig & raft_config,
                         const pingcap::ClusterConfig & cluster_config_);
+    ~TMTContext();
 
     SchemaSyncerPtr getSchemaSyncer() const;
 
@@ -142,6 +150,7 @@ private:
     Etcd::ClientPtr etcd_client;
 
     OwnerManagerPtr s3gc_owner;
+    S3::S3LockClientPtr s3_lock_client;
 
     mutable std::mutex mutex;
 

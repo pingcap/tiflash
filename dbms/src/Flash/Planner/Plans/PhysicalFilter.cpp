@@ -38,10 +38,7 @@ PhysicalPlanNodePtr PhysicalFilter::build(
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr before_filter_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
 
-    std::vector<const tipb::Expr *> conditions;
-    for (const auto & c : selection.conditions())
-        conditions.push_back(&c);
-    String filter_column_name = analyzer.buildFilterColumn(before_filter_actions, conditions);
+    String filter_column_name = analyzer.buildFilterColumn(before_filter_actions, selection.conditions());
 
     auto physical_filter = std::make_shared<PhysicalFilter>(
         executor_id,
@@ -67,7 +64,7 @@ void PhysicalFilter::buildPipelineExec(PipelineExecGroupBuilder & group_builder,
     profile_group.reserve(group_builder.concurrency);
     auto input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<FilterTransformOp>(group_builder.exec_status, input_header, before_filter_actions, filter_column, log->identifier()));
+        builder.appendTransformOp(std::make_unique<FilterTransformOp>(group_builder.exec_status, log->identifier(), input_header, before_filter_actions, filter_column));
         PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
     });
     context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);

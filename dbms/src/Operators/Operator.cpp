@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Operators/Operator.h>
@@ -19,8 +20,15 @@
 
 namespace DB
 {
-#define CHECK_IS_CANCELLED                   \
-    if (unlikely(exec_status.isCancelled())) \
+namespace FailPoints
+{
+extern const char random_pipeline_model_operator_run_failpoint[];
+extern const char random_pipeline_model_cancel_failpoint[];
+} // namespace FailPoints
+
+#define CHECK_IS_CANCELLED                                                               \
+    fiu_do_on(FailPoints::random_pipeline_model_cancel_failpoint, exec_status.cancel()); \
+    if (unlikely(exec_status.isCancelled()))                                             \
         return OperatorStatus::CANCELLED;
 
 OperatorStatus Operator::await()
@@ -35,6 +43,7 @@ OperatorStatus Operator::await()
 #endif
     if (profile_info)
         profile_info->updateTime(profile_info->total_stopwatch.elapsed() - start_time);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 
@@ -58,6 +67,7 @@ OperatorStatus SourceOp::read(Block & block)
 
     assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
 #endif
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 
@@ -85,6 +95,7 @@ OperatorStatus TransformOp::transform(Block & block)
 
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 
@@ -113,6 +124,7 @@ OperatorStatus TransformOp::tryOutput(Block & block)
 
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 
@@ -128,6 +140,7 @@ OperatorStatus SinkOp::prepare()
 #endif
     if (profile_info)
         profile_info->updateTime(profile_info->total_stopwatch.elapsed() - start_time);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 
@@ -147,10 +160,11 @@ OperatorStatus SinkOp::write(Block && block)
     // TODO collect operator profile info here.
     auto op_status = writeImpl(std::move(block));
 #ifndef NDEBUG
-    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif
     if (profile_info)
         profile_info->update(block, profile_info->total_stopwatch.elapsed() - start_time);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
 

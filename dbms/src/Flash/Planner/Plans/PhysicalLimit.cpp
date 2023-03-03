@@ -61,7 +61,7 @@ void PhysicalLimit::buildPipelineExec(PipelineExecGroupBuilder & group_builder, 
     OperatorProfileInfoGroup profile_group;
     profile_group.reserve(group_builder.concurrency);
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<LimitTransformOp>(group_builder.exec_status, global_limit, log->identifier()));
+        builder.appendTransformOp(std::make_unique<LimitTransformOp>(group_builder.exec_status, log->identifier(), global_limit));
         PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
     });
     context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);

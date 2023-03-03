@@ -118,16 +118,12 @@ struct MockWriter
         tracked_packet->serializeByResponse(response);
         queue->push(tracked_packet);
     }
-    void sendExecutionSummary(const tipb::SelectResponse & response)
-    {
-        tipb::SelectResponse tmp = response;
-        write(tmp);
-    }
     uint16_t getPartitionNum() const { return 1; }
     bool isLocal(size_t index) const
     {
         return index == 0;
     }
+    bool isReadyForWrite() const { throw Exception("Unsupport async write"); }
 
     std::vector<tipb::FieldType> result_field_types;
 
@@ -370,8 +366,10 @@ public:
 
         // 3. send execution summary
         writer->add_summary = true;
+
         ExecutionSummaryCollector summary_collector(*dag_context_ptr, false);
-        writer->sendExecutionSummary(summary_collector.genExecutionSummaryResponse());
+        auto summary_response = summary_collector.genExecutionSummaryResponse();
+        writer->write(summary_response);
     }
 
     void prepareQueueV2(

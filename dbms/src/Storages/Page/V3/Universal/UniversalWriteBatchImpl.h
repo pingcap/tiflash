@@ -94,10 +94,10 @@ public:
         writes.emplace_back(std::move(w));
     }
 
-    void putPage(const UniversalPageId & page_id, UInt64 tag, std::string_view data)
+    void putPage(const UniversalPageId & page_id, UInt64 tag, std::string_view data, const PageFieldSizes & data_sizes = {})
     {
         auto buffer_ptr = std::make_shared<ReadBufferFromOwnString>(data);
-        putPage(page_id, tag, buffer_ptr, data.size());
+        putPage(page_id, tag, buffer_ptr, data.size(), data_sizes);
     }
 
     void putExternal(const UniversalPageId & page_id, UInt64 tag)
