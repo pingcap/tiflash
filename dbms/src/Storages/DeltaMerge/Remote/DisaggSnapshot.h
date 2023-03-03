@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Transaction/Types.h>
+#include <common/defines.h>
 #include <tipb/expression.pb.h>
 
 #include <mutex>
@@ -100,17 +101,11 @@ class DisaggPhysicalTableReadSnapshot
     friend struct Serializer;
 
 public:
-    DisaggPhysicalTableReadSnapshot(TableID table_id_, SegmentReadTasks && tasks_)
-        : physical_table_id(table_id_)
-        , tasks(std::move(tasks_))
-    {
-    }
+    DisaggPhysicalTableReadSnapshot(TableID table_id_, SegmentReadTasks && tasks_);
 
     SegmentReadTaskPtr popTask(UInt64 segment_id);
 
-    bool empty() const { return tasks.empty(); }
-
-    const SegmentReadTasks & getTasks() const { return tasks; }
+    ALWAYS_INLINE bool empty() const { return tasks.empty(); }
 
     DISALLOW_COPY(DisaggPhysicalTableReadSnapshot);
 
@@ -124,7 +119,8 @@ public:
 
 private:
     mutable std::mutex mtx;
-    SegmentReadTasks tasks;
+    // segment_id -> SegmentReadTaskPtr
+    std::unordered_map<UInt64, SegmentReadTaskPtr> tasks;
 };
 
 

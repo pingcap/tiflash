@@ -34,11 +34,11 @@ Serializer::serializeTo(const DisaggPhysicalTableReadSnapshotPtr & snap, const D
     RemotePb::RemotePhysicalTable remote_table;
     remote_table.set_snapshot_id(task_id.toMeta().SerializeAsString());
     remote_table.set_table_id(snap->physical_table_id);
-    for (const auto & seg_task : snap->tasks)
+    for (const auto & [seg_id, seg_task] : snap->tasks)
     {
         auto remote_seg = Serializer::serializeTo(
             seg_task->read_snapshot,
-            seg_task->segment->segmentId(),
+            seg_id,
             seg_task->segment->segmentEpoch(),
             seg_task->segment->getRowKeyRange(),
             /*read_ranges*/ seg_task->ranges);

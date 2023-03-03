@@ -61,17 +61,21 @@ bool DisaggReadSnapshot::empty() const
     return true;
 }
 
+DisaggPhysicalTableReadSnapshot::DisaggPhysicalTableReadSnapshot(TableID table_id_, SegmentReadTasks && tasks_)
+    : physical_table_id(table_id_)
+{
+    for (auto && t : tasks_)
+    {
+        tasks.emplace(t->segment->segmentId(), t);
+    }
+}
+
 SegmentReadTaskPtr DisaggPhysicalTableReadSnapshot::popTask(const UInt64 segment_id)
 {
     std::unique_lock lock(mtx);
-    for (auto iter = tasks.begin(); iter != tasks.end(); ++iter)
+    if (auto iter = tasks.find(segment_id); iter != tasks.end())
     {
-        auto seg = *iter;
-        if (seg->segment->segmentId() == segment_id)
-        {
-            tasks.erase(iter);
-            return seg;
-        }
+        return iter->second;
     }
     return nullptr;
 }
