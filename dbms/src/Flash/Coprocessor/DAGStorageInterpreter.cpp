@@ -44,6 +44,7 @@
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <common/logger_useful.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -231,6 +232,7 @@ void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_
             if (random() % 100 > 50)
                 region_ids.insert(info.region_id);
         }
+        LOG_WARNING(Logger::get(), "failpoint inject region_exception_after_read_from_storage_some_error, throw RegionException with region_ids={}", region_ids);
         throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
     });
     fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
@@ -238,6 +240,7 @@ void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_
         RegionException::UnavailableRegions region_ids;
         for (const auto & info : regions_info)
             region_ids.insert(info.region_id);
+        LOG_WARNING(Logger::get(), "failpoint inject region_exception_after_read_from_storage_all_error, throw RegionException with region_ids={}", region_ids);
         throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
     });
 }
@@ -299,8 +302,18 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
     mvcc_query_info->scan_context = scan_context;
 
-    auto remote_requests = buildRemoteRequests(scan_context);
+    if (!mvcc_query_info->regions_query_info.empty())
+    {
+        buildLocalStreams(pipeline, context.getSettingsRef().max_block_size);
+    }
 
+    // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
+    auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
+
+    // Note that `buildRemoteRequests` must be called after `buildLocalStreams` because
+    // `buildLocalStreams` will setup `region_retry_from_local_region` and we must
+    // retry those regions or there will be data lost.
+    auto remote_requests = buildRemoteRequests(scan_context);
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
     {
         // This means RN is sending requests with stale region info, we simply reject the request
@@ -309,14 +322,6 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
         throw Exception("Rejected disaggregated DAG execute because RN region info does not match", DB::ErrorCodes::REGION_EPOCH_NOT_MATCH);
     }
-
-    if (!mvcc_query_info->regions_query_info.empty())
-    {
-        buildLocalStreams(pipeline, context.getSettingsRef().max_block_size);
-    }
-
-    // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
-    auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
 
     // A failpoint to test pause before alter lock released
     FAIL_POINT_PAUSE(FailPoints::pause_with_alter_locks_acquired);
@@ -791,7 +796,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         const TableID table_id = table_query_info.first;
         const SelectQueryInfo & query_info = table_query_info.second;
         auto table_snap = buildLocalStreamsForPhysicalTable(table_id, query_info, current_pipeline, max_block_size);
-        if (!table_snap)
+        if (table_snap)
         {
             disaggregated_snap->addTask(table_id, std::move(table_snap));
         }
