@@ -46,7 +46,7 @@ public:
             FailPointHelper::enableFailPoint(FailPoints::force_ingest_via_delta);
     }
 
-    ~StoreIngestTest()
+    ~StoreIngestTest() override
     {
         if (ingest_by_split)
             FailPointHelper::disableFailPoint(FailPoints::force_ingest_via_replace);
@@ -231,7 +231,7 @@ try
     auto pool = std::make_shared<ThreadPool>(4);
     for (const auto & op : ops)
     {
-        pool->schedule([=, &log] {
+        pool->scheduleOrThrowOnError([=, &log] {
             try
             {
                 LOG_INFO(
