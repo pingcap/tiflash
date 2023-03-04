@@ -89,7 +89,6 @@ private:
             if (isUpperAlphaASCII(chars[i]))
             {
                 chars[i] = toLowerIfAlphaASCII(chars[i]);
-                ++i;
             }
             else
             {
@@ -99,9 +98,13 @@ private:
         }
     }
 
+    // When escape_char is a lower char, we need to convert it to the capital char
+    // Because: when lowering "ABC" with escape 'a', after lower, "ABC" -> "abc",
+    // then 'a' will be an escape char and it is not expected.
+    // Morever, when escape char is uppered we need to tell it to the caller.
     static void lowerStringsExcludeEscapeChar(Chars_t & chars, char escape_char)
     {
-        if (!(escape_char >= 'A' && escape_char <= 'Z'))
+        if (!isAlphaASCII(escape_char))
         {
             lowerStrings(chars);
             return;
@@ -109,6 +112,8 @@ private:
 
         size_t size = chars.size();
         bool escaped = false;
+        char actual_escape_char = isLowerAplhaASCII(escape_char) ? toUpperIfAlphaASCII(escape_char) : escape_char;
+
         for (size_t i = 0; i < size; ++i)
         {
             char char_to_lower = chars[i];
@@ -126,6 +131,15 @@ private:
             }
             else
             {
+                if ((chars[i] == static_cast<unsigned char>(escape_char)) && !escaped)
+                {
+                    escaped = true;
+
+                    // It should be `chars[i] = toUpperIfAlphaASCII(chars[i])`,
+                    // but 'actual_escape_char' is always equal to 'toUpperIfAlphaASCII(str[i])'
+                    chars[i] = actual_escape_char;
+                    continue;
+                }
                 size_t utf8_len = UTF8::seqLength(char_to_lower);
                 i += utf8_len - 1;
             }
@@ -158,14 +172,10 @@ private:
         }
 
         const auto * col_escape_const = typeid_cast<const ColumnConst *>(&*column_escape);
-        if (col_escape_const != nullptr)
-        {
-            char escape_char = static_cast<Int32>(col_escape_const->getValue<Int32>());
-            lowerStringsExcludeEscapeChar(lowered_col_data->getChars(), escape_char);
-            return;
-        }
+        RUNTIME_CHECK_MSG(col_escape_const != nullptr, "escape char column should be constant");
+        char escape_char = static_cast<Int32>(col_escape_const->getValue<Int32>());
 
-        lowerStrings(lowered_col_data->getChars());
+        lowerStringsExcludeEscapeChar(lowered_col_data->getChars(), escape_char);
     }
 };
 
@@ -308,6 +318,9 @@ public:
                 else
                 {
                     escape_char = static_cast<UInt8>(c);
+                    if constexpr (name == std::string_view(NameIlike3Args::name))
+                        if (isLowerAplhaASCII(escape_char))
+                            escape_char = toUpperIfAlphaASCII(escape_char);
                 }
             }
             if (!valid_args)

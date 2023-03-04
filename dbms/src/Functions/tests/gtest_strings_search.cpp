@@ -683,17 +683,15 @@ TEST_F(StringMatch, CheckEscape)
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN)
     };
 
-    // std::vector<std::optional<String>> expr_vec{"", "aaz", "aaz", "AAz", "aAz", "a啊啊啊aa啊Zz", "ü", "á"};
-    // std::vector<std::optional<String>> pat_vec{"", "AAAAz", "Aaaz", "AAAAZ", "aAaAz", "a啊啊啊AaaA啊Zz", "Ü", "a"};
-    std::vector<std::optional<String>> expr_vec{"aaz", "AAz", "aAz", "a啊啊啊aa啊Zz", "ü", "á"};
-    std::vector<std::optional<String>> pat_vec{"Aaaz", "AAAAZ", "aAaAz", "a啊啊啊AaaA啊Zz", "Ü", "a"};
+    std::vector<std::optional<String>> expr_vec{"", "aaz", "aaz", "AAz", "aAz", "a啊啊啊aa啊Zz", "ü", "á"};
+    std::vector<std::optional<String>> pat_vec{"", "AAAAz", "Aaaz", "AAAAZ", "aAaAz", "a啊啊啊AaaA啊Zz", "Ü", "a"};
     std::vector<std::optional<UInt64>> vec_vec_lower_a_expect = {1, 0, 1, 0, 1, 0, 0, 0}; // escape 'a'
     std::vector<std::optional<UInt64>> vec_vec_capital_a_expect = {1, 1, 1, 1, 1, 1, 0, 0}; // escape 'A'
     ColumnWithTypeAndName escape_lower_a = createConstColumn<Int32>(1, static_cast<Int32>('a'));
     ColumnWithTypeAndName escape_capital_a = createConstColumn<Int32>(1, static_cast<Int32>('A'));
+
     for (const auto * collator : collators)
     {
-        std::cout << magic_enum::enum_name(collator->getCollatorType()) << std::endl;
         // vec vec
         ASSERT_COLUMN_EQ(
             toNullableVec(vec_vec_lower_a_expect),
@@ -746,10 +744,10 @@ TEST_F(StringMatch, CheckEscape)
                 collator));
 
         ASSERT_COLUMN_EQ(
-            toConst(1),
+            toConst(0),
             executeFunction(
                 "ilike3Args",
-                {toConst("a啊啊a"), toConst("a啊啊A"), escape_capital_a},
+                {toConst("a啊啊a"), toConst("A啊啊a"), escape_capital_a},
                 collator));
 
         ASSERT_COLUMN_EQ(

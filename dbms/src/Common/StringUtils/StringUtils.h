@@ -93,6 +93,11 @@ inline bool isUpperAlphaASCII(char c)
     return (c >= 'A' && c <= 'Z');
 }
 
+inline bool isLowerAplhaASCII(char c)
+{
+    return (c >= 'a' && c <= 'z');
+}
+
 inline bool isAlphaASCII(char c)
 {
     return (c >= 'a' && c <= 'z')
