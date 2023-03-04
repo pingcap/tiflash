@@ -16,7 +16,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/BlobStore.h>
-#include <Storages/Page/V3/CheckpointFile/CPDataFileReader.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
@@ -42,7 +41,7 @@ UniversalPageStoragePtr UniversalPageStorage::create(
         PS::V3::BlobConfig::from(config));
     if (s3_client != nullptr)
     {
-        storage->remote_reader = std::make_unique<PS::V3::CPDataFileReader>(s3_client, bucket);
+        storage->remote_reader = std::make_unique<PS::V3::S3PageReader>(s3_client, bucket);
     }
     return storage;
 }

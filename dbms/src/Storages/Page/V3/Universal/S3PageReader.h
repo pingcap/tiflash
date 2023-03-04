@@ -35,10 +35,10 @@ using UniversalPageIdAndEntries = std::vector<UniversalPageIdAndEntry>;
 /**
  * Used to read checkpoint data from S3 according to the specified checkpoint info(including file_id, offset and size) in `PageEntry`.
  */
-class CPDataFileReader : private Allocator<false>
+class S3PageReader : private Allocator<false>
 {
 public:
-    explicit CPDataFileReader(std::shared_ptr<Aws::S3::S3Client> s3_client_, const String & bucket_)
+    explicit S3PageReader(std::shared_ptr<Aws::S3::S3Client> s3_client_, const String & bucket_)
         : s3_client(s3_client_)
         , bucket(bucket_)
     {}
@@ -57,5 +57,5 @@ private:
     String bucket;
 };
 
-using CPDataFileReaderPtr = std::unique_ptr<CPDataFileReader>;
+using S3PageReaderPtr = std::unique_ptr<S3PageReader>;
 } // namespace DB::PS::V3

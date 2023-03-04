@@ -13,13 +13,13 @@
 // limitations under the License.
 
 #include <IO/ReadBufferFromFile.h>
-#include <Storages/Page/V3/CheckpointFile/CPDataFileReader.h>
+#include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 
 namespace DB::PS::V3
 {
-Page CPDataFileReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
+Page S3PageReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
 {
     const auto & page_entry = page_id_and_entry.second;
     RUNTIME_CHECK(page_entry.checkpoint_info.has_value());
@@ -50,7 +50,7 @@ Page CPDataFileReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
     return page;
 }
 
-UniversalPageMap CPDataFileReader::read(const UniversalPageIdAndEntries & page_id_and_entries)
+UniversalPageMap S3PageReader::read(const UniversalPageIdAndEntries & page_id_and_entries)
 {
     UniversalPageMap page_map;
     for (const auto & page_id_and_entry : page_id_and_entries)
@@ -60,7 +60,7 @@ UniversalPageMap CPDataFileReader::read(const UniversalPageIdAndEntries & page_i
     return page_map;
 }
 
-std::pair<UniversalPageMap, UniversalPageMap> CPDataFileReader::read(const FieldReadInfos & to_read)
+std::pair<UniversalPageMap, UniversalPageMap> S3PageReader::read(const FieldReadInfos & to_read)
 {
     UniversalPageMap complete_page_map;
     size_t read_fields_size = 0;

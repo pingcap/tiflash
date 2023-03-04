@@ -22,9 +22,9 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
-#include <Storages/Page/V3/CheckpointFile/CPDataFileReader.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <common/defines.h>
 
 namespace DB
@@ -191,7 +191,7 @@ public:
     using BlobStorePtr = std::unique_ptr<PS::V3::universal::BlobStoreType>;
     BlobStorePtr blob_store;
 
-    PS::V3::CPDataFileReaderPtr remote_reader;
+    PS::V3::S3PageReaderPtr remote_reader;
 
     PS::V3::universal::ExternalPageCallbacksManager manager;
 
