@@ -114,10 +114,6 @@ public:
     /// Take shared ownership of Arena, that holds memory for states of aggregate functions.
     void addArena(ArenaPtr arena_);
 
-    /** Transform column with states of aggregate functions to column with final result values.
-      */
-    MutableColumnPtr convertToValues() const;
-
     std::string getName() const override { return "AggregateFunction(" + func->getName() + ")"; }
     const char * getFamilyName() const override { return "AggregateFunction"; }
 

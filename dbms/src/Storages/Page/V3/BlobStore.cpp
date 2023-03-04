@@ -262,7 +262,8 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
             edit.putExternal(wb.getFullPageId(write.page_id));
             break;
         case WriteBatchWriteType::UPSERT:
-            throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown write type: {}", magic_enum::enum_name(write.type));
+            break;
         }
     }
 
@@ -321,8 +322,8 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
             case WriteBatchWriteType::PUT:
             case WriteBatchWriteType::UPSERT:
             case WriteBatchWriteType::UPDATE_REMOTE:
-                throw Exception(fmt::format("write batch have a invalid total size == 0 while this kind of entry exist, write_type={}", static_cast<Int32>(write.type)),
-                                ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "write batch have a invalid total size == 0 while this kind of entry exist, write_type={}", magic_enum::enum_name(write.type));
+                break;
             }
         }
         return edit;

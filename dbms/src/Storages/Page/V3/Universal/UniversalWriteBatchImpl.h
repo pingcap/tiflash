@@ -15,6 +15,7 @@
 #pragma once
 
 #include <IO/ReadBufferFromString.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/WriteBatchImpl.h>
@@ -167,13 +168,6 @@ public:
         total_data_size += rhs.total_data_size;
     }
 
-    void clear()
-    {
-        Writes tmp;
-        writes.swap(tmp);
-        total_data_size = 0;
-    }
-
     size_t getTotalDataSize() const
     {
         return total_data_size;
@@ -214,7 +208,14 @@ public:
         return fmt_buffer.toString();
     }
 
-    UniversalWriteBatch(UniversalWriteBatch && rhs)
+    void clear()
+    {
+        Writes tmp;
+        writes.swap(tmp);
+        total_data_size = 0;
+    }
+
+    UniversalWriteBatch(UniversalWriteBatch && rhs) noexcept
         : prefix(std::move(rhs.prefix))
         , writes(std::move(rhs.writes))
         , total_data_size(rhs.total_data_size)
@@ -224,7 +225,7 @@ public:
     {
         prefix.swap(o.prefix);
         writes.swap(o.writes);
-        std::swap(o.total_data_size, total_data_size);
+        std::swap(total_data_size, o.total_data_size);
     }
 
 private:

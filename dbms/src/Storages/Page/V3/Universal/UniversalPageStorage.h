@@ -178,6 +178,9 @@ private:
     void tryUpdateLocalCacheForRemotePages(UniversalWriteBatch & wb, SnapshotPtr snapshot) const;
 
 public:
+    friend class PageReaderImplUniversal;
+
+    // private: // TODO: make these private
     String storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator; // Get paths for storing data
     PageStorageConfig config;

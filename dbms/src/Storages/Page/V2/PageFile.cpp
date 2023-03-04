@@ -28,6 +28,7 @@
 
 #include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
+#include <magic_enum.hpp>
 
 #ifndef __APPLE__
 #include <fcntl.h>
@@ -120,7 +121,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             meta_write_bytes += (sizeof(PageId) + sizeof(PageId));
             break;
         case WriteBatchWriteType::PUT_EXTERNAL:
-            throw Exception("Should not serialize with `PUT_EXTERNAL`");
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Should not serialize with {}", magic_enum::enum_name(write.type));
             break;
         default:
             throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(write.type)), ErrorCodes::LOGICAL_ERROR);

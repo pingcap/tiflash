@@ -35,31 +35,6 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
         non_joined_stream = join->createStreamWithNonJoinedRows(input->getHeader(), probe_index, join->getProbeConcurrency(), max_block_size);
 }
 
-Block HashJoinProbeBlockInputStream::getTotals()
-{
-    if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
-    {
-        totals = child->getTotals();
-        if (!totals)
-        {
-            if (join->hasTotals())
-            {
-                for (const auto & name_and_type : child->getHeader().getColumnsWithTypeAndName())
-                {
-                    auto column = name_and_type.type->createColumn();
-                    column->insertDefault();
-                    totals.insert(ColumnWithTypeAndName(std::move(column), name_and_type.type, name_and_type.name));
-                }
-            }
-            else
-                return totals; /// There's nothing to JOIN.
-        }
-        join->joinTotals(totals);
-    }
-
-    return totals;
-}
-
 Block HashJoinProbeBlockInputStream::getHeader() const
 {
     Block res = children.back()->getHeader();
