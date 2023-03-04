@@ -26,22 +26,13 @@ class WriteBuffer;
   */
 struct BlockInfo
 {
-    /** is_overflows:
-      * After running GROUP BY ... WITH TOTALS with the max_rows_to_group_by and group_by_overflow_mode = 'any' settings,
-      *  a row is inserted in the separate block with aggregated values that have not passed max_rows_to_group_by.
-      * If it is such a block, then is_overflows is set to true for it.
-      * Overflows is now deprecated, will throw error if is_overflows is true
-      */
-
     /** bucket_num:
       * When using the two-level aggregation method, data with different key groups are scattered across different buckets.
       * In this case, the bucket number is indicated here. It is used to optimize the merge for distributed aggregation.
       * Otherwise -1.
       */
 
-    // todo remove is_overflows in next major version(v7.0.0)
 #define APPLY_FOR_BLOCK_INFO_FIELDS(M) \
-    M(bool, is_overflows, false, 1)    \
     M(Int32, bucket_num, -1, 2)
 
 #define DECLARE_FIELD(TYPE, NAME, DEFAULT, FIELD_NUM) \

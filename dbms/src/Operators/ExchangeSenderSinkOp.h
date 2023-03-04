@@ -25,11 +25,10 @@ class ExchangeSenderSinkOp : public SinkOp
 public:
     ExchangeSenderSinkOp(
         PipelineExecutorStatus & exec_status_,
-        std::unique_ptr<DAGResponseWriter> && writer,
-        const String & req_id)
-        : SinkOp(exec_status_)
+        const String & req_id,
+        std::unique_ptr<DAGResponseWriter> && writer)
+        : SinkOp(exec_status_, req_id)
         , writer(std::move(writer))
-        , log(Logger::get(req_id))
     {
     }
 
@@ -41,6 +40,7 @@ public:
     void operatePrefix() override;
     void operateSuffix() override;
 
+protected:
     OperatorStatus writeImpl(Block && block) override;
 
     OperatorStatus prepareImpl() override;
@@ -49,7 +49,6 @@ public:
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;
-    const LoggerPtr log;
     size_t total_rows = 0;
 };
 } // namespace DB

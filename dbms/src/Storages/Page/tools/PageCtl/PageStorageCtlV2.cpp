@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Encryption/MockKeyManager.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
@@ -26,6 +27,8 @@
 #include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
+
+#include <magic_enum.hpp>
 
 using namespace DB::PS::V2;
 DB::WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
@@ -272,6 +275,8 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                            page_file.getFileId(),
                            page_file.getLevel());
                     break;
+                default:
+                    throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "illegal type: {}", magic_enum::enum_name(record.type));
                 }
             }
         }

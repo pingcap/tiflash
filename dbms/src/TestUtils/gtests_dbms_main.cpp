@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/ThreadPool.h>
+#include <IO/IOThreadPool.h>
 #include <Poco/Environment.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
@@ -74,10 +76,13 @@ int main(int argc, char ** argv)
         DB::tests::TiFlashTestEnv::getGlobalContext().getSettingsRef().dt_read_thread_count_scale);
     DB::DM::SegmentReadTaskScheduler::instance();
 
+    DB::GlobalThreadPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
+    DB::IOThreadPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
     const auto s3_endpoint = Poco::Environment::get("S3_ENDPOINT", "");
-    const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "");
+    const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "mock_bucket");
     const auto access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", "");
     const auto secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", "");
+    const auto mock_s3 = Poco::Environment::get("MOCK_S3", "true"); // In unit-tests, use MockS3Client by default.
     auto s3config = DB::StorageS3Config{
         .endpoint = s3_endpoint,
         .bucket = s3_bucket,
@@ -85,7 +90,7 @@ int main(int argc, char ** argv)
         .secret_access_key = secret_access_key,
     };
     Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
-    DB::S3::ClientFactory::instance().init(s3config);
+    DB::S3::ClientFactory::instance().init(s3config, mock_s3 == "true");
 
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint

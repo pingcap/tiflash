@@ -89,6 +89,7 @@ check_then_add_sources_compile_flag (
     src/Columns/ColumnsCommon.cpp
     src/Columns/ColumnVector.cpp
     src/DataTypes/DataTypeString.cpp
+    src/Interpreters/Join.cpp
 )
 
 list (APPEND tiflash_common_io_sources ${CONFIG_BUILD})
@@ -225,6 +226,7 @@ endif()
 # We mark it public to make the headers available.
 if (Poco_NetSSL_FOUND)
     target_link_libraries (tiflash_common_io PUBLIC ${Poco_NetSSL_LIBRARY})
+    target_no_warning (tiflash_common_io deprecated-enum-enum-conversion)
 endif()
 
 target_link_libraries (dbms ${Poco_Foundation_LIBRARY})

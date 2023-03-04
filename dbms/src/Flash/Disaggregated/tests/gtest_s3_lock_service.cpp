@@ -23,6 +23,8 @@
 #include <TiDB/MockOwnerManager.h>
 #include <TiDB/OwnerManager.h>
 #include <aws/core/client/ClientConfiguration.h>
+#include <aws/s3/model/CreateBucketRequest.h>
+#include <aws/s3/model/CreateBucketResult.h>
 #include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <common/types.h>
@@ -39,6 +41,7 @@ class S3LockServiceTest
 {
 public:
     void SetUp() override
+    try
     {
         db_context = std::make_unique<Context>(DB::tests::TiFlashTestEnv::getContext());
         log = Logger::get();
@@ -58,7 +61,31 @@ public:
             s3_client = std::make_shared<MockS3Client>();
         }
         s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager, s3_client);
+        createBucketIfNotExist();
         createS3DataFiles();
+    }
+    CATCH
+
+    bool createBucketIfNotExist()
+    {
+        Aws::S3::Model::CreateBucketRequest request;
+        const auto & bucket = s3_client->bucket();
+        request.SetBucket(bucket);
+        auto outcome = s3_client->CreateBucket(request);
+        if (outcome.IsSuccess())
+        {
+            LOG_DEBUG(log, "Created bucket {}", bucket);
+        }
+        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
+        {
+            LOG_DEBUG(log, "Bucket {} already exist", bucket);
+        }
+        else
+        {
+            const auto & err = outcome.GetError();
+            LOG_ERROR(log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
+        }
+        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
     }
 
     void createS3DataFiles()
