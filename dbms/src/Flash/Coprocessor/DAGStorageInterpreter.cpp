@@ -355,7 +355,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
     /// handle timezone/duration cast for local and remote table scan.
     executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
-    recordProfileStreams(pipeline, filter_conditions.executor_id);
+    recordProfileStreams(pipeline, filter_conditions.hasValue() ? filter_conditions.executor_id : table_scan.getTableScanExecutorID());
 }
 
 void DAGStorageInterpreter::prepare()
