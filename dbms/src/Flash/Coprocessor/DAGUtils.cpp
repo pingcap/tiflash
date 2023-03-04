@@ -1171,22 +1171,20 @@ std::vector<Int64> getColumnsForExpr(const tipb::Expr & expr, const std::vector<
 tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, TimezoneInfo & timezone_info)
 {
     tipb::Expr ret_expr = expr;
-    if (expr.tp() == tipb::ExprType::MysqlTime && expr.has_field_type())
+    if (expr.tp() == tipb::ExprType::MysqlTime && expr.field_type().tp() == TiDB::TypeDatetime)
     {
-        Field value = decodeLiteral(expr);
         // for example:
         //      when timezone is +08:00
         //      2019-01-01 00:00:00 +08:00 -> 2019-01-01 00:00:00 +00:00
         static const auto & time_zone_utc = DateLUT::instance("UTC");
-        (void)time_zone_utc;
-        UInt64 from_time = value.get<UInt64>();
+        UInt64 from_time = decodeDAGUInt64(expr.val());
         UInt64 result_time = from_time;
         if (timezone_info.is_name_based)
             convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
         else if (timezone_info.timezone_offset != 0)
             convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
         WriteBufferFromOwnString ss;
-        encodeDAGInt64(result_time, ss);
+        encodeDAGUInt64(result_time, ss);
         ret_expr.set_val(ss.releaseStr());
     }
     else if (isScalarFunctionExpr(expr))
