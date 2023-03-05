@@ -262,6 +262,23 @@ RUN rm -rf /cmake-artifacts/doc \
            /cmake-artifacts/bin/ccmake
 
 ####################
+# Build a recent ninja-build
+####################
+
+FROM centos-base-compilers AS builder-ninja
+
+WORKDIR /
+
+ARG NINJA_VERSION=1.11.1
+RUN wget https://github.com/ninja-build/ninja/archive/refs/tags/v${NINJA_VERSION}.tar.gz \
+    && tar xf v${NINJA_VERSION}.tar.gz \
+    && mv ninja-${NINJA_VERSION} ninja-src
+
+WORKDIR /ninja-src
+
+RUN ./configure.py --bootstrap
+
+####################
 # Build GitHub CLI
 ####################
 
@@ -307,7 +324,7 @@ COPY misc/cargo-config.toml /root/.cargo/config
 
 RUN --mount=type=cache,target=/var/cache/yum,sharing=locked \
     yum install -y vim screen less \
-                   make ninja-build gcc libcurl-devel
+                   make gcc libcurl-devel
 
 # Use dump-init as the default entry point.
 RUN if [[ "$(uname -m)" = @(x86_64|x64) ]]; then \
@@ -315,7 +332,7 @@ RUN if [[ "$(uname -m)" = @(x86_64|x64) ]]; then \
     elif [[ "$(uname -m)" = @(arm64|aarch64|armv8b|armv8l) ]]; then \
       PLATFORM=aarch64 ; \
     fi \
-    wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.5/dumb-init_1.2.5_${PLATFORM}
+    && wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.5/dumb-init_1.2.5_${PLATFORM}
 RUN chmod +x /usr/local/bin/dumb-init
 
 COPY --from=builder-cmake /cmake-artifacts /usr/local/
@@ -327,6 +344,9 @@ RUN { echo "/usr/local/lib/$(uname -m)-unknown-linux-gnu" | tee /etc/ld.so.conf.
 COPY --from=builder-ccache /ccache-artifacts /
 
 COPY --from=builder-python /python-artifacts /
+
+COPY --from=builder-ninja /ninja-src/ninja /usr/bin/ninja-build
+RUN ln -sf /usr/bin/ninja-build /usr/bin/ninja
 
 COPY --from=builder-gh /gh-artifacts/bin/gh /usr/local/bin/gh
 

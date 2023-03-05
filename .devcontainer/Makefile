@@ -72,3 +72,7 @@ clean-all:
 clean-cmake:
 	rm -rf ../cmake-build-Debug/CMakeCache.txt
 	rm -rf ../cmake-build-Release/CMakeCache.txt
+
+.PHONY: shell
+shell: rebuild-docker
+	$(CONTAINER_SHELL)
