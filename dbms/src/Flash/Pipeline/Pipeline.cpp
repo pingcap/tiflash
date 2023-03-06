@@ -145,6 +145,8 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
             case tipb::ExecType::TypeExchangeSender:
             case tipb::ExecType::TypeExchangeReceiver:
             case tipb::ExecType::TypeExpand:
+            case tipb::ExecType::TypeWindow:
+            case tipb::ExecType::TypeSort:
                 return true;
             default:
                 is_supported = false;
