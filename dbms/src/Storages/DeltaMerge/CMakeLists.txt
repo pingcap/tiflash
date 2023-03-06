@@ -25,6 +25,7 @@ add_headers_and_sources(delta_merge ./File)
 add_headers_and_sources(delta_merge ./ColumnFile)
 add_headers_and_sources(delta_merge ./Delta)
 add_headers_and_sources(delta_merge ./ReadThread)
+add_headers_and_sources(delta_merge ./Remote)
 
 add_library(delta_merge ${delta_merge_headers} ${delta_merge_sources})
 target_link_libraries(delta_merge PRIVATE dbms dtpb page)

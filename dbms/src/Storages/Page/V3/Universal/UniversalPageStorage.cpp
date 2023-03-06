@@ -152,6 +152,21 @@ void UniversalPageStorage::traverse(const String & prefix, const std::function<v
     }
 }
 
+void UniversalPageStorage::traverseEntries(const String & prefix, const std::function<void(UniversalPageId page_id, DB::PageEntry entry)> & acceptor, SnapshotPtr snapshot) const
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot("");
+    }
+
+    // TODO: This could hold the read lock of `page_directory` for a long time
+    const auto page_ids = page_directory->getAllPageIdsWithPrefix(prefix, snapshot);
+    for (const auto & page_id : page_ids)
+    {
+        acceptor(page_id, getEntry(page_id, snapshot));
+    }
+}
+
 UniversalPageId UniversalPageStorage::getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot, bool throw_on_not_exist) const
 {
     if (!snapshot)
@@ -162,7 +177,7 @@ UniversalPageId UniversalPageStorage::getNormalPageId(const UniversalPageId & pa
     return page_directory->getNormalPageId(page_id, snapshot, throw_on_not_exist);
 }
 
-DB::PageEntry UniversalPageStorage::getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot)
+DB::PageEntry UniversalPageStorage::getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot) const
 {
     if (!snapshot)
     {
