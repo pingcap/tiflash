@@ -76,6 +76,7 @@ public:
         assert(header);
         return header;
     }
+
     void setHeader(const Block & header_)
     {
         assert(header_ && !header);
@@ -87,15 +88,6 @@ public:
         profile_info = profile_info_;
         profile_info->start();
     }
-
-    // void updateProfileInfo(const Block & block, UInt64 time)
-    // {
-    //     std::cout << "update rows: " << block.rows() << std::endl;
-    //     ++profile_info->blocks;
-    //     profile_info->rows += block.rows();
-    //     profile_info->bytes += block.bytes();
-    //     profile_info->execution_time += time;
-    // }
 
 protected:
     PipelineExecutorStatus & exec_status;

@@ -154,7 +154,6 @@ void ExecutionSummaryCollector::addExecuteSummariesForPipeline(tipb::SelectRespo
     if (!dag_context.collect_execution_summaries)
         return;
     /// fill execution_summary for local executor
-
     // collect tree based executor's execution summary
     if (dag_context.return_executor_id)
     {
@@ -173,7 +172,7 @@ void ExecutionSummaryCollector::addExecuteSummariesForPipeline(tipb::SelectRespo
     }
     else
     {
-        /// collect list based executor's execution summary
+        // collect list based executor's execution summary
         const auto & profile_map = dag_context.pipeline_profiles;
         ExecutionSummary current;
         for (const auto & executor_id : dag_context.list_based_executors_order)
@@ -189,7 +188,7 @@ void ExecutionSummaryCollector::addExecuteSummariesForPipeline(tipb::SelectRespo
         }
     }
 
-    // TODO: support exchange profile for Pipeline Model.
+    // TODO: support exchange profile for pipeline model.
 }
 
 void ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
@@ -213,7 +212,7 @@ void ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
 
     size_t profile_num = executor_profile.size();
 
-    // Calculate time_processed_ns for operators before the last operator
+    // 1. Calculate time_processed_ns for operators before the last operator
     for (size_t i = 0; i < profile_num - 1; ++i)
     {
         auto && operator_profile_group = executor_profile[i];
@@ -225,7 +224,7 @@ void ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
         accumulated_time += time_processed_ns;
     }
 
-    // Only output the last operator's num_produced_rows, num_iterations and concurrency
+    // 2. Only output the last operator's num_produced_rows, num_iterations and concurrency
     auto && operator_profile_group = executor_profile[profile_num - 1];
     UInt64 time_processed_ns = 0;
     current.concurrency = std::max(concurrency, operator_profile_group.size());
@@ -238,11 +237,9 @@ void ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
     accumulated_time += time_processed_ns;
     current.time_processed_ns = accumulated_time;
 
-    // get execution info from scan_context
+    // 3. Get execution info from scan_context
     if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
-    {
         current.scan_context->merge(*(iter->second));
-    }
     fillTiExecutionSummary(response.add_execution_summaries(), current, executor_id);
 }
 } // namespace DB
