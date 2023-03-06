@@ -1515,8 +1515,8 @@ void DeltaMergeStore::restoreStableFiles()
         for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
         {
             //To avoid restore dmfile twice in DeltaMergeStore::DeltaMergeStore(the other is in StableValueSpace::restore of restoreSegment)
-            // we just add the file to path_delegate with file_size = 0
-            // when we do DMFile::restore later, we then update the actually size of file.
+            //we just add the file to path_delegate with file_size = 0
+            //when we do DMFile::restore later, we then update the actually size of file.
             path_delegate.addDTFile(file_id, 0, root_path);
         }
     }
