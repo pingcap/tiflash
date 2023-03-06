@@ -38,6 +38,7 @@ public:
     Model::UploadPartOutcome UploadPart(const Model::UploadPartRequest & request) const override;
     Model::CompleteMultipartUploadOutcome CompleteMultipartUpload(const Model::CompleteMultipartUploadRequest & request) const override;
     Model::CreateBucketOutcome CreateBucket(const Model::CreateBucketRequest & request) const override;
+    Model::DeleteBucketOutcome DeleteBucket(const Model::DeleteBucketRequest & request) const override;
     Model::DeleteObjectOutcome DeleteObject(const Model::DeleteObjectRequest & request) const override;
     Model::HeadObjectOutcome HeadObject(const Model::HeadObjectRequest & request) const override;
 

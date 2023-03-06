@@ -295,6 +295,34 @@ void VersionedPageEntries<Trait>::createDelete(const PageVersion & ver)
         toDebugString()));
 }
 
+template <typename Trait>
+bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry)
+{
+    auto page_lock = acquireLock();
+    if (type == EditRecordType::VAR_ENTRY)
+    {
+        auto last_iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1, 0));
+        RUNTIME_CHECK(last_iter != entries.end() && last_iter->second.isEntry());
+        auto & ori_entry = last_iter->second.entry;
+        RUNTIME_CHECK(ori_entry.checkpoint_info.has_value());
+        if (!ori_entry.checkpoint_info->is_local_data_reclaimed)
+        {
+            return false;
+        }
+        ori_entry.file_id = entry.file_id;
+        ori_entry.size = entry.size;
+        ori_entry.offset = entry.offset;
+        ori_entry.checksum = entry.checksum;
+        ori_entry.checkpoint_info->is_local_data_reclaimed = false;
+        return true;
+    }
+    throw Exception(fmt::format(
+        "try to update remote page with invalid state "
+        "[ver={}] [state={}]",
+        ver,
+        toDebugString()));
+}
+
 // Create a new reference version with version=`ver` and `ori_page_id_`.
 // If create success, then return true, otherwise return false.
 template <typename Trait>
@@ -1473,6 +1501,7 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
                 case EditRecordType::VAR_ENTRY:
                 case EditRecordType::VAR_EXTERNAL:
                 case EditRecordType::VAR_REF:
+                case EditRecordType::UPDATE_DATA_FROM_REMOTE:
                     throw Exception(fmt::format("should not handle edit with invalid type [type={}]", magic_enum::enum_name(r.type)));
                 }
             }
@@ -1486,6 +1515,34 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
         // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
         sequence.fetch_add(edit_size);
     }
+}
+
+template <typename Trait>
+typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCacheForRemotePages(PageEntriesEdit && edit, const DB::PageStorageSnapshotPtr & snap_, const WriteLimiterPtr & write_limiter)
+{
+    std::unique_lock apply_lock(apply_mutex);
+    auto seq = toConcreteSnapshot(snap_)->sequence;
+    for (auto & r : edit.getMutRecords())
+    {
+        r.version = PageVersion(seq, 0);
+    }
+    wal->apply(Trait::Serializer::serializeTo(edit), write_limiter);
+    typename PageDirectory<Trait>::PageEntries ignored_entries;
+    {
+        std::unique_lock table_lock(table_rw_mutex);
+
+        for (const auto & r : edit.getRecords())
+        {
+            auto iter = mvcc_table_directory.lower_bound(r.page_id);
+            assert(iter != mvcc_table_directory.end());
+            auto & version_list = iter->second;
+            if (!version_list->updateLocalCacheForRemotePage(PageVersion(seq, 0), r.entry))
+            {
+                ignored_entries.push_back(r.entry);
+            }
+        }
+    }
+    return ignored_entries;
 }
 
 template <typename Trait>
@@ -1668,8 +1725,16 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
     auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
     files_snap.num_records = edit_from_disk.size();
     files_snap.read_elapsed_ms = watch.elapsedMilliseconds();
-    bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), write_limiter);
-    return done_any_io;
+    if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
+    {
+        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), write_limiter);
+        return done_any_io;
+    }
+    else if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+    {
+        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeInCompressedFormTo(edit_from_disk), write_limiter);
+        return done_any_io;
+    }
 }
 
 template <typename Trait>
