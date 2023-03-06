@@ -27,11 +27,13 @@
 namespace DB
 {
 class StoragePathPool;
+using StoragePathPoolPtr = std::shared_ptr<StoragePathPool>;
 
 
 namespace DM
 {
 class StoragePool;
+using StoragePoolPtr = std::shared_ptr<StoragePool>;
 using NotCompress = std::unordered_set<ColId>;
 struct DMContext;
 using DMContextPtr = std::shared_ptr<DMContext>;
@@ -43,8 +45,8 @@ struct DMContext : private boost::noncopyable
 {
     const Context & db_context;
 
-    StoragePathPool & path_pool;
-    StoragePool & storage_pool;
+    StoragePathPoolPtr path_pool;
+    StoragePoolPtr storage_pool;
 
     // gc safe-point, maybe update.
     DB::Timestamp min_version;
@@ -91,8 +93,8 @@ struct DMContext : private boost::noncopyable
 
 public:
     DMContext(const Context & db_context_,
-              StoragePathPool & path_pool_,
-              StoragePool & storage_pool_,
+              const StoragePathPoolPtr & path_pool_,
+              const StoragePoolPtr & storage_pool_,
               const DB::Timestamp min_version_,
               const NotCompress & not_compress_,
               bool is_common_handle_,

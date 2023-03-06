@@ -72,13 +72,13 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
             property.effective_num_rows = block_size;
             properties.push_back(property);
         }
-        auto path_pool = std::make_unique<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        auto storage_pool = std::make_unique<DB::DM::StoragePool>(*db_context, /*ns_id*/ 1, *path_pool, "test.t1");
+        auto path_pool = std::make_shared<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+        auto storage_pool = std::make_shared<DB::DM::StoragePool>(*db_context, /*ns_id*/ 1, *path_pool, "test.t1");
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = std::make_unique<DB::DM::DMContext>( //
             *db_context,
-            *path_pool,
-            *storage_pool,
+            path_pool,
+            storage_pool,
             /*min_version_*/ 0,
             dm_settings.not_compress_columns,
             false,
