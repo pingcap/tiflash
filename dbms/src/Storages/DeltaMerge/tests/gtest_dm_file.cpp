@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Interpreters/Context.h>
+#include <Poco/DirectoryIterator.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
@@ -290,12 +291,41 @@ try
         }
     };
 
+    auto check_files = [&](const DMFilePtr & dmfile1, const DMFilePtr & dmfile2) {
+        try
+        {
+            auto fnames = dmfile1->listInternalFiles();
+            FAIL() << "Shouldn't come here.";
+        }
+        catch (...)
+        {
+        }
+
+        auto fnames = dmfile2->listInternalFiles();
+        auto dir = dmfile2->path();
+
+        std::vector<String> scan_fnames;
+        Poco::DirectoryIterator end;
+        for (Poco::DirectoryIterator itr(dir); itr != end; ++itr)
+        {
+            if (itr.name() != "NGC") // Ignore NGC file.
+            {
+                scan_fnames.push_back(itr.name());
+            }
+        }
+
+        std::sort(fnames.begin(), fnames.end());
+        std::sort(scan_fnames.begin(), scan_fnames.end());
+        ASSERT_EQ(fnames, scan_fnames);
+    };
+
     auto check_meta = [&](const DMFilePtr & dmfile1, const DMFilePtr & dmfile2) {
         ASSERT_FALSE(dmfile1->useMetaV2());
         ASSERT_TRUE(dmfile2->useMetaV2());
         check_pack_stats(dmfile1, dmfile2);
         check_pack_properties(dmfile1, dmfile2);
         check_column_stats(dmfile1, dmfile2);
+        check_files(dmfile1, dmfile2);
     };
 
     auto add_nullable_columns = [](Block & block, size_t beg, size_t end) {

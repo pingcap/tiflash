@@ -43,7 +43,6 @@ public:
         UInt64 max_block_size);
 
     String getName() const override { return name; }
-    Block getTotals() override;
     Block getHeader() const override;
     void cancel(bool kill) override;
 

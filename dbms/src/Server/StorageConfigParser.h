@@ -105,6 +105,9 @@ struct StorageS3Config
     String cache_dir;
     UInt64 cache_capacity = 0;
 
+    inline static String S3_ACCESS_KEY_ID = "S3_ACCESS_KEY_ID";
+    inline static String S3_SECRET_ACCESS_KEY = "S3_SECRET_ACCESS_KEY";
+
     void parse(const String & content, const LoggerPtr & log);
     bool isS3Enabled() const;
     bool isFileCacheEnabled() const;
