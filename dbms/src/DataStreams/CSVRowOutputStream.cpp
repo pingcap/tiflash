@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <DataStreams/CSVRowOutputStream.h>
-
 #include <IO/WriteHelpers.h>
 
 
@@ -22,7 +21,10 @@ namespace DB
 
 
 CSVRowOutputStream::CSVRowOutputStream(WriteBuffer & ostr_, const Block & sample_, bool with_names_, bool with_types_)
-    : ostr(ostr_), sample(sample_), with_names(with_names_), with_types(with_types_)
+    : ostr(ostr_)
+    , sample(sample_)
+    , with_names(with_names_)
+    , with_types(with_types_)
 {
     size_t columns = sample.columns();
     data_types.resize(columns);
@@ -81,31 +83,8 @@ void CSVRowOutputStream::writeRowEndDelimiter()
 
 void CSVRowOutputStream::writeSuffix()
 {
-    writeTotals();
     writeExtremes();
 }
-
-
-void CSVRowOutputStream::writeTotals()
-{
-    if (totals)
-    {
-        size_t columns = totals.columns();
-
-        writeChar('\n', ostr);
-        writeRowStartDelimiter();
-
-        for (size_t j = 0; j < columns; ++j)
-        {
-            if (j != 0)
-                writeFieldDelimiter();
-            writeField(*totals.getByPosition(j).column.get(), *totals.getByPosition(j).type.get(), 0);
-        }
-
-        writeRowEndDelimiter();
-    }
-}
-
 
 void CSVRowOutputStream::writeExtremes()
 {
@@ -136,4 +115,4 @@ void CSVRowOutputStream::writeExtremes()
 }
 
 
-}
+} // namespace DB

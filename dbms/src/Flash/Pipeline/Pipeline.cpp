@@ -111,7 +111,7 @@ EventPtr Pipeline::toEvent(PipelineExecutorStatus & status, Context & context, s
     //     ```
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
 
-    auto plain_pipeline_event = std::make_shared<PlainPipelineEvent>(status, memory_tracker, context, shared_from_this(), concurrency);
+    auto plain_pipeline_event = std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency);
     for (const auto & child : children)
     {
         auto input = child->toEvent(status, context, concurrency, all_events);
@@ -140,6 +140,7 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
             case tipb::ExecType::TypeSelection:
             case tipb::ExecType::TypeLimit:
             case tipb::ExecType::TypeTopN:
+            case tipb::ExecType::TypeAggregation:
             case tipb::ExecType::TypeTableScan:
             case tipb::ExecType::TypeExchangeSender:
             case tipb::ExecType::TypeExchangeReceiver:

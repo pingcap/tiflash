@@ -23,16 +23,6 @@ MockExchangeSenderInputStream::MockExchangeSenderInputStream(
     children.push_back(input);
 }
 
-Block MockExchangeSenderInputStream::getTotals()
-{
-    if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
-    {
-        totals = child->getTotals();
-    }
-
-    return totals;
-}
-
 Block MockExchangeSenderInputStream::getHeader() const
 {
     return children.back()->getHeader();

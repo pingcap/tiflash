@@ -153,7 +153,6 @@ private:
     void sendProgress();
     void sendEndOfStream();
     void sendProfileInfo();
-    void sendTotals();
     void sendExtremes();
 
     /// Creates state.block_in/block_out for blocks read/write, depending on whether compression is enabled.

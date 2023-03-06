@@ -549,6 +549,7 @@ private:
 
     void updateConnProfileInfo(size_t pushed_data_size)
     {
+        std::lock_guard lock(mu);
         connection_profile_info.bytes += pushed_data_size;
         connection_profile_info.packets += 1;
     }
@@ -560,6 +561,7 @@ private:
     TunnelStatus status;
 
     std::chrono::seconds timeout;
+    UInt64 timeout_nanoseconds{0};
     mutable std::optional<Stopwatch> timeout_stopwatch;
 
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
