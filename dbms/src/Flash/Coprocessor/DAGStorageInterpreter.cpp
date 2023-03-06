@@ -171,33 +171,31 @@ bool hasRegionToRead(const DAGContext & dag_context, const TiDBTableScan & table
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-// <has_cast, extra_cast>
-std::pair<bool, ExpressionActionsPtr> addExtraCastsAfterTs(
+std::optional<ExpressionActionsPtr> addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
-    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    const TiDBTableScan & table_scan)
+    const DB::ColumnInfos & table_scan_columns)
 {
     bool has_need_cast_column = false;
-    for (auto b : need_cast_column)
-        has_need_cast_column |= (b != ExtraCastAfterTSMode::None);
+    for (const auto & col : table_scan_columns)
+    {
+        has_need_cast_column |= (col.id != -1 && (col.tp == TiDB::TypeTimestamp || col.tp == TiDB::TypeTime));
+    }
     if (!has_need_cast_column)
-        return {false, nullptr};
+        return std::nullopt;
 
     ExpressionActionsChain chain;
-    analyzer.initChain(chain);
-    auto original_source_columns = analyzer.getCurrentInputColumns();
     // execute timezone cast or duration cast if needed for local table scan
-    if (analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan))
+    if (analyzer.appendExtraCastsAfterTS(chain, table_scan_columns))
     {
         ExpressionActionsPtr extra_cast = chain.getLastActions();
         assert(extra_cast);
         chain.finalize();
         chain.clear();
-        return {true, extra_cast};
+        return extra_cast;
     }
     else
     {
-        return {false, nullptr};
+        return std::nullopt;
     }
 }
 
@@ -397,8 +395,8 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     DAGPipeline & pipeline)
 {
     // execute timezone cast or duration cast if needed for local table scan
-    auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
-    if (has_cast)
+    auto extra_cast = addExtraCastsAfterTs(*analyzer, table_scan.getColumns());
+    if (extra_cast.has_value())
     {
         assert(remote_read_streams_start_index <= pipeline.streams.size());
         size_t i = 0;
@@ -406,7 +404,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
         while (i < remote_read_streams_start_index)
         {
             auto & stream = pipeline.streams[i++];
-            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast.value(), log->identifier());
             stream->setExtraInfo("cast after local tableScan");
         }
     }

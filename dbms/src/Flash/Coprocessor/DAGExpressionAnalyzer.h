@@ -148,8 +148,7 @@ public:
     // Int64 to duration.
     bool appendExtraCastsAfterTS(
         ExpressionActionsChain & chain,
-        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const TiDBTableScan & table_scan);
+        const DB::ColumnInfos & table_scan_columns);
 
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(
@@ -280,7 +279,6 @@ private:
 
     bool buildExtraCastsAfterTS(
         const ExpressionActionsPtr & actions,
-        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
         const ColumnInfos & table_scan_columns);
 
     std::pair<bool, Names> buildJoinKey(

@@ -917,17 +917,16 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
   */
 bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
     const ExpressionActionsPtr & actions,
-    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
     const ColumnInfos & table_scan_columns)
 {
     bool has_cast = false;
 
     // For TimeZone
-    tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
-    String tz_col = getActions(tz_expr, actions);
-    static const String convert_time_zone_form_utc = "ConvertTimeZoneFromUTC";
-    static const String convert_time_zone_by_offset = "ConvertTimeZoneByOffsetFromUTC";
-    const String & timezone_func_name = context.getTimezoneInfo().is_name_based ? convert_time_zone_form_utc : convert_time_zone_by_offset;
+    // tipb::Expr tz_expr = constructTZExpr(context.getTimezoneInfo());
+    // String tz_col = getActions(tz_expr, actions);
+    // static const String convert_time_zone_form_utc = "ConvertTimeZoneFromUTC";
+    // static const String convert_time_zone_by_offset = "ConvertTimeZoneByOffsetFromUTC";
+    // const String & timezone_func_name = context.getTimezoneInfo().is_name_based ? convert_time_zone_form_utc : convert_time_zone_by_offset;
 
     // For Duration
     String fsp_col;
@@ -935,16 +934,17 @@ bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
 
     // For Projection
     NamesWithAliases project_to_origin_names;
-    for (size_t i = 0; i < need_cast_column.size(); ++i)
+    for (size_t i = 0; i < table_scan_columns.size(); ++i)
     {
+        const auto & col = table_scan_columns[i];
         String casted_name = source_columns[i].name;
-        if (!context.getTimezoneInfo().is_utc_timezone && need_cast_column[i] == ExtraCastAfterTSMode::AppendTimeZoneCast)
-        {
-            casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
-            has_cast = true;
-        }
+        // if (!context.getTimezoneInfo().is_utc_timezone && col.id != -1 && col.tp == TiDB::TypeTimestamp)
+        // {
+        //     casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, timezone_func_name, actions);
+        //     has_cast = true;
+        // }
 
-        if (need_cast_column[i] == ExtraCastAfterTSMode::AppendDurationCast)
+        if (col.id != -1 && col.tp == TiDB::TypeTime)
         {
             if (table_scan_columns[i].decimal > 6)
                 throw Exception("fsp must <= 6", ErrorCodes::LOGICAL_ERROR);
@@ -965,12 +965,11 @@ bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
 
 bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     ExpressionActionsChain & chain,
-    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    const TiDBTableScan & table_scan)
+    const DB::ColumnInfos & table_scan_columns)
 {
     auto & step = initAndGetLastStep(chain);
 
-    bool has_cast = buildExtraCastsAfterTS(step.actions, need_cast_column, table_scan.getColumns());
+    bool has_cast = buildExtraCastsAfterTS(step.actions, table_scan_columns);
 
     for (auto & col : source_columns)
         step.required_output.push_back(col.name);
