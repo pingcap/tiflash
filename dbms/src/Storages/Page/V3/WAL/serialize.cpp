@@ -96,7 +96,7 @@ inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry, bool has
         readIntBinary(checkpoint_info.data_location.size_in_file, buf);
         String data_file_id;
         readStringBinary(data_file_id, buf);
-         // TODO: different entries' data_file_id could be highly duplicated, try to reuse the ptr to reduce memory overhead later.
+        // TODO: different entries' data_file_id could be highly duplicated, try to reuse the ptr to reduce memory overhead later.
         checkpoint_info.data_location.data_file_id = std::make_shared<String>(data_file_id);
         entry.checkpoint_info = checkpoint_info;
     }
