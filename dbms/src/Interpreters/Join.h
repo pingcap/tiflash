@@ -34,50 +34,6 @@ namespace DB
 {
 struct ProbeProcessInfo;
 
-struct JoinMemoryInfo
-{
-    std::shared_ptr<std::atomic<size_t>> total_input_rows_ptr;
-    std::shared_ptr<std::atomic<size_t>> total_input_bytes_ptr;
-    JoinMemoryInfo()
-        : total_input_rows_ptr(std::make_shared<std::atomic<size_t>>(0))
-        , total_input_bytes_ptr(std::make_shared<std::atomic<size_t>>(0))
-    {}
-
-    JoinMemoryInfo(std::shared_ptr<std::atomic<size_t>> total_input_build_rows_ptr_, std::shared_ptr<std::atomic<size_t>> total_input_build_bytes_ptr_)
-        : total_input_rows_ptr(total_input_build_rows_ptr_)
-        , total_input_bytes_ptr(total_input_build_bytes_ptr_)
-    {}
-
-    void addRows(size_t row) const
-    {
-        (*total_input_rows_ptr) += row;
-    }
-
-    void addBytes(size_t bytes) const
-    {
-        (*total_input_bytes_ptr) += bytes;
-    }
-
-    void subRows(size_t row) const
-    {
-        (*total_input_rows_ptr) -= row;
-    }
-
-    void subBytes(size_t bytes) const
-    {
-        (*total_input_bytes_ptr) -= bytes;
-    }
-
-    size_t getTotalRows() const
-    {
-        return (*total_input_rows_ptr);
-    }
-
-    size_t getTotalBytes() const
-    {
-        return (*total_input_bytes_ptr);
-    }
-};
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -156,14 +112,11 @@ public:
          ExpressionActionsPtr other_condition_ptr = nullptr,
          size_t max_block_size = 0,
          const String & match_helper_name = "",
-         JoinMemoryInfo join_memory_info = JoinMemoryInfo(),
          size_t restore_round = 0);
-
-    std::shared_ptr<Join> createRestoreJoin();
 
     size_t restore_round;
 
-    /** Call `setBuildConcurrencyAndInitPool`, `initMapImpl` and `setSampleBlock`.
+    /** Call `setBuildConcurrencyAndInitJoinPartition`, `initMapImpl` and `setSampleBlock`.
       * You must call this method before subsequent calls to insertFromBlock.
       */
     void initBuild(const Block & sample_block, size_t build_concurrency_ = 1);
@@ -232,8 +185,10 @@ public:
     size_t getTotalRowCount() const;
     /// Sum size in bytes of all buffers, used for JOIN maps and for all memory pools.
     size_t getTotalByteCount() const;
+    /// size in bytes for partition hash map
+    size_t getPartitionByteCount(size_t partition_index) const;
 
-    size_t getTotalBuildInputRows() const { return join_memory_info.getTotalRows(); }
+    size_t getTotalBuildInputRows() const { return total_input_build_rows; }
 
     ASTTableJoin::Kind getKind() const { return kind; }
 
@@ -404,11 +359,18 @@ public:
 
     struct JoinPartition
     {
+        /// mutex to protect concurrent modify partition
+        /// note if you wants to acquire both build_probe_mutex and partition_mutex,
+        /// please lock build_probe_mutex first
+        std::mutex partition_mutex;
         BuildPartition build_partition;
         ProbePartition probe_partition;
+        ArenaPtr pool;
         bool spill{};
+        /// only update this field when spill is enabled. todo support this field in non-spill mode
+        std::atomic<size_t> memory_usage{0};
     };
-    using JoinPartitions = std::vector<JoinPartition>;
+    using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
 
     SpillerPtr build_spiller;
     SpillerPtr probe_spiller;
@@ -458,10 +420,6 @@ private:
     Blocks original_blocks;
     /// mutex to protect concurrent insert to blocks
     std::mutex blocks_lock;
-    /// mutex to protect concurrent modify partitions
-    /// note if you wants to acquire both build_probe_mutex and partitions_mutexes,
-    /// please lock build_probe_mutex first
-    std::vector<std::mutex> partitions_mutexes;
 
     JoinPartitions partitions;
 
@@ -479,6 +437,8 @@ private:
 
     JoinPtr restore_join;
 
+    // todo refine NonJoinedBlockInputStream and move both `maps` and `rows_not_inserted_to_map` to JoinPartitions
+    //  and each JoinPartition use a non-concurrent map is enough
     MapsAny maps_any; /// For ANY LEFT|INNER JOIN
     MapsAll maps_all; /// For ALL LEFT|INNER JOIN
     MapsAnyFull maps_any_full; /// For ANY RIGHT|FULL JOIN
@@ -488,10 +448,6 @@ private:
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions
     std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
-
-    /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
-    Arenas pools;
-
 
 private:
     Type type = Type::EMPTY;
@@ -505,10 +461,13 @@ private:
     /// Block with key columns in the same order they appear in the right-side table.
     Block sample_block_with_keys;
 
+    Block build_sample_block;
+    Block probe_sample_block;
+
     const LoggerPtr log;
 
     Block totals;
-    JoinMemoryInfo join_memory_info;
+    std::atomic<size_t> total_input_build_rows{0};
 
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
       * Note that these methods could be called simultaneously only while use of StorageJoin,
@@ -524,7 +483,7 @@ private:
     size_t getBuildConcurrencyInternal() const
     {
         if (unlikely(build_concurrency == 0))
-            throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Logical error: `setBuildConcurrencyAndInitJoinPartition` has not been called", ErrorCodes::LOGICAL_ERROR);
         return build_concurrency;
     }
 
@@ -539,7 +498,7 @@ private:
     /** Set Join build concurrency and init hash map.
       * You must call this method before subsequent calls to insertFromBlock.
       */
-    void setBuildConcurrencyAndInitPool(size_t build_concurrency_);
+    void setBuildConcurrencyAndInitJoinPartition(size_t build_concurrency_);
 
     /// Throw an exception if blocks have different types of key columns.
     void checkTypesOfKeys(const Block & block_left, const Block & block_right) const;
@@ -579,6 +538,7 @@ private:
     void releaseAllPartitions();
 
     void spillMostMemoryUsedPartitionIfNeed();
+    std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
 };
 
 struct ProbeProcessInfo

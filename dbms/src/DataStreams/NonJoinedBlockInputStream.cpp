@@ -143,13 +143,14 @@ Block NonJoinedBlockInputStream::readImpl()
         if (std::all_of(
                 std::begin(parent.partitions),
                 std::end(parent.partitions),
-                [](const Join::JoinPartition & partition) { return partition.build_partition.blocks.empty(); }))
+                [](const std::unique_ptr<Join::JoinPartition> & partition) { return partition->build_partition.blocks.empty(); }))
         {
             return Block();
         }
     }
 
 
+    /// todo read data based on JoinPartition
     if (add_not_mapped_rows)
     {
         setNextCurrentNotMappedRow();
@@ -258,7 +259,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
     {
         current_segment = index;
 
-        while (parent.partitions[current_segment].spill)
+        while (parent.partitions[current_segment]->spill)
         {
             current_segment += step;
             if (current_segment >= map.getSegmentSize())
@@ -282,10 +283,10 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
 
     for (; *it != end || current_segment + step < map.getSegmentSize();)
     {
-        if (*it == end || (parent.max_bytes_before_external_join && parent.partitions[current_segment].spill))
+        if (*it == end || (parent.max_bytes_before_external_join && parent.partitions[current_segment]->spill))
         {
             current_segment += step;
-            while (parent.partitions[current_segment].spill)
+            while (parent.partitions[current_segment]->spill)
             {
                 current_segment += step;
                 if (current_segment >= map.getSegmentSize())

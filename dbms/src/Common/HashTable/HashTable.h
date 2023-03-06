@@ -1497,15 +1497,18 @@ public:
         return segments[segment_index]->getHashTable();
     }
 
-    void resetSegmentTable(size_t segment_index)
+    size_t resetSegmentTable(size_t segment_index)
     {
+        size_t ret = 0;
         std::unique_ptr<SegmentType> segment_ptr = nullptr;
         {
             /// release the lock before destruct related segment
             std::unique_lock lock(segments[segment_index]->getMutex());
+            ret = segments[segment_index]->getBufferSizeInBytes();
             segment_ptr.swap(segments[segment_index]);
             segments[segment_index].reset();
         }
+        return ret;
     }
 
     std::mutex & getSegmentMutex(size_t segment_index)
