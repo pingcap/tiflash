@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <cstddef>
 
 namespace DB
 {
@@ -207,13 +208,15 @@ UInt64 ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
 {
     ExecutionSummary current;
     std::cout << "operators size: " << executor_profile.size() << std::endl;
+    UInt64 concurrency = 0;
     for (size_t i = 0; i < executor_profile.size(); ++i)
     {
         auto && operator_profile_group = executor_profile[i];
-        auto concurrency = operator_profile_group.size();
+        concurrency = std::max(concurrency, operator_profile_group.size());
+
+        std::cout << "i : " << i << ", concurrency: " << concurrency << std::endl;
         if (i == executor_profile.size() - 1)
         {
-            ExecutionSummary current_operator;
             UInt64 time_processed_ns = 0;
             current.concurrency = concurrency;
             for (const auto & operator_profile : operator_profile_group)
@@ -227,14 +230,11 @@ UInt64 ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
         }
         else
         {
-            ExecutionSummary current_operator;
-            current_operator.concurrency = concurrency;
+            UInt64 time_processed_ns = 0;
+            // time_processed_ns = max(time_processed_ns of all operator in one group)
             for (const auto & operator_profile : operator_profile_group)
-            {
-                // std::cout <<
-                current_operator.time_processed_ns = std::max(current.time_processed_ns, operator_profile->execution_time);
-            }
-            accumulated_time += current_operator.time_processed_ns;
+                time_processed_ns = std::max(time_processed_ns, operator_profile->execution_time);
+            accumulated_time += time_processed_ns;
         }
     }
     // get execution info from scan_context

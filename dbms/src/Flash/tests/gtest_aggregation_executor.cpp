@@ -494,6 +494,20 @@ try
 }
 CATCH
 
+TEST_F(AggExecutorTestRunner, ProjectAfterAgg)
+try
+{
+    auto request = context
+                           .scan("aggnull_test", "t1")
+                           .aggregation({}, {col("s2")})
+                           .project({col("s2")})
+                           .limit(2)
+                           .build(context);
+    // ywq todo
+    executeAndAssertColumnsEqual(request, {{toNullableVec<String>({"banana", {}})}});
+}
+CATCH
+
 TEST_F(AggExecutorTestRunner, RepeatedAggregateFunction)
 try
 {

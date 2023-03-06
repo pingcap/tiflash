@@ -191,14 +191,6 @@ try
     }
 
     {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .aggregation({col("s2")}, {col("s2")})
-                           .build(context);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, concurrency}}};
-        testForPipelineExecutionSummary(request, expect, expect);
-    }
-    {
         auto t1 = context.scan("test_db", "test_table");
         auto t2 = context.scan("test_db", "test_table");
         auto request = t1.join(t2, tipb::JoinType::TypeInnerJoin, {col("s1")}).build(context);
@@ -221,6 +213,80 @@ try
                            .build(context);
         Expect expect{{"exchange_receiver_0", {12, concurrency}}, {"sort_1", {12, 1}}, {"window_2", {12, 1}}};
         testForExecutionSummary(request, expect);
+    }
+}
+CATCH
+
+TEST_F(ExecutionSummaryTestRunner, Expand)
+try
+{
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .expand(MockVVecColumnNameVec{
+                               MockVecColumnNameVec{
+                                   MockColumnNameVec{"s1"},
+                               },
+                               MockVecColumnNameVec{
+                                   MockColumnNameVec{"s2"},
+                               },
+                           })
+                           .build(context);
+
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"expand_1", {24, concurrency}}};
+        testForPipelineExecutionSummary(request, expect, expect);
+    }
+}
+CATCH
+
+TEST_F(ExecutionSummaryTestRunner, Agg)
+try
+{
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .aggregation({col("s2")}, {col("s2")})
+                           .build(context);
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, concurrency}}};
+        testForPipelineExecutionSummary(request, expect, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .aggregation({col("s2")}, {col("s2")})
+                           .project({col("s2")})
+                           .build(context);
+        Expect expect{{"table_scan_0", {12, concurrency}},
+                      {"aggregation_1", {3, concurrency}},
+                      {"project_2", {3, concurrency}}};
+        Expect expect_pipeline{{"table_scan_0", {12, concurrency}},
+                               {"aggregation_1", {3, concurrency}},
+                               {"project_2", {3, 1}}};
+
+        testForPipelineExecutionSummary(request, expect_pipeline, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .aggregation({}, {col("s2")})
+                           .project({col("s2")})
+                           .limit(2)
+                           .build(context);
+
+        Expect expect{{"table_scan_0", {12, concurrency}},
+                      {"aggregation_1", {3, 10}},
+                      {"project_2", {3, 10}},
+                      {"limit_3", {2, 1}}};
+        Expect expect_pipeline{{"table_scan_0", {12, concurrency}},
+                               {"aggregation_1", {3, concurrency}},
+                               {"project_2", {3, 1}},
+                               {"limit_3", {2, 1}}};
+
+        testForExecutionSummary(request, expect);
+
+        testForPipelineExecutionSummary(request, expect_pipeline, expect);
     }
 }
 CATCH

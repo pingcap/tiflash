@@ -53,7 +53,7 @@ void AggregateContext::writeSuffix()
         size_t rows = many_data[i]->size();
         LOG_TRACE(
             log,
-            "Aggregated. {} to {} rows (from {:.3f} MiB))",
+            "Aggregated. {} to {} rows (from {:.3f} MiB)",
             threads_data[i].src_rows,
             rows,
             (threads_data[i].src_bytes / 1048576.0));
@@ -63,7 +63,7 @@ void AggregateContext::writeSuffix()
 
     LOG_TRACE(
         log,
-        "Total aggregated {} rows (from {:.3f} MiB))",
+        "Total aggregated {} rows (from {:.3f} MiB)",
         total_src_rows,
         (total_src_bytes / 1048576.0));
 

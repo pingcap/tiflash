@@ -26,7 +26,7 @@ void PhysicalAggregationBuild::buildPipelineExec(PipelineExecGroupBuilder & grou
     if (!before_agg_actions->getActions().empty())
     {
         OperatorProfileInfoGroup profile_group;
-        profile_group.resize(group_builder.concurrency);
+        profile_group.reserve(group_builder.concurrency);
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), before_agg_actions));
             PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
@@ -37,11 +37,14 @@ void PhysicalAggregationBuild::buildPipelineExec(PipelineExecGroupBuilder & grou
     }
 
     OperatorProfileInfoGroup profile_group;
-    profile_group.resize(group_builder.concurrency);
+    profile_group.reserve(group_builder.concurrency);
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<AggregateSinkOp>(group_builder.exec_status, build_index++, aggregate_context, log->identifier()));
-        PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
+        auto sink = std::make_unique<AggregateSinkOp>(group_builder.exec_status, build_index++, aggregate_context, log->identifier());
+        auto profile = std::make_shared<OperatorProfileInfo>();
+        sink->setProfileInfo(profile);
+        profile_group.emplace_back(profile);
+        builder.setSinkOp(std::move(sink));
     });
     std::cout << "test4" << std::endl;
 

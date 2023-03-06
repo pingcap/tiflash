@@ -29,7 +29,7 @@ void PhysicalAggregationConvergent::buildPipelineExec(PipelineExecGroupBuilder &
     {
         group_builder.init(1);
         OperatorProfileInfoGroup profile_group;
-        profile_group.resize(group_builder.concurrency);
+        profile_group.reserve(group_builder.concurrency);
         group_builder.transform([&](auto & builder) {
             auto source = std::make_unique<NullSourceOp>(
                 group_builder.exec_status,
@@ -46,7 +46,7 @@ void PhysicalAggregationConvergent::buildPipelineExec(PipelineExecGroupBuilder &
     {
         group_builder.init(aggregate_context->getConvergentConcurrency());
         OperatorProfileInfoGroup profile_group;
-        profile_group.resize(group_builder.concurrency);
+        profile_group.reserve(group_builder.concurrency);
         size_t index = 0;
         group_builder.transform([&](auto & builder) {
             auto source = std::make_unique<AggregateConvergentSourceOp>(
@@ -66,7 +66,7 @@ void PhysicalAggregationConvergent::buildPipelineExec(PipelineExecGroupBuilder &
     if (!expr_after_agg->getActions().empty())
     {
         OperatorProfileInfoGroup profile_group;
-        profile_group.resize(group_builder.concurrency);
+        profile_group.reserve(group_builder.concurrency);
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), expr_after_agg));
             PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
