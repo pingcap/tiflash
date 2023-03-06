@@ -152,7 +152,22 @@ PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status,
     return builder.build();
 }
 
-bool Pipeline::isFineGrainedPipeline() const
+/**
+ * There are two execution modes in pipeline.
+ * 1. non fine grained mode
+ *     A pipeline generates an event(PlainPipelineEvent).
+ *     This means that all the operators in the pipeline are finished before the next pipeline is triggered.
+ * 2. fine grained mode
+ *     A pipeline will generate n Events(FineGrainedPipelineEvent), one for each data partition.
+ *     There is a fine-grained mapping of Events between Pipelines, e.g. only Events from the same data partition will have dependencies on each other.
+ *     This means that once some data partition of the previous pipeline has finished, the operators of the next pipeline's corresponding data partition can be started without having to wait for the entire pipeline to finish.
+ * 
+ *        ┌──non fine grained mode──┐                          ┌──fine grained mode──┐
+ *                                            ┌──FineGrainedPipelineEvent◄───FineGrainedPipelineEvent
+ * PlainPipelineEvent◄───PlainPipelineEvent◄──┼──FineGrainedPipelineEvent◄───FineGrainedPipelineEvent
+ *                                            └──FineGrainedPipelineEvent◄───FineGrainedPipelineEvent
+ */
+bool Pipeline::isFineGrainedMode() const
 {
     assert(!plan_nodes.empty());
     // The source plan node determines whether the execution mode is fine grained or non-fine grained.
@@ -172,18 +187,18 @@ Events Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     Events self_events;
     assert(!plan_nodes.empty());
-    if (isFineGrainedPipeline())
+    if (isFineGrainedMode())
     {
         auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
         assert(!fine_grained_exec_group.empty());
         for (auto & pipeline_exec : fine_grained_exec_group)
             self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), std::move(pipeline_exec)));
-        LOG_DEBUG(log, "generate {} fine grained pipeline event", self_events.size());
+        LOG_DEBUG(log, "Execute in fine grained model and generate {} fine grained pipeline event", self_events.size());
     }
     else
     {
         self_events.push_back(std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency));
-        LOG_DEBUG(log, "generate one plain pipeline event");
+        LOG_DEBUG(log, "Execute in non fine grained model and generate one plain pipeline event");
     }
     return self_events;
 }
@@ -193,8 +208,8 @@ Events Pipeline::doToEvents(PipelineExecutorStatus & status, Context & context, 
     auto self_events = toSelfEvents(status, context, concurrency);
     for (const auto & child : children)
     {
-        // If fine-grained is enabled in the current pipeline, then the child must also be enabled.
-        RUNTIME_CHECK(!isFineGrainedPipeline() || child->isFineGrainedPipeline());
+        // If the current pipeline is fine grained model, the child must also be.
+        RUNTIME_CHECK(!isFineGrainedMode() || child->isFineGrainedMode());
         auto inputs = child->doToEvents(status, context, concurrency, all_events);
         mapEvents(inputs, self_events);
     }
