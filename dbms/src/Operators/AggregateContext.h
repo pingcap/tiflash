@@ -35,6 +35,7 @@ struct ThreadData
     }
 };
 
+/// Aggregated data shared between AggBuild and AggConvergent Pipeline.
 class AggregateContext
 {
 public:
@@ -46,9 +47,12 @@ public:
 
     void initBuild(const Aggregator::Params & params, size_t max_threads_);
 
-    void executeOnBlock(size_t task_index, const Block & block);
+    void buildOnBlock(size_t task_index, const Block & block);
 
     void initConvergent();
+
+    // Called before convergent to trace aggregate statistics and handle empty table with result case.
+    void initConvergentPrefix();
 
     size_t getConvergentConcurrency();
 
