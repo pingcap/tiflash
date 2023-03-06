@@ -55,7 +55,7 @@ protected:
     void transformHeaderImpl(Block & header_) override;
 
 private:
-    void getMergeOutput(Block & block);
+    Block getMergeOutput();
 
 private:
     SortDescription order_desc;

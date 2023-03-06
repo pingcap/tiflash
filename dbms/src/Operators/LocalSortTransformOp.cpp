@@ -26,15 +26,13 @@ void LocalSortTransformOp::operatePrefix()
     SortHelper::removeConstantsFromSortDescription(header, order_desc);
 }
 
-void LocalSortTransformOp::getMergeOutput(Block & block)
+Block LocalSortTransformOp::getMergeOutput()
 {
-    assert(!block);
-    if unlikely (!merge_impl)
-        return;
-
-    block = merge_impl->read();
+    assert(merge_impl);
+    Block block = merge_impl->read();
     if likely (block)
         SortHelper::enrichBlockWithConstants(block, header);
+    return block;
 }
 
 OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
@@ -59,7 +57,7 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
                     log->identifier(),
                     max_block_size,
                     limit);
-                getMergeOutput(block);
+                block = getMergeOutput();
             }
             return OperatorStatus::HAS_OUTPUT;
         }
@@ -81,7 +79,8 @@ OperatorStatus LocalSortTransformOp::tryOutputImpl(Block & block)
         return OperatorStatus::NEED_INPUT;
     case LocalSortStatus::MERGE:
     {
-        getMergeOutput(block);
+        if likely (merge_impl)
+            block = getMergeOutput();
         return OperatorStatus::HAS_OUTPUT;
     }
     }
