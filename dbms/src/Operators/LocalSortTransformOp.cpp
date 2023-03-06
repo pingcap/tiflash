@@ -26,13 +26,15 @@ void LocalSortTransformOp::operatePrefix()
     SortHelper::removeConstantsFromSortDescription(header, order_desc);
 }
 
-Block LocalSortTransformOp::getMergeOutput()
+void LocalSortTransformOp::getMergeOutput(Block & block)
 {
-    assert(merge_impl);
-    Block res = merge_impl->read();
-    if (likely(res))
-        SortHelper::enrichBlockWithConstants(res, header);
-    return res;
+    assert(!block);
+    if unlikely (!merge_impl)
+        return;
+
+    block = merge_impl->read();
+    if likely (block)
+        SortHelper::enrichBlockWithConstants(block, header);
 }
 
 OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
@@ -40,15 +42,16 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
     switch (status)
     {
     case LocalSortStatus::PARTIAL:
+    {
         /// If there were only const columns in sort description, then there is no need to sort.
         /// Return the blocks as is.
         if (order_desc.empty())
             return OperatorStatus::HAS_OUTPUT;
-        if (unlikely(!block))
+        if unlikely (!block)
         {
             // convert to merge phase.
             status = LocalSortStatus::MERGE;
-            if (!sorted_blocks.empty())
+            if likely (!sorted_blocks.empty())
             {
                 merge_impl = std::make_unique<MergeSortingBlocksBlockInputStream>(
                     sorted_blocks,
@@ -56,7 +59,7 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
                     log->identifier(),
                     max_block_size,
                     limit);
-                block = getMergeOutput();
+                getMergeOutput(block);
             }
             return OperatorStatus::HAS_OUTPUT;
         }
@@ -64,6 +67,7 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
         sortBlock(block, order_desc, limit);
         sorted_blocks.emplace_back(std::move(block));
         return OperatorStatus::NEED_INPUT;
+    }
     case LocalSortStatus::MERGE:
         throw Exception("Unexpcet status: MERGE.");
     }
@@ -76,9 +80,10 @@ OperatorStatus LocalSortTransformOp::tryOutputImpl(Block & block)
     case LocalSortStatus::PARTIAL:
         return OperatorStatus::NEED_INPUT;
     case LocalSortStatus::MERGE:
-        if (likely(merge_impl))
-            block = getMergeOutput();
+    {
+        getMergeOutput(block);
         return OperatorStatus::HAS_OUTPUT;
+    }
     }
 }
 

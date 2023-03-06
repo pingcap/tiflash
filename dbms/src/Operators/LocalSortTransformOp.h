@@ -55,7 +55,7 @@ protected:
     void transformHeaderImpl(Block & header_) override;
 
 private:
-    Block getMergeOutput();
+    void getMergeOutput(Block & block);
 
 private:
     SortDescription order_desc;
@@ -75,6 +75,6 @@ private:
     // If there is no output in the merge phase, merge_impl will be nullptr.
     std::unique_ptr<IBlockInputStream> merge_impl;
 
-    LocalSortStatus status;
+    LocalSortStatus status{LocalSortStatus::PARTIAL};
 };
 } // namespace DB
