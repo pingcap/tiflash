@@ -70,7 +70,9 @@ private:
     std::mutex mutex;
     JoinPtr original_join;
     JoinPtr join;
+    const bool need_output_non_joined_data;
     size_t current_non_joined_stream_index;
+    BlockInputStreamPtr current_probe_stream;
     UInt64 max_block_size;
     ProbeProcessInfo probe_process_info;
     BlockInputStreamPtr non_joined_stream;
