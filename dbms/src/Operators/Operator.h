@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Common/Stopwatch.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <Core/Block.h>
 #include <Operators/OperatorProfileInfo.h>
 

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <TestUtils/executorSerializer.h>
+#include <TestUtils/ExecutorSerializer.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
 namespace DB::tests
@@ -309,6 +309,9 @@ void ExecutorSerializer::serializeListStruct(const tipb::DAGRequest * dag_reques
             break;
         case tipb::ExecType::TypeExpand:
             serializeExpandSource("Expand", executor.expand(), buf);
+            break;
+        case tipb::ExecType::TypeProjection:
+            serializeProjection("Projection", executor.projection(), buf);
             break;
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);

@@ -59,7 +59,6 @@ void PhysicalAggregationConvergent::buildPipelineExec(PipelineExecGroupBuilder &
             profile_group.emplace_back(profile);
             builder.setSourceOp(std::move(source));
         });
-        std::cout << "test1" << std::endl;
         context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);
     }
 
@@ -71,8 +70,6 @@ void PhysicalAggregationConvergent::buildPipelineExec(PipelineExecGroupBuilder &
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), expr_after_agg));
             PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
         });
-                std::cout << "test2" << std::endl;
-
         context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);
     }
 }

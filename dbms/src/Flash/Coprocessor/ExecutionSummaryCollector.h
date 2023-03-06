@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,11 +26,13 @@ class DAGContext;
 class ExecutionSummaryCollector
 {
 public:
-    explicit ExecutionSummaryCollector(
+    ExecutionSummaryCollector(
         DAGContext & dag_context_,
-        bool enable_pipeline_)
+        bool enable_pipeline_,
+        bool fill_executor_id_ = false)
         : dag_context(dag_context_)
         , enable_pipeline(enable_pipeline_)
+        , fill_executor_id(fill_executor_id_)
     {}
 
     void addExecuteSummaries(tipb::SelectResponse & response);
@@ -38,8 +40,6 @@ public:
     void addExecuteSummariesForPipeline(tipb::SelectResponse & response);
 
     tipb::SelectResponse genExecutionSummaryResponse();
-
-    tipb::SelectResponse genExecutionSummaryResponseForPipeline();
 
 private:
     void fillTiExecutionSummary(
@@ -54,15 +54,19 @@ private:
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
     // fill the ExecutionSummary for one executor and return the time spend on the executor and it's children.
-    UInt64 fillLocalExecutionSummaryForPipeline(
+    void fillLocalExecutionSummaryForPipeline(
         tipb::SelectResponse & response,
+        ExecutionSummary & current,
+        bool empty_executor,
         const String & executor_id,
         const ExecutorProfileInfo & executor_profile,
-        UInt64 accumulated_time,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
 private:
     DAGContext & dag_context;
     bool enable_pipeline;
+
+    /// for testing execution summary of list-based DagRequest
+    bool fill_executor_id;
 };
 } // namespace DB

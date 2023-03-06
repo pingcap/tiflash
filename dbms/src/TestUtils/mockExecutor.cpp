@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -446,20 +446,20 @@ void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, C
     mock_storage->addExchangeData(name, columns);
 }
 
-void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint)
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos, ColumnsWithTypeAndName columns, size_t concurrency_hint)
 {
-    assertMockInput(columnInfos, columns);
+    assertMockInput(mock_column_infos, columns);
 
-    addMockTableSchema(db, table, columnInfos);
+    addMockTableSchema(db, table, mock_column_infos);
     addMockTableColumnData(db, table, columns);
     addMockTableConcurrencyHint(db, table, concurrency_hint);
 }
 
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint)
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & mock_column_infos, ColumnsWithTypeAndName columns, size_t concurrency_hint)
 {
-    assertMockInput(columnInfos, columns);
+    assertMockInput(mock_column_infos, columns);
 
-    addMockTableSchema(name, columnInfos);
+    addMockTableSchema(name, mock_column_infos);
     addMockTableColumnData(name, columns);
     addMockTableConcurrencyHint(name, concurrency_hint);
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Statistics/traverseExecutors.h>
-#include <cstddef>
+
 
 namespace DB
 {
@@ -52,24 +52,17 @@ void ExecutionSummaryCollector::fillTiExecutionSummary(
     execution_summary->set_concurrency(current.concurrency);
     execution_summary->mutable_tiflash_scan_context()->CopyFrom(current.scan_context->serialize());
 
-    if (dag_context.return_executor_id)
+    if (dag_context.return_executor_id || fill_executor_id)
         execution_summary->set_executor_id(executor_id);
 }
 
 tipb::SelectResponse ExecutionSummaryCollector::genExecutionSummaryResponse()
 {
     tipb::SelectResponse response;
-    if (enable_pipeline)
+    if unlikely (enable_pipeline)
         addExecuteSummariesForPipeline(response);
     else
         addExecuteSummaries(response);
-    return response;
-}
-
-tipb::SelectResponse ExecutionSummaryCollector::genExecutionSummaryResponseForPipeline()
-{
-    tipb::SelectResponse response;
-    addExecuteSummariesForPipeline(response);
     return response;
 }
 
@@ -160,90 +153,96 @@ void ExecutionSummaryCollector::addExecuteSummariesForPipeline(tipb::SelectRespo
 {
     if (!dag_context.collect_execution_summaries)
         return;
-    UInt64 accumulated_time = 0;
     /// fill execution_summary for local executor
+
+    // collect tree based executor's execution summary
     if (dag_context.return_executor_id)
     {
         assert(dag_context.dag_request->has_root_executor());
-        UInt64 accumulated_time = 0;
-
+        ExecutionSummary current;
         traverseExecutorsReverse(dag_context.dag_request, [&](const tipb::Executor & executor) {
             auto && executor_id = executor.executor_id();
-            std::cout << "executor_id: " << executor_id << std::endl;
-            accumulated_time = fillLocalExecutionSummaryForPipeline(
+            fillLocalExecutionSummaryForPipeline(
                 response,
+                current,
+                dag_context.pipeline_profiles[executor_id].empty(),
                 executor_id,
                 dag_context.pipeline_profiles[executor_id],
-                accumulated_time,
                 dag_context.scan_context_map);
         });
     }
     else
     {
-        /// collect list based executor's excution summary
+        /// collect list based executor's execution summary
         const auto & profile_map = dag_context.pipeline_profiles;
-        assert(profile_map.size() == dag_context.list_based_executors_order.size());
+        ExecutionSummary current;
         for (const auto & executor_id : dag_context.list_based_executors_order)
         {
             auto it = profile_map.find(executor_id);
-            assert(it != profile_map.end());
-            accumulated_time = fillLocalExecutionSummaryForPipeline(
+            fillLocalExecutionSummaryForPipeline(
                 response,
+                current,
+                it == profile_map.end(),
                 executor_id,
                 it->second,
-                accumulated_time,
                 dag_context.scan_context_map);
         }
     }
 
-    // TODO: consider cop remote read and disaggregated mode.
+    // TODO: support exchange profile for Pipeline Model.
 }
 
-UInt64 ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
+void ExecutionSummaryCollector::fillLocalExecutionSummaryForPipeline(
     tipb::SelectResponse & response,
+    ExecutionSummary & current,
+    bool empty_executor,
     const String & executor_id,
     const ExecutorProfileInfo & executor_profile,
-    UInt64 accumulated_time,
     const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const
 {
-    ExecutionSummary current;
-    std::cout << "operators size: " << executor_profile.size() << std::endl;
+    if (empty_executor)
+    {
+        fillTiExecutionSummary(response.add_execution_summaries(), current, executor_id);
+        return;
+    }
+
     UInt64 concurrency = 0;
-    for (size_t i = 0; i < executor_profile.size(); ++i)
+    UInt64 accumulated_time = current.time_processed_ns;
+    current.num_iterations = 0;
+    current.num_produced_rows = 0;
+
+    size_t profile_num = executor_profile.size();
+
+    // Calculate time_processed_ns for operators before the last operator
+    for (size_t i = 0; i < profile_num - 1; ++i)
     {
         auto && operator_profile_group = executor_profile[i];
         concurrency = std::max(concurrency, operator_profile_group.size());
-
-        std::cout << "i : " << i << ", concurrency: " << concurrency << std::endl;
-        if (i == executor_profile.size() - 1)
-        {
-            UInt64 time_processed_ns = 0;
-            current.concurrency = concurrency;
-            for (const auto & operator_profile : operator_profile_group)
-            {
-                time_processed_ns = std::max(time_processed_ns, operator_profile->execution_time);
-                current.num_produced_rows += operator_profile->rows;
-                current.num_iterations += operator_profile->blocks;
-            }
-            accumulated_time += time_processed_ns;
-            current.time_processed_ns = accumulated_time;
-        }
-        else
-        {
-            UInt64 time_processed_ns = 0;
-            // time_processed_ns = max(time_processed_ns of all operator in one group)
-            for (const auto & operator_profile : operator_profile_group)
-                time_processed_ns = std::max(time_processed_ns, operator_profile->execution_time);
-            accumulated_time += time_processed_ns;
-        }
+        UInt64 time_processed_ns = 0;
+        // time_processed_ns = max(time_processed_ns of all operator in one group)
+        for (const auto & operator_profile : operator_profile_group)
+            time_processed_ns = std::max(time_processed_ns, operator_profile->execution_time);
+        accumulated_time += time_processed_ns;
     }
+
+    // Only output the last operator's num_produced_rows, num_iterations and concurrency
+    auto && operator_profile_group = executor_profile[profile_num - 1];
+    UInt64 time_processed_ns = 0;
+    current.concurrency = std::max(concurrency, operator_profile_group.size());
+    for (const auto & operator_profile : operator_profile_group)
+    {
+        time_processed_ns = std::max(time_processed_ns, operator_profile->execution_time);
+        current.num_produced_rows += operator_profile->rows;
+        current.num_iterations += operator_profile->blocks;
+    }
+    accumulated_time += time_processed_ns;
+    current.time_processed_ns = accumulated_time;
+
     // get execution info from scan_context
     if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
     {
         current.scan_context->merge(*(iter->second));
     }
     fillTiExecutionSummary(response.add_execution_summaries(), current, executor_id);
-
-    return accumulated_time;
 }
 } // namespace DB

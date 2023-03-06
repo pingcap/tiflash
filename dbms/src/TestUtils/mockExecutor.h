@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -181,10 +181,10 @@ public:
         return DAGRequestBuilder(index);
     }
     /// mock column table scan
-    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
-    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
-    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
-    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint = 0);
+    void addMockTable(const MockTableName & name, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint = 0);
+    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+    void addMockTable(const MockTableName & name, const MockColumnInfoVec & mock_column_infos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
     void updateMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
     {
         addMockTableColumnData(db, table, columns);

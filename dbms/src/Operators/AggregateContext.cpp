@@ -78,7 +78,6 @@ void AggregateContext::initConvergentPrefix()
 void AggregateContext::initConvergent()
 {
     RUNTIME_CHECK(inited_build && !inited_convergent);
-    writeSuffix();
 
     initConvergentPrefix();
 

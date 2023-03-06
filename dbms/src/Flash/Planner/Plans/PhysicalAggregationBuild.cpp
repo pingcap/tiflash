@@ -31,8 +31,6 @@ void PhysicalAggregationBuild::buildPipelineExec(PipelineExecGroupBuilder & grou
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), before_agg_actions));
             PhysicalPlanHelper::registerProfileInfo(builder, profile_group);
         });
-        std::cout << "test3" << std::endl;
-
         context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);
     }
 
@@ -46,8 +44,6 @@ void PhysicalAggregationBuild::buildPipelineExec(PipelineExecGroupBuilder & grou
         profile_group.emplace_back(profile);
         builder.setSinkOp(std::move(sink));
     });
-    std::cout << "test4" << std::endl;
-
     context.getDAGContext()->pipeline_profiles[executor_id].emplace_back(profile_group);
 
     Block before_agg_header = group_builder.getCurrentHeader();

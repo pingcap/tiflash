@@ -17,8 +17,8 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
+#include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/executorSerializer.h>
 #include <TestUtils/mockExecutor.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 
@@ -124,6 +124,30 @@ public:
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1,
         bool enable_memory_tracker = false);
+
+
+    /// test execution summary
+    // <rows, concurrency>
+    using ProfileInfo = std::pair<int, size_t>;
+    using Expect = std::unordered_map<String, ProfileInfo>;
+    static constexpr int not_check_rows = -1;
+
+
+    void testForExecutionSummary(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const Expect & expect,
+        size_t concurrency = 10,
+        bool enable_pipeline = false);
+
+    void testForPipelineExecutionSummary(const std::shared_ptr<tipb::DAGRequest> & request,
+                                         const Expect & expect_pipeline,
+                                         const Expect & expect_pull)
+    {
+        enablePipeline(true);
+        testForExecutionSummary(request, expect_pipeline, 10, true);
+        enablePipeline(false);
+        testForExecutionSummary(request, expect_pull);
+    }
 
 private:
     void executeExecutor(
