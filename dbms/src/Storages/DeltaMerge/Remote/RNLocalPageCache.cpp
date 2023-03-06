@@ -359,6 +359,7 @@ bool RNLocalPageCacheLRU::put(const UniversalPageId & key, size_t size)
     }
     else
     {
+        RUNTIME_CHECK_MSG(size == item.size, "Put an item with different size, new_size={} old_size={}", size, item.size);
         queue.splice(queue.end(), queue, item.queue_iter);
     }
 

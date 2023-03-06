@@ -46,6 +46,8 @@ namespace DB::DM::Remote
  * - Evict:  Evict overflowed items, and return these items.
  *           Note that if an item was removed by calling `remove()`, it will not
  *           occur any more in the evicted list.
+ *
+ * Eviction only happens when you manually call `evict()`..
  */
 class RNLocalPageCacheLRU
     : private boost::noncopyable
@@ -89,7 +91,9 @@ public:
 
     [[nodiscard]] std::vector<UniversalPageId> evict();
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     LoggerPtr log;
 
     size_t max_size;
@@ -197,7 +201,9 @@ private:
         return fmt::format("{}_{}_{}", oid.write_node_id, oid.table_id, oid.page_id);
     }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     struct OccupyInfo
     {
         size_t size;
