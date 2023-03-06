@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
 namespace DB::tests
@@ -422,6 +423,49 @@ try
                   .build(context);
     result.emplace_back(toNullableVec<String>({"b0b", "c0c", "d0d", {}, "f0f", "g0g", "h0h", {}}));
     executeAndAssertColumnsEqual(request, result);
+}
+CATCH
+
+TEST_F(WindowExecutorTestRunner, fineGrainedShuffle)
+try
+{
+    DB::MockColumnInfoVec column_infos{{"partition", TiDB::TP::TypeLong}, {"order", TiDB::TP::TypeLong}};
+    DB::MockColumnInfoVec partition_column_infos{{"partition", TiDB::TP::TypeLong}};
+    ColumnsWithTypeAndName column_data;
+    ColumnsWithTypeAndName common_column_data;
+    size_t table_rows = 102400;
+    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(column_infos))
+    {
+        ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        column_data.push_back(ColumnGenerator::instance().generate(opts));
+    }
+    ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({table_rows, "UInt64", RANDOM});
+    IColumn::Permutation perm;
+    shuffle_column.column->getPermutation(false, 0, -1, perm);
+    for (auto & column : column_data)
+    {
+        column.column = column.column->permute(perm, 0);
+    }
+
+    context.addExchangeReceiver("exchange_receiver_1_concurrency", column_infos, column_data, 1, partition_column_infos);
+    context.addExchangeReceiver("exchange_receiver_3_concurrency", column_infos, column_data, 3, partition_column_infos);
+    context.addExchangeReceiver("exchange_receiver_5_concurrency", column_infos, column_data, 5, partition_column_infos);
+    context.addExchangeReceiver("exchange_receiver_10_concurrency", column_infos, column_data, 10, partition_column_infos);
+    std::vector<size_t> exchange_receiver_concurrency = {1, 3, 5, 10};
+
+    auto gen_request = [&](size_t exchange_concurrency) {
+        return context
+            .receive(fmt::format("exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency)
+            .sort({{"partition", false}, {"order", false}}, true)
+            .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
+            .build(context);
+    };
+
+    auto baseline = executeStreams(gen_request(1), 1);
+    for (size_t exchange_concurrency : exchange_receiver_concurrency)
+    {
+        executeAndAssertColumnsEqual(gen_request(exchange_concurrency), baseline);
+    }
 }
 CATCH
 

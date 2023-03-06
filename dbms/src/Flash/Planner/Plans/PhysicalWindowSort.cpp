@@ -17,14 +17,13 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalWindowSort.h>
 #include <Interpreters/Context.h>
-#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/LocalSortTransformOp.h>
-#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 
 namespace DB
 {
