@@ -80,18 +80,17 @@ public:
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
-    // helper functions for building the task read from S3
+    // helper functions for building the task read from a shared remote storage system (e.g. S3)
     BlockInputStreams readFromWriteNode(
         const Context & db_context,
         unsigned num_streams);
-
+    DM::RNRemoteReadTaskPtr buildDisaggregatedTask(
+        const Context & db_context,
+        const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest>
     buildDisaggregatedTaskForNode(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
-    DM::RNRemoteReadTaskPtr buildDisaggregatedTask(
-        const Context & db_context,
-        const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
     DM::RSOperatorPtr buildRSOperator(
         const Context & db_context,
         const DM::ColumnDefinesPtr & columns_to_read);

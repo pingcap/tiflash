@@ -133,7 +133,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
     size_t tasks_n = batch_cop_tasks.size();
 
     // Collect the response from write nodes and build the remote tasks
-    std::vector<DM::RNRemoteTableReadTaskPtr> remote_tasks(tasks_n, nullptr);
+    std::vector<DM::RNRemoteTableReadTaskPtr> remote_tasks_from_wns(tasks_n, nullptr);
     // The execution summaries
     std::vector<DisaggregatedExecutionSummary> summaries(tasks_n);
 
@@ -213,7 +213,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
                     Stopwatch watch_table;
 
-                    remote_tasks[idx] = DM::RNRemoteTableReadTask::buildFrom(
+                    remote_tasks_from_wns[idx] = DM::RNRemoteTableReadTask::buildFrom(
                         db_context,
                         resp->store_id(),
                         cop_task.store_addr,
@@ -238,7 +238,8 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
     }
     thread_manager->wait();
 
-    auto read_task = std::make_shared<DM::RNRemoteReadTask>(std::move(remote_tasks));
+    // collect all remote tables read tasks into one read task
+    auto read_task = std::make_shared<DM::RNRemoteReadTask>(std::move(remote_tasks_from_wns));
 
     const auto avg_establish_rpc_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.establish_rpc_ms; }) / summaries.size();
     const auto avg_build_remote_task_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.build_remote_task_ms; }) / summaries.size();
@@ -360,7 +361,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
-    auto page_downloader = std::make_shared<RNPagePreparer>(
+    auto page_preparer = std::make_shared<RNPagePreparer>(
         remote_read_tasks,
         page_receiver,
         column_defines,
@@ -386,7 +387,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         auto sub_streams = DM::RNRemoteSegmentThreadInputStream::buildInputStreams(
             db_context,
             remote_read_tasks,
-            page_downloader,
+            page_preparer,
             column_defines,
             read_tso,
             sub_streams_size,
