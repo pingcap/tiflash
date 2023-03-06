@@ -922,7 +922,7 @@ try
 {
     using tipb::JoinType;
     /// One join key(t.a = s.a) + no other condition.
-    /// left table + right table + result column.
+    /// left table(t) + right table(s) + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t1 = {
         {
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5})},
@@ -977,8 +977,8 @@ try
         }
     }
 
-    /// One join key(t.a = s.a) + other condition(s.c > t.c).
-    /// left table + right table + result column.
+    /// One join key(t.a = s.a) + other condition(t.c < s.c).
+    /// left table(t) + right table(s) + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t2 = {
         {
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
@@ -986,7 +986,12 @@ try
             toNullableVec<Int8>({1, 1, 1, 1, 1}),
         },
         {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {1, 2, {}, {}, 5}), toNullableVec<Int32>("c", {2, {}, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {}), toNullableVec<Int32>("c", {})},
+            toNullableVec<Int8>({0, 0, 0, 0, 0}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, 2, {}, {}, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
             toNullableVec<Int8>({0, 0, 0, 0, 0}),
         },
@@ -1019,7 +1024,7 @@ try
                                      {col("a")},
                                      {},
                                      {},
-                                     {gt(col("s.c"), col("t.c"))},
+                                     {lt(col("t.c"), col("s.c"))},
                                      {},
                                      0,
                                      true)
@@ -1029,7 +1034,7 @@ try
     }
 
     /// Two join keys(t.a = s.a and t.b = s.b) + no other condition.
-    /// left table + right table + result column.
+    /// left table(t) + right table(s) + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t3 = {
         {
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
@@ -1037,7 +1042,12 @@ try
             toNullableVec<Int8>({1, 1, 1, 1, 1}),
         },
         {
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
+            {toNullableVec<Int32>("a", {1, {}, 3, {}, 5}), toNullableVec<Int32>("b", {1, 2, {}, {}, 5})},
+            {toNullableVec<Int32>("a", {}), toNullableVec<Int32>("b", {})},
+            toNullableVec<Int8>({0, 0, 0, 0, 0}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, {}, 3, {}, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {6, 7, 8, 9, 10})},
             toNullableVec<Int8>({0, 0, 0, 0, 0}),
         },
@@ -1045,6 +1055,16 @@ try
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})},
             {toNullableVec<Int32>("a", {1, {}, 3, {}, 4, 4}), toNullableVec<Int32>("b", {1, 2, {}, 4, {}, 4})},
             toNullableVec<Int8>({1, {}, {}, 1, 0}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, 2, 3, 4}), toNullableVec<Int32>("b", {1, 2, {}, 4})},
+            {toNullableVec<Int32>("a", {1, {}, 3, {}}), toNullableVec<Int32>("b", {1, 2, {}, {}})},
+            toNullableVec<Int8>({1, {}, {}, {}}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, 2, {}, 4, 5, {}, 4, {}}), toNullableVec<Int32>("b", {{}, 3, 2, 4, 5, 1, {}, {}})},
+            {toNullableVec<Int32>("a", {2, 2, 2, 3, 4, 4}), toNullableVec<Int32>("b", {1, 3, {}, {}, 4, {}})},
+            toNullableVec<Int8>({0, 1, {}, 1, 0, {}, {}, {}}),
         },
     };
 
@@ -1070,8 +1090,8 @@ try
         }
     }
 
-    /// Two join keys(t.a = s.a and t.b = s.b) + other condition(s.c > t.c).
-    /// left table + right table + result column.
+    /// Two join keys(t.a = s.a and t.b = s.b) + other condition(t.c < s.c).
+    /// left table(t) + right table(s) + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t4 = {
         {
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
@@ -1080,7 +1100,17 @@ try
         },
         {
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
+            {toNullableVec<Int32>("a", {}), toNullableVec<Int32>("b", {}), toNullableVec<Int32>("c", {})},
+            toNullableVec<Int8>({0, 0, 0, 0, 0}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {6, 7, 8, 9, 10}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            toNullableVec<Int8>({0, 0, 0, 0, 0}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
             toNullableVec<Int8>({0, 0, 0, 0, 0}),
         },
         {
@@ -1092,6 +1122,11 @@ try
             {toNullableVec<Int32>("a", {1, 2, {}, 4, 6}), toNullableVec<Int32>("b", {1, 2, 3, {}, {}}), toNullableVec<Int32>("c", {1, 2, 1, 2, 1})},
             {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, {}}), toNullableVec<Int32>("c", {2, 1, 2, 1, 2})},
             toNullableVec<Int8>({1, 0, {}, 0, 0}),
+        },
+        {
+            {toNullableVec<Int32>("a", {1, 2, 3, 3, {}, 6}), toNullableVec<Int32>("b", {1, 2, 3, 3, {}, {}}), toNullableVec<Int32>("c", {1, 3, 1, 2, 3, 1})},
+            {toNullableVec<Int32>("a", {{}, 2, 3, 4, 5}), toNullableVec<Int32>("b", {{}, 2, 3, 4, {}}), toNullableVec<Int32>("c", {3, 1, 2, 1, 2})},
+            toNullableVec<Int8>({{}, 0, 1, {}, 0, {}}),
         },
     };
 
@@ -1108,7 +1143,7 @@ try
                                      {col("a"), col("b")},
                                      {},
                                      {},
-                                     {gt(col("s.c"), col("t.c"))},
+                                     {lt(col("t.c"), col("s.c"))},
                                      {},
                                      0,
                                      true)
@@ -1117,11 +1152,11 @@ try
         }
     }
 
-    /// Two join keys(t.a = s.a and t.b = s.b) and other condition(s.c > t.c or t.a = s.a)
+    /// Two join keys(t.a = s.a and t.b = s.b) and other condition(t.c < s.c or t.a = s.a)
     /// Test the case that other condition has a condition that is same to one of join key equal conditions.
     /// In other words, test if these two expression can be handled normally when column reuse happens.
     /// For more details, see the comments in `NASemiJoinHelper::runAndCheckExprResult`.
-    /// left table + right table + result column.
+    /// left table(t) + right table(s) + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t5 = {
         {
             {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
@@ -1148,7 +1183,7 @@ try
                                      {col("a"), col("b")},
                                      {},
                                      {},
-                                     {Or(gt(col("s.c"), col("t.c")), eq(col("t.a"), col("s.a")))},
+                                     {Or(lt(col("t.c"), col("s.c")), eq(col("t.a"), col("s.a")))},
                                      {},
                                      0,
                                      true)

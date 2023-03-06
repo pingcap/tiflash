@@ -269,6 +269,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NASemiJoinHel
             size_t prev_offset = current_offset;
             res->template fillRightColumns<Mapped, STEP>(columns, left_columns, right_columns, null_rows, current_offset, max_pace);
 
+            /// Note that current_offset - prev_offset may be zero.
             for (size_t i = 0; i < left_columns; ++i)
                 columns[i]->insertManyFrom(*block.getByPosition(i).column.get(), res->getRowNum(), current_offset - prev_offset);
 

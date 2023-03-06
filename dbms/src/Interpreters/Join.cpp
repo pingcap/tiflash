@@ -2160,7 +2160,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                 res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
                 continue;
             }
-            /// Then key size is greater than 2 and right table does not have a all-key-null row.
+            /// Then key size is greater than 1 and right table does not have a all-key-null row.
             /// E.g. (1,2) in ((1,3),(1,null)) => NULL, (1,2) in ((1,3),(2,null)) => false.
         }
         /// We have to compare them to the null rows one by one.
