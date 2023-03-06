@@ -57,12 +57,12 @@ struct RegionManager : SharedMutexLockWrap
 
     RegionReadLock genRegionReadLock() const
     {
-        return {genReadLockGuard(), regions, region_range_index};
+        return {genSharedLock(), regions, region_range_index};
     }
 
     RegionWriteLock genRegionWriteLock()
     {
-        return {genWriteLockGuard(), regions, region_range_index};
+        return {genUniqueLock(), regions, region_range_index};
     }
 
     /// Encapsulate the task lock for region
