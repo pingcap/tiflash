@@ -107,9 +107,16 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
         readIntBinary(page_id, buf);
 
         auto file_id = context.storage_pool.dataReader()->getNormalPageId(page_id);
-        auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
+        auto path_delegate = context.path_pool.getStableDiskDelegator();
+        auto file_parent_path = path_delegate.getDTFilePath(file_id);
 
         auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
+        auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
+        if (!res) {
+
+            // ? 这个值得 throw 吗？还是就打个 ERROR 就可以了呢？
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "update dt file size failed");
+        }
         stable->files.push_back(dmfile);
     }
 

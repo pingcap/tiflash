@@ -213,7 +213,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                                  *path_pool,
                                                  db_name_ + "." + table_name_);
 
-    // Restore existing dm files and set capacity for path_pool.
+    // Restore existing dm files.
     // Should be done before any background task setup.
     restoreStableFiles();
 
@@ -1514,8 +1514,10 @@ void DeltaMergeStore::restoreStableFiles()
     {
         for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
         {
-            auto dmfile = DMFile::restore(file_provider, file_id, /* page_id= */ 0, root_path, DMFile::ReadMetaMode::diskSizeOnly());
-            path_delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), root_path);
+            //To avoid restore dmfile twice in DeltaMergeStore::DeltaMergeStore(the other is in StableValueSpace::restore of restoreSegment)
+            // we just add the file to path_delegate with file_size = 0
+            // when we do DMFile::restore later, we then update the actually size of file.
+            path_delegate.addDTFile(file_id, 0, root_path);
         }
     }
 }

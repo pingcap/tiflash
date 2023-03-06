@@ -149,6 +149,11 @@ public:
 
     void addDTFile(UInt64 file_id, size_t file_size, std::string_view path);
 
+    // Update the file size of the DTFile with file_id.
+    // Return true if the file size is updated.
+    // Return false if the file size is not updated because the file_id is not in StableDiskDelegator.
+    bool updateDTFileSize(UInt64 file_id, size_t file_size);
+
     void removeDTFile(UInt64 file_id);
 
     DISALLOW_COPY_AND_MOVE(StableDiskDelegator);
