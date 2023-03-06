@@ -369,3 +369,43 @@ mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp
 |    4 | NULL |                                            0 |
 |    6 | NULL |                                            0 |
 +------+------+----------------------------------------------+
+
+
+mysql> truncate test.t;
+mysql> truncate test.s;
+mysql> insert into test.t values(1, 1, 2), (2, 2, 2), (3, 3, 2), (4, 4, 2), (5, 5, 2);
+mysql> insert into test.s values(1, 1, 1), (1, 1, 2), (1, 1, 3), (2, 2, 1), (2, 2, 2), (2, 2, 2), (3, 3, 1), (3, 3, 2), (null, 3, 2), (4, 4, 1), (4, 4, 2), (4, null, 3);
+
+func> wait_table test t
+func> wait_table test s
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b from t where (a,b) not in (select a,b from s where s.c > t.c);
++------+------+
+| a    | b    |
++------+------+
+|    2 |    2 |
+|    3 |    3 |
+|    5 |    5 |
++------+------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) not in (select a,b from s where s.c > t.c) from t;
++------+------+--------------------------------------------------+
+| a    | b    | (a,b) not in (select a,b from s where s.c > t.c) |
++------+------+--------------------------------------------------+
+|    1 |    1 |                                                0 |
+|    2 |    2 |                                                1 |
+|    3 |    3 |                                                1 |
+|    4 |    4 |                                             NULL |
+|    5 |    5 |                                                1 |
++------+------+--------------------------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) in (select a,b from s where s.c > t.c) from t;
++------+------+----------------------------------------------+
+| a    | b    | (a,b) in (select a,b from s where s.c > t.c) |
++------+------+----------------------------------------------+
+|    1 |    1 |                                            1 |
+|    2 |    2 |                                            0 |
+|    3 |    3 |                                            0 |
+|    4 |    4 |                                         NULL |
+|    5 |    5 |                                            0 |
++------+------+----------------------------------------------+

@@ -220,22 +220,21 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t col
 
 void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, int32_t collator_id, const Context & context)
 {
+    /// aggregation function is handled in AggregationBinder, so just treated as a column
+    auto ft = checkSchema(input, func->getColumnName());
+    if (ft != input.end())
+    {
+        expr->set_tp(tipb::ColumnRef);
+        *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
+        WriteBufferFromOwnString ss;
+        encodeDAGInt64(ft - input.begin(), ss);
+        expr->set_val(ss.releaseStr());
+        return;
+    }
     if (AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
     {
-        /// aggregation function is handled in AggregationBinder, so just treated as a column
-        auto ft = checkSchema(input, func->getColumnName());
-        if (ft != input.end())
-        {
-            expr->set_tp(tipb::ColumnRef);
-            *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
-            WriteBufferFromOwnString ss;
-            encodeDAGInt64(ft - input.begin(), ss);
-            expr->set_val(ss.releaseStr());
-            return;
-        }
-        throw Exception("Aggregation function: " + func->getColumnName() + " should not be handled as ASTFunction" + func->getColumnName(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("No such column: " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
     }
-
     String func_name_lowercase = Poco::toLower(func->name);
     // TODO: Support more functions.
     // TODO: Support type inference.

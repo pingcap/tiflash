@@ -1128,6 +1128,13 @@ try
             {toNullableVec<Int32>("a", {{}, 2, 3, 4, 5}), toNullableVec<Int32>("b", {{}, 2, 3, 4, {}}), toNullableVec<Int32>("c", {3, 1, 2, 1, 2})},
             toNullableVec<Int8>({{}, 0, 1, {}, 0, {}}),
         },
+        {
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {1, 1, 1, 2, 2, 2, 3, 3, {}, 4, 4, 4}),
+             toNullableVec<Int32>("b", {1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, {}}),
+             toNullableVec<Int32>("c", {1, 2, 3, 1, 2, 2, 1, 2, 2, 1, 2, 3})},
+            toNullableVec<Int8>({1, 0, 0, {}, 0}),
+        },
     };
 
     for (const auto & [left, right, res] : t4)
@@ -1152,7 +1159,7 @@ try
         }
     }
 
-    /// Two join keys(t.a = s.a and t.b = s.b) and other condition(t.c < s.c or t.a = s.a)
+    /// Two join keys(t.a = s.a and t.b = s.b) and other condition(t.c < s.d or t.a = s.a)
     /// Test the case that other condition has a condition that is same to one of join key equal conditions.
     /// In other words, test if these two expression can be handled normally when column reuse happens.
     /// For more details, see the comments in `NASemiJoinHelper::runAndCheckExprResult`.
@@ -1160,12 +1167,12 @@ try
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t5 = {
         {
             {toNullableVec<Int32>("a", {1, 2, {}, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5}), toNullableVec<Int32>("c", {1, 1, 1, 1, 1})},
-            {toNullableVec<Int32>("a", {{}, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, {}, 3, 4, 5}), toNullableVec<Int32>("c", {2, 2, 2, 2, 2})},
+            {toNullableVec<Int32>("a", {{}, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, {}, 3, 4, 5}), toNullableVec<Int32>("d", {2, 2, 2, 2, 2})},
             toNullableVec<Int8>({{}, {}, {}, 1, 1}),
         },
         {
             {toNullableVec<Int32>("a", {1, 2, {}, 4, 6}), toNullableVec<Int32>("b", {1, 2, 3, {}, 5}), toNullableVec<Int32>("c", {1, 2, 1, 2, 1})},
-            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, {}}), toNullableVec<Int32>("c", {2, 1, 2, 1, 2})},
+            {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, {}}), toNullableVec<Int32>("d", {2, 1, 2, 1, 2})},
             toNullableVec<Int8>({1, 1, {}, {}, 0}),
         },
     };
@@ -1173,7 +1180,7 @@ try
     for (const auto & [left, right, res] : t5)
     {
         context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, left);
-        context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, right);
+        context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}}, right);
 
         for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
         {
@@ -1183,7 +1190,7 @@ try
                                      {col("a"), col("b")},
                                      {},
                                      {},
-                                     {Or(lt(col("t.c"), col("s.c")), eq(col("t.a"), col("s.a")))},
+                                     {Or(lt(col("c"), col("d")), eq(col("t.a"), col("s.a")))},
                                      {},
                                      0,
                                      true)
