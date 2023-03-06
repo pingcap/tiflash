@@ -39,7 +39,6 @@ public:
         , order_desc(order_desc_)
         , limit(limit_)
         , max_block_size(max_block_size_)
-        , req_id(req_id_)
     {}
 
     String getName() const override
@@ -63,7 +62,6 @@ private:
     // 0 means no limit.
     size_t limit;
     size_t max_block_size;
-    String req_id;
 
     /// Before operation, will remove constant columns from blocks. And after, place constant columns back.
     /// (to avoid excessive virtual function calls and because constants cannot be serialized in Native format for temporary files)

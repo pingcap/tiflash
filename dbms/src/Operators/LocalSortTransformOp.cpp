@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <DataStreams/MergeSortingBlocksBlockInputStream.h>
+#include <DataStreams/SortHelper.h>
 #include <Interpreters/sortBlock.h>
 #include <Operators/LocalSortTransformOp.h>
-#include <DataStreams/SortHelper.h>
 
 namespace DB
 {
@@ -53,7 +53,7 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
                 merge_impl = std::make_unique<MergeSortingBlocksBlockInputStream>(
                     sorted_blocks,
                     order_desc,
-                    req_id,
+                    log->identifier(),
                     max_block_size,
                     limit);
                 block = getMergeOutput();

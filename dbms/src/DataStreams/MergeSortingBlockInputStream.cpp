@@ -17,11 +17,11 @@
 #include <DataStreams/MergeSortingBlocksBlockInputStream.h>
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
+#include <DataStreams/SortHelper.h>
 #include <DataStreams/copyData.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <common/logger_useful.h>
-#include <DataStreams/SortHelper.h>
 
 namespace DB
 {
