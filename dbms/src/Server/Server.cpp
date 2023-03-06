@@ -24,10 +24,10 @@
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
-#include <Common/ThreadPool.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/UniThreadPool.h>
 #include <Common/assert_cast.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>

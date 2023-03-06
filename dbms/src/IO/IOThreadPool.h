@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Common/ThreadPool.h>
+#include <Common/UniThreadPool.h>
 
 namespace DB
 {
