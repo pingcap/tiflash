@@ -19,12 +19,12 @@
 namespace DB::DM::Remote
 {
 
-class LocalPageCache;
-using LocalPageCachePtr = std::shared_ptr<LocalPageCache>;
+class RNLocalPageCache;
+using RNLocalPageCachePtr = std::shared_ptr<RNLocalPageCache>;
 
-class LocalPageCacheLRU;
+class RNLocalPageCacheLRU;
 
-class LocalPageCacheGuard;
-using LocalPageCacheGuardPtr = std::shared_ptr<LocalPageCacheGuard>;
+class RNLocalPageCacheGuard;
+using RNLocalPageCacheGuardPtr = std::shared_ptr<RNLocalPageCacheGuard>;
 
 } // namespace DB::DM::Remote

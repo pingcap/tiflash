@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Storages/DeltaMerge/Remote/LocalPageCache_fwd.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
+#include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
@@ -36,7 +36,18 @@ using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 namespace DB::DM::Remote
 {
 
-class LocalPageCacheLRU
+/**
+ * A standard LRU. Its max_size is changeable.
+ *
+ * It supports the following operations:
+ * - Put:    Put a key into LRU's management.
+ * - Remove: Remove a key from LRU's management. A removed key will not trigger
+ *           any evict any more. Its size is also cleared.
+ * - Evict:  Evict overflowed items, and return these items.
+ *           Note that if an item was removed by calling `remove()`, it will not
+ *           occur any more in the evicted list.
+ */
+class RNLocalPageCacheLRU
     : private boost::noncopyable
 {
 private:
@@ -50,7 +61,7 @@ private:
     };
 
 public:
-    explicit LocalPageCacheLRU(size_t max_size_)
+    explicit RNLocalPageCacheLRU(size_t max_size_)
         : log(Logger::get())
         , max_size(max_size_)
     {
@@ -76,7 +87,7 @@ public:
     /// Returns true if the key was existed and removed.
     bool remove(const UniversalPageId & key);
 
-    std::vector<UniversalPageId> evict();
+    [[nodiscard]] std::vector<UniversalPageId> evict();
 
 private:
     LoggerPtr log;
@@ -88,11 +99,16 @@ private:
     std::unordered_map<UniversalPageId, Item> index;
 };
 
-class LocalPageCache
-    : public std::enable_shared_from_this<LocalPageCache>
+
+/**
+ * Only used in disaggregated read node. It caches pages in a local PageStorage
+ * instance to avoid repeatedly pulling page data from disaggregated write nodes.
+ */
+class RNLocalPageCache
+    : public std::enable_shared_from_this<RNLocalPageCache>
     , private boost::noncopyable
 {
-    friend LocalPageCacheGuard;
+    friend RNLocalPageCacheGuard;
 
 private:
     String statistics(std::unique_lock<std::mutex> &) const
@@ -107,43 +123,72 @@ private:
 
     void evictFromStorage(std::unique_lock<std::mutex> &);
 
+    /**
+     * Only called by RNLocalPageCacheGuard, when it is constructed.
+     *
+     * This function guards (pins) specified keys, avoid them from evicted.
+     *
+     * Internally, it removes these keys from the (evictable) LRU, to avoid being evicted.
+     */
     void guard(
         std::unique_lock<std::mutex> & lock,
-        const std::vector<UniversalPageId> keys,
-        const std::vector<size_t> sizes,
+        const std::vector<UniversalPageId> & keys,
+        const std::vector<size_t> & sizes,
         uint64_t guard_debug_id);
 
-    void unguard(const std::vector<UniversalPageId> keys, uint64_t guard_debug_id);
+    /**
+     * Only called by RNLocalPageCacheGuard, when it is destructed.
+     *
+     * This function unguards (unpins) specified keys, allowing them to be evicted, if there is no other guards
+     * referencing the key.
+     *
+     * Internally, it adds these keys to the (evictable) LRU so that it could be evicted.
+     */
+    void unguard(const std::vector<UniversalPageId> & keys, uint64_t guard_debug_id);
 
 public:
-    struct LocalPageCacheOptions
+    struct RNLocalPageCacheOptions
     {
         // TODO: May be better to manage the underlying storage by this module itself?
         UniversalPageStoragePtr underlying_storage;
         size_t max_size_bytes = 0; // 0 means unlimited.
     };
 
-    explicit LocalPageCache(const LocalPageCacheOptions & options);
+    explicit RNLocalPageCache(const RNLocalPageCacheOptions & options);
 
     struct OccupySpaceResult
     {
         std::vector<PageOID> pages_not_in_cache;
-        LocalPageCacheGuardPtr pages_guard;
+        RNLocalPageCacheGuardPtr pages_guard;
     };
 
     /**
      * Giving a list of pages and sizes, wait until the cache is empty enough to hold all of these pages.
      * A Guard will be returned. When Guard is alive, these pages are ensured to be accessible if they are
      * put into the cache later.
+     *
+     * This function also returns pages not in the cache.
      */
     OccupySpaceResult occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes);
 
+    /**
+     * Put a page into the cache.
+     *
+     * The page must be currently "occupied" by calling `occupySpace`, otherwise there will be exceptions.
+     */
     void write(
         const PageOID & oid,
         ReadBufferPtr && read_buffer,
         PageSize size,
         PageFieldSizes && field_sizes);
 
+    /**
+     * Read a page from the cache.
+     *
+     * The page must be currently "occupied" by calling `occupySpace`, otherwise there will be exceptions.
+     * The page must exist, either because `write` is called, or it is already in the cache,
+     *   otherwise there will be exceptions.
+     */
     Page getPage(const PageOID & oid, const std::vector<size_t> & indices);
 
 private:
@@ -169,14 +214,14 @@ private:
     std::unordered_map<UniversalPageId, OccupyInfo> occupied_keys;
     size_t occupied_size = 0; // Pre-calculated value from occupied_keys.
     std::condition_variable cv;
-    LocalPageCacheLRU evictable_keys;
+    RNLocalPageCacheLRU evictable_keys;
 };
 
-class LocalPageCacheGuard
+class RNLocalPageCacheGuard
 {
 public:
-    LocalPageCacheGuard(
-        const std::shared_ptr<LocalPageCache> & parent_,
+    RNLocalPageCacheGuard(
+        const std::shared_ptr<RNLocalPageCache> & parent_,
         std::unique_lock<std::mutex> & lock,
         const std::vector<UniversalPageId> keys_,
         const std::vector<size_t> sizes)
@@ -189,13 +234,13 @@ public:
         parent->guard(lock, keys, sizes, debug_id);
     }
 
-    ~LocalPageCacheGuard()
+    ~RNLocalPageCacheGuard()
     {
         parent->unguard(keys, debug_id);
     }
 
 private:
-    const std::shared_ptr<LocalPageCache> parent;
+    const std::shared_ptr<RNLocalPageCache> parent;
     const std::vector<UniversalPageId> keys;
     const uint64_t debug_id; // Only for debug output
 

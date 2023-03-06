@@ -15,14 +15,14 @@
 #include <IO/ReadBuffer.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/Remote/LocalPageCache.h>
+#include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 
 namespace DB::DM::Remote
 {
 
-LocalPageCache::LocalPageCache(const LocalPageCacheOptions & options)
+RNLocalPageCache::RNLocalPageCache(const RNLocalPageCacheOptions & options)
     : log(Logger::get())
     , storage(options.underlying_storage)
     , max_size(options.max_size_bytes)
@@ -47,7 +47,7 @@ LocalPageCache::LocalPageCache(const LocalPageCacheOptions & options)
     }
 }
 
-void LocalPageCache::write(
+void RNLocalPageCache::write(
     const PageOID & oid,
     ReadBufferPtr && read_buffer,
     PageSize size,
@@ -75,7 +75,7 @@ void LocalPageCache::write(
     storage->write(std::move(cache_wb));
 }
 
-Page LocalPageCache::getPage(const PageOID & oid, const std::vector<size_t> & indices)
+Page RNLocalPageCache::getPage(const PageOID & oid, const std::vector<size_t> & indices)
 {
     auto key = buildCacheId(oid);
 
@@ -88,7 +88,7 @@ Page LocalPageCache::getPage(const PageOID & oid, const std::vector<size_t> & in
             key);
     }
 
-    auto snapshot = storage->getSnapshot("LocalPageCache.getPage");
+    auto snapshot = storage->getSnapshot("RNLocalPageCache.getPage");
     auto page_map = storage->read(
         {{key, indices}},
         /* read_limiter */ nullptr,
@@ -101,7 +101,7 @@ Page LocalPageCache::getPage(const PageOID & oid, const std::vector<size_t> & in
     return page;
 }
 
-void LocalPageCache::evictFromStorage(std::unique_lock<std::mutex> &)
+void RNLocalPageCache::evictFromStorage(std::unique_lock<std::mutex> &)
 {
     // Note: Not all keys in the `evictable_keys` will be evicted.
     // We will only evict overflow keys.
@@ -127,7 +127,7 @@ void LocalPageCache::evictFromStorage(std::unique_lock<std::mutex> &)
     }
 }
 
-void LocalPageCache::guard(std::unique_lock<std::mutex> & lock, const std::vector<UniversalPageId> keys, const std::vector<size_t> sizes, uint64_t guard_debug_id)
+void RNLocalPageCache::guard(std::unique_lock<std::mutex> & lock, const std::vector<UniversalPageId> & keys, const std::vector<size_t> & sizes, uint64_t guard_debug_id)
 {
     RUNTIME_CHECK(max_size > 0);
 
@@ -186,7 +186,7 @@ void LocalPageCache::guard(std::unique_lock<std::mutex> & lock, const std::vecto
     evictFromStorage(lock);
 }
 
-void LocalPageCache::unguard(const std::vector<UniversalPageId> keys, uint64_t guard_debug_id)
+void RNLocalPageCache::unguard(const std::vector<UniversalPageId> & keys, uint64_t guard_debug_id)
 {
     RUNTIME_CHECK(max_size > 0);
 
@@ -231,7 +231,7 @@ void LocalPageCache::unguard(const std::vector<UniversalPageId> keys, uint64_t g
     cv.notify_all();
 }
 
-LocalPageCache::OccupySpaceResult LocalPageCache::occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes)
+RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(const std::vector<PageOID> & pages, const std::vector<size_t> & page_sizes)
 {
     RUNTIME_CHECK(pages.size() == page_sizes.size(), pages.size(), page_sizes.size());
     const size_t n = pages.size();
@@ -241,7 +241,7 @@ LocalPageCache::OccupySpaceResult LocalPageCache::occupySpace(const std::vector<
     for (const auto & page : pages)
         keys.emplace_back(buildCacheId(page));
 
-    LocalPageCacheGuardPtr guard{};
+    RNLocalPageCacheGuardPtr guard{};
 
     if (max_size > 0)
     {
@@ -317,7 +317,7 @@ LocalPageCache::OccupySpaceResult LocalPageCache::occupySpace(const std::vector<
         // Guard keys first, then check existence. In this way, these keys will not be
         // evicted after the check.
         auto this_ptr = shared_from_this();
-        guard = std::make_shared<LocalPageCacheGuard>(this_ptr, lock, keys, page_sizes);
+        guard = std::make_shared<RNLocalPageCacheGuard>(this_ptr, lock, keys, page_sizes);
     }
     else
     {
@@ -326,7 +326,7 @@ LocalPageCache::OccupySpaceResult LocalPageCache::occupySpace(const std::vector<
         RUNTIME_CHECK(guard == nullptr);
     }
 
-    auto snapshot = storage->getSnapshot("LocalPageCache.occupySpace");
+    auto snapshot = storage->getSnapshot("RNLocalPageCache.occupySpace");
     std::vector<PageOID> missing_ids;
     for (size_t i = 0; i < n; ++i)
     {
@@ -342,7 +342,7 @@ LocalPageCache::OccupySpaceResult LocalPageCache::occupySpace(const std::vector<
     };
 }
 
-bool LocalPageCacheLRU::put(const UniversalPageId & key, size_t size)
+bool RNLocalPageCacheLRU::put(const UniversalPageId & key, size_t size)
 {
     if (max_size == 0)
         return false;
@@ -367,7 +367,7 @@ bool LocalPageCacheLRU::put(const UniversalPageId & key, size_t size)
     return inserted;
 }
 
-bool LocalPageCacheLRU::remove(const UniversalPageId & key)
+bool RNLocalPageCacheLRU::remove(const UniversalPageId & key)
 {
     auto it = index.find(key);
     if (it == index.end())
@@ -380,7 +380,7 @@ bool LocalPageCacheLRU::remove(const UniversalPageId & key)
     return true;
 }
 
-std::vector<UniversalPageId> LocalPageCacheLRU::evict()
+std::vector<UniversalPageId> RNLocalPageCacheLRU::evict()
 {
     if (current_total_size <= max_size)
         return {};
@@ -422,4 +422,5 @@ std::vector<UniversalPageId> LocalPageCacheLRU::evict()
 
     return evicted;
 }
+
 } // namespace DB::DM::Remote
