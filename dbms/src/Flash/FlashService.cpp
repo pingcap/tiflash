@@ -672,6 +672,7 @@ grpc::Status FlashService::FetchDisaggPages(
     const disaggregated::FetchDisaggPagesRequest * request,
     grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer)
 {
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_DEBUG(log, "Handling FetchDisaggPages request: {}", request->ShortDebugString());
     if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
         return check_result;

@@ -48,11 +48,10 @@ void DisaggregatedTask::prepare(const disaggregated::EstablishDisaggTaskRequest 
 {
     const auto & meta = request->meta();
     DM::DisaggTaskId task_id(meta);
-    auto task = std::make_shared<DisaggregatedTask>(context, task_id);
 
     auto & tmt_context = context->getTMTContext();
     TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context);
-    LOG_DEBUG(task->log, "DisaggregatedTask handling {} regions from {} physical tables", tables_regions_info.regionCount(), tables_regions_info.tableCount());
+    LOG_DEBUG(log, "DisaggregatedTask handling {} regions from {} physical tables", tables_regions_info.regionCount(), tables_regions_info.tableCount());
 
     // set schema ver and start ts
     auto schema_ver = request->schema_ver();
@@ -68,18 +67,18 @@ void DisaggregatedTask::prepare(const disaggregated::EstablishDisaggTaskRequest 
     } // use default timeout if it is 0
 
     // Parse the encoded plan into `dag_req`
-    task->dag_req = getDAGRequestFromStringWithRetry(request->encoded_plan());
-    LOG_DEBUG(task->log, "DAGReq: {}", task->dag_req.ShortDebugString());
+    dag_req = getDAGRequestFromStringWithRetry(request->encoded_plan());
+    LOG_DEBUG(log, "DAGReq: {}", dag_req.ShortDebugString());
 
-    context->getTimezoneInfo().resetByDAGRequest(task->dag_req);
+    context->getTimezoneInfo().resetByDAGRequest(dag_req);
 
-    task->dag_context = std::make_unique<DAGContext>(
-        task->dag_req,
+    dag_context = std::make_unique<DAGContext>(
+        dag_req,
         task_id,
         std::move(tables_regions_info),
         context->getClientInfo().current_address.toString(),
-        task->log);
-    context->setDAGContext(task->dag_context.get());
+        log);
+    context->setDAGContext(dag_context.get());
 }
 
 void DisaggregatedTask::execute(disaggregated::EstablishDisaggTaskResponse * response)
@@ -97,7 +96,12 @@ void DisaggregatedTask::execute(disaggregated::EstablishDisaggTaskResponse * res
     const auto & task_id = *dag_context->getDisaggTaskId();
     auto snap = manager->getSnapshot(task_id);
     if (!snap)
-        throw Exception(fmt::format("Snapshot for {} was missing", task_id));
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Snapshot was missing, task_id={}", task_id);
+
+    {
+        auto snapshot_id = task_id.toMeta();
+        response->set_allocated_snapshot_id(&snapshot_id);
+    }
 
     using DM::Remote::Serializer;
     for (const auto & [table_id, table_tasks] : snap->tableSnapshots())
