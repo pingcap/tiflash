@@ -358,7 +358,7 @@ try
         wb.putPage("page_foo", 0, "The flower carriage rocked", {4, 10, 12});
         wb.delPage("id_bar");
         wb.putPage("page_abc", 0, "Dreamed of the day that she was born");
-        auto blob_store_edits = blob_store.write(wb, nullptr);
+        auto blob_store_edits = blob_store.write(std::move(wb), nullptr);
 
         ASSERT_EQ(blob_store_edits.size(), 3);
 
