@@ -33,7 +33,6 @@
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
-#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 namespace DB

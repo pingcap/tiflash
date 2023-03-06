@@ -77,18 +77,20 @@ using VersionedEntries = std::vector<VersionedEntry>;
 
 enum class EditRecordType
 {
-    PUT,
-    PUT_EXTERNAL,
-    REF,
-    DEL,
+    PUT = 0,
+    PUT_EXTERNAL = 1,
+    REF = 2,
+    DEL = 3,
     //
-    UPSERT,
+    UPSERT = 4,
     // Variant types for dumping the in-memory entries into
     // snapshot
-    VAR_ENTRY,
-    VAR_REF,
-    VAR_EXTERNAL,
-    VAR_DELETE,
+    VAR_ENTRY = 5,
+    VAR_REF = 6,
+    VAR_EXTERNAL = 7,
+    VAR_DELETE = 8,
+    // Just used to update local cache info for VAR_ENTRY type
+    UPDATE_DATA_FROM_REMOTE = 9,
 };
 
 inline const char * typeToString(EditRecordType t)
@@ -113,6 +115,8 @@ inline const char * typeToString(EditRecordType t)
         return "VAR_EXT";
     case EditRecordType::VAR_DELETE:
         return "VAR_DEL";
+    case EditRecordType::UPDATE_DATA_FROM_REMOTE:
+        return "UPDATE_DATA_FROM_REMOTE";
     default:
         return "INVALID";
     }
@@ -171,6 +175,15 @@ public:
     {
         EditRecord record{};
         record.type = EditRecordType::PUT;
+        record.page_id = page_id;
+        record.entry = entry;
+        records.emplace_back(record);
+    }
+
+    void updateRemote(const PageId & page_id, const PageEntryV3 & entry)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::UPDATE_DATA_FROM_REMOTE;
         record.page_id = page_id;
         record.entry = entry;
         records.emplace_back(record);

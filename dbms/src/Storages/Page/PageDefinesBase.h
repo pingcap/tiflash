@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <Storages/Page/PageConstants.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
+#include <Storages/Page/PageConstants.h>
 #include <fmt/format.h>
 
 #include <chrono>

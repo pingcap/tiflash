@@ -50,13 +50,15 @@ try
     }
     ASSERT_THROW({
         cache.getPage({.page_id = 2}, {0});
-    }, DB::Exception);
+    },
+                 DB::Exception);
 
     ASSERT_THROW({
         cache.getPage({.page_id = 1}, {1});
-    }, DB::Exception);
+    },
+                 DB::Exception);
 
-    cache.write({ .page_id = 5 }, "foo_bar", { 3, 4 });
+    cache.write({.page_id = 5}, "foo_bar", {3, 4});
     {
         auto page = cache.getPage({.page_id = 5}, {0});
         ASSERT_EQ("foo", page.getFieldData(0));

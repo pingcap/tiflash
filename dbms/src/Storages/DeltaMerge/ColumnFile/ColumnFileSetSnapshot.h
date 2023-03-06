@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
 namespace DB
 {
@@ -56,6 +57,7 @@ class ColumnFileSetSnapshot : public std::enable_shared_from_this<ColumnFileSetS
 {
     friend class MemTableSet;
     friend class ColumnFilePersistedSet;
+    friend struct Remote::Serializer;
 
 private:
     StorageSnapshotPtr storage_snap;

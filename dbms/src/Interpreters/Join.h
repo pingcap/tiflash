@@ -25,7 +25,6 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <common/ThreadPool.h>
 
 #include <shared_mutex>
 

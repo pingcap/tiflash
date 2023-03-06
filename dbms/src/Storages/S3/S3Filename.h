@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/Transaction/Types.h>
 #include <common/defines.h>
 #include <common/types.h>
@@ -23,12 +24,8 @@
 
 namespace DB::S3
 {
-struct DMFileOID
-{
-    StoreID store_id = 0;
-    TableID table_id = 0;
-    UInt64 file_id = 0;
-};
+
+using DMFileOID = ::DB::DM::Remote::DMFileOID;
 
 enum class S3FilenameType
 {
@@ -162,15 +159,3 @@ struct S3Filename
 };
 
 } // namespace DB::S3
-
-template <>
-struct fmt::formatter<DB::S3::DMFileOID>
-{
-    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
-
-    template <typename FormatContext>
-    auto format(const DB::S3::DMFileOID & value, FormatContext & ctx) const -> decltype(ctx.out())
-    {
-        return format_to(ctx.out(), "{}_{}_{}", value.store_id, value.table_id, value.file_id);
-    }
-};

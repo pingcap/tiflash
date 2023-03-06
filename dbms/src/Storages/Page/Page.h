@@ -78,7 +78,8 @@ struct ByteBuffer
     friend bool operator!=(const std::string_view & a, const ByteBuffer & b) { return !(a == b); }
 
     // For pretty print in Google Test
-    friend std::ostream& operator<<(std::ostream& os, const ByteBuffer & b) {
+    friend std::ostream & operator<<(std::ostream & os, const ByteBuffer & b)
+    {
         return os << std::string_view(b.begin_pos, b.size());
     }
 
@@ -114,7 +115,7 @@ private:
 public:
     inline bool isValid() const { return is_valid; }
 
-    ByteBuffer getFieldData(size_t index) const
+    ConstByteBuffer getFieldData(size_t index) const
     {
         auto iter = field_offsets.find(FieldOffsetInsidePage(index));
         if (unlikely(iter == field_offsets.end()))
@@ -126,7 +127,7 @@ public:
         PageFieldOffset end = (iter == field_offsets.end() ? data.size() : iter->offset);
         assert(beg <= data.size());
         assert(end <= data.size());
-        return ByteBuffer(data.begin() + beg, data.begin() + end);
+        return ConstByteBuffer(data.begin() + beg, data.begin() + end);
     }
 
     inline static PageFieldSizes fieldOffsetsToSizes(const PageFieldOffsetChecksums & field_offsets, size_t data_size)

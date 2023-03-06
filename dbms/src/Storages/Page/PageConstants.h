@@ -59,4 +59,4 @@ static constexpr NamespaceId KVSTORE_NAMESPACE_ID = 1000000UL;
 // just a random namespace id for test, the value doesn't matter
 static constexpr NamespaceId TEST_NAMESPACE_ID = 1000;
 
-}
+} // namespace DB
