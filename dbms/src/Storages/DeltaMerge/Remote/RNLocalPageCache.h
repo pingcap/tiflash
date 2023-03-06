@@ -208,7 +208,7 @@ public:
 private:
     static UniversalPageId buildCacheId(const PageOID & oid)
     {
-        return fmt::format("{}_{}_{}", oid.write_node_id, oid.table_id, oid.page_id);
+        return fmt::format("{}_{}_{}", oid.store_id, oid.table_id, oid.page_id);
     }
 
 #ifndef DBMS_PUBLIC_GTEST

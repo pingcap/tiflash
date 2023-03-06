@@ -44,7 +44,7 @@ void serializeSchema(WriteBuffer & buf, const Block & schema);
 BlockPtr deserializeSchema(ReadBuffer & buf);
 
 void serializeColumn(WriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level);
-void deserializeColumn(IColumn & column, const DataTypePtr & type, const ConstByteBuffer & data_buf, size_t rows);
+void deserializeColumn(IColumn & column, const DataTypePtr & type, std::string_view data_buf, size_t rows);
 
 /// Serialize those column files' metadata into buf.
 void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files);

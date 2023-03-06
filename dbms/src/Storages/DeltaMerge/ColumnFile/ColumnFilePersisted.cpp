@@ -77,9 +77,9 @@ void serializeColumn(WriteBuffer & buf, const IColumn & column, const DataTypePt
     compressed.next();
 }
 
-void deserializeColumn(IColumn & column, const DataTypePtr & type, const ConstByteBuffer & data_buf, size_t rows)
+void deserializeColumn(IColumn & column, const DataTypePtr & type, std::string_view data_buf, size_t rows)
 {
-    ReadBufferFromMemory buf(data_buf.begin(), data_buf.size());
+    ReadBufferFromString buf(data_buf);
     CompressedReadBuffer compressed(buf);
     type->deserializeBinaryBulkWithMultipleStreams(
         column,

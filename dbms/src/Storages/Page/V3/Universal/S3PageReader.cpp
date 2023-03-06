@@ -39,7 +39,7 @@ Page S3PageReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
         pos += n;
     }
     Page page{UniversalPageIdFormat::getU64ID(page_id_and_entry.first)};
-    page.data = ByteBuffer(data_buf, data_buf + buf_size);
+    page.data = std::string_view(data_buf, buf_size);
     page.mem_holder = mem_holder;
     // Calculate the field_offsets from page entry
     for (size_t index = 0; index < page_entry.field_offsets.size(); index++)
@@ -96,7 +96,7 @@ std::pair<UniversalPageMap, UniversalPageMap> S3PageReader::read(const FieldRead
             data_pos += size_to_read;
         }
         Page page{UniversalPageIdFormat::getU64ID(read_info.page_id)};
-        page.data = ByteBuffer(read_fields_buf + page_begin, read_fields_buf + data_pos);
+        page.data = std::string_view(read_fields_buf + page_begin, data_pos - page_begin);
         page.mem_holder = read_fields_mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
         read_fields_page_map.emplace(read_info.page_id, page);
