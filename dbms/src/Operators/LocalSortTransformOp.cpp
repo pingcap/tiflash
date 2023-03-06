@@ -67,7 +67,7 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
         return OperatorStatus::NEED_INPUT;
     }
     case LocalSortStatus::MERGE:
-        throw Exception("Unexpcet status: MERGE.");
+        throw Exception("Unexpected status: MERGE.");
     }
 }
 
