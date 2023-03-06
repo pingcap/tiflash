@@ -16,13 +16,14 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/ReadUtil.h>
 
 namespace DB::DM
 {
 BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
     const ColumnDefines & columns_to_read,
-    BlockInputStreamPtr stable_,
-    BlockInputStreamPtr delta_,
+    SkippableBlockInputStreamPtr stable_,
+    SkippableBlockInputStreamPtr delta_,
     size_t stable_rows_,
     const BitmapFilterPtr & bitmap_filter_,
     const String & req_id_)
@@ -36,7 +37,7 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
 
 Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 {
-    auto [block, from_delta] = readBlock();
+    auto [block, from_delta] = readBlock(stable, delta);
     if (block)
     {
         if (from_delta)
@@ -67,35 +68,6 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return
         }
     }
     return block;
-}
-
-// <Block, from_delta>
-std::pair<Block, bool> BitmapFilterBlockInputStream::readBlock()
-{
-    if (stable == nullptr && delta == nullptr)
-    {
-        return {{}, false};
-    }
-
-    if (stable == nullptr)
-    {
-        return {delta->read(), true};
-    }
-
-    auto block = stable->read();
-    if (block)
-    {
-        return {block, false};
-    }
-    else
-    {
-        stable = nullptr;
-        if (delta != nullptr)
-        {
-            block = delta->read();
-        }
-        return {block, true};
-    }
 }
 
 } // namespace DB::DM

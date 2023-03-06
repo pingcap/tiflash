@@ -521,7 +521,7 @@ TEST_F(SegmentBitmapFilterTest, CleanStable)
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
-        EMPTY_FILTER,
+        EMPTY_RS_OPERATOR,
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_NE(bitmap_filter, nullptr);
@@ -543,7 +543,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
-            EMPTY_FILTER,
+            EMPTY_RS_OPERATOR,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         ASSERT_NE(bitmap_filter, nullptr);
@@ -563,7 +563,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
-            EMPTY_FILTER,
+            EMPTY_RS_OPERATOR,
             1,
             DEFAULT_BLOCK_SIZE);
         ASSERT_NE(bitmap_filter, nullptr);
@@ -591,7 +591,7 @@ TEST_F(SegmentBitmapFilterTest, StableRange)
         *dm_context,
         snap,
         {buildRowKeyRange(10000, 50000)}, // [10000, 50000)
-        EMPTY_FILTER,
+        EMPTY_RS_OPERATOR,
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_NE(bitmap_filter, nullptr);

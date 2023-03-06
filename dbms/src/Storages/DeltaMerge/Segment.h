@@ -165,7 +165,7 @@ public:
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
-        const RSOperatorPtr & filter,
+        const PushDownFilterPtr & filter,
         UInt64 max_version,
         size_t expected_block_size);
 
@@ -631,9 +631,18 @@ public:
                                                    const ColumnDefines & columns_to_read,
                                                    const SegmentSnapshotPtr & segment_snap,
                                                    const RowKeyRanges & read_ranges,
-                                                   const RSOperatorPtr & filter,
+                                                   const PushDownFilterPtr & filter,
                                                    UInt64 max_version,
                                                    size_t expected_block_size);
+
+    BlockInputStreamPtr getLateMaterializationStream(BitmapFilterPtr && bitmap_filter,
+                                                     const DMContext & dm_context,
+                                                     const ColumnDefines & columns_to_read,
+                                                     const SegmentSnapshotPtr & segment_snap,
+                                                     const RowKeyRanges & data_ranges,
+                                                     const PushDownFilterPtr & filter,
+                                                     UInt64 max_version,
+                                                     size_t expected_block_size);
 
 
 private:

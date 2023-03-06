@@ -251,7 +251,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
 {
     assert(isFunctionExpr(expr));
 
-    RSOperatorPtr op = EMPTY_FILTER;
+    RSOperatorPtr op = EMPTY_RS_OPERATOR;
     if (unlikely(isAggFunctionExpr(expr)))
     {
         op = createUnsupported(expr.ShortDebugString(), "agg function: " + tipb::ExprType_Name(expr.tp()), false);
@@ -392,7 +392,7 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
                                           FilterParser::AttrCreatorByColumnID && creator,
                                           const LoggerPtr & log)
 {
-    RSOperatorPtr op = EMPTY_FILTER;
+    RSOperatorPtr op = EMPTY_RS_OPERATOR;
     if (dag_info.filters.empty())
         return op;
 

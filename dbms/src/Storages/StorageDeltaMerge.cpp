@@ -25,6 +25,8 @@
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Databases/IDatabase.h>
 #include <Debug/MockTiDB.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -39,6 +41,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/MutableSupport.h>
@@ -702,12 +705,13 @@ DM::RowKeyRanges StorageDeltaMerge::parseMvccQueryInfo(const DB::MvccQueryInfo &
 }
 
 
-DM::RSOperatorPtr StorageDeltaMerge::parseRoughSetFilter(const SelectQueryInfo & query_info,
-                                                         const ColumnDefines & columns_to_read,
-                                                         const Context & context,
-                                                         const LoggerPtr & tracing_logger)
+DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryInfo & query_info,
+                                                             const ColumnDefines & columns_to_read,
+                                                             const Context & context,
+                                                             const LoggerPtr & tracing_logger)
 {
-    DM::RSOperatorPtr rs_operator = DM::EMPTY_FILTER;
+    // build rough set operator
+    DM::RSOperatorPtr rs_operator = DM::EMPTY_RS_OPERATOR;
     const bool enable_rs_filter = context.getSettingsRef().dt_enable_rough_set_filter;
     if (enable_rs_filter)
     {
@@ -727,13 +731,50 @@ DM::RSOperatorPtr StorageDeltaMerge::parseRoughSetFilter(const SelectQueryInfo &
             };
             rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
         }
-        if (likely(rs_operator != DM::EMPTY_FILTER))
+        if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
             LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
     }
     else
         LOG_DEBUG(tracing_logger, "Rough set filter is disabled.");
 
-    return rs_operator;
+    // build push down filter
+    if (!query_info.dag_query->pushed_down_filters.empty())
+    {
+        std::unordered_set<ColId> filter_column_ids;
+        for (const auto & filter : query_info.dag_query->filters)
+        {
+            filter_column_ids.insert(DB::DM::cop::getColumnIDForColumnExpr(filter, columns_to_read));
+        }
+        ColumnDefines filter_columns;
+        for (const auto id : filter_column_ids)
+        {
+            auto iter = std::find_if(
+                columns_to_read.begin(),
+                columns_to_read.end(),
+                [id](const ColumnDefine & d) -> bool { return d.id == id; });
+            RUNTIME_CHECK(iter != columns_to_read.end());
+            filter_columns.push_back(*iter);
+        }
+
+        for (const auto & col : filter_columns)
+        {
+            // do not support push down filter on datetime and time
+            RUNTIME_CHECK(col.id == 1 || (col.type->getTypeId() != TypeIndex::MyDateTime && col.type->getTypeId() != TypeIndex::MyTime));
+        }
+
+        NamesAndTypes columns_to_read_name_and_type;
+        for (const auto & col : columns_to_read)
+        {
+            columns_to_read_name_and_type.emplace_back(col.name, col.type);
+        }
+
+        // build filter expression actions
+        std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(columns_to_read_name_and_type, context);
+        auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(query_info.dag_query->pushed_down_filters, *analyzer);
+
+        return std::make_shared<PushDownFilter>(rs_operator, before_where, filter_columns, filter_column_name);
+    }
+    return std::make_shared<PushDownFilter>(rs_operator);
 }
 
 BlockInputStreams StorageDeltaMerge::read(
@@ -774,7 +815,7 @@ BlockInputStreams StorageDeltaMerge::read(
 
     auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, tracing_logger);
 
-    auto rs_operator = parseRoughSetFilter(query_info, columns_to_read, context, tracing_logger);
+    auto filter = parsePushDownFilter(query_info, columns_to_read, context, tracing_logger);
 
     const auto & scan_context = mvcc_query_info.scan_context;
 
@@ -785,7 +826,7 @@ BlockInputStreams StorageDeltaMerge::read(
         ranges,
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
-        rs_operator,
+        filter,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,
@@ -852,7 +893,7 @@ UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)
 {
     if (storeInited())
     {
-        return _store->onSyncGc(limit, gc_options);
+        return store->onSyncGc(limit, gc_options);
     }
     return 0;
 }
@@ -941,7 +982,7 @@ DM::DeltaMergeStorePtr StorageDeltaMerge::getStoreIfInited()
 {
     if (storeInited())
     {
-        return _store;
+        return store;
     }
     return nullptr;
 }
@@ -1175,7 +1216,7 @@ try
         std::lock_guard lock(store_mutex); // Avoid concurrent init store and DDL.
         if (storeInited())
         {
-            _store->applyAlters(commands, table_info, max_column_id_used, context);
+            store->applyAlters(commands, table_info, max_column_id_used, context);
         }
         else
         {
@@ -1214,12 +1255,12 @@ ColumnDefines StorageDeltaMerge::getStoreColumnDefines() const
 {
     if (storeInited())
     {
-        return _store->getTableColumns();
+        return store->getTableColumns();
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return _store->getTableColumns();
+        return store->getTableColumns();
     }
     ColumnDefines cols;
     cols.emplace_back(table_column_info->handle_column_define);
@@ -1259,13 +1300,13 @@ void StorageDeltaMerge::rename(
     }
     if (storeInited())
     {
-        _store->rename(new_path_to_db, new_database_name, new_table_name);
+        store->rename(new_path_to_db, new_database_name, new_table_name);
         return;
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        _store->rename(new_path_to_db, new_database_name, new_table_name);
+        store->rename(new_path_to_db, new_database_name, new_table_name);
     }
     else
     {
@@ -1278,12 +1319,12 @@ String StorageDeltaMerge::getTableName() const
 {
     if (storeInited())
     {
-        return _store->getTableName();
+        return store->getTableName();
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return _store->getTableName();
+        return store->getTableName();
     }
     return table_column_info->table_name;
 }
@@ -1292,12 +1333,12 @@ String StorageDeltaMerge::getDatabaseName() const
 {
     if (storeInited())
     {
-        return _store->getDatabaseName();
+        return store->getDatabaseName();
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return _store->getDatabaseName();
+        return store->getDatabaseName();
     }
     return table_column_info->db_name;
 }
@@ -1421,7 +1462,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     StoreStats stat;
     if (storeInited())
     {
-        stat = _store->getStoreStats();
+        stat = store->getStoreStats();
     }
 
 #define INSERT_INT(NAME)             \
@@ -1527,7 +1568,7 @@ void StorageDeltaMerge::shutdownImpl()
         return;
     if (storeInited())
     {
-        _store->shutdown();
+        store->shutdown();
     }
 }
 
@@ -1553,12 +1594,12 @@ DataTypePtr StorageDeltaMerge::getPKTypeImpl() const
 {
     if (storeInited())
     {
-        return _store->getPKDataType();
+        return store->getPKDataType();
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return _store->getPKDataType();
+        return store->getPKDataType();
     }
     return table_column_info->handle_column_define.type;
 }
@@ -1567,12 +1608,12 @@ SortDescription StorageDeltaMerge::getPrimarySortDescription() const
 {
     if (storeInited())
     {
-        return _store->getPrimarySortDescription();
+        return store->getPrimarySortDescription();
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return _store->getPrimarySortDescription();
+        return store->getPrimarySortDescription();
     }
     SortDescription desc;
     desc.emplace_back(table_column_info->handle_column_define.name, /* direction_= */ 1, /* nulls_direction_= */ 1);
@@ -1583,12 +1624,12 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
 {
     if (storeInited())
     {
-        return _store;
+        return store;
     }
     std::lock_guard lock(store_mutex);
-    if (_store == nullptr)
+    if (store == nullptr)
     {
-        _store = std::make_shared<DeltaMergeStore>(
+        store = std::make_shared<DeltaMergeStore>(
             global_context,
             data_path_contains_database_name,
             table_column_info->db_name,
@@ -1603,7 +1644,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
         table_column_info.reset(nullptr);
         store_inited.store(true, std::memory_order_release);
     }
-    return _store;
+    return store;
 }
 
 bool StorageDeltaMerge::initStoreIfDataDirExist()

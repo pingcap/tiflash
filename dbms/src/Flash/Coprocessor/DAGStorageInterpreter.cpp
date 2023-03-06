@@ -169,49 +169,6 @@ bool hasRegionToRead(const DAGContext & dag_context, const TiDBTableScan & table
     return has_region_to_read;
 }
 
-// add timezone cast for timestamp type, this is used to support session level timezone
-// <has_cast, extra_cast, project_for_remote_read>
-std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterTs(
-    DAGExpressionAnalyzer & analyzer,
-    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    const TiDBTableScan & table_scan)
-{
-    bool has_need_cast_column = false;
-    for (auto b : need_cast_column)
-        has_need_cast_column |= (b != ExtraCastAfterTSMode::None);
-    if (!has_need_cast_column)
-        return {false, nullptr, nullptr};
-
-    ExpressionActionsChain chain;
-    analyzer.initChain(chain);
-    auto original_source_columns = analyzer.getCurrentInputColumns();
-    // execute timezone cast or duration cast if needed for local table scan
-    if (analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan))
-    {
-        ExpressionActionsPtr extra_cast = chain.getLastActions();
-        assert(extra_cast);
-        chain.finalize();
-        chain.clear();
-
-        // After `analyzer.appendExtraCastsAfterTS`, analyzer.getCurrentInputColumns() has been modified.
-        // For remote read, `timezone cast and duration cast` had been pushed down, don't need to execute cast expressions.
-        // To keep the schema of local read streams and remote read streams the same, do project action for remote read streams.
-        NamesWithAliases project_for_remote_read;
-        const auto & after_cast_source_columns = analyzer.getCurrentInputColumns();
-        for (size_t i = 0; i < after_cast_source_columns.size(); ++i)
-            project_for_remote_read.emplace_back(original_source_columns[i].name, after_cast_source_columns[i].name);
-        assert(!project_for_remote_read.empty());
-        ExpressionActionsPtr project_for_cop_read = std::make_shared<ExpressionActions>(original_source_columns);
-        project_for_cop_read->add(ExpressionAction::project(project_for_remote_read));
-
-        return {true, extra_cast, project_for_cop_read};
-    }
-    else
-    {
-        return {false, nullptr, nullptr};
-    }
-}
-
 void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_info)
 {
     // Inject failpoint to throw RegionException for testing
@@ -377,7 +334,7 @@ void DAGStorageInterpreter::prepare()
     assert(storages_with_structure_lock.find(logical_table_id) != storages_with_structure_lock.end());
     storage_for_logical_table = storages_with_structure_lock[logical_table_id].storage;
 
-    std::tie(required_columns, source_columns, is_need_add_cast_column) = getColumnsForTableScan();
+    std::tie(required_columns, source_columns) = getColumnsForTableScan();
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
@@ -387,8 +344,8 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     DAGPipeline & pipeline)
 {
     // execute timezone cast or duration cast if needed for local table scan
-    auto [has_cast, extra_cast, project_for_cop_read] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
-    if (has_cast)
+    auto extra_cast = ::DB::addExtraCastsAfterTs(*analyzer, table_scan.getColumns());
+    if (extra_cast.has_value())
     {
         assert(remote_read_streams_start_index <= pipeline.streams.size());
         size_t i = 0;
@@ -396,15 +353,8 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
         while (i < remote_read_streams_start_index)
         {
             auto & stream = pipeline.streams[i++];
-            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast.value(), log->identifier());
             stream->setExtraInfo("cast after local tableScan");
-        }
-        // remote streams
-        while (i < pipeline.streams.size())
-        {
-            auto & stream = pipeline.streams[i++];
-            stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log->identifier());
-            stream->setExtraInfo("cast after remote tableScan");
         }
     }
 }
@@ -583,6 +533,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         query_info.query = dagContext().dummy_ast;
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions.conditions,
+            table_scan.getPushedDownFilters(),
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
@@ -928,12 +879,10 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     return storages_with_lock;
 }
 
-std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getColumnsForTableScan()
+std::pair<Names, NamesAndTypes> DAGStorageInterpreter::getColumnsForTableScan()
 {
     Names required_columns_tmp;
     NamesAndTypes source_columns_tmp;
-    std::vector<ExtraCastAfterTSMode> need_cast_column;
-    need_cast_column.reserve(table_scan.getColumnSize());
     String handle_column_name = MutableSupport::tidb_pk_column_name;
     if (auto pk_handle_col = storage_for_logical_table->getTableInfo().getPKHandleColumn())
         handle_column_name = pk_handle_col->get().name;
@@ -971,15 +920,9 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
             source_columns_tmp.emplace_back(std::move(pair));
         }
         required_columns_tmp.emplace_back(std::move(name));
-        if (cid != -1 && ci.tp == TiDB::TypeTimestamp)
-            need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
-        else if (cid != -1 && ci.tp == TiDB::TypeTime)
-            need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
-        else
-            need_cast_column.push_back(ExtraCastAfterTSMode::None);
     }
 
-    return {required_columns_tmp, source_columns_tmp, need_cast_column};
+    return {required_columns_tmp, source_columns_tmp};
 }
 
 // Build remote requests from `region_retry_from_local_region` and `table_regions_info.remote_regions`

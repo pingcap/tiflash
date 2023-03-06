@@ -18,6 +18,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB::DM
 {
@@ -28,8 +29,8 @@ class BitmapFilterBlockInputStream : public IProfilingBlockInputStream
 public:
     BitmapFilterBlockInputStream(
         const ColumnDefines & columns_to_read,
-        BlockInputStreamPtr stable_,
-        BlockInputStreamPtr delta_,
+        SkippableBlockInputStreamPtr stable_,
+        SkippableBlockInputStreamPtr delta_,
         size_t stable_rows_,
         const BitmapFilterPtr & bitmap_filter_,
         const String & req_id_);
@@ -50,11 +51,9 @@ protected:
     Block readImpl(FilterPtr & res_filter, bool return_filter) override;
 
 private:
-    std::pair<Block, bool> readBlock();
-
     Block header;
-    BlockInputStreamPtr stable;
-    BlockInputStreamPtr delta;
+    SkippableBlockInputStreamPtr stable;
+    SkippableBlockInputStreamPtr delta;
     size_t stable_rows;
     BitmapFilterPtr bitmap_filter;
     const LoggerPtr log;

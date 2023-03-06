@@ -125,8 +125,8 @@ Block LateMaterializationBlockInputStream::readImpl()
                               rest_column_block.startOffset(),
                               rest_column_block.rows(),
                               passed_count);
-
-            // TODO: remove tmp filter column in filter_column_block
+            // join filter_column_block and rest_column_block by columns,
+            // the tmp column added by FilterBlockInputStream will be removed.
             return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
         }
     }

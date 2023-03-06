@@ -148,8 +148,7 @@ public:
     // Int64 to duration.
     bool appendExtraCastsAfterTS(
         ExpressionActionsChain & chain,
-        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const TiDBTableScan & table_scan);
+        const DB::ColumnInfos & table_scan_columns);
 
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(
@@ -263,6 +262,10 @@ private:
         const ExpressionActionsPtr & actions,
         const String & expr_name);
 
+    bool buildExtraCastsAfterTS(
+        const ExpressionActionsPtr & actions,
+        const ColumnInfos & table_scan_columns);
+
     /**
      * when force_uint8 is false, alignReturnType align the data type in tiflash with the data type in dag request, otherwise
      * always convert the return type to uint8 or nullable(uint8)
@@ -277,11 +280,6 @@ private:
         const ExpressionActionsPtr & actions,
         const String & expr_name,
         bool force_uint8);
-
-    bool buildExtraCastsAfterTS(
-        const ExpressionActionsPtr & actions,
-        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const ColumnInfos & table_scan_columns);
 
     std::pair<bool, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,

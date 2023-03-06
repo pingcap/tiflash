@@ -19,7 +19,7 @@
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
@@ -172,7 +172,7 @@ protected:
         const String & db_engine,
         const String & db_name_,
         const String & name_,
-        const DM::OptionTableInfoConstRef table_info_,
+        DM::OptionTableInfoConstRef table_info_,
         const ColumnsDescription & columns_,
         const ASTPtr & primary_expr_ast_,
         Timestamp tombstone,
@@ -188,7 +188,7 @@ private:
         const AlterCommands & commands,
         const String & database_name,
         const String & table_name,
-        const DB::DM::OptionTableInfoConstRef table_info_,
+        DB::DM::OptionTableInfoConstRef table_info_,
         const Context & context);
 
     DataTypePtr getPKTypeImpl() const override;
@@ -203,11 +203,11 @@ private:
     bool dataDirExist();
     void shutdownImpl();
 
-    /// Get Rough set filter from query
-    DM::RSOperatorPtr parseRoughSetFilter(const SelectQueryInfo & query_info,
-                                          const DM::ColumnDefines & columns_to_read,
-                                          const Context & context,
-                                          const LoggerPtr & tracing_logger);
+    /// Get filters from query to construct rough set operation and push down filters.
+    DM::PushDownFilterPtr parsePushDownFilter(const SelectQueryInfo & query_info,
+                                              const DM::ColumnDefines & columns_to_read,
+                                              const Context & context,
+                                              const LoggerPtr & tracing_logger);
 
     DM::RowKeyRanges parseMvccQueryInfo(const DB::MvccQueryInfo & mvcc_query_info,
                                         unsigned num_streams,
@@ -237,7 +237,7 @@ private:
 
     std::unique_ptr<TableColumnInfo> table_column_info; // After create DeltaMergeStore object, it is deprecated.
     std::atomic<bool> store_inited;
-    DM::DeltaMergeStorePtr _store;
+    DM::DeltaMergeStorePtr store;
 
     Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
     bool is_common_handle = false;

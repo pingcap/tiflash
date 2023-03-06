@@ -40,7 +40,7 @@ void ColumnFileBig::calculateStat(const DMContext & context)
         index_cache,
         /*set_cache_if_miss*/ false,
         {segment_range},
-        EMPTY_FILTER,
+        EMPTY_RS_OPERATOR,
         {},
         context.db_context.getFileProvider(),
         context.getReadLimiter(),

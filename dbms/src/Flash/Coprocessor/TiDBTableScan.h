@@ -71,6 +71,11 @@ public:
         return table_scan;
     }
 
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & getPushedDownFilters() const
+    {
+        return pushed_down_filters;
+    }
+
 private:
     const tipb::Executor * table_scan;
     String executor_id;
@@ -85,6 +90,12 @@ private:
     /// physical_table_ids contains the table ids of its partitions
     std::vector<Int64> physical_table_ids;
     Int64 logical_table_id;
+
+    /// pushed_down_filter_conditions is the filter conditions that are
+    /// pushed down to table scan by late materialization.
+    /// They will be executed on Storage layer.
+    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
+
     bool keep_order;
     bool is_fast_scan;
 };

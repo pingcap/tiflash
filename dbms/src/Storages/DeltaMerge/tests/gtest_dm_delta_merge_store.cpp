@@ -548,7 +548,7 @@ try
                      {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                      /* num_streams= */ 1,
                      /* max_version= */ std::numeric_limits<UInt64>::max(),
-                     filter,
+                     std::make_shared<PushDownFilter>(filter),
                      TRACING_NAME,
                      /* keep_order= */ false,
                      /* is_fast_scan= */ false,

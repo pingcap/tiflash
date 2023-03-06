@@ -175,15 +175,44 @@ void executeCreatingSets(
     }
 }
 
+// add timezone cast for timestamp type, this is used to support session level timezone
+std::optional<ExpressionActionsPtr> addExtraCastsAfterTs(
+    DAGExpressionAnalyzer & analyzer,
+    const DB::ColumnInfos & table_scan_columns)
+{
+    bool has_need_cast_column = false;
+    for (const auto & col : table_scan_columns)
+    {
+        has_need_cast_column |= (col.id != -1 && (col.tp == TiDB::TypeTimestamp || col.tp == TiDB::TypeTime));
+    }
+    if (!has_need_cast_column)
+        return std::nullopt;
+
+    ExpressionActionsChain chain;
+    // execute timezone cast or duration cast if needed for local table scan
+    if (analyzer.appendExtraCastsAfterTS(chain, table_scan_columns))
+    {
+        ExpressionActionsPtr extra_cast = chain.getLastActions();
+        assert(extra_cast);
+        chain.finalize();
+        chain.clear();
+        return extra_cast;
+    }
+    else
+    {
+        return std::nullopt;
+    }
+}
+
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-    const FilterConditions & filter_conditions,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
     DAGExpressionAnalyzer & analyzer)
 {
-    assert(filter_conditions.hasValue());
+    assert(!conditions.empty());
 
     ExpressionActionsChain chain;
     analyzer.initChain(chain);
-    String filter_column_name = analyzer.appendWhere(chain, filter_conditions.conditions);
+    String filter_column_name = analyzer.appendWhere(chain, conditions);
     ExpressionActionsPtr before_where = chain.getLastActions();
     chain.addStep();
 
@@ -207,7 +236,7 @@ void executePushedDownFilter(
     LoggerPtr log,
     DAGPipeline & pipeline)
 {
-    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions, analyzer);
+    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
 
     assert(remote_read_streams_start_index <= pipeline.streams.size());
     // for remote read, filter had been pushed down, don't need to execute again.

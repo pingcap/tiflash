@@ -96,8 +96,10 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
     {
         NamesAndTypes source_columns;
         std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
         dag_query = std::make_unique<DAGQueryInfo>(
             conditions,
+            pushed_down_filters,
             DAGPreparedSets(),
             source_columns,
             timezone_info);
