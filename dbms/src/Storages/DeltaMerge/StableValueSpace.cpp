@@ -112,8 +112,8 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
 
         auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
         auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
-        if (!res) {
-
+        if (!res)
+        {
             // ? 这个值得 throw 吗？还是就打个 ERROR 就可以了呢？
             throw Exception(ErrorCodes::LOGICAL_ERROR, "update dt file size failed");
         }

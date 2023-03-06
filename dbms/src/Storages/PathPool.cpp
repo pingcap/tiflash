@@ -510,20 +510,21 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
     pool.global_capacity->addUsedSize(path, file_size);
 }
 
-bool StableDiskDelegator::updateDTFileSize(UInt64 file_id, size_t file_size) {
-    
+bool StableDiskDelegator::updateDTFileSize(UInt64 file_id, size_t file_size)
+{
     auto iter = pool.dt_file_path_map.find(file_id);
-    if (iter == pool.dt_file_path_map.end()) {
+    if (iter == pool.dt_file_path_map.end())
+    {
         return false;
     }
     auto index = iter->second;
     auto it = pool.main_path_infos[index].file_size_map.find(file_id);
-    if (it == pool.main_path_infos[index].file_size_map.end()) {
+    if (it == pool.main_path_infos[index].file_size_map.end())
+    {
         return false;
     }
     it->second = file_size;
     return true;
-    
 }
 
 void StableDiskDelegator::removeDTFile(UInt64 file_id)
