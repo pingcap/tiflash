@@ -14,7 +14,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
-#include <Common/ThreadPool.h>
+#include <Common/UniThreadPool.h>
 #include <Common/setThreadName.h>
 #include <Poco/Util/Application.h>
 #include <Poco/Util/LayeredConfiguration.h>
