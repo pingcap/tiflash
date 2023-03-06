@@ -137,7 +137,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::checkStepEnd()
     if (!step_end)
         return;
 
-    RUNTIME_CHECK_MSG(step == STEP, "current step {} != caller's step {}", static_cast<std::underlying_type<NASemiJoinStep>::type>(step), static_cast<std::underlying_type<NASemiJoinStep>::type>(STEP));
+    RUNTIME_CHECK_MSG(step == STEP, "current step {} != caller's step {}", static_cast<std::underlying_type_t<NASemiJoinStep>>(step), static_cast<std::underlying_type<NASemiJoinStep>::type>(STEP));
 
     if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_OTHER_COND)
     {
