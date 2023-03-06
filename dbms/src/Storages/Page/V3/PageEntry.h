@@ -93,6 +93,7 @@ public:
         {
             if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
             {
+                // entry.size is not reliable under this case, use the size_in_file in checkpoint_info instead
                 return {field_offsets.back().first, checkpoint_info->data_location.size_in_file};
             }
             else
