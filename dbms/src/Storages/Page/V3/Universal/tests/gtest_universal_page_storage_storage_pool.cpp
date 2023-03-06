@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Poco/Logger.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -21,7 +22,6 @@
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <common/logger_useful.h>
 #include <fmt/ranges.h>
 #include <gtest/gtest.h>
 

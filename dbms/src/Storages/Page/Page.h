@@ -23,7 +23,6 @@
 #include <set>
 #include <unordered_map>
 
-
 namespace DB
 {
 using MemHolder = std::shared_ptr<char>;
@@ -47,6 +46,45 @@ struct FieldOffsetInsidePage
     {}
 
     bool operator<(const FieldOffsetInsidePage & rhs) const { return index < rhs.index; }
+};
+
+struct ByteBuffer
+{
+    using Pos = char *;
+
+    ByteBuffer()
+        : begin_pos(nullptr)
+        , end_pos(nullptr)
+    {}
+
+    ByteBuffer(Pos begin_pos_, Pos end_pos_)
+        : begin_pos(begin_pos_)
+        , end_pos(end_pos_)
+    {}
+
+    inline Pos begin() const { return begin_pos; }
+    inline Pos end() const { return end_pos; }
+    inline size_t size() const { return end_pos - begin_pos; }
+
+    friend bool operator==(const ByteBuffer & a, const std::string_view & b)
+    {
+        if (a.size() != b.size())
+            return false;
+        return memcmp(a.begin_pos, b.data(), a.size()) == 0;
+    }
+
+    friend bool operator==(const std::string_view & a, const ByteBuffer & b) { return b == a; }
+    friend bool operator!=(const ByteBuffer & a, const std::string_view & b) { return !(a == b); }
+    friend bool operator!=(const std::string_view & a, const ByteBuffer & b) { return !(a == b); }
+
+    // For pretty print in Google Test
+    friend std::ostream& operator<<(std::ostream& os, const ByteBuffer & b) {
+        return os << std::string_view(b.begin_pos, b.size());
+    }
+
+private:
+    Pos begin_pos;
+    Pos end_pos; /// 1 byte after the end of the buffer
 };
 
 struct Page

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <IO/ReadBuffer.h>
+#include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
@@ -49,9 +50,9 @@ RNLocalPageCache::RNLocalPageCache(const RNLocalPageCacheOptions & options)
 
 void RNLocalPageCache::write(
     const PageOID & oid,
-    ReadBufferPtr && read_buffer,
+    const ReadBufferPtr & read_buffer,
     PageSize size,
-    PageFieldSizes && field_sizes)
+    const PageFieldSizes & field_sizes)
 {
     auto key = buildCacheId(oid);
 
@@ -73,6 +74,12 @@ void RNLocalPageCache::write(
     UniversalWriteBatch cache_wb;
     cache_wb.putPage(key, 0, read_buffer, size, field_sizes);
     storage->write(std::move(cache_wb));
+}
+
+void RNLocalPageCache::write(const PageOID & oid, std::string_view data, const PageFieldSizes & field_sizes)
+{
+    auto read_buf = std::make_shared<ReadBufferFromOwnString>(data);
+    write(oid, read_buf, data.size(), field_sizes);
 }
 
 Page RNLocalPageCache::getPage(const PageOID & oid, const std::vector<size_t> & indices)

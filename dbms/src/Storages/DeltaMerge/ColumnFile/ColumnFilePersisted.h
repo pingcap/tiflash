@@ -19,6 +19,9 @@
 
 namespace DB
 {
+
+struct ByteBuffer;
+
 namespace DM
 {
 struct WriteBatches;

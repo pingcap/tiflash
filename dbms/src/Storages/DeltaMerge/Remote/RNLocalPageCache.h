@@ -177,20 +177,30 @@ public:
 
     /**
      * Put a page into the cache.
-     *
      * The page must be currently "occupied" by calling `occupySpace`, otherwise there will be exceptions.
      */
     void write(
         const PageOID & oid,
-        ReadBufferPtr && read_buffer,
+        const ReadBufferPtr & read_buffer,
         PageSize size,
-        PageFieldSizes && field_sizes);
+        const PageFieldSizes & field_sizes = {});
+
+    /**
+     * Put a page into the cache.
+     * The page must be currently "occupied" by calling `occupySpace`, otherwise there will be exceptions.
+     *
+     * This is a shortcut function for write, only used in tests.
+     */
+    void write(
+        const PageOID & oid,
+        std::string_view data,
+        const PageFieldSizes & field_sizes = {});
 
     /**
      * Read a page from the cache.
      *
-     * The page must be currently "occupied" by calling `occupySpace`, otherwise there will be exceptions.
-     * The page must exist, either because `write` is called, or it is already in the cache,
+     * - The page must be currently "occupied" by calling `occupySpace`, otherwise there will be exceptions.
+     * - The page must exist, either because `write` is called, or it is already in the cache,
      *   otherwise there will be exceptions.
      */
     Page getPage(const PageOID & oid, const std::vector<size_t> & indices);
