@@ -41,7 +41,7 @@ inline void deserializeVersionFrom(ReadBuffer & buf, PageVersion & version)
     readIntBinary(version.epoch, buf);
 }
 
-inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf)
+inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf, bool has_checkpoint_info)
 {
     writeIntBinary(entry.file_id, buf);
     writeIntBinary(entry.offset, buf);
@@ -56,26 +56,15 @@ inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf)
         writeIntBinary(off, buf);
         writeIntBinary(checksum, buf);
     }
-}
-
-inline void serializeEntryWithCheckpointInfoTo(const PageEntryV3 & entry, WriteBuffer & buf)
-{
-    serializeEntryTo(entry, buf);
-    if (entry.checkpoint_info.has_value())
+    if (has_checkpoint_info)
     {
-        writeIntBinary(static_cast<UInt32>(1), buf);
-        writeIntBinary(static_cast<UInt32>(entry.checkpoint_info->is_local_data_reclaimed), buf);
         writeIntBinary(entry.checkpoint_info->data_location.offset_in_file, buf);
         writeIntBinary(entry.checkpoint_info->data_location.size_in_file, buf);
         writeStringBinary(*(entry.checkpoint_info->data_location.data_file_id), buf);
     }
-    else
-    {
-        writeIntBinary(static_cast<UInt32>(0), buf);
-    }
 }
 
-inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry)
+inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry, bool has_checkpoint_info)
 {
     readIntBinary(entry.file_id, buf);
     readIntBinary(entry.offset, buf);
@@ -99,19 +88,10 @@ inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry)
             entry.field_offsets.emplace_back(field_offset, field_checksum);
         }
     }
-}
-
-inline void deserializeEntryWithCheckpointInfoFrom(ReadBuffer & buf, PageEntryV3 & entry)
-{
-    deserializeEntryFrom(buf, entry);
-    UInt32 has_remote_info;
-    readIntBinary(has_remote_info, buf);
-    if (has_remote_info)
+    if (has_checkpoint_info)
     {
         CheckpointInfo checkpoint_info;
-        UInt32 is_local_data_reclaimed;
-        readIntBinary(is_local_data_reclaimed, buf);
-        checkpoint_info.is_local_data_reclaimed = is_local_data_reclaimed;
+        checkpoint_info.is_local_data_reclaimed = (entry.file_id == INVALID_BLOBFILE_ID);
         readIntBinary(checkpoint_info.data_location.offset_in_file, buf);
         readIntBinary(checkpoint_info.data_location.size_in_file, buf);
         String data_file_id;
@@ -133,6 +113,18 @@ inline void deserializeUInt128PageIDFrom(ReadBuffer & buf, PageIdV3Internal & pa
     readIntBinary(page_id, buf);
 }
 
+static constexpr UInt32 FLAG_CHECKPOINT_INFO = 0x01;
+
+inline UInt32 setCheckpointInfoExists(UInt32 flags)
+{
+    return flags | FLAG_CHECKPOINT_INFO;
+}
+
+inline bool isCheckpointInfoExists(UInt32 flags)
+{
+    return flags & FLAG_CHECKPOINT_INFO;
+}
+
 template <typename EditRecord>
 void serializePutTo(const EditRecord & record, WriteBuffer & buf)
 {
@@ -141,6 +133,11 @@ void serializePutTo(const EditRecord & record, WriteBuffer & buf)
     writeIntBinary(record.type, buf);
 
     UInt32 flags = 0;
+    bool has_checkpoint_info = record.entry.checkpoint_info.has_value();
+    if (has_checkpoint_info)
+    {
+        flags = setCheckpointInfoExists(flags);
+    }
     writeIntBinary(flags, buf);
     if constexpr (std::is_same_v<EditRecord, u128::PageEntriesEdit::EditRecord>)
     {
@@ -153,14 +150,7 @@ void serializePutTo(const EditRecord & record, WriteBuffer & buf)
     serializeVersionTo(record.version, buf);
     writeIntBinary(record.being_ref_count, buf);
 
-    if constexpr (std::is_same_v<EditRecord, u128::PageEntriesEdit::EditRecord>)
-    {
-        serializeEntryTo(record.entry, buf);
-    }
-    else if constexpr (std::is_same_v<EditRecord, universal::PageEntriesEdit::EditRecord>)
-    {
-        serializeEntryWithCheckpointInfoTo(record.entry, buf);
-    }
+    serializeEntryTo(record.entry, buf, has_checkpoint_info);
 }
 
 template <typename EditType>
@@ -170,6 +160,7 @@ void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadB
 
     UInt32 flags = 0;
     readIntBinary(flags, buf);
+    bool has_checkpoint_info = isCheckpointInfoExists(flags);
 
     typename EditType::EditRecord rec;
     rec.type = record_type;
@@ -183,15 +174,7 @@ void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadB
     }
     deserializeVersionFrom(buf, rec.version);
     readIntBinary(rec.being_ref_count, buf);
-
-    if constexpr (std::is_same_v<typename EditType::PageId, PageIdV3Internal>)
-    {
-        deserializeEntryFrom(buf, rec.entry);
-    }
-    else if constexpr (std::is_same_v<typename EditType::PageId, UniversalPageId>)
-    {
-        deserializeEntryWithCheckpointInfoFrom(buf, rec.entry);
-    }
+    deserializeEntryFrom(buf, rec.entry, has_checkpoint_info);
 
     edit.appendRecord(rec);
 }
