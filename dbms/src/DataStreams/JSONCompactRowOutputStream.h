@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <DataStreams/JSONRowOutputStream.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferValidUTF8.h>
-#include <DataStreams/JSONRowOutputStream.h>
 
 namespace DB
 {
@@ -37,8 +37,7 @@ public:
     void writeRowEndDelimiter() override;
 
 protected:
-    void writeTotals() override;
     void writeExtremes() override;
 };
 
-}
+} // namespace DB

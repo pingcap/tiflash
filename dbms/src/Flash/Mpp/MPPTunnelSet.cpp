@@ -92,6 +92,10 @@ void MPPTunnelSetBase<Tunnel>::registerTunnel(const MPPTaskId & receiver_task_id
     {
         ++external_thread_cnt;
     }
+    if (tunnel->isLocal())
+    {
+        ++local_tunnel_cnt;
+    }
 }
 
 template <typename Tunnel>

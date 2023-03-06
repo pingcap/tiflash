@@ -44,6 +44,7 @@ constexpr static std::string_view DELMARK_SUFFIX = ".del";
 
 // clang-format off
 
+constexpr static std::string_view fmt_allstore_prefix  = "s";
 constexpr static std::string_view fmt_store_prefix     = "s{store_id}/";
 constexpr static std::string_view fmt_manifest_prefix  = "s{store_id}/manifest/";
 constexpr static std::string_view fmt_manifest         = "s{store_id}/manifest/{subpath}";
@@ -84,6 +85,20 @@ String toFullKey(const S3FilenameType type, const StoreID store_id, const std::s
 }
 
 } // namespace details
+
+bool S3FilenameView::isDMFile() const
+{
+    // dmfile with table prefix
+    static_assert(details::fmt_subpath_dtfile[0] == 't', "dtfile prefix changed!");
+    static_assert(details::fmt_subpath_dtfile[1] == '_', "dtfile prefix changed!");
+
+    // dmfile with keyspace prefix
+    static_assert(details::fmt_subpath_keyspace_dtfile[0] == 'k', "keyspace dtfile prefix changed!");
+    static_assert(details::fmt_subpath_keyspace_dtfile[1] == 's', "keyspace dtfile prefix changed!");
+    static_assert(details::fmt_subpath_keyspace_dtfile[2] == '_', "keyspace dtfile prefix changed!");
+
+    return (startsWith(data_subpath, "t_") || startsWith(data_subpath, "ks_"));
+}
 
 String S3FilenameView::toFullKey() const
 {
@@ -290,6 +305,11 @@ S3FilenameView::LockInfo S3FilenameView::getLockInfo() const
 }
 
 //==== Generate S3 key from raw parts ====//
+
+String S3Filename::allStorePrefix()
+{
+    return String(details::fmt_allstore_prefix);
+}
 
 S3Filename S3Filename::fromStoreId(StoreID store_id)
 {

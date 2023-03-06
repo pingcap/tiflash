@@ -539,8 +539,8 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     readConfig(table, "cache_capacity", cache_capacity);
 
     auto read_s3_auth_info_from_env = [&]() {
-        access_key_id = Poco::Environment::get("ACCESS_KEY_ID", /*default*/ "");
-        secret_access_key = Poco::Environment::get("SECRET_ACCESS_KEY", /*default*/ "");
+        access_key_id = Poco::Environment::get(S3_ACCESS_KEY_ID, /*default*/ "");
+        secret_access_key = Poco::Environment::get(S3_SECRET_ACCESS_KEY, /*default*/ "");
         return !access_key_id.empty() && !secret_access_key.empty();
     };
     auto read_s3_auth_info_from_config = [&]() {

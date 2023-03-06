@@ -166,10 +166,41 @@ struct MockExchangeWriter
             original_size);
         checker(tracked_packet, part_id);
     }
-    void broadcastOrPassThroughWrite(Blocks & blocks)
+
+    void broadcastOrPassThroughWriteV0(Blocks & blocks)
     {
         checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), 0);
     }
+
+    void broadcastWrite(Blocks & blocks)
+    {
+        return broadcastOrPassThroughWriteV0(blocks);
+    }
+    void passThroughWrite(Blocks & blocks)
+    {
+        return broadcastOrPassThroughWriteV0(blocks);
+    }
+    void broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        if (version == MPPDataPacketV0)
+            return broadcastOrPassThroughWriteV0(blocks);
+
+        size_t original_size{};
+        auto && packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
+        if (!packet)
+            return;
+
+        checker(packet, 0);
+    }
+    void broadcastWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        return broadcastOrPassThroughWrite(blocks, version, compression_method);
+    }
+    void passThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        return broadcastOrPassThroughWrite(blocks, version, compression_method);
+    }
+
     void partitionWrite(Blocks & blocks, uint16_t part_id)
     {
         checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), part_id);
@@ -504,7 +535,11 @@ try
     auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         batch_send_min_limit,
-        *dag_context_ptr);
+        *dag_context_ptr,
+        MPPDataPacketVersion::MPPDataPacketV0,
+        tipb::CompressionMode::NONE,
+        tipb::ExchangeType::Broadcast);
+
     for (const auto & block : blocks)
         dag_writer->write(block);
     dag_writer->flush();
@@ -521,6 +556,60 @@ try
         }
     }
     ASSERT_EQ(decoded_block_rows, expect_rows);
+}
+CATCH
+
+TEST_F(TestMPPExchangeWriter, TestBroadcastOrPassThroughWriterV1)
+try
+{
+    const size_t block_rows = 64;
+    const size_t block_num = 64;
+    const size_t batch_send_min_limit = 108;
+
+    // 1. Build Blocks.
+    std::vector<Block> blocks;
+    for (size_t i = 0; i < block_num; ++i)
+    {
+        blocks.emplace_back(prepareRandomBlock(block_rows));
+        blocks.emplace_back(prepareRandomBlock(0));
+    }
+    Block header = blocks.back();
+    for (auto mode : {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
+    {
+        // 2. Build MockExchangeWriter.
+        TrackedMppDataPacketPtrs write_report;
+        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+            ASSERT_EQ(part_id, 0);
+            write_report.emplace_back(packet);
+        };
+        auto mock_writer = std::make_shared<MockExchangeWriter>(checker, 1, *dag_context_ptr);
+
+        // 3. Start to write.
+        auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockExchangeWriter>>>(
+            mock_writer,
+            batch_send_min_limit,
+            *dag_context_ptr,
+            MPPDataPacketVersion::MPPDataPacketV1,
+            mode,
+            tipb::ExchangeType::Broadcast);
+
+        for (const auto & block : blocks)
+            dag_writer->write(block);
+        dag_writer->flush();
+
+        // 4. Start to check write_report.
+        size_t expect_rows = block_rows * block_num;
+        size_t decoded_block_rows = 0;
+        for (const auto & packet : write_report)
+        {
+            for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
+            {
+                auto decoded_block = CHBlockChunkCodecV1::decode(header, packet->getPacket().chunks(i));
+                decoded_block_rows += decoded_block.rows();
+            }
+        }
+        ASSERT_EQ(decoded_block_rows, expect_rows);
+    }
 }
 CATCH
 

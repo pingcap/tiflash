@@ -2601,33 +2601,6 @@ bool Join::needReturnNonJoinedData() const
     return getFullness(kind);
 }
 
-void Join::joinTotals(Block & block) const
-{
-    std::shared_lock lock(rwlock);
-    Block totals_without_keys = totals;
-
-    if (totals_without_keys)
-    {
-        for (const auto & name : key_names_right)
-            totals_without_keys.erase(totals_without_keys.getPositionByName(name));
-
-        for (size_t i = 0; i < totals_without_keys.columns(); ++i)
-            block.insert(totals_without_keys.safeGetByPosition(i));
-    }
-    else
-    {
-        /// We will join empty `totals` - from one row with the default values.
-
-        for (size_t i = 0; i < sample_block_with_columns_to_add.columns(); ++i)
-        {
-            const auto & col = sample_block_with_columns_to_add.getByPosition(i);
-            block.insert({col.type->createColumnConstWithDefaultValue(1)->convertToFullColumnIfConst(),
-                          col.type,
-                          col.name});
-        }
-    }
-}
-
 BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const
 {
     return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
