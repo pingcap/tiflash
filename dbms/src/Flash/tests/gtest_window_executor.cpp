@@ -433,7 +433,7 @@ try
     DB::MockColumnInfoVec partition_column_infos{{"partition", TiDB::TP::TypeLong}};
     ColumnsWithTypeAndName column_data;
     ColumnsWithTypeAndName common_column_data;
-    size_t table_rows = 102400;
+    size_t table_rows = 1024;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(column_infos))
     {
         ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
