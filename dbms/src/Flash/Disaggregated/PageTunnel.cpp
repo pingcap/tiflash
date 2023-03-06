@@ -82,12 +82,12 @@ disaggregated::PagesPacket PageTunnel::readPacket()
     }
 
     // generate an inputstream of mem-table
-    if (false) // Currently the memtable data is responded in the 1st response.
+#if 0
+    if (false) // Currently the memtable data is responded in the 1st response. Serializer::serializeTo(const ColumnFileInMemory & cf_in_mem)
     {
         auto chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(*result_field_types);
         auto delta_vs = seg_task->read_snapshot->delta;
         UNUSED(chunk_codec_stream, delta_vs);
-#if 0
         auto mem_table_stream = std::make_shared<DM::DeltaMemTableInputStream>(delta_vs, column_defines, seg_task->segment->getRowKeyRange());
         mem_table_stream->readPrefix();
         while (true)
@@ -101,8 +101,8 @@ disaggregated::PagesPacket PageTunnel::readPacket()
             chunk_codec_stream->clear();
         }
         mem_table_stream->readSuffix();
-#endif
     }
+#endif
 
     LOG_DEBUG(log,
               "send packet, pages={} pages_size={} blocks={}",

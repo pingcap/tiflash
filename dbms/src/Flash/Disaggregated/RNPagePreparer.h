@@ -38,7 +38,7 @@ public:
         const String & executor_id,
         bool do_prepare_);
 
-    ~RNPagePreparer();
+    ~RNPagePreparer() noexcept;
 
 private:
     void persistLoop(size_t idx);

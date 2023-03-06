@@ -163,7 +163,6 @@ PageReceiverResult RNPageReceiverBase<RPCContext>::nextResult(std::unique_ptr<CH
     // from different stores, tables, segments
 
     std::shared_ptr<PageReceivedMessage> recv_msg;
-    // auto pop_res = msg_channels[stream_id]->pop(recv_msg);
     auto pop_res = msg_channel->pop(recv_msg);
     if (pop_res != MPMCQueueResult::OK)
     {
@@ -428,14 +427,12 @@ void RNPageReceiverBase<RPCContext>::connectionDone(
 template <typename RPCContext>
 void RNPageReceiverBase<RPCContext>::finishAllMsgChannels()
 {
-    // for (auto & msg_channel : msg_channels)
     msg_channel->finish();
 }
 
 template <typename RPCContext>
 void RNPageReceiverBase<RPCContext>::cancelAllMsgChannels()
 {
-    // for (auto & msg_channel : msg_channels)
     msg_channel->cancel();
 }
 

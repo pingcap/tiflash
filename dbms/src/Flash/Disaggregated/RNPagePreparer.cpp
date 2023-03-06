@@ -13,11 +13,11 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/RNPagePreparer.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
-// #include <IO/IOThreadPool.h>
-#include <Common/TiFlashMetrics.h>
+#include <IO/IOThreadPool.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <common/logger_useful.h>
@@ -57,7 +57,7 @@ RNPagePreparer::RNPagePreparer(
             });
             persist_threads.emplace_back(task->get_future());
 
-            // IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+            IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
         }
     }
     catch (...)
@@ -67,7 +67,7 @@ RNPagePreparer::RNPagePreparer(
     }
 }
 
-RNPagePreparer::~RNPagePreparer()
+RNPagePreparer::~RNPagePreparer() noexcept
 {
     for (auto & task : persist_threads)
     {
