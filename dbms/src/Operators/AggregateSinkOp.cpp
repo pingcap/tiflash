@@ -21,7 +21,7 @@ OperatorStatus AggregateSinkOp::writeImpl(Block && block)
     {
         return OperatorStatus::FINISHED;
     }
-    agg_context->executeOnBlock(index, block);
+    agg_context->buildOnBlock(index, block);
     total_rows += block.rows();
     block.clear();
     return OperatorStatus::NEED_INPUT;
