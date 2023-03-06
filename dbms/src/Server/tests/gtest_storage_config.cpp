@@ -825,5 +825,92 @@ secret_access_key = "44444444"
 }
 CATCH
 
+TEST_F(StorageConfigTest, RemoteCacheConfig)
+try
+{
+    Strings tests = {
+        R"(
+[storage]
+[storage.main]
+dir = ["123"]
+[storage.remote.cache]
+dir = "/tmp/StorageConfigTest/RemoteCacheConfig/0"
+capacity = 10000000
+dtfile_level = 11
+delta_rate = 0.33
+        )",
+        R"(
+[storage]
+[storage.main]
+dir = ["123"]
+[storage.remote.cache]
+dir = "/tmp/StorageConfigTest/RemoteCacheConfig/0/"
+capacity = 10000000
+dtfile_level = 11
+delta_rate = 0.33
+        )",
+        R"(
+[storage]
+[storage.main]
+dir = ["123"]
+[storage.remote.cache]
+dir = "/tmp/StorageConfigTest/RemoteCacheConfig/1"
+capacity = 10000000
+dtfile_level = 101
+delta_rate = 0.33
+        )",
+        R"(
+[storage]
+[storage.main]
+dir = ["123"]
+[storage.remote.cache]
+dir = "/tmp/StorageConfigTest/RemoteCacheConfig/2"
+capacity = 10000000
+dtfile_level = 11
+delta_rate = 1.1
+        )"};
+
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        size_t global_capacity_quota;
+        TiFlashStorageConfig storage;
+        try
+        {
+            std::tie(global_capacity_quota, storage) = TiFlashStorageConfig::parseSettings(*config, log);
+            if (i == 2 || i == 3)
+            {
+                FAIL() << test_case; // Parse failed, should not come here.
+            }
+        }
+        catch (...)
+        {
+            continue;
+        }
+
+        const auto & remote_cache_config = storage.remote_cache_config;
+        if (i == 0 || i == 1)
+        {
+            auto target_dir = fmt::format("/tmp/StorageConfigTest/RemoteCacheConfig/0{}", i == 0 ? "" : "/");
+            ASSERT_EQ(remote_cache_config.dir, target_dir);
+            ASSERT_EQ(remote_cache_config.capacity, 10000000);
+            ASSERT_EQ(remote_cache_config.dtfile_level, 11);
+            ASSERT_DOUBLE_EQ(remote_cache_config.delta_rate, 0.33);
+            ASSERT_EQ(remote_cache_config.getStableCacheDir(), "/tmp/StorageConfigTest/RemoteCacheConfig/0/stable");
+            ASSERT_EQ(remote_cache_config.getDeltaCacheDir(), "/tmp/StorageConfigTest/RemoteCacheConfig/0/delta");
+            ASSERT_EQ(remote_cache_config.getStableCapacity() + remote_cache_config.getDeltaCapacity(), remote_cache_config.capacity);
+            ASSERT_DOUBLE_EQ(remote_cache_config.getStableCapacity() * 1.0 / remote_cache_config.capacity, 1.0 - remote_cache_config.delta_rate);
+            ASSERT_TRUE(remote_cache_config.isCacheEnabled());
+        }
+        else
+        {
+            FAIL() << i; // Should not come here.
+        }
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

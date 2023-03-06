@@ -965,6 +965,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashStorageConfig storage_config;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
 
+    storage_config.remote_cache_config.initCacheDir();
+
     if (storage_config.s3_config.isS3Enabled())
     {
         if (enable_encryption)
