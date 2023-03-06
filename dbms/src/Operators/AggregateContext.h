@@ -46,7 +46,7 @@ public:
     }
 
     void initBuild(const Aggregator::Params & params, size_t max_threads_);
-    
+
     void buildOnBlock(size_t task_index, const Block & block);
 
     void initConvergent();
