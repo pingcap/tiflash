@@ -1501,7 +1501,7 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
                 case EditRecordType::VAR_ENTRY:
                 case EditRecordType::VAR_EXTERNAL:
                 case EditRecordType::VAR_REF:
-                case EditRecordType::UPDATE_REMOTE:
+                case EditRecordType::UPDATE_DATA_FROM_REMOTE:
                     throw Exception(fmt::format("should not handle edit with invalid type [type={}]", magic_enum::enum_name(r.type)));
                 }
             }

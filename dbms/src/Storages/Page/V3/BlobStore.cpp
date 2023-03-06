@@ -173,7 +173,7 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
         switch (write.type)
         {
         case WriteBatchWriteType::PUT:
-        case WriteBatchWriteType::UPDATE_REMOTE:
+        case WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE:
         {
             ChecksumClass digest;
             PageEntryV3 entry;
@@ -321,7 +321,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
             }
             case WriteBatchWriteType::PUT:
             case WriteBatchWriteType::UPSERT:
-            case WriteBatchWriteType::UPDATE_REMOTE:
+            case WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE:
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "write batch have a invalid total size == 0 while this kind of entry exist, write_type={}", magic_enum::enum_name(write.type));
                 break;
             }
@@ -362,7 +362,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
         switch (write.type)
         {
         case WriteBatchWriteType::PUT:
-        case WriteBatchWriteType::UPDATE_REMOTE:
+        case WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE:
         {
             ChecksumClass digest;
             PageEntryV3 entry;

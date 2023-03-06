@@ -111,7 +111,7 @@ public:
 
     void updateRemotePage(const UniversalPageId & page_id, const ReadBufferPtr & read_buffer, PageSize size)
     {
-        Write w{WriteBatchWriteType::UPDATE_REMOTE, page_id, 0, read_buffer, size, "", {}};
+        Write w{WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE, page_id, 0, read_buffer, size, "", {}};
         total_data_size += size;
         writes.emplace_back(std::move(w));
     }

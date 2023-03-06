@@ -91,7 +91,7 @@ enum class EditRecordType
     VAR_EXTERNAL = 7,
     VAR_DELETE = 8,
     // Just used to update local cache info for VAR_ENTRY type
-    UPDATE_REMOTE = 9,
+    UPDATE_DATA_FROM_REMOTE = 9,
 };
 
 inline const char * typeToString(EditRecordType t)
@@ -116,8 +116,8 @@ inline const char * typeToString(EditRecordType t)
         return "VAR_EXT";
     case EditRecordType::VAR_DELETE:
         return "VAR_DEL";
-    case EditRecordType::UPDATE_REMOTE:
-        return "UPDATE_REMOTE";
+    case EditRecordType::UPDATE_DATA_FROM_REMOTE:
+        return "UPDATE_DATA_FROM_REMOTE";
     default:
         return "INVALID";
     }
@@ -184,7 +184,7 @@ public:
     void updateRemote(const PageId & page_id, const PageEntryV3 & entry)
     {
         EditRecord record{};
-        record.type = EditRecordType::UPDATE_REMOTE;
+        record.type = EditRecordType::UPDATE_DATA_FROM_REMOTE;
         record.page_id = page_id;
         record.entry = entry;
         records.emplace_back(record);

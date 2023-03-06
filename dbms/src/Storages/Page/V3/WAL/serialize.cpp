@@ -136,7 +136,7 @@ inline void deserializeUInt128PageIDFrom(ReadBuffer & buf, PageIdV3Internal & pa
 template <typename EditRecord>
 void serializePutTo(const EditRecord & record, WriteBuffer & buf)
 {
-    assert(record.type == EditRecordType::PUT || record.type == EditRecordType::UPSERT || record.type == EditRecordType::VAR_ENTRY || record.type == EditRecordType::UPDATE_REMOTE);
+    assert(record.type == EditRecordType::PUT || record.type == EditRecordType::UPSERT || record.type == EditRecordType::VAR_ENTRY || record.type == EditRecordType::UPDATE_DATA_FROM_REMOTE);
 
     writeIntBinary(record.type, buf);
 
@@ -166,7 +166,7 @@ void serializePutTo(const EditRecord & record, WriteBuffer & buf)
 template <typename EditType>
 void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, EditType & edit)
 {
-    assert(record_type == EditRecordType::PUT || record_type == EditRecordType::UPSERT || record_type == EditRecordType::VAR_ENTRY || record_type == EditRecordType::UPDATE_REMOTE);
+    assert(record_type == EditRecordType::PUT || record_type == EditRecordType::UPSERT || record_type == EditRecordType::VAR_ENTRY || record_type == EditRecordType::UPDATE_DATA_FROM_REMOTE);
 
     UInt32 flags = 0;
     readIntBinary(flags, buf);
@@ -326,7 +326,7 @@ void deserializeFrom(ReadBuffer & buf, EditType & edit)
         case EditRecordType::PUT:
         case EditRecordType::UPSERT:
         case EditRecordType::VAR_ENTRY:
-        case EditRecordType::UPDATE_REMOTE:
+        case EditRecordType::UPDATE_DATA_FROM_REMOTE:
         {
             deserializePutFrom(record_type, buf, edit);
             break;
@@ -368,7 +368,7 @@ String Serializer<PageEntriesEdit>::serializeTo(const PageEntriesEdit & edit)
         case EditRecordType::PUT:
         case EditRecordType::UPSERT:
         case EditRecordType::VAR_ENTRY:
-        case EditRecordType::UPDATE_REMOTE:
+        case EditRecordType::UPDATE_DATA_FROM_REMOTE:
             serializePutTo(record, buf);
             break;
         case EditRecordType::REF:
@@ -402,7 +402,7 @@ String Serializer<PageEntriesEdit>::serializeInCompressedFormTo(const PageEntrie
         case EditRecordType::PUT:
         case EditRecordType::UPSERT:
         case EditRecordType::VAR_ENTRY:
-        case EditRecordType::UPDATE_REMOTE:
+        case EditRecordType::UPDATE_DATA_FROM_REMOTE:
             serializePutTo(record, compressed_buf);
             break;
         case EditRecordType::REF:
