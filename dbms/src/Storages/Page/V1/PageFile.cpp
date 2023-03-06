@@ -20,9 +20,8 @@
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 
-#include <span>
-
 #include <boost/algorithm/string/classification.hpp>
+#include <span>
 
 #ifndef __APPLE__
 #include <fcntl.h>
