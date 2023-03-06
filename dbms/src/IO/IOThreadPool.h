@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2022 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,25 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <Operators/AggregateSinkOp.h>
+
+#pragma once
+
+#include <Common/ThreadPool.h>
 
 namespace DB
 {
-OperatorStatus AggregateSinkOp::writeImpl(Block && block)
-{
-    if (unlikely(!block))
-    {
-        return OperatorStatus::FINISHED;
-    }
-    agg_context->buildOnBlock(index, block);
-    total_rows += block.rows();
-    block.clear();
-    return OperatorStatus::NEED_INPUT;
-}
 
-void AggregateSinkOp::operateSuffix()
+/*
+ * ThreadPool used for the IO.
+ */
+class IOThreadPool
 {
-    LOG_DEBUG(log, "finish write with {} rows", total_rows);
-}
+    static std::unique_ptr<ThreadPool> instance;
+
+public:
+    static void initialize(size_t max_threads, size_t max_free_threads, size_t queue_size);
+    static ThreadPool & get();
+};
 
 } // namespace DB

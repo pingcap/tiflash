@@ -977,5 +977,32 @@ void DMFile::finalizeDirName()
     }
     old_file.renameTo(new_path);
 }
+
+std::vector<String> DMFile::listInternalFiles()
+{
+    RUNTIME_CHECK(useMetaV2());
+    std::vector<String> fnames;
+    fnames.push_back(metav2FileName());
+    for (const auto & [col_id, stat] : column_stats)
+    {
+        auto name_base = getFileNameBase(col_id, {});
+        // .dat and .mrk are required.
+        fnames.push_back(colDataFileName(name_base));
+        fnames.push_back(colMarkFileName(name_base));
+        if (stat.index_bytes > 0)
+        {
+            fnames.push_back(colIndexFileName(name_base));
+        }
+
+        if (stat.type->isNullable())
+        {
+            auto null_name_base = getFileNameBase(col_id, {IDataType::Substream::NullMap});
+            fnames.push_back(colDataFileName(null_name_base));
+            fnames.push_back(colMarkFileName(null_name_base));
+        }
+    }
+    return fnames;
+}
+
 } // namespace DM
 } // namespace DB
