@@ -20,7 +20,6 @@
 #include <Common/Arena.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/Logger.h>
-#include <Common/ThreadPool.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>

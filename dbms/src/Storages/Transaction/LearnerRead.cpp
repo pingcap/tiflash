@@ -14,7 +14,6 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
-#include <Common/ThreadPool.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>

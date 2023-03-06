@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
-#include <Common/ThreadPool.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -52,8 +51,7 @@ namespace tests
 class SyncStatusTest : public ::testing::Test
 {
 public:
-    SyncStatusTest()
-        = default;
+    SyncStatusTest() = default;
     static void SetUpTestCase()
     {
         try

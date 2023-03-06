@@ -76,8 +76,8 @@ int main(int argc, char ** argv)
         DB::tests::TiFlashTestEnv::getGlobalContext().getSettingsRef().dt_read_thread_count_scale);
     DB::DM::SegmentReadTaskScheduler::instance();
 
-    DB::GlobalThreadPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
-    DB::IOThreadPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
+    DB::GlobalThreadPool::initialize(/*max_threads*/ 20, /*max_free_threads*/ 10, /*queue_size*/ 1000);
+    DB::IOThreadPool::initialize(/*max_threads*/ 20, /*max_free_threads*/ 10, /*queue_size*/ 1000);
     const auto s3_endpoint = Poco::Environment::get("S3_ENDPOINT", "");
     const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "mock_bucket");
     const auto access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", "");

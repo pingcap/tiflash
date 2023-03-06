@@ -19,7 +19,6 @@
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/Runnable.h>
-#include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/V2/PageStorage.h>
