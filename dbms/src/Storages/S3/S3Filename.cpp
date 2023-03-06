@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringRefUtils.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/S3/S3Filename.h>
 #include <re2/re2.h>
@@ -24,11 +25,11 @@
 
 namespace DB::S3
 {
-
 //==== Serialize/Deserialize ====//
 
 namespace details
 {
+// Ref: https://github.com/google/re2/wiki/Syntax
 
 /// parsing LockFile
 const static re2::RE2 rgx_lock("^lock/s(?P<store_id>[0-9]+)/(?P<data_subpath>.+)$");
@@ -43,6 +44,7 @@ constexpr static std::string_view DELMARK_SUFFIX = ".del";
 
 // clang-format off
 
+constexpr static std::string_view fmt_allstore_prefix  = "s";
 constexpr static std::string_view fmt_store_prefix     = "s{store_id}/";
 constexpr static std::string_view fmt_manifest_prefix  = "s{store_id}/manifest/";
 constexpr static std::string_view fmt_manifest         = "s{store_id}/manifest/{subpath}";
@@ -51,6 +53,7 @@ constexpr static std::string_view fmt_subpath_manifest                       = "
 constexpr static std::string_view fmt_datafile_prefix  = "s{store_id}/data/";
 constexpr static std::string_view fmt_data_file        = "s{store_id}/data/{subpath}";
 constexpr static std::string_view fmt_subpath_checkpoint_data            = "dat_{seq}_{index}";
+constexpr static std::string_view fmt_subpath_dttable                    = "t_{table_id}";
 constexpr static std::string_view fmt_subpath_dtfile                     = "t_{table_id}/dmf_{id}";
 constexpr static std::string_view fmt_subpath_keyspace_dtfile            = "ks_{keyspace}_t_{table_id}/dmf_{id}";
 
@@ -60,6 +63,8 @@ constexpr static std::string_view fmt_lock_prefix = "lock/";
 constexpr static std::string_view fmt_lock_datafile_prefix = "lock/s{store_id}/{subpath}.lock_";
 constexpr static std::string_view fmt_lock_file = "lock/s{store_id}/{subpath}.lock_s{lock_store}_{lock_seq}";
 
+// If you want to read/write S3 object as file throught `FileProvider`, file path must starts with `s3_filename_prefix`. 
+constexpr static std::string_view s3_filename_prefix = "s3://";
 // clang-format on
 
 
@@ -81,6 +86,20 @@ String toFullKey(const S3FilenameType type, const StoreID store_id, const std::s
 
 } // namespace details
 
+bool S3FilenameView::isDMFile() const
+{
+    // dmfile with table prefix
+    static_assert(details::fmt_subpath_dtfile[0] == 't', "dtfile prefix changed!");
+    static_assert(details::fmt_subpath_dtfile[1] == '_', "dtfile prefix changed!");
+
+    // dmfile with keyspace prefix
+    static_assert(details::fmt_subpath_keyspace_dtfile[0] == 'k', "keyspace dtfile prefix changed!");
+    static_assert(details::fmt_subpath_keyspace_dtfile[1] == 's', "keyspace dtfile prefix changed!");
+    static_assert(details::fmt_subpath_keyspace_dtfile[2] == '_', "keyspace dtfile prefix changed!");
+
+    return (startsWith(data_subpath, "t_") || startsWith(data_subpath, "ks_"));
+}
+
 String S3FilenameView::toFullKey() const
 {
     return details::toFullKey(type, store_id, data_subpath);
@@ -89,6 +108,11 @@ String S3FilenameView::toFullKey() const
 String S3Filename::toFullKey() const
 {
     return details::toFullKey(type, store_id, data_subpath);
+}
+
+String S3Filename::toFullKeyWithPrefix() const
+{
+    return fmt::format("{}{}", details::s3_filename_prefix, toFullKey());
 }
 
 String S3Filename::toManifestPrefix() const
@@ -188,6 +212,15 @@ S3FilenameView S3FilenameView::fromStoreKeyPrefix(const std::string_view prefix)
     return res;
 }
 
+S3FilenameView S3FilenameView::fromKeyWithPrefix(std::string_view fullpath)
+{
+    if (startsWith(fullpath, details::s3_filename_prefix))
+    {
+        return fromKey(fullpath.substr(details::s3_filename_prefix.size()));
+    }
+    return S3FilenameView{}; // Invalid
+}
+
 //==== Data file utils ====//
 
 String S3FilenameView::getLockPrefix() const
@@ -273,6 +306,11 @@ S3FilenameView::LockInfo S3FilenameView::getLockInfo() const
 
 //==== Generate S3 key from raw parts ====//
 
+String S3Filename::allStorePrefix()
+{
+    return String(details::fmt_allstore_prefix);
+}
+
 S3Filename S3Filename::fromStoreId(StoreID store_id)
 {
     return S3Filename{
@@ -289,6 +327,15 @@ S3Filename S3Filename::fromDMFileOID(const DMFileOID & oid)
         .type = S3FilenameType::DataFile,
         .store_id = oid.store_id,
         .data_subpath = fmt::format(details::fmt_subpath_dtfile, fmt::arg("table_id", oid.table_id), fmt::arg("id", oid.file_id)),
+    };
+}
+
+S3Filename S3Filename::fromTableID(StoreID store_id, TableID table_id)
+{
+    return S3Filename{
+        .type = S3FilenameType::DataFile,
+        .store_id = store_id,
+        .data_subpath = fmt::format(details::fmt_subpath_dttable, fmt::arg("table_id", table_id)),
     };
 }
 

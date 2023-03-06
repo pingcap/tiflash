@@ -60,11 +60,16 @@
     M(IOLimiterPendingFgWriteReq)               \
     M(IOLimiterPendingBgReadReq)                \
     M(IOLimiterPendingFgReadReq)                \
+    M(S3LockServiceNumLatches)                  \
     M(StoragePoolV2Only)                        \
     M(StoragePoolV3Only)                        \
     M(StoragePoolMixMode)                       \
     M(RegionPersisterRunMode)                   \
-    M(GlobalStorageRunMode)
+    M(GlobalStorageRunMode)                     \
+    M(GlobalThread)                             \
+    M(GlobalThreadActive)                       \
+    M(LocalThread)                              \
+    M(LocalThreadActive)
 
 namespace CurrentMetrics
 {

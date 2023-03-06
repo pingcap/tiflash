@@ -19,25 +19,28 @@ namespace DB
 {
 BlockInputStreamSourceOp::BlockInputStreamSourceOp(
     PipelineExecutorStatus & exec_status_,
+    const String & req_id,
     const BlockInputStreamPtr & impl_)
-    : SourceOp(exec_status_)
+    : SourceOp(exec_status_, req_id)
     , impl(impl_)
 {
-    impl->readPrefix();
+    assert(impl);
     setHeader(impl->getHeader());
+}
+
+void BlockInputStreamSourceOp::operatePrefix()
+{
+    impl->readPrefix();
+}
+
+void BlockInputStreamSourceOp::operateSuffix()
+{
+    impl->readSuffix();
 }
 
 OperatorStatus BlockInputStreamSourceOp::readImpl(Block & block)
 {
-    if (unlikely(finished))
-        return OperatorStatus::HAS_OUTPUT;
-
     block = impl->read();
-    if (unlikely(!block))
-    {
-        impl->readSuffix();
-        finished = true;
-    }
     return OperatorStatus::HAS_OUTPUT;
 }
 } // namespace DB

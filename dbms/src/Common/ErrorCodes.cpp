@@ -406,6 +406,7 @@ extern const int PAGE_SIZE_NOT_MATCH = 9006;
 extern const int ILLFORMED_PAGE_NAME = 9007;
 extern const int ILLFORMAT_RAFT_ROW = 9008;
 extern const int REGION_DATA_SCHEMA_UPDATED = 9009;
+extern const int REGION_EPOCH_NOT_MATCH = 9010;
 
 extern const int LOCK_EXCEPTION = 10000;
 extern const int VERSION_ERROR = 10001;
@@ -427,6 +428,7 @@ extern const int PS_ENTRY_NO_VALID_VERSION = 10016;
 extern const int PS_DIR_APPLY_INVALID_STATUS = 10017;
 
 extern const int S3_ERROR = 11000;
+extern const int CANNOT_SCHEDULE_TASK = 11001;
 } // namespace ErrorCodes
 
 } // namespace DB

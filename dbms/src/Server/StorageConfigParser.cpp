@@ -538,8 +538,22 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     readConfig(table, "cache_dir", cache_dir);
     readConfig(table, "cache_capacity", cache_capacity);
 
-    access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", /*default*/ "");
-    secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", /*default*/ "");
+    auto read_s3_auth_info_from_env = [&]() {
+        access_key_id = Poco::Environment::get(S3_ACCESS_KEY_ID, /*default*/ "");
+        secret_access_key = Poco::Environment::get(S3_SECRET_ACCESS_KEY, /*default*/ "");
+        return !access_key_id.empty() && !secret_access_key.empty();
+    };
+    auto read_s3_auth_info_from_config = [&]() {
+        readConfig(table, "access_key_id", access_key_id);
+        readConfig(table, "secret_access_key", secret_access_key);
+    };
+    if (!read_s3_auth_info_from_env())
+    {
+        // Reset and read from config.
+        access_key_id.clear();
+        secret_access_key.clear();
+        read_s3_auth_info_from_config();
+    }
 
     LOG_INFO(
         log,

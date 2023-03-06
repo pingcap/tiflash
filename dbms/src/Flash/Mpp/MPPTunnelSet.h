@@ -28,39 +28,18 @@ class MPPTunnelSetBase : private boost::noncopyable
 {
 public:
     using TunnelPtr = std::shared_ptr<Tunnel>;
-    MPPTunnelSetBase(DAGContext & dag_context, const String & req_id);
+    explicit MPPTunnelSetBase(const String & req_id)
+        : log(Logger::get(req_id))
+    {}
 
-    // this is a root mpp writing.
-    void write(tipb::SelectResponse & response);
-    // this is a broadcast or pass through writing.
-    // data codec version V0
-    void broadcastOrPassThroughWrite(Blocks & blocks);
-    // this is a partition writing.
-    // data codec version V0
-    void partitionWrite(Blocks & blocks, int16_t partition_id);
-    // data codec version > V0
-    void partitionWrite(const Block & header, std::vector<MutableColumns> && part_columns, int16_t partition_id, MPPDataPacketVersion version, CompressionMethod compression_method);
-    // this is a fine grained shuffle writing.
-    // data codec version V0
-    void fineGrainedShuffleWrite(
-        const Block & header,
-        std::vector<IColumn::ScatterColumns> & scattered,
-        size_t bucket_idx,
-        UInt64 fine_grained_shuffle_stream_count,
-        size_t num_columns,
-        int16_t partition_id);
-    void fineGrainedShuffleWrite(
-        const Block & header,
-        std::vector<IColumn::ScatterColumns> & scattered,
-        size_t bucket_idx,
-        UInt64 fine_grained_shuffle_stream_count,
-        size_t num_columns,
-        int16_t partition_id,
-        MPPDataPacketVersion version,
-        CompressionMethod compression_method);
+    void write(TrackedMppDataPacketPtr && data, size_t index);
+    void nonBlockingWrite(TrackedMppDataPacketPtr && data, size_t index);
+
+    void write(tipb::SelectResponse & response, size_t index);
+    void nonBlockingWrite(tipb::SelectResponse & response, size_t index);
+
     /// this is a execution summary writing.
-    /// for both broadcast writing and partition/fine grained shuffle writing, only
-    /// return meaningful execution summary for the first tunnel,
+    /// only return meaningful execution summary for the first tunnel,
     /// because in TiDB, it does not know enough information
     /// about the execution details for the mpp query, it just
     /// add up all the execution summaries for the same executor,
@@ -81,10 +60,15 @@ public:
     {
         return external_thread_cnt;
     }
+    size_t getLocalTunnelCnt()
+    {
+        return local_tunnel_cnt;
+    }
 
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
 
-private:
+    bool isReadyForWrite() const;
+
     bool isLocal(size_t index) const;
 
 private:
@@ -92,9 +76,8 @@ private:
     std::unordered_map<MPPTaskId, size_t> receiver_task_id_to_index_map;
     const LoggerPtr log;
 
-    std::vector<tipb::FieldType> result_field_types;
-
     int external_thread_cnt = 0;
+    size_t local_tunnel_cnt = 0;
 };
 
 class MPPTunnelSet : public MPPTunnelSetBase<MPPTunnel>

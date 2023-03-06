@@ -55,6 +55,18 @@ using ClientPtr = std::shared_ptr<Client>;
 } // namespace Etcd
 class OwnerManager;
 using OwnerManagerPtr = std::shared_ptr<OwnerManager>;
+namespace S3
+{
+class IS3LockClient;
+using S3LockClientPtr = std::shared_ptr<IS3LockClient>;
+class S3GCManagerService;
+using S3GCManagerServicePtr = std::unique_ptr<S3GCManagerService>;
+} // namespace S3
+namespace DM::Remote
+{
+class DisaggSnapshotManager;
+using DisaggSnapshotManagerPtr = std::unique_ptr<DisaggSnapshotManager>;
+} // namespace DM::Remote
 
 class TMTContext : private boost::noncopyable
 {
@@ -92,6 +104,7 @@ public:
     explicit TMTContext(Context & context_,
                         const TiFlashRaftConfig & raft_config,
                         const pingcap::ClusterConfig & cluster_config_);
+    ~TMTContext();
 
     SchemaSyncerPtr getSchemaSyncer() const;
 
@@ -102,6 +115,8 @@ public:
     pingcap::kv::Cluster * getKVCluster() { return cluster.get(); }
 
     const OwnerManagerPtr & getS3GCOwnerManager() const;
+
+    DM::Remote::DisaggSnapshotManager * getDisaggSnapshotManager() const;
 
     MPPTaskManagerPtr getMPPTaskManager();
 
@@ -142,6 +157,10 @@ private:
     Etcd::ClientPtr etcd_client;
 
     OwnerManagerPtr s3gc_owner;
+    S3::S3LockClientPtr s3lock_client;
+    S3::S3GCManagerServicePtr s3gc_manager;
+
+    DM::Remote::DisaggSnapshotManagerPtr snapshot_manager;
 
     mutable std::mutex mutex;
 

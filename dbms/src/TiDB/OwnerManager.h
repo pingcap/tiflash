@@ -51,9 +51,6 @@ using LeaderKey = v3electionpb::LeaderKey;
 } // namespace Etcd
 
 class OwnerManager;
-// Now owner manager is created in TMTContext, but
-// used in S3LockService. It is hard to find out
-// which will be shutdown first. So use shared_ptr now.
 using OwnerManagerPtr = std::shared_ptr<OwnerManager>;
 
 namespace tests

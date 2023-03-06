@@ -14,7 +14,9 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
+#include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
 namespace DB
 {
@@ -23,13 +25,14 @@ namespace DM
 class DMFileBlockInputStream;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 class ColumnFileBig;
-using ColumnBigFilePtr = std::shared_ptr<ColumnFileBig>;
+using ColumnFileBigPtr = std::shared_ptr<ColumnFileBig>;
 
 
 /// A column file which contains a DMFile. The DMFile could have many Blocks.
 class ColumnFileBig : public ColumnFilePersisted
 {
     friend class ColumnFileBigReader;
+    friend struct Remote::Serializer;
 
 private:
     DMFilePtr file;
@@ -53,7 +56,7 @@ public:
 
     ColumnFileBig(const ColumnFileBig &) = default;
 
-    ColumnBigFilePtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
+    ColumnFileBigPtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
     {
         auto * new_column_file = new ColumnFileBig(*this);
         new_column_file->file = new_file;
@@ -159,6 +162,8 @@ public:
     std::pair<size_t, size_t> readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
 
     Block readNextBlock() override;
+
+    size_t skipNextBlock() override;
 
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
 };
