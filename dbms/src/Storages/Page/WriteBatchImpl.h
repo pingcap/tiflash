@@ -266,7 +266,7 @@ public:
                     fb.fmtAppend("E{}.{}", namespace_id, w.page_id);
                     break;
                 case WriteBatchWriteType::PUT_REMOTE:
-                    fb.fmtAppend("R{}", w.page_id);
+                    fb.fmtAppend("R{}.{}", namespace_id, w.page_id);
                     break;
                 default:
                     fb.fmtAppend("Unknown {}.{}", namespace_id, w.page_id);
