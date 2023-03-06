@@ -40,6 +40,8 @@ public:
 
     disaggregated::DisaggTaskMeta toMeta() const;
 
+    // There could be more thatn one TableScan in one MPPTask (in the future).
+    // We use `MPPTaskId` and `ExecutorID` to represent the ID of one DisaggTask.
     const MPPTaskId mpp_task_id;
     const String executor_id;
 };
