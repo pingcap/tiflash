@@ -2502,6 +2502,8 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
 {
     waitUntilAllBuildFinished();
 
+    std::shared_lock lock(rwlock);
+
     probe_process_info.updateStartRow();
 
     Block block = probe_process_info.block;
