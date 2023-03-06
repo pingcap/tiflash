@@ -529,6 +529,14 @@ public:
     {
         return use_autoscaler;
     }
+    void setDisaggregatedStorageWriteRole(bool is_write_role)
+    {
+        is_diaggregated_tiflash_storage_write_role = is_write_role;
+    }
+    bool isDisaggregatedStorageWriteRole() const
+    {
+        return is_diaggregated_tiflash_storage_write_role;
+    }
 
 private:
     /** Check if the current client has access to the specified database.
@@ -548,7 +556,8 @@ private:
 
     bool is_config_loaded = false; /// Is configuration loaded from toml file.
     DisaggregatedMode disaggregated_mode = DisaggregatedMode::None;
-    bool use_autoscaler = true; /// todo: remove this after AutoScaler is stable. Only meaningfule in DisaggregatedComputeMode.
+    bool use_autoscaler = true; /// todo: remove this after AutoScaler is stable. Only meaningful in DisaggregatedComputeMode.
+    bool is_diaggregated_tiflash_storage_write_role = false; /// Only meaningful for DisaggregatedComputeMode.
 };
 
 using ContextPtr = std::shared_ptr<Context>;

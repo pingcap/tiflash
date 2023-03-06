@@ -108,8 +108,12 @@
 ## The minimum duration to handle read-index tasks in each worker.
 # read_index_worker_tick_ms = 10
 # disaggregated_mode = "tiflash_storage" or "tiflash_compute"
-# Means whether we use AutoScaler or PD for tiflash_compute nodes. Default use AutoScaler. Will remove this after AutoScaler is stable.
+## Means whether we use AutoScaler or PD for tiflash_compute nodes. Default use AutoScaler. Will remove this after AutoScaler is stable.
 # use_autoscaler = true
+## True when tiflash_storage has labels like: <engine, tiflash> and <engine_role, write>.
+## False when tiflash_storage only has label: <engine, tiflash>.
+## Only meaningful when disaggregated_mode is 'tiflash_compute'.
+# is_disaggregated_storage_write_role: true
 
 [flash.proxy]
 # addr = "0.0.0.0:20170"

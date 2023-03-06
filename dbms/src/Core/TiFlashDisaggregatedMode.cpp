@@ -64,4 +64,15 @@ std::string getProxyLabelByDisaggregatedMode(DisaggregatedMode mode)
         __builtin_unreachable();
     };
 }
+
+bool isDisaggregatedStorageWriteRole(const Poco::Util::LayeredConfiguration & config)
+{
+    bool is_storage_write_role = false;
+    if (getDisaggregatedMode(config) == DisaggregatedMode::Compute)
+    {
+        static const std::string config_key = "flash.is_disaggregated_storage_write_role";
+        is_storage_write_role = config.getBool(config_key);
+    }
+    return is_storage_write_role;
+}
 } // namespace DB
