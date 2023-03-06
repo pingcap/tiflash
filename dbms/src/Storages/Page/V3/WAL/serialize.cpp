@@ -431,15 +431,17 @@ PageEntriesEdit Serializer<PageEntriesEdit>::deserializeFrom(std::string_view re
     ReadBufferFromMemory buf(record.data(), record.size());
     UInt32 version = 0;
     readIntBinary(version, buf);
-    CompressedReadBuffer compressed_buf(buf);
     switch (version)
     {
     case WALSerializeVersion::Plain:
         DB::PS::V3::deserializeFrom(buf, edit);
         break;
     case WALSerializeVersion::LZ4:
+    {
+        CompressedReadBuffer compressed_buf(buf);
         DB::PS::V3::deserializeFrom(compressed_buf, edit);
         break;
+    }
     default:
         throw Exception(fmt::format("Unknown version for PageEntriesEdit deser [version={}]", version), ErrorCodes::LOGICAL_ERROR);
     }
