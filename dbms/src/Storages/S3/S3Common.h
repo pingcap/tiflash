@@ -75,6 +75,7 @@ public:
     bool isEnabled() const;
 
     void init(const StorageS3Config & config_, bool mock_s3_ = false);
+
     void shutdown();
 
     const String & bucket() const;

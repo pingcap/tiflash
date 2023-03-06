@@ -88,16 +88,22 @@ namespace DB
         F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                                       \
         F(type_mpp_establish_conn_local, {{"type", "mpp_tunnel_local"}}),                                                                           \
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}))                                                                                     \
-    M(tiflash_exchange_data_bytes, "Total bytes sent by exchange operators", Counter, \
-        F(type_hash_original, {"type", "hash_original"}), /*the original data size by hash exchange*/ \
-        F(type_hash_none_compression_remote, {"type", "hash_none_compression_remote"}), /*the remote exchange data size by hash partition with no compression*/\
-        F(type_hash_none_compression_local, {"type", "hash_none_compression_local"}), /*the local exchange data size by hash partition with no compression*/ \
-        F(type_hash_lz4_compression, {"type", "hash_lz4_compression"}), /*the exchange data size by hash partition with lz4 compression*/ \
-        F(type_hash_zstd_compression, {"type", "hash_zstd_compression"}), /*the exchange data size by hash partition with zstd compression*/ \
-        F(type_broadcast_passthrough_original, {"type", "broadcast_passthrough_original"}), /*the original exchange data size by broadcast/passthough*/ \
-        F(type_broadcast_passthrough_none_compression_local, {"type", "broadcast_passthrough_none_compression_local"}), /*the local exchange data size by broadcast/passthough with no compression*/ \
-        F(type_broadcast_passthrough_none_compression_remote, {"type", "broadcast_passthrough_none_compression_remote"}), /*the remote exchange data size by broadcast/passthough with no compression*/ \
-    ) \
+    M(tiflash_exchange_data_bytes, "Total bytes sent by exchange operators", Counter,                                                               \
+        F(type_hash_original, {"type", "hash_original"}),                                                                                           \
+        F(type_hash_none_compression_remote, {"type", "hash_none_compression_remote"}),                                                             \
+        F(type_hash_none_compression_local, {"type", "hash_none_compression_local"}),                                                               \
+        F(type_hash_lz4_compression, {"type", "hash_lz4_compression"}),                                                                             \
+        F(type_hash_zstd_compression, {"type", "hash_zstd_compression"}),                                                                           \
+        F(type_broadcast_original, {"type", "broadcast_original"}),                                                                                 \
+        F(type_broadcast_none_compression_local, {"type", "broadcast_none_compression_local"}),                                                     \
+        F(type_broadcast_none_compression_remote, {"type", "broadcast_none_compression_remote"}),                                                   \
+        F(type_broadcast_lz4_compression, {"type", "broadcast_lz4_compression"}),                                                                   \
+        F(type_broadcast_zstd_compression, {"type", "broadcast_zstd_compression"}),                                                                 \
+        F(type_passthrough_original, {"type", "passthrough_original"}),                                                                             \
+        F(type_passthrough_none_compression_local, {"type", "passthrough_none_compression_local"}),                                                 \
+        F(type_passthrough_none_compression_remote, {"type", "passthrough_none_compression_remote"}),                                               \
+        F(type_passthrough_lz4_compression, {"type", "passthrough_lz4_compression"}),                                                               \
+        F(type_passthrough_zstd_compression, {"type", "passthrough_zstd_compression"}))                                                             \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                                    \
     M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                                       \
     M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                                   \
