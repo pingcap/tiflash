@@ -1499,17 +1499,18 @@ public:
 
     void resetSegmentTable(size_t segment_index)
     {
-        segments[segment_index].reset();
+        std::unique_ptr<SegmentType> segment_ptr = nullptr;
+        {
+            /// release the lock before destruct related segment
+            std::unique_lock lock(segments[segment_index]->getMutex());
+            segment_ptr.swap(segments[segment_index]);
+            segments[segment_index].reset();
+        }
     }
 
     std::mutex & getSegmentMutex(size_t segment_index)
     {
         return segments[segment_index]->getMutex();
-    }
-
-    bool isSegmentRelease(size_t segment_index) const
-    {
-        return !static_cast<bool>(segments[segment_index]);
     }
 
     size_t getSegmentSize() const { return segment_size; }

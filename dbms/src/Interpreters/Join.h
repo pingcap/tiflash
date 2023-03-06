@@ -280,6 +280,7 @@ public:
     }
 
     void meetError(const String & error_message);
+    void meetErrorImpl(const String & error_message, std::unique_lock<std::mutex> & lock);
 
     /// Reference to the row in block.
     struct RowRef
@@ -458,10 +459,9 @@ private:
     /// mutex to protect concurrent insert to blocks
     std::mutex blocks_lock;
     /// mutex to protect concurrent modify partitions
-    std::mutex partitions_lock;
-    std::vector<std::mutex> partitions_locks;
-    /// mutex to protect concurrent modify probe blocks
-    std::mutex probe_blocks_lock;
+    /// note if you wants to acquire both build_probe_mutex and partitions_mutexes,
+    /// please lock build_probe_mutex first
+    std::vector<std::mutex> partitions_mutexes;
 
     JoinPartitions partitions;
 
@@ -568,14 +568,14 @@ private:
     IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
 
-    Blocks trySpillBuildPartition(size_t partition_index, bool force);
     void trySpillBuildPartitions(bool force);
-    Blocks trySpillProbePartition(size_t partition_index, bool force);
     void trySpillProbePartitions(bool force);
-
-    void releaseBuildPartitionBlocks(size_t partition_index);
-    void releaseBuildPartitionHashTable(size_t partition_index);
-    void releaseProbePartitionBlocks(size_t partition_index);
+    /// use lock as the argument to force the caller acquire the lock before call them
+    Blocks trySpillBuildPartition(size_t partition_index, bool force, std::unique_lock<std::mutex> & partition_lock);
+    Blocks trySpillProbePartition(size_t partition_index, bool force, std::unique_lock<std::mutex> & partition_lock);
+    void releaseBuildPartitionBlocks(size_t partition_index, std::unique_lock<std::mutex> & partition_lock);
+    void releaseBuildPartitionHashTable(size_t partition_index, std::unique_lock<std::mutex> & partition_lock);
+    void releaseProbePartitionBlocks(size_t partition_index, std::unique_lock<std::mutex> & partition_lock);
     void releaseAllPartitions();
 
     void spillMostMemoryUsedPartitionIfNeed();

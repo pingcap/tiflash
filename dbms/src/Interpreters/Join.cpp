@@ -209,7 +209,12 @@ Join::Join(
 
 void Join::meetError(const String & error_message_)
 {
-    std::lock_guard lk(build_probe_mutex);
+    std::unique_lock lock(build_probe_mutex);
+    meetErrorImpl(error_message_, lock);
+}
+
+void Join::meetErrorImpl(const String & error_message_, std::unique_lock<std::mutex> &)
+{
     if (meet_error)
         return;
     meet_error = true;
@@ -400,13 +405,12 @@ static void clearMapPartition(const Maps & maps, Join::Type type, size_t partiti
     case Join::Type::CROSS:
         return;
 
-#define M(NAME)                                                              \
-    case Join::Type::NAME:                                                   \
-        if (maps.NAME)                                                       \
-        {                                                                    \
-            std::lock_guard lk(maps.NAME->getSegmentMutex(partition_index)); \
-            maps.NAME->resetSegmentTable(partition_index);                   \
-        }                                                                    \
+#define M(NAME)                                            \
+    case Join::Type::NAME:                                 \
+        if (maps.NAME)                                     \
+        {                                                  \
+            maps.NAME->resetSegmentTable(partition_index); \
+        }                                                  \
         return;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -570,8 +574,8 @@ void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
 
     partitions.reserve(build_concurrency);
 
-    std::vector<std::mutex> locks(build_concurrency);
-    partitions_locks.swap(locks);
+    std::vector<std::mutex> mutexes(build_concurrency);
+    partitions_mutexes.swap(mutexes);
 
     for (size_t i = 0; i < getBuildConcurrencyInternal(); ++i)
     {
@@ -871,10 +875,6 @@ void insertFromBlockImplType(
         }
         else if (enable_join_spill)
         {
-            if (map.isSegmentRelease(stream_index))
-            {
-                return;
-            }
             insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         }
         else
@@ -892,10 +892,6 @@ void insertFromBlockImplType(
         }
         else if (enable_join_spill)
         {
-            if (map.isSegmentRelease(stream_index))
-            {
-                return;
-            }
             insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         }
         else
@@ -1052,10 +1048,10 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
             }
             Blocks blocks_to_spill;
             {
-                std::unique_lock partition_lock(partitions_locks[i]);
+                std::unique_lock partition_lock(partitions_mutexes[i]);
                 insertBlockToBuildPartition(std::move(dispatch_blocks[i]), i);
                 if (partitions[i].spill)
-                    blocks_to_spill = trySpillBuildPartition(i, false);
+                    blocks_to_spill = trySpillBuildPartition(i, false, partition_lock);
                 else
                     stored_block = &(partitions[i].build_partition.blocks.back());
                 if (stored_block != nullptr)
@@ -2229,7 +2225,6 @@ void Join::finishOneBuild()
     {
         if (isEnableSpill())
         {
-            std::unique_lock p_lock(partitions_lock);
             if (hasPartitionSpilled())
             {
                 trySpillBuildPartitions(true);
@@ -2262,7 +2257,6 @@ void Join::finishOneProbe()
     {
         if (isEnableSpill())
         {
-            std::unique_lock p_lock(partitions_lock);
             if (hasPartitionSpilled())
             {
                 trySpillProbePartitions(true);
@@ -2292,12 +2286,12 @@ void Join::finishOneNonJoin(size_t partition_index)
 {
     while (partition_index < build_concurrency)
     {
-        std::unique_lock lock(partitions_locks[partition_index]);
-        releaseBuildPartitionBlocks(partition_index);
-        releaseProbePartitionBlocks(partition_index);
+        std::unique_lock partition_lock(partitions_mutexes[partition_index]);
+        releaseBuildPartitionBlocks(partition_index, partition_lock);
+        releaseProbePartitionBlocks(partition_index, partition_lock);
         if (!partitions[partition_index].spill)
         {
-            releaseBuildPartitionHashTable(partition_index);
+            releaseBuildPartitionHashTable(partition_index, partition_lock);
         }
         partition_index += build_concurrency;
     }
@@ -2513,8 +2507,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
     Blocks blocks_to_spill;
 
     {
-        std::unique_lock lk(partitions_lock);
-        RUNTIME_CHECK_MSG(restore_round < 4, "max_bytes_before_external_join is too small, please make it larger and try again.");
+        std::unique_lock lk(build_probe_mutex);
         if (max_bytes_before_external_join && getTotalByteCount() <= max_bytes_before_external_join)
         {
             return;
@@ -2532,6 +2525,9 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
             return;
         }
 
+        RUNTIME_CHECK_MSG(restore_round < 4, "max_bytes_before_external_join is too small, please make it larger and try again.");
+        RUNTIME_CHECK_MSG(build_concurrency > 1, "Join with build concurrency = 1 does not support spill.");
+
         LOG_DEBUG(log, fmt::format("all bytes used : {}", getTotalByteCount()));
         for (size_t index = 0; index < partitions.size(); ++index)
         {
@@ -2539,11 +2535,11 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         }
         LOG_DEBUG(log, fmt::format("make round : {}, partition : {} spill.", restore_round, target_partition_index));
 
-        std::unique_lock partition_lock(partitions_locks[target_partition_index]);
+        std::unique_lock partition_lock(partitions_mutexes[target_partition_index]);
         partitions[target_partition_index].spill = true;
-        releaseBuildPartitionHashTable(target_partition_index);
+        releaseBuildPartitionHashTable(target_partition_index, partition_lock);
         spilled_partition_indexes.push_back(target_partition_index);
-        blocks_to_spill = trySpillBuildPartition(target_partition_index, true);
+        blocks_to_spill = trySpillBuildPartition(target_partition_index, true, partition_lock);
     }
     build_spiller->spillBlocks(blocks_to_spill, target_partition_index);
     LOG_DEBUG(log, fmt::format("all bytes used after spill : {}", getTotalByteCount()));
@@ -2597,7 +2593,7 @@ bool Join::getPartitionSpilled(size_t partition_index)
 
 bool Join::hasPartitionSpilledWithLock()
 {
-    std::unique_lock lk(partitions_lock);
+    std::unique_lock lk(build_probe_mutex);
     return hasPartitionSpilled();
 }
 
@@ -2608,16 +2604,13 @@ bool Join::hasPartitionSpilled()
 
 std::tuple<JoinPtr, BlockInputStreamPtr, BlockInputStreamPtr, BlockInputStreamPtr> Join::getOneRestoreStream(size_t max_block_size)
 {
-    std::unique_lock lk(partitions_lock);
-    {
-        std::lock_guard err_lk(build_probe_mutex);
-        if (meet_error)
-            return {nullptr, nullptr, nullptr, nullptr};
-    }
-    LOG_DEBUG(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_non_joined_data_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_non_joined_data_streams.size()));
-    assert(restore_build_streams.size() == restore_probe_streams.size() && restore_build_streams.size() == restore_non_joined_data_streams.size());
+    std::unique_lock lock(build_probe_mutex);
+    if (meet_error)
+        throw Exception(error_message);
     try
     {
+        LOG_DEBUG(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_non_joined_data_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_non_joined_data_streams.size()));
+        assert(restore_build_streams.size() == restore_probe_streams.size() && restore_build_streams.size() == restore_non_joined_data_streams.size());
         auto get_back_stream = [](BlockInputStreams & streams) {
             BlockInputStreamPtr stream = streams.back();
             streams.pop_back();
@@ -2672,8 +2665,11 @@ std::tuple<JoinPtr, BlockInputStreamPtr, BlockInputStreamPtr, BlockInputStreamPt
     }
     catch (...)
     {
+        restore_build_streams.clear();
+        restore_probe_streams.clear();
+        restore_non_joined_data_streams.clear();
         auto err_message = getCurrentExceptionMessage(false, true);
-        meetError(err_message);
+        meetErrorImpl(err_message, lock);
         throw Exception(err_message);
     }
 }
@@ -2688,11 +2684,11 @@ void Join::dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>
         Blocks blocks_to_spill;
         bool need_spill = false;
         {
-            std::unique_lock partitions_lk(partitions_locks[i]);
+            std::unique_lock partition_lock(partitions_mutexes[i]);
             if (getPartitionSpilled(i))
             {
                 insertBlockToProbePartition(std::move(partition_blocks[i]), i);
-                blocks_to_spill = trySpillProbePartition(i, false);
+                blocks_to_spill = trySpillProbePartition(i, false, partition_lock);
                 need_spill = true;
             }
         }
@@ -2703,13 +2699,13 @@ void Join::dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>
     }
 }
 
-Blocks Join::trySpillBuildPartition(size_t partition_index, bool force)
+Blocks Join::trySpillBuildPartition(size_t partition_index, bool force, std::unique_lock<std::mutex> & partition_lock)
 {
     if (partitions[partition_index].spill
         && ((force && partitions[partition_index].build_partition.bytes) || partitions[partition_index].build_partition.bytes >= build_spill_config.max_cached_data_bytes_in_spiller))
     {
         auto ret = partitions[partition_index].build_partition.original_blocks;
-        releaseBuildPartitionBlocks(partition_index);
+        releaseBuildPartitionBlocks(partition_index, partition_lock);
         return ret;
     }
     else
@@ -2722,16 +2718,21 @@ void Join::trySpillBuildPartitions(bool force)
 {
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-        build_spiller->spillBlocks(trySpillBuildPartition(i, force), i);
+        Blocks blocks_to_spill;
+        {
+            std::unique_lock partition_lock(partitions_mutexes[i]);
+            blocks_to_spill = trySpillBuildPartition(i, force, partition_lock);
+        }
+        build_spiller->spillBlocks(blocks_to_spill, i);
     }
 }
 
-Blocks Join::trySpillProbePartition(size_t partition_index, bool force)
+Blocks Join::trySpillProbePartition(size_t partition_index, bool force, std::unique_lock<std::mutex> & partition_lock)
 {
     if (partitions[partition_index].spill && ((force && partitions[partition_index].probe_partition.bytes) || partitions[partition_index].probe_partition.bytes >= probe_spill_config.max_cached_data_bytes_in_spiller))
     {
         auto ret = partitions[partition_index].probe_partition.blocks;
-        releaseProbePartitionBlocks(partition_index);
+        releaseProbePartitionBlocks(partition_index, partition_lock);
         return ret;
     }
     else
@@ -2742,12 +2743,16 @@ void Join::trySpillProbePartitions(bool force)
 {
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-        auto blocks_to_spill = trySpillProbePartition(i, force);
+        Blocks blocks_to_spill;
+        {
+            std::unique_lock partition_lock(partitions_mutexes[i]);
+            blocks_to_spill = trySpillProbePartition(i, force, partition_lock);
+        }
         probe_spiller->spillBlocks(blocks_to_spill, i);
     }
 }
 
-void Join::releaseBuildPartitionBlocks(size_t partition_index)
+void Join::releaseBuildPartitionBlocks(size_t partition_index, std::unique_lock<std::mutex> &)
 {
     join_memory_info.subBytes(partitions[partition_index].build_partition.bytes);
     join_memory_info.subRows(partitions[partition_index].build_partition.rows);
@@ -2757,7 +2762,7 @@ void Join::releaseBuildPartitionBlocks(size_t partition_index)
     partitions[partition_index].build_partition.original_blocks.clear();
 }
 
-void Join::releaseBuildPartitionHashTable(size_t partition_index)
+void Join::releaseBuildPartitionHashTable(size_t partition_index, std::unique_lock<std::mutex> &)
 {
     clearMapPartition(maps_any, type, partition_index);
     clearMapPartition(maps_all, type, partition_index);
@@ -2772,7 +2777,7 @@ void Join::releaseBuildPartitionHashTable(size_t partition_index)
     }
 }
 
-void Join::releaseProbePartitionBlocks(size_t partition_index)
+void Join::releaseProbePartitionBlocks(size_t partition_index, std::unique_lock<std::mutex> &)
 {
     partitions[partition_index].probe_partition.blocks.clear();
     join_memory_info.subBytes(partitions[partition_index].probe_partition.bytes);
@@ -2785,11 +2790,12 @@ void Join::releaseAllPartitions()
 {
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-        releaseBuildPartitionBlocks(i);
-        releaseProbePartitionBlocks(i);
+        std::unique_lock partition_lock(partitions_mutexes[i]);
+        releaseBuildPartitionBlocks(i, partition_lock);
+        releaseProbePartitionBlocks(i, partition_lock);
         if (!partitions[i].spill)
         {
-            releaseBuildPartitionHashTable(i);
+            releaseBuildPartitionHashTable(i, partition_lock);
         }
     }
 }
