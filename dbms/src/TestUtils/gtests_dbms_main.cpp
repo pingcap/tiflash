@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
-#include <Common/ThreadPool.h>
+#include <Common/UniThreadPool.h>
 #include <IO/IOThreadPool.h>
 #include <Poco/Environment.h>
 #include <Server/StorageConfigParser.h>
