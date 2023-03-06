@@ -23,7 +23,7 @@
 #include <Flash/Planner/Plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExpressionTransformOp.h>
-#include <Operators/TopNTransformOp.h>
+#include <Operators/LocalSortTransformOp.h>
 
 namespace DB
 {
@@ -77,7 +77,7 @@ void PhysicalTopN::buildPipelineExec(PipelineExecGroupBuilder & group_builder, C
         });
     }
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<TopNTransformOp>(group_builder.exec_status, log->identifier(), order_descr, limit, context.getSettingsRef().max_block_size));
+        builder.appendTransformOp(std::make_unique<LocalSortTransformOp>(group_builder.exec_status, log->identifier(), order_descr, limit, context.getSettingsRef().max_block_size));
     });
 }
 
