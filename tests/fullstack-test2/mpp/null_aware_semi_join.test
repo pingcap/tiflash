@@ -13,6 +13,7 @@
 # limitations under the License.
 
 mysql> drop table if exists test.t;
+mysql> drop table if exists test.s;
 mysql> create table test.t(a int, b int, c int);
 mysql> create table test.s(a int, b int, c int);
 mysql> alter table test.t set tiflash replica 1;
@@ -23,7 +24,7 @@ mysql> insert into test.t values(1, 0, 0), (2, 0, 0), (3, 0, 0), (4, 0, 0), (5, 
 func> wait_table test t
 func> wait_table test s
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a from t where a not in (select a from s);
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a from t where a not in (select a from s);
 +------+
 | a    |
 +------+
@@ -34,7 +35,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    5 |
 +------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,a not in (select a from s) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,a not in (select a from s) from t;
 +------+----------------------------+
 | a    | a not in (select a from s) |
 +------+----------------------------+
@@ -45,7 +46,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    5 |                          1 |
 +------+----------------------------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,a in (select a from s) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,a in (select a from s) from t;
 +------+------------------------+
 | a    | a in (select a from s) |
 +------+------------------------+
@@ -64,7 +65,7 @@ mysql> insert into test.t values(1, 0, 0), (null, 0, 0), (null, 0, 0), (4, 0, 0)
 func> wait_table test t
 func> wait_table test s
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a from t where a not in (select a from s);
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a from t where a not in (select a from s);
 +------+
 | a    |
 +------+
@@ -75,7 +76,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    5 |
 +------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,a not in (select a from s) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,a not in (select a from s) from t;
 +------+----------------------------+
 | a    | a not in (select a from s) |
 +------+----------------------------+
@@ -86,7 +87,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    5 |                          1 |
 +------+----------------------------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,a in (select a from s) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,a in (select a from s) from t;
 +------+------------------------+
 | a    | a in (select a from s) |
 +------+------------------------+
@@ -106,7 +107,7 @@ mysql> insert into test.s values(1, 0, 0), (2, 0, 0), (8, 0, 0), (9, 0, 0), (10,
 func> wait_table test t
 func> wait_table test s
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a from t where a not in (select a from s);
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a from t where a not in (select a from s);
 +------+
 | a    |
 +------+
@@ -114,7 +115,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    5 |
 +------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,a not in (select a from s) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,a not in (select a from s) from t;
 +------+----------------------------+
 | a    | a not in (select a from s) |
 +------+----------------------------+
@@ -125,7 +126,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    5 |                          1 |
 +------+----------------------------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,a in (select a from s) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,a in (select a from s) from t;
 +------+------------------------+
 | a    | a in (select a from s) |
 +------+------------------------+
@@ -145,10 +146,10 @@ mysql> insert into test.s values(1, 0, 0), (null, 0, 0), (3, 0, 0), (4, 0, 0), (
 func> wait_table test t
 func> wait_table test s
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a from t where a not in (select a from s);
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a from t where a not in (select a from s);
 # empty
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,a not in (select a from s) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,a not in (select a from s) from t;
 +------+----------------------------+
 | a    | a not in (select a from s) |
 +------+----------------------------+
@@ -159,7 +160,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    5 |                       NULL |
 +------+----------------------------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,a in (select a from s) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,a in (select a from s) from t;
 +------+------------------------+
 | a    | a in (select a from s) |
 +------+------------------------+
@@ -170,17 +171,18 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    5 |                   NULL |
 +------+------------------------+
 
-
+mysql> truncate test.t;
+mysql> truncate test.s;
 mysql> insert into test.t values(1, 1, 1), (2, 2, 1), (3, 3, 1), (4, 4, 1), (5, 5, 1);
 mysql> insert into test.s values(1, 1, 2), (2, 2, 2), (3, 3, 2), (4, 4, 2), (5, 5, 2);
 
 func> wait_table test t
 func> wait_table test s
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,b from t where (a,b) not in (select a,b from s where s.c > t.c);
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b from t where (a,b) not in (select a,b from s where s.c > t.c);
 # empty
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) not in (select a,b from s where s.c > t.c) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) not in (select a,b from s where s.c > t.c) from t;
 +------+------+--------------------------------------------------+
 | a    | b    | (a,b) not in (select a,b from s where s.c > t.c) |
 +------+------+--------------------------------------------------+
@@ -191,7 +193,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    5 |    5 |                                                0 |
 +------+------+--------------------------------------------------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) in (select a,b from s where s.c > t.c) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) in (select a,b from s where s.c > t.c) from t;
 +------+------+----------------------------------------------+
 | a    | b    | (a,b) in (select a,b from s where s.c > t.c) |
 +------+------+----------------------------------------------+
@@ -211,7 +213,7 @@ mysql> insert into test.s values(1, 6, 2), (2, 7, 2), (3, 8, 2), (4, 9, 2), (5, 
 func> wait_table test t
 func> wait_table test s
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,b from t where (a,b) not in (select a,b from s where s.c > t.c);
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b from t where (a,b) not in (select a,b from s where s.c > t.c);
 +------+------+
 | a    | b    |
 +------+------+
@@ -222,7 +224,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    5 |    5 |
 +------+------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) not in (select a,b from s where s.c > t.c) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) not in (select a,b from s where s.c > t.c) from t;
 +------+------+--------------------------------------------------+
 | a    | b    | (a,b) not in (select a,b from s where s.c > t.c) |
 +------+------+--------------------------------------------------+
@@ -233,7 +235,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    5 |    5 |                                                1 |
 +------+------+--------------------------------------------------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) in (select a,b from s where s.c > t.c) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) in (select a,b from s where s.c > t.c) from t;
 +------+------+----------------------------------------------+
 | a    | b    | (a,b) in (select a,b from s where s.c > t.c) |
 +------+------+----------------------------------------------+
@@ -253,14 +255,14 @@ mysql> insert into test.s values(1, 1, 2), (null, 2, 2), (3, null, 2), (null, 4,
 func> wait_table test t
 func> wait_table test s
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,b from t where (a,b) not in (select a,b from s where s.c > t.c);
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b from t where (a,b) not in (select a,b from s where s.c > t.c);
 +------+------+
 | a    | b    |
 +------+------+
 |    5 |    5 |
 +------+------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) not in (select a,b from s where s.c > t.c) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) not in (select a,b from s where s.c > t.c) from t;
 +------+------+--------------------------------------------------+
 | a    | b    | (a,b) not in (select a,b from s where s.c > t.c) |
 +------+------+--------------------------------------------------+
@@ -271,7 +273,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    5 |    5 |                                                1 |
 +------+------+--------------------------------------------------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) in (select a,b from s where s.c > t.c) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) in (select a,b from s where s.c > t.c) from t;
 +------+------+----------------------------------------------+
 | a    | b    | (a,b) in (select a,b from s where s.c > t.c) |
 +------+------+----------------------------------------------+
@@ -291,7 +293,7 @@ mysql> insert into test.s values(1, 1, 2), (2, 2, 1), (3, 3, 2), (4, 4, 1), (5, 
 func> wait_table test t
 func> wait_table test s
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,b from t where (a,b) not in (select a,b from s where s.c > t.c);
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b from t where (a,b) not in (select a,b from s where s.c > t.c);
 +------+------+
 | a    | b    |
 +------+------+
@@ -300,7 +302,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    6 | NULL |
 +------+------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) not in (select a,b from s where s.c > t.c) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) not in (select a,b from s where s.c > t.c) from t;
 +------+------+--------------------------------------------------+
 | a    | b    | (a,b) not in (select a,b from s where s.c > t.c) |
 +------+------+--------------------------------------------------+
@@ -311,7 +313,7 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set 
 |    6 | NULL |                                                1 |
 +------+------+--------------------------------------------------+
 
-mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) in (select a,b from s where s.c > t.c) from t;
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) in (select a,b from s where s.c > t.c) from t;
 +------+------+----------------------------------------------+
 | a    | b    | (a,b) in (select a,b from s where s.c > t.c) |
 +------+------+----------------------------------------------+

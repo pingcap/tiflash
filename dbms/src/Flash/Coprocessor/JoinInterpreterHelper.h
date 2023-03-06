@@ -130,7 +130,7 @@ struct TiFlashJoin
     ///
     /// Example 2:
     ///   `select * from t1 where col1 not in (select col1 from t2 where t1.col2 = t2.col2 and t1.col3 > t2.col3)`
-    ///   There are several possibilities which depends on TiDB.
+    ///   There are several possibilities which depends on TiDB's planner.
     ///   1. cartesian anti semi join.
     ///      - join key is empty
     ///      - other_cond is `t1.col2 = t2.col2 and t1.col3 > t2.col3`

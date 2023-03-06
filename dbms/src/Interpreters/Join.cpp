@@ -2053,6 +2053,8 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>> res;
     res.reserve(rows);
     std::list<NASemiJoinResult<KIND, STRICTNESS> *> res_list;
+    /// We can just consider the result of left semi join because `NASemiJoinResult::setResult` will correct
+    /// the result if it's not left semi join.
     for (size_t i = 0; i < rows; ++i)
     {
         if constexpr (has_filter_map)
