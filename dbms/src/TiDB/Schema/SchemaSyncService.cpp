@@ -124,7 +124,7 @@ void SchemaSyncService::removeKeyspaceGCTasks()
 SchemaSyncService::~SchemaSyncService()
 {
     background_pool.removeTask(handle);
-    for (auto const & iter: ks_handle_map)
+    for (auto const & iter : ks_handle_map)
     {
         auto task_handle = iter.second;
         background_pool.removeTask(task_handle);

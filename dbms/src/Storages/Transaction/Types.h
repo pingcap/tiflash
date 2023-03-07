@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <pingcap/pd/IClient.h>
 #include <common/types.h>
+#include <pingcap/pd/IClient.h>
 
 #include <chrono>
 #include <unordered_set>
