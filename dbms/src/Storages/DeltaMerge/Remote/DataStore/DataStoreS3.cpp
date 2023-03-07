@@ -90,9 +90,9 @@ bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_
     // upload in parallel
     for (size_t file_idx = 0; file_idx < local_files.data_files.size(); ++file_idx)
     {
-        auto task = std::make_shared<std::packaged_task<void()>>([&] {
-            const auto & local_datafile = local_files.data_files[file_idx];
-            auto s3key = S3::S3Filename::newCheckpointData(store_id, upload_seq, file_idx);
+        auto task = std::make_shared<std::packaged_task<void()>>([&, idx = file_idx] {
+            const auto & local_datafile = local_files.data_files[idx];
+            auto s3key = S3::S3Filename::newCheckpointData(store_id, upload_seq, idx);
             auto lock_key = s3key.toView().getLockKey(store_id, upload_seq);
             S3::uploadFile(*s3_client, bucket, local_datafile, s3key.toFullKey());
             S3::uploadEmptyFile(*s3_client, bucket, lock_key);

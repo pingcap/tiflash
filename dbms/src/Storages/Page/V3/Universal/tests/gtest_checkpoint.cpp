@@ -15,6 +15,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
+#include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
@@ -78,7 +79,7 @@ public:
         return ret;
     }
 
-    void dumpCheckpoint()
+    void dumpCheckpoint(bool upload_success = true)
     {
         page_storage->dumpIncrementalCheckpoint({
             .data_file_id_pattern = "{sequence}_{sub_file_index}.data",
@@ -86,6 +87,10 @@ public:
             .manifest_file_id_pattern = "{sequence}.manifest",
             .manifest_file_path_pattern = dir + "{sequence}.manifest",
             .writer_info = *writer_info,
+            .must_locked_files = {},
+            .persist_checkpoint = [upload_success](const PS::V3::LocalCheckpointFiles &) {
+                return upload_success;
+            },
         });
     }
 
@@ -365,6 +370,87 @@ try
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("4", iter->page_id);
         ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("5", iter->page_id);
+        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
+        ASSERT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info->data_location));
+    }
+}
+CATCH
+
+TEST_F(PSCheckpointTest, DumpWriteDumpWithUploadFailure)
+try
+{
+    {
+        UniversalWriteBatch batch;
+        batch.putPage("3", tag, "The flower carriage rocked");
+        batch.putPage("4", tag, "Nahida opened her eyes");
+        page_storage->write(std::move(batch));
+    }
+    // mock that local files are generated, but uploading to remote data source is failed
+    dumpCheckpoint(/*upload_success*/ false);
+    {
+        ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
+        ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
+
+        auto reader = CPManifestFileReader::create({.file_path = dir + "2.manifest"});
+        auto im = CheckpointProto::StringsInternMap{};
+        auto prefix = reader->readPrefix();
+        auto edits = reader->readEdits(im);
+        auto records = edits->getRecords();
+
+        ASSERT_EQ(2, records.size());
+
+        auto iter = records.begin();
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("3", iter->page_id);
+        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
+        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("4", iter->page_id);
+        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+    }
+
+    // Write and dump again.
+    // This time the checkpoint should also contains the
+    // data in previous write
+
+    {
+        UniversalWriteBatch batch;
+        batch.putPage("3", tag, "Said she just dreamed a dream"); // Override
+        batch.putPage("5", tag, "Dreamed of the day that she was born"); // New
+        page_storage->write(std::move(batch));
+    }
+    dumpCheckpoint(/*upload_success*/ true);
+    {
+        ASSERT_TRUE(Poco::File(dir + "4.manifest").exists());
+        ASSERT_TRUE(Poco::File(dir + "4_0.data").exists());
+
+        auto reader = CPManifestFileReader::create({.file_path = dir + "4.manifest"});
+        auto im = CheckpointProto::StringsInternMap{};
+        auto prefix = reader->readPrefix();
+        auto edits = reader->readEdits(im);
+        auto records = edits->getRecords();
+
+        ASSERT_EQ(3, records.size());
+
+        auto iter = records.begin();
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("3", iter->page_id);
+        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
+        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("4", iter->page_id);
+        // 2_0.data is not uploaded and the data_location only get updated after success upload
+        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
         ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
 
         iter++;

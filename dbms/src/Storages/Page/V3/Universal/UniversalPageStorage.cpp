@@ -391,8 +391,6 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
     writer->writeSuffix();
     writer.reset();
 
-    SYNC_FOR("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
-
     // Persist the checkpoint to remote store.
     // If not persisted or exception throw, then we can not apply the checkpoint
     // info to directory. Neither update `last_checkpoint_sequence`.
@@ -414,6 +412,8 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
         tryLogCurrentException(log, "failed to persist checkpoint");
         return;
     }
+
+    SYNC_FOR("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
 
     // TODO: Currently, even when has_new_data == false,
     //   something will be written to DataFile (i.e., the file prefix).
