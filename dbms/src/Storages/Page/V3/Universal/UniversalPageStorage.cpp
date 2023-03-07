@@ -75,7 +75,8 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
 
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
-    if (write_batch.hasWritesFromRemote())
+    const bool has_writes_from_remote = write_batch.hasWritesFromRemote();
+    if (has_writes_from_remote)
     {
         assert(remote_locks_local_mgr != nullptr);
         // Before ingesting remote pages/remote external pages, we need to create "lock" on S3
@@ -86,7 +87,7 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
     }
     auto edit = blob_store->write(std::move(write_batch), write_limiter);
     auto applied_lock_ids = page_directory->apply(std::move(edit), write_limiter);
-    if (write_batch.hasWritesFromRemote())
+    if (has_writes_from_remote)
     {
         assert(remote_locks_local_mgr != nullptr);
         // Remove the applied locks from checkpoint_manager.pre_lock_files

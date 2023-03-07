@@ -63,6 +63,11 @@ public:
         putExternal(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag);
     }
 
+    void putRemoteExternal(PageIdU64 page_id, const PS::V3::CheckpointLocation & data_location)
+    {
+        putRemoteExternal(UniversalPageIdFormat::toFullPageId(prefix, page_id), data_location);
+    }
+
     // Add RefPage{ref_id} -> Page{page_id}
     void putRefPage(PageIdU64 ref_id, PageIdU64 page_id)
     {
