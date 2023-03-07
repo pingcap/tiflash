@@ -88,7 +88,7 @@ void UniversalPageStorageService::doCheckpoint(bool force)
         writer_info.set_version(store_info.version());
         writer_info.set_version_git(store_info.git_hash());
         writer_info.set_start_at_ms(store_info.start_timestamp() * 1000);
-        auto remote_info = writer_info.mutable_remote_info();
+        auto * remote_info = writer_info.mutable_remote_info();
         remote_info->set_type_name("S3");
 
         Poco::TemporaryFile temp_checkpoint_dir{temp_path};
