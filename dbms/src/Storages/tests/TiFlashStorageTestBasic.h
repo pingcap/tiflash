@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB

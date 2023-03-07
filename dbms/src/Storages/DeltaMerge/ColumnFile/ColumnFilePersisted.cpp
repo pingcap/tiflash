@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
+#include <Storages/Page/Page.h>
 
 namespace DB
 {

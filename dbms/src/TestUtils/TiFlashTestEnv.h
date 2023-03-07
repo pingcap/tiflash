@@ -18,7 +18,7 @@
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Poco/SortedDirectoryIterator.h>
-#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/PageConstants.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <fmt/core.h>
 
@@ -32,7 +32,7 @@ enum class TestType
 class TiFlashTestEnv
 {
 public:
-    static String getTemporaryPath(const std::string_view test_case = "", bool get_abs = true);
+    static String getTemporaryPath(std::string_view test_case = "", bool get_abs = true);
 
     static void tryCreatePath(const std::string & path);
 
