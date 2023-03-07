@@ -22,7 +22,6 @@
 
 namespace DB
 {
-
 class IBlockOutputStream;
 
 /// SpillHandler is used to spill blocks, currently hidden behind `Spiller::spillBlocks`
@@ -32,15 +31,17 @@ class IBlockOutputStream;
 class SpillHandler
 {
 public:
-    SpillHandler(Spiller * spiller_, std::unique_ptr<SpilledFile> && spilled_file, size_t partition_id_);
+    SpillHandler(Spiller * spiller_, size_t partition_id_);
     void spillBlocks(const Blocks & blocks);
     void finish();
 
 private:
+    std::pair<size_t, size_t> setUpNextSpilledFile();
+    bool isSpilledFileFull(UInt64 spilled_rows, UInt64 spilled_bytes);
     class SpillWriter
     {
     public:
-        SpillWriter(const FileProviderPtr & file_provider, const String & file_name, const Block & header, size_t spill_version);
+        SpillWriter(const FileProviderPtr & file_provider, const String & file_name, bool append_write, const Block & header, size_t spill_version);
         SpillDetails finishWrite();
         void write(const Block & block);
 
@@ -57,6 +58,8 @@ private:
     String current_spill_file_name;
     std::unique_ptr<SpillWriter> writer;
     double time_cost = 0;
+    SpillDetails prev_spill_details;
+    static const Int64 INVALID_CURRENT_SPILLED_FILE_INDEX = -10;
 };
 
 } // namespace DB

@@ -19,7 +19,9 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -343,7 +345,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     // build compaction task and finish prepare stage
     MinorCompactionPtr compaction_task;
     {
-        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+        PageReaderPtr reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
         // There should be three compaction sub_tasks.
         // The first task try to compact the first three column files to a larger one.
@@ -358,7 +360,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         ASSERT_EQ(tasks[1].is_trivial_move, true);
         ASSERT_EQ(tasks[2].to_compact.size(), 1);
         ASSERT_EQ(tasks[2].is_trivial_move, true);
-        compaction_task->prepare(dmContext(), wbs, reader);
+        compaction_task->prepare(dmContext(), wbs, *reader);
     }
 
     // another thread write more data to the delta value space and flush it
@@ -384,10 +386,10 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
         EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
         // generate and commit
-        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+        PageReaderPtr reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
         EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
-        compaction_task->prepare(dmContext(), wbs, reader);
+        compaction_task->prepare(dmContext(), wbs, *reader);
         ASSERT_TRUE(compaction_task->commit(persisted_file_set, wbs));
         ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
         ASSERT_EQ(persisted_file_set->getDeletes(), 1);
@@ -408,12 +410,12 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             delta->flush(dmContext());
             while (true)
             {
-                PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+                PageReaderPtr reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
                 auto minor_compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
                 if (!minor_compaction_task)
                     break;
                 ASSERT_NE(minor_compaction_task->getFirsCompactIndex(), std::numeric_limits<size_t>::max());
-                minor_compaction_task->prepare(dmContext(), wbs, reader);
+                minor_compaction_task->prepare(dmContext(), wbs, *reader);
                 minor_compaction_task->commit(persisted_file_set, wbs);
             }
             wbs.writeRemoves();

@@ -17,44 +17,80 @@
 
 namespace DB
 {
-ExecutionResult PipelineExecutorStatus::toExecutionResult()
-{
-    auto get_err_msg = getErrMsg();
-    return get_err_msg.empty()
-        ? ExecutionResult::success()
-        : ExecutionResult::fail(get_err_msg);
-}
-
-String PipelineExecutorStatus::getErrMsg()
+ExecutionResult PipelineExecutorStatus::toExecutionResult() noexcept
 {
     std::lock_guard lock(mu);
-    return err_msg;
+    return exception_ptr
+        ? ExecutionResult::fail(exception_ptr)
+        : ExecutionResult::success();
 }
 
-void PipelineExecutorStatus::onErrorOccurred(String && err_msg_)
+std::exception_ptr PipelineExecutorStatus::getExceptionPtr() noexcept
+{
+    std::lock_guard lock(mu);
+    return exception_ptr;
+}
+
+String PipelineExecutorStatus::getExceptionMsg() noexcept
+{
+    try
+    {
+        auto cur_exception_ptr = getExceptionPtr();
+        if (!cur_exception_ptr)
+            return "";
+        std::rethrow_exception(cur_exception_ptr);
+    }
+    catch (const DB::Exception & e)
+    {
+        return e.message();
+    }
+    catch (...)
+    {
+        return getCurrentExceptionMessage(false, true);
+    }
+}
+
+void PipelineExecutorStatus::onErrorOccurred(const String & err_msg) noexcept
+{
+    DB::Exception e(err_msg);
+    onErrorOccurred(std::make_exception_ptr(e));
+}
+
+bool PipelineExecutorStatus::setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept
+{
+    assert(exception_ptr_ != nullptr);
+    std::lock_guard lock(mu);
+    if (exception_ptr != nullptr)
+        return false;
+    exception_ptr = exception_ptr_;
+    return true;
+}
+
+void PipelineExecutorStatus::onErrorOccurred(const std::exception_ptr & exception_ptr_) noexcept
+{
+    if (setExceptionPtr(exception_ptr_))
+    {
+        cancel();
+        LOG_WARNING(log, "error occured and cancel the query");
+    }
+}
+
+void PipelineExecutorStatus::wait() noexcept
 {
     {
-        std::lock_guard lock(mu);
-        if (!err_msg.empty())
-            return;
-        err_msg = err_msg_.empty() ? empty_err_msg : std::move(err_msg_);
+        std::unique_lock lock(mu);
+        cv.wait(lock, [&] { return 0 == active_event_count; });
     }
-    cancel();
+    LOG_DEBUG(log, "query finished and wait done");
 }
 
-void PipelineExecutorStatus::wait()
-{
-    std::unique_lock lock(mu);
-    cv.wait(lock, [&] { return 0 == active_event_count; });
-}
-
-void PipelineExecutorStatus::onEventSchedule()
+void PipelineExecutorStatus::onEventSchedule() noexcept
 {
     std::lock_guard lock(mu);
     ++active_event_count;
 }
 
-void PipelineExecutorStatus::onEventFinish()
+void PipelineExecutorStatus::onEventFinish() noexcept
 {
     std::lock_guard lock(mu);
     assert(active_event_count > 0);
@@ -63,7 +99,7 @@ void PipelineExecutorStatus::onEventFinish()
         cv.notify_all();
 }
 
-void PipelineExecutorStatus::cancel()
+void PipelineExecutorStatus::cancel() noexcept
 {
     is_cancelled.store(true, std::memory_order_release);
 }

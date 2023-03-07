@@ -262,6 +262,16 @@ struct ContextShared
             global_storage_pool->shutdown();
         }
 
+        if (ps_write)
+        {
+            ps_write->shutdown();
+        }
+
+        if (tmt_context)
+        {
+            tmt_context->shutdown();
+        }
+
         /** At this point, some tables may have threads that block our mutex.
           * To complete them correctly, we will copy the current list of tables,
           *  and ask them all to finish their work.
@@ -1646,15 +1656,15 @@ void Context::setPageStorageRunMode(PageStorageRunMode run_mode) const
 bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
 {
     auto lock = getLock();
-    if (shared->global_storage_pool)
-    {
-        // GlobalStoragePool may be initialized many times in some test cases for restore.
-        LOG_WARNING(shared->log, "GlobalStoragePool has already been initialized.");
-        shared->global_storage_pool->shutdown();
-    }
     CurrentMetrics::set(CurrentMetrics::GlobalStorageRunMode, static_cast<UInt8>(shared->storage_run_mode));
     if (shared->storage_run_mode == PageStorageRunMode::MIX_MODE || shared->storage_run_mode == PageStorageRunMode::ONLY_V3)
     {
+        if (shared->global_storage_pool)
+        {
+            // GlobalStoragePool may be initialized many times in some test cases for restore.
+            LOG_WARNING(shared->log, "GlobalStoragePool has already been initialized.");
+            shared->global_storage_pool->shutdown();
+        }
         try
         {
             shared->global_storage_pool = std::make_shared<DM::GlobalStoragePool>(path_pool, *this, settings);
@@ -1689,14 +1699,23 @@ void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)
         {
             // GlobalStoragePool may be initialized many times in some test cases for restore.
             LOG_WARNING(shared->log, "GlobalUniversalPageStorage(WriteNode) has already been initialized.");
+            shared->ps_write->shutdown();
         }
-        PageStorageConfig config;
-        shared->ps_write = UniversalPageStorageService::create( //
-            *this,
-            "write",
-            path_pool.getPSDiskDelegatorGlobalMulti(PathPool::write_uni_path_prefix),
-            config);
-        LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
+        try
+        {
+            PageStorageConfig config;
+            shared->ps_write = UniversalPageStorageService::create( //
+                *this,
+                "write",
+                path_pool.getPSDiskDelegatorGlobalMulti(PathPool::write_uni_path_prefix),
+                config);
+            LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            throw;
+        }
     }
     else
     {
@@ -1920,9 +1939,9 @@ const std::shared_ptr<DB::DM::SharedBlockSchemas> & Context::getSharedBlockSchem
     return shared->shared_block_schemas;
 }
 
-void Context::initializeSharedBlockSchemas()
+void Context::initializeSharedBlockSchemas(size_t shared_block_schemas_size)
 {
-    shared->shared_block_schemas = std::make_shared<DB::DM::SharedBlockSchemas>(*this);
+    shared->shared_block_schemas = std::make_shared<DB::DM::SharedBlockSchemas>(shared_block_schemas_size);
 }
 
 size_t Context::getMaxStreams() const

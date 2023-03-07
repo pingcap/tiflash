@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
 #include <memory>
@@ -235,22 +236,26 @@ PageIdU64 ColumnFileTiny::writeColumnFileData(const DMContext & context, const B
     return page_id;
 }
 
+void ColumnFileTiny::removeData(WriteBatches & wbs) const
+{
+    wbs.removed_log.delPage(data_page_id);
+}
 
 ColumnPtr ColumnFileTinyReader::getPKColumn()
 {
-    tiny_file.fillColumns(storage_snap->log_reader, *col_defs, 1, cols_data_cache);
+    tiny_file.fillColumns(*storage_snap->log_reader, *col_defs, 1, cols_data_cache);
     return cols_data_cache[0];
 }
 
 ColumnPtr ColumnFileTinyReader::getVersionColumn()
 {
-    tiny_file.fillColumns(storage_snap->log_reader, *col_defs, 2, cols_data_cache);
+    tiny_file.fillColumns(*storage_snap->log_reader, *col_defs, 2, cols_data_cache);
     return cols_data_cache[1];
 }
 
 std::pair<size_t, size_t> ColumnFileTinyReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
-    tiny_file.fillColumns(storage_snap->log_reader, *col_defs, output_cols.size(), cols_data_cache);
+    tiny_file.fillColumns(*storage_snap->log_reader, *col_defs, output_cols.size(), cols_data_cache);
 
     auto & pk_col = cols_data_cache[0];
     return copyColumnsData(cols_data_cache, pk_col, output_cols, rows_offset, rows_limit, range);
@@ -262,11 +267,20 @@ Block ColumnFileTinyReader::readNextBlock()
         return {};
 
     Columns columns;
-    tiny_file.fillColumns(storage_snap->log_reader, *col_defs, col_defs->size(), columns);
+    tiny_file.fillColumns(*storage_snap->log_reader, *col_defs, col_defs->size(), columns);
 
     read_done = true;
 
     return genBlock(*col_defs, columns);
+}
+
+size_t ColumnFileTinyReader::skipNextBlock()
+{
+    if (read_done)
+        return 0;
+
+    read_done = true;
+    return tiny_file.getRows();
 }
 
 ColumnFileReaderPtr ColumnFileTinyReader::createNewReader(const ColumnDefinesPtr & new_col_defs)

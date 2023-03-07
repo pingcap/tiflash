@@ -133,12 +133,12 @@ struct SchemaGetter
 
     KeyspaceID keyspace_id;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_, KeyspaceID keyspace_id_)
         : snap(keyspace_id_, cluster_, tso_)
         , keyspace_id(keyspace_id_)
-        , log(&Poco::Logger::get("SchemaGetter"))
+        , log(Logger::get())
     {
     }
 

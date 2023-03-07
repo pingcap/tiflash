@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Storages/Page/V3/PageDefines.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -37,6 +38,12 @@ public:
     BlobFileOffset offset = 0; // The offset of page data in file
     UInt64 checksum = 0; // The checksum of whole page data
 
+    /**
+     * Whether this page entry's data is stored in a checkpoint and where it is stored.
+     * If this page entry is not stored in a checkpoint file, this field is nullopt.
+     */
+    std::optional<CheckpointInfo> checkpoint_info = std::nullopt;
+
     // The offset to the beginning of specify field.
     PageFieldOffsetChecksums field_offsets{};
 
@@ -46,7 +53,10 @@ public:
         return size + padded_size;
     }
 
-    inline bool isValid() const { return file_id != INVALID_BLOBFILE_ID; }
+    inline bool isValid() const
+    {
+        return file_id != INVALID_BLOBFILE_ID || checkpoint_info.has_value();
+    }
 
     size_t getFieldSize(size_t index) const
     {
@@ -57,7 +67,17 @@ public:
                                         field_offsets.size()),
                             ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
-            return size - field_offsets.back().first;
+        {
+            if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+            {
+                // entry.size is not reliable under this case, use the size_in_file in checkpoint_info instead
+                return checkpoint_info->data_location.size_in_file - field_offsets.back().first;
+            }
+            else
+            {
+                return size - field_offsets.back().first;
+            }
+        }
         else
             return field_offsets[index + 1].first - field_offsets[index].first;
     }
@@ -70,7 +90,17 @@ public:
                 fmt::format("Try to getFieldOffsets with invalid index [index={}] [fields_size={}]", index, field_offsets.size()),
                 ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
-            return {field_offsets.back().first, size};
+        {
+            if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+            {
+                // entry.size is not reliable under this case, use the size_in_file in checkpoint_info instead
+                return {field_offsets.back().first, checkpoint_info->data_location.size_in_file};
+            }
+            else
+            {
+                return {field_offsets.back().first, size};
+            }
+        }
         else
             return {field_offsets[index].first, field_offsets[index + 1].first};
     }
@@ -79,25 +109,30 @@ using PageEntriesV3 = std::vector<PageEntryV3>;
 using PageIDAndEntryV3 = std::pair<PageIdV3Internal, PageEntryV3>;
 using PageIDAndEntriesV3 = std::vector<PageIDAndEntryV3>;
 
-
-inline String toDebugString(const PageEntryV3 & entry)
-{
-    FmtBuffer fmt_buf;
-    fmt_buf.joinStr(
-        entry.field_offsets.begin(),
-        entry.field_offsets.end(),
-        [](const auto & offset_checksum, FmtBuffer & fb) {
-            fb.fmtAppend("{}", offset_checksum.first);
-        },
-        ",");
-    return fmt::format("PageEntryV3{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets: [{}]}}",
-                       entry.file_id,
-                       entry.offset,
-                       entry.size,
-                       entry.checksum,
-                       entry.tag,
-                       fmt_buf.toString());
-}
-
 } // namespace PS::V3
 } // namespace DB
+
+template <>
+struct fmt::formatter<DB::PS::V3::PageEntryV3>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::PageEntryV3 & entry, FormatContext & ctx) const
+    {
+        using namespace DB;
+
+        FmtBuffer fmt_buf;
+        fmt_buf.joinStr(
+            entry.field_offsets.begin(),
+            entry.field_offsets.end(),
+            [](const auto & offset_checksum, FmtBuffer & fb) {
+                fb.fmtAppend("{}", offset_checksum.first);
+            },
+            ",");
+        return format_to(ctx.out(), "PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets: [{}]}}", entry.file_id, entry.offset, entry.size, entry.checksum, entry.tag, fmt_buf.toString());
+    }
+};

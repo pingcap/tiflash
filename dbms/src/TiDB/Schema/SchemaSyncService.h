@@ -22,15 +22,12 @@
 #include <shared_mutex>
 #include <unordered_map>
 
-namespace Poco
-{
-class Logger;
-}
-
 namespace DB
 {
 class Context;
 class BackgroundProcessingPool;
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
 
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
@@ -71,7 +68,7 @@ private:
     // Handles for each keyspace schema sync task.
     std::unordered_map<KeyspaceID, BackgroundProcessingPool::TaskHandle> ks_handle_map;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;

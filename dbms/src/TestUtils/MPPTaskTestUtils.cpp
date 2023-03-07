@@ -18,6 +18,7 @@
 #include <Server/MockComputeClient.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/MPPTaskTestUtils.h>
+#include <fmt/core.h>
 
 namespace DB::tests
 {
@@ -62,7 +63,7 @@ void MPPTaskTestUtils::startServers(size_t server_num_)
     {
         MockComputeServerManager::instance().addServer(MockServerAddrGenerator::instance().nextAddr());
         // Currently, we simply add a context and don't care about destruct it.
-        TiFlashTestEnv::addGlobalContext();
+        TiFlashTestEnv::addGlobalContext(context.context.getSettings());
         TiFlashTestEnv::getGlobalContext(i + test_meta.context_idx).setMPPTest();
     }
 
@@ -136,7 +137,7 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
 {
     FmtBuffer buf;
     buf.fmtAppend("server id: {}, tasks: ", server_id);
-    buf.fmtAppend(TiFlashTestEnv::getGlobalContext(server_id).getTMTContext().getMPPTaskManager()->toString());
+    buf.fmtAppend(fmt::runtime(TiFlashTestEnv::getGlobalContext(server_id).getTMTContext().getMPPTaskManager()->toString()));
     return buf.toString();
 }
 

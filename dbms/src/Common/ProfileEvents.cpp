@@ -112,7 +112,18 @@
                                                \
     M(ChecksumDigestBytes)                     \
                                                \
-    M(RaftWaitIndexTimeout)
+    M(RaftWaitIndexTimeout)                    \
+                                               \
+    M(S3WriteBytes)                            \
+    M(S3ReadBytes)                             \
+    M(S3CreateMultipartUpload)                 \
+    M(S3UploadPart)                            \
+    M(S3CompleteMultipartUpload)               \
+    M(S3PutObject)                             \
+    M(S3GetObject)                             \
+    M(S3HeadObject)                            \
+    M(S3ListObjects)                           \
+    M(S3DeleteObject)
 
 namespace ProfileEvents
 {

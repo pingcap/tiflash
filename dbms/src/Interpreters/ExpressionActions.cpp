@@ -48,6 +48,12 @@ Names ExpressionAction::getNeededColumns() const
     for (const auto & column : projections)
         res.push_back(column.first);
 
+    if (expand)
+    {
+        for (const auto & column : expand->getAllGroupSetColumnNames())
+            res.push_back(column);
+    }
+
     if (!source_name.empty())
         res.push_back(source_name);
 
@@ -135,6 +141,13 @@ ExpressionAction ExpressionAction::ordinaryJoin(std::shared_ptr<const Join> join
     return a;
 }
 
+ExpressionAction ExpressionAction::expandSource(GroupingSets grouping_sets_)
+{
+    ExpressionAction a;
+    a.type = EXPAND;
+    a.expand = std::make_shared<Expand>(grouping_sets_);
+    return a;
+}
 
 void ExpressionAction::prepare(Block & sample_block)
 {
@@ -228,6 +241,23 @@ void ExpressionAction::prepare(Block & sample_block)
         break;
     }
 
+    case EXPAND:
+    {
+        // sample_block is just for schema check followed by later block, modify it if your schema has changed during this action.
+        auto name_set = expand->getAllGroupSetColumnNames();
+        // make grouping set column to be nullable.
+        for (const auto & col_name : name_set)
+        {
+            auto & column_with_name = sample_block.getByName(col_name);
+            column_with_name.type = makeNullable(column_with_name.type);
+            if (column_with_name.column != nullptr)
+                column_with_name.column = makeNullable(column_with_name.column);
+        }
+        // fill one more column: groupingID.
+        sample_block.insert({nullptr, expand->grouping_identifier_column_type, expand->grouping_identifier_column_name});
+        break;
+    }
+
     case PROJECT:
     {
         Block new_block;
@@ -313,6 +343,12 @@ void ExpressionAction::execute(Block & block) const
         break;
     }
 
+    case EXPAND:
+    {
+        expand->replicateAndFillNull(block);
+        break;
+    }
+
     case PROJECT:
     {
         Block new_block;
@@ -349,14 +385,6 @@ void ExpressionAction::execute(Block & block) const
     }
 }
 
-
-void ExpressionAction::executeOnTotals(Block & block) const
-{
-    if (type != JOIN)
-        execute(block);
-    else
-        join->joinTotals(block);
-}
 
 String ExpressionAction::toString() const
 {
@@ -475,38 +503,6 @@ void ExpressionActions::execute(Block & block) const
 {
     for (const auto & action : actions)
         action.execute(block);
-}
-
-void ExpressionActions::executeOnTotals(Block & block) const
-{
-    /// If there is `totals` in the subquery for JOIN, but we do not have totals, then take the block with the default values instead of `totals`.
-    if (!block)
-    {
-        bool has_totals_in_join = false;
-        for (const auto & action : actions)
-        {
-            if (action.join && action.join->hasTotals())
-            {
-                has_totals_in_join = true;
-                break;
-            }
-        }
-
-        if (has_totals_in_join)
-        {
-            for (const auto & name_and_type : input_columns)
-            {
-                auto column = name_and_type.type->createColumn();
-                column->insertDefault();
-                block.insert(ColumnWithTypeAndName(std::move(column), name_and_type.type, name_and_type.name));
-            }
-        }
-        else
-            return; /// There's nothing to JOIN.
-    }
-
-    for (const auto & action : actions)
-        action.executeOnTotals(block);
 }
 
 std::string ExpressionActions::getSmallestColumn(const NamesAndTypesList & columns)

@@ -15,22 +15,26 @@
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/getNumberOfCPUCores.h>
-#include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/DataStreamExecutor.h>
 
 namespace DB
 {
-DataStreamExecutor::DataStreamExecutor(const BlockIO & block_io)
-    : QueryExecutor(block_io.process_list_entry)
-    , data_stream(block_io.in)
+DataStreamExecutor::DataStreamExecutor(
+    const MemoryTrackerPtr & memory_tracker_,
+    Context & context_,
+    const String & req_id,
+    const BlockInputStreamPtr & data_stream_)
+    : QueryExecutor(memory_tracker_, context_, req_id)
+    , data_stream(data_stream_)
 {
     assert(data_stream);
     thread_cnt_before_execute = GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Value();
     estimate_thread_cnt = std::max(data_stream->estimateNewThreadCount(), 1);
 }
 
-ExecutionResult DataStreamExecutor::execute(ResultHandler result_handler)
+ExecutionResult DataStreamExecutor::execute(ResultHandler && result_handler)
 {
     try
     {
@@ -50,7 +54,7 @@ ExecutionResult DataStreamExecutor::execute(ResultHandler result_handler)
     }
     catch (...)
     {
-        return ExecutionResult::fail(getCurrentExceptionMessage(true, true));
+        return ExecutionResult::fail(std::current_exception());
     }
 }
 
@@ -109,5 +113,19 @@ RU DataStreamExecutor::collectRequestUnit()
     // TODO find a more reasonable ratio for `condition.wait`.
     cpu_time_ns /= 2;
     return toRU(ceil(cpu_time_ns));
+}
+
+Block DataStreamExecutor::getSampleBlock() const
+{
+    return data_stream->getHeader();
+}
+
+BaseRuntimeStatistics DataStreamExecutor::getRuntimeStatistics() const
+{
+    BaseRuntimeStatistics runtime_statistics;
+    assert(data_stream);
+    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(data_stream.get()))
+        runtime_statistics.append(p_stream->getProfileInfo());
+    return runtime_statistics;
 }
 } // namespace DB

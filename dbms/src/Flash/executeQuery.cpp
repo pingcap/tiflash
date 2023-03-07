@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/MemoryTracker.h>
 #include <Common/ProfileEvents.h>
 #include <Core/QueryProcessingStage.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -73,7 +74,7 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, DAGContext & dag_co
     }
 }
 
-BlockIO doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool internal)
+QueryExecutorPtr doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool internal)
 {
     RUNTIME_ASSERT(context.getDAGContext());
     auto & dag_context = *context.getDAGContext();
@@ -92,8 +93,13 @@ BlockIO doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool internal)
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
     auto interpreter = dag.interpreter(context, QueryProcessingStage::Complete);
     BlockIO res = interpreter->execute();
+    MemoryTrackerPtr memory_tracker;
     if (likely(process_list_entry))
+    {
         (*process_list_entry)->setQueryStreams(res);
+        memory_tracker = (*process_list_entry)->getMemoryTrackerPtr();
+    }
+
 
     /// Hold element of process list till end of query execution.
     res.process_list_entry = process_list_entry;
@@ -102,7 +108,7 @@ BlockIO doExecuteAsBlockIO(IQuerySource & dag, Context & context, bool internal)
     if (likely(!internal))
         logQueryPipeline(logger, res.in);
 
-    return res;
+    return std::make_unique<DataStreamExecutor>(memory_tracker, context, logger->identifier(), res.in);
 }
 
 std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool internal)
@@ -124,20 +130,23 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
         logQuery(dag_context.dummy_query_string, context, logger);
     }
 
+    MemoryTrackerPtr memory_tracker;
+    if (likely(process_list_entry))
+        memory_tracker = (*process_list_entry)->getMemoryTrackerPtr();
+
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
 
     PhysicalPlan physical_plan{context, logger->identifier()};
     physical_plan.build(dag_context.dag_request);
     physical_plan.outputAndOptimize();
     auto pipeline = physical_plan.toPipeline();
-    auto executor = std::make_unique<PipelineExecutor>(process_list_entry, context, pipeline);
+    auto executor = std::make_unique<PipelineExecutor>(memory_tracker, context, logger->identifier(), pipeline);
     if (likely(!internal))
         LOG_DEBUG(logger, fmt::format("Query pipeline:\n{}", executor->toString()));
     return {std::move(executor)};
 }
-} // namespace
 
-BlockIO executeAsBlockIO(Context & context, bool internal)
+QueryExecutorPtr executeAsBlockIO(Context & context, bool internal)
 {
     if (context.getSettingsRef().enable_planner)
     {
@@ -150,17 +159,18 @@ BlockIO executeAsBlockIO(Context & context, bool internal)
         return doExecuteAsBlockIO(dag, context, internal);
     }
 }
+} // namespace
 
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
-    // now only support pipeline model in executor/interpreter test.
-    if ((context.isExecutorTest() || context.isInterpreterTest())
+    // now only support pipeline model in test mode.
+    if (context.isTest()
         && context.getSettingsRef().enable_planner
         && context.getSettingsRef().enable_pipeline)
     {
         if (auto res = executeAsPipeline(context, internal); res)
             return std::move(*res);
     }
-    return std::make_unique<DataStreamExecutor>(executeAsBlockIO(context, internal));
+    return executeAsBlockIO(context, internal);
 }
 } // namespace DB

@@ -829,7 +829,7 @@ void KVStore::setStore(metapb::Store store_)
     LOG_INFO(log, "Set store info {}", getStore().base.ShortDebugString());
 }
 
-uint64_t KVStore::getStoreID(std::memory_order memory_order) const
+StoreID KVStore::getStoreID(std::memory_order memory_order) const
 {
     return getStore().store_id.load(memory_order);
 }

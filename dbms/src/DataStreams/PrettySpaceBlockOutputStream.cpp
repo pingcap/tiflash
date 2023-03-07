@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/PrettySpaceBlockOutputStream.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
-#include <DataStreams/PrettySpaceBlockOutputStream.h>
 
 
 namespace DB
@@ -103,8 +103,7 @@ void PrettySpaceBlockOutputStream::writeSuffix()
     }
 
     total_rows = 0;
-    writeTotals();
     writeExtremes();
 }
 
-}
+} // namespace DB

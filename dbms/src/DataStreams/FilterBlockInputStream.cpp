@@ -40,24 +40,12 @@ FilterBlockInputStream::FilterBlockInputStream(
     children.push_back(input);
 }
 
-Block FilterBlockInputStream::getTotals()
-{
-    if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
-    {
-        totals = child->getTotals();
-        filter_transform_action.getExperssion()->executeOnTotals(totals);
-    }
-
-    return totals;
-}
-
-
 Block FilterBlockInputStream::getHeader() const
 {
     return filter_transform_action.getHeader();
 }
 
-Block FilterBlockInputStream::readImpl()
+Block FilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 {
     Block res;
 
@@ -67,13 +55,15 @@ Block FilterBlockInputStream::readImpl()
     /// Until non-empty block after filtering or end of stream.
     while (true)
     {
-        FilterPtr child_filter = nullptr;
-        res = children.back()->read(child_filter, true);
+        // The child of FilterBlockInputStream is UnorderInputStream typically
+        // which does not support read(FilterPtr & res_filter, bool return_filter),
+        // so we call read() here.
+        res = children.back()->read();
 
         if (!res)
             return res;
 
-        if (filter_transform_action.transform(res, child_filter))
+        if (filter_transform_action.transform(res, res_filter, return_filter))
             return res;
     }
 }

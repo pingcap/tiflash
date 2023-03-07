@@ -35,7 +35,7 @@ extern const int DEADLOCK_AVOIDED;
 SchemaSyncService::SchemaSyncService(DB::Context & context_)
     : context(context_)
     , background_pool(context_.getBackgroundPool())
-    , log(&Poco::Logger::get("SchemaSyncService"))
+    , log(Logger::get())
 {
     // Add task for adding and removing keyspace sync schema tasks.
     handle = background_pool.addTask(

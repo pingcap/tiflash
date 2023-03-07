@@ -36,7 +36,7 @@ struct SchemaBuilder
 
     KeyspaceID keyspace_id;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     SchemaBuilder(Getter & getter_, Context & context_, KeyspaceDatabaseMap & dbs_, Int64 version)
         : getter(getter_)
@@ -44,7 +44,7 @@ struct SchemaBuilder
         , databases(dbs_)
         , target_version(version)
         , keyspace_id(getter_.getKeyspaceID())
-        , log(&Poco::Logger::get("SchemaBuilder"))
+        , log(Logger::get())
     {}
 
     void applyDiff(const SchemaDiff & diff);

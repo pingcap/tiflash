@@ -27,6 +27,7 @@
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/UniThreadPool.h>
 #include <Common/assert_cast.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
@@ -46,6 +47,7 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
+#include <IO/IOThreadPool.h>
 #include <IO/ReadHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
@@ -74,6 +76,7 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
@@ -818,6 +821,21 @@ private:
     std::vector<std::unique_ptr<Poco::Net::TCPServer>> servers;
 };
 
+void initThreadPool(const Settings & settings, size_t logical_cores)
+{
+    // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
+    size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
+    // Currently, `GlobalThreadPool` is only used by `IOThreadPool`, so they have the same number of threads.
+    GlobalThreadPool::initialize(
+        /*max_threads*/ max_io_thread_count,
+        /*max_free_threads*/ max_io_thread_count / 2,
+        /*queue_size*/ max_io_thread_count * 2);
+    IOThreadPool::initialize(
+        /*max_threads*/ max_io_thread_count,
+        /*max_free_threads*/ max_io_thread_count / 2,
+        /*queue_size*/ max_io_thread_count * 2);
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
@@ -929,9 +947,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setUseAutoScaler(useAutoScaler(config()));
 
     /// Init File Provider
+    bool enable_encryption = false;
     if (proxy_conf.is_proxy_runnable)
     {
-        bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
         if (enable_encryption)
         {
             auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
@@ -958,6 +977,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t global_capacity_quota = 0;
     TiFlashStorageConfig storage_config;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
+
+    if (storage_config.s3_config.isS3Enabled())
+    {
+        if (enable_encryption)
+        {
+            LOG_ERROR(log, "Cannot support S3 when encryption enabled.");
+            throw Exception("Cannot support S3 when encryption enabled.");
+        }
+        S3::ClientFactory::instance().init(storage_config.s3_config);
+    }
 
     if (storage_config.format_version)
     {
@@ -1112,6 +1141,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
+    initThreadPool(settings, server_info.cpu_info.logical_cores);
 
     /// PageStorage run mode has been determined above
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
@@ -1215,10 +1245,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DM::DMFileReaderPool::instance();
-    DM::SegmentReaderPoolManager::instance().init(server_info);
+    DM::SegmentReaderPoolManager::instance().init(server_info.cpu_info.logical_cores, settings.dt_read_thread_count_scale);
     DM::SegmentReadTaskScheduler::instance();
 
-    global_context->initializeSharedBlockSchemas();
+    auto schema_cache_size = config().getInt("schema_cache_size", 10000);
+    global_context->initializeSharedBlockSchemas(schema_cache_size);
 
     // Load remaining databases
     loadMetadata(*global_context);
@@ -1272,6 +1303,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // `Context::shutdown()` will destroy `DeltaIndexManager`.
         // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
         DB::DM::SegmentReaderPoolManager::instance().stop();
+        if (storage_config.s3_config.isS3Enabled())
+        {
+            S3::ClientFactory::instance().shutdown();
+        }
         global_context->shutdown();
         LOG_DEBUG(log, "Shutted down storages.");
     });

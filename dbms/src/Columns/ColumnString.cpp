@@ -21,11 +21,6 @@
 #include <common/memcpy.h>
 #include <fmt/core.h>
 
-
-/// Used in the `reserve` method, when the number of rows is known, but sizes of elements are not.
-#define APPROX_STRING_SIZE 64
-
-
 namespace DB
 {
 namespace ErrorCodes

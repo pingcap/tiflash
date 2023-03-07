@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/PathPool.h>
 
@@ -47,6 +48,14 @@ void ColumnFileBig::calculateStat(const DMContext & context)
         /*tracing_id*/ context.tracing_id);
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
+}
+
+void ColumnFileBig::removeData(WriteBatches & wbs) const
+{
+    // Here we remove the data id instead of file_id.
+    // Because a dmfile could be used in several places, and only after all page ids are removed,
+    // then the file_id got removed.
+    wbs.removed_data.delPage(file->pageId());
 }
 
 ColumnFileReaderPtr
@@ -254,6 +263,24 @@ Block ColumnFileBigReader::readNextBlock()
     else
     {
         return file_stream->read();
+    }
+}
+
+size_t ColumnFileBigReader::skipNextBlock()
+{
+    initStream();
+
+    if (pk_ver_only)
+    {
+        if (next_block_index_in_cache >= cached_pk_ver_columns.size())
+        {
+            return 0;
+        }
+        return cached_pk_ver_columns[next_block_index_in_cache++].front()->size();
+    }
+    else
+    {
+        return file_stream->skipNextBlock();
     }
 }
 

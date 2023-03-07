@@ -49,9 +49,6 @@ public:
 
     Block getHeader() const override { return children.back()->getHeader(); }
 
-    /// Takes `totals` only from the main source, not from subquery sources.
-    Block getTotals() override;
-
     virtual void collectNewThreadCountOfThisLevel(int & cnt) override
     {
         if (!children.empty())

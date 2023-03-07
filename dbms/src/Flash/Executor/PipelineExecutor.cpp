@@ -20,23 +20,24 @@
 namespace DB
 {
 PipelineExecutor::PipelineExecutor(
-    const ProcessListEntryPtr & process_list_entry_,
+    const MemoryTrackerPtr & memory_tracker_,
     Context & context_,
+    const String & req_id,
     const PipelinePtr & root_pipeline_)
-    : QueryExecutor(process_list_entry_)
-    , context(context_)
+    : QueryExecutor(memory_tracker_, context_, req_id)
     , root_pipeline(root_pipeline_)
+    , status(req_id)
 {
     assert(root_pipeline);
 }
 
-ExecutionResult PipelineExecutor::execute(ResultHandler result_handler)
+ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
 {
     assert(root_pipeline);
-    // for result_handler.isIgnored(), the sink plan of root_pipeline must be nullptr.
-    // Now only used by unit tests.
+    // for !result_handler.isIgnored(), the sink plan of root_pipeline must be nullptr.
+    // TODO Now the result handler for batch cop introduces io blocking, we should find a better implementation of get result sink.
     if (unlikely(!result_handler.isIgnored()))
-        root_pipeline->addGetResultSink(result_handler);
+        root_pipeline->addGetResultSink(std::move(result_handler));
 
     {
         auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
@@ -85,5 +86,17 @@ RU PipelineExecutor::collectRequestUnit()
 {
     // TODO support collectRequestUnit
     return 0;
+}
+
+Block PipelineExecutor::getSampleBlock() const
+{
+    return root_pipeline->getSampleBlock();
+}
+
+BaseRuntimeStatistics PipelineExecutor::getRuntimeStatistics() const
+{
+    // TODO support getRuntimeStatistics
+    BaseRuntimeStatistics runtime_statistics;
+    return runtime_statistics;
 }
 } // namespace DB

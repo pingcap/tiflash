@@ -13,19 +13,29 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/MemoryTrackerSetter.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <assert.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_pipeline_model_event_schedule_failpoint[];
+extern const char random_pipeline_model_event_finish_failpoint[];
+} // namespace FailPoints
+
 // if any exception throw here, we should record err msg and then cancel the query.
-#define CATCH                                                                \
-    catch (...)                                                              \
-    {                                                                        \
-        exec_status.onErrorOccurred(getCurrentExceptionMessage(true, true)); \
+#define CATCH                                                    \
+    catch (...)                                                  \
+    {                                                            \
+        LOG_WARNING(log, "error occurred and cancel the query"); \
+        exec_status.onErrorOccurred(std::current_exception());   \
     }
 
 void Event::addInput(const EventPtr & input)
@@ -47,7 +57,7 @@ void Event::addOutput(const EventPtr & output)
     outputs.push_back(output);
 }
 
-void Event::onInputFinish()
+void Event::onInputFinish() noexcept
 {
     auto cur_value = unfinished_inputs.fetch_sub(1);
     assert(cur_value >= 1);
@@ -61,16 +71,22 @@ void Event::schedule() noexcept
     assert(0 == unfinished_inputs);
     exec_status.onEventSchedule();
     MemoryTrackerSetter setter{true, mem_tracker.get()};
-    // if err throw here, we should call finish directly.
-    bool direct_finish = true;
+    std::vector<TaskPtr> tasks;
     try
     {
-        // if no task is scheduled here, we can call finish directly.
-        direct_finish = scheduleImpl();
+        tasks = scheduleImpl();
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_schedule_failpoint);
     }
     CATCH
-    if (direct_finish)
+    if (!tasks.empty())
+    {
+        scheduleTasks(tasks);
+    }
+    else
+    {
+        // if no task is scheduled here, we should call finish directly.
         finish();
+    }
 }
 
 void Event::finish() noexcept
@@ -80,6 +96,7 @@ void Event::finish() noexcept
     try
     {
         finishImpl();
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_event_finish_failpoint);
     }
     CATCH
     // If query has already been cancelled, it will not trigger outputs.
@@ -103,27 +120,35 @@ void Event::finish() noexcept
     exec_status.onEventFinish();
 }
 
-void Event::scheduleTasks(std::vector<TaskPtr> & tasks)
+void Event::scheduleTasks(std::vector<TaskPtr> & tasks) noexcept
 {
     assert(!tasks.empty());
     assert(0 == unfinished_tasks);
     unfinished_tasks = tasks.size();
     assert(status != EventStatus::FINISHED);
-    TaskScheduler::instance->submit(tasks);
+    // If query has already been cancelled, we can skip scheduling tasks.
+    // And then tasks will be destroyed and call `onTaskFinish`.
+    if (likely(!exec_status.isCancelled()))
+    {
+        LOG_DEBUG(log, "{} tasks scheduled by event", tasks.size());
+        TaskScheduler::instance->submit(tasks);
+    }
 }
 
 void Event::onTaskFinish() noexcept
 {
     assert(status != EventStatus::FINISHED);
-    auto cur_value = unfinished_tasks.fetch_sub(1);
-    assert(cur_value >= 1);
-    if (1 == cur_value)
+    int32_t remaining_tasks = unfinished_tasks.fetch_sub(1) - 1;
+    assert(remaining_tasks >= 0);
+    LOG_DEBUG(log, "one task finished, {} tasks remaining", remaining_tasks);
+    if (0 == remaining_tasks)
         finish();
 }
 
-void Event::switchStatus(EventStatus from, EventStatus to)
+void Event::switchStatus(EventStatus from, EventStatus to) noexcept
 {
     RUNTIME_ASSERT(status.compare_exchange_strong(from, to));
+    LOG_DEBUG(log, "switch status: {} --> {}", magic_enum::enum_name(from), magic_enum::enum_name(to));
 }
 
 #undef CATCH

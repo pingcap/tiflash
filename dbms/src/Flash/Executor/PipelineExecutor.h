@@ -49,8 +49,9 @@ class PipelineExecutor : public QueryExecutor
 {
 public:
     PipelineExecutor(
-        const ProcessListEntryPtr & process_list_entry_,
+        const MemoryTrackerPtr & memory_tracker_,
         Context & context_,
+        const String & req_id,
         const PipelinePtr & root_pipeline_);
 
     String toString() const override;
@@ -61,12 +62,14 @@ public:
 
     RU collectRequestUnit() override;
 
+    Block getSampleBlock() const override;
+
+    BaseRuntimeStatistics getRuntimeStatistics() const override;
+
 protected:
-    ExecutionResult execute(ResultHandler result_handler) override;
+    ExecutionResult execute(ResultHandler && result_handler) override;
 
 private:
-    Context & context;
-
     PipelinePtr root_pipeline;
 
     PipelineExecutorStatus status;

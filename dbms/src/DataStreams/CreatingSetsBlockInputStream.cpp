@@ -99,17 +99,6 @@ void CreatingSetsBlockInputStream::readPrefixImpl()
 }
 
 
-Block CreatingSetsBlockInputStream::getTotals()
-{
-    auto * input = dynamic_cast<IProfilingBlockInputStream *>(children.back().get());
-
-    if (input)
-        return input->getTotals();
-    else
-        return totals;
-}
-
-
 void CreatingSetsBlockInputStream::createAll()
 {
     if (!created)
@@ -248,9 +237,6 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             const BlockStreamProfileInfo & profile_info = profiling_in->getProfileInfo();
 
             head_rows = profile_info.rows;
-
-            if (subquery.join)
-                subquery.join->setTotals(profiling_in->getTotals());
         }
         if (subquery.join)
             head_rows = subquery.join->getTotalBuildInputRows();

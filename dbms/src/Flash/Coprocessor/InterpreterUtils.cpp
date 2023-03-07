@@ -25,6 +25,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
 
+
 namespace DB
 {
 namespace
@@ -123,7 +124,7 @@ void orderStreams(
                 settings.max_block_size,
                 limit,
                 getAverageThreshold(settings.max_bytes_before_external_sort, pipeline.streams.size()),
-                SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_spilled_size_per_spill, context.getFileProvider()),
+                SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
                 log->identifier());
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
@@ -141,7 +142,7 @@ void orderStreams(
             limit,
             settings.max_bytes_before_external_sort,
             // todo use identifier_executor_id as the spill id
-            SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_spilled_size_per_spill, context.getFileProvider()),
+            SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
             log->identifier());
     }
 }
@@ -187,17 +188,15 @@ std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilt
     chain.addStep();
 
     // remove useless tmp column and keep the schema of local streams and remote streams the same.
-    NamesWithAliases project_cols;
     for (const auto & col : analyzer.getCurrentInputColumns())
     {
         chain.getLastStep().required_output.push_back(col.name);
-        project_cols.emplace_back(col.name, col.name);
     }
-    chain.getLastActions()->add(ExpressionAction::project(project_cols));
     ExpressionActionsPtr project_after_where = chain.getLastActions();
     chain.finalize();
     chain.clear();
 
+    RUNTIME_CHECK(!project_after_where->getActions().empty());
     return {before_where, filter_column_name, project_after_where};
 }
 

@@ -16,15 +16,18 @@
 
 #include <Common/nocopyable.h>
 #include <Storages/Page/Page.h>
+#include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
-#include <Storages/Page/WriteBatch.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
+#include <magic_enum.hpp>
+
 namespace DB::PS::V3
 {
+
 // `PageDirectory::apply` with create a version={directory.sequence, epoch=0}.
 // After data compaction and page entries need to be updated, will create
 // some entries with a version={old_sequence, epoch=old_epoch+1}.
@@ -67,28 +70,6 @@ struct PageVersion
     }
 };
 } // namespace DB::PS::V3
-/// See https://fmt.dev/latest/api.html#formatting-user-defined-types
-template <>
-struct fmt::formatter<DB::PS::V3::PageVersion>
-{
-    static constexpr auto parse(format_parse_context & ctx)
-    {
-        const auto * it = ctx.begin();
-        const auto * end = ctx.end();
-
-        /// Only support {}.
-        if (it != end && *it != '}')
-            throw format_error("invalid format");
-
-        return it;
-    }
-
-    template <typename FormatContext>
-    auto format(const DB::PS::V3::PageVersion & ver, FormatContext & ctx)
-    {
-        return format_to(ctx.out(), "<{},{}>", ver.sequence, ver.epoch);
-    }
-};
 
 namespace DB::PS::V3
 {
@@ -97,18 +78,20 @@ using VersionedEntries = std::vector<VersionedEntry>;
 
 enum class EditRecordType
 {
-    PUT,
-    PUT_EXTERNAL,
-    REF,
-    DEL,
+    PUT = 0,
+    PUT_EXTERNAL = 1,
+    REF = 2,
+    DEL = 3,
     //
-    UPSERT,
+    UPSERT = 4,
     // Variant types for dumping the in-memory entries into
     // snapshot
-    VAR_ENTRY,
-    VAR_REF,
-    VAR_EXTERNAL,
-    VAR_DELETE,
+    VAR_ENTRY = 5,
+    VAR_REF = 6,
+    VAR_EXTERNAL = 7,
+    VAR_DELETE = 8,
+    // Just used to update local cache info for VAR_ENTRY type
+    UPDATE_DATA_FROM_REMOTE = 9,
 };
 
 inline const char * typeToString(EditRecordType t)
@@ -133,8 +116,44 @@ inline const char * typeToString(EditRecordType t)
         return "VAR_EXT";
     case EditRecordType::VAR_DELETE:
         return "VAR_DEL";
+    case EditRecordType::UPDATE_DATA_FROM_REMOTE:
+        return "UPDATE_DATA_FROM_REMOTE";
     default:
         return "INVALID";
+    }
+}
+
+inline CheckpointProto::EditType typeToProto(EditRecordType t)
+{
+    switch (t)
+    {
+    case EditRecordType::VAR_ENTRY:
+        return CheckpointProto::EDIT_TYPE_ENTRY;
+    case EditRecordType::VAR_REF:
+        return CheckpointProto::EDIT_TYPE_REF;
+    case EditRecordType::VAR_EXTERNAL:
+        return CheckpointProto::EDIT_TYPE_EXTERNAL;
+    case EditRecordType::VAR_DELETE:
+        return CheckpointProto::EDIT_TYPE_DELETE;
+    default:
+        RUNTIME_CHECK_MSG(false, "Unsupported Edit Type {}", magic_enum::enum_name(t));
+    }
+}
+
+inline EditRecordType typeFromProto(CheckpointProto::EditType t)
+{
+    switch (t)
+    {
+    case CheckpointProto::EDIT_TYPE_ENTRY:
+        return EditRecordType::VAR_ENTRY;
+    case CheckpointProto::EDIT_TYPE_REF:
+        return EditRecordType::VAR_REF;
+    case CheckpointProto::EDIT_TYPE_EXTERNAL:
+        return EditRecordType::VAR_EXTERNAL;
+    case CheckpointProto::EDIT_TYPE_DELETE:
+        return EditRecordType::VAR_DELETE;
+    default:
+        RUNTIME_CHECK_MSG(false, "Unsupported Proto Edit Type {}", magic_enum::enum_name(t));
     }
 }
 
@@ -157,6 +176,15 @@ public:
     {
         EditRecord record{};
         record.type = EditRecordType::PUT;
+        record.page_id = page_id;
+        record.entry = entry;
+        records.emplace_back(record);
+    }
+
+    void updateRemote(const PageId & page_id, const PageEntryV3 & entry)
+    {
+        EditRecord record{};
+        record.type = EditRecordType::UPDATE_DATA_FROM_REMOTE;
         record.page_id = page_id;
         record.entry = entry;
         records.emplace_back(record);
@@ -251,20 +279,14 @@ public:
         PageVersion version;
         PageEntryV3 entry;
         Int64 being_ref_count{1};
+
+        CheckpointProto::EditRecord toProto() const;
+
+        static EditRecord fromProto(
+            const CheckpointProto::EditRecord & edit_rec,
+            CheckpointProto::StringsInternMap & strings_map);
     };
     using EditRecords = std::vector<EditRecord>;
-
-    static String toDebugString(const EditRecord & rec)
-    {
-        return fmt::format(
-            "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
-            typeToString(rec.type),
-            rec.page_id,
-            rec.ori_page_id,
-            rec.version,
-            DB::PS::V3::toDebugString(rec.entry),
-            rec.being_ref_count);
-    }
 
     void appendRecord(const EditRecord & rec)
     {
@@ -305,3 +327,62 @@ namespace universal
 using PageEntriesEdit = PageEntriesEdit<UniversalPageId>;
 }
 } // namespace DB::PS::V3
+
+template <>
+struct fmt::formatter<DB::PS::V3::PageVersion>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::PageVersion & ver, FormatContext & ctx) const
+    {
+        return format_to(ctx.out(), "{}.{}", ver.sequence, ver.epoch);
+    }
+};
+
+template <>
+struct fmt::formatter<DB::PS::V3::PageEntriesEdit<DB::PageIdV3Internal>::EditRecord>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::PageEntriesEdit<DB::PageIdV3Internal>::EditRecord & rec, FormatContext & ctx) const
+    {
+        return format_to(ctx.out(),
+                         "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
+                         DB::PS::V3::typeToString(rec.type),
+                         rec.page_id,
+                         rec.ori_page_id,
+                         rec.version,
+                         rec.entry,
+                         rec.being_ref_count);
+    }
+};
+
+template <>
+struct fmt::formatter<DB::PS::V3::PageEntriesEdit<DB::UniversalPageId>::EditRecord>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::PageEntriesEdit<DB::UniversalPageId>::EditRecord & rec, FormatContext & ctx) const
+    {
+        return format_to(ctx.out(),
+                         "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
+                         DB::PS::V3::typeToString(rec.type),
+                         rec.page_id,
+                         rec.ori_page_id,
+                         rec.version,
+                         rec.entry,
+                         rec.being_ref_count);
+    }
+};
