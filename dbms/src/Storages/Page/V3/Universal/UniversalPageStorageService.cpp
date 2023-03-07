@@ -90,7 +90,13 @@ bool UniversalPageStorageService::uploadCheckpoint()
     auto store_info = tmt.getKVStore()->getStoreMeta();
     if (store_info.id() == InvalidStoreID)
     {
-        LOG_INFO(Logger::get(), "Skip checkpoint because store meta is not initialized");
+        LOG_INFO(log, "Skip checkpoint because store meta is not initialized");
+        return false;
+    }
+    auto remote_store = global_context.getRemoteDataStore();
+    if (remote_store == nullptr)
+    {
+        LOG_INFO(log, "Skip checkpoint because remote data store is not initialized");
         return false;
     }
 
@@ -108,8 +114,6 @@ bool UniversalPageStorageService::uploadCheckpoint()
         ri->set_type_name("S3");
         // ri->set_name(); FIXME: what does this field used for?
     }
-
-    DM::Remote::IDataStorePtr remote_store; // FIXME: get the remote store from Context?
 
     UniversalPageStorage::DumpCheckpointOptions opts{
         .data_file_id_pattern = "",

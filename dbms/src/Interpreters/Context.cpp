@@ -56,6 +56,8 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
@@ -75,6 +77,8 @@
 #include <pcg_random.hpp>
 #include <set>
 #include <unordered_map>
+
+#include "Storages/S3/S3Common.h"
 
 
 namespace ProfileEvents
@@ -165,6 +169,9 @@ struct ContextShared
     IORateLimiter io_rate_limiter;
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
+
+    /// An abstraction for putting local files to remote data store (e.g. S3)
+    DM::Remote::IDataStorePtr remote_data_store;
 
     /// The PS instance available on Write Node.
     UniversalPageStorageServicePtr ps_write;
@@ -1688,6 +1695,22 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
 {
     auto lock = getLock();
     return shared->global_storage_pool;
+}
+
+void Context::initializeRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled)
+{
+    if (!s3_enabled)
+        return;
+
+    // Now only S3 data store is supported
+    auto lock = getLock();
+    shared->remote_data_store = std::make_shared<DM::Remote::DataStoreS3>(file_provider);
+}
+
+DM::Remote::IDataStorePtr Context::getRemoteDataStore() const
+{
+    auto lock = getLock();
+    return shared->remote_data_store;
 }
 
 void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)

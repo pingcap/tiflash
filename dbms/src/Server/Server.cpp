@@ -976,6 +976,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         S3::ClientFactory::instance().init(storage_config.s3_config);
     }
+    global_context->initializeRemoteDataStore(global_context->getFileProvider(), storage_config.s3_config.isS3Enabled());
 
     if (storage_config.format_version)
     {

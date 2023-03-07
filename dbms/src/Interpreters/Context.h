@@ -112,6 +112,11 @@ class DeltaIndexManager;
 class GlobalStoragePool;
 class SharedBlockSchemas;
 using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
+namespace Remote
+{
+class IDataStore;
+using IDataStorePtr = std::shared_ptr<IDataStore>;
+} // namespace Remote
 } // namespace DM
 
 /// (database name, table name)
@@ -429,6 +434,9 @@ public:
     PageStorageRunMode getPageStorageRunMode() const;
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
+
+    void initializeRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled);
+    DM::Remote::IDataStorePtr getRemoteDataStore() const;
 
     void initializeWriteNodePageStorageIfNeed(const PathPool & path_pool);
     UniversalPageStoragePtr getWriteNodePageStorage() const;

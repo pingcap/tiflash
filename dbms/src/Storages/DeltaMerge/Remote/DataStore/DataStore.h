@@ -22,6 +22,10 @@
 
 namespace DB::DM::Remote
 {
+
+class IDataStore;
+using IDataStorePtr = std::shared_ptr<IDataStore>;
+
 class IPreparedDMFileToken : boost::noncopyable
 {
 public:
@@ -80,6 +84,5 @@ public:
     virtual bool putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) = 0;
 };
 
-using IDataStorePtr = std::shared_ptr<IDataStore>;
 
 } // namespace DB::DM::Remote

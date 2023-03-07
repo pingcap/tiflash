@@ -47,6 +47,7 @@ private:
     explicit UniversalPageStorageService(Context & global_context_)
         : global_context(global_context_)
         , uni_page_storage(nullptr)
+        , log(Logger::get())
     {
     }
 
@@ -59,5 +60,7 @@ private:
     BackgroundProcessingPool::TaskHandle remote_checkpoint_handle;
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
+
+    LoggerPtr log;
 };
 } // namespace DB
