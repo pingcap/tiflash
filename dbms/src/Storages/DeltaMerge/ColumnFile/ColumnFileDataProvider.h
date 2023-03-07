@@ -67,6 +67,11 @@ public:
         : storage_snap(storage_snap_)
     {}
 
+    static std::shared_ptr<ColumnFileDataProviderLocalStoragePool> create(StorageSnapshotPtr storage_snap)
+    {
+        return std::make_shared<ColumnFileDataProviderLocalStoragePool>(storage_snap);
+    }
+
     Page readTinyData(
         PageId page_id,
         const std::optional<std::vector<size_t>> & fields) const override;
