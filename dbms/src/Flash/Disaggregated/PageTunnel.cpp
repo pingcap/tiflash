@@ -67,23 +67,27 @@ disaggregated::PagesPacket PageTunnel::readPacket()
     auto persisted_cf = seg_task->read_snapshot->delta->getPersistedFileSetSnapshot();
     for (const auto page_id : read_page_ids)
     {
+        // FIXME: Depends on abstraction of reading page data from PageStorage directly
         UNUSED(page_id);
-        // auto page = persisted_cf->getStorage()->readForColumnFileTiny(page_id);
-        // dtpb::RemotePage remote_page;
-        // remote_page.set_page_id(page_id);
-        // remote_page.mutable_data()->assign(page.data.begin(), page.data.end());
-        // const auto field_sizes = PageUtil::getFieldSizes(page.field_offsets, page.data.size());
-        // for (const auto field_sz : field_sizes)
-        // {
-        //     remote_page.add_field_sizes(field_sz);
-        // }
-        // total_pages_data_size += page.data.size();
-        // packet.mutable_pages()->Add(remote_page.SerializeAsString());
+#if 0
+        auto page = persisted_cf->getStorage()->readForColumnFileTiny(page_id);
+        dtpb::RemotePage remote_page;
+        remote_page.set_page_id(page_id);
+        remote_page.mutable_data()->assign(page.data.begin(), page.data.end());
+        const auto field_sizes = PageUtil::getFieldSizes(page.field_offsets, page.data.size());
+        for (const auto field_sz : field_sizes)
+        {
+            remote_page.add_field_sizes(field_sz);
+        }
+        total_pages_data_size += page.data.size();
+        packet.mutable_pages()->Add(remote_page.SerializeAsString());
+#endif
     }
 
-    // generate an inputstream of mem-table
+    // generate an input stream of mem-table
 #if 0
-    if (false) // Currently the memtable data is responded in the 1st response. Serializer::serializeTo(const ColumnFileInMemory & cf_in_mem)
+    // TODO: Currently the memtable data is responded in the 1st response. Serializer::serializeTo(const ColumnFileInMemory & cf_in_mem)
+    if (false) 
     {
         auto chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(*result_field_types);
         auto delta_vs = seg_task->read_snapshot->delta;

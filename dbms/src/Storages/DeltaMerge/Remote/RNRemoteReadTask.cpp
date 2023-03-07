@@ -49,6 +49,7 @@ namespace DB::DM
 
 RNRemoteReadTask::RNRemoteReadTask(std::vector<RNRemoteTableReadTaskPtr> && tasks_)
     : num_segments(0)
+    , log(Logger::get())
 {
     size_t total_num_cftiny = 0;
     size_t total_num_cftiny_to_fetch = 0;
@@ -84,7 +85,7 @@ RNRemoteReadTask::RNRemoteReadTask(std::vector<RNRemoteTableReadTaskPtr> && task
     curr_store = tasks.begin();
 
     LOG_INFO(
-        Logger::get(),
+        log,
         "read task local cache hit rate: {}",
         total_num_cftiny == 0 ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * total_num_cftiny_to_fetch / total_num_cftiny));
     GET_METRIC(tiflash_disaggregated_details, type_cftiny_read).Increment(total_num_cftiny);
@@ -192,7 +193,7 @@ void RNRemoteReadTask::allDataReceive(const String & end_err_msg)
                 auto old_state = seg_task->state;
                 seg_task->state = SegmentReadTaskState::DataReady;
                 LOG_DEBUG(
-                    Logger::get(),
+                    log,
                     "seg_task: {} from {} to {}",
                     seg_task->segment_id,
                     magic_enum::enum_name(old_state),
@@ -240,7 +241,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteReadTask::nextTaskForPrepare()
             const auto old_state = seg_task->state;
             seg_task->state = SegmentReadTaskState::DataReadyAndPrepraring;
             LOG_DEBUG(
-                Logger::get(),
+                log,
                 "seg_task: {} from {} to {}",
                 seg_task->segment_id,
                 magic_enum::enum_name(old_state),
@@ -321,7 +322,7 @@ bool RNRemoteReadTask::doneOrErrorHappen() const
 
 RNRemoteTableReadTaskPtr RNRemoteTableReadTask::buildFrom(
     const Context & db_context,
-    const UInt64 store_id,
+    const StoreID store_id,
     const String & address,
     const DisaggTaskId & snapshot_id,
     const RemotePb::RemotePhysicalTable & remote_table,
@@ -379,7 +380,8 @@ RNRemoteSegmentReadTask::RNRemoteSegmentReadTask(
     UInt64 store_id_,
     TableID table_id_,
     UInt64 segment_id_,
-    String address_)
+    String address_,
+    LoggerPtr log_)
     : snapshot_id(std::move(snapshot_id_))
     , store_id(store_id_)
     , table_id(table_id_)
@@ -388,6 +390,7 @@ RNRemoteSegmentReadTask::RNRemoteSegmentReadTask(
     , total_num_cftiny(0)
     , num_msg_to_consume(0)
     , num_msg_consumed(0)
+    , log(std::move(log_))
 {
 }
 
@@ -417,7 +420,8 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         store_id,
         table_id,
         proto.segment_id(),
-        address);
+        address,
+        log);
 
     // task->page_cache = db_context.getDMRemoteManager()->getPageCache();
     task->segment = std::make_shared<Segment>(
@@ -506,7 +510,7 @@ void RNRemoteSegmentReadTask::receivePage(RemotePb::RemotePage && remote_page)
         field_sizes.emplace_back(field_sz);
     }
     // page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
-    LOG_DEBUG(Logger::get(), "receive page, oid={}", oid);
+    LOG_DEBUG(log, "receive page, oid={}", oid);
 }
 
 void RNRemoteSegmentReadTask::prepare()

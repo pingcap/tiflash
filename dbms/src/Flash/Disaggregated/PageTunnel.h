@@ -43,6 +43,8 @@ using SyncPagePacketWriter = grpc::ServerWriter<disaggregated::PagesPacket>;
 class PageTunnel;
 using PageTunnelPtr = std::unique_ptr<PageTunnel>;
 
+// A tunnel for the TiFlash write node send the delta layer data to the read node.
+// Including ColumnFileTiny and ColumnFileInMemory
 class PageTunnel
 {
 public:

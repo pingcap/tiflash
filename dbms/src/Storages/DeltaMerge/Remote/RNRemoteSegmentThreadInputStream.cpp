@@ -14,6 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <DataStreams/SegmentReadTransformAction.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -85,7 +86,6 @@ RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
     , cur_segment_id(0)
     , log(Logger::get(String(req_id)))
 {
-    // TODO: abstract for this class/DMSegmentThreadInputStream/UnorderedInputStream
     if (extra_table_id_index != InvalidColumnID)
     {
         ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
@@ -122,9 +122,10 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
                     throw Exception(read_tasks->getErrorMessage(), ErrorCodes::LOGICAL_ERROR);
                 }
                 LOG_DEBUG(log, "Read from remote segment done");
-                // read_tasks->wakeAll();
                 return {};
             }
+
+            // Note that the segment task could come from different physical tables
             cur_segment_id = task->segment_id;
             physical_table_id = task->table_id;
             UNUSED(read_mode); // TODO: support more read mode
@@ -148,7 +149,7 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
             continue;
         }
 
-        // TODO: abstract for this class/DMSegmentThreadInputStream/UnorderedInputStream
+        // TODO: replace by SegmentReadTransformAction
         if (extra_table_id_index != InvalidColumnID)
         {
             assert(physical_table_id != -1);

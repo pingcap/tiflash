@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Transaction/Types.h>
 #include <common/types.h>
 
@@ -66,6 +67,8 @@ enum class SegmentReadTaskState
     DataReadyAndPrepared,
 };
 
+// Represent a read tasks for one disagg task.
+// The read node use it as a task pool for RNRemoteSegmentReadTask.
 class RNRemoteReadTask
 {
 public:
@@ -124,6 +127,8 @@ private:
     std::condition_variable cv_ready_tasks;
     String err_msg;
     std::map<SegmentReadTaskState, std::list<RNRemoteSegmentReadTaskPtr>> ready_segment_tasks;
+
+    LoggerPtr log;
 };
 
 // Represent a read tasks from one write node
@@ -141,13 +146,13 @@ public:
         , address(address_)
     {}
 
-    UInt64 storeID() const { return store_id; }
+    StoreID storeID() const { return store_id; }
 
     TableID tableID() const { return table_id; }
 
     static RNRemoteTableReadTaskPtr buildFrom(
         const Context & db_context,
-        UInt64 store_id,
+        StoreID store_id,
         const String & address,
         const DisaggTaskId & snapshot_id,
         const RemotePb::RemotePhysicalTable & table,
@@ -177,7 +182,7 @@ public:
     friend class tests::RemoteReadTaskTest;
 
 private:
-    const UInt64 store_id;
+    const StoreID store_id;
     const TableID table_id;
     const DisaggTaskId snapshot_id;
     const String address;
@@ -194,13 +199,13 @@ public:
         const Context & db_context,
         const RemotePb::RemoteSegment & proto,
         const DisaggTaskId & snapshot_id,
-        UInt64 store_id,
+        StoreID store_id,
         TableID table_id,
         const String & address,
         const LoggerPtr & log);
 
     // The page ids that is absent from local cache
-    const std::vector<UInt64> & pendingPageIds() const { return pending_page_ids; }
+    const PageIdU64s & pendingPageIds() const { return pending_page_ids; }
 
     size_t totalCFTinys() const { return total_num_cftiny; }
 
@@ -237,15 +242,16 @@ public:
     // Only used by buildFrom
     RNRemoteSegmentReadTask(
         DisaggTaskId snapshot_id_,
-        UInt64 store_id_,
+        StoreID store_id_,
         TableID table_id_,
         UInt64 segment_id_,
-        String address_);
+        String address_,
+        LoggerPtr log_);
 
 public:
     SegmentReadTaskState state = SegmentReadTaskState::Init;
     const DisaggTaskId snapshot_id;
-    const UInt64 store_id;
+    const StoreID store_id;
     const TableID table_id;
     const UInt64 segment_id;
     const String address;
@@ -273,15 +279,13 @@ public:
 private:
     std::mutex mtx_queue;
 
-    // FIXME: this should be directly persisted to local cache? Or it will consume
-    // too many memory
-    // A temporary queue for storing the pages
-    // std::queue<std::pair<PageId, Page>> persisted_pages;
     // A temporary queue for storing the blocks
     // from remote mem-table
     std::queue<Block> mem_table_blocks;
 
     static Allocator<false> allocator;
+
+    LoggerPtr log;
 };
 
 } // namespace DM

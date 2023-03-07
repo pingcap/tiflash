@@ -17,6 +17,7 @@
 #include <Core/Defines.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/SegmentReadTransformAction.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
