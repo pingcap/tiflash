@@ -136,7 +136,7 @@ public:
      * `disable_sharing == true` seems nice, but it may cause flush to be less efficient when used frequently.
      * Only specify it when really needed.
      */
-    ColumnFileSetSnapshotPtr createSnapshot(const StorageSnapshotPtr & storage_snap, bool disable_sharing = false);
+    ColumnFileSetSnapshotPtr createSnapshot(const IColumnFileDataProviderPtr & data_provider, bool disable_sharing = false);
 
     /// Build a flush task which will try to flush all column files in this MemTableSet at this moment.
     ColumnFileFlushTaskPtr buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version);

@@ -230,14 +230,14 @@ void MemTableSet::ingestColumnFiles(const RowKeyRange & range, const ColumnFiles
         appendColumnFileInner(f);
 }
 
-ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(const StorageSnapshotPtr & storage_snap, bool disable_sharing)
+ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(const IColumnFileDataProviderPtr & data_provider, bool disable_sharing)
 {
     // Disable append, so that new writes will not touch the content of this snapshot.
     // This could lead to more fragmented IOs, so we don't do it for all snapshots.
     if (disable_sharing && !column_files.empty() && column_files.back()->isAppendable())
         column_files.back()->disableAppend();
 
-    auto snap = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
+    auto snap = std::make_shared<ColumnFileSetSnapshot>(data_provider);
     snap->rows = rows;
     snap->bytes = bytes;
     snap->deletes = deletes;

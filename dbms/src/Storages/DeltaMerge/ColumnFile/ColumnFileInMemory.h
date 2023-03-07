@@ -72,8 +72,10 @@ public:
         return std::make_shared<ColumnFileInMemory>(*this);
     }
 
-    ColumnFileReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
+    ColumnFileReaderPtr getReader(
+        const DMContext & context,
+        const IColumnFileDataProviderPtr & data_provider,
+        const ColumnDefinesPtr & col_defs) const override;
 
     bool isAppendable() const override
     {

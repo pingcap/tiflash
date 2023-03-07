@@ -340,9 +340,9 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     return true;
 }
 
-ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const StorageSnapshotPtr & storage_snap)
+ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const IColumnFileDataProviderPtr & data_provider)
 {
-    auto snap = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
+    auto snap = std::make_shared<ColumnFileSetSnapshot>(data_provider);
     snap->rows = rows;
     snap->bytes = bytes;
     snap->deletes = deletes;

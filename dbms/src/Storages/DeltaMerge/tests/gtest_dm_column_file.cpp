@@ -16,6 +16,7 @@
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -220,11 +221,12 @@ try
         wbs.writeAll();
     }
     auto storage_snap = std::make_shared<StorageSnapshot>(dmContext().storage_pool, nullptr, "", true);
+    auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
 
     {
         // Read columns exactly the same as we have written
         auto columns_to_read = std::make_shared<ColumnDefines>(getColumnDefinesFromBlock(block));
-        auto reader = cf->getReader(dmContext(), storage_snap, columns_to_read);
+        auto reader = cf->getReader(dmContext(), data_from_storage_snap, columns_to_read);
         auto block_read = reader->readNextBlock();
         ASSERT_BLOCK_EQ(block_read, block);
     }
@@ -234,7 +236,7 @@ try
         ColumnID added_colid = 100;
         String added_colname = "added_col";
         auto columns_to_read = std::make_shared<ColumnDefines>(ColumnDefines{ColumnDefine(added_colid, added_colname, typeFromString("Int64"))});
-        auto reader = cf->getReader(dmContext(), storage_snap, columns_to_read);
+        auto reader = cf->getReader(dmContext(), data_from_storage_snap, columns_to_read);
         auto block_read = reader->readNextBlock();
         ASSERT_COLUMNS_EQ_R(
             ColumnsWithTypeAndName({
