@@ -173,6 +173,7 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
         switch (write.type)
         {
         case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE:
         {
             ChecksumClass digest;
             PageEntryV3 entry;
@@ -220,7 +221,30 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
                 LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, write.size);
                 throw e;
             }
+            if (write.type == WriteBatchWriteType::PUT)
+            {
+                edit.put(wb.getFullPageId(write.page_id), entry);
+            }
+            else
+            {
+                edit.updateRemote(wb.getFullPageId(write.page_id), entry);
+            }
 
+            break;
+        }
+        case WriteBatchWriteType::PUT_REMOTE:
+        {
+            PageEntryV3 entry;
+            entry.file_id = INVALID_BLOBFILE_ID;
+            entry.tag = write.tag;
+            entry.checkpoint_info = CheckpointInfo{
+                .data_location = *write.data_location,
+                .is_local_data_reclaimed = true,
+            };
+            if (!write.offsets.empty())
+            {
+                entry.field_offsets.swap(write.offsets);
+            }
             edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
@@ -239,6 +263,7 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
             break;
         case WriteBatchWriteType::UPSERT:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown write type: {}", magic_enum::enum_name(write.type));
+            break;
         }
     }
 
@@ -247,7 +272,7 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
 
 template <typename Trait>
 typename BlobStore<Trait>::PageEntriesEdit
-BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
+BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -258,10 +283,26 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
     if (all_page_data_size == 0)
     {
         // Shortcut for WriteBatch that don't need to persist blob data.
-        for (auto & write : wb.getWrites())
+        for (auto & write : wb.getMutWrites())
         {
             switch (write.type)
             {
+            case WriteBatchWriteType::PUT_REMOTE:
+            {
+                PageEntryV3 entry;
+                entry.file_id = INVALID_BLOBFILE_ID;
+                entry.tag = write.tag;
+                entry.checkpoint_info = CheckpointInfo{
+                    .data_location = *write.data_location,
+                    .is_local_data_reclaimed = true,
+                };
+                if (!write.offsets.empty())
+                {
+                    entry.field_offsets.swap(write.offsets);
+                }
+                edit.put(wb.getFullPageId(write.page_id), entry);
+                break;
+            }
             case WriteBatchWriteType::DEL:
             {
                 edit.del(wb.getFullPageId(write.page_id));
@@ -280,7 +321,9 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
             }
             case WriteBatchWriteType::PUT:
             case WriteBatchWriteType::UPSERT:
+            case WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE:
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "write batch have a invalid total size == 0 while this kind of entry exist, write_type={}", magic_enum::enum_name(write.type));
+                break;
             }
         }
         return edit;
@@ -319,6 +362,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
         switch (write.type)
         {
         case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE:
         {
             ChecksumClass digest;
             PageEntryV3 entry;
@@ -359,6 +403,29 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
             }
 
             buffer_pos += write.size;
+            if (write.type == WriteBatchWriteType::PUT)
+            {
+                edit.put(wb.getFullPageId(write.page_id), entry);
+            }
+            else
+            {
+                edit.updateRemote(wb.getFullPageId(write.page_id), entry);
+            }
+            break;
+        }
+        case WriteBatchWriteType::PUT_REMOTE:
+        {
+            PageEntryV3 entry;
+            entry.file_id = INVALID_BLOBFILE_ID;
+            entry.tag = write.tag;
+            entry.checkpoint_info = CheckpointInfo{
+                .data_location = *write.data_location,
+                .is_local_data_reclaimed = true,
+            };
+            if (!write.offsets.empty())
+            {
+                entry.field_offsets.swap(write.offsets);
+            }
             edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }

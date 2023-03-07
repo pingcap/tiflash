@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
@@ -65,6 +66,13 @@ public:
         QueryProcessingStage::Enum & processed_stage,
         size_t max_block_size,
         unsigned num_streams) override;
+
+    DM::Remote::DisaggPhysicalTableReadSnapshotPtr
+    writeNodeBuildRemoteReadSnapshot(
+        const Names & column_names,
+        const SelectQueryInfo & query_info,
+        const Context & context,
+        unsigned num_streams);
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
@@ -212,6 +220,7 @@ private:
     DM::RowKeyRanges parseMvccQueryInfo(const DB::MvccQueryInfo & mvcc_query_info,
                                         unsigned num_streams,
                                         const Context & context,
+                                        const String & req_id,
                                         const LoggerPtr & tracing_logger);
 #ifndef DBMS_PUBLIC_GTEST
 private:
