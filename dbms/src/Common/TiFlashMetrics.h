@@ -309,7 +309,7 @@ namespace DB
         F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20})) \
     M(tiflash_mark_cache_size, "size of mark cache", Gauge,                                                  \
         F(type_change_count, {{"type", "change_count"}}), \
-        F(type_current_size, {{"type", "current_size"}}))       
+        F(type_current_size, {{"type", "current_size"}}))
 
 // clang-format on
 

@@ -21,6 +21,7 @@
 #include <Interpreters/AggregationCommon.h>
 
 #include <memory>
+
 #include "Common/TiFlashMetrics.h"
 
 
