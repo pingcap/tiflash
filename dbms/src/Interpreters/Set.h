@@ -22,7 +22,7 @@
 #include <Core/Block.h>
 #include <DataStreams/SizeLimits.h>
 #include <DataTypes/IDataType.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/SetVariants.h>
 #include <Parsers/IAST.h>
 #include <Storages/Transaction/Collator.h>
