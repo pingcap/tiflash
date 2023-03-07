@@ -99,9 +99,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-    pingcap::kv::LabelFilter label_filter = context.isDisaggregatedStorageWriteRole() ? 
-        pingcap::kv::labelFilterOnlyTiFlashWriteNode :
-        pingcap::kv::labelFilterNoTiFlashWriteNode;
+    pingcap::kv::LabelFilter label_filter = context.isDisaggregatedStorageWriteRole() ? pingcap::kv::labelFilterOnlyTiFlashWriteNode : pingcap::kv::labelFilterNoTiFlashWriteNode;
     auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(
         bo,
         cluster,
