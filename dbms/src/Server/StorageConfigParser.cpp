@@ -602,30 +602,30 @@ void StorageRemoteCacheConfig::initCacheDir() const
 {
     if (isCacheEnabled())
     {
-        std::filesystem::create_directories(getStableCacheDir());
-        std::filesystem::create_directories(getDeltaCacheDir());
+        std::filesystem::create_directories(getDTFileCacheDir());
+        std::filesystem::create_directories(getPageCacheDir());
     }
 }
 
-String StorageRemoteCacheConfig::getStableCacheDir() const
+String StorageRemoteCacheConfig::getDTFileCacheDir() const
 {
     std::filesystem::path cache_root(dir);
-    // {dir}/stable
-    return cache_root /= "stable";
+    // {dir}/dtfile
+    return cache_root /= "dtfile";
 }
-String StorageRemoteCacheConfig::getDeltaCacheDir() const
+String StorageRemoteCacheConfig::getPageCacheDir() const
 {
     std::filesystem::path cache_root(dir);
-    // {dir}/delta
-    return cache_root /= "delta";
+    // {dir}/page
+    return cache_root /= "page";
 }
 
-UInt64 StorageRemoteCacheConfig::getStableCapacity() const
+UInt64 StorageRemoteCacheConfig::getDTFileCapacity() const
 {
-    return capacity - getDeltaCapacity();
+    return capacity - getPageCapacity();
 }
 
-UInt64 StorageRemoteCacheConfig::getDeltaCapacity() const
+UInt64 StorageRemoteCacheConfig::getPageCapacity() const
 {
     return capacity * delta_rate;
 }

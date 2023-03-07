@@ -119,10 +119,10 @@ struct StorageRemoteCacheConfig
 
     bool isCacheEnabled() const;
     void initCacheDir() const;
-    String getStableCacheDir() const;
-    String getDeltaCacheDir() const;
-    UInt64 getStableCapacity() const;
-    UInt64 getDeltaCapacity() const;
+    String getDTFileCacheDir() const;
+    String getPageCacheDir() const;
+    UInt64 getDTFileCapacity() const;
+    UInt64 getPageCapacity() const;
     void parse(const String & content, const LoggerPtr & log);
 };
 

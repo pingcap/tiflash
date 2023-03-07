@@ -898,10 +898,10 @@ delta_rate = 1.1
             ASSERT_EQ(remote_cache_config.capacity, 10000000);
             ASSERT_EQ(remote_cache_config.dtfile_level, 11);
             ASSERT_DOUBLE_EQ(remote_cache_config.delta_rate, 0.33);
-            ASSERT_EQ(remote_cache_config.getStableCacheDir(), "/tmp/StorageConfigTest/RemoteCacheConfig/0/stable");
-            ASSERT_EQ(remote_cache_config.getDeltaCacheDir(), "/tmp/StorageConfigTest/RemoteCacheConfig/0/delta");
-            ASSERT_EQ(remote_cache_config.getStableCapacity() + remote_cache_config.getDeltaCapacity(), remote_cache_config.capacity);
-            ASSERT_DOUBLE_EQ(remote_cache_config.getStableCapacity() * 1.0 / remote_cache_config.capacity, 1.0 - remote_cache_config.delta_rate);
+            ASSERT_EQ(remote_cache_config.getDTFileCacheDir(), "/tmp/StorageConfigTest/RemoteCacheConfig/0/dtfile");
+            ASSERT_EQ(remote_cache_config.getPageCacheDir(), "/tmp/StorageConfigTest/RemoteCacheConfig/0/page");
+            ASSERT_EQ(remote_cache_config.getDTFileCapacity() + remote_cache_config.getPageCapacity(), remote_cache_config.capacity);
+            ASSERT_DOUBLE_EQ(remote_cache_config.getDTFileCapacity() * 1.0 / remote_cache_config.capacity, 1.0 - remote_cache_config.delta_rate);
             ASSERT_TRUE(remote_cache_config.isCacheEnabled());
         }
         else
