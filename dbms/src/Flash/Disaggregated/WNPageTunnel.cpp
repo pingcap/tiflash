@@ -14,7 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <Flash/Disaggregated/PageTunnel.h>
+#include <Flash/Disaggregated/WNPageTunnel.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -32,7 +32,7 @@
 
 namespace DB
 {
-PageTunnelPtr PageTunnel::build(
+WNPageTunnelPtr WNPageTunnel::build(
     const Context & context,
     const DM::DisaggTaskId & task_id,
     TableID table_id,
@@ -46,7 +46,7 @@ PageTunnelPtr PageTunnel::build(
     auto task = snap->popSegTask(table_id, segment_id);
     RUNTIME_CHECK(task.isValid(), task.err_msg);
 
-    auto tunnel = std::make_unique<PageTunnel>(
+    auto tunnel = std::make_unique<WNPageTunnel>(
         task_id,
         snap_manager,
         task.seg_task,
@@ -56,7 +56,7 @@ PageTunnelPtr PageTunnel::build(
     return tunnel;
 }
 
-disaggregated::PagesPacket PageTunnel::readPacket()
+disaggregated::PagesPacket WNPageTunnel::readPacket()
 {
     // TODO: the returned rows should respect max_rows_per_chunk
 
@@ -116,17 +116,17 @@ disaggregated::PagesPacket PageTunnel::readPacket()
     return packet;
 }
 
-void PageTunnel::connect(SyncPagePacketWriter * sync_writer)
+void WNPageTunnel::connect(SyncPagePacketWriter * sync_writer)
 {
     // TODO: split the packet into smaller size
     sync_writer->Write(readPacket());
 }
 
-void PageTunnel::waitForFinish()
+void WNPageTunnel::waitForFinish()
 {
 }
 
-void PageTunnel::close()
+void WNPageTunnel::close()
 {
     if (!snap_manager)
         return;

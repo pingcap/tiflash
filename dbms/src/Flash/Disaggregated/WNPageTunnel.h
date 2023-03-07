@@ -40,15 +40,15 @@ class DisaggSnapshotManager;
 
 using SyncPagePacketWriter = grpc::ServerWriter<disaggregated::PagesPacket>;
 
-class PageTunnel;
-using PageTunnelPtr = std::unique_ptr<PageTunnel>;
+class WNPageTunnel;
+using WNPageTunnelPtr = std::unique_ptr<WNPageTunnel>;
 
 // A tunnel for the TiFlash write node send the delta layer data to the read node.
 // Including ColumnFileTiny and ColumnFileInMemory
-class PageTunnel
+class WNPageTunnel
 {
 public:
-    static PageTunnelPtr build(
+    static WNPageTunnelPtr build(
         const Context & context,
         const DM::DisaggTaskId & task_id,
         TableID table_id,
@@ -63,12 +63,12 @@ public:
     void close();
 
 public:
-    PageTunnel(DM::DisaggTaskId task_id_,
-               DM::Remote::DisaggSnapshotManager * manager,
-               DM::SegmentReadTaskPtr seg_task_,
-               DM::ColumnDefinesPtr column_defines_,
-               std::shared_ptr<std::vector<tipb::FieldType>> result_field_types_,
-               PageIdU64s read_page_ids)
+    WNPageTunnel(DM::DisaggTaskId task_id_,
+                 DM::Remote::DisaggSnapshotManager * manager,
+                 DM::SegmentReadTaskPtr seg_task_,
+                 DM::ColumnDefinesPtr column_defines_,
+                 std::shared_ptr<std::vector<tipb::FieldType>> result_field_types_,
+                 PageIdU64s read_page_ids)
         : task_id(std::move(task_id_))
         , snap_manager(manager)
         , seg_task(std::move(seg_task_))
@@ -79,11 +79,11 @@ public:
     {}
 
     // just for test
-    PageTunnel(DM::SegmentReadTaskPtr seg_task_,
-               DM::ColumnDefinesPtr column_defines,
-               std::shared_ptr<std::vector<tipb::FieldType>> result_field_types_,
-               PageIdU64s read_page_ids)
-        : PageTunnel(
+    WNPageTunnel(DM::SegmentReadTaskPtr seg_task_,
+                 DM::ColumnDefinesPtr column_defines,
+                 std::shared_ptr<std::vector<tipb::FieldType>> result_field_types_,
+                 PageIdU64s read_page_ids)
+        : WNPageTunnel(
             DM::DisaggTaskId::unknown_disaggregated_task_id,
             /*manager*/ nullptr,
             std::move(seg_task_),

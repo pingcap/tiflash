@@ -58,13 +58,13 @@ namespace DB
 {
 namespace
 {
-struct GrpcExchangePacketReader : public PagePacketReader
+struct FetchPagesStreamReader : public PagePacketReader
 {
     std::shared_ptr<pingcap::kv::RpcCall<disaggregated::FetchDisaggPagesRequest>> call;
     grpc::ClientContext client_context;
     std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> reader;
 
-    explicit GrpcExchangePacketReader(const FetchPagesRequest & req)
+    explicit FetchPagesStreamReader(const FetchPagesRequest & req)
     {
         call = std::make_shared<pingcap::kv::RpcCall<disaggregated::FetchDisaggPagesRequest>>(req.req);
     }
@@ -138,7 +138,7 @@ void GRPCPagesReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr /*log
 
 ExchangePagePacketReaderPtr GRPCPagesReceiverContext::makeReader(const Request & request) const
 {
-    auto reader = std::make_shared<GrpcExchangePacketReader>(request);
+    auto reader = std::make_shared<FetchPagesStreamReader>(request);
     reader->reader = cluster->rpc_client->sendStreamRequest(
         "", // request.req->address(), FIXME
         &reader->client_context,
