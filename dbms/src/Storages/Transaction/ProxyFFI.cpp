@@ -161,10 +161,18 @@ uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t
 
 RawCppPtr CreateWriteBatch(const EngineStoreServerWrap * dummy)
 {
-    // Don't move the dummy argument, it is useful on proxy's side.
-    // This function is not protected by try-catch, since it's rarely throw.
-    UNUSED(dummy);
-    return GenRawCppPtr(new UniversalWriteBatch(), RawCppPtrTypeImpl::WriteBatch);
+    try
+    {
+        // Don't move the dummy argument, it is useful on proxy's side.
+        // This function is not protected by try-catch, since it's rarely throw.
+        UNUSED(dummy);
+        return GenRawCppPtr(new UniversalWriteBatch(), RawCppPtrTypeImpl::WriteBatch);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
 }
 
 void WriteBatchPutPage(RawVoidPtr ptr, BaseBuffView page_id, BaseBuffView value)
@@ -853,10 +861,12 @@ void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint
     {
         RegionTable & region_table = server->tmt->getRegionTable();
         region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
+        return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
     }
     catch (...)
     {
-        return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
     }
 }
 
