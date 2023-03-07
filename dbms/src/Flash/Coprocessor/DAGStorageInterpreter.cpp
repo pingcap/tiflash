@@ -40,6 +40,7 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
@@ -489,11 +490,7 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
     size_t task_per_thread = all_tasks.size() / concurrent_num;
     size_t rest_task = all_tasks.size() % concurrent_num;
-    // todo: wait for S3 code.
-    const bool is_write_role = false;
-    pingcap::kv::LabelFilter tiflash_label_filter = pingcap::kv::labelFilterNoTiFlashWriteNode;
-    if (is_write_role)
-        tiflash_label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
+    pingcap::kv::LabelFilter tiflash_label_filter = S3::ClientFactory::instance().isEnabled() ? pingcap::kv::labelFilterOnlyTiFlashWriteNode : pingcap::kv::labelFilterNoTiFlashWriteNode;
     for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
     {
         size_t task_end = task_start + task_per_thread;
