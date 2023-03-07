@@ -932,7 +932,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
     global_context->setUseAutoScaler(useAutoScaler(config()));
-    global_context->setDisaggregatedStorageWriteRole(isDisaggregatedStorageWriteRole(config()));
 
     /// Init File Provider
     bool enable_encryption = false;

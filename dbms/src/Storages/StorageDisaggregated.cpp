@@ -15,6 +15,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -99,7 +100,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-    pingcap::kv::LabelFilter label_filter = context.isDisaggregatedStorageWriteRole() ? pingcap::kv::labelFilterOnlyTiFlashWriteNode : pingcap::kv::labelFilterNoTiFlashWriteNode;
+    pingcap::kv::LabelFilter label_filter = S3::ClientFactory::instance().isEnabled() ? pingcap::kv::labelFilterOnlyTiFlashWriteNode : pingcap::kv::labelFilterNoTiFlashWriteNode;
     auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(
         bo,
         cluster,
