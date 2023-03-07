@@ -24,9 +24,7 @@
 #include <cassert>
 #include <tuple>
 
-namespace pingcap
-{
-namespace kv
+namespace pingcap::kv
 {
 template <>
 struct RpcTypeTraits<disaggregated::FetchDisaggPagesRequest>
@@ -51,8 +49,7 @@ struct RpcTypeTraits<disaggregated::FetchDisaggPagesRequest>
     }
 };
 
-} // namespace kv
-} // namespace pingcap
+} // namespace pingcap::kv
 
 namespace DB
 {
@@ -99,8 +96,6 @@ FetchPagesRequest::FetchPagesRequest(DM::RNRemoteSegmentReadTaskPtr seg_task_)
     if (!seg_task)
         return;
 
-    // req->set_address(seg_task->address);
-
     *req->mutable_snapshot_id() = seg_task->snapshot_id.toMeta();
     req->set_table_id(seg_task->table_id);
     req->set_segment_id(seg_task->segment_id);
@@ -108,6 +103,12 @@ FetchPagesRequest::FetchPagesRequest(DM::RNRemoteSegmentReadTaskPtr seg_task_)
     {
         req->add_page_ids(page_id);
     }
+}
+
+const String & FetchPagesRequest::address() const
+{
+    assert(seg_task != nullptr);
+    return seg_task->address;
 }
 
 GRPCPagesReceiverContext::Request GRPCPagesReceiverContext::popRequest() const
@@ -140,7 +141,7 @@ ExchangePagePacketReaderPtr GRPCPagesReceiverContext::makeReader(const Request &
 {
     auto reader = std::make_shared<FetchPagesStreamReader>(request);
     reader->reader = cluster->rpc_client->sendStreamRequest(
-        "", // request.req->address(), FIXME
+        request.address(),
         &reader->client_context,
         *reader->call);
     return reader;

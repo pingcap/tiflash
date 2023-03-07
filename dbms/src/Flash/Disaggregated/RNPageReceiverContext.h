@@ -49,6 +49,8 @@ struct FetchPagesRequest
 
     bool isValid() const { return seg_task != nullptr; }
 
+    const String & address() const;
+
     String identifier() const
     {
         assert(isValid());
@@ -71,8 +73,6 @@ public:
 
     Request popRequest() const;
 
-    bool supportAsync(const Request & request) const;
-
     ExchangePagePacketReaderPtr makeReader(const Request & request) const;
 
     static Status getStatusOK()
@@ -93,6 +93,7 @@ public:
     void finishAllReceivingTasks(const String & err_msg);
 
 private:
+    // The remote segment task pool
     DM::RNRemoteReadTaskPtr remote_read_tasks;
     pingcap::kv::Cluster * cluster;
 };

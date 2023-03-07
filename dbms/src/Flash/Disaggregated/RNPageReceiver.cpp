@@ -345,14 +345,14 @@ std::tuple<bool, String> RNPageReceiverBase<RPCContext>::taskReadLoop(const Requ
         }
         else
         {
-            bool retriable = !has_data && i + 1 < max_retry_times;
+            bool retryable = !has_data && i + 1 < max_retry_times;
             LOG_WARNING(
                 log,
-                "FetchDisaggregatedPagesRequest meets rpc fail. Err code = {}, err msg = {}, retriable = {}",
+                "FetchDisaggregatedPagesRequest meets rpc fail. Err code = {}, err msg = {}, retryable = {}",
                 status.error_code(),
                 status.error_message(),
-                retriable);
-            // if we have received some data, we should not retry.
+                retryable);
+            // if we have received some data, we can not retry.
             if (has_data)
                 break;
 
