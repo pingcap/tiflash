@@ -105,7 +105,6 @@ void UniversalPageStorageService::doCheckpoint(bool force)
         };
         auto result = uni_page_storage->dumpIncrementalCheckpoint(options);
 
-        auto file_provider = global_context.getFileProvider();
         // TODO: create related S3 lock
         // Note we must upload data file before manifest file
         for (const auto & data_file_info : result.new_data_files)
