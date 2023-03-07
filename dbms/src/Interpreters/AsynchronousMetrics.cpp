@@ -247,7 +247,7 @@ void AsynchronousMetrics::update()
     M("background_thread.num_runs", uint64_t)  \
     M("background_thread.run_interval", uint64_t)
 
-#define GET_METRIC_MACRO(NAME, TYPE)                             \
+#define GET_METRIC_MACRO(NAME, TYPE)                       \
     do                                                     \
     {                                                      \
         TYPE value{};                                      \

@@ -21,6 +21,7 @@
 #include <chrono>
 #include <unordered_set>
 #include <vector>
+
 #include "Common/TiFlashMetrics.h"
 
 namespace DB
@@ -87,47 +88,58 @@ using PageFieldOffsets = std::vector<PageFieldOffset>;
 using PageFieldSizes = std::vector<UInt64>;
 
 
-class PageFieldOffsetChecksums{
+class PageFieldOffsetChecksums
+{
 public:
     std::vector<std::pair<PageFieldOffset, UInt64>> inner;
-    void reserve(size_t size) {
+    void reserve(size_t size)
+    {
         inner.reserve(size);
     }
 
-    size_t size() const {
+    size_t size() const
+    {
         return inner.size();
     }
 
-    std::pair<PageFieldOffset, UInt64>& back(){
+    std::pair<PageFieldOffset, UInt64> & back()
+    {
         return inner.back();
     }
 
-    const std::pair<PageFieldOffset, UInt64>& back() const{
+    const std::pair<PageFieldOffset, UInt64> & back() const
+    {
         return inner.back();
     }
 
-    auto begin() {
+    auto begin()
+    {
         return inner.begin();
     }
 
-    auto begin() const {
+    auto begin() const
+    {
         return inner.begin();
     }
 
-    auto end() const {
+    auto end() const
+    {
         return inner.end();
     }
 
-    bool empty() const{
+    bool empty() const
+    {
         return inner.empty();
     }
-    
-    void swap(PageFieldOffsetChecksums& other) {
+
+    void swap(PageFieldOffsetChecksums & other)
+    {
         //GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Decrement(inner.size() * 2 * 8);
         inner.swap(other.inner);
         //GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(inner.size() * 2 * 8);
     }
-    void emplaceBack(PageFieldOffset offset, UInt64 checksum) {
+    void emplaceBack(PageFieldOffset offset, UInt64 checksum)
+    {
         inner.emplace_back(offset, checksum);
         GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(2 * 8);
     }
@@ -135,18 +147,22 @@ public:
     //     inner = std::move(value);
     //     GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(inner.size() * 2 * 8);
     // }
-    PageFieldOffsetChecksums() {
+    PageFieldOffsetChecksums()
+    {
         GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Increment();
     }
 
-    PageFieldOffsetChecksums(const PageFieldOffsetChecksums & page_filed_offset_checksums){
+    PageFieldOffsetChecksums(const PageFieldOffsetChecksums & page_filed_offset_checksums)
+    {
         GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Increment();
         inner = page_filed_offset_checksums.inner;
         GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(inner.size() * 2 * 8);
     }
 
-    PageFieldOffsetChecksums &operator=(const PageFieldOffsetChecksums& page_filed_offset_checksums) {
-        if (this == &page_filed_offset_checksums) {
+    PageFieldOffsetChecksums & operator=(const PageFieldOffsetChecksums & page_filed_offset_checksums)
+    {
+        if (this == &page_filed_offset_checksums)
+        {
             return *this;
         }
 
@@ -154,10 +170,10 @@ public:
         GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Increment();
         GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(inner.size() * 2 * 8);
         return *this;
-    
     }
 
-    ~PageFieldOffsetChecksums() {
+    ~PageFieldOffsetChecksums()
+    {
         GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Decrement();
         GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Decrement(inner.size() * 2 * 8);
     }
