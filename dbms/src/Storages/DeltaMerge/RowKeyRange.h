@@ -31,6 +31,7 @@ namespace DB::DM
 using HandleValuePtr = std::shared_ptr<String>;
 
 struct RowKeyRange;
+using RowKeyRanges = std::vector<RowKeyRange>;
 
 inline int compare(const char * a, size_t a_size, const char * b, size_t b_size)
 {
@@ -801,7 +802,6 @@ struct RowKeyRange
     }
     bool operator!=(const RowKeyRange & rhs) const { return !(*this == rhs); }
 }; // struct RowKeyRange
-using RowKeyRanges = std::vector<RowKeyRange>;
 
 // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
 inline String toDebugString(const RowKeyRanges & ranges)

@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 
+#include <cassert>
 #include <condition_variable>
 #include <mutex>
 #include <queue>
@@ -105,10 +106,10 @@ public:
     {
         {
             std::unique_lock<std::mutex> lock(mu);
-            pop_times++;
+            ++pop_times;
             while (queue.empty() && !done)
             {
-                pop_empty_times++;
+                ++pop_empty_times;
                 reader_cv.wait(lock);
             }
             if (queue.empty())
@@ -122,6 +123,41 @@ public:
         writer_cv.notify_one();
         return true;
     }
+
+    /**
+   * Attempts to pop an item off the work queue.  It will not block if data is
+   * unavaliable
+   *
+   * @param[out] item  If `tryPop` returns `true`, it contains the popped item or is modified
+   *                    if `tryPop` returns `false`, it is unmodified
+   * @returns          True upon success or `finish()` has been called. 
+   *                    False if the queue is empty
+   */
+    bool tryPop(T & item)
+    {
+        {
+            std::unique_lock<std::mutex> lock(mu);
+            ++pop_times;
+            if (queue.empty())
+            {
+                if (done)
+                {
+                    return true;
+                }
+                else
+                {
+                    ++pop_empty_times;
+                    return false;
+                }
+            }
+            item = std::move(queue.front());
+            queue.pop();
+        }
+        writer_cv.notify_one();
+        return true;
+    }
+
+
     /**
    * Sets the maximum queue size.  If `maxSize == 0` then it is unbounded.
    *

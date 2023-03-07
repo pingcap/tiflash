@@ -21,6 +21,7 @@
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
+#include <span>
 
 #ifndef __APPLE__
 #include <fcntl.h>
@@ -58,7 +59,7 @@ using Checksum = UInt64;
 static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageTag) + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
 
 /// Return <data to write into meta file, data to write into data file>.
-std::pair<ByteBuffer, ByteBuffer> genWriteData( //
+std::pair<std::span<char>, std::span<char>> genWriteData( //
     const WriteBatch & wb,
     PageFile & page_file,
     PageEntriesEdit & edit)
@@ -284,14 +285,14 @@ void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
     // TODO: investigate if not copy data into heap, write big pages can be faster?
-    ByteBuffer meta_buf, data_buf;
+    std::span<char> meta_buf, data_buf;
     std::tie(meta_buf, data_buf) = PageMetaFormat::genWriteData(wb, page_file, edit);
 
-    SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
-    SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
+    SCOPE_EXIT({ page_file.free(meta_buf.data(), meta_buf.size()); });
+    SCOPE_EXIT({ page_file.free(data_buf.data(), data_buf.size()); });
 
-    auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size());
+    auto write_buf = [&](WritableFilePtr & file, UInt64 offset, std::span<char> buf) {
+        PageUtil::writeFile(file, offset, buf.data(), buf.size());
         if (sync_on_write)
             PageUtil::syncFile(file);
     };
@@ -359,7 +360,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
 
         Page page;
         page.page_id = page_id;
-        page.data = ByteBuffer(pos, pos + page_cache.size);
+        page.data = std::string_view(pos, page_cache.size);
         page.mem_holder = mem_holder;
         page_map.emplace(page_id, page);
 
@@ -408,7 +409,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
 
         Page page;
         page.page_id = page_id;
-        page.data = ByteBuffer(data_buf, data_buf + page_cache.size);
+        page.data = std::string_view(data_buf, page_cache.size);
         page.mem_holder = mem_holder;
 
         ++it;
