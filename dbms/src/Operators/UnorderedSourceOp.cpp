@@ -21,9 +21,12 @@ OperatorStatus UnorderedSourceOp::readImpl(Block & block)
     auto await_status = awaitImpl();
     if (await_status == OperatorStatus::HAS_OUTPUT)
     {
-        std::swap(block, t_block.value());
-        t_block.reset();
-        return action.transform(block) ? OperatorStatus::HAS_OUTPUT : OperatorStatus::FINISHED;
+        if (t_block.has_value())
+        {
+            std::swap(block, t_block.value());
+            t_block.reset();
+            action.transform(block);
+        }
     }
     return await_status;
 }
@@ -45,7 +48,7 @@ OperatorStatus UnorderedSourceOp::awaitImpl()
             return OperatorStatus::HAS_OUTPUT;
         }
         else
-            return OperatorStatus::FINISHED;
+            return OperatorStatus::HAS_OUTPUT;
     }
 }
 } // namespace DB

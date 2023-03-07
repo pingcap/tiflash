@@ -827,7 +827,7 @@ SourceOps StorageDeltaMerge::readSourceOps(
     RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
 
-    auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, tracing_logger);
+    auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, query_info.req_id, tracing_logger);
 
     auto rs_operator = parseRoughSetFilter(query_info, columns_to_read, context, tracing_logger);
 
@@ -851,7 +851,7 @@ SourceOps StorageDeltaMerge::readSourceOps(
         scan_context);
 
     /// Ensure read_tso info after read.
-    checkReadTso(mvcc_query_info.read_tso, context.getTMTContext(), context, global_context);
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
 
     LOG_TRACE(tracing_logger, "[ranges: {}] [sources: {}]", ranges.size(), source_ops.size());
 

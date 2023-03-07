@@ -32,10 +32,9 @@ public:
         const int extra_table_id_index,
         const TableID physical_table_id,
         const String & req_id)
-        : SourceOp(exec_status_)
+        : SourceOp(exec_status_, req_id)
         , task_pool(task_pool_)
         , action(header, extra_table_id_index, physical_table_id)
-        , log(Logger::get(req_id))
     {
         setHeader(toEmptyBlock(columns_to_read_));
         if (extra_table_id_index != InvalidColumnID)
@@ -69,7 +68,6 @@ private:
     SegmentReadTransformAction action;
     std::optional<Block> t_block;
 
-    const LoggerPtr log;
     int64_t ref_no;
 };
 } // namespace DB

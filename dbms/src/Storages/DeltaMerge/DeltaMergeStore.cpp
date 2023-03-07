@@ -1135,6 +1135,7 @@ SourceOps DeltaMergeStore::readSourceOps(
     LOG_DEBUG(tracing_logger, "Read create SourceOp done");
 
     return res;
+}
 
 Remote::DisaggPhysicalTableReadSnapshotPtr
 DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
