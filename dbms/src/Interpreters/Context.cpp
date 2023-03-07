@@ -1708,6 +1708,7 @@ void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)
                 *this,
                 "write",
                 path_pool.getPSDiskDelegatorGlobalMulti(PathPool::write_uni_path_prefix),
+                getTemporaryPath(),
                 config);
             LOG_INFO(shared->log, "initialized GlobalUniversalPageStorage(WriteNode)");
         }

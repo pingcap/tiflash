@@ -357,4 +357,14 @@ S3Filename S3Filename::newCheckpointManifest(StoreID store_id, UInt64 upload_seq
     };
 }
 
+String S3Filename::newCheckpointDataNameTemplate(StoreID store_id)
+{
+    return fmt::format(details::fmt_data_file, fmt::arg("store_id", store_id), fmt::arg("subpath", details::fmt_subpath_checkpoint_data));
+}
+
+String S3Filename::newCheckpointManifestNameTemplate(StoreID store_id)
+{
+    return fmt::format(details::fmt_manifest, fmt::arg("store_id", store_id), fmt::arg("subpath", details::fmt_subpath_manifest));
+}
+
 } // namespace DB::S3

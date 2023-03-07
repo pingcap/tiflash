@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Core/Types.h>
+#include <Encryption/PosixRandomAccessFile.h>
 #include <Flash/Disaggregated/S3LockClient.h>
 #include <Interpreters/Context.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
@@ -396,7 +397,8 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const String &
     // parse lock from manifest
     PS::V3::CheckpointProto::StringsInternMap strings_cache;
     using ManifestReader = DB::PS::V3::CPManifestFileReader;
-    auto reader = ManifestReader::create(ManifestReader::Options{.file_path = local_manifest_path});
+    auto manifest_file = PosixRandomAccessFile::create(local_manifest_path);
+    auto reader = ManifestReader::create(ManifestReader::Options{.plain_file = manifest_file});
     auto mf_prefix = reader->readPrefix();
 
     while (true)

@@ -33,25 +33,33 @@ public:
         Context & context,
         const String & name,
         PSDiskDelegatorPtr delegator,
+        String && temp_path,
         const PageStorageConfig & config);
 
     bool gc();
+    // `force` is just used in test.
+    void doCheckpoint(bool force = false);
     UniversalPageStoragePtr getUniversalPageStorage() const { return uni_page_storage; }
     ~UniversalPageStorageService();
     void shutdown();
 
 private:
-    explicit UniversalPageStorageService(Context & global_context_)
+    explicit UniversalPageStorageService(Context & global_context_, String && temp_path_)
         : global_context(global_context_)
         , uni_page_storage(nullptr)
+        , temp_path(std::move(temp_path_))
     {
     }
 
 private:
     Context & global_context;
     UniversalPageStoragePtr uni_page_storage;
+    String temp_path;
+
     BackgroundProcessingPool::TaskHandle gc_handle;
+    BackgroundProcessingPool::TaskHandle checkpoint_handle;
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
+    std::atomic<Timepoint> last_checkpoint_time = Clock::now();
 };
 } // namespace DB

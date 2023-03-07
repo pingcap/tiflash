@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Encryption/PosixRandomAccessFile.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadBufferFromRandomAccessFile.h>
 #include <IO/WriteBufferFromWritableFile.h>
 #include <IO/copyData.h>
 #include <Storages/Page/V3/BlobStore.h>
@@ -146,8 +149,9 @@ try
     uploadFile(remote_dir, "data_1");
     uploadFile(remote_dir, "manifest_foo");
 
+    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
-        .file_path = remote_dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     PS::V3::CheckpointProto::StringsInternMap im;
@@ -205,8 +209,9 @@ try
     uploadFile(remote_dir, "data_1");
     uploadFile(remote_dir, "manifest_foo");
 
+    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
-        .file_path = remote_dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     PS::V3::CheckpointProto::StringsInternMap im;
@@ -272,8 +277,9 @@ try
     uploadFile(remote_dir, "data_1");
     uploadFile(remote_dir, "manifest_foo");
 
+    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
-        .file_path = remote_dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     PS::V3::CheckpointProto::StringsInternMap im;
@@ -344,8 +350,9 @@ try
     uploadFile(remote_dir, "data_1");
     uploadFile(remote_dir, "manifest_foo");
 
+    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
-        .file_path = remote_dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     PS::V3::CheckpointProto::StringsInternMap im;

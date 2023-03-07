@@ -135,6 +135,9 @@ struct S3Filename
     static S3Filename newCheckpointData(StoreID store_id, UInt64 upload_seq, UInt64 file_idx);
     static S3Filename newCheckpointManifest(StoreID store_id, UInt64 upload_seq);
 
+    static String newCheckpointDataNameTemplate(StoreID store_id);
+    static String newCheckpointManifestNameTemplate(StoreID store_id);
+
     String toFullKey() const;
 
     // `toFullKeyWithPrefix` will as a `s3:://` prefix in full key.
