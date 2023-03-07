@@ -13,7 +13,9 @@
 // limitations under the License.
 
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
+#include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <string_view>
 #if !__clang__
 #pragma GCC diagnostic push
@@ -392,6 +394,11 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
         storage_config.s3_config.parse(config.getString("storage.s3"), log);
     }
 
+    if (config.has("storage.remote.cache"))
+    {
+        storage_config.remote_cache_config.parse(config.getString("storage.remote.cache"), log);
+    }
+
     return std::make_tuple(global_capacity_quota, storage_config);
 }
 
@@ -535,8 +542,6 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     RUNTIME_CHECK(connection_timeout_ms > 0);
     readConfig(table, "request_timeout_ms", request_timeout_ms);
     RUNTIME_CHECK(request_timeout_ms > 0);
-    readConfig(table, "cache_dir", cache_dir);
-    readConfig(table, "cache_capacity", cache_capacity);
 
     auto read_s3_auth_info_from_env = [&]() {
         access_key_id = Poco::Environment::get(S3_ACCESS_KEY_ID, /*default*/ "");
@@ -558,15 +563,12 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     LOG_INFO(
         log,
         "endpoint={} bucket={} max_connections={} connection_timeout_ms={} "
-        "request_timeout_ms={} cache_dir={} cache_capacity={} "
-        "access_key_id_size={}  secret_access_key_size={}",
+        "request_timeout_ms={} access_key_id_size={}  secret_access_key_size={}",
         endpoint,
         bucket,
         max_connections,
         connection_timeout_ms,
         request_timeout_ms,
-        cache_dir,
-        cache_capacity,
         access_key_id.size(),
         secret_access_key.size());
 }
@@ -576,9 +578,56 @@ bool StorageS3Config::isS3Enabled() const
     return !bucket.empty();
 }
 
-bool StorageS3Config::isFileCacheEnabled() const
+void StorageRemoteCacheConfig::parse(const String & content, const LoggerPtr & log)
 {
-    return !cache_dir.empty() && cache_capacity != 0;
+    std::istringstream ss(content);
+    cpptoml::parser p(ss);
+    auto table = p.parse();
+
+    readConfig(table, "dir", dir);
+    readConfig(table, "capacity", capacity);
+    readConfig(table, "dtfile_level", dtfile_level);
+    RUNTIME_CHECK(dtfile_level <= 100);
+    readConfig(table, "delta_rate", delta_rate);
+    RUNTIME_CHECK(std::isgreaterequal(delta_rate, 0.1) && std::islessequal(delta_rate, 1.0), delta_rate);
+    LOG_INFO(log, "StorageRemoteCacheConfig: dir={}, capacity={}, dtfile_level={}, delta_rate={}", dir, capacity, dtfile_level, delta_rate);
+}
+
+bool StorageRemoteCacheConfig::isCacheEnabled() const
+{
+    return !dir.empty() && capacity > 0;
+}
+
+void StorageRemoteCacheConfig::initCacheDir() const
+{
+    if (isCacheEnabled())
+    {
+        std::filesystem::create_directories(getDTFileCacheDir());
+        std::filesystem::create_directories(getPageCacheDir());
+    }
+}
+
+String StorageRemoteCacheConfig::getDTFileCacheDir() const
+{
+    std::filesystem::path cache_root(dir);
+    // {dir}/dtfile
+    return cache_root /= "dtfile";
+}
+String StorageRemoteCacheConfig::getPageCacheDir() const
+{
+    std::filesystem::path cache_root(dir);
+    // {dir}/page
+    return cache_root /= "page";
+}
+
+UInt64 StorageRemoteCacheConfig::getDTFileCapacity() const
+{
+    return capacity - getPageCapacity();
+}
+
+UInt64 StorageRemoteCacheConfig::getPageCapacity() const
+{
+    return capacity * delta_rate;
 }
 
 } // namespace DB

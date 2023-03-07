@@ -32,7 +32,7 @@ Page CPWriteDataSourceFixture::read(const BlobStore<universal::BlobStoreTrait>::
 
     Page page(1);
     page.mem_holder = nullptr;
-    page.data = ByteBuffer(value.data(), value.data() + value.size());
+    page.data = std::string_view(value);
     return page;
 }
 
