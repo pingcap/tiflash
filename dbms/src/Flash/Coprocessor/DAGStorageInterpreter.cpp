@@ -489,6 +489,11 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
     size_t task_per_thread = all_tasks.size() / concurrent_num;
     size_t rest_task = all_tasks.size() % concurrent_num;
+    // todo: wait for S3 code.
+    const bool is_write_role = false;
+    pingcap::kv::LabelFilter tiflash_label_filter = pingcap::kv::labelFilterNoTiFlashWriteNode;
+    if (is_write_role)
+        tiflash_label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
     for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
     {
         size_t task_end = task_start + task_per_thread;
@@ -498,7 +503,7 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
             continue;
         std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
 
-        auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
+        auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1, tiflash_label_filter);
         context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
         pipeline.streams.push_back(input);
