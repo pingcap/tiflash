@@ -72,7 +72,7 @@ private:
     // Only add metrics when file is actually added in `doOpenFile`.
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite, 0};
     std::string file_name;
-    int fd;
+    int fd = -1;
     WriteLimiterPtr write_limiter;
 };
 
