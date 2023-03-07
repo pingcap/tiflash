@@ -861,7 +861,6 @@ void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint
     {
         RegionTable & region_table = server->tmt->getRegionTable();
         region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
-        return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
     }
     catch (...)
     {
