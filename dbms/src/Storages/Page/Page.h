@@ -65,7 +65,7 @@ public:
     {}
 
     PageIdU64 page_id;
-    ByteBuffer data;
+    std::string_view data;
     MemHolder mem_holder;
     // Field offsets inside this page.
     std::set<FieldOffsetInsidePage> field_offsets;
@@ -76,7 +76,7 @@ private:
 public:
     inline bool isValid() const { return is_valid; }
 
-    ByteBuffer getFieldData(size_t index) const
+    std::string_view getFieldData(size_t index) const
     {
         auto iter = field_offsets.find(FieldOffsetInsidePage(index));
         if (unlikely(iter == field_offsets.end()))
@@ -88,7 +88,8 @@ public:
         PageFieldOffset end = (iter == field_offsets.end() ? data.size() : iter->offset);
         assert(beg <= data.size());
         assert(end <= data.size());
-        return ByteBuffer(data.begin() + beg, data.begin() + end);
+        assert(end >= beg);
+        return std::string_view(data.begin() + beg, end - beg);
     }
 
     inline static PageFieldSizes fieldOffsetsToSizes(const PageFieldOffsetChecksums & field_offsets, size_t data_size)

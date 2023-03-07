@@ -94,29 +94,6 @@ using PageFileIdAndLevels = std::vector<PageFileIdAndLevel>;
 
 using PageSize = UInt64;
 
-struct ByteBuffer
-{
-    using Pos = char *;
-
-    ByteBuffer()
-        : begin_pos(nullptr)
-        , end_pos(nullptr)
-    {}
-
-    ByteBuffer(Pos begin_pos_, Pos end_pos_)
-        : begin_pos(begin_pos_)
-        , end_pos(end_pos_)
-    {}
-
-    inline Pos begin() const { return begin_pos; }
-    inline Pos end() const { return end_pos; }
-    inline size_t size() const { return end_pos - begin_pos; }
-
-private:
-    Pos begin_pos;
-    Pos end_pos; /// 1 byte after the end of the buffer
-};
-
 /// https://stackoverflow.com/a/13938417
 inline size_t alignPage(size_t n)
 {

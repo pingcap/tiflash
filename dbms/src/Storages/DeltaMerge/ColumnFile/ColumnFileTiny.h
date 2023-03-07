@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
+#include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 #include <Storages/Page/PageStorage_fwd.h>
 
 namespace DB
@@ -33,6 +34,7 @@ using ColumnFileTinyPtr = std::shared_ptr<ColumnFileTiny>;
 class ColumnFileTiny : public ColumnFilePersisted
 {
     friend class ColumnFileTinyReader;
+    friend struct Remote::Serializer;
 
 private:
     ColumnFileSchemaPtr schema;
