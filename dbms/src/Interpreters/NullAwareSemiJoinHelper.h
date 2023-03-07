@@ -27,7 +27,7 @@ enum class NASemiJoinStep : UInt8
 {
     /// Check other conditions for the right rows whose join key are equal to this left row.
     /// The join keys of this left row must not have null.
-    NOT_NULL_KEY_CHECK_OTHER_COND,
+    NOT_NULL_KEY_CHECK_MATCHED_ROWS,
     /// Check join key equal condition and other conditions(if any) for the right rows
     /// with at least one null join key.
     /// The join keys of this left row must not have null.

@@ -2134,7 +2134,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             {
                 /// Else the other condition must be checked for these matched right row(s).
                 auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-                res.emplace_back(i, NASemiJoinStep::NOT_NULL_KEY_CHECK_OTHER_COND, static_cast<const void *>(map_it));
+                res.emplace_back(i, NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS, static_cast<const void *>(map_it));
                 res_list.push_back(&res.back());
             }
             continue;

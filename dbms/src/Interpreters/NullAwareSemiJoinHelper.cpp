@@ -35,11 +35,11 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <typename Mapped, NASemiJoinStep STEP>
 void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const PaddedPODArray<Join::RowRef> & null_rows, size_t & current_offset, size_t max_pace)
 {
-    static_assert(STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_OTHER_COND || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
+    static_assert(STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
 
     RUNTIME_CHECK_MSG(step == STEP, "current step {} != caller's step {}", static_cast<std::underlying_type<NASemiJoinStep>::type>(step), static_cast<std::underlying_type<NASemiJoinStep>::type>(STEP));
 
-    if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_OTHER_COND)
+    if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS)
     {
         static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
 
@@ -112,7 +112,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(ConstNullMapPtr eq_null
             /// If other expr is NULL or 0, this right row is not included in the result set.
             continue;
         }
-        if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_OTHER_COND)
+        if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS)
         {
             /// other expr is true, so the result is true for this row that has matched right row(s).
             setResult<NASemiJoinResultType::TRUE_VALUE>();
@@ -139,7 +139,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::checkStepEnd()
 
     RUNTIME_CHECK_MSG(step == STEP, "current step {} != caller's step {}", static_cast<std::underlying_type_t<NASemiJoinStep>>(step), static_cast<std::underlying_type<NASemiJoinStep>::type>(STEP));
 
-    if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_OTHER_COND)
+    if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS)
     {
         step = NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS;
         step_end = false;
@@ -204,7 +204,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NASemiJoin
     {
         /// Step of NOT_NULL_KEY_CHECK_OTHER_COND only exist when strictness is all.
         std::list<NASemiJoinHelper::Result *> next_step_res_list;
-        runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_OTHER_COND>(res_list, next_step_res_list);
+        runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS>(res_list, next_step_res_list);
         res_list.swap(next_step_res_list);
     }
 
@@ -229,7 +229,7 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename
 template <NASemiJoinStep STEP>
 void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NASemiJoinHelper::Result *> & res_list, std::list<NASemiJoinHelper::Result *> & next_res_list)
 {
-    static_assert(STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_OTHER_COND || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
+    static_assert(STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
 
     auto it = res_list.begin();
     while (it != res_list.end())
@@ -363,7 +363,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
         other_conditions.other_cond_expr->execute(exec_block);
 
     ConstNullMapPtr eq_null_map = nullptr;
-    if constexpr (STEP != NASemiJoinStep::NOT_NULL_KEY_CHECK_OTHER_COND)
+    if constexpr (STEP != NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS)
     {
         other_conditions.null_aware_eq_cond_expr->execute(exec_block);
 
