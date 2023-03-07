@@ -20,10 +20,17 @@
 
 namespace DB::PS::V3
 {
+enum WALSerializeVersion : UInt32
+{
+    Plain = 1,
+    LZ4 = 2,
+};
+
 template <typename PageEntriesEdit>
 struct Serializer
 {
     static String serializeTo(const PageEntriesEdit & edit);
+    static String serializeInCompressedFormTo(const PageEntriesEdit & edit);
     static PageEntriesEdit deserializeFrom(std::string_view record);
 };
 

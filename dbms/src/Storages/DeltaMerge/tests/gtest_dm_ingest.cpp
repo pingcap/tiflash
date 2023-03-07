@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <common/ThreadPool.h>
 
 #include <future>
+#include <random>
 
 namespace DB
 {

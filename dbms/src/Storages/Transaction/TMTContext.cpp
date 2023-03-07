@@ -19,7 +19,9 @@
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <Interpreters/Context.h>
 #include <Server/RaftConfigParser.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshotManager.h>
 #include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3GCManager.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
@@ -97,7 +99,13 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
         etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
         s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.flash_server_addr, etcd_client);
         s3gc_owner->campaignOwner(); // start campaign
-        s3_lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
+        s3lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
+
+        S3::S3GCConfig gc_config;
+        gc_config.temp_path = context.getTemporaryPath() + "/s3_temp"; // TODO: unify the suffix for it?
+        s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, cluster->pd_client, s3gc_owner, s3lock_client, gc_config);
+
+        snapshot_manager = std::make_unique<DM::Remote::DisaggSnapshotManager>(context);
     }
 }
 
@@ -139,6 +147,17 @@ void TMTContext::shutdown()
         // let client retry
         s3gc_owner->cancel();
         s3gc_owner = nullptr;
+    }
+
+    if (s3gc_manager)
+    {
+        s3gc_manager->shutdown();
+        s3gc_manager = nullptr;
+    }
+
+    if (s3lock_client)
+    {
+        s3lock_client = nullptr;
     }
 
     if (background_service)
@@ -232,6 +251,11 @@ pingcap::pd::ClientPtr TMTContext::getPDClient() const
 const OwnerManagerPtr & TMTContext::getS3GCOwnerManager() const
 {
     return s3gc_owner;
+}
+
+DM::Remote::DisaggSnapshotManager * TMTContext::getDisaggSnapshotManager() const
+{
+    return snapshot_manager.get();
 }
 
 MPPTaskManagerPtr TMTContext::getMPPTaskManager()

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>

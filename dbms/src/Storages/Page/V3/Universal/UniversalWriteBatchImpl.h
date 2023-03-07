@@ -15,6 +15,7 @@
 #pragma once
 
 #include <IO/ReadBufferFromString.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/WriteBatchImpl.h>
@@ -41,6 +42,8 @@ private:
         UniversalPageId ori_page_id;
         // Fields' offset inside Page's data
         PageFieldOffsetChecksums offsets;
+
+        std::optional<PS::V3::CheckpointLocation> data_location = std::nullopt;
     };
     using Writes = std::vector<Write>;
 
@@ -100,6 +103,19 @@ public:
         putPage(page_id, tag, buffer_ptr, data.size(), data_sizes);
     }
 
+    void putRemotePage(const UniversalPageId & page_id, UInt64 tag, const PS::V3::CheckpointLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums)
+    {
+        Write w{WriteBatchWriteType::PUT_REMOTE, page_id, tag, nullptr, /* size */ 0, "", std::move(offset_and_checksums), data_location};
+        writes.emplace_back(std::move(w));
+    }
+
+    void updateRemotePage(const UniversalPageId & page_id, const ReadBufferPtr & read_buffer, PageSize size)
+    {
+        Write w{WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE, page_id, 0, read_buffer, size, "", {}};
+        total_data_size += size;
+        writes.emplace_back(std::move(w));
+    }
+
     void putExternal(const UniversalPageId & page_id, UInt64 tag)
     {
         // External page's data is not managed by PageStorage, which means data is empty.
@@ -152,13 +168,6 @@ public:
         total_data_size += rhs.total_data_size;
     }
 
-    void clear()
-    {
-        Writes tmp;
-        writes.swap(tmp);
-        total_data_size = 0;
-    }
-
     size_t getTotalDataSize() const
     {
         return total_data_size;
@@ -187,6 +196,9 @@ public:
                 case WriteBatchWriteType::PUT_EXTERNAL:
                     fb.fmtAppend("E{}", w.page_id);
                     break;
+                case WriteBatchWriteType::PUT_REMOTE:
+                    fb.fmtAppend("R{}", w.page_id);
+                    break;
                 default:
                     fb.fmtAppend("Unknown {}", w.page_id);
                     break;
@@ -196,7 +208,14 @@ public:
         return fmt_buffer.toString();
     }
 
-    UniversalWriteBatch(UniversalWriteBatch && rhs)
+    void clear()
+    {
+        Writes tmp;
+        writes.swap(tmp);
+        total_data_size = 0;
+    }
+
+    UniversalWriteBatch(UniversalWriteBatch && rhs) noexcept
         : prefix(std::move(rhs.prefix))
         , writes(std::move(rhs.writes))
         , total_data_size(rhs.total_data_size)
@@ -206,7 +225,7 @@ public:
     {
         prefix.swap(o.prefix);
         writes.swap(o.writes);
-        std::swap(o.total_data_size, total_data_size);
+        std::swap(total_data_size, o.total_data_size);
     }
 
 private:
