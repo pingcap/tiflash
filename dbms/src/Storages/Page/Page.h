@@ -23,7 +23,6 @@
 #include <set>
 #include <unordered_map>
 
-
 namespace DB
 {
 using MemHolder = std::shared_ptr<char>;
