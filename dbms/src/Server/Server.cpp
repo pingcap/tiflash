@@ -88,10 +88,12 @@
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <boost_wrapper/string_split.h>
 #include <common/ErrorHandlers.h>
+#include <common/ThreadPool.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
 
+#include <atomic>
 #include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
 #include <limits>
@@ -492,11 +494,13 @@ private:
 void initStores(Context & global_context, const LoggerPtr & log, bool lazily_init_store)
 {
     auto do_init_stores = [&global_context, log]() {
+        ThreadPool thread_pool(SettingMaxThreads().getAutoValue());
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
-        int init_cnt = 0;
-        int err_cnt = 0;
-        for (auto & [table_id, storage] : storages)
-        {
+
+        std::atomic<int> init_cnt = 0;
+        std::atomic<int> err_cnt = 0;
+
+        auto init_stores_function = [&](auto & table_id, auto & storage) {
             // This will skip the init of storages that do not contain any data. TiFlash now sync the schema and
             // create all tables regardless the table have define TiFlash replica or not, so there may be lots
             // of empty tables in TiFlash.
@@ -512,7 +516,20 @@ void initStores(Context & global_context, const LoggerPtr & log, bool lazily_ini
                 err_cnt++;
                 tryLogCurrentException(log, fmt::format("Storage inited fail, [table_id={}]", table_id));
             }
+        };
+
+        for (auto & iter : storages)
+        {
+            const auto & table_id = iter.first;
+            auto & storage = iter.second;
+            auto task = [&init_stores_function, &table_id, &storage] {
+                init_stores_function(table_id, storage);
+            };
+
+            thread_pool.trySchedule(task);
         }
+
+        thread_pool.wait();
         LOG_INFO(
             log,
             "Storage inited finish. [total_count={}] [init_count={}] [error_count={}] [datatype_fullname_count={}]",
