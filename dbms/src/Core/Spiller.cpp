@@ -17,6 +17,7 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/SpilledFilesInputStream.h>
 #include <DataStreams/copyData.h>
+#include <Encryption/FileProvider.h>
 #include <Poco/Path.h>
 
 
