@@ -22,6 +22,9 @@
 
 namespace DB
 {
+
+/// Read blocks asyncly from Storage Layer by using read thread,
+/// The result can not guarantee the keep_order property
 class UnorderedSourceOp : public SourceOp
 {
 public:
@@ -43,7 +46,7 @@ public:
             ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
             header.insert(extra_table_id_index, col);
         }
-        ref_no = task_pool->increaseUnorderedInputStreamRefCount();
+        auto ref_no = task_pool->increaseUnorderedInputStreamRefCount();
         LOG_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
         addReadTaskPoolToScheduler();
     }
@@ -67,7 +70,5 @@ private:
     DM::SegmentReadTaskPoolPtr task_pool;
     SegmentReadTransformAction action;
     std::optional<Block> t_block;
-
-    int64_t ref_no;
 };
 } // namespace DB

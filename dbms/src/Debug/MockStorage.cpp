@@ -130,7 +130,7 @@ Int64 MockStorage::addTableDataForDeltaMerge(Context & context, const String & n
 
         // write data to DeltaMergeStorage
         ASTPtr insertptr(new ASTInsertQuery());
-        BlockOutputStreamPtr output = storage->write(insertptr, context.getGlobalContext().getSettingsRef());
+        BlockOutputStreamPtr output = storage->write(insertptr, context.getSettingsRef());
 
         Block insert_block{columns};
 
