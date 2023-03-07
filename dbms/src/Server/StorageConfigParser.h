@@ -114,7 +114,7 @@ struct StorageRemoteCacheConfig
 {
     String dir;
     UInt64 capacity = 0;
-    UInt64 dtfile_level = 1;
+    UInt64 dtfile_level = 100;
     double delta_rate = 0.3;
 
     bool isCacheEnabled() const;
