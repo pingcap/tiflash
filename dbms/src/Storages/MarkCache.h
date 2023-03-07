@@ -21,6 +21,7 @@
 #include <Interpreters/AggregationCommon.h>
 
 #include <memory>
+#include "Common/TiFlashMetrics.h"
 
 
 namespace ProfileEvents
@@ -37,7 +38,7 @@ struct MarksWeightFunction
     size_t operator()(const MarksInCompressedFile & marks) const
     {
         /// NOTE Could add extra 100 bytes for overhead of std::vector, cache structures and allocator.
-        return marks.size() * sizeof(MarkInCompressedFile);
+        return marks.allocated_bytes();
     }
 };
 
@@ -59,6 +60,8 @@ public:
     MappedPtr getOrSet(const Key & key, LoadFunc && load)
     {
         auto result = Base::getOrSet(key, load);
+        GET_METRIC(tiflash_mark_cache_size, type_change_count).Increment();
+        GET_METRIC(tiflash_mark_cache_size, type_current_size).Set(Base::weight());
         if (result.second)
             ProfileEvents::increment(ProfileEvents::MarkCacheMisses);
         else
