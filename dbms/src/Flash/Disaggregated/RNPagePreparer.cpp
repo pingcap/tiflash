@@ -35,7 +35,7 @@ RNPagePreparer::RNPagePreparer(
     const String & req_id,
     const String & executor_id,
     bool do_prepare_)
-    : threads_num(max_streams_)
+    : threads_num(max_streams_ * 2) // these threads involve disk IO, 2x scale for better CPU utilization
     , do_prepare(do_prepare_)
     , remote_read_tasks(std::move(remote_read_tasks_))
     , receiver(std::move(receiver_))
