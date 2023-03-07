@@ -88,7 +88,6 @@
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <boost_wrapper/string_split.h>
 #include <common/ErrorHandlers.h>
-#include <common/ThreadPool.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
