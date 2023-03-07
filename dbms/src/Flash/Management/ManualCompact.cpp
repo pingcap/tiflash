@@ -38,11 +38,12 @@ ManualCompactManager::ManualCompactManager(const Context & global_context_, cons
 
 grpc::Status ManualCompactManager::handleRequest(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
 {
+    auto ks_tbl_id = KeyspaceTableID{request->keyspace_id(), request->logical_table_id()};
     {
         std::lock_guard lock(mutex);
 
         // Check whether there are duplicated executions.
-        if (unsync_active_logical_table_ids.count(request->logical_table_id()))
+        if (unsync_active_logical_table_ids.count(ks_tbl_id))
         {
             response->mutable_error()->mutable_err_compact_in_progress();
             response->set_has_remaining(false);
@@ -57,12 +58,12 @@ grpc::Status ManualCompactManager::handleRequest(const ::kvrpcpb::CompactRequest
             return grpc::Status::OK;
         }
 
-        unsync_active_logical_table_ids.insert(request->logical_table_id());
+        unsync_active_logical_table_ids.insert(ks_tbl_id);
         unsync_running_or_pending_tasks++;
     }
     SCOPE_EXIT({
         std::lock_guard lock(mutex);
-        unsync_active_logical_table_ids.erase(request->logical_table_id());
+        unsync_active_logical_table_ids.erase(ks_tbl_id);
         unsync_running_or_pending_tasks--;
     });
 
@@ -101,7 +102,7 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
 {
     const auto & tmt_context = global_context.getTMTContext();
     // TODO(iosmanthus): support compact keyspace tables;
-    auto storage = tmt_context.getStorages().get(NullspaceID, request->physical_table_id());
+    auto storage = tmt_context.getStorages().get(request->keyspace_id(), request->physical_table_id());
     if (storage == nullptr)
     {
         response->mutable_error()->mutable_err_physical_table_not_exist();
@@ -163,6 +164,7 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
 
     Stopwatch timer;
 
+    // TODO(iosmanthus): attach keyspace id for this logger.
     LOG_INFO(log, "Manual compaction begin for table {}, start_key = {}", request->physical_table_id(), start_key.toDebugString());
 
     // Repeatedly merge multiple segments as much as possible.

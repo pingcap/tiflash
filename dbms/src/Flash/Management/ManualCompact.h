@@ -15,6 +15,7 @@
 
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
+#include <Storages/Transaction/Types.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 #pragma GCC diagnostic push
@@ -78,7 +79,7 @@ private:
 
     /// When there is a task containing the same logical_table running,
     /// the task will be rejected.
-    std::set<int64_t> unsync_active_logical_table_ids = {};
+    std::unordered_set<DB::KeyspaceTableID, boost::hash<DB::KeyspaceTableID>> unsync_active_logical_table_ids = {};
 
     size_t unsync_running_or_pending_tasks = 0;
 
