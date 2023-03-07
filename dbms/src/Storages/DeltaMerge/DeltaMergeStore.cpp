@@ -32,10 +32,11 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
@@ -1134,6 +1135,30 @@ SourceOps DeltaMergeStore::readSourceOps(
     LOG_DEBUG(tracing_logger, "Read create SourceOp done");
 
     return res;
+
+Remote::DisaggPhysicalTableReadSnapshotPtr
+DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
+    const Context & db_context,
+    const DB::Settings & db_settings,
+    const RowKeyRanges & sorted_ranges,
+    size_t num_streams,
+    const String & tracing_id,
+    const SegmentIdSet & read_segments,
+    const ScanContextPtr & scan_context)
+{
+    auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
+    auto log_tracing_id = getLogTracingId(*dm_context);
+    auto tracing_logger = log->getChild(log_tracing_id);
+
+    // Create segment snapshots for the given key ranges. The TiFlash compute node
+    // could fetch the data segment by segment with these snapshots later.
+    // `try_split_task` is false because we need to ensure only one segment task
+    // for one segment.
+    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /* try_split_task */ false);
+    GET_METRIC(tiflash_disaggregated_read_tasks_count).Increment(tasks.size());
+    LOG_DEBUG(tracing_logger, "Read create segment snapshot done");
+
+    return std::make_unique<Remote::DisaggPhysicalTableReadSnapshot>(physical_table_id, std::move(tasks));
 }
 
 size_t forceMergeDeltaRows(const DMContextPtr & dm_context)

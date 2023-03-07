@@ -30,6 +30,21 @@ using Seconds = std::chrono::seconds;
 static constexpr UInt64 MB = 1ULL * 1024 * 1024;
 static constexpr UInt64 GB = MB * 1024;
 
+enum class StorageType
+{
+    Log = 1,
+    Data = 2,
+    Meta = 3,
+    KVStore = 4,
+};
+
+enum class PageStorageRunMode : UInt8
+{
+    ONLY_V2 = 1,
+    ONLY_V3 = 2,
+    MIX_MODE = 3,
+    UNI_PS = 4,
+};
 
 // PageStorage V2 define
 static constexpr UInt64 PAGE_SIZE_STEP = (1 << 10) * 16; // 16 KB
@@ -79,16 +94,15 @@ using PageFileIdAndLevels = std::vector<PageFileIdAndLevel>;
 
 using PageSize = UInt64;
 
-struct ByteBuffer
+template <class Pos>
+struct ByteBufferInternal
 {
-    using Pos = char *;
-
-    ByteBuffer()
+    ByteBufferInternal()
         : begin_pos(nullptr)
         , end_pos(nullptr)
     {}
 
-    ByteBuffer(Pos begin_pos_, Pos end_pos_)
+    ByteBufferInternal(Pos begin_pos_, Pos end_pos_)
         : begin_pos(begin_pos_)
         , end_pos(end_pos_)
     {}
@@ -100,6 +114,20 @@ struct ByteBuffer
 private:
     Pos begin_pos;
     Pos end_pos; /// 1 byte after the end of the buffer
+};
+
+struct ByteBuffer : public ByteBufferInternal<char *>
+{
+    using ByteBufferInternal<char *>::ByteBufferInternal;
+};
+
+struct ConstByteBuffer : public ByteBufferInternal<const char *>
+{
+    using ByteBufferInternal<const char *>::ByteBufferInternal;
+
+    explicit ConstByteBuffer(const ByteBuffer & buf)
+        : ConstByteBuffer(buf.begin(), buf.end())
+    {}
 };
 
 /// https://stackoverflow.com/a/13938417
@@ -114,7 +142,7 @@ inline size_t alignPage(size_t n)
 template <>
 struct fmt::formatter<DB::PageIdV3Internal>
 {
-    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    static constexpr auto parse(format_parse_context & ctx)
     {
         const auto * it = ctx.begin();
         const auto * end = ctx.end();
@@ -125,7 +153,7 @@ struct fmt::formatter<DB::PageIdV3Internal>
     }
 
     template <typename FormatContext>
-    auto format(const DB::PageIdV3Internal & value, FormatContext & ctx) const -> decltype(ctx.out())
+    auto format(const DB::PageIdV3Internal & value, FormatContext & ctx) const
     {
         return format_to(ctx.out(), "{}.{}", value.high, value.low);
     }
@@ -134,7 +162,7 @@ struct fmt::formatter<DB::PageIdV3Internal>
 template <>
 struct fmt::formatter<DB::PageFileIdAndLevel>
 {
-    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    static constexpr auto parse(format_parse_context & ctx)
     {
         const auto * it = ctx.begin();
         const auto * end = ctx.end();
@@ -145,7 +173,7 @@ struct fmt::formatter<DB::PageFileIdAndLevel>
     }
 
     template <typename FormatContext>
-    auto format(const DB::PageFileIdAndLevel & id_lvl, FormatContext & ctx) const -> decltype(ctx.out())
+    auto format(const DB::PageFileIdAndLevel & id_lvl, FormatContext & ctx) const
     {
         return format_to(ctx.out(), "{}_{}", id_lvl.first, id_lvl.second);
     }

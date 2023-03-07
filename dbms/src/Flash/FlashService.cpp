@@ -21,6 +21,8 @@
 #include <Common/setThreadName.h>
 #include <Debug/MockStorage.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/Disaggregated/DisaggregatedTask.h>
+#include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
 #include <Flash/Management/ManualCompact.h>
@@ -32,6 +34,7 @@
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/support/status_code_enum.h>
@@ -43,7 +46,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
-}
+extern const int UNKNOWN_EXCEPTION;
+} // namespace ErrorCodes
 
 #define CATCH_FLASHSERVICE_EXCEPTION                                                                                                        \
     catch (Exception & e)                                                                                                                   \
@@ -73,6 +77,10 @@ void FlashService::init(Context & context_)
     manual_compact_manager = std::make_unique<Management::ManualCompactManager>(
         context->getGlobalContext(),
         context->getGlobalContext().getSettingsRef());
+
+    // Only when the s3 storage is enabled on write node, provide the lock service interfaces
+    if (!context->isDisaggregatedComputeMode() && S3::ClientFactory::instance().isEnabled())
+        s3_lock_service = std::make_unique<S3::S3LockService>(*context);
 
     auto settings = context->getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
@@ -473,7 +481,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
 grpc::Status FlashService::checkGrpcContext(const grpc::ServerContext * grpc_context) const
 {
     // For coprocessor/mpp test, we don't care about security config.
-    if likely (!context->isMPPTest() && !context->isCopTest())
+    if (likely(!context->isMPPTest() && !context->isCopTest()))
     {
         if (!context->getSecurityConfig()->checkGrpcContext(grpc_context))
         {
@@ -547,6 +555,187 @@ grpc::Status FlashService::Compact(grpc::ServerContext * grpc_context, const kvr
         return check_result;
 
     return manual_compact_manager->handleRequest(request, response);
+}
+
+grpc::Status FlashService::tryAddLock(grpc::ServerContext * grpc_context, const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response)
+{
+    if (!s3_lock_service)
+    {
+        return grpc::Status(::grpc::StatusCode::INTERNAL,
+                            fmt::format(
+                                "can not handle tryAddLock, s3enabled={} compute_node={}",
+                                S3::ClientFactory::instance().isEnabled(),
+                                context->isDisaggregatedComputeMode()));
+    }
+
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    return s3_lock_service->tryAddLock(request, response);
+}
+
+grpc::Status FlashService::tryMarkDelete(grpc::ServerContext * grpc_context, const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response)
+{
+    if (!s3_lock_service)
+    {
+        return grpc::Status(::grpc::StatusCode::INTERNAL,
+                            fmt::format(
+                                "can not handle tryMarkDelete, s3enabled={} compute_node={}",
+                                S3::ClientFactory::instance().isEnabled(),
+                                context->isDisaggregatedComputeMode()));
+    }
+
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    return s3_lock_service->tryMarkDelete(request, response);
+}
+
+grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggTaskRequest * request, disaggregated::EstablishDisaggTaskResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    LOG_DEBUG(log, "Handling EstablishDisaggTask request: {}", request->ShortDebugString());
+    if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
+        return check_result;
+    // TODO metrics
+    auto [db_context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+        return status;
+    db_context->setMockStorage(mock_storage);
+    db_context->setMockMPPServerInfo(mpp_test_info);
+
+    RUNTIME_CHECK(context->isDisaggregatedStorageMode());
+
+    const auto & meta = request->meta();
+    DM::DisaggTaskId task_id(meta);
+    auto task = std::make_shared<DisaggregatedTask>(db_context, task_id);
+    SCOPE_EXIT({
+        current_memory_tracker = nullptr;
+    });
+
+    grpc::Status ret_status = grpc::Status::OK;
+    auto record_error = [&](grpc::StatusCode err_code, int flash_err_code, const String & err_msg) {
+        auto * err = response->mutable_error();
+        err->set_code(flash_err_code);
+        err->set_msg(err_msg);
+        ret_status = grpc::Status(err_code, err_msg);
+    };
+
+    try
+    {
+        task->prepare(request);
+        task->execute(response);
+    }
+    catch (Exception & e)
+    {
+        LOG_ERROR(task->log, "DB Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        record_error(grpc::StatusCode::INTERNAL, e.code(), e.message());
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(log, "KV Client Exception: {}", e.message());
+        record_error(grpc::StatusCode::INTERNAL, ErrorCodes::UNKNOWN_EXCEPTION, e.message());
+    }
+    catch (std::exception & e)
+    {
+        LOG_ERROR(task->log, "std exception: {}", e.what());
+        record_error(grpc::StatusCode::INTERNAL, ErrorCodes::UNKNOWN_EXCEPTION, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(task->log, "other exception");
+        record_error(grpc::StatusCode::INTERNAL, ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
+    }
+
+    if (auto * dag_ctx = db_context->getDAGContext(); dag_ctx)
+    {
+        // There may be region errors. Add information about which region to retry.
+        for (const auto & region : dag_ctx->retry_regions)
+        {
+            auto * retry_region = response->add_retry_regions();
+            retry_region->set_id(region.region_id);
+            retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+            retry_region->mutable_region_epoch()->set_version(region.region_version);
+        }
+    }
+
+    LOG_DEBUG(log, "Handle EstablishDisaggTask request done, resp_err={}", response->error().ShortDebugString());
+    return ret_status;
+}
+
+grpc::Status FlashService::FetchDisaggPages(
+    grpc::ServerContext * grpc_context,
+    const disaggregated::FetchDisaggPagesRequest * request,
+    grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    LOG_DEBUG(log, "Handling FetchDisaggPages request: {}", request->ShortDebugString());
+    if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
+        return check_result;
+
+    disaggregated::PagesPacket err_response;
+    auto record_error = [&](grpc::StatusCode err_code, const String & err_msg) {
+        auto * err = err_response.mutable_error();
+        err->set_code(ErrorCodes::UNKNOWN_EXCEPTION);
+        err->set_msg(err_msg);
+        sync_writer->Write(err_response);
+
+        return grpc::Status(err_code, err_msg);
+    };
+
+    const DM::DisaggTaskId task_id(request->snapshot_id());
+    LOG_DEBUG(log, "Fetching pages, task_id={}", task_id);
+    try
+    {
+        PageIdU64s read_ids;
+        read_ids.reserve(request->page_ids_size());
+        for (auto page_id : request->page_ids())
+            read_ids.emplace_back(page_id);
+
+#if 0
+        auto tunnel = PageTunnel::build(
+            *context,
+            task_id,
+            request->table_id(),
+            request->segment_id(),
+            read_ids);
+
+        tunnel->connect(sync_writer);
+        LOG_DEBUG(log, "Handle FetchDisaggPages request done");
+        return grpc::Status::OK;
+#endif
+
+        return record_error(grpc::StatusCode::UNIMPLEMENTED, "unimplemented");
+    }
+    catch (const TiFlashException & e)
+    {
+        LOG_ERROR(log, "TiFlash Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        return record_error(grpc::StatusCode::INTERNAL, e.standardText());
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        return record_error(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(log, "KV Client Exception: {}", e.message());
+        return record_error(grpc::StatusCode::INTERNAL, e.message());
+    }
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(log, "std exception: {}", e.what());
+        return record_error(grpc::StatusCode::INTERNAL, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "other exception");
+        return record_error(grpc::StatusCode::INTERNAL, "other exception");
+    }
 }
 
 void FlashService::setMockStorage(MockStorage * mock_storage_)

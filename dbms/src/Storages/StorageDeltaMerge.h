@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
@@ -66,6 +67,7 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
+
     SourceOps readSourceOps(
         PipelineExecutorStatus & exec_status_,
         const Names & column_names,
@@ -73,6 +75,13 @@ public:
         const Context & context,
         size_t max_block_size,
         unsigned num_streams) override;
+
+    DM::Remote::DisaggPhysicalTableReadSnapshotPtr
+    writeNodeBuildRemoteReadSnapshot(
+        const Names & column_names,
+        const SelectQueryInfo & query_info,
+        const Context & context,
+        unsigned num_streams);
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
@@ -220,6 +229,7 @@ private:
     DM::RowKeyRanges parseMvccQueryInfo(const DB::MvccQueryInfo & mvcc_query_info,
                                         unsigned num_streams,
                                         const Context & context,
+                                        const String & req_id,
                                         const LoggerPtr & tracing_logger);
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -245,7 +255,7 @@ private:
 
     std::unique_ptr<TableColumnInfo> table_column_info; // After create DeltaMergeStore object, it is deprecated.
     std::atomic<bool> store_inited;
-    DM::DeltaMergeStorePtr _store;
+    DM::DeltaMergeStorePtr _store; // NOLINT(readability-identifier-naming)
 
     Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
     bool is_common_handle = false;

@@ -18,6 +18,7 @@
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
+#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
@@ -43,6 +44,7 @@
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
+#include <Interpreters/Expand.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -73,7 +75,9 @@ struct AnalysisResult
     ExpressionActionsPtr before_where;
     ExpressionActionsPtr before_aggregation;
     ExpressionActionsPtr before_having;
-    ExpressionActionsPtr before_order_and_select;
+    ExpressionActionsPtr before_order;
+    ExpressionActionsPtr before_expand;
+    ExpressionActionsPtr before_select;
     ExpressionActionsPtr final_projection;
 
     String filter_column_name;
@@ -99,10 +103,7 @@ AnalysisResult analyzeExpressions(
     // In test mode, filter is not pushed down to table scan.
     if (query_block.selection && (!query_block.isTableScanSource() || context.isTest()))
     {
-        std::vector<const tipb::Expr *> where_conditions;
-        for (const auto & c : query_block.selection->selection().conditions())
-            where_conditions.push_back(&c);
-        res.filter_column_name = analyzer.appendWhere(chain, where_conditions);
+        res.filter_column_name = analyzer.appendWhere(chain, query_block.selection->selection().conditions());
         res.before_where = chain.getLastActions();
         chain.addStep();
     }
@@ -119,10 +120,7 @@ AnalysisResult analyzeExpressions(
 
         if (query_block.having != nullptr)
         {
-            std::vector<const tipb::Expr *> having_conditions;
-            for (const auto & c : query_block.having->selection().conditions())
-                having_conditions.push_back(&c);
-            res.having_column_name = analyzer.appendWhere(chain, having_conditions);
+            res.having_column_name = analyzer.appendWhere(chain, query_block.having->selection().conditions());
             res.before_having = chain.getLastActions();
             chain.addStep();
         }
@@ -131,6 +129,14 @@ AnalysisResult analyzeExpressions(
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::ExecType::TypeTopN)
     {
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
+        res.before_order = chain.getLastActions();
+        chain.addStep();
+    }
+
+    if (query_block.expand)
+    {
+        res.before_expand = analyzer.appendExpand(query_block.expand->expand(), chain);
+        chain.addStep();
     }
 
     const auto & dag_context = *context.getDAGContext();
@@ -146,7 +152,7 @@ AnalysisResult analyzeExpressions(
             chain,
             query_block.qb_column_prefix);
 
-    res.before_order_and_select = chain.getLastActions();
+    res.before_select = chain.getLastActions();
 
     chain.finalize();
     chain.clear();
@@ -393,9 +399,16 @@ void DAGQueryBlockInterpreter::executeAggregation(
     executeExpression(pipeline, expression_actions_ptr, log, "before aggregation");
 
     Block before_agg_header = pipeline.firstStream()->getHeader();
+    const Settings & settings = context.getSettingsRef();
 
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
-    SpillConfig spill_config(context.getTemporaryPath(), fmt::format("{}_aggregation", log->identifier()), context.getSettingsRef().max_spilled_size_per_spill, context.getFileProvider());
+    SpillConfig spill_config(
+        context.getTemporaryPath(),
+        fmt::format("{}_aggregation", log->identifier()),
+        settings.max_cached_data_bytes_in_spiller,
+        settings.max_spilled_rows_per_file,
+        settings.max_spilled_bytes_per_file,
+        context.getFileProvider());
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
@@ -423,7 +436,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
     else if (pipeline.streams.size() > 1)
     {
         /// If there are several sources, then we perform parallel aggregation
-        const Settings & settings = context.getSettingsRef();
         BlockInputStreamPtr stream = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
             BlockInputStreams{},
@@ -570,12 +582,12 @@ void DAGQueryBlockInterpreter::handleWindowOrder(DAGPipeline & pipeline, const t
 }
 
 // To execute a query block, you have to:
-// 1. generate the date stream and push it to pipeline.
+// 1. generate the data stream and push it to pipeline.
 // 2. assign the analyzer
 // 3. construct a final projection, even if it's not necessary. just construct it.
 // Talking about projection, it has the following rules.
 // 1. if the query block does not contain agg, then the final project is the same as the source Executor
-// 2. if the query block contains agg, then the final project is the same as agg Executor
+// 2. if the query block contains agg/expand, then the final project is the same as agg/expand Executor
 // 3. if the cop task may contains more then 1 query block, and the current query block is not the root
 //    query block, then the project should add an alias for each column that needs to be projected, something
 //    like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
@@ -664,9 +676,9 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         executeWhere(pipeline, res.before_having, res.having_column_name, "execute having");
         recordProfileStreams(pipeline, query_block.having_name);
     }
-    if (res.before_order_and_select)
+    if (res.before_order)
     {
-        executeExpression(pipeline, res.before_order_and_select, log, "before order and select");
+        executeExpression(pipeline, res.before_order, log, "before order");
     }
 
     if (!res.order_columns.empty())
@@ -676,14 +688,30 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
 
-    // execute final project action
-    executeProject(pipeline, final_project, "final projection");
     // execute limit
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)
     {
         executeLimit(pipeline);
         recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
+
+    // execute the expand OP after all filter/limits and so on.
+    // since expand OP has some row replication work to do, place it after limit can reduce some unnecessary burden.
+    // and put it before the final projection, because we should recognize some base col as grouping set col before change their alias.
+    if (res.before_expand)
+    {
+        executeExpand(pipeline, res.before_expand);
+        recordProfileStreams(pipeline, query_block.expand_name);
+    }
+
+    if (res.before_select)
+    {
+        executeExpression(pipeline, res.before_select, log, "before select");
+    }
+
+    // execute final project action
+    executeProject(pipeline, final_project, "final projection");
+
     restorePipelineConcurrency(pipeline);
 
     // execute exchange_sender
@@ -724,9 +752,17 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
     }
 }
 
+void DAGQueryBlockInterpreter::executeExpand(DAGPipeline & pipeline, const ExpressionActionsPtr & expr)
+{
+    String expand_extra_info = fmt::format("expand: grouping set {}", expr->getActions().back().expand->getGroupingSetsDes());
+    pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, expr, log->identifier());
+        stream->setExtraInfo(expand_extra_info);
+    });
+}
+
 void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
 {
-    RUNTIME_ASSERT(dagContext().isMPPTask() && dagContext().tunnel_set != nullptr, log, "exchange_sender only run in MPP");
     /// exchange sender should be at the top of operators
     const auto & exchange_sender = query_block.exchange_sender->exchange_sender();
     std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
@@ -745,7 +781,6 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     pipeline.transform([&](auto & stream) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
-            dagContext().tunnel_set,
             partition_col_ids,
             partition_col_collators,
             exchange_sender.tp(),
@@ -756,7 +791,8 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             stream_count,
             batch_size,
             exchange_sender.compression(),
-            context.getSettingsRef().batch_send_min_limit_compression);
+            context.getSettingsRef().batch_send_min_limit_compression,
+            log->identifier());
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         stream->setExtraInfo(extra_info);
     });

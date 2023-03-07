@@ -16,6 +16,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -141,7 +142,7 @@ void PageDirectoryFactory<Trait>::loadEdit(const PageDirectoryPtr & dir, const P
             max_applied_ver = r.version;
 
         if (dump_entries)
-            LOG_INFO(Logger::get(), PageEntriesEdit::toDebugString(r));
+            LOG_INFO(Logger::get(), "{}", r);
         applyRecord(dir, r);
     }
 }
@@ -212,6 +213,9 @@ void PageDirectoryFactory<Trait>::applyRecord(
         }
         case EditRecordType::PUT:
             version_list->createNewEntry(restored_version, r.entry);
+            break;
+        case EditRecordType::UPDATE_DATA_FROM_REMOTE:
+            version_list->updateLocalCacheForRemotePage(restored_version, r.entry);
             break;
         case EditRecordType::DEL:
         case EditRecordType::VAR_DELETE: // nothing different from `DEL`

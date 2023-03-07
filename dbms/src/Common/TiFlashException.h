@@ -251,6 +251,12 @@ public:
         , error(_error)
     {}
 
+    template <typename... Args>
+    TiFlashException(const TiFlashError & _error, const std::string & fmt, Args &&... args)
+        : Exception(FmtBuffer().fmtAppend(fmt::runtime(fmt), std::forward<Args>(args)...).toString())
+        , error(_error)
+    {}
+
     const char * name() const throw() override { return "DB::TiFlashException"; }
     const char * className() const throw() override { return "DB::TiFlashException"; }
 

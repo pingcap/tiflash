@@ -26,54 +26,34 @@ class EventTask : public Task
 {
 public:
     EventTask(
+        PipelineExecutorStatus & exec_status_,
+        const EventPtr & event_);
+    EventTask(
         MemoryTrackerPtr mem_tracker_,
+        const String & req_id,
         PipelineExecutorStatus & exec_status_,
         const EventPtr & event_);
 
     ~EventTask();
 
 protected:
-    ExecTaskStatus executeImpl() override;
+    ExecTaskStatus executeImpl() noexcept override;
     virtual ExecTaskStatus doExecuteImpl() = 0;
 
-    ExecTaskStatus awaitImpl() override;
+    ExecTaskStatus awaitImpl() noexcept override;
     virtual ExecTaskStatus doAwaitImpl() { return ExecTaskStatus::RUNNING; };
 
     // Used to release held resources, just like `Event::finishImpl`.
-    virtual void finalize(){};
+    void finalize() noexcept;
+    virtual void finalizeImpl(){};
 
 private:
-    template <typename Action>
-    ExecTaskStatus doTaskAction(Action && action)
-    {
-        if (unlikely(exec_status.isCancelled()))
-        {
-            finalize();
-            return ExecTaskStatus::CANCELLED;
-        }
-        try
-        {
-            auto status = action();
-            switch (status)
-            {
-            case FINISH_STATUS:
-                finalize();
-            default:
-                return status;
-            }
-        }
-        catch (...)
-        {
-            finalize();
-            assert(event);
-            exec_status.onErrorOccurred(std::current_exception());
-            return ExecTaskStatus::ERROR;
-        }
-    }
+    ExecTaskStatus doTaskAction(std::function<ExecTaskStatus()> && action);
 
 private:
     PipelineExecutorStatus & exec_status;
     EventPtr event;
+    std::atomic_bool finalized{false};
 };
 
 } // namespace DB

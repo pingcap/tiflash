@@ -15,17 +15,20 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
+#include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
 namespace DB
 {
 namespace DM
 {
 class ColumnFileDeleteRange;
-using ColumnDeleteRangeFilePtr = std::shared_ptr<ColumnFileDeleteRange>;
+using ColumnFileDeleteRangePtr = std::shared_ptr<ColumnFileDeleteRange>;
 
 /// A column file that contains a DeleteRange. It will remove all covered data in the previous column files.
 class ColumnFileDeleteRange : public ColumnFilePersisted
 {
+    friend struct Remote::Serializer;
+
 private:
     RowKeyRange delete_range;
 
@@ -44,9 +47,9 @@ public:
 
     const auto & getDeleteRange() { return delete_range; }
 
-    ColumnDeleteRangeFilePtr cloneWith(const RowKeyRange & range)
+    ColumnFileDeleteRangePtr cloneWith(const RowKeyRange & range)
     {
-        auto new_dpdr = new ColumnFileDeleteRange(*this);
+        auto * new_dpdr = new ColumnFileDeleteRange(*this);
         new_dpdr->delete_range = range;
         return std::shared_ptr<ColumnFileDeleteRange>(new_dpdr);
     }

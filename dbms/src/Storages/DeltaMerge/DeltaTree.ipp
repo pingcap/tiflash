@@ -34,8 +34,6 @@ __attribute__((noinline, flatten)) typename DT_CLASS::InternPtr DT_CLASS::TIFLAS
             as(Intern, root)->parent = nullptr;
         --height;
 
-        LOG_TRACE(log, "height {} -> {}", (height + 1), height);
-
         return {};
     }
 
@@ -57,7 +55,6 @@ __attribute__((noinline, flatten)) typename DT_CLASS::InternPtr DT_CLASS::TIFLAS
 
             ++height;
 
-            LOG_TRACE(log, "height {} -> {}", (height - 1), height);
         }
 
         auto pos = parent->searchChild(asNode(node));

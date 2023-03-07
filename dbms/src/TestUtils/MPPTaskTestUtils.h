@@ -70,9 +70,9 @@ public:
 
     void TearDown() override;
 
-    static void startServers();
+    void startServers();
 
-    static void startServers(size_t server_num_);
+    void startServers(size_t server_num_);
     static size_t serverNum();
 
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
@@ -94,7 +94,7 @@ protected:
     static MPPTestMeta test_meta;
 };
 
-#define ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols)                                                                                \
+#define ASSERT_MPPTASK_EQUAL(tasks, properties, expected_cols)                                                                              \
     do                                                                                                                                      \
     {                                                                                                                                       \
         TiFlashTestEnv::getGlobalContext().setMPPTest();                                                                                    \
@@ -123,14 +123,15 @@ protected:
             TiFlashTestEnv::getGlobalContext(i).setMPPTest();                          \
         auto tasks = (builder).buildMPPTasks(context, properties);                     \
         size_t task_size = tasks.size();                                               \
+        ASSERT_EQ(task_size, (expected_strings).size());                               \
         for (size_t i = 0; i < task_size; ++i)                                         \
         {                                                                              \
             ASSERT_DAGREQUEST_EQAUL((expected_strings)[i], tasks[i].dag_request);      \
         }                                                                              \
         ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(                                          \
-            builder,                                                                   \
-            properties,                                                                \
-            expect_cols);                                                              \
+            (builder),                                                                 \
+            (properties),                                                              \
+            (expected_cols));                                                          \
     } while (0)
 
 } // namespace DB::tests

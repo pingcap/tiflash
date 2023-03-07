@@ -19,6 +19,7 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 
+#include <magic_enum.hpp>
 #include <stack>
 
 #ifdef FIU_ENABLE
@@ -454,7 +455,10 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
             this->applyRef(rec);
             break;
         case WriteBatchWriteType::UPSERT:
-            throw Exception("WriteType::UPSERT should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "DeltaVersionEditAcceptor::apply with invalid type {}", magic_enum::enum_name(rec.type));
+            break;
+        default:
+            throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(rec.type)), ErrorCodes::LOGICAL_ERROR);
             break;
         }
     }
@@ -593,6 +597,9 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
             break;
         case WriteBatchWriteType::UPSERT:
             current->upsertPage(rec.page_id, rec.entry);
+            break;
+        default:
+            throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(rec.type)), ErrorCodes::LOGICAL_ERROR);
             break;
         }
     }

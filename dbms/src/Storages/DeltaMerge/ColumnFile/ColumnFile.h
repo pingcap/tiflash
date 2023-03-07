@@ -19,7 +19,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/DeltaMerge/StoragePool_fwd.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 namespace DB
@@ -159,6 +159,9 @@ public:
 
     /// This method is only used to read raw data.
     virtual Block readNextBlock() { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
+
+    /// This method used to skip next block.
+    virtual size_t skipNextBlock() { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
 
     /// Create a new reader from current reader with different columns to read.
     virtual ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & col_defs) = 0;

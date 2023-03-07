@@ -133,6 +133,16 @@ Block ColumnFileInMemoryReader::readNextBlock()
     return genBlock(*col_defs, columns);
 }
 
+
+size_t ColumnFileInMemoryReader::skipNextBlock()
+{
+    if (read_done)
+        return 0;
+
+    read_done = true;
+    return memory_file.getRows();
+}
+
 ColumnFileReaderPtr ColumnFileInMemoryReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
     // Reuse the cache data.

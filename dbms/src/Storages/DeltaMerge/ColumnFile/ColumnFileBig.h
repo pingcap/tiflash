@@ -14,7 +14,9 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
+#include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
 namespace DB
 {
@@ -23,13 +25,14 @@ namespace DM
 class DMFileBlockInputStream;
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 class ColumnFileBig;
-using ColumnBigFilePtr = std::shared_ptr<ColumnFileBig>;
+using ColumnFileBigPtr = std::shared_ptr<ColumnFileBig>;
 
 
 /// A column file which contains a DMFile. The DMFile could have many Blocks.
 class ColumnFileBig : public ColumnFilePersisted
 {
     friend class ColumnFileBigReader;
+    friend struct Remote::Serializer;
 
 private:
     DMFilePtr file;
@@ -53,7 +56,7 @@ public:
 
     ColumnFileBig(const ColumnFileBig &) = default;
 
-    ColumnBigFilePtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
+    ColumnFileBigPtr cloneWith(DMContext & context, const DMFilePtr & new_file, const RowKeyRange & new_segment_range)
     {
         auto * new_column_file = new ColumnFileBig(*this);
         new_column_file->file = new_file;
@@ -72,13 +75,7 @@ public:
     size_t getRows() const override { return valid_rows; }
     size_t getBytes() const override { return valid_bytes; };
 
-    void removeData(WriteBatches & wbs) const override
-    {
-        // Here we remove the data id instead of file_id.
-        // Because a dmfile could be used in several places, and only after all page ids are removed,
-        // then the file_id got removed.
-        wbs.removed_data.delPage(file->pageId());
-    }
+    void removeData(WriteBatches & wbs) const override;
 
     ColumnFileReaderPtr
     getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const override;
@@ -166,7 +163,10 @@ public:
 
     Block readNextBlock() override;
 
+    size_t skipNextBlock() override;
+
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
 };
+
 } // namespace DM
 } // namespace DB
