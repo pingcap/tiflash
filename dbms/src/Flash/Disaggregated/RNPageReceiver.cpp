@@ -193,7 +193,7 @@ PageReceiverResult RNPageReceiverBase<RPCContext>::toDecodeResult(
     assert(recv_msg != nullptr);
     /// the data packets (now we ignore execution summary)
     auto result = PageReceiverResult::newOk(recv_msg->req_info);
-    result.decode_detail = decodeChunks(recv_msg, decoder_ptr);
+    result.decode_detail = decodeChunksAndPersistPages(recv_msg, decoder_ptr);
     auto has_pending_msg = recv_msg->seg_task->addConsumedMsg();
     LOG_DEBUG(exc_log,
               "seg: {} state: {} received: {} pending: {}",
@@ -210,7 +210,7 @@ PageReceiverResult RNPageReceiverBase<RPCContext>::toDecodeResult(
 }
 
 template <typename RPCContext>
-PageDecodeDetail RNPageReceiverBase<RPCContext>::decodeChunks(
+PageDecodeDetail RNPageReceiverBase<RPCContext>::decodeChunksAndPersistPages(
     const std::shared_ptr<PageReceivedMessage> & recv_msg,
     std::unique_ptr<CHBlockChunkCodec> & decoder_ptr)
 {
@@ -241,7 +241,7 @@ PageDecodeDetail RNPageReceiverBase<RPCContext>::decodeChunks(
         }
     }
 
-    // TODO: Parse the chunks into pages and push to queue
+    // Parse the remote pages and persist them into local cache
     for (const String & page : recv_msg->pages())
     {
         DM::RemotePb::RemotePage remote_page;

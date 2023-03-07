@@ -509,6 +509,7 @@ void RNRemoteSegmentReadTask::receivePage(RemotePb::RemotePage && remote_page)
     {
         field_sizes.emplace_back(field_sz);
     }
+    // FIXME: depends on local page cache
     // page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
     LOG_DEBUG(log, "receive page, oid={}", oid);
 }

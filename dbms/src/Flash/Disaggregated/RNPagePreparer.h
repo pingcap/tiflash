@@ -26,6 +26,12 @@ namespace DB
 class RNPagePreparer;
 using RNPagePreparerPtr = std::shared_ptr<RNPagePreparer>;
 
+// `RNPagePreparer` starts background threads to keep
+// - popping message from `RNPageReceiver.msg_channel`
+// - persisting pages for ColumnFileTiny into RN's LocalPageCache
+// - decoding blocks for ColumnFileInMemory into RN's memory
+// - do some extra preparation work after all data received from
+//   all write nodes
 class RNPagePreparer
 {
 public:

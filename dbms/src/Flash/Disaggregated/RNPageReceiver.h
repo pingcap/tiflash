@@ -125,6 +125,11 @@ private:
     {}
 };
 
+// `RNPageReceiver` starts background threads to keep
+// - poping ** non-ready ** segment tasks from the task pool and fetch
+//   the pages and mem-tables blocks through `FlashService::FetchDisaggPages`
+//   from write nodes
+// - receiving message from different write nodes and push them into msg_channel
 template <typename RPCContext>
 class RNPageReceiverBase
 {
@@ -169,7 +174,7 @@ private:
         const std::shared_ptr<PageReceivedMessage> & recv_msg,
         std::unique_ptr<CHBlockChunkCodec> & decoder_ptr);
 
-    PageDecodeDetail decodeChunks(
+    PageDecodeDetail decodeChunksAndPersistPages(
         const std::shared_ptr<PageReceivedMessage> & recv_msg,
         std::unique_ptr<CHBlockChunkCodec> & decoder_ptr);
 
