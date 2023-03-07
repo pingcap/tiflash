@@ -549,7 +549,7 @@ private:
 
     bool is_config_loaded = false; /// Is configuration loaded from toml file.
     DisaggregatedMode disaggregated_mode = DisaggregatedMode::None;
-    bool use_autoscaler = true; /// todo: remove this after AutoScaler is stable. Only meaningfule in DisaggregatedComputeMode.
+    bool use_autoscaler = true; /// todo: remove this after AutoScaler is stable. Only meaningful in DisaggregatedComputeMode.
 };
 
 

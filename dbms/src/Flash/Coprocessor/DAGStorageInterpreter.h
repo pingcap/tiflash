@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/SelectQueryInfo.h>

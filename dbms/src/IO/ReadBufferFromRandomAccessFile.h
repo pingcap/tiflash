@@ -14,30 +14,35 @@
 
 #pragma once
 
-#include <Encryption/EncryptionPath.h>
-#include <IO/ReadBufferFromRandomAccessFile.h>
+#include <IO/ReadBufferFromFileDescriptor.h>
 
 namespace DB
 {
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
-class ReadLimiter;
-using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+class RandomAccessFile;
+using RandomAccessFilePtr = std::shared_ptr<RandomAccessFile>;
 
-/**
- * Note: This class maybe removed in the future, use ReadBufferFromRandomAccessFile instead if possible
- */
-class ReadBufferFromFileProvider : public ReadBufferFromRandomAccessFile
+class ReadBufferFromRandomAccessFile : public ReadBufferFromFileDescriptor
 {
+protected:
+    bool nextImpl() override;
+
 public:
-    ReadBufferFromFileProvider(
-        const FileProviderPtr & file_provider_,
-        const std::string & file_name_,
-        const EncryptionPath & encryption_path_,
+    ReadBufferFromRandomAccessFile(
+        RandomAccessFilePtr file_,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
-        const ReadLimiterPtr & read_limiter = nullptr,
-        int flags = -1,
         char * existing_memory = nullptr,
         size_t alignment = 0);
+
+    ~ReadBufferFromRandomAccessFile() override;
+
+    std::string getFileName() const override;
+
+    int getFD() const override;
+
+private:
+    off_t doSeekInFile(off_t offset, int whence) override;
+
+private:
+    RandomAccessFilePtr file;
 };
 } // namespace DB
