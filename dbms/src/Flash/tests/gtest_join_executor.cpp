@@ -771,7 +771,8 @@ try
     size_t table_rows = 51200;
     size_t common_rows = 10240;
     UInt64 max_block_size = 800;
-    size_t original_max_streams = 20;
+    size_t max_streams_big = 20;
+    size_t max_streams_small = 4;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_column_infos))
     {
         ColumnGeneratorOpts opts{common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
@@ -832,7 +833,7 @@ try
                        .build(context);
     context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use right_table left join left_table as the reference
-    auto ref_columns = executeStreams(request, original_max_streams);
+    auto ref_columns = executeStreams(request, max_streams_big);
 
     /// case 1.1 table scan join table scan
     for (auto & left_table_name : left_table_names)
@@ -844,17 +845,18 @@ try
                           .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")})
                           .build(context);
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
-            auto result_columns = executeStreams(request, original_max_streams);
-            ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_big));
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_small));
             // test spill to disk
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
             if (right_table_name == "right_table_1_concurrency")
             {
-                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
+                ASSERT_THROW(executeStreams(request, max_streams_big), Exception);
             }
             else
             {
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_big));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_small));
             }
         }
     }
@@ -868,18 +870,19 @@ try
                           .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {}, {}, {}, exchange_concurrency)
                           .build(context);
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
-            auto result_columns = executeStreams(request, original_max_streams);
-            ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_big));
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_small));
 
             // test spill to disk
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
             if (exchange_concurrency == 1)
             {
-                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
+                ASSERT_THROW(executeStreams(request, max_streams_big), Exception);
             }
             else
             {
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_big));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_small));
             }
         }
     }
@@ -892,7 +895,7 @@ try
     context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use right_table left join left_table as the reference
     context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
-    ref_columns = executeStreams(request, original_max_streams);
+    ref_columns = executeStreams(request, max_streams_big);
     /// case 2.1 table scan join table scan
     for (auto & left_table_name : left_table_names)
     {
@@ -903,18 +906,18 @@ try
                           .join(context.scan("outer_join_test", right_table_name), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(right_table_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, 0)
                           .build(context);
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
-            auto result_columns = executeStreams(request, original_max_streams);
-            ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_big));
 
             // test spill to disk
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
             if (right_table_name == "right_table_1_concurrency")
             {
-                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
+                ASSERT_THROW(executeStreams(request, max_streams_big), Exception);
             }
             else
             {
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_big));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_small));
             }
         }
     }
@@ -929,18 +932,18 @@ try
                           .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(exchange_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, exchange_concurrency)
                           .build(context);
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
-            auto result_columns = executeStreams(request, original_max_streams);
-            ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_big));
 
             // test spill to disk
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
             if (exchange_concurrency == 1)
             {
-                ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
+                ASSERT_THROW(executeStreams(request, max_streams_big), Exception);
             }
             else
             {
-                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_big));
+                ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_small));
             }
         }
     }

@@ -135,7 +135,7 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
                 size_t partition_index = 0;
                 Block block;
 
-                if (!join->isEnableSpill())
+                if (!join->isSpilled())
                 {
                     block = current_probe_stream->read();
                 }
@@ -148,7 +148,7 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
 
                 if (!block)
                 {
-                    if (join->isEnableSpill())
+                    if (join->isSpilled())
                     {
                         block = current_probe_stream->read();
                         if (block)

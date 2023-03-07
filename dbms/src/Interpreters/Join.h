@@ -159,6 +159,8 @@ public:
 
     bool hasPartitionSpilled();
 
+    bool isSpilled() const { return is_spilled; }
+
     std::tuple<JoinPtr, BlockInputStreamPtr, BlockInputStreamPtr, BlockInputStreamPtr> getOneRestoreStream(size_t max_block_size);
 
     void dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>> & partition_blocks_list);
@@ -168,7 +170,9 @@ public:
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
     /// Sum size in bytes of all buffers, used for JOIN maps and for all memory pools.
-    size_t getTotalByteCount() const;
+    size_t getTotalByteCount();
+    /// The peak build bytes usage, if spill is not enabled, the same as getTotalByteCount
+    size_t getPeakBuildBytesUsage();
     /// size in bytes for partition hash map
     size_t getPartitionByteCount(size_t partition_index) const;
 
@@ -413,6 +417,8 @@ private:
     SpillConfig build_spill_config;
     SpillConfig probe_spill_config;
     Int64 join_restore_concurrency;
+    bool is_spilled = false;
+    std::atomic<size_t> peak_build_bytes_usage{0};
 
     BlockInputStreams restore_build_streams;
     BlockInputStreams restore_probe_streams;

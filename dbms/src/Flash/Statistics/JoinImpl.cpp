@@ -20,11 +20,13 @@ namespace DB
 void JoinStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 {
     fmt_buffer.fmtAppend(
-        R"("hash_table_bytes":{},"build_side_child":"{}",)"
+        R"("peak_build_bytes_usage":{},"build_side_child":"{}","is_spill_enabled":{},"is_spilled":{})"
         R"("non_joined_outbound_rows":{},"non_joined_outbound_blocks":{},"non_joined_outbound_bytes":{},"non_joined_execution_time_ns":{},)"
         R"("join_build_inbound_rows":{},"join_build_inbound_blocks":{},"join_build_inbound_bytes":{},"join_build_execution_time_ns":{})",
-        hash_table_bytes,
+        peak_build_bytes_usage,
         build_side_child,
+        is_spill_enabled,
+        is_spilled,
         non_joined_base.rows,
         non_joined_base.blocks,
         non_joined_base.bytes,
@@ -42,8 +44,10 @@ void JoinStatistics::collectExtraRuntimeDetail()
     if (it != join_execute_info_map.end())
     {
         const auto & join_execute_info = it->second;
-        hash_table_bytes = join_execute_info.join_ptr->getTotalByteCount();
+        peak_build_bytes_usage = join_execute_info.join_ptr->getPeakBuildBytesUsage();
         build_side_child = join_execute_info.build_side_root_executor_id;
+        is_spill_enabled = join_execute_info.join_ptr->isEnableSpill();
+        is_spilled = join_execute_info.join_ptr->isSpilled();
         for (const auto & non_joined_stream : join_execute_info.non_joined_streams)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get()); p_stream)
