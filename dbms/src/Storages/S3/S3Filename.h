@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/Transaction/Types.h>
 #include <common/defines.h>
 #include <common/types.h>
@@ -24,12 +25,7 @@
 namespace DB::S3
 {
 
-struct DMFileOID
-{
-    StoreID store_id = 0;
-    Int64 table_id = 0;
-    UInt64 file_id = 0;
-};
+using DMFileOID = ::DB::DM::Remote::DMFileOID;
 
 enum class S3FilenameType
 {
@@ -83,6 +79,7 @@ struct S3FilenameView
     /// CheckpointDataFile/StableFile utils ///
 
     ALWAYS_INLINE bool isDataFile() const { return type == S3FilenameType::DataFile; }
+    bool isDMFile() const;
     // Return the lock key prefix for finding any locks on this data file through `S3::LIST`
     String getLockPrefix() const;
     // Return the lock key for writing lock file on S3
@@ -112,12 +109,16 @@ struct S3FilenameView
 
     ALWAYS_INLINE bool isDelMark() const { return type == S3FilenameType::DelMark; }
 
+    ALWAYS_INLINE bool isValid() const { return type != S3FilenameType::Invalid; }
+
 public:
     // The result return a view from the `fullpath`.
     // If parsing from a raw char ptr, do NOT create a temporary String object.
     static S3FilenameView fromKey(std::string_view fullpath);
 
     static S3FilenameView fromStoreKeyPrefix(std::string_view prefix);
+
+    static S3FilenameView fromKeyWithPrefix(std::string_view fullpath);
 };
 
 // Use for generating the S3 object key
@@ -127,12 +128,19 @@ struct S3Filename
     StoreID store_id{0};
     String data_subpath;
 
+    static String allStorePrefix();
     static S3Filename fromStoreId(StoreID store_id);
     static S3Filename fromDMFileOID(const DMFileOID & oid);
+    static S3Filename fromTableID(StoreID store_id, TableID table_id);
     static S3Filename newCheckpointData(StoreID store_id, UInt64 upload_seq, UInt64 file_idx);
     static S3Filename newCheckpointManifest(StoreID store_id, UInt64 upload_seq);
 
     String toFullKey() const;
+
+    // `toFullKeyWithPrefix` will as a `s3:://` prefix in full key.
+    // You can pass a full key with prefix to `FileProvider` as file path,
+    // if you want to read/write S3 object as file.
+    String toFullKeyWithPrefix() const;
 
     String toManifestPrefix() const;
 
@@ -151,15 +159,3 @@ struct S3Filename
 };
 
 } // namespace DB::S3
-
-template <>
-struct fmt::formatter<DB::S3::DMFileOID>
-{
-    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
-
-    template <typename FormatContext>
-    auto format(const DB::S3::DMFileOID & value, FormatContext & ctx) const -> decltype(ctx.out())
-    {
-        return format_to(ctx.out(), "{}_{}_{}", value.store_id, value.table_id, value.file_id);
-    }
-};

@@ -76,16 +76,8 @@ struct SpilledFiles
     std::vector<std::unique_ptr<SpilledFile>> immutable_spilled_files;
     /// mutable spilled files means the next spill can append to the files
     std::vector<std::unique_ptr<SpilledFile>> mutable_spilled_files;
-    void makeAllSpilledFilesImmutable()
-    {
-        std::lock_guard lock(spilled_files_mutex);
-        for (auto & mutable_file : mutable_spilled_files)
-        {
-            mutable_file->markFull();
-            immutable_spilled_files.push_back(std::move(mutable_file));
-        }
-        mutable_spilled_files.clear();
-    }
+    void makeAllSpilledFilesImmutable();
+    void commitSpilledFiles(std::vector<std::unique_ptr<SpilledFile>> && spilled_files);
 };
 
 class Spiller

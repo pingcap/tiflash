@@ -417,7 +417,6 @@ void TCPHandler::processOrdinaryQuery()
               */
             if (!block && !isQueryCancelled())
             {
-                sendTotals();
                 sendExtremes();
                 sendProfileInfo();
                 sendProgress();
@@ -467,28 +466,6 @@ void TCPHandler::sendProfileInfo()
         out->next();
     }
 }
-
-
-void TCPHandler::sendTotals()
-{
-    if (auto * input = dynamic_cast<IProfilingBlockInputStream *>(state.io.in.get()))
-    {
-        const Block & totals = input->getTotals();
-
-        if (totals)
-        {
-            initBlockOutput(totals);
-
-            writeVarUInt(Protocol::Server::Totals, *out);
-            writeStringBinary("", *out);
-
-            state.block_out->write(totals);
-            state.maybe_compressed_out->next();
-            out->next();
-        }
-    }
-}
-
 
 void TCPHandler::sendExtremes()
 {

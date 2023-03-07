@@ -513,11 +513,12 @@ public:
     }
     bool isDisaggregatedStorageMode() const
     {
-        return disaggregated_mode == DisaggregatedMode::Storage;
+        // there is no difference
+        return disaggregated_mode == DisaggregatedMode::Storage || disaggregated_mode == DisaggregatedMode::None;
     }
 
     const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
-    void initializeSharedBlockSchemas();
+    void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
 
     // todo: remove after AutoScaler is stable.
     void setUseAutoScaler(bool use)

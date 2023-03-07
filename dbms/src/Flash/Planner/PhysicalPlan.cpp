@@ -51,7 +51,7 @@ bool pushDownSelection(Context & context, const PhysicalPlanNodePtr & plan, cons
         auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
         return physical_table_scan->setFilterConditions(executor_id, selection);
     }
-    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest()))
+    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest() && !context.getSettingsRef().enable_pipeline))
     {
         auto physical_mock_table_scan = std::static_pointer_cast<PhysicalMockTableScan>(plan);
         if (context.mockStorage()->useDeltaMerge() && context.mockStorage()->tableExistsForDeltaMerge(physical_mock_table_scan->getLogicalTableID()))
@@ -302,7 +302,7 @@ void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & conte
 PipelinePtr PhysicalPlan::toPipeline()
 {
     assert(root_node);
-    PipelineBuilder builder;
+    PipelineBuilder builder{log->identifier()};
     root_node->buildPipeline(builder);
     root_node.reset();
     auto pipeline = builder.build();

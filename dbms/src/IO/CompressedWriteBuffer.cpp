@@ -32,16 +32,13 @@ extern const int CANNOT_COMPRESS;
 extern const int UNKNOWN_COMPRESSION_METHOD;
 } // namespace ErrorCodes
 
-
-template <bool add_checksum>
-void CompressedWriteBuffer<add_checksum>::nextImpl()
+template <typename Buffer>
+size_t CompressionEncode(
+    std::string_view source,
+    const CompressionSettings & compression_settings,
+    Buffer & compressed_buffer)
 {
-    if (!offset())
-        return;
-
-    size_t uncompressed_size = offset();
     size_t compressed_size = 0;
-    char * compressed_buffer_ptr = nullptr;
 
     /** The format of compressed block - see CompressedStream.h
       */
@@ -52,41 +49,35 @@ void CompressedWriteBuffer<add_checksum>::nextImpl()
     case CompressionMethod::LZ4HC:
     {
         static constexpr size_t header_size = 1 + sizeof(UInt32) + sizeof(UInt32);
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wold-style-cast"
-        compressed_buffer.resize(header_size + LZ4_COMPRESSBOUND(uncompressed_size));
-#pragma GCC diagnostic pop
-
+        compressed_buffer.resize(header_size + LZ4_COMPRESSBOUND(source.size()));
         compressed_buffer[0] = static_cast<UInt8>(CompressionMethodByte::LZ4);
 
         if (compression_settings.method == CompressionMethod::LZ4)
-            compressed_size = header_size + LZ4_compress_fast(working_buffer.begin(), &compressed_buffer[header_size], uncompressed_size, LZ4_COMPRESSBOUND(uncompressed_size), compression_settings.level);
+            compressed_size = header_size + LZ4_compress_fast(source.data(), &compressed_buffer[header_size], source.size(), LZ4_COMPRESSBOUND(source.size()), compression_settings.level);
         else
-            compressed_size = header_size + LZ4_compress_HC(working_buffer.begin(), &compressed_buffer[header_size], uncompressed_size, LZ4_COMPRESSBOUND(uncompressed_size), compression_settings.level);
+            compressed_size = header_size + LZ4_compress_HC(source.data(), &compressed_buffer[header_size], source.size(), LZ4_COMPRESSBOUND(source.size()), compression_settings.level);
 
         UInt32 compressed_size_32 = compressed_size;
-        UInt32 uncompressed_size_32 = uncompressed_size;
+        UInt32 uncompressed_size_32 = source.size();
 
         unalignedStore<UInt32>(&compressed_buffer[1], compressed_size_32);
         unalignedStore<UInt32>(&compressed_buffer[5], uncompressed_size_32);
 
-        compressed_buffer_ptr = &compressed_buffer[0];
         break;
     }
     case CompressionMethod::ZSTD:
     {
         static constexpr size_t header_size = 1 + sizeof(UInt32) + sizeof(UInt32);
 
-        compressed_buffer.resize(header_size + ZSTD_compressBound(uncompressed_size));
+        compressed_buffer.resize(header_size + ZSTD_compressBound(source.size()));
 
         compressed_buffer[0] = static_cast<UInt8>(CompressionMethodByte::ZSTD);
 
         size_t res = ZSTD_compress(
             &compressed_buffer[header_size],
             compressed_buffer.size() - header_size,
-            working_buffer.begin(),
-            uncompressed_size,
+            source.data(),
+            source.size(),
             compression_settings.level);
 
         if (ZSTD_isError(res))
@@ -95,20 +86,19 @@ void CompressedWriteBuffer<add_checksum>::nextImpl()
         compressed_size = header_size + res;
 
         UInt32 compressed_size_32 = compressed_size;
-        UInt32 uncompressed_size_32 = uncompressed_size;
+        UInt32 uncompressed_size_32 = source.size();
 
         unalignedStore<UInt32>(&compressed_buffer[1], compressed_size_32);
         unalignedStore<UInt32>(&compressed_buffer[5], uncompressed_size_32);
 
-        compressed_buffer_ptr = &compressed_buffer[0];
         break;
     }
     case CompressionMethod::NONE:
     {
         static constexpr size_t header_size = 1 + sizeof(UInt32) + sizeof(UInt32);
 
-        compressed_size = header_size + uncompressed_size;
-        UInt32 uncompressed_size_32 = uncompressed_size;
+        compressed_size = header_size + source.size();
+        UInt32 uncompressed_size_32 = source.size();
         UInt32 compressed_size_32 = compressed_size;
 
         compressed_buffer.resize(compressed_size);
@@ -117,14 +107,27 @@ void CompressedWriteBuffer<add_checksum>::nextImpl()
 
         unalignedStore<UInt32>(&compressed_buffer[1], compressed_size_32);
         unalignedStore<UInt32>(&compressed_buffer[5], uncompressed_size_32);
-        memcpy(&compressed_buffer[9], working_buffer.begin(), uncompressed_size);
+        memcpy(&compressed_buffer[9], source.data(), source.size());
 
-        compressed_buffer_ptr = &compressed_buffer[0];
         break;
     }
     default:
         throw Exception("Unknown compression method", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
     }
+
+    return compressed_size;
+}
+
+template <bool add_checksum>
+void CompressedWriteBuffer<add_checksum>::nextImpl()
+{
+    if (!offset())
+        return;
+
+    const char * source = working_buffer.begin();
+    const size_t source_size = offset();
+    size_t compressed_size = CompressionEncode({source, source_size}, compression_settings, compressed_buffer);
+    const auto * compressed_buffer_ptr = &compressed_buffer[0];
 
     if constexpr (add_checksum)
     {
@@ -161,4 +164,12 @@ CompressedWriteBuffer<add_checksum>::~CompressedWriteBuffer()
 
 template class CompressedWriteBuffer<true>;
 template class CompressedWriteBuffer<false>;
+template size_t CompressionEncode<PODArray<char>>(
+    std::string_view,
+    const CompressionSettings &,
+    PODArray<char> &);
+template size_t CompressionEncode<String>(
+    std::string_view,
+    const CompressionSettings &,
+    String &);
 } // namespace DB

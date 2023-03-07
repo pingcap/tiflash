@@ -127,6 +127,41 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
             ASSERT_EQ(total_rows, decoded_block.rows());
         }
         {
+            std::vector<Block> blocks_to_move;
+            blocks_to_move.reserve(blocks.size());
+            for (auto && block : blocks)
+            {
+                blocks_to_move.emplace_back(block);
+            }
+            for (auto && block : blocks_to_move)
+            {
+                for (auto && col : block)
+                {
+                    ASSERT_TRUE(col.column);
+                }
+            }
+            auto codec = CHBlockChunkCodecV1{
+                header,
+            };
+            auto str = codec.encode(std::move(blocks_to_move), mode);
+            for (auto && block : blocks_to_move)
+            {
+                ASSERT_EQ(block.rows(), 0);
+            }
+            ASSERT_FALSE(str.empty());
+            ASSERT_EQ(codec.encoded_rows, total_rows);
+
+            if (mode == CompressionMethod::NONE)
+                ASSERT_EQ(codec.compressed_size, 0);
+            else
+                ASSERT_NE(codec.compressed_size, 0);
+
+            ASSERT_NE(codec.original_size, 0);
+
+            auto decoded_block = CHBlockChunkCodecV1::decode(header, str);
+            ASSERT_EQ(total_rows, decoded_block.rows());
+        }
+        {
             auto columns = prepareBlock(rows).getColumns();
             auto codec = CHBlockChunkCodecV1{
                 header,
@@ -179,5 +214,19 @@ TEST(CHBlockChunkCodec, ChunkCodecV1)
         }
         test_enocde_release_data(std::move(batch_columns), header, total_rows);
     }
+    {
+        auto source_str = CHBlockChunkCodecV1{header}.encode(blocks.front(), CompressionMethod::NONE);
+        ASSERT_FALSE(source_str.empty());
+        ASSERT_EQ(static_cast<CompressionMethodByte>(source_str[0]), CompressionMethodByte::NONE);
+
+        for (auto mode : {CompressionMethod::LZ4, CompressionMethod::ZSTD})
+        {
+            auto compressed_str_a = CHBlockChunkCodecV1::encode({&source_str[1], source_str.size() - 1}, mode);
+            auto compressed_str_b = CHBlockChunkCodecV1{header}.encode(blocks.front(), mode);
+
+            ASSERT_EQ(compressed_str_a, compressed_str_b);
+        }
+    }
 }
+
 } // namespace DB::tests

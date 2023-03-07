@@ -88,16 +88,22 @@ namespace DB
         F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                                       \
         F(type_mpp_establish_conn_local, {{"type", "mpp_tunnel_local"}}),                                                                           \
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}))                                                                                     \
-    M(tiflash_exchange_data_bytes, "Total bytes sent by exchange operators", Counter, \
-        F(type_hash_original, {"type", "hash_original"}), /*the original data size by hash exchange*/ \
-        F(type_hash_none_compression_remote, {"type", "hash_none_compression_remote"}), /*the remote exchange data size by hash partition with no compression*/\
-        F(type_hash_none_compression_local, {"type", "hash_none_compression_local"}), /*the local exchange data size by hash partition with no compression*/ \
-        F(type_hash_lz4_compression, {"type", "hash_lz4_compression"}), /*the exchange data size by hash partition with lz4 compression*/ \
-        F(type_hash_zstd_compression, {"type", "hash_zstd_compression"}), /*the exchange data size by hash partition with zstd compression*/ \
-        F(type_broadcast_passthrough_original, {"type", "broadcast_passthrough_original"}), /*the original exchange data size by broadcast/passthough*/ \
-        F(type_broadcast_passthrough_none_compression_local, {"type", "broadcast_passthrough_none_compression_local"}), /*the local exchange data size by broadcast/passthough with no compression*/ \
-        F(type_broadcast_passthrough_none_compression_remote, {"type", "broadcast_passthrough_none_compression_remote"}), /*the remote exchange data size by broadcast/passthough with no compression*/ \
-    ) \
+    M(tiflash_exchange_data_bytes, "Total bytes sent by exchange operators", Counter,                                                               \
+        F(type_hash_original, {"type", "hash_original"}),                                                                                           \
+        F(type_hash_none_compression_remote, {"type", "hash_none_compression_remote"}),                                                             \
+        F(type_hash_none_compression_local, {"type", "hash_none_compression_local"}),                                                               \
+        F(type_hash_lz4_compression, {"type", "hash_lz4_compression"}),                                                                             \
+        F(type_hash_zstd_compression, {"type", "hash_zstd_compression"}),                                                                           \
+        F(type_broadcast_original, {"type", "broadcast_original"}),                                                                                 \
+        F(type_broadcast_none_compression_local, {"type", "broadcast_none_compression_local"}),                                                     \
+        F(type_broadcast_none_compression_remote, {"type", "broadcast_none_compression_remote"}),                                                   \
+        F(type_broadcast_lz4_compression, {"type", "broadcast_lz4_compression"}),                                                                   \
+        F(type_broadcast_zstd_compression, {"type", "broadcast_zstd_compression"}),                                                                 \
+        F(type_passthrough_original, {"type", "passthrough_original"}),                                                                             \
+        F(type_passthrough_none_compression_local, {"type", "passthrough_none_compression_local"}),                                                 \
+        F(type_passthrough_none_compression_remote, {"type", "passthrough_none_compression_remote"}),                                               \
+        F(type_passthrough_lz4_compression, {"type", "passthrough_lz4_compression"}),                                                               \
+        F(type_passthrough_zstd_compression, {"type", "passthrough_zstd_compression"}))                                                             \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                                    \
     M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                                       \
     M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                                   \
@@ -203,6 +209,15 @@ namespace DB
         F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))                                                                             \
     M(tiflash_storage_rough_set_filter_rate, "Bucketed histogram of rough set filter rate", Histogram,                                              \
         F(type_dtfile_pack, {{"type", "dtfile_pack"}}, EqualWidthBuckets{0, 6, 20}))                                                                \
+    M(tiflash_disaggregated_object_lock_request_count, "Total number of S3 object lock/delete request", Counter,                                    \
+        F(type_lock, {"type", "lock"}), F(type_delete, {"type", "delete"}),                                                                         \
+        F(type_owner_changed, {"type", "owner_changed"}), F(type_error, {"type", "error"}),                                                         \
+        F(type_lock_conflict, {"type", "lock_conflict"}), F(type_delete_conflict, {"type", "delete_conflict"}),                                     \
+        F(type_delete_risk, {"type", "delete_risk"}))                                                                                               \
+    M(tiflash_disaggregated_object_lock_request_duration_seconds, "Bucketed histogram of S3 object lock/delete request duration", Histogram,        \
+        F(type_lock, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                  \
+        F(type_delete, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}))                                                                              \
+    M(tiflash_disaggregated_read_tasks_count, "Total number of storage engine disaggregated read tasks", Counter)                                   \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                             \
         Histogram, /* these command usually cost servel seconds, increase the start bucket to 50ms */                                               \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                                      \
@@ -277,7 +292,21 @@ namespace DB
     M(tiflash_compute_request_unit, "Request Unit used by tiflash compute", Counter,                                                                \
         F(type_mpp, {{"type", "mpp"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
         F(type_cop, {{"type", "cop"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}),     \
-        F(type_batch, {{"type", "batch"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()}))
+        F(type_batch, {{"type", "batch"}, ComputeLabelHolder::instance().getClusterIdLabel(), ComputeLabelHolder::instance().getProcessIdLabel()})) \
+    M(tiflash_shared_block_schemas, "statistics about shared block schemas of ColumnFiles", Gauge,                                                  \
+        F(type_current_size, {{"type", "current_size"}}),                                                                                           \
+        F(type_still_used_when_evict, {{"type", "still_used_when_evict"}}),                                                                         \
+        F(type_miss_count, {{"type", "miss_count"}}),                                                                                               \
+        F(type_hit_count, {{"type", "hit_count"}}))                                                                                                 \
+    M(tiflash_storage_s3_request_seconds, "S3 request duration in seconds", Histogram,                                                              \
+        F(type_put_object, {{"type", "put_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_get_object, {{"type", "get_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_create_multi_part_upload, {{"type", "create_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                         \
+        F(type_upload_part, {{"type", "upload_part"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
+        F(type_complete_multi_part_upload, {{"type", "complete_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                     \
+        F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
+        F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
+        F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))
 
 // clang-format on
 

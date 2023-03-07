@@ -18,7 +18,7 @@
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Poco/SortedDirectoryIterator.h>
-#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/PageConstants.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <fmt/core.h>
 
@@ -32,7 +32,7 @@ enum class TestType
 class TiFlashTestEnv
 {
 public:
-    static String getTemporaryPath(const std::string_view test_case = "", bool get_abs = true);
+    static String getTemporaryPath(std::string_view test_case = "", bool get_abs = true);
 
     static void tryCreatePath(const std::string & path);
 
@@ -78,7 +78,7 @@ public:
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
     static void initializeGlobalContext(Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 2);
-    static void addGlobalContext(Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 2);
+    static void addGlobalContext(const DB::Settings & settings_ = DB::Settings(), Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 2);
     static Context & getGlobalContext() { return *global_contexts[0]; }
     static Context & getGlobalContext(int idx) { return *global_contexts[idx]; }
     static int globalContextSize() { return global_contexts.size(); }

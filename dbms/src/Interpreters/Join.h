@@ -25,7 +25,6 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <common/ThreadPool.h>
 
 #include <shared_mutex>
 
@@ -119,21 +118,6 @@ public:
     Block joinBlock(ProbeProcessInfo & probe_process_info) const;
 
     void checkTypes(const Block & block) const;
-
-    /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
-      */
-    void setTotals(const Block & block)
-    {
-        std::unique_lock lock(rwlock);
-        totals = block;
-    }
-    bool hasTotals() const
-    {
-        std::shared_lock lock(rwlock);
-        return static_cast<bool>(totals);
-    };
-
-    void joinTotals(Block & block) const;
 
     bool needReturnNonJoinedData() const;
 
@@ -361,7 +345,6 @@ private:
 
     const LoggerPtr log;
 
-    Block totals;
     std::atomic<size_t> total_input_build_rows{0};
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
       * Note that these methods could be called simultaneously only while use of StorageJoin,
