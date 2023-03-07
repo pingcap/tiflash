@@ -228,6 +228,7 @@ public:
 
     bool readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg);
     void popBlock(Block & block);
+    bool tryPopBlock(Block & block);
 
     std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator scheduleSegment(
         const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,

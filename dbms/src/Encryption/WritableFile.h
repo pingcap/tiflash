@@ -28,6 +28,8 @@ public:
 
     virtual ssize_t pwrite(char * buf, size_t size, off_t offset) const = 0;
 
+    virtual off_t seek(off_t offset, int whence) const = 0;
+
     virtual std::string getFileName() const = 0;
 
     virtual int getFd() const = 0;
