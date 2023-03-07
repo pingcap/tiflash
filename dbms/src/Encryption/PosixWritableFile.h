@@ -47,6 +47,8 @@ public:
 
     ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
 
+    off_t seek(off_t offset, int whence) const override;
+
     std::string getFileName() const override { return file_name; }
 
     int getFd() const override { return fd; }

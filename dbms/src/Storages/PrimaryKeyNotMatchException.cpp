@@ -14,6 +14,7 @@
 
 
 #include <Databases/DatabasesCommon.h>
+#include <Encryption/FileProvider.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>

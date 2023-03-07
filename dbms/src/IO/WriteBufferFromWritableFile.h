@@ -14,30 +14,42 @@
 
 #pragma once
 
-#include <Encryption/EncryptionPath.h>
-#include <IO/ReadBufferFromRandomAccessFile.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
 
 namespace DB
 {
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
-class ReadLimiter;
-using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+class WritableFile;
+using WritableFilePtr = std::shared_ptr<WritableFile>;
 
-/**
- * Note: This class maybe removed in the future, use ReadBufferFromRandomAccessFile instead if possible
- */
-class ReadBufferFromFileProvider : public ReadBufferFromRandomAccessFile
+class WriteBufferFromWritableFile : public WriteBufferFromFileDescriptor
 {
+protected:
+    void nextImpl() override;
+
 public:
-    ReadBufferFromFileProvider(
-        const FileProviderPtr & file_provider_,
-        const std::string & file_name_,
-        const EncryptionPath & encryption_path_,
+    WriteBufferFromWritableFile(
+        WritableFilePtr file_,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
-        const ReadLimiterPtr & read_limiter = nullptr,
-        int flags = -1,
         char * existing_memory = nullptr,
         size_t alignment = 0);
+
+    ~WriteBufferFromWritableFile() override;
+
+    void sync() override;
+
+    std::string getFileName() const override;
+
+    int getFD() const override;
+
+    void close() override;
+
+private:
+    off_t doSeek(off_t offset, int whence) override;
+
+    void doTruncate(off_t length) override;
+
+private:
+    WritableFilePtr file;
 };
+
 } // namespace DB
