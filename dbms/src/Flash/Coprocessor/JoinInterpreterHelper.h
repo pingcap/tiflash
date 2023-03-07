@@ -49,16 +49,16 @@ struct JoinOtherConditions
     /// Validate this JoinConditions and return error message if any.
     String validate(bool is_null_aware_semi_join) const
     {
-        if ((!other_cond_name.empty() || !other_eq_cond_from_in_name.empty()) && other_cond_expr == nullptr)
+        if unlikely ((!other_cond_name.empty() || !other_eq_cond_from_in_name.empty()) && other_cond_expr == nullptr)
             return "other_cond_name and/or other_eq_cond_from_in_name are not empty but other_cond_expr is nullptr";
-        if (other_cond_name.empty() && other_eq_cond_from_in_name.empty() && other_cond_expr != nullptr)
+        if unlikely (other_cond_name.empty() && other_eq_cond_from_in_name.empty() && other_cond_expr != nullptr)
             return "other_cond_name and other_eq_cond_from_in_name are empty but other_cond_expr is not nullptr";
 
         if (is_null_aware_semi_join)
         {
-            if (null_aware_eq_cond_name.empty() || null_aware_eq_cond_expr == nullptr)
+            if unlikely (null_aware_eq_cond_name.empty() || null_aware_eq_cond_expr == nullptr)
                 return "null-aware semi join does not have null_aware_eq_cond_name or null_aware_eq_cond_expr is nullptr";
-            if (!other_eq_cond_from_in_name.empty())
+            if unlikely (!other_eq_cond_from_in_name.empty())
                 return "null-aware semi join should not have other_eq_cond_from_in_name";
         }
 

@@ -63,6 +63,9 @@ void extractNestedColumnsAndNullMap(ColumnRawPtrs & key_columns, ColumnPtr & nul
 
 void extractAllKeyNullMap(ColumnRawPtrs & key_columns, ColumnPtr & all_key_null_map_holder, ConstNullMapPtr & all_key_null_map)
 {
+    if (key_columns.empty())
+        return;
+
     for (auto & column : key_columns)
     {
         /// If one column is not nullable, just return.
@@ -100,9 +103,6 @@ void extractAllKeyNullMap(ColumnRawPtrs & key_columns, ColumnPtr & all_key_null_
             }
         }
     }
-
-    if (!all_key_null_map_holder)
-        return;
 
     all_key_null_map = &static_cast<const ColumnUInt8 &>(*all_key_null_map_holder).getData();
 }
