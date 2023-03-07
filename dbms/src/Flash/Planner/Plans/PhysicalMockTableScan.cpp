@@ -114,8 +114,8 @@ void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Co
 void PhysicalMockTableScan::buildPipelineExecGroup(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
-    Context & /*context*/,
-    size_t /*concurrency*/)
+    Context & context,
+    size_t concurrency)
 {
     if (context.mockStorage()->useDeltaMerge())
     {
