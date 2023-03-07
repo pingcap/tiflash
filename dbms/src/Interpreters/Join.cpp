@@ -1099,13 +1099,18 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                     }
                     if likely (map_size_after_insert > map_size_before_insert)
                     {
-                        join_partition->memory_usage += (pool_size_after_insert - pool_size_before_insert);
+                        join_partition->memory_usage += (map_size_after_insert - map_size_before_insert);
                     }
                     continue;
                 }
             }
             build_spiller->spillBlocks(blocks_to_spill, i);
         }
+#ifdef DBMS_PUBLIC_GTEST
+        // for join spill to disk gtest
+        if (restore_round == 1)
+            return;
+#endif
         spillMostMemoryUsedPartitionIfNeed();
     }
 }

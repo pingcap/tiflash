@@ -142,12 +142,7 @@ try
                 // for spill to disk tests
                 context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
                 ASSERT_THROW(executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j], {1}), Exception);
-                context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(25000)));
-                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j], {2});
-                context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(75000)));
-                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j], {5});
-                context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(170000)));
-                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j], {10});
+                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j], {2, 5, 10});
             }
         }
     }
@@ -752,13 +747,15 @@ try
                        .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
                        .build(context);
 
+    auto join_restore_concurrences = {-1, 0, 1, 5};
     const ColumnsWithTypeAndName expect = {toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0})};
     context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
-    ASSERT_THROW(executeAndAssertColumnsEqual(request, expect, {1}, {DEFAULT_BLOCK_SIZE}), Exception);
-    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(50000)));
-    executeAndAssertColumnsEqual(request, expect, {2, 5}, {1, 2, 5, DEFAULT_BLOCK_SIZE});
-    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(120000)));
-    executeAndAssertColumnsEqual(request, expect, {10}, {1, 2, 5, DEFAULT_BLOCK_SIZE});
+    for (const auto & join_restore_concurrency : join_restore_concurrences)
+    {
+        context.context.setSetting("join_restore_concurrency", Field(static_cast<UInt64>(join_restore_concurrency)));
+        ASSERT_THROW(executeAndAssertColumnsEqual(request, expect, {1}, {DEFAULT_BLOCK_SIZE}), Exception);
+        executeAndAssertColumnsEqual(request, expect, {2, 5, 10}, {1, 2, 5, DEFAULT_BLOCK_SIZE});
+    }
 }
 CATCH
 
@@ -771,8 +768,8 @@ try
     ColumnsWithTypeAndName left_column_data;
     ColumnsWithTypeAndName right_column_data;
     ColumnsWithTypeAndName common_column_data;
-    size_t table_rows = 102400;
-    size_t common_rows = 20480;
+    size_t table_rows = 51200;
+    size_t common_rows = 10240;
     UInt64 max_block_size = 800;
     size_t original_max_streams = 20;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_column_infos))
@@ -824,10 +821,9 @@ try
     context.addExchangeReceiver("right_exchange_receiver_5_concurrency", right_column_infos, right_column_data, 5, right_partition_column_infos);
     context.addExchangeReceiver("right_exchange_receiver_10_concurrency", right_column_infos, right_column_data, 10, right_partition_column_infos);
     std::vector<String> left_table_names = {"left_table_1_concurrency", "left_table_3_concurrency", "left_table_5_concurrency", "left_table_10_concurrency"};
-    std::vector<String> right_table_names = {"right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
+    std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
     std::vector<size_t> right_exchange_receiver_concurrency = {1, 3, 5, 10};
-    UInt64 max_bytes_before_external_join = 23292240;
-
+    UInt64 max_bytes_before_external_join = 20000;
     /// case 1, right join without right condition
     auto request = context
                        .scan("outer_join_test", right_table_names[0])
@@ -852,11 +848,9 @@ try
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
             // test spill to disk
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
-            if (right_table_name == "right_table_1_concurrency" && left_table_name == "left_table_1_concurrency")
+            if (right_table_name == "right_table_1_concurrency")
             {
-                max_bytes_before_external_join = 100000;
                 ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
-                max_bytes_before_external_join = 23292240;
             }
             else
             {
@@ -878,14 +872,13 @@ try
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
 
             // test spill to disk
-            if (exchange_concurrency == 1 && left_table_name == "left_table_1_concurrency")
+            context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
+            if (exchange_concurrency == 1)
             {
-                context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(100000)));
                 ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
             }
             else
             {
-                context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
             }
         }
@@ -898,6 +891,7 @@ try
                   .build(context);
     context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use right_table left join left_table as the reference
+    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
     ref_columns = executeStreams(request, original_max_streams);
     /// case 2.1 table scan join table scan
     for (auto & left_table_name : left_table_names)
@@ -914,7 +908,7 @@ try
 
             // test spill to disk
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
-            if (right_table_name == "right_table_1_concurrency" && left_table_name == "left_table_1_concurrency")
+            if (right_table_name == "right_table_1_concurrency")
             {
                 ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
             }
@@ -939,14 +933,13 @@ try
             ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
 
             // test spill to disk
-            if (exchange_concurrency == 1 && left_table_name == "left_table_1_concurrency")
+            context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
+            if (exchange_concurrency == 1)
             {
-                context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(100000)));
                 ASSERT_THROW(executeStreams(request, original_max_streams), Exception);
             }
             else
             {
-                context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
             }
         }
