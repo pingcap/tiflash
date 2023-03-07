@@ -1202,6 +1202,11 @@ bool Join::isEnableSpill() const
     return max_bytes_before_external_join > 0;
 }
 
+bool Join::isRestoreJoin() const
+{
+    return restore_round > 0;
+}
+
 void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
 {
     size_t keys_size = key_names_right.size();
@@ -2709,7 +2714,7 @@ std::tuple<JoinPtr, BlockInputStreamPtr, BlockInputStreamPtr, BlockInputStreamPt
         restore_non_joined_data_streams.resize(restore_join_build_concurrency, nullptr);
         RUNTIME_CHECK_MSG(restore_build_streams.size() == static_cast<size_t>(restore_join_build_concurrency), "restore streams size must equal to restore_join_build_concurrency");
         auto new_max_bytes_before_external_join = static_cast<size_t>(max_bytes_before_external_join * (static_cast<double>(restore_join_build_concurrency) / build_concurrency));
-        restore_join = createRestoreJoin(new_max_bytes_before_external_join);
+        restore_join = createRestoreJoin(std::max(1, new_max_bytes_before_external_join));
         restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
         restore_join->setInitActiveBuildConcurrency();
         restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);

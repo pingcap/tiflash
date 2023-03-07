@@ -47,20 +47,77 @@ public:
 
 protected:
     Block readImpl() override;
-    Block getOutputBlock();
-    std::tuple<size_t, Block> getOneProbeBlock();
 
 private:
+    /*
+     *   spill not enabled:
+     *                                  WAIT_BUILD_FINISH
+     *                                          |
+     *                                          ▼
+     *                                        PROBE
+     *                                          |
+     *                                          ▼
+     *                                  -----------------
+     *              has non_joined data |               | no non_joined data
+     *                                  ▼               ▼
+     *                         WAIT_PROBE_FINISH     FINISHED
+     *                                  |
+     *                                  ▼
+     *                        READ_NON_JOINED_DATA
+     *                                  |
+     *                                  ▼
+     *                               FINISHED
+     *
+     *   spill enabled:
+     *                  |-------------------> WAIT_BUILD_FINISH
+     *                  |                             |
+     *                  |                             ▼
+     *                  |                           PROBE
+     *                  |                             |
+     *                  |                             ▼
+     *                  |                    WAIT_PROBE_FINISH
+     *                  |                             |
+     *                  |                             ▼
+     *                  |                      ---------------
+     *                  |  has non_joined data |             | no non_joined data
+     *                  |                      ▼             |
+     *                  |             READ_NON_JOINED_DATA   |
+     *                  |                      \             /
+     *                  |                       \           /
+     *                  |                        \         /
+     *                  |                         \       /
+     *                  |                          \     /
+     *                  |                           \   /
+     *                  |                            \ /
+     *                  |                             ▼
+     *                  |                      GET_RESTORE_JOIN
+     *                  |                             |
+     *                  |                             ▼
+     *                  |                      ---------------
+     *                  |    has restored join |             | no restored join
+     *                  |                      ▼             ▼
+     *                  |                RESTORE_BUILD    FINISHED
+     *                  |                      |
+     *                  -----------------------|
+     *
+     */
     enum class ProbeStatus
     {
-        PROBE,
-        BUILD_RESTORE_PARTITION,
-        JUDGE_WEATHER_HAVE_PARTITION_TO_RESTORE,
-        WAIT_FOR_READ_NON_JOINED_DATA,
-        READ_NON_JOINED_DATA,
-        FINISHED,
+        WAIT_BUILD_FINISH, /// wait build finish
+        PROBE, /// probe for both init probe and restore probe
+        WAIT_PROBE_FINISH, /// wait probe finish
+        GET_RESTORE_JOIN, /// try to get restore join
+        RESTORE_BUILD, /// build for restore join
+        READ_NON_JOINED_DATA, /// output non joined data
+        FINISHED, /// the final state
     };
 
+    Block getOutputBlock();
+    std::tuple<size_t, Block> getOneProbeBlock();
+    void onCurrentProbeDone();
+    void onAllProbeDone();
+    void onCurrentReadNonJoinedDataDone();
+    void tryGetRestoreJoin();
     void readSuffixImpl() override;
     const LoggerPtr log;
     /// join/non_joined_stream/restore_build_stream/restore_probe_stream can be modified during the runtime
@@ -77,7 +134,7 @@ private:
     BlockInputStreamPtr non_joined_stream;
     BlockInputStreamPtr restore_build_stream;
     BlockInputStreamPtr restore_probe_stream;
-    ProbeStatus status{ProbeStatus::PROBE};
+    ProbeStatus status{ProbeStatus::WAIT_BUILD_FINISH};
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;
     std::list<JoinPtr> parents;

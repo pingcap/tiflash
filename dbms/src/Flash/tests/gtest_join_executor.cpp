@@ -752,7 +752,7 @@ try
     context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
     for (const auto & join_restore_concurrency : join_restore_concurrences)
     {
-        context.context.setSetting("join_restore_concurrency", Field(static_cast<UInt64>(join_restore_concurrency)));
+        context.context.setSetting("join_restore_concurrency", Field(static_cast<Int64>(join_restore_concurrency)));
         ASSERT_THROW(executeAndAssertColumnsEqual(request, expect, {1}, {DEFAULT_BLOCK_SIZE}), Exception);
         executeAndAssertColumnsEqual(request, expect, {2, 5, 10}, {1, 2, 5, DEFAULT_BLOCK_SIZE});
     }
