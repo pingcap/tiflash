@@ -58,8 +58,10 @@ void ColumnFileBig::removeData(WriteBatches & wbs) const
     wbs.removed_data.delPage(file->pageId());
 }
 
-ColumnFileReaderPtr
-ColumnFileBig::getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
+ColumnFileReaderPtr ColumnFileBig::getReader(
+    const DMContext & context,
+    const IColumnFileDataProviderPtr &,
+    const ColumnDefinesPtr & col_defs) const
 {
     return std::make_shared<ColumnFileBigReader>(context, *this, col_defs);
 }
