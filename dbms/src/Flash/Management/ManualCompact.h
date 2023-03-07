@@ -13,7 +13,7 @@
 // limitations under the License.
 #pragma once
 
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>

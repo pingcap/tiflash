@@ -16,7 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Core/Types.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>

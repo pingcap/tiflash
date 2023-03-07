@@ -16,6 +16,7 @@
 #include <Common/Stopwatch.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/Utils.h>
+#include <Interpreters/Context.h>
 
 #include <ext/scope_guard.h>
 

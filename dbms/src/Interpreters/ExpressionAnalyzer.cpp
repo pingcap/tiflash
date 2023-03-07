@@ -32,6 +32,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsMiscellaneous.h>
 #include <Functions/IFunction.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
