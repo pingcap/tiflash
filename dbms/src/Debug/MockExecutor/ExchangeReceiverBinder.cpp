@@ -18,6 +18,7 @@
 #include <Debug/MockExecutor/ExchangeReceiverBinder.h>
 #include <Debug/MockExecutor/ExchangeSenderBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Interpreters/Context.h>
 #include <Storages/Transaction/TiDB.h>
 #include <kvproto/mpp.pb.h>
 

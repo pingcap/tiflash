@@ -16,6 +16,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/copyData.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTCreateQuery.h>

@@ -14,12 +14,12 @@
 
 #pragma once
 
-#include <Core/ColumnWithTypeAndName.h>
-#include <Interpreters/Context_fwd.h>
-
+#include <memory>
 
 namespace DB
 {
-ColumnPtr castColumn(const ColumnWithTypeAndName & arg, const DataTypePtr & type, const Context & context);
-ColumnPtr tiDBCastColumn(const ColumnWithTypeAndName & arg, const DataTypePtr & type, const Context & context);
+
+class Context;
+using ContextPtr = std::shared_ptr<Context>;
+
 } // namespace DB

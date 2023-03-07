@@ -14,6 +14,7 @@
 
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
+#include <Interpreters/Context.h>
 #include <Operators/AggregateSinkOp.h>
 #include <Operators/ExpressionTransformOp.h>
 

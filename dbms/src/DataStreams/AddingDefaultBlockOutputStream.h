@@ -14,11 +14,11 @@
 
 #pragma once
 
-#include <DataStreams/IBlockOutputStream.h>
 #include <Columns/ColumnConst.h>
-#include <Storages/ColumnDefault.h>
-#include <Interpreters/Context.h>
+#include <DataStreams/IBlockOutputStream.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/evaluateMissingDefaults.h>
+#include <Storages/ColumnDefault.h>
 
 
 namespace DB
@@ -37,8 +37,11 @@ public:
         NamesAndTypesList required_columns_,
         const ColumnDefaults & column_defaults_,
         const Context & context_)
-        : output(output_), header(header_), required_columns(required_columns_),
-          column_defaults(column_defaults_), context(context_)
+        : output(output_)
+        , header(header_)
+        , required_columns(required_columns_)
+        , column_defaults(column_defaults_)
+        , context(context_)
     {
     }
 
@@ -59,4 +62,4 @@ private:
 };
 
 
-}
+} // namespace DB

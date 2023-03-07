@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Coprocessor/DAGQueryBlock.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/IQuerySource.h>
 
 namespace DB
@@ -35,7 +35,7 @@ public:
 
     std::shared_ptr<DAGQueryBlock> getRootQueryBlock() const { return root_query_block; }
 
-    DAGContext & getDAGContext() const { return *context.getDAGContext(); }
+    DAGContext & getDAGContext() const;
 
 private:
     Context & context;

@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V2/PageFile.h>
