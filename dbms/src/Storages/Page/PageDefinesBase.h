@@ -135,12 +135,30 @@ public:
     //     inner = std::move(value);
     //     GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(inner.size() * 2 * 8);
     // }
-    // PageFieldOffsetChecksums(){
-    //     GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Increment();
-    // }
+    PageFieldOffsetChecksums() {
+        GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Increment();
+    }
+
+    PageFieldOffsetChecksums(const PageFieldOffsetChecksums & page_filed_offset_checksums){
+        GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Increment();
+        inner = page_filed_offset_checksums.inner;
+        GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(inner.size() * 2 * 8);
+    }
+
+    PageFieldOffsetChecksums &operator=(const PageFieldOffsetChecksums& page_filed_offset_checksums) {
+        if (this == &page_filed_offset_checksums) {
+            return *this;
+        }
+
+        this->inner = page_filed_offset_checksums.inner;
+        GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Increment();
+        GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(inner.size() * 2 * 8);
+        return *this;
+    
+    }
 
     ~PageFieldOffsetChecksums() {
-        //GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Decrement();
+        GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Decrement();
         GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Decrement(inner.size() * 2 * 8);
     }
 };
