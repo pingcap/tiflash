@@ -393,20 +393,30 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
                                           const LoggerPtr & log)
 {
     RSOperatorPtr op = EMPTY_RS_OPERATOR;
-    if (dag_info.filters.empty())
+    if (dag_info.filters.empty() && dag_info.pushed_down_filters.empty())
         return op;
 
-    if (dag_info.filters.size() == 1)
+    if (dag_info.filters.size() == 1 && dag_info.pushed_down_filters.empty())
     {
         op = cop::tryParse(dag_info.filters[0], columns_to_read, creator, dag_info.timezone_info, log);
+    }
+    else if (dag_info.pushed_down_filters.size() == 1 && dag_info.filters.empty())
+    {
+        op = cop::tryParse(dag_info.pushed_down_filters[0], columns_to_read, creator, dag_info.timezone_info, log);
     }
     else
     {
         /// By default, multiple conditions with operator "and"
         RSOperators children;
+        children.reserve(dag_info.filters.size() + dag_info.pushed_down_filters.size());
         for (int i = 0; i < dag_info.filters.size(); ++i)
         {
             const auto & filter = dag_info.filters[i];
+            children.emplace_back(cop::tryParse(filter, columns_to_read, creator, dag_info.timezone_info, log));
+        }
+        for (int i = 0; i < dag_info.pushed_down_filters.size(); ++i)
+        {
+            const auto & filter = dag_info.pushed_down_filters[i];
             children.emplace_back(cop::tryParse(filter, columns_to_read, creator, dag_info.timezone_info, log));
         }
         op = createAnd(children);
