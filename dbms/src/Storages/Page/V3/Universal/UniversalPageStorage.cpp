@@ -24,6 +24,10 @@
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
 
+#include "Common/Exception.h"
+#include "Storages/Page/V3/CheckpointFile/CheckpointFiles.h"
+#include "common/logger_useful.h"
+
 namespace DB
 {
 UniversalPageStoragePtr UniversalPageStorage::create(
@@ -334,8 +338,7 @@ PS::V3::S3LockLocalManager::ExtraLockInfo UniversalPageStorage::getUploadLocksIn
     return remote_locks_local_mgr->getUploadLocksInfo();
 }
 
-UniversalPageStorage::DumpCheckpointResult
-UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
+void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
 {
     std::scoped_lock lock(checkpoint_mu);
 
@@ -343,7 +346,7 @@ UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::Dump
     auto snap = page_directory->createSnapshot(/*tracing_id*/ "dumpIncrementalCheckpoint");
 
     if (snap->sequence == last_checkpoint_sequence)
-        return {};
+        return;
 
     auto edit_from_mem = page_directory->dumpSnapshotToEdit(snap);
 
@@ -391,6 +394,28 @@ UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::Dump
 
     SYNC_FOR("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
 
+    // Persist the checkpoint to remote store.
+    // If not persisted or exception throw, then we can not apply the checkpoint
+    // info to directory. Neither update `last_checkpoint_sequence`.
+    try
+    {
+        auto checkpoint = PS::V3::LocalCheckpointFiles{
+            .data_files = {data_file_path},
+            .manifest_file = {manifest_file_path},
+        };
+        bool persist_done = options.persist_checkpoint(checkpoint);
+        if (!persist_done)
+        {
+            LOG_ERROR(log, "failed to persist checkpoint");
+            return;
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, "failed to persist checkpoint");
+        return;
+    }
+
     // TODO: Currently, even when has_new_data == false,
     //   something will be written to DataFile (i.e., the file prefix).
     //   This can be avoided, as its content is useless.
@@ -401,14 +426,7 @@ UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::Dump
         page_directory->copyCheckpointInfoFromEdit(edit_from_mem);
     }
 
-    // FIXME: should push forward the `last_checkpoint_sequence` only when the local files
-    //        are successfully uploaded to remote source
     last_checkpoint_sequence = snap->sequence;
-
-    return DumpCheckpointResult{
-        .new_data_files = {{.id = data_file_id, .path = data_file_path}},
-        .new_manifest_files = {{.id = manifest_file_id, .path = manifest_file_path}},
-    };
 }
 
 } // namespace DB

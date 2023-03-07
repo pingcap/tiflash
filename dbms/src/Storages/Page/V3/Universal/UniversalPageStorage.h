@@ -22,6 +22,7 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/Universal/S3LockLocalManager.h>
@@ -171,20 +172,17 @@ public:
          * lock files from `writeEditsAndApplyCheckpointInfo`.
          */
         const std::unordered_set<String> & must_locked_files = {};
+
+        /**
+         * A callback to persist the checkpoint to remote data store.
+         *
+         * If the checkpoint persist failed, it must throw an exception or return false
+         * to prevent the incremental data lost between checkpoints.
+         */
+        const std::function<bool(const PS::V3::LocalCheckpointFiles &)> persist_checkpoint;
     };
 
-    struct DumpCheckpointResult
-    {
-        struct FileInfo
-        {
-            const String id;
-            const String path;
-        };
-        std::vector<FileInfo> new_data_files;
-        std::vector<FileInfo> new_manifest_files;
-    };
-
-    DumpCheckpointResult dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+    void dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
 
     PageIdU64 getMaxIdAfterRestart() const;
 

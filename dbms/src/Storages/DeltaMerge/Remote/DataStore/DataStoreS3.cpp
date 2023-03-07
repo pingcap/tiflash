@@ -77,10 +77,14 @@ void DataStoreS3::copyDMFileMetaToLocalPath(const S3::DMFileOID & remote_oid, co
     LOG_DEBUG(log, "copyDMFileMetaToLocalPath finished. Local_dir={} cost={}ms", local_dir, sw.elapsedMilliseconds());
 }
 
-void DataStoreS3::putCheckpointFiles(const LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq)
+bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq)
 {
     auto s3_client = S3::ClientFactory::instance().sharedClient();
     const auto & bucket = S3::ClientFactory::instance().bucket();
+
+    /// First upload all CheckpointData files and theirs lock,
+    /// then upload the CheckpointManifest to make the files within
+    /// `upload_seq` public to S3GCManager.
 
     std::vector<std::future<void>> upload_results;
     // upload in parallel
@@ -104,6 +108,8 @@ void DataStoreS3::putCheckpointFiles(const LocalCheckpointFiles & local_files, S
     // upload manifest after all CheckpointData uploaded
     auto s3key = S3::S3Filename::newCheckpointManifest(store_id, upload_seq);
     S3::uploadFile(*s3_client, bucket, local_files.manifest_file, s3key.toFullKey());
+
+    return true; // upload success
 }
 
 void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vector<String> & target_short_fnames, const String & local_dir)

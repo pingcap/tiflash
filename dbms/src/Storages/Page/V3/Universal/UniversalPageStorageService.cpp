@@ -58,6 +58,21 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     return service;
 }
 
+struct CheckpointUploadFunctor
+{
+    const StoreID store_id;
+    const UInt64 sequence;
+    const DM::Remote::IDataStorePtr remote_store;
+
+    bool operator()(const PS::V3::LocalCheckpointFiles & checkpoint) const
+    {
+        // Persist checkpoint to remote_source
+        // Note that we use `upload_sequence` but not `snapshot.sequence` for
+        // the S3 key.
+        return remote_store->putCheckpointFiles(checkpoint, store_id, sequence);
+    }
+};
+
 bool UniversalPageStorageService::uploadCheckpoint()
 {
     // If another thread is running, just skip
@@ -103,24 +118,13 @@ bool UniversalPageStorageService::uploadCheckpoint()
         .manifest_file_path_pattern = "",
         .writer_info = wi,
         .must_locked_files = upload_info.pre_lock_keys,
+        .persist_checkpoint = CheckpointUploadFunctor{
+            .store_id = store_info.id(),
+            .sequence = upload_info.upload_sequence,
+            .remote_store = remote_store,
+        },
     };
-    const auto res = uni_page_storage->dumpIncrementalCheckpoint(opts);
-    if (res.new_manifest_files.empty())
-    {
-        // No new checkpoint generated
-        return false;
-    }
-
-    RUNTIME_CHECK_MSG(res.new_manifest_files.size() == 1, "Only support 1 manifest per checkpoint, actual n_manifest={}", res.new_manifest_files.size());
-
-    DM::Remote::IDataStore::LocalCheckpointFiles checkpoint_files;
-    for (const auto & df : res.new_data_files)
-    {
-        checkpoint_files.data_files.emplace_back(df.path);
-    }
-    checkpoint_files.manifest_file = res.new_manifest_files[0].path;
-
-    remote_store->putCheckpointFiles(checkpoint_files, store_info.id(), upload_info.upload_sequence);
+    uni_page_storage->dumpIncrementalCheckpoint(opts);
 
     // always return false to run at fixed rate
     return false;
