@@ -23,7 +23,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
 
-#include "ext/scope_guard.h"
+#include <ext/scope_guard.h>
 
 namespace DB
 {

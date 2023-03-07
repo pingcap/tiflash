@@ -116,7 +116,7 @@ public:
         Write w{WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE, page_id, 0, read_buffer, size, "", {}};
         total_data_size += size;
         writes.emplace_back(std::move(w));
-        // This is use for update local page data from remote, don't need to set `ingest_with_remote_location`
+        // This is use for update local page data from remote, don't need to set `has_writes_from_remote`
     }
 
     void putExternal(const UniversalPageId & page_id, UInt64 tag)

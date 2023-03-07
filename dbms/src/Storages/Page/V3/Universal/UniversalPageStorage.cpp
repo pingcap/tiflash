@@ -78,7 +78,7 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
         // Before ingesting remote pages/remote external pages, we need to create "lock" on S3
         // to ensure the correctness between FAP and S3GC.
         // If any "lock" failed to be created, then it will throw exception.
-        // Note that if `remote_locks`'s store_id is not inited, it will blocks until inited
+        // Note that if `remote_locks_local_mgr`'s store_id is not inited, it will blocks until inited
         remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
     }
     auto edit = blob_store->write(std::move(write_batch), write_limiter);
