@@ -123,25 +123,24 @@ public:
     }
     
     void swap(PageFieldOffsetChecksums& other) {
-        GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Decrement(inner.size() * 2 * 8);
+        //GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Decrement(inner.size() * 2 * 8);
         inner.swap(other.inner);
-        GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(inner.size() * 2 * 8);
+        //GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(inner.size() * 2 * 8);
     }
     void emplaceBack(PageFieldOffset offset, UInt64 checksum) {
         inner.emplace_back(offset, checksum);
         GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(2 * 8);
     }
-    void setInner(std::vector<std::pair<PageFieldOffset, UInt64>>&& value){
-        inner = std::move(value);
-        GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(inner.size() * 2 * 8);
-    }
-    PageFieldOffsetChecksums(){
-        GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Increment();
-        // GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).
-    }
+    // void setInner(std::vector<std::pair<PageFieldOffset, UInt64>>&& value){
+    //     inner = std::move(value);
+    //     GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Increment(inner.size() * 2 * 8);
+    // }
+    // PageFieldOffsetChecksums(){
+    //     GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Increment();
+    // }
 
     ~PageFieldOffsetChecksums() {
-        GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Decrement();
+        //GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_num_count).Decrement();
         GET_METRIC(tiflash_PageFieldOffsetChecksums_memory_usage, type_memory_usage).Decrement(inner.size() * 2 * 8);
     }
 };
