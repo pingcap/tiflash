@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <TiDB/Schema/SchemaGetter.h>
 

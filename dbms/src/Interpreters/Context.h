@@ -20,6 +20,7 @@
 #include <Debug/MockServerInfo.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
@@ -550,8 +551,6 @@ private:
     DisaggregatedMode disaggregated_mode = DisaggregatedMode::None;
     bool use_autoscaler = true; /// todo: remove this after AutoScaler is stable. Only meaningfule in DisaggregatedComputeMode.
 };
-
-using ContextPtr = std::shared_ptr<Context>;
 
 
 /// Puts an element into the map, erases it in the destructor.
