@@ -62,6 +62,13 @@ bool isUInt8Type(const DataTypePtr & type)
     return removeNullable(type)->getTypeId() == TypeIndex::UInt8;
 }
 
+tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info)
+{
+    return dag_timezone_info.is_name_based
+        ? constructStringLiteralTiExpr(dag_timezone_info.timezone_name)
+        : constructInt64LiteralTiExpr(dag_timezone_info.timezone_offset);
+}
+
 String getAggFuncName(
     const tipb::Expr & expr,
     const tipb::Aggregation & agg,
@@ -910,7 +917,7 @@ bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
 
     // After apply cast, some columns' name will be changed, and new column will be added.
     // We add a projection to keep the original column names.
-    NamesWithAliases project_cols;
+    NamesWithAliases project_to_origin_names;
     for (size_t i = 0; i < table_scan_columns.size(); ++i)
     {
         const auto & col = table_scan_columns[i];
@@ -934,8 +941,9 @@ bool DAGExpressionAnalyzer::buildExtraCastsAfterTS(
             has_cast = true;
         }
 
-        project_cols.emplace_back(casted_name, source_columns[i].name);
+        project_to_origin_names.emplace_back(casted_name, source_columns[i].name);
     }
+    actions->add(ExpressionAction::project(project_to_origin_names));
 
     return has_cast;
 }

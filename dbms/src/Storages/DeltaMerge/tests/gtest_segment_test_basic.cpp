@@ -764,6 +764,7 @@ std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(Pa
     RUNTIME_CHECK(snapshot != nullptr);
     return {segment, snapshot};
 }
+
 std::vector<Block> SegmentTestBasic::readSegment(PageIdU64 segment_id, bool need_row_id, const RowKeyRanges & ranges)
 {
     auto [segment, snapshot] = getSegmentForRead(segment_id);
@@ -778,6 +779,27 @@ std::vector<Block> SegmentTestBasic::readSegment(PageIdU64 segment_id, bool need
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE,
         need_row_id);
+    std::vector<Block> blks;
+    for (auto blk = stream->read(); blk; blk = stream->read())
+    {
+        blks.push_back(blk);
+    }
+    return blks;
+}
+
+std::vector<Block> SegmentTestBasic::lateMaterializationReadSegment(PageIdU64 segment_id, const RowKeyRanges & ranges, const PushDownFilterPtr & filter)
+{
+    auto [segment, snapshot] = getSegmentForRead(segment_id);
+    ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
+                                     getVersionColumnDefine()};
+    auto stream = segment->getBitmapFilterInputStream(
+        *dm_context,
+        columns_to_read,
+        snapshot,
+        ranges.empty() ? RowKeyRanges{segment->getRowKeyRange()} : ranges,
+        filter,
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE);
     std::vector<Block> blks;
     for (auto blk = stream->read(); blk; blk = stream->read())
     {

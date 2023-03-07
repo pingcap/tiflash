@@ -178,6 +178,35 @@ bool hasRegionToRead(const DAGContext & dag_context, const TiDBTableScan & table
     return has_region_to_read;
 }
 
+// add timezone cast for timestamp type, this is used to support session level timezone
+std::optional<ExpressionActionsPtr> addExtraCastsAfterTs(
+    DAGExpressionAnalyzer & analyzer,
+    const DB::ColumnInfos & table_scan_columns)
+{
+    bool has_need_cast_column = false;
+    for (const auto & col : table_scan_columns)
+    {
+        has_need_cast_column |= (col.id != -1 && (col.tp == TiDB::TypeTimestamp || col.tp == TiDB::TypeTime));
+    }
+    if (!has_need_cast_column)
+        return std::nullopt;
+
+    ExpressionActionsChain chain;
+    // execute timezone cast or duration cast if needed for local table scan
+    if (analyzer.appendExtraCastsAfterTS(chain, table_scan_columns))
+    {
+        ExpressionActionsPtr extra_cast = chain.getLastActions();
+        assert(extra_cast);
+        chain.finalize();
+        chain.clear();
+        return extra_cast;
+    }
+    else
+    {
+        return std::nullopt;
+    }
+}
+
 void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_info)
 {
     // Inject failpoint to throw RegionException for testing

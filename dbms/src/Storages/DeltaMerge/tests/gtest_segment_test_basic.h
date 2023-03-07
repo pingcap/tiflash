@@ -96,6 +96,7 @@ public:
     void printFinishedOperations() const;
 
     std::vector<Block> readSegment(PageIdU64 segment_id, bool need_row_id, const RowKeyRanges & ranges);
+    std::vector<Block> lateMaterializationReadSegment(PageIdU64 segment_id, const RowKeyRanges & ranges, const PushDownFilterPtr & filter);
     ColumnPtr getSegmentRowId(PageIdU64 segment_id, const RowKeyRanges & ranges);
     ColumnPtr getSegmentHandle(PageIdU64 segment_id, const RowKeyRanges & ranges);
     void writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end);

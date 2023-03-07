@@ -31,7 +31,6 @@ namespace DB
 {
 class DAGContext;
 
-tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info);
 bool isLiteralExpr(const tipb::Expr & expr);
 Field decodeLiteral(const tipb::Expr & expr);
 bool isFunctionExpr(const tipb::Expr & expr);

@@ -68,11 +68,6 @@ void executeCreatingSets(
     size_t max_streams,
     const LoggerPtr & log);
 
-// add timezone cast for timestamp type, this is used to support session level timezone
-std::optional<ExpressionActionsPtr> addExtraCastsAfterTs(
-    DAGExpressionAnalyzer & analyzer,
-    const DB::ColumnInfos & table_scan_columns);
-
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
     DAGExpressionAnalyzer & analyzer);

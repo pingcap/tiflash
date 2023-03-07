@@ -726,13 +726,6 @@ std::unordered_map<String, tipb::ScalarFuncSig> getFuncNameToSigMap()
 }
 } // namespace
 
-tipb::Expr constructTZExpr(const TimezoneInfo & dag_timezone_info)
-{
-    return dag_timezone_info.is_name_based
-        ? constructStringLiteralTiExpr(dag_timezone_info.timezone_name)
-        : constructInt64LiteralTiExpr(dag_timezone_info.timezone_offset);
-}
-
 bool isScalarFunctionExpr(const tipb::Expr & expr)
 {
     return expr.tp() == tipb::ExprType::ScalarFunc;

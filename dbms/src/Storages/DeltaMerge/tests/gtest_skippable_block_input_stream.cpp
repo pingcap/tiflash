@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyOrderedBlockInputStream.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
+#include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
@@ -24,99 +25,8 @@
 
 #include <boost/algorithm/string.hpp>
 
-
 namespace DB::DM::tests
 {
-
-namespace
-{
-
-// "[a, b)" => std::pair{a, b}
-template <typename T>
-std::pair<T, T> parseRange(String & str_range)
-{
-    boost::algorithm::trim(str_range);
-    RUNTIME_CHECK(str_range.front() == '[' && str_range.back() == ')', str_range);
-    std::vector<String> values;
-    str_range = str_range.substr(1, str_range.size() - 2);
-    boost::split(values, str_range, boost::is_any_of(","));
-    RUNTIME_CHECK(values.size() == 2, str_range);
-    return {static_cast<T>(std::stol(values[0])), static_cast<T>(std::stol(values[1]))};
-}
-
-// "[a, b)|[c, d)" => [std::pair{a, b}, std::pair{c, d}]
-template <typename T>
-std::vector<std::pair<T, T>> parseRanges(std::string_view str_ranges)
-{
-    std::vector<String> ranges;
-    boost::split(ranges, str_ranges, boost::is_any_of("|"));
-    RUNTIME_CHECK(!ranges.empty(), str_ranges);
-    std::vector<std::pair<T, T>> vector_ranges;
-    vector_ranges.reserve(ranges.size());
-    for (auto & r : ranges)
-    {
-        vector_ranges.emplace_back(parseRange<T>(r));
-    }
-    return vector_ranges;
-}
-
-struct SegDataUnit
-{
-    String type;
-    std::pair<Int64, Int64> range;
-};
-
-// "type:[a, b)" => SegDataUnit
-SegDataUnit parseSegDataUnit(String & s)
-{
-    boost::algorithm::trim(s);
-    std::vector<String> values;
-    boost::split(values, s, boost::is_any_of(":"));
-    RUNTIME_CHECK(values.size() == 2, s);
-    return SegDataUnit{boost::algorithm::trim_copy(values[0]), parseRange<Int64>(values[1])};
-}
-
-void check(const std::vector<SegDataUnit> & seg_data_units)
-{
-    RUNTIME_CHECK(!seg_data_units.empty());
-    std::vector<size_t> stable_units;
-    std::vector<size_t> mem_units;
-    for (size_t i = 0; i < seg_data_units.size(); i++)
-    {
-        const auto & type = seg_data_units[i].type;
-        if (type == "s")
-        {
-            stable_units.emplace_back(i);
-        }
-        else if (type == "d_mem" || type == "d_mem_del")
-        {
-            mem_units.emplace_back(i);
-        }
-        auto [begin, end] = seg_data_units[i].range;
-        RUNTIME_CHECK(begin < end, begin, end);
-    }
-    RUNTIME_CHECK(stable_units.empty() || (stable_units.size() == 1 && stable_units[0] == 0));
-    std::vector<size_t> expected_mem_units(mem_units.size());
-    std::iota(expected_mem_units.begin(), expected_mem_units.end(), seg_data_units.size() - mem_units.size());
-    RUNTIME_CHECK(mem_units == expected_mem_units, expected_mem_units, mem_units);
-}
-
-std::vector<SegDataUnit> parseSegData(std::string_view seg_data)
-{
-    std::vector<String> str_seg_data_units;
-    boost::split(str_seg_data_units, seg_data, boost::is_any_of("|"));
-    RUNTIME_CHECK(!str_seg_data_units.empty(), seg_data);
-    std::vector<SegDataUnit> seg_data_units;
-    seg_data_units.reserve(str_seg_data_units.size());
-    for (auto & s : str_seg_data_units)
-    {
-        seg_data_units.emplace_back(parseSegDataUnit(s));
-    }
-    check(seg_data_units);
-    return seg_data_units;
-}
-
-} // namespace
 
 class SkippableBlockInputStreamTest : public SegmentTestBasic
 {
