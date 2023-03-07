@@ -166,9 +166,9 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
                 // is simply 0, we need to calulate the checksums of each fields
                 for (size_t i = 0; i < write.offsets.size(); ++i)
                 {
-                    const auto field_beg = write.offsets[i].first;
-                    const auto field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
-                    write.offsets[i].second = CityHash_v1_0_2::CityHash64(data_pos + field_beg, field_end - field_beg);
+                    const auto field_beg = write.offsets.inner[i].first;
+                    const auto field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets.inner[i + 1].first;
+                    write.offsets.inner[i].second = CityHash_v1_0_2::CityHash64(data_pos + field_beg, field_end - field_beg);
                 }
 
                 data_pos += write.size;
@@ -418,7 +418,7 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
                 {
                     auto field_offset = PageUtil::get<UInt64>(pos);
                     auto field_checksum = PageUtil::get<UInt64>(pos);
-                    entry.field_offsets.emplace_back(field_offset, field_checksum);
+                    entry.field_offsets.emplaceBack(field_offset, field_checksum);
                 }
             }
 
@@ -656,7 +656,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
                 {
                     auto field_offset = PageUtil::get<UInt64>(pos);
                     auto field_checksum = PageUtil::get<UInt64>(pos);
-                    entry.field_offsets.emplace_back(field_offset, field_checksum);
+                    entry.field_offsets.emplaceBack(field_offset, field_checksum);
                 }
             }
 
@@ -926,7 +926,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read, const ReadLimiterPtr 
         // Calculate the field_offsets from page entry
         for (size_t index = 0; index < entry.field_offsets.size(); index++)
         {
-            const auto offset = entry.field_offsets[index].first;
+            const auto offset = entry.field_offsets.inner[index].first;
             page.field_offsets.emplace(index, offset);
         }
 
@@ -992,7 +992,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const
 
             if constexpr (PAGE_CHECKSUM_ON_READ)
             {
-                auto expect_checksum = entry.field_offsets[field_index].second;
+                auto expect_checksum = entry.field_offsets.inner[field_index].second;
                 auto field_checksum = CityHash_v1_0_2::CityHash64(write_offset, size_to_read);
                 if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
                 {
@@ -1057,7 +1057,7 @@ Page PageFile::Reader::read(FieldReadInfo & to_read, const ReadLimiterPtr & read
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
-            auto expect_checksum = to_read.entry.field_offsets[field_index].second;
+            auto expect_checksum = to_read.entry.field_offsets.inner[field_index].second;
             auto field_checksum = CityHash_v1_0_2::CityHash64(write_offset, size_to_read);
             if (unlikely(to_read.entry.size != 0 && field_checksum != expect_checksum))
             {

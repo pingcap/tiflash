@@ -90,7 +90,7 @@ public:
         PageFieldOffset off = 0;
         for (auto data_sz : data_sizes)
         {
-            offsets.emplace_back(off, 0);
+            offsets.emplaceBack(off, 0);
             off += data_sz;
         }
         if (unlikely(!data_sizes.empty() && off != size))

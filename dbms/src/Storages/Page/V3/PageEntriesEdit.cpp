@@ -33,7 +33,7 @@ CheckpointProto::EditRecord PageEntriesEdit<UniversalPageId>::EditRecord::toProt
         proto_edit.set_entry_tag(entry.tag);
         proto_edit.set_entry_checksum(entry.checksum);
         proto_edit.mutable_entry_location()->CopyFrom(entry.checkpoint_info->data_location.toProto());
-        for (const auto & [offset, checksum] : entry.field_offsets)
+        for (const auto & [offset, checksum] : entry.field_offsets.inner)
         {
             proto_edit.add_entry_fields_offset(offset);
             proto_edit.add_entry_fields_checksum(checksum);
@@ -67,9 +67,12 @@ typename PageEntriesEdit<UniversalPageId>::EditRecord PageEntriesEdit<UniversalP
         auto sz = proto_edit.entry_fields_offset_size();
         for (int i = 0; i < sz; ++i)
         {
-            rec.entry.field_offsets.emplace_back(std::make_pair(
+            // rec.entry.field_offsets.emplaceBack(std::make_pair(
+            //     proto_edit.entry_fields_offset(i),
+            //     proto_edit.entry_fields_checksum(i)));
+            rec.entry.field_offsets.emplaceBack(
                 proto_edit.entry_fields_offset(i),
-                proto_edit.entry_fields_checksum(i)));
+                proto_edit.entry_fields_checksum(i));
         }
         // Note: rec.entry.* is untouched, leaving zero value.
         // We need to take care when restoring the PS instance.

@@ -66,7 +66,7 @@ public:
         else if (index == field_offsets.size() - 1)
             return size - field_offsets.back().first;
         else
-            return field_offsets[index + 1].first - field_offsets[index].first;
+            return field_offsets.inner[index + 1].first - field_offsets.inner[index].first;
     }
 
     // Return field{index} offsets: [begin, end) of page data.
@@ -79,7 +79,7 @@ public:
         else if (index == field_offsets.size() - 1)
             return {field_offsets.back().first, size};
         else
-            return {field_offsets[index].first, field_offsets[index + 1].first};
+            return {field_offsets.inner[index].first, field_offsets.inner[index + 1].first};
     }
 };
 using PageEntriesV3 = std::vector<PageEntryV3>;

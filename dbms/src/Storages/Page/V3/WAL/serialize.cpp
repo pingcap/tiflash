@@ -77,7 +77,7 @@ inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry)
         {
             readIntBinary(field_offset, buf);
             readIntBinary(field_checksum, buf);
-            entry.field_offsets.emplace_back(field_offset, field_checksum);
+            entry.field_offsets.emplaceBack(field_offset, field_checksum);
         }
     }
 }

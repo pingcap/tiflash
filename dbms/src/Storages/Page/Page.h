@@ -95,12 +95,12 @@ public:
     {
         PageFieldSizes field_size = {};
 
-        auto it = field_offsets.begin();
-        while (it != field_offsets.end())
+        auto it = field_offsets.inner.begin();
+        while (it != field_offsets.inner.end())
         {
             PageFieldOffset beg = it->first;
             ++it;
-            field_size.emplace_back(it == field_offsets.end() ? data_size - beg : it->first - beg);
+            field_size.emplace_back(it == field_offsets.inner.end() ? data_size - beg : it->first - beg);
         }
         return field_size;
     }
@@ -148,19 +148,19 @@ public:
                            checksum,
                            tag,
                            ref,
-                           field_offsets.size());
+                           field_offsets.inner.size());
     }
 
     size_t getFieldSize(size_t index) const
     {
-        if (unlikely(index >= field_offsets.size()))
+        if (unlikely(index >= field_offsets.inner.size()))
             throw Exception("Try to getFieldData of PageEntry" + DB::toString(file_id) + " with invalid index: " + DB::toString(index)
                                 + ", fields size: " + DB::toString(field_offsets.size()),
                             ErrorCodes::LOGICAL_ERROR);
-        else if (index == field_offsets.size() - 1)
-            return size - field_offsets.back().first;
+        else if (index == field_offsets.inner.size() - 1)
+            return size - field_offsets.inner.back().first;
         else
-            return field_offsets[index + 1].first - field_offsets[index].first;
+            return field_offsets.inner[index + 1].first - field_offsets.inner[index].first;
     }
 
     // Return field{index} offsets: [begin, end) of page data.
@@ -171,9 +171,9 @@ public:
                 fmt::format("Try to getFieldOffsets with invalid index [index={}] [fields_size={}]", index, field_offsets.size()),
                 ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
-            return {field_offsets.back().first, size};
+            return {field_offsets.inner.back().first, size};
         else
-            return {field_offsets[index].first, field_offsets[index + 1].first};
+            return {field_offsets.inner[index].first, field_offsets.inner[index + 1].first};
     }
 
     bool operator==(const PageEntry & rhs) const
@@ -185,7 +185,7 @@ public:
         // compare the fields offsets
         for (size_t i = 0; i < field_offsets.size(); ++i)
         {
-            if (field_offsets[i] != rhs.field_offsets[i])
+            if (field_offsets.inner[i] != rhs.field_offsets.inner[i])
                 return false;
         }
         return true;

@@ -305,8 +305,10 @@ namespace DB
         F(type_complete_multi_part_upload, {{"type", "complete_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                     \
         F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
         F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
-        F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))
-
+        F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))\
+    M(tiflash_PageFieldOffsetChecksums_memory_usage, "memory usage of PageFieldOffsetChecksums", Gauge, \
+        F(type_num_count, {{"type", "num_count"}}), \
+        F(type_memory_usage, {{"type", "memory_usage"}}))
 // clang-format on
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

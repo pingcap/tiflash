@@ -196,11 +196,11 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
             for (size_t i = 0; i < write.offsets.size(); ++i)
             {
                 ChecksumClass field_digest;
-                field_begin = write.offsets[i].first;
-                field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
+                field_begin = write.offsets.inner[i].first;
+                field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets.inner[i + 1].first;
 
                 field_digest.update(data_buf.begin() + field_begin, field_end - field_begin);
-                write.offsets[i].second = field_digest.checksum();
+                write.offsets.inner[i].second = field_digest.checksum();
             }
 
             if (!write.offsets.empty())
@@ -345,14 +345,14 @@ BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr &
             for (size_t i = 0; i < write.offsets.size(); ++i)
             {
                 ChecksumClass field_digest;
-                field_begin = write.offsets[i].first;
-                field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
+                field_begin = write.offsets.inner[i].first;
+                field_end = (i == write.offsets.size() - 1) ? write.size : write.offsets.inner[i + 1].first;
 
                 field_digest.update(buffer_pos + field_begin, field_end - field_begin);
-                write.offsets[i].second = field_digest.checksum();
+                write.offsets.inner[i].second = field_digest.checksum();
             }
 
-            if (!write.offsets.empty())
+            if (!write.offsets.inner.empty())
             {
                 // we can swap from WriteBatch instead of copying
                 entry.field_offsets.swap(write.offsets);
@@ -648,7 +648,7 @@ BlobStore<Trait>::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_lim
 
             if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
             {
-                const auto expect_checksum = entry.field_offsets[field_index].second;
+                const auto expect_checksum = entry.field_offsets.inner[field_index].second;
                 ChecksumClass digest;
                 digest.update(write_offset, size_to_read);
                 auto field_checksum = digest.checksum();
@@ -778,7 +778,7 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
         // Calculate the field_offsets from page entry
         for (size_t index = 0; index < entry.field_offsets.size(); index++)
         {
-            const auto offset = entry.field_offsets[index].first;
+            const auto offset = entry.field_offsets.inner[index].first;
             page.field_offsets.emplace(index, offset);
         }
 
@@ -859,7 +859,7 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
     // Calculate the field_offsets from page entry
     for (size_t index = 0; index < entry.field_offsets.size(); index++)
     {
-        const auto offset = entry.field_offsets[index].first;
+        const auto offset = entry.field_offsets.inner[index].first;
         page.field_offsets.emplace(index, offset);
     }
 
