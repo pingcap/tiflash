@@ -161,16 +161,10 @@ uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t
 
 RawCppPtr CreateWriteBatch(const EngineStoreServerWrap * dummy)
 {
-    try
-    {
-        UNUSED(dummy);
-        return GenRawCppPtr(new UniversalWriteBatch(), RawCppPtrTypeImpl::WriteBatch);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        exit(-1);
-    }
+    // Don't move the dummy argument, it is useful on proxy's side.
+    // This function is not protected by try-catch, since it's rarely throw.
+    UNUSED(dummy);
+    return GenRawCppPtr(new UniversalWriteBatch(), RawCppPtrTypeImpl::WriteBatch);
 }
 
 void WriteBatchPutPage(RawVoidPtr ptr, BaseBuffView page_id, BaseBuffView value)
@@ -855,8 +849,15 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
 
 void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts)
 {
-    RegionTable & region_table = server->tmt->getRegionTable();
-    region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
+    try
+    {
+        RegionTable & region_table = server->tmt->getRegionTable();
+        region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
+    }
+    catch (...)
+    {
+        return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}};
+    }
 }
 
 
