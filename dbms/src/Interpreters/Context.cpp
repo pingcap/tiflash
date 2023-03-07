@@ -65,6 +65,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
@@ -77,8 +78,6 @@
 #include <pcg_random.hpp>
 #include <set>
 #include <unordered_map>
-
-#include "Storages/S3/S3Common.h"
 
 
 namespace ProfileEvents
