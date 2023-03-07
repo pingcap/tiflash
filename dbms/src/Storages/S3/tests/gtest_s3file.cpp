@@ -100,6 +100,7 @@ protected:
         }
         return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
     }
+
     void writeFile(const String & key, size_t size, const WriteSettings & write_setting)
     {
         S3WritableFile file(s3_client, bucket, key, write_setting);

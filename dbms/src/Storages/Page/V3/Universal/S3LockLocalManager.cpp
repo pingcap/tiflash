@@ -33,11 +33,13 @@ S3LockLocalManager::S3LockLocalManager()
     , log(Logger::get())
 {
     // store_id, s3lock_client are inited later because they may not
-    // accessable when UniversalPageStorage is created.
+    // accessable when S3LockLocalManager is created.
     auto & ins = S3::ClientFactory::instance();
     s3_client = ins.sharedTiFlashClient();
 }
 
+// `store_id`, `s3lock_client` are inited later because they may not
+// accessable when S3LockLocalManager is created.
 void S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientPtr s3lock_client_)
 {
     if (inited_from_s3)
@@ -170,7 +172,6 @@ String S3LockLocalManager::createS3Lock(const String & datafile_key, const S3::S
         // Try to create a lock file for the data file created by another store.
         // e.g. Ingest some pages from CheckpointDataFile or DTFile when doing FAP,
         // send rpc to S3LockService
-        RUNTIME_CHECK(s3_file.store_id == lock_store_id, s3_file.store_id, lock_store_id);
         auto [ok, err_msg] = s3lock_client->sendTryAddLockRequest(datafile_key, store_id, upload_seq, 10);
         if (!ok)
         {
