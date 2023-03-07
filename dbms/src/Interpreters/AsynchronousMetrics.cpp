@@ -247,7 +247,7 @@ void AsynchronousMetrics::update()
     M("background_thread.num_runs", uint64_t)  \
     M("background_thread.run_interval", uint64_t)
 
-#define GET_METRIC(NAME, TYPE)                             \
+#define GET_METRIC2(NAME, TYPE)                             \
     do                                                     \
     {                                                      \
         TYPE value{};                                      \
@@ -256,7 +256,7 @@ void AsynchronousMetrics::update()
         set("jemalloc." NAME, value);                      \
     } while (0);
 
-        FOR_EACH_METRIC(GET_METRIC);
+        FOR_EACH_METRIC(GET_METRIC2);
 
 #undef GET_METRIC
 #undef FOR_EACH_METRIC
