@@ -19,6 +19,7 @@
 #include <DataTypes/NestedUtils.h>
 #include <Databases/DatabaseFactory.h>
 #include <Databases/IDatabase.h>
+#include <Encryption/FileProvider.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
