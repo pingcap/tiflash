@@ -131,7 +131,7 @@ void RNPageReceiverBase<RPCContext>::cancel()
 {
     if (setEndState(PageReceiverState::CANCELED))
     {
-        rpc_context->cancelMPPTaskOnTiFlashStorageNode(exc_log);
+        rpc_context->cancelDisaggTaskOnTiFlashStorageNode(exc_log);
     }
     cancelAllMsgChannels();
 }

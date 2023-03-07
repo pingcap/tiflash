@@ -132,7 +132,7 @@ void GRPCPagesReceiverContext::finishAllReceivingTasks(const String & err_msg)
     remote_read_tasks->allDataReceive(err_msg);
 }
 
-void GRPCPagesReceiverContext::cancelMPPTaskOnTiFlashStorageNode(LoggerPtr /*log*/)
+void GRPCPagesReceiverContext::cancelDisaggTaskOnTiFlashStorageNode(LoggerPtr /*log*/)
 {
     // TODO cancel
 }

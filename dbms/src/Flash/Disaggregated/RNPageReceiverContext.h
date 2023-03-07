@@ -80,11 +80,8 @@ public:
         return grpc::Status::OK;
     }
 
-    // Normally cancel will be sent by TiDB to all MPPTasks, so ExchangeReceiver no need to cancel.
-    // But in disaggregated mode, TableScan in tiflash_compute node will be converted to ExchangeReceiver(executed in tiflash_compute node),
-    // and ExchangeSender+TableScan(executed in tiflash_storage node).
-    // So when we cancel the former MPPTask, the latter MPPTask needs to be handled by the tiflash_compute node itself.
-    void cancelMPPTaskOnTiFlashStorageNode(LoggerPtr log);
+    // When error happens, try cancel disagg task on the storage node side.
+    void cancelDisaggTaskOnTiFlashStorageNode(LoggerPtr log);
 
     void finishTaskEstablish(const Request & req, bool meet_error);
 
