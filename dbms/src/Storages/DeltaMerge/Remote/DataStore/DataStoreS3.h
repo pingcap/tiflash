@@ -16,6 +16,7 @@
 
 #include <Encryption/FileProvider.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB::DM::Remote
 {
@@ -47,6 +48,8 @@ public:
      * Should be used by a read node.
      */
     IPreparedDMFileTokenPtr prepareDMFile(const S3::DMFileOID & oid) override;
+
+    void putCheckpointFiles(const LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) override;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

@@ -36,6 +36,9 @@ public:
         const PageStorageConfig & config);
 
     bool gc();
+
+    bool uploadCheckpoint();
+
     UniversalPageStoragePtr getUniversalPageStorage() const { return uni_page_storage; }
     ~UniversalPageStorageService();
     void shutdown();
@@ -48,9 +51,12 @@ private:
     }
 
 private:
+    std::atomic_bool is_checkpoint_uploading{false};
+
     Context & global_context;
     UniversalPageStoragePtr uni_page_storage;
     BackgroundProcessingPool::TaskHandle gc_handle;
+    BackgroundProcessingPool::TaskHandle remote_checkpoint_handle;
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 };

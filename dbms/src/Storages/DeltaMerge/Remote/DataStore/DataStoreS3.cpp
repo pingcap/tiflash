@@ -17,6 +17,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3Filename.h>
 
 namespace DB::DM::Remote
 {
@@ -72,6 +73,21 @@ void DataStoreS3::copyDMFileMetaToLocalPath(const S3::DMFileOID & remote_oid, co
     std::vector<String> target_fnames = {DMFile::metav2FileName(), IDataType::getFileNameForStream(DB::toString(-1), {}) + ".idx"};
     copyToLocal(remote_oid, target_fnames, local_dir);
     LOG_DEBUG(log, "copyDMFileMetaToLocalPath finished. Local_dir={} cost={}ms", local_dir, sw.elapsedMilliseconds());
+}
+
+void DataStoreS3::putCheckpointFiles(const LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq)
+{
+    auto s3_client = S3::ClientFactory::instance().sharedClient();
+    const auto & bucket = S3::ClientFactory::instance().bucket();
+
+    for (size_t file_idx = 0; file_idx < local_files.data_files.size(); ++file_idx)
+    {
+        const auto & local_datafile = local_files.data_files[file_idx];
+        auto s3key = S3::S3Filename::newCheckpointData(store_id, upload_seq, file_idx);
+        S3::uploadFile(*s3_client, bucket, local_datafile, s3key.toFullKey());
+    }
+    auto s3key = S3::S3Filename::newCheckpointManifest(store_id, upload_seq);
+    S3::uploadFile(*s3_client, bucket, local_files.manifest_file, s3key.toFullKey());
 }
 
 void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vector<String> & target_short_fnames, const String & local_dir)

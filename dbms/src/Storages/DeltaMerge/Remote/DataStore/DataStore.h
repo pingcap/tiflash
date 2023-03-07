@@ -67,6 +67,18 @@ public:
      * Should be used by a read node.
      */
     virtual IPreparedDMFileTokenPtr prepareDMFile(const S3::DMFileOID & oid) = 0;
+
+    struct LocalCheckpointFiles
+    {
+        Strings data_files;
+        String manifest_file;
+    };
+
+    /**
+     * Blocks until all checkpoint files are successfully put in the remote data store.
+     * Should be used by a write node.
+     */
+    virtual void putCheckpointFiles(const LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) = 0;
 };
 
 using IDataStorePtr = std::shared_ptr<IDataStore>;

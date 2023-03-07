@@ -24,6 +24,7 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/Universal/S3LockLocalManager.h>
 #include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <common/defines.h>
 
@@ -41,6 +42,18 @@ class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+
+namespace S3
+{
+class IS3LockClient;
+using S3LockClientPtr = std::shared_ptr<IS3LockClient>;
+} // namespace S3
+
+namespace PS::V3
+{
+class S3LockLocalManager;
+using S3LockLocalManagerPtr = std::unique_ptr<S3LockLocalManager>;
+} // namespace PS::V3
 
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
@@ -77,7 +90,7 @@ public:
     {
     }
 
-    ~UniversalPageStorage() = default;
+    ~UniversalPageStorage();
 
     void restore();
 
@@ -120,6 +133,10 @@ public:
 
     DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
 
+    void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client) const;
+
+    PS::V3::S3LockLocalManager::ExtraLockInfo getUploadLocksInfo() const;
+
     struct DumpCheckpointOptions
     {
         /**
@@ -146,6 +163,14 @@ public:
          * The writer info field in the dumped files.
          */
         const PS::V3::CheckpointProto::WriterInfo & writer_info;
+
+        /**
+         * The list of lock files that will be always appended to the checkpoint file.
+         *
+         * Note: In addition to the specified lock files, the checkpoint file will also contain
+         * lock files from `writeEditsAndApplyCheckpointInfo`.
+         */
+        const std::unordered_set<String> & must_locked_files = {};
     };
 
     struct DumpCheckpointResult
@@ -194,6 +219,7 @@ public:
     BlobStorePtr blob_store;
 
     PS::V3::S3PageReaderPtr remote_reader;
+    PS::V3::S3LockLocalManagerPtr remote_locks_local_mgr;
 
     PS::V3::universal::ExternalPageCallbacksManager manager;
 

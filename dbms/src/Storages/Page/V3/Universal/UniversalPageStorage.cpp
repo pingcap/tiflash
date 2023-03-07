@@ -19,6 +19,7 @@
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
+#include <Storages/Page/V3/Universal/S3LockLocalManager.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
@@ -42,6 +43,7 @@ UniversalPageStoragePtr UniversalPageStorage::create(
     if (s3_client != nullptr)
     {
         storage->remote_reader = std::make_unique<PS::V3::S3PageReader>(s3_client, bucket);
+        storage->remote_locks_local_mgr = std::make_unique<PS::V3::S3LockLocalManager>();
     }
     return storage;
 }
@@ -56,6 +58,8 @@ void UniversalPageStorage::restore()
                          .create(storage_name, file_provider, delegator, PS::V3::WALConfig::from(config));
 }
 
+UniversalPageStorage::~UniversalPageStorage() = default;
+
 size_t UniversalPageStorage::getNumberOfPages(const String & prefix) const
 {
     return page_directory->numPagesWithPrefix(prefix);
@@ -68,8 +72,23 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
 
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
+    if (write_batch.hasWritesFromRemote())
+    {
+        assert(remote_locks_local_mgr != nullptr);
+        // Before ingesting remote pages/remote external pages, we need to create "lock" on S3
+        // to ensure the correctness between FAP and S3GC.
+        // If any "lock" failed to be created, then it will throw exception.
+        // Note that if `remote_locks`'s store_id is not inited, it will blocks until inited
+        remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
+    }
     auto edit = blob_store->write(std::move(write_batch), write_limiter);
-    page_directory->apply(std::move(edit), write_limiter);
+    auto applied_lock_ids = page_directory->apply(std::move(edit), write_limiter);
+    if (write_batch.hasWritesFromRemote())
+    {
+        assert(remote_locks_local_mgr != nullptr);
+        // Remove the applied locks from checkpoint_manager.pre_lock_files
+        remote_locks_local_mgr->cleanAppliedS3ExternalFiles(std::move(applied_lock_ids));
+    }
 }
 
 Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) const
@@ -303,6 +322,18 @@ void UniversalPageStorage::tryUpdateLocalCacheForRemotePages(UniversalWriteBatch
     }
 }
 
+void UniversalPageStorage::initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client) const
+{
+    assert(remote_locks_local_mgr != nullptr);
+    remote_locks_local_mgr->initStoreInfo(store_id, lock_client);
+}
+
+PS::V3::S3LockLocalManager::ExtraLockInfo UniversalPageStorage::getUploadLocksInfo() const
+{
+    assert(remote_locks_local_mgr != nullptr);
+    return remote_locks_local_mgr->getUploadLocksInfo();
+}
+
 UniversalPageStorage::DumpCheckpointResult
 UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
 {
@@ -346,6 +377,7 @@ UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::Dump
         .manifest_file_path = manifest_file_path,
         .manifest_file_id = manifest_file_id,
         .data_source = PS::V3::CPWriteDataSourceBlobStore::create(*blob_store),
+        .must_locked_files = options.must_locked_files,
     });
 
     writer->writePrefix({
@@ -369,6 +401,8 @@ UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::Dump
         page_directory->copyCheckpointInfoFromEdit(edit_from_mem);
     }
 
+    // FIXME: should push forward the `last_checkpoint_sequence` only when the local files
+    //        are successfully uploaded to remote source
     last_checkpoint_sequence = snap->sequence;
 
     return DumpCheckpointResult{
