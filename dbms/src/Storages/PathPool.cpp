@@ -523,7 +523,10 @@ bool StableDiskDelegator::updateDTFileSize(UInt64 file_id, size_t file_size)
     {
         return false;
     }
+    const auto origin_file_size = it->second;
     it->second = file_size;
+    // update global used size
+    pool.global_capacity->addUsedSize(pool.main_path_infos[index].path, file_size - origin_file_size);
     return true;
 }
 
