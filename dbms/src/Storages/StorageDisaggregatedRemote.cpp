@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -150,8 +150,8 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
             [&, idx] {
                 Stopwatch watch;
 
-                const auto & cop_task = batch_cop_tasks[idx];
-                auto req = buildDisaggregatedTaskForNode(db_context, cop_task);
+                const auto & batch_cop_task = batch_cop_tasks[idx];
+                auto req = buildDisaggregatedTaskForNode(db_context, batch_cop_task);
 
                 auto call = pingcap::kv::RpcCall<disaggregated::EstablishDisaggTaskRequest>(req);
                 cluster->rpc_client->sendRequest(req->address(), call, DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC);
@@ -162,7 +162,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                     LOG_DEBUG(
                         log,
                         "Received EstablishDisaggregated response with error, addr={} err={}",
-                        cop_task.store_addr,
+                        batch_cop_task.store_addr,
                         resp->error().msg());
 
                     if (resp->error().code() == ErrorCodes::REGION_EPOCH_NOT_MATCH)
@@ -183,7 +183,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                         // Meet other errors... May be not retirable?
                         throw Exception(ErrorCodes::LOGICAL_ERROR,
                                         "EstablishDisaggregatedTask failed, addr={} error={} code={}",
-                                        cop_task.store_addr,
+                                        batch_cop_task.store_addr,
                                         resp->error().msg(),
                                         resp->error().code());
                     }
@@ -195,7 +195,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                     "Received EstablishDisaggregated response, store={} snap_id={} addr={} resp.num_tables={}",
                     resp->store_id(),
                     snapshot_id,
-                    cop_task.store_addr,
+                    batch_cop_task.store_addr,
                     resp->tables_size());
 
                 auto this_elapse_ms = watch.elapsedMillisecondsFromLastTime();
@@ -216,7 +216,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                     remote_tasks_from_wns[idx] = DM::RNRemoteTableReadTask::buildFrom(
                         db_context,
                         resp->store_id(),
-                        cop_task.store_addr,
+                        batch_cop_task.store_addr,
                         snapshot_id,
                         table,
                         log);
@@ -226,7 +226,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
                         "Build RNRemoteTableReadTask finished, elapsed={}s store={} addr={} segments={} task_id={}",
                         watch_table.elapsedSeconds(),
                         resp->store_id(),
-                        cop_task.store_addr,
+                        batch_cop_task.store_addr,
                         table.segments().size(),
                         task_id);
                 }
