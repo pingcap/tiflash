@@ -68,7 +68,6 @@ Columns ColumnFileTiny::readFromDisk(
     Columns columns(num_columns_read); // allocate empty columns
 
     std::vector<size_t> fields;
-    // fields.first = data_page_id;
     const auto & colid_to_offset = schema->getColIdToOffset();
     for (size_t index = col_start; index < col_end; ++index)
     {
@@ -77,7 +76,6 @@ Columns ColumnFileTiny::readFromDisk(
         {
             auto col_index = it->second;
             fields.emplace_back(col_index);
-            // fields.second.push_back(col_index);
         }
         else
         {

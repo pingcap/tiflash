@@ -40,9 +40,9 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     snap->delta = this->shared_from_this();
 
     auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), context.tracing_id, /*snapshot_read*/ true);
-    auto read_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
-    snap->persisted_files_snap = persisted_file_set->createSnapshot(read_from_storage_snap);
-    snap->mem_table_snap = mem_table_set->createSnapshot(read_from_storage_snap, for_update);
+    auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
+    snap->persisted_files_snap = persisted_file_set->createSnapshot(data_from_storage_snap);
+    snap->mem_table_snap = mem_table_set->createSnapshot(data_from_storage_snap, for_update);
     snap->shared_delta_index = delta_index;
 
     return snap;
