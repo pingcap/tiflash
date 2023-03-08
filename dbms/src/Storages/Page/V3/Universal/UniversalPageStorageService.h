@@ -78,7 +78,7 @@ public:
 
     LoggerPtr log;
 
-    // A standalone thread pool for avoid this being affected by
+    // A standalone thread pool to avoid checkpoint uploading being affected by
     // other background tasks unexpectly.
     std::unique_ptr<BackgroundProcessingPool> checkpoint_pool;
     BackgroundProcessingPool::TaskHandle remote_checkpoint_handle;
