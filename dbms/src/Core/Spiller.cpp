@@ -280,6 +280,16 @@ UInt64 Spiller::spilledRows(UInt64 partition_id)
     return ret;
 }
 
+bool Spiller::hasSpilledData(UInt64 partition_id)
+{
+    RUNTIME_CHECK_MSG(partition_id < partition_num, "{}: partition id {} exceeds partition num {}.", config.spill_id, partition_id, partition_num);
+    RUNTIME_CHECK_MSG(isSpillFinished(), "{}: spilledBlockDataSize must be called when the spiller is finished.", config.spill_id);
+    if (!has_spilled_data)
+        return false;
+    std::lock_guard partition_lock(spilled_files[partition_id]->spilled_files_mutex);
+    return !spilled_files[partition_id]->immutable_spilled_files.empty();
+}
+
 String Spiller::nextSpillFileName(UInt64 partition_id)
 {
     Int64 index = tmp_file_index.fetch_add(1);

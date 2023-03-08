@@ -90,6 +90,7 @@ public:
     /// max_stream_size == 0 means the spiller choose the stream size automatically
     BlockInputStreams restoreBlocks(UInt64 partition_id, UInt64 max_stream_size = 0, bool append_dummy_read_stream = false);
     UInt64 spilledRows(UInt64 partition_id);
+    bool hasSpilledData(UInt64 partition_id);
     void finishSpill();
     bool hasSpilledData() const { return has_spilled_data; };
     /// only for test now
