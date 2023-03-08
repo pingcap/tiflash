@@ -73,7 +73,7 @@ bool SpillHandler::isSpilledFileFull(UInt64 spilled_rows, UInt64 spilled_bytes)
     return (spiller->config.max_spilled_rows_per_file > 0 && spilled_rows >= spiller->config.max_spilled_rows_per_file) || (spiller->config.max_spilled_bytes_per_file > 0 && spilled_bytes >= spiller->config.max_spilled_bytes_per_file);
 }
 
-void SpillHandler::spillBlocks(Blocks & blocks)
+void SpillHandler::spillBlocks(Blocks && blocks)
 {
     ///  todo check the disk usage
     if (unlikely(blocks.empty()))
