@@ -38,6 +38,14 @@ message RemoteSegment {
     repeated bytes read_key_ranges = 21;
 }
 
+message RemotePage {
+    // The page is read as a cf in DeltaVS,
+    // so we can get the u64 page_id.
+    uint64 page_id = 1;
+    bytes data = 2;
+    repeated uint64 field_sizes = 4;
+}
+
 message ColumnFileRemote {
     oneof column_file {
         ColumnFileTiny tiny = 1;
