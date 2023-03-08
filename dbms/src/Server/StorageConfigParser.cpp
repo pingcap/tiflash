@@ -609,12 +609,18 @@ void StorageRemoteCacheConfig::initCacheDir() const
 
 String StorageRemoteCacheConfig::getDTFileCacheDir() const
 {
+    if (dir.empty())
+        return "";
+
     std::filesystem::path cache_root(dir);
     // {dir}/dtfile
     return cache_root /= "dtfile";
 }
 String StorageRemoteCacheConfig::getPageCacheDir() const
 {
+    if (dir.empty())
+        return "";
+
     std::filesystem::path cache_root(dir);
     // {dir}/page
     return cache_root /= "page";
