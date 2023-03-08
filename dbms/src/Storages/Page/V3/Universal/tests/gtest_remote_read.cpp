@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <IO/WriteBufferFromWritableFile.h>
+#include <IO/copyData.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
@@ -67,19 +69,13 @@ public:
     void uploadFile(const String & dir, const String & f_name)
     {
         const String & full_path = dir + "/" + f_name;
-        size_t total_size = Poco::File(full_path).getSize();
-        ReadBufferFromFile src_buf(full_path);
-        auto * data_buf = static_cast<char *>(malloc(total_size));
-        src_buf.readStrict(data_buf, total_size);
+        ReadBufferPtr src_buf = std::make_shared<ReadBufferFromFile>(full_path);
         S3::WriteSettings write_setting;
-        S3::S3WritableFile dst_file(s3_client, bucket, f_name, write_setting);
-        size_t pos = 0;
-        while (pos < total_size)
-        {
-            auto n = dst_file.write(data_buf + pos, total_size - pos);
-            pos += n;
-        }
-        auto r = dst_file.fsync();
+        WritableFilePtr dst_file = std::make_shared<S3::S3WritableFile>(s3_client, bucket, f_name, write_setting);
+        WriteBufferPtr dst_buf = std::make_shared<WriteBufferFromWritableFile>(dst_file);
+        copyData(*src_buf, *dst_buf);
+        dst_buf->next();
+        auto r = dst_file->fsync();
         ASSERT_EQ(r, 0);
     }
 

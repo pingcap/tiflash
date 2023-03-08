@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/IQuerySource.h>
 
 namespace DB
@@ -30,7 +30,7 @@ public:
     String str(size_t max_query_size) override;
     std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
 
-    DAGContext & getDAGContext() const { return *context.getDAGContext(); }
+    DAGContext & getDAGContext() const;
     const tipb::DAGRequest & getDAGRequest() const;
 
 private:

@@ -57,6 +57,7 @@ const String PathPool::data_path_prefix = "data";
 const String PathPool::meta_path_prefix = "meta";
 const String PathPool::kvstore_path_prefix = "kvstore";
 const String PathPool::write_uni_path_prefix = "write";
+const String PathPool::read_node_cache_path_prefix = "read_cache";
 
 // Constructor to be used during initialization
 PathPool::PathPool(
@@ -121,6 +122,11 @@ PSDiskDelegatorPtr PathPool::getPSDiskDelegatorGlobalMulti(const String & prefix
 PSDiskDelegatorPtr PathPool::getPSDiskDelegatorGlobalSingle(const String & prefix) const
 {
     return std::make_shared<PSDiskDelegatorGlobalSingle>(*this, prefix);
+}
+
+PSDiskDelegatorPtr PathPool::getPSDiskDelegatorFixedDirectory(const String & dir) const
+{
+    return std::make_shared<PSDiskDelegatorFixedDirectory>(*this, dir);
 }
 
 //==========================================================================================
@@ -1028,6 +1034,73 @@ void PSDiskDelegatorGlobalSingle::removePageFile(const PageFileIdAndLevel & id_l
 {
     pool.global_capacity->freeUsedSize(pool.listGlobalPagePaths()[0], file_size);
 
+    page_path_map.eraseIfExist(id_lvl);
+}
+
+//==========================================================================================
+// Choose PS file path in a fixed directory.
+//==========================================================================================
+PSDiskDelegatorFixedDirectory::PSDiskDelegatorFixedDirectory(const PathPool & pool_, const String & path_)
+    : path(path_)
+    , pool(pool_)
+{
+}
+
+bool PSDiskDelegatorFixedDirectory::fileExist(const PageFileIdAndLevel & id_lvl) const
+{
+    return page_path_map.exist(id_lvl);
+}
+
+size_t PSDiskDelegatorFixedDirectory::numPaths() const
+{
+    return 1;
+}
+
+String PSDiskDelegatorFixedDirectory::defaultPath() const
+{
+    return path;
+}
+
+Strings PSDiskDelegatorFixedDirectory::listPaths() const
+{
+    return {path};
+}
+
+String PSDiskDelegatorFixedDirectory::choosePath(const PageFileIdAndLevel &)
+{
+    return path;
+}
+
+size_t PSDiskDelegatorFixedDirectory::addPageFileUsedSize(
+    const PageFileIdAndLevel & id_lvl,
+    size_t size_to_add,
+    const String & pf_parent_path,
+    bool need_insert_location)
+{
+    // We need a map for id_lvl -> path_index for function `fileExist`
+    if (need_insert_location)
+        page_path_map.setIndex(id_lvl, 0);
+
+    pool.global_capacity->addUsedSize(pf_parent_path, size_to_add);
+    return 0;
+}
+
+void PSDiskDelegatorFixedDirectory::freePageFileUsedSize(
+    const PageFileIdAndLevel &,
+    size_t size_to_free,
+    const String & pf_parent_path)
+{
+    pool.global_capacity->freeUsedSize(pf_parent_path, size_to_free);
+}
+
+String PSDiskDelegatorFixedDirectory::getPageFilePath(const PageFileIdAndLevel &) const
+{
+    return path;
+}
+
+void PSDiskDelegatorFixedDirectory::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool, bool)
+{
+    pool.global_capacity->freeUsedSize(path, file_size);
     page_path_map.eraseIfExist(id_lvl);
 }
 

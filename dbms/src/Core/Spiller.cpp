@@ -18,6 +18,7 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/SpilledFilesInputStream.h>
 #include <DataStreams/copyData.h>
+#include <Encryption/FileProvider.h>
 #include <Poco/Path.h>
 
 
@@ -132,13 +133,12 @@ void Spiller::spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, UIn
 {
     auto spill_handler = createSpillHandler(partition_id);
     block_in.readPrefix();
-    Blocks spill_blocks;
     while (true)
     {
-        spill_blocks = readDataForSpill(block_in, config.max_cached_data_bytes_in_spiller, is_cancelled);
+        auto spill_blocks = readDataForSpill(block_in, config.max_cached_data_bytes_in_spiller, is_cancelled);
         if (spill_blocks.empty())
             break;
-        spill_handler.spillBlocks(spill_blocks);
+        spill_handler.spillBlocks(std::move(spill_blocks));
     }
     if (is_cancelled())
         return;
@@ -182,13 +182,13 @@ SpillHandler Spiller::createSpillHandler(UInt64 partition_id)
     return SpillHandler(this, partition_id);
 }
 
-void Spiller::spillBlocks(const Blocks & blocks, UInt64 partition_id)
+void Spiller::spillBlocks(Blocks && blocks, UInt64 partition_id)
 {
     if (blocks.empty())
         return;
     auto spiller_handler = createSpillHandler(partition_id);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_spill_to_disk_failpoint);
-    spiller_handler.spillBlocks(blocks);
+    spiller_handler.spillBlocks(std::move(blocks));
     spiller_handler.finish();
 }
 

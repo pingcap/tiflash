@@ -55,9 +55,9 @@ private:
     /// Read a block of columns in `column_defines` from cache / disk,
     /// if `pack->schema` is not match with `column_defines`, take good care of ddl cast
     Columns readFromCache(const ColumnDefines & column_defines, size_t col_start, size_t col_end) const;
-    Columns readFromDisk(const PageReader & page_reader, const ColumnDefines & column_defines, size_t col_start, size_t col_end) const;
+    Columns readFromDisk(const IColumnFileDataProviderPtr & data_provider, const ColumnDefines & column_defines, size_t col_start, size_t col_end) const;
 
-    void fillColumns(const PageReader & page_reader, const ColumnDefines & col_defs, size_t col_count, Columns & result) const;
+    void fillColumns(const IColumnFileDataProviderPtr & data_provider, const ColumnDefines & col_defs, size_t col_count, Columns & result) const;
 
     const DataTypePtr & getDataType(ColId column_id) const
     {
@@ -91,8 +91,10 @@ public:
         return new_tiny_file;
     }
 
-    ColumnFileReaderPtr
-    getReader(const DMContext & /*context*/, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
+    ColumnFileReaderPtr getReader(
+        const DMContext &,
+        const IColumnFileDataProviderPtr & data_provider,
+        const ColumnDefinesPtr & col_defs) const override;
 
     void removeData(WriteBatches & wbs) const override;
 
@@ -138,27 +140,31 @@ class ColumnFileTinyReader : public ColumnFileReader
 {
 private:
     const ColumnFileTiny & tiny_file;
-    const StorageSnapshotPtr storage_snap;
+    const IColumnFileDataProviderPtr data_provider;
     const ColumnDefinesPtr col_defs;
 
     Columns cols_data_cache;
     bool read_done = false;
 
 public:
-    ColumnFileTinyReader(const ColumnFileTiny & tiny_file_,
-                         const StorageSnapshotPtr & storage_snap_,
-                         const ColumnDefinesPtr & col_defs_,
-                         const Columns & cols_data_cache_)
+    ColumnFileTinyReader(
+        const ColumnFileTiny & tiny_file_,
+        const IColumnFileDataProviderPtr & data_provider_,
+        const ColumnDefinesPtr & col_defs_,
+        const Columns & cols_data_cache_)
         : tiny_file(tiny_file_)
-        , storage_snap(storage_snap_)
+        , data_provider(data_provider_)
         , col_defs(col_defs_)
         , cols_data_cache(cols_data_cache_)
     {
     }
 
-    ColumnFileTinyReader(const ColumnFileTiny & tiny_file_, const StorageSnapshotPtr & storage_snap_, const ColumnDefinesPtr & col_defs_)
+    ColumnFileTinyReader(
+        const ColumnFileTiny & tiny_file_,
+        const IColumnFileDataProviderPtr & data_provider_,
+        const ColumnDefinesPtr & col_defs_)
         : tiny_file(tiny_file_)
-        , storage_snap(storage_snap_)
+        , data_provider(data_provider_)
         , col_defs(col_defs_)
     {
     }

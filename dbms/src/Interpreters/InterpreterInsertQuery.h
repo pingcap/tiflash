@@ -16,7 +16,7 @@
 
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockOutputStream.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/ASTInsertQuery.h>
 

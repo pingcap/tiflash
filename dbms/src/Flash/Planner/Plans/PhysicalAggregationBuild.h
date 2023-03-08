@@ -18,7 +18,7 @@
 #include <Flash/Planner/Plans/PhysicalUnary.h>
 #include <Flash/Planner/Plans/PipelineBreakerHelper.h>
 #include <Interpreters/AggregateDescription.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Operators/AggregateContext.h>
 

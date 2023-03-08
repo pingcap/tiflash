@@ -686,7 +686,7 @@ BlobStore<Trait>::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_lim
         {
             UNUSED(entry, fields);
             Page page(Trait::PageIdTrait::getU64ID(page_id));
-            page.data = ByteBuffer(nullptr, nullptr);
+            page.data = std::string_view(nullptr, 0);
             page_map.emplace(Trait::PageIdTrait::getPageMapKey(page_id), std::move(page));
         }
         return page_map;
@@ -743,7 +743,8 @@ BlobStore<Trait>::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_lim
         }
 
         Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
-        page.data = ByteBuffer(pos, write_offset);
+        RUNTIME_CHECK(write_offset >= pos);
+        page.data = std::string_view(pos, write_offset - pos);
         page.mem_holder = shared_mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
         fields_offset_in_page.clear();
@@ -839,7 +840,7 @@ BlobStore<Trait>::read(PageIdAndEntries & entries, const ReadLimiterPtr & read_l
         }
 
         Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
-        page.data = ByteBuffer(pos, pos + entry.size);
+        page.data = std::string_view(pos, entry.size);
         page.mem_holder = mem_holder;
 
         // Calculate the field_offsets from page entry
@@ -920,7 +921,7 @@ Page BlobStore<Trait>::read(const PageIdAndEntry & id_entry, const ReadLimiterPt
     }
 
     Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
-    page.data = ByteBuffer(data_buf, data_buf + buf_size);
+    page.data = std::string_view(data_buf, buf_size);
     page.mem_holder = mem_holder;
 
     // Calculate the field_offsets from page entry
