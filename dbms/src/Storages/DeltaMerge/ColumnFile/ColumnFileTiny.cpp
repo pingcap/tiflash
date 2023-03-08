@@ -218,7 +218,7 @@ ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(const DMContext & context, con
 
 PageIdU64 ColumnFileTiny::writeColumnFileData(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
 {
-    auto page_id = context.storage_pool.newLogPageId();
+    auto page_id = context.storage_pool->newLogPageId();
 
     MemoryWriteBuffer write_buf;
     PageFieldSizes col_data_sizes;

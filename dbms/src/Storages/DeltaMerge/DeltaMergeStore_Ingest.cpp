@@ -75,7 +75,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
     const std::vector<DMFilePtr> & files,
     bool clear_data_in_range)
 {
-    auto delegate = dm_context->path_pool.getStableDiskDelegator();
+    auto delegate = dm_context->path_pool->getStableDiskDelegator();
     auto file_provider = dm_context->db_context.getFileProvider();
 
     Segments updated_segments;
@@ -398,7 +398,7 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *    │-------- Ingest Range --------│
          */
 
-        auto delegate = dm_context.path_pool.getStableDiskDelegator();
+        auto delegate = dm_context.path_pool->getStableDiskDelegator();
         auto file_provider = dm_context.db_context.getFileProvider();
 
         WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
@@ -554,7 +554,7 @@ void DeltaMergeStore::ingestFiles(
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
 
-    auto delegate = dm_context->path_pool.getStableDiskDelegator();
+    auto delegate = dm_context->path_pool->getStableDiskDelegator();
     auto file_provider = dm_context->db_context.getFileProvider();
 
     size_t rows = 0;
