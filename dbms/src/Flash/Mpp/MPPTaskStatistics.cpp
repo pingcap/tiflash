@@ -22,7 +22,6 @@
 #include <tipb/executor.pb.h>
 
 #include <magic_enum.hpp>
-#include <memory>
 
 namespace DB
 {
@@ -83,13 +82,13 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
 void MPPTaskStatistics::collectRuntimeStatistics()
 {
     LOG_INFO(logger, "collect runtime statistics");
-    const auto & executor_statistics_res = dag_context->executorStatisticCollector()->getResult();
+    const auto & executor_statistics_res = executor_statistics_collector->getResult();
     auto it = executor_statistics_res.find(sender_executor_id);
     RUNTIME_CHECK_MSG(it != executor_statistics_res.end(), "Can't find exchange sender statistics after `collectRuntimeStatistics`");
     const auto & return_statistics = it->second->getBaseRuntimeStatistics();
     // record io bytes
     output_bytes = return_statistics.bytes;
-    recordInputBytes(dag_context->executorStatisticCollector()->getDAGContext());
+    recordInputBytes(executor_statistics_collector->getDAGContext());
 }
 
 void MPPTaskStatistics::logTracingJson()

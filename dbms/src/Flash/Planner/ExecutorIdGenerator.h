@@ -36,7 +36,6 @@ public:
 
         auto * mutable_executor = const_cast<tipb::Executor *>(&executor);
         mutable_executor->set_executor_id(executor_id);
-        std::cout << executor.has_executor_id() << std::endl;
         return executor_id;
     }
 

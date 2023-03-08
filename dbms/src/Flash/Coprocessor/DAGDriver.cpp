@@ -30,8 +30,6 @@
 #include <Storages/Transaction/RegionException.h>
 #include <pingcap/Exception.h>
 
-#include <memory>
-
 namespace DB
 {
 namespace ErrorCodes

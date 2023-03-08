@@ -18,7 +18,6 @@
 #include <tipb/executor.pb.h>
 
 #include <map>
-#include <memory>
 
 namespace DB
 {

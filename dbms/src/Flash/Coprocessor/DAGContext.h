@@ -267,15 +267,9 @@ public:
 
     String getRootExecutorId();
 
-    void setExecutorStatisticCollector(ExecutorStatisticsCollectorPtr & executor_statistics_collector_)
-    {
-        executor_statistics_collector = executor_statistics_collector_;
-    }
+    void setExecutorStatisticCollector(ExecutorStatisticsCollectorPtr & executor_statistics_collector_);
 
-    ExecutorStatisticsCollectorPtr executorStatisticCollector() const
-    {
-        return executor_statistics_collector;
-    }
+    ExecutorStatisticsCollectorPtr executorStatisticCollector() const;
 
 
     const tipb::DAGRequest * dag_request;

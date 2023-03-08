@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -336,5 +336,15 @@ bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
 const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_id) const
 {
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
+}
+
+void DAGContext::setExecutorStatisticCollector(ExecutorStatisticsCollectorPtr & executor_statistics_collector_)
+{
+    executor_statistics_collector = executor_statistics_collector_;
+}
+
+ExecutorStatisticsCollectorPtr DAGContext::executorStatisticCollector() const
+{
+    return executor_statistics_collector;
 }
 } // namespace DB

@@ -46,9 +46,14 @@ public:
 
 #define WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN                                      \
     std::vector<DAGRequestType> type{DAGRequestType::tree, DAGRequestType::list}; \
-    for (const auto t : type)                                                     \
-    {
+    std::vector<bool> planner_bools{false, true};                                 \
+    for (auto enable_planner : planner_bools)                                     \
+    {                                                                             \
+        enablePlanner(enable_planner);                                            \
+        for (const auto t : type)                                                 \
+        {
 #define WRAP_FOR_EXCUTION_SUMMARY_TEST_END \
+    }                                      \
     }
 };
 
