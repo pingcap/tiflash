@@ -24,6 +24,7 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
+#include <aws/s3/S3Client.h>
 
 #include <ext/scope_guard.h>
 
@@ -36,11 +37,19 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     const PageStorageConfig & config)
 {
     auto service = UniversalPageStorageServicePtr(new UniversalPageStorageService(context));
-    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider());
+    auto & s3factory = S3::ClientFactory::instance();
+    std::shared_ptr<Aws::S3::S3Client> s3_client;
+    String bucket;
+    if (s3factory.isEnabled())
+    {
+        s3_client = s3factory.sharedClient();
+        bucket = s3factory.bucket();
+    }
+    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider(), s3_client, bucket);
     service->uni_page_storage->restore();
     auto & bkg_pool = context.getBackgroundPool();
 
-    if (S3::ClientFactory::instance().isEnabled())
+    if (s3factory.isEnabled())
     {
         // TODO: make this interval reloadable
         auto interval_s = context.getSettingsRef().remote_checkpoint_interval_seconds;
@@ -62,6 +71,22 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     return service;
 }
 
+UniversalPageStorageServicePtr
+UniversalPageStorageService::createForTest(
+    Context & context,
+    const String & name,
+    PSDiskDelegatorPtr delegator,
+    const PageStorageConfig & config,
+    std::shared_ptr<Aws::S3::S3Client> s3_client,
+    String bucket)
+{
+    auto service = UniversalPageStorageServicePtr(new UniversalPageStorageService(context));
+    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider(), s3_client, bucket);
+    service->uni_page_storage->restore();
+    // not register background task under test
+    return service;
+}
+
 struct CheckpointUploadFunctor
 {
     const StoreID store_id;
@@ -71,7 +96,6 @@ struct CheckpointUploadFunctor
     bool operator()(const PS::V3::LocalCheckpointFiles & checkpoint) const
     {
         // Persist checkpoint to remote_source
-
         return remote_store->putCheckpointFiles(checkpoint, store_id, sequence);
     }
 };
@@ -102,8 +126,12 @@ bool UniversalPageStorageService::uploadCheckpoint()
         LOG_INFO(log, "Skip checkpoint because remote data store is not initialized");
         return false;
     }
-
     auto s3lock_client = tmt.getS3LockClient();
+    return uploadCheckpointImpl(store_info, s3lock_client, remote_store);
+}
+
+bool UniversalPageStorageService::uploadCheckpointImpl(const metapb::Store & store_info, const S3::S3LockClientPtr & s3lock_client, const DM::Remote::IDataStorePtr & remote_store)
+{
     uni_page_storage->initLocksLocalManager(store_info.id(), s3lock_client);
     const auto upload_info = uni_page_storage->getUploadLocksInfo();
 
@@ -123,10 +151,10 @@ bool UniversalPageStorageService::uploadCheckpoint()
     auto local_dir_str = local_dir.toString() + "/";
 
     UniversalPageStorage::DumpCheckpointOptions opts{
-        .data_file_id_pattern = "{sequence}_{sub_file_index}.data",
-        .data_file_path_pattern = local_dir_str + "{sequence}_{sub_file_index}.data",
-        .manifest_file_id_pattern = "{sequence}.manifest",
-        .manifest_file_path_pattern = local_dir_str + "{sequence}.manifest",
+        .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
+        .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",
+        .manifest_file_id_pattern = S3::S3Filename::newCheckpointManifestNameTemplate(store_info.id()),
+        .manifest_file_path_pattern = local_dir_str + "mf_{seq}",
         .writer_info = wi,
         .must_locked_files = upload_info.pre_lock_keys,
         .persist_checkpoint = CheckpointUploadFunctor{
@@ -136,6 +164,7 @@ bool UniversalPageStorageService::uploadCheckpoint()
             .sequence = upload_info.upload_sequence,
             .remote_store = remote_store,
         },
+        .override_sequence = upload_info.upload_sequence,
     };
     uni_page_storage->dumpIncrementalCheckpoint(opts);
 

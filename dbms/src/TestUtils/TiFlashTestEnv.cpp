@@ -27,6 +27,8 @@
 
 #include <memory>
 
+#include "Encryption/FileProvider.h"
+
 namespace DB::tests
 {
 std::vector<std::shared_ptr<Context>> TiFlashTestEnv::global_contexts = {};
@@ -216,4 +218,11 @@ void TiFlashTestEnv::setUpTestContext(Context & context, DAGContext * dag_contex
     /// collation sensitive group by setting `group_by_collation_sensitive` to true
     context.setSetting("group_by_collation_sensitive", Field(static_cast<UInt64>(1)));
 }
+
+FileProviderPtr TiFlashTestEnv::getMockFileProvider()
+{
+    bool encryption_enabled = false;
+    return std::make_shared<FileProvider>(std::make_shared<MockKeyManager>(encryption_enabled), encryption_enabled);
+}
+
 } // namespace DB::tests

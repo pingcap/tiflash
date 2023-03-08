@@ -352,22 +352,25 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
 
     // As a checkpoint, we write both entries (in manifest) and its data.
     // Some entries' data may be already written by a previous checkpoint. These data will not be written again.
+    UInt64 sequence = snap->sequence;
+    if (options.override_sequence)
+        sequence = options.override_sequence.value();
 
     auto data_file_id = fmt::format(
         fmt::runtime(options.data_file_id_pattern),
-        fmt::arg("sequence", snap->sequence),
-        fmt::arg("sub_file_index", 0));
+        fmt::arg("seq", sequence),
+        fmt::arg("index", 0));
     auto data_file_path = fmt::format(
         fmt::runtime(options.data_file_path_pattern),
-        fmt::arg("sequence", snap->sequence),
-        fmt::arg("sub_file_index", 0));
+        fmt::arg("seq", sequence),
+        fmt::arg("index", 0));
 
     auto manifest_file_id = fmt::format(
         fmt::runtime(options.manifest_file_id_pattern),
-        fmt::arg("sequence", snap->sequence));
+        fmt::arg("seq", sequence));
     auto manifest_file_path = fmt::format(
         fmt::runtime(options.manifest_file_path_pattern),
-        fmt::arg("sequence", snap->sequence));
+        fmt::arg("seq", sequence));
 
     RUNTIME_CHECK(
         data_file_path != manifest_file_path,

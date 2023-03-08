@@ -141,7 +141,7 @@ public:
     struct DumpCheckpointOptions
     {
         /**
-         * The data file id and path. Available placeholders: {sequence}, {sub_file_index}.
+         * The data file id and path. Available placeholders: {seq}, {index}.
          * We accept "/" in the file name.
          *
          * File path is where the data file is put in the local FS. It should be a valid FS path.
@@ -151,7 +151,7 @@ public:
         const std::string & data_file_path_pattern;
 
         /**
-         * The manifest file id and path. Available placeholders: {sequence}.
+         * The manifest file id and path. Available placeholders: {seq}.
          * We accept "/" in the file name.
          *
          * File path is where the manifest file is put in the local FS. It should be a valid FS path.
@@ -180,6 +180,12 @@ public:
          * to prevent the incremental data lost between checkpoints.
          */
         const std::function<bool(const PS::V3::LocalCheckpointFiles &)> persist_checkpoint;
+
+        /**
+         * Override the value of `seq` placeholder in the data files and manifest file.
+         * By default it is std::nullopt, use the snapshot->sequence as `seq` value.
+         */
+        std::optional<UInt64> override_sequence = std::nullopt;
     };
 
     void dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);

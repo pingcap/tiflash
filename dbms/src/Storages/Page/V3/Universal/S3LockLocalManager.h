@@ -62,7 +62,8 @@ private:
     String createS3Lock(const String & datafile_key, const S3::S3FilenameView & s3_file, UInt64 lock_store_id);
 
 private:
-    std::shared_ptr<S3::TiFlashS3Client> s3_client;
+    std::shared_ptr<Aws::S3::S3Client> s3_client;
+    String bucket;
 
     std::mutex mtx_store_init;
     std::condition_variable cv_init;

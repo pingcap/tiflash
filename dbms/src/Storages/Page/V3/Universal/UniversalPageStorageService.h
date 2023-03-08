@@ -17,6 +17,12 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 
+namespace DB::DM::Remote
+{
+class IDataStore;
+using IDataStorePtr = std::shared_ptr<IDataStore>;
+}
+
 namespace DB
 {
 class UniversalPageStorageService;
@@ -43,6 +49,16 @@ public:
     ~UniversalPageStorageService();
     void shutdown();
 
+    bool uploadCheckpointImpl(const metapb::Store & store_info, const S3::S3LockClientPtr & s3lock_client, const DM::Remote::IDataStorePtr & remote_store);
+
+    static UniversalPageStorageServicePtr
+    createForTest(
+        Context & context,
+        const String & name,
+        PSDiskDelegatorPtr delegator,
+        const PageStorageConfig & config,
+        std::shared_ptr<Aws::S3::S3Client> s3_client,
+        String bucket);
 private:
     explicit UniversalPageStorageService(Context & global_context_)
         : global_context(global_context_)
@@ -51,7 +67,11 @@ private:
     {
     }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     std::atomic_bool is_checkpoint_uploading{false};
 
     Context & global_context;
