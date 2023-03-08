@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
 namespace DB
 {
@@ -56,9 +57,10 @@ class ColumnFileSetSnapshot : public std::enable_shared_from_this<ColumnFileSetS
 {
     friend class MemTableSet;
     friend class ColumnFilePersistedSet;
+    friend struct Remote::Serializer;
 
 private:
-    StorageSnapshotPtr storage_snap;
+    IColumnFileDataProviderPtr data_provider;
 
     ColumnFiles column_files;
     size_t rows{0};
@@ -69,14 +71,14 @@ private:
     size_t rowkey_column_size{0};
 
 public:
-    explicit ColumnFileSetSnapshot(const StorageSnapshotPtr & storage_snap_)
-        : storage_snap{storage_snap_}
+    explicit ColumnFileSetSnapshot(const IColumnFileDataProviderPtr & data_provider_)
+        : data_provider{data_provider_}
     {}
 
     ColumnFileSetSnapshotPtr clone()
     {
-        auto c = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
-        c->storage_snap = storage_snap;
+        auto c = std::make_shared<ColumnFileSetSnapshot>(data_provider);
+        c->data_provider = data_provider;
         c->column_files = column_files;
         c->rows = rows;
         c->bytes = bytes;
@@ -96,7 +98,7 @@ public:
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getStorageSnapshot() { return storage_snap; }
+    const auto & getDataProvider() { return data_provider; }
 };
 
 } // namespace DM

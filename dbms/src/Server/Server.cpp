@@ -24,10 +24,10 @@
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
-#include <Common/ThreadPool.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/UniThreadPool.h>
 #include <Common/assert_cast.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
@@ -964,6 +964,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t global_capacity_quota = 0;
     TiFlashStorageConfig storage_config;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
+
+    storage_config.remote_cache_config.initCacheDir();
 
     if (storage_config.s3_config.isS3Enabled())
     {

@@ -56,8 +56,10 @@ void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_
     result.insert(result.end(), read_cols.begin(), read_cols.end());
 }
 
-ColumnFileReaderPtr
-ColumnFileInMemory::getReader(const DMContext & /*context*/, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
+ColumnFileReaderPtr ColumnFileInMemory::getReader(
+    const DMContext &,
+    const IColumnFileDataProviderPtr &,
+    const ColumnDefinesPtr & col_defs) const
 {
     return std::make_shared<ColumnFileInMemoryReader>(*this, col_defs);
 }

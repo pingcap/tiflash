@@ -90,7 +90,7 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
     const RowKeyRange & segment_range,
     PageIdU64 id)
 {
-    Page page = context.storage_pool.metaReader()->read(id);
+    Page page = context.storage_pool->metaReader()->read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     auto column_files = deserializeSavedColumnFiles(context, segment_range, buf);
     return std::make_shared<ColumnFilePersistedSet>(id, column_files);
@@ -340,9 +340,9 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     return true;
 }
 
-ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const StorageSnapshotPtr & storage_snap)
+ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const IColumnFileDataProviderPtr & data_provider)
 {
-    auto snap = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
+    auto snap = std::make_shared<ColumnFileSetSnapshot>(data_provider);
     snap->rows = rows;
     snap->bytes = bytes;
     snap->deletes = deletes;

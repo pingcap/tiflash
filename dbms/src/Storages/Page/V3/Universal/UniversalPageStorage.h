@@ -24,6 +24,7 @@
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <common/defines.h>
 
 namespace DB
@@ -45,6 +46,8 @@ class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 using UniversalPageMap = std::map<UniversalPageId, Page>;
+using UniversalPageIdAndEntry = std::pair<UniversalPageId, PS::V3::PageEntryV3>;
+using UniversalPageIdAndEntries = std::vector<UniversalPageIdAndEntry>;
 
 class UniversalPageStorage final
 {
@@ -57,7 +60,9 @@ public:
         const String & name,
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config,
-        const FileProviderPtr & file_provider);
+        const FileProviderPtr & file_provider,
+        std::shared_ptr<Aws::S3::S3Client> s3_client = nullptr,
+        const String & bucket = "");
 
     UniversalPageStorage(
         String name,
@@ -107,11 +112,13 @@ public:
 
     UniversalPageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
 
-    void traverse(const String & prefix, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot) const;
+    void traverse(const String & prefix, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) const;
+
+    void traverseEntries(const String & prefix, const std::function<void(UniversalPageId page_id, DB::PageEntry entry)> & acceptor, SnapshotPtr snapshot = {}) const;
 
     UniversalPageId getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
 
-    DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot);
+    DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
 
     struct DumpCheckpointOptions
     {
@@ -169,6 +176,10 @@ public:
     void registerUniversalExternalPagesCallbacks(const UniversalExternalPageCallbacks & callbacks);
     void unregisterUniversalExternalPagesCallbacks(const String & prefix);
 
+private:
+    void tryUpdateLocalCacheForRemotePages(UniversalWriteBatch & wb, SnapshotPtr snapshot) const;
+
+public:
     friend class PageReaderImplUniversal;
 
     // private: // TODO: make these private
@@ -181,6 +192,8 @@ public:
 
     using BlobStorePtr = std::unique_ptr<PS::V3::universal::BlobStoreType>;
     BlobStorePtr blob_store;
+
+    PS::V3::S3PageReaderPtr remote_reader;
 
     PS::V3::universal::ExternalPageCallbacksManager manager;
 

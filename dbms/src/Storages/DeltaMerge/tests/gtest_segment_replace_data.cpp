@@ -161,7 +161,7 @@ class SegmentReplaceDataSimpleTest : public SegmentTestBasic
 TEST_F(SegmentReplaceDataSimpleTest, DMFileGCIsUnchanged)
 try
 {
-    WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+    WriteBatches ingest_wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
 
     auto delegator = storage_path_pool->getStableDiskDelegator();
     auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);

@@ -44,6 +44,7 @@
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/Expand.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -816,5 +817,9 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     DAGPipeline pipeline;
     executeImpl(pipeline);
     return pipeline.streams;
+}
+DAGContext & DAGQueryBlockInterpreter::dagContext() const
+{
+    return *context.getDAGContext();
 }
 } // namespace DB

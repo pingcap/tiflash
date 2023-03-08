@@ -24,6 +24,7 @@
 #include <IO/Progress.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include <Poco/Net/TCPServerConnection.h>
 #include <Storages/Transaction/RegionLockInfo.h>
 

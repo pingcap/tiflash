@@ -17,10 +17,12 @@
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
+#include <Operators/Operator.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -32,6 +34,7 @@
 
 namespace DB
 {
+
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 
@@ -323,6 +326,37 @@ public:
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID,
                            const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+
+
+    /// Read rows in two modes:
+    ///     when is_fast_scan == false, we will read rows with MVCC filtering, del mark !=0  filter and sorted merge.
+    ///     when is_fast_scan == true, we will read rows without MVCC and sorted merge.
+    /// `sorted_ranges` should be already sorted and merged.
+    SourceOps readSourceOps(PipelineExecutorStatus & exec_status_,
+                            const Context & db_context,
+                            const DB::Settings & db_settings,
+                            const ColumnDefines & columns_to_read,
+                            const RowKeyRanges & sorted_ranges,
+                            size_t num_streams,
+                            UInt64 max_version,
+                            const RSOperatorPtr & filter,
+                            const String & tracing_id,
+                            bool keep_order,
+                            bool is_fast_scan = false,
+                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
+                            const SegmentIdSet & read_segments = {},
+                            size_t extra_table_id_index = InvalidColumnID,
+                            const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+
+    Remote::DisaggPhysicalTableReadSnapshotPtr
+    writeNodeBuildRemoteReadSnapshot(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const RowKeyRanges & sorted_ranges,
+        size_t num_streams,
+        const String & tracing_id,
+        const SegmentIdSet & read_segments = {},
+        const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
     bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)
