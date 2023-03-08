@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/UnifiedLogFormatter.h>
+#include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Poco/ConsoleChannel.h>
@@ -26,8 +27,6 @@
 #include <TestUtils/TiFlashTestEnv.h>
 
 #include <memory>
-
-#include "Encryption/FileProvider.h"
 
 namespace DB::tests
 {

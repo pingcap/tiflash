@@ -21,7 +21,7 @@ namespace DB::DM::Remote
 {
 class IDataStore;
 using IDataStorePtr = std::shared_ptr<IDataStore>;
-}
+} // namespace DB::DM::Remote
 
 namespace DB
 {
@@ -59,6 +59,7 @@ public:
         const PageStorageConfig & config,
         std::shared_ptr<Aws::S3::S3Client> s3_client,
         String bucket);
+
 private:
     explicit UniversalPageStorageService(Context & global_context_)
         : global_context(global_context_)

@@ -56,12 +56,9 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-<<<<<<< HEAD
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
-=======
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
->>>>>>> upstream/master
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
@@ -173,14 +170,10 @@ struct ContextShared
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
 
-<<<<<<< HEAD
-    /// An abstraction for putting local files to remote data store (e.g. S3)
-    DM::Remote::IDataStorePtr remote_data_store;
-
-=======
     /// The following members are only available in read-write disaggregated mode
     ///
->>>>>>> upstream/master
+    /// An abstraction for putting local files to remote data store (e.g. S3)
+    DM::Remote::IDataStorePtr remote_data_store;
     /// The PS instance available on Write Node.
     UniversalPageStorageServicePtr ps_write;
     /// The PS instance available on Read Node.
