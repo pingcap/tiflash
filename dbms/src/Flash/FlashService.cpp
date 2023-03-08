@@ -23,6 +23,7 @@
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/Disaggregated/DisaggregatedTask.h>
 #include <Flash/Disaggregated/S3LockService.h>
+#include <Flash/Disaggregated/WNPageTunnel.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
 #include <Flash/Management/ManualCompact.h>
@@ -696,8 +697,7 @@ grpc::Status FlashService::FetchDisaggPages(
         for (auto page_id : request->page_ids())
             read_ids.emplace_back(page_id);
 
-#if 0
-        auto tunnel = PageTunnel::build(
+        auto tunnel = WNPageTunnel::build(
             *context,
             task_id,
             request->table_id(),
@@ -707,9 +707,6 @@ grpc::Status FlashService::FetchDisaggPages(
         tunnel->connect(sync_writer);
         LOG_DEBUG(log, "Handle FetchDisaggPages request done");
         return grpc::Status::OK;
-#endif
-
-        return record_error(grpc::StatusCode::UNIMPLEMENTED, "unimplemented");
     }
     catch (const TiFlashException & e)
     {

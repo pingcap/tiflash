@@ -15,7 +15,7 @@
 #pragma once
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>

@@ -58,8 +58,10 @@ void ColumnFileBig::removeData(WriteBatches & wbs) const
     wbs.removed_data.delPage(file->pageId());
 }
 
-ColumnFileReaderPtr
-ColumnFileBig::getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
+ColumnFileReaderPtr ColumnFileBig::getReader(
+    const DMContext & context,
+    const IColumnFileDataProviderPtr &,
+    const ColumnDefinesPtr & col_defs) const
 {
     return std::make_shared<ColumnFileBigReader>(context, *this, col_defs);
 }
@@ -82,8 +84,8 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(const DMContext & cont
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
-    auto file_id = context.storage_pool.dataReader()->getNormalPageId(file_page_id);
-    auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
+    auto file_id = context.storage_pool->dataReader()->getNormalPageId(file_page_id);
+    auto file_parent_path = context.path_pool->getStableDiskDelegator().getDTFilePath(file_id);
 
     auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_page_id, file_parent_path, DMFile::ReadMetaMode::all());
 

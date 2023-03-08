@@ -84,7 +84,7 @@ class Spiller
 {
 public:
     Spiller(const SpillConfig & config, bool is_input_sorted, UInt64 partition_num, const Block & input_schema, const LoggerPtr & logger, Int64 spill_version = 1, bool release_spilled_file_on_restore = true);
-    void spillBlocks(const Blocks & blocks, UInt64 partition_id);
+    void spillBlocks(Blocks && blocks, UInt64 partition_id);
     /// spill blocks by reading from BlockInputStream, this is more memory friendly compared to spillBlocks
     void spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled);
     /// max_stream_size == 0 means the spiller choose the stream size automatically

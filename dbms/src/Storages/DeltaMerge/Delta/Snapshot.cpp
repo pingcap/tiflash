@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
@@ -38,10 +39,11 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     snap->is_update = for_update;
     snap->delta = this->shared_from_this();
 
-    auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), context.tracing_id, /*snapshot_read*/ true);
-    snap->persisted_files_snap = persisted_file_set->createSnapshot(storage_snap);
+    auto storage_snap = std::make_shared<StorageSnapshot>(*context.storage_pool, context.getReadLimiter(), context.tracing_id, /*snapshot_read*/ true);
+    auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
+    snap->persisted_files_snap = persisted_file_set->createSnapshot(data_from_storage_snap);
+    snap->mem_table_snap = mem_table_set->createSnapshot(data_from_storage_snap, for_update);
     snap->shared_delta_index = delta_index;
-    snap->mem_table_snap = mem_table_set->createSnapshot(storage_snap, for_update);
 
     return snap;
 }

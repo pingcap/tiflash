@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 
 namespace DB
