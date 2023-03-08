@@ -26,9 +26,16 @@
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
+
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_skip_s3_lock_create[];
+} // namespace FailPoints
+
 UniversalPageStoragePtr UniversalPageStorage::create(
     const String & name,
     PSDiskDelegatorPtr delegator,
@@ -75,7 +82,12 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
 
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
-    const bool has_writes_from_remote = write_batch.hasWritesFromRemote();
+    bool has_writes_from_remote = write_batch.hasWritesFromRemote();
+    fiu_do_on(FailPoints::force_skip_s3_lock_create, {
+        // some unit test we want to focus on read/write logic, skip these lock logic
+        has_writes_from_remote = false;
+        LOG_WARNING(log, "!!!skip remote_locks_local_mgr!!!");
+    });
     if (has_writes_from_remote)
     {
         assert(remote_locks_local_mgr != nullptr);

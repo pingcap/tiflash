@@ -20,6 +20,8 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 
+#include <magic_enum.hpp>
+
 
 namespace DB::ErrorCodes
 {
@@ -116,12 +118,19 @@ void S3LockLocalManager::createS3LockForWriteBatch(UniversalWriteBatch & write_b
         }
     }
 
-    for (auto & [datafile_key, lock_key] : s3_datafiles_to_lock)
+    for (auto & [input_key, lock_key] : s3_datafiles_to_lock)
     {
-        auto view = S3::S3FilenameView::fromKey(datafile_key);
-        if (!view.isDataFile())
+        auto view = S3::S3FilenameView::fromKey(input_key);
+        RUNTIME_CHECK_MSG(view.isDataFile() || view.isLockFile(),
+                          "invalid data_file_id, input_key={} type={}",
+                          input_key,
+                          magic_enum::enum_name(view.type));
+        if (view.isLockFile())
+        {
+            lock_key = std::make_shared<String>(input_key);
             continue;
-        auto lock_result = createS3Lock(datafile_key, view, store_id);
+        }
+        auto lock_result = createS3Lock(input_key, view, store_id);
         lock_key = std::make_shared<String>(lock_result);
     }
 

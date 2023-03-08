@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Flash/Disaggregated/S3LockClient.h>
@@ -38,6 +39,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_skip_s3_lock_create[];
+} // namespace FailPoints
+
 namespace PS::universal::tests
 {
 class UniPageStorageRemoteReadTest : public DB::base::TiFlashStorageTestBasic
@@ -49,6 +55,9 @@ public:
 
     void SetUp() override
     {
+        // These test focus on read/write data, skip the lockkey logic
+        FailPointHelper::enableFailPoint(FailPoints::force_skip_s3_lock_create);
+
         TiFlashStorageTestBasic::SetUp();
         auto path = getTemporaryPath();
         remote_dir = path;
@@ -57,13 +66,16 @@ public:
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         s3_client = S3::ClientFactory::instance().sharedClient();
         bucket = S3::ClientFactory::instance().bucket();
-        mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client, bucket);
 
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
 
         page_storage = UniversalPageStorage::create("write", delegator, config, file_provider, s3_client, bucket);
         page_storage->restore();
-        page_storage->initLocksLocalManager(test_store_id, mock_s3lock_client);
+    }
+
+    void TearDown() override
+    {
+        FailPointHelper::disableFailPoint(FailPoints::force_skip_s3_lock_create);
     }
 
     void reload()
@@ -77,7 +89,6 @@ public:
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         auto storage = UniversalPageStorage::create("test.t", delegator, config_, file_provider, s3_client, bucket);
         storage->restore();
-        page_storage->initLocksLocalManager(test_store_id, mock_s3lock_client);
         return storage;
     }
 
@@ -107,7 +118,6 @@ protected:
     PSDiskDelegatorPtr delegator;
     std::shared_ptr<Aws::S3::S3Client> s3_client;
     String bucket;
-    S3::S3LockClientPtr mock_s3lock_client;
     PageStorageConfig config;
     std::shared_ptr<UniversalPageStorage> page_storage;
 
