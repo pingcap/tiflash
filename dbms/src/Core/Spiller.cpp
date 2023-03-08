@@ -176,7 +176,7 @@ SpillHandler Spiller::createSpillHandler(UInt64 partition_id)
     return SpillHandler(this, partition_id);
 }
 
-void Spiller::spillBlocks(const Blocks & blocks, UInt64 partition_id)
+void Spiller::spillBlocks(Blocks && blocks, UInt64 partition_id)
 {
     if (blocks.empty())
         return;

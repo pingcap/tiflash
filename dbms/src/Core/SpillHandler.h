@@ -32,7 +32,7 @@ class SpillHandler
 {
 public:
     SpillHandler(Spiller * spiller_, size_t partition_id_);
-    void spillBlocks(const Blocks & blocks);
+    void spillBlocks(Blocks & blocks);
     void finish();
 
 private:
