@@ -737,14 +737,15 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
         LOG_DEBUG(tracing_logger, "Rough set filter is disabled.");
 
     // build push down filter
-    if (!query_info.dag_query->pushed_down_filters.empty())
+    if (likely(query_info.dag_query) && !query_info.dag_query->pushed_down_filters.empty())
     {
         std::unordered_set<ColId> filter_column_ids;
-        for (const auto & filter : query_info.dag_query->filters)
+        for (const auto & filter : query_info.dag_query->pushed_down_filters)
         {
-            filter_column_ids.insert(DB::DM::cop::getColumnIDForColumnExpr(filter, columns_to_read));
+            FilterParser::parseFilterColumnsFromDAGQuery(filter, columns_to_read, filter_column_ids);
         }
         ColumnDefines filter_columns;
+        filter_columns.reserve(filter_column_ids.size());
         for (const auto id : filter_column_ids)
         {
             auto iter = std::find_if(
@@ -758,7 +759,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
         for (const auto & col : filter_columns)
         {
             // do not support push down filter on datetime and time
-            RUNTIME_CHECK(col.id == 1 || (col.type->getTypeId() != TypeIndex::MyDateTime && col.type->getTypeId() != TypeIndex::MyTime));
+            RUNTIME_CHECK(col.id == -1 || (col.type->getTypeId() != TypeIndex::MyDateTime && col.type->getTypeId() != TypeIndex::MyTime));
         }
 
         NamesAndTypes columns_to_read_name_and_type;

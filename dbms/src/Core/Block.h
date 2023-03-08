@@ -173,6 +173,8 @@ using BlocksList = std::list<Block>;
 using BucketBlocksListMap = std::map<Int32, BlocksList>;
 
 /// join blocks by columns
+/// The schema of the output block is the same as the header block.
+/// The columns not in the header block will be ignored.
 Block hstackBlocks(Blocks && blocks, const Block & header);
 
 /// join blocks by rows

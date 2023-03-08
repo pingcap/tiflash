@@ -36,10 +36,6 @@ struct DAGQueryInfo;
 
 namespace DM
 {
-namespace cop
-{
-ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const ColumnDefines & columns_to_read);
-} // namespace cop
 
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
@@ -83,6 +79,8 @@ public:
     };
 
     static std::unordered_map<tipb::ScalarFuncSig, RSFilterType> scalar_func_rs_filter_map;
+
+    static void parseFilterColumnsFromDAGQuery(const tipb::Expr & expr, const ColumnDefines & columns_to_read, std::unordered_set<ColId> & col_id_set);
 };
 
 } // namespace DM

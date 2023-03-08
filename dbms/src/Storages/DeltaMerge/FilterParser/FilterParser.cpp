@@ -424,6 +424,24 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
     return op;
 }
 
+void FilterParser::parseFilterColumnsFromDAGQuery(const tipb::Expr & expr, const ColumnDefines & columns_to_read, std::unordered_set<ColId> & col_id_set)
+{
+    if (expr.children_size() == 0)
+    {
+        if (likely(isColumnExpr(expr)))
+        {
+            col_id_set.insert(cop::getColumnIDForColumnExpr(expr, columns_to_read));
+        }
+    }
+    else
+    {
+        for (const auto & child : expr.children())
+        {
+            parseFilterColumnsFromDAGQuery(child, columns_to_read, col_id_set);
+        }
+    }
+}
+
 std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser::scalar_func_rs_filter_map{
     /*
     {tipb::ScalarFuncSig::CastIntAsInt, "cast"},
