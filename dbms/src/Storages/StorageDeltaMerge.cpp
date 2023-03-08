@@ -987,7 +987,7 @@ UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)
 {
     if (storeInited())
     {
-        return store->onSyncGc(limit, gc_options);
+        return _store->onSyncGc(limit, gc_options);
     }
     return 0;
 }
@@ -1076,7 +1076,7 @@ DM::DeltaMergeStorePtr StorageDeltaMerge::getStoreIfInited()
 {
     if (storeInited())
     {
-        return store;
+        return _store;
     }
     return nullptr;
 }
@@ -1310,7 +1310,7 @@ try
         std::lock_guard lock(store_mutex); // Avoid concurrent init store and DDL.
         if (storeInited())
         {
-            store->applyAlters(commands, table_info, max_column_id_used, context);
+            _store->applyAlters(commands, table_info, max_column_id_used, context);
         }
         else
         {
@@ -1349,12 +1349,12 @@ ColumnDefines StorageDeltaMerge::getStoreColumnDefines() const
 {
     if (storeInited())
     {
-        return store->getTableColumns();
+        return _store->getTableColumns();
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return store->getTableColumns();
+        return _store->getTableColumns();
     }
     ColumnDefines cols;
     cols.emplace_back(table_column_info->handle_column_define);
@@ -1394,13 +1394,13 @@ void StorageDeltaMerge::rename(
     }
     if (storeInited())
     {
-        store->rename(new_path_to_db, new_database_name, new_table_name);
+        _store->rename(new_path_to_db, new_database_name, new_table_name);
         return;
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        store->rename(new_path_to_db, new_database_name, new_table_name);
+        _store->rename(new_path_to_db, new_database_name, new_table_name);
     }
     else
     {
@@ -1413,12 +1413,12 @@ String StorageDeltaMerge::getTableName() const
 {
     if (storeInited())
     {
-        return store->getTableName();
+        return _store->getTableName();
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return store->getTableName();
+        return _store->getTableName();
     }
     return table_column_info->table_name;
 }
@@ -1427,12 +1427,12 @@ String StorageDeltaMerge::getDatabaseName() const
 {
     if (storeInited())
     {
-        return store->getDatabaseName();
+        return _store->getDatabaseName();
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return store->getDatabaseName();
+        return _store->getDatabaseName();
     }
     return table_column_info->db_name;
 }
@@ -1556,7 +1556,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     StoreStats stat;
     if (storeInited())
     {
-        stat = store->getStoreStats();
+        stat = _store->getStoreStats();
     }
 
 #define INSERT_INT(NAME)             \
@@ -1662,7 +1662,7 @@ void StorageDeltaMerge::shutdownImpl()
         return;
     if (storeInited())
     {
-        store->shutdown();
+        _store->shutdown();
     }
 }
 
@@ -1688,12 +1688,12 @@ DataTypePtr StorageDeltaMerge::getPKTypeImpl() const
 {
     if (storeInited())
     {
-        return store->getPKDataType();
+        return _store->getPKDataType();
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return store->getPKDataType();
+        return _store->getPKDataType();
     }
     return table_column_info->handle_column_define.type;
 }
@@ -1702,12 +1702,12 @@ SortDescription StorageDeltaMerge::getPrimarySortDescription() const
 {
     if (storeInited())
     {
-        return store->getPrimarySortDescription();
+        return _store->getPrimarySortDescription();
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        return store->getPrimarySortDescription();
+        return _store->getPrimarySortDescription();
     }
     SortDescription desc;
     desc.emplace_back(table_column_info->handle_column_define.name, /* direction_= */ 1, /* nulls_direction_= */ 1);
@@ -1718,12 +1718,12 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
 {
     if (storeInited())
     {
-        return store;
+        return _store;
     }
     std::lock_guard lock(store_mutex);
-    if (store == nullptr)
+    if (_store == nullptr)
     {
-        store = std::make_shared<DeltaMergeStore>(
+        _store = std::make_shared<DeltaMergeStore>(
             global_context,
             data_path_contains_database_name,
             table_column_info->db_name,
@@ -1738,7 +1738,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
         table_column_info.reset(nullptr);
         store_inited.store(true, std::memory_order_release);
     }
-    return store;
+    return _store;
 }
 
 bool StorageDeltaMerge::initStoreIfDataDirExist()
