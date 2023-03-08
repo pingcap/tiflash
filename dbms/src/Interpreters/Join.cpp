@@ -1184,7 +1184,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                     continue;
                 }
             }
-            build_spiller->spillBlocks(blocks_to_spill, i);
+            build_spiller->spillBlocks(std::move(blocks_to_spill), i);
         }
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
@@ -2606,7 +2606,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         spilled_partition_indexes.push_back(target_partition_index);
         blocks_to_spill = trySpillBuildPartition(target_partition_index, true, partition_lock);
     }
-    build_spiller->spillBlocks(blocks_to_spill, target_partition_index);
+    build_spiller->spillBlocks(std::move(blocks_to_spill), target_partition_index);
     LOG_DEBUG(log, fmt::format("all bytes used after spill : {}", getTotalByteCount()));
 }
 
@@ -2738,7 +2738,7 @@ void Join::dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>
         }
         if (need_spill)
         {
-            probe_spiller->spillBlocks(blocks_to_spill, i);
+            probe_spiller->spillBlocks(std::move(blocks_to_spill), i);
         }
         else
             partition_blocks_list.push_back({i, partition_blocks[i]});
@@ -2775,7 +2775,7 @@ void Join::trySpillBuildPartitions(bool force)
             std::unique_lock partition_lock(partitions[i]->partition_mutex);
             blocks_to_spill = trySpillBuildPartition(i, force, partition_lock);
         }
-        build_spiller->spillBlocks(blocks_to_spill, i);
+        build_spiller->spillBlocks(std::move(blocks_to_spill), i);
     }
 }
 
@@ -2806,7 +2806,7 @@ void Join::trySpillProbePartitions(bool force)
             std::unique_lock partition_lock(partitions[i]->partition_mutex);
             blocks_to_spill = trySpillProbePartition(i, force, partition_lock);
         }
-        probe_spiller->spillBlocks(blocks_to_spill, i);
+        probe_spiller->spillBlocks(std::move(blocks_to_spill), i);
     }
 }
 
