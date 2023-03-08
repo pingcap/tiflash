@@ -706,7 +706,7 @@ void SegmentTestBasic::reloadDMContext()
                                              storage_path_pool,
                                              storage_pool,
                                              /*min_version_*/ 0,
-                                             settings.not_compress_columns,
+                                             /*physical_table_id*/ 100,
                                              options.is_common_handle,
                                              1,
                                              db_context->getSettingsRef());

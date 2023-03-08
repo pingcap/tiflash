@@ -80,7 +80,7 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
             path_pool,
             storage_pool,
             /*min_version_*/ 0,
-            dm_settings.not_compress_columns,
+            /*physical_table_id*/ 1,
             false,
             1,
             db_context->getSettingsRef());

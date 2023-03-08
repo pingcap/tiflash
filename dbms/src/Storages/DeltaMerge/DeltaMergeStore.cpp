@@ -429,7 +429,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                path_pool,
                                storage_pool,
                                latest_gc_safe_point.load(std::memory_order_acquire),
-                               settings.not_compress_columns,
+                               physical_table_id,
                                is_common_handle,
                                rowkey_column_size,
                                db_settings,

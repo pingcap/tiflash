@@ -119,7 +119,7 @@ public:
             path_pool,
             storage_pool,
             /*min_version_*/ 0,
-            settings.not_compress_columns,
+            /*physical_table_id*/ 100,
             false,
             1,
             db_context->getSettingsRef());
@@ -1102,7 +1102,7 @@ public:
             path_pool,
             storage_pool,
             /*min_version_*/ 0,
-            settings.not_compress_columns,
+            /*physical_table_id*/ 100,
             is_common_handle,
             rowkey_column_size,
             db_context->getSettingsRef());

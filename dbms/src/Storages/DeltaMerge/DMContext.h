@@ -51,10 +51,9 @@ struct DMContext : private boost::noncopyable
     // gc safe-point, maybe update.
     DB::Timestamp min_version;
 
-    const NotCompress & not_compress; // Not used currently.
+    const TableID physical_table_id;
 
     bool is_common_handle;
-
     // The number of columns in primary key if is_common_handle = true, otherwise, should always be 1.
     size_t rowkey_column_size;
     // The base rows of segment.
@@ -96,7 +95,7 @@ public:
               const StoragePathPoolPtr & path_pool_,
               const StoragePoolPtr & storage_pool_,
               const DB::Timestamp min_version_,
-              const NotCompress & not_compress_,
+              TableID physical_table_id_,
               bool is_common_handle_,
               size_t rowkey_column_size_,
               const DB::Settings & settings,
@@ -106,7 +105,7 @@ public:
         , path_pool(path_pool_)
         , storage_pool(storage_pool_)
         , min_version(min_version_)
-        , not_compress(not_compress_)
+        , physical_table_id(physical_table_id_)
         , is_common_handle(is_common_handle_)
         , rowkey_column_size(rowkey_column_size_)
         , segment_limit_rows(settings.dt_segment_limit_rows)
