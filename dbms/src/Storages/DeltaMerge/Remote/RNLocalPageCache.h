@@ -160,6 +160,11 @@ public:
 
     explicit RNLocalPageCache(const RNLocalPageCacheOptions & options);
 
+    static RNLocalPageCachePtr create(const RNLocalPageCacheOptions & options)
+    {
+        return std::make_shared<RNLocalPageCache>(options);
+    }
+
     struct OccupySpaceResult
     {
         std::vector<PageOID> pages_not_in_cache;
