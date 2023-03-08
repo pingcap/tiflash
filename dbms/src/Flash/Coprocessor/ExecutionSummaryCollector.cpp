@@ -18,6 +18,8 @@
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 
+#include <cstddef>
+
 namespace DB
 {
 namespace
@@ -60,6 +62,33 @@ tipb::SelectResponse ExecutionSummaryCollector::genExecutionSummaryResponse()
     addExecuteSummaries(response);
     return response;
 }
+
+void ExecutionSummaryCollector::collect()
+{
+    dag_context.executorStatisticCollector()->collectRuntimeDetails();
+}
+
+// ywq todo
+void ExecutionSummaryCollector::fillLocalExecutionSummary(
+    tipb::SelectResponse & response,
+    const String & executor_id,
+    const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map)
+{
+    ExecutionSummary current;
+    const auto & res = dag_context.executorStatisticCollector()->getResult().find(executor_id)->second->getBaseRuntimeStatistics();
+
+    current.num_iterations = res.blocks;
+    current.num_produced_rows = res.rows;
+    current.concurrency = res.concurrency;
+    current.time_processed_ns = res.execution_time_ns;
+
+    if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
+        current.scan_context->merge(*(iter->second));
+
+    current.time_processed_ns += dag_context.compile_time_ns;
+    fillTiExecutionSummary(response.add_execution_summaries(), current, executor_id);
+}
+
 
 void ExecutionSummaryCollector::fillLocalExecutionSummary(
     tipb::SelectResponse & response,
@@ -118,10 +147,28 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
         return;
 
     /// fill execution_summary for local executor
+    collect();
+    LOG_INFO(log, "ywq test reach here");
     if (dag_context.return_executor_id)
     {
-        for (auto & p : dag_context.getProfileStreamsMap())
-            fillLocalExecutionSummary(response, p.first, p.second, dag_context.scan_context_map);
+
+        auto profiles = dag_context.executorStatisticCollector()->getResult();
+        for (auto & p : profiles)
+        {
+            fillLocalExecutionSummary(response, p.first,  dag_context.scan_context_map);
+        }
+        // for (auto & p : dag_context.getProfileStreamsMap())
+        // {
+        //     std::cout << p.first << std::endl;
+        //     if (dag_context.isMPPTask())
+        //     {
+        //         LOG_INFO(log, "ywq test reach here, executor_id: {}", p.first);
+
+        //         fillLocalExecutionSummary(response, p.first, p.second.size(), dag_context.scan_context_map);
+        //     }
+        //     else
+        //         fillLocalExecutionSummary(response, p.first, p.second, dag_context.scan_context_map);
+        // }
     }
     else
     {
@@ -135,12 +182,17 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
         }
     }
 
-    // TODO support cop remote read and disaggregated mode.
-    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(dag_context);
-    // fill execution_summary to reponse for remote executor received by exchange.
-    for (auto & p : exchange_execution_summary.execution_summaries)
+    // // TODO support cop remote read and disaggregated mode.
+    if (!dag_context.isMPPTask())
     {
-        fillTiExecutionSummary(response.add_execution_summaries(), p.second, p.first);
+        LOG_INFO(log, "ywq test reach here not mpp task");
+
+        auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(dag_context);
+        // fill execution_summary to response for remote executor received by exchange.
+        for (auto & p : exchange_execution_summary.execution_summaries)
+        {
+            fillTiExecutionSummary(response.add_execution_summaries(), p.second, p.first);
+        }
     }
 }
 } // namespace DB

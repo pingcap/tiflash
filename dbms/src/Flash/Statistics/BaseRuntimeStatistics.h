@@ -15,6 +15,7 @@
 #pragma once
 
 #include <common/types.h>
+#include <cstddef>
 
 namespace DB
 {
@@ -24,8 +25,9 @@ struct BaseRuntimeStatistics
     size_t rows = 0;
     size_t blocks = 0;
     size_t bytes = 0;
-
+    size_t concurrency = 0;
     UInt64 execution_time_ns = 0;
+
 
     void append(const BlockStreamProfileInfo &);
 };

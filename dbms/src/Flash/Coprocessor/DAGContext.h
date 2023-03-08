@@ -31,6 +31,7 @@
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Statistics/ExecutorStatisticsCollector.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/Transaction/TiDB.h>
@@ -266,6 +267,17 @@ public:
 
     String getRootExecutorId();
 
+    void setExecutorStatisticCollector(ExecutorStatisticsCollectorPtr & executor_statistics_collector_)
+    {
+        executor_statistics_collector = executor_statistics_collector_;
+    }
+
+    ExecutorStatisticsCollectorPtr executorStatisticCollector() const
+    {
+        return executor_statistics_collector;
+    }
+
+
     const tipb::DAGRequest * dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
     /// dummy_query_string and dummy_ast is used for that
@@ -310,6 +322,8 @@ public:
     /// While when we support collcate join later, scan_context_map.size() may > 1,
     /// thus we need to pay attention to scan_context_map usage that time.
     std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
+
+    ExecutorStatisticsCollectorPtr executor_statistics_collector;
 
 private:
     void initExecutorIdToJoinIdMap();

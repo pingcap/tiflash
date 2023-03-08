@@ -21,20 +21,17 @@ void JoinStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 {
     fmt_buffer.fmtAppend(
         R"("hash_table_bytes":{},"build_side_child":"{}",)"
-        R"("non_joined_outbound_rows":{},"non_joined_outbound_blocks":{},"non_joined_outbound_bytes":{},"non_joined_execution_time_ns":{},)"
         R"("join_build_inbound_rows":{},"join_build_inbound_blocks":{},"join_build_inbound_bytes":{},"join_build_execution_time_ns":{})",
         hash_table_bytes,
         build_side_child,
-        non_joined_base.rows,
-        non_joined_base.blocks,
-        non_joined_base.bytes,
-        non_joined_base.execution_time_ns,
         join_build_base.rows,
         join_build_base.blocks,
         join_build_base.bytes,
         join_build_base.execution_time_ns);
 }
 
+
+// ywq test todo time cal fix...
 void JoinStatistics::collectExtraRuntimeDetail()
 {
     const auto & join_execute_info_map = dag_context.getJoinExecuteInfoMap();
@@ -44,14 +41,6 @@ void JoinStatistics::collectExtraRuntimeDetail()
         const auto & join_execute_info = it->second;
         hash_table_bytes = join_execute_info.join_ptr->getTotalByteCount();
         build_side_child = join_execute_info.build_side_root_executor_id;
-        for (const auto & non_joined_stream : join_execute_info.non_joined_streams)
-        {
-            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get()); p_stream)
-            {
-                const auto & profile_info = p_stream->getProfileInfo();
-                non_joined_base.append(profile_info);
-            }
-        }
         for (const auto & join_build_stream : join_execute_info.join_build_streams)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get()); p_stream)

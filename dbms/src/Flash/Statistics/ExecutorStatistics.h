@@ -93,6 +93,8 @@ public:
                 }
             }
         }
+        
+        // ywq todo check here...
         if constexpr (ExecutorImpl::has_extra_info)
         {
             collectExtraRuntimeDetail();

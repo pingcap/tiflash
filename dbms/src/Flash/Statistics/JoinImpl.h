@@ -42,8 +42,6 @@ private:
     size_t hash_table_bytes = 0;
     String build_side_child;
 
-    BaseRuntimeStatistics non_joined_base;
-
     BaseRuntimeStatistics join_build_base;
 
 protected:

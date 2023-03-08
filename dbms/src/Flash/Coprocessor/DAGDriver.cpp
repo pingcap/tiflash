@@ -30,6 +30,8 @@
 #include <Storages/Transaction/RegionException.h>
 #include <pingcap/Exception.h>
 
+#include <memory>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -90,6 +92,9 @@ try
 {
     auto start_time = Clock::now();
     DAGContext & dag_context = *context.getDAGContext();
+    auto executor_statistics_collector = std::make_shared<ExecutorStatisticsCollector>();
+    executor_statistics_collector->initialize(&dag_context);
+    dag_context.setExecutorStatisticCollector(executor_statistics_collector);
 
     auto query_executor = queryExecute(context, internal);
     if (!query_executor)

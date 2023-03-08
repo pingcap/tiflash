@@ -16,10 +16,11 @@
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
+#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/executeQuery.h>
+#include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/ExecutorTestUtils.h>
-#include <TestUtils/executorSerializer.h>
 
 #include <functional>
 
@@ -305,6 +306,43 @@ Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::D
     Blocks blocks;
     queryExecute(context.context, /*internal=*/!enable_memory_tracker)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
     return blocks;
+}
+
+void ExecutorTest::testForExecutionSummary(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    const Expect & expect,
+    size_t concurrency)
+{
+    request->set_collect_execution_summaries(true);
+    DAGContext dag_context(*request, "test_execution_summary", concurrency);
+    executeStreams(&dag_context);
+    ASSERT_TRUE(dag_context.collect_execution_summaries);
+    auto collector = std::make_shared<ExecutorStatisticsCollector>();
+    collector->initialize(&dag_context);
+    dag_context.setExecutorStatisticCollector(collector);
+    ExecutionSummaryCollector summary_collector(dag_context);
+    summary_collector.collect();
+
+    auto summaries = summary_collector.genExecutionSummaryResponse().execution_summaries();
+    ASSERT_EQ(summaries.size(), expect.size()) << "\n"
+                                               << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+    for (const auto & summary : summaries)
+    {
+        ASSERT_TRUE(summary.has_executor_id()) << "\n"
+                                               << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+        auto it = expect.find(summary.executor_id());
+        ASSERT_TRUE(it != expect.end())
+            << fmt::format("unknown executor_id: {}", summary.executor_id()) << "\n"
+            << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+        if (it->second.first != not_check_rows)
+            ASSERT_EQ(summary.num_produced_rows(), it->second.first)
+                << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
+                << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+        ASSERT_EQ(summary.concurrency(), it->second.second)
+            << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
+            << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+        // time_processed_ns, num_iterations and tiflash_scan_context are not checked here.
+    }
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, size_t concurrency)

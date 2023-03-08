@@ -16,7 +16,7 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <TestUtils/executorSerializer.h>
+#include <TestUtils/ExecutorSerializer.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
 namespace DB::tests

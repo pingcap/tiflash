@@ -18,10 +18,13 @@
 #include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
+#include "RemoteExecutionSummary.h"
+
 namespace DB
 {
 class DAGContext;
 
+struct RemoteExecutionSummary;
 class ExecutionSummaryCollector
 {
 public:
@@ -33,6 +36,8 @@ public:
     void addExecuteSummaries(tipb::SelectResponse & response);
 
     tipb::SelectResponse genExecutionSummaryResponse();
+
+    void collect();
 
 private:
     void fillTiExecutionSummary(
@@ -46,7 +51,15 @@ private:
         const BlockInputStreams & streams,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
+    void fillLocalExecutionSummary(
+        tipb::SelectResponse & response,
+        const String & executor_id,
+        const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map);
+
+    // RemoteExecutionSummary getRemoteExecutionSummaries(DAGContext & dag_context);
+
 private:
     DAGContext & dag_context;
+    const LoggerPtr log = Logger::get("ywq test");
 };
 } // namespace DB

@@ -23,5 +23,6 @@ void BaseRuntimeStatistics::append(const BlockStreamProfileInfo & profile_info)
     blocks += profile_info.blocks;
     bytes += profile_info.bytes;
     execution_time_ns = std::max(execution_time_ns, profile_info.execution_time);
+    ++concurrency;
 }
 } // namespace DB
