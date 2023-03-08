@@ -19,6 +19,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
+#include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Page/PageDefinesBase.h>
@@ -46,12 +47,6 @@ class RNRemoteTableReadTask;
 using RNRemoteTableReadTaskPtr = std::shared_ptr<RNRemoteTableReadTask>;
 class RNRemoteSegmentReadTask;
 using RNRemoteSegmentReadTaskPtr = std::shared_ptr<RNRemoteSegmentReadTask>;
-
-namespace Remote
-{
-class LocalPageCache;
-using LocalPageCachePtr = std::shared_ptr<LocalPageCache>;
-} // namespace Remote
 
 enum class SegmentReadTaskState
 {
@@ -257,7 +252,7 @@ public:
     const String address;
 
 private:
-    Remote::LocalPageCachePtr page_cache;
+    Remote::RNLocalPageCachePtr page_cache;
 
     // The snapshot of reading ids acquired from write node
     std::vector<UInt64> delta_page_ids;

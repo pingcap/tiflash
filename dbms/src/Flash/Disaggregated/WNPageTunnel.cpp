@@ -17,6 +17,7 @@
 #include <Flash/Disaggregated/WNPageTunnel.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshotManager.h>
@@ -67,11 +68,8 @@ disaggregated::PagesPacket WNPageTunnel::readPacket()
     auto persisted_cf = seg_task->read_snapshot->delta->getPersistedFileSetSnapshot();
     for (const auto page_id : read_page_ids)
     {
-        // FIXME: Depends on abstraction of reading page data from PageStorage directly
-        UNUSED(page_id);
-#if 0
-        auto page = persisted_cf->getStorage()->readForColumnFileTiny(page_id);
-        dtpb::RemotePage remote_page;
+        auto page = persisted_cf->getDataProvider()->readTinyData(page_id);
+        DM::RemotePb::RemotePage remote_page;
         remote_page.set_page_id(page_id);
         remote_page.mutable_data()->assign(page.data.begin(), page.data.end());
         const auto field_sizes = PageUtil::getFieldSizes(page.field_offsets, page.data.size());
@@ -81,7 +79,6 @@ disaggregated::PagesPacket WNPageTunnel::readPacket()
         }
         total_pages_data_size += page.data.size();
         packet.mutable_pages()->Add(remote_page.SerializeAsString());
-#endif
     }
 
     // generate an input stream of mem-table

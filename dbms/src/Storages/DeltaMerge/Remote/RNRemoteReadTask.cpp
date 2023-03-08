@@ -27,6 +27,7 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
+#include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
@@ -482,7 +483,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         /* path_pool */ nullptr,
         /* storage_pool */ nullptr,
         /* min_version */ 0,
-        NotCompress{},
+        table_id,
         /* is_common_handle */ segment_range.is_common_handle,
         /* rowkey_column_size */ segment_range.rowkey_column_size,
         db_context.getSettingsRef(),
