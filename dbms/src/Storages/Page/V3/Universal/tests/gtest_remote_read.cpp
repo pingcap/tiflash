@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Encryption/PosixRandomAccessFile.h>
+#include <Flash/Disaggregated/MockS3LockClient.h>
+#include <Flash/Disaggregated/S3LockClient.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadBufferFromRandomAccessFile.h>
 #include <IO/WriteBufferFromWritableFile.h>
@@ -27,9 +29,12 @@
 #include <Storages/S3/S3WritableFile.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <aws/s3/model/DeleteBucketRequest.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -38,6 +43,10 @@ namespace PS::universal::tests
 class UniPageStorageRemoteReadTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
+    UniPageStorageRemoteReadTest()
+        : log(Logger::get())
+    {}
+
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
@@ -48,11 +57,13 @@ public:
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         s3_client = S3::ClientFactory::instance().sharedClient();
         bucket = S3::ClientFactory::instance().bucket();
+        mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client, bucket);
+
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
+
         page_storage = UniversalPageStorage::create("write", delegator, config, file_provider, s3_client, bucket);
         page_storage->restore();
-
-        log = Logger::get("UniPageStorageRemoteReadTest");
-        ASSERT_TRUE(createBucketIfNotExist());
+        page_storage->initLocksLocalManager(test_store_id, mock_s3lock_client);
     }
 
     void reload()
@@ -66,6 +77,7 @@ public:
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         auto storage = UniversalPageStorage::create("test.t", delegator, config_, file_provider, s3_client, bucket);
         storage->restore();
+        page_storage->initLocksLocalManager(test_store_id, mock_s3lock_client);
         return storage;
     }
 
@@ -83,40 +95,19 @@ public:
     }
 
 protected:
-    bool createBucketIfNotExist()
-    {
-        Aws::S3::Model::CreateBucketRequest request;
-        request.SetBucket(bucket);
-        auto outcome = s3_client->CreateBucket(request);
-        if (outcome.IsSuccess())
-        {
-            LOG_DEBUG(log, "Created bucket {}", bucket);
-        }
-        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
-        {
-            LOG_DEBUG(log, "Bucket {} already exist", bucket);
-        }
-        else
-        {
-            const auto & err = outcome.GetError();
-            LOG_ERROR(log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
-        }
-        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
-    }
-
     void deleteBucket()
     {
-        Aws::S3::Model::DeleteBucketRequest request;
-        request.SetBucket(bucket);
-        s3_client->DeleteBucket(request);
+        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client, bucket);
     }
 
 protected:
+    StoreID test_store_id = 1234;
     String remote_dir;
     FileProviderPtr file_provider;
     PSDiskDelegatorPtr delegator;
     std::shared_ptr<Aws::S3::S3Client> s3_client;
     String bucket;
+    S3::S3LockClientPtr mock_s3lock_client;
     PageStorageConfig config;
     std::shared_ptr<UniversalPageStorage> page_storage;
 

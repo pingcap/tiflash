@@ -44,40 +44,12 @@ public:
 
     void SetUp() override
     {
-        createBucketIfNotExist();
+        ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, s3_client->bucket());
     }
 
     void TearDown() override
     {
-        deleteBucket();
-    }
-
-    bool createBucketIfNotExist()
-    {
-        Aws::S3::Model::CreateBucketRequest request;
-        request.SetBucket(s3_client->bucket());
-        auto outcome = s3_client->CreateBucket(request);
-        if (outcome.IsSuccess())
-        {
-            LOG_DEBUG(log, "Created bucket {}", s3_client->bucket());
-        }
-        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
-        {
-            LOG_DEBUG(log, "Bucket {} already exist", s3_client->bucket());
-        }
-        else
-        {
-            const auto & err = outcome.GetError();
-            LOG_ERROR(log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
-        }
-        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
-    }
-
-    void deleteBucket() const
-    {
-        Aws::S3::Model::DeleteBucketRequest request;
-        request.SetBucket(s3_client->bucket());
-        s3_client->DeleteBucket(request);
+        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client, s3_client->bucket());
     }
 
 protected:
