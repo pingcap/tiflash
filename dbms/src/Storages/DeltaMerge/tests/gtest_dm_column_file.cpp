@@ -16,6 +16,7 @@
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -55,15 +56,15 @@ public:
         TiFlashStorageTestBasic::SetUp();
 
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
-        path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
-        storage_pool = std::make_unique<StoragePool>(*db_context, /*ns_id*/ 100, *path_pool, "test.t1");
+        path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
+        storage_pool = std::make_shared<StoragePool>(*db_context, /*ns_id*/ 100, *path_pool, "test.t1");
         column_cache = std::make_shared<ColumnCache>();
         dm_context = std::make_unique<DMContext>( //
             *db_context,
-            *path_pool,
-            *storage_pool,
+            path_pool,
+            storage_pool,
             /*min_version_*/ 0,
-            settings.not_compress_columns,
+            /*physical_table_id*/ 100,
             false,
             1,
             db_context->getSettingsRef());
@@ -76,8 +77,8 @@ public:
 private:
     std::unique_ptr<DMContext> dm_context;
     /// all these var live as ref in dm_context
-    std::unique_ptr<StoragePathPool> path_pool;
-    std::unique_ptr<StoragePool> storage_pool;
+    std::shared_ptr<StoragePathPool> path_pool;
+    std::shared_ptr<StoragePool> storage_pool;
     DeltaMergeStore::Settings settings;
 
 protected:
@@ -174,7 +175,7 @@ CATCH
 TEST_F(ColumnFileTest, SerializeColumnFilePersisted)
 try
 {
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     MemoryWriteBuffer buff;
     {
         ColumnFilePersisteds column_file_persisteds;
@@ -203,7 +204,7 @@ try
 {
     size_t num_rows_write = 0;
     Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-    WriteBatches wbs(dmContext().storage_pool);
+    WriteBatches wbs(*dmContext().storage_pool);
     EXPECT_THROW(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, num_rows_write, wbs), DB::Exception);
 }
 CATCH
@@ -215,16 +216,17 @@ try
     Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
     ColumnFileTinyPtr cf;
     {
-        WriteBatches wbs(dmContext().storage_pool);
+        WriteBatches wbs(*dmContext().storage_pool);
         cf = ColumnFileTiny::writeColumnFile(dmContext(), block, 0, num_rows_write, wbs);
         wbs.writeAll();
     }
-    auto storage_snap = std::make_shared<StorageSnapshot>(dmContext().storage_pool, nullptr, "", true);
+    auto storage_snap = std::make_shared<StorageSnapshot>(*dmContext().storage_pool, nullptr, "", true);
+    auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
 
     {
         // Read columns exactly the same as we have written
         auto columns_to_read = std::make_shared<ColumnDefines>(getColumnDefinesFromBlock(block));
-        auto reader = cf->getReader(dmContext(), storage_snap, columns_to_read);
+        auto reader = cf->getReader(dmContext(), data_from_storage_snap, columns_to_read);
         auto block_read = reader->readNextBlock();
         ASSERT_BLOCK_EQ(block_read, block);
     }
@@ -234,7 +236,7 @@ try
         ColumnID added_colid = 100;
         String added_colname = "added_col";
         auto columns_to_read = std::make_shared<ColumnDefines>(ColumnDefines{ColumnDefine(added_colid, added_colname, typeFromString("Int64"))});
-        auto reader = cf->getReader(dmContext(), storage_snap, columns_to_read);
+        auto reader = cf->getReader(dmContext(), data_from_storage_snap, columns_to_read);
         auto block_read = reader->readNextBlock();
         ASSERT_COLUMNS_EQ_R(
             ColumnsWithTypeAndName({

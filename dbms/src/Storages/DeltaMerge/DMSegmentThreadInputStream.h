@@ -17,7 +17,7 @@
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SegmentReadTransformAction.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>

@@ -32,7 +32,7 @@
 #include <Functions/IFunction.h>
 #include <Functions/StringUtil.h>
 #include <Functions/castTypeToEither.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <common/types.h>
 #include <fmt/core.h>
 

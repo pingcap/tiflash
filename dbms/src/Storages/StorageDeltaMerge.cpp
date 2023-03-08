@@ -843,6 +843,63 @@ BlockInputStreams StorageDeltaMerge::read(
     return streams;
 }
 
+SourceOps StorageDeltaMerge::readSourceOps(
+    PipelineExecutorStatus & exec_status_,
+    const Names & column_names,
+    const SelectQueryInfo & query_info,
+    const Context & context,
+    size_t max_block_size,
+    unsigned num_streams)
+{
+    auto & store = getAndMaybeInitStore();
+    // Note that `columns_to_read` should keep the same sequence as ColumnRef
+    // in `Coprocessor.TableScan.columns`, or rough set filter could be
+    // failed to parsed.
+    ColumnDefines columns_to_read;
+    size_t extra_table_id_index = InvalidColumnID;
+    setColumnsToRead(store, columns_to_read, extra_table_id_index, column_names);
+
+    const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
+
+    RUNTIME_CHECK(!select_query.raw_for_mutable, select_query.raw_for_mutable);
+
+    auto tracing_logger = log->getChild(query_info.req_id);
+
+    // Read with MVCC filtering
+    RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
+    const auto & mvcc_query_info = *query_info.mvcc_query_info;
+
+    auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, query_info.req_id, tracing_logger);
+
+    auto rs_operator = parseRoughSetFilter(query_info, columns_to_read, context, tracing_logger);
+
+    const auto & scan_context = mvcc_query_info.scan_context;
+
+    auto source_ops = store->readSourceOps(
+        exec_status_,
+        context,
+        context.getSettingsRef(),
+        columns_to_read,
+        ranges,
+        num_streams,
+        /*max_version=*/mvcc_query_info.read_tso,
+        rs_operator,
+        query_info.req_id,
+        query_info.keep_order,
+        /* is_fast_scan */ query_info.is_fast_scan,
+        max_block_size,
+        parseSegmentSet(select_query.segment_expression_list),
+        extra_table_id_index,
+        scan_context);
+
+    /// Ensure read_tso info after read.
+    checkReadTso(mvcc_query_info.read_tso, context, query_info.req_id);
+
+    LOG_TRACE(tracing_logger, "[ranges: {}] [sources: {}]", ranges.size(), source_ops.size());
+
+    return source_ops;
+}
+
 DM::Remote::DisaggPhysicalTableReadSnapshotPtr
 StorageDeltaMerge::writeNodeBuildRemoteReadSnapshot(
     const Names & column_names,
