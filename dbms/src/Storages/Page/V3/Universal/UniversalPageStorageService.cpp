@@ -162,11 +162,12 @@ bool UniversalPageStorageService::uploadCheckpointImpl(const metapb::Store & sto
 
     /*
      * If using `snapshot->sequence` as a part of manifest name, we can NOT
-     * ensure all locks generated with sequence less than the checkpoint's
-     * snapshot->sequence are uploaded to S3.
+     * guarantee **all** locks generated with sequence less than the
+     * checkpoint's snapshot->sequence are fully uploaded to S3.
      * In order to make the locks within same `upload_sequence` are public
-     * to S3GCManager atomically, we must use `upload_sequence` to override
-     * the CheckpoinDataFile and CheckpointManifest key.
+     * to S3GCManager atomically, we must use a standalone `upload_sequence`
+     * (which is managed by `S3LockLocalManager`) to override the
+     * CheckpoinDataFile and CheckpointManifest key.
      *
      * Example:
      * timeline:
