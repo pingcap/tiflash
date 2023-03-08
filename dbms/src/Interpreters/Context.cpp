@@ -167,11 +167,13 @@ struct ContextShared
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
 
-    /// The PS instance available on Write Node, or we are not in disaggregated mode.
+    /// The following members are only available in read-write disaggregated mode
+    ///
+    /// The PS instance available on Write Node.
     UniversalPageStorageServicePtr ps_write;
-    /// The PS instance available on Disaggregated Read Node.
+    /// The PS instance available on Read Node.
     UniversalPageStorageServicePtr ps_rn_page_cache;
-    /// The page cache in disaggregated compute node, used to cache pages.
+    /// The page cache in Read Node. It uses ps_rn_page_cache as storage to cache page data to local disk based on the LRU mechanism.
     DB::DM::Remote::RNLocalPageCachePtr rn_page_cache;
 
     TiFlashSecurityConfigPtr security_config;
