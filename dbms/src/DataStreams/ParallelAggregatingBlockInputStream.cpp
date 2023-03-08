@@ -15,10 +15,10 @@
 #include <Common/FmtUtils.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/MergingAndConvertingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
+#include <DataStreams/SpilledRestoreMergingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 
 namespace DB
@@ -29,14 +29,12 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     const Aggregator::Params & params_,
     bool final_,
     size_t max_threads_,
-    size_t temporary_data_merge_threads_,
     const String & req_id)
     : log(Logger::get(req_id))
     , params(params_)
     , aggregator(params, req_id)
     , final(final_)
     , max_threads(std::min(inputs.size(), max_threads_))
-    , temporary_data_merge_threads(temporary_data_merge_threads_)
     , keys_size(params.keys_size)
     , aggregates_size(params.aggregates_size)
     , handler(*this)
@@ -112,14 +110,29 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 */
 
             aggregator.finishSpill();
-            auto bucket_restore_streams = aggregator.restoreSpilledData();
-            impl = std::make_unique<MergingAggregatedMemoryEfficientBlockInputStream>(
-                bucket_restore_streams.back(),
-                params,
-                final,
-                temporary_data_merge_threads,
-                temporary_data_merge_threads,
-                log->identifier());
+            auto merging_buckets = aggregator.restoreSpilledData(final);
+            if (!merging_buckets)
+            {
+                impl = std::make_unique<NullBlockInputStream>(aggregator.getHeader(final));
+            }
+            else
+            {
+                size_t restore_merge_stream_num = std::min(max_threads, merging_buckets->getBucketNum());
+                RUNTIME_CHECK(restore_merge_stream_num > 0);
+                if (restore_merge_stream_num > 1)
+                {
+                    BlockInputStreams merging_streams;
+                    for (size_t i = 0; i < restore_merge_stream_num; ++i)
+                    {
+                        merging_streams.push_back(std::make_shared<SpilledRestoreMergingBlockInputStream>(merging_buckets, log->identifier()));
+                    }
+                    impl = std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, log->identifier());
+                }
+                else
+                {
+                    impl = std::make_unique<SpilledRestoreMergingBlockInputStream>(merging_buckets, log->identifier());
+                }
+            }
         }
 
         executed = true;

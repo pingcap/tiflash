@@ -37,7 +37,6 @@ public:
         const Aggregator::Params & params_,
         bool final_,
         size_t max_threads_,
-        size_t temporary_data_merge_threads_,
         const String & req_id);
 
     String getName() const override { return NAME; }
@@ -69,7 +68,6 @@ private:
     Aggregator aggregator;
     bool final;
     size_t max_threads;
-    size_t temporary_data_merge_threads;
 
     size_t keys_size;
     size_t aggregates_size;

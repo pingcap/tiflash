@@ -17,6 +17,8 @@
 #include <Common/Logger.h>
 #include <Interpreters/Aggregator.h>
 
+#include <atomic>
+
 namespace DB
 {
 class SpilledRestoreMergingBuckets
@@ -28,19 +30,24 @@ public:
         bool final_,
         const String & req_id);
 
+    Block getHeader() const;
+
     BlocksList restoreBucketDataToMerge(std::function<bool()> && is_cancelled);
 
     BlocksList mergeBucketData(BlocksList && bucket_data_to_merge);
+
+    size_t getBucketNum() const { return bucket_restore_streams.size(); }
 
 private:
     const LoggerPtr log;
 
     Aggregator aggregator;
     bool final;
-  
-    std::atomic_int32_t current_bucket_num = 0;
+
+    std::atomic_uint32_t current_bucket_num = 0;
 
     std::vector<BlockInputStreams> bucket_restore_streams;
 };
+using SpilledRestoreMergingBucketsPtr = std::shared_ptr<SpilledRestoreMergingBuckets>;
 
 } // namespace DB

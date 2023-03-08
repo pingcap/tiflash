@@ -926,9 +926,6 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
             params,
             final,
             max_streams,
-            settings.aggregation_memory_efficient_merge_threads
-                ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
-                : static_cast<size_t>(settings.max_threads),
             /*req_id=*/"");
 
         pipeline.streams.resize(1);

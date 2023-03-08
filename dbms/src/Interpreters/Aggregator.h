@@ -930,6 +930,9 @@ private:
 };
 using MergingBucketsPtr = std::shared_ptr<MergingBuckets>;
 
+class SpilledRestoreMergingBuckets;
+using SpilledRestoreMergingBucketsPtr = std::shared_ptr<SpilledRestoreMergingBuckets>;
+
 /** Aggregates the source of the blocks.
   */
 class Aggregator
@@ -1062,7 +1065,7 @@ public:
     /// For external aggregation.
     void spill(AggregatedDataVariants & data_variants);
     void finishSpill();
-    std::vector<BlockInputStreams> restoreSpilledData();
+    SpilledRestoreMergingBucketsPtr restoreSpilledData(bool final);
     bool hasSpilledData() const { return spiller != nullptr && spiller->hasSpilledData(); }
     void useTwoLevelHashTable() { use_two_level_hash_table = true; }
     void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);

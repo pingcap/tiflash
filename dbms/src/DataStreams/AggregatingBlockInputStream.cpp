@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <DataStreams/AggregatingBlockInputStream.h>
-#include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/MergingAndConvertingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
+#include <DataStreams/SpilledRestoreMergingBlockInputStream.h>
 
 namespace DB
 {
@@ -67,8 +67,15 @@ Block AggregatingBlockInputStream::readImpl()
                     aggregator.spill(*data_variants);
             }
             aggregator.finishSpill();
-            auto bucket_restore_streams = aggregator.restoreSpilledData();
-            impl = std::make_unique<MergingAggregatedMemoryEfficientBlockInputStream>(bucket_restore_streams.back(), params, final, 1, 1, log->identifier());
+            auto merging_buckets = aggregator.restoreSpilledData(final);
+            if (!merging_buckets)
+            {
+                impl = std::make_unique<NullBlockInputStream>(aggregator.getHeader(final));
+            }
+            else
+            {
+                impl = std::make_unique<SpilledRestoreMergingBlockInputStream>(merging_buckets, log->identifier());
+            }
         }
     }
 

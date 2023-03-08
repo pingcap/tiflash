@@ -22,9 +22,11 @@
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/Aggregator.h>
+#include <Interpreters/SpilledRestoreMergingBuckets.h>
 
 #include <array>
 #include <cassert>
+#include <random>
 
 namespace DB
 {
@@ -830,16 +832,18 @@ void Aggregator::finishSpill()
     spiller->finishSpill();
 }
 
-std::vector<BlockInputStreams> Aggregator::restoreSpilledData()
+SpilledRestoreMergingBucketsPtr Aggregator::restoreSpilledData(bool final)
 {
     assert(spiller != nullptr);
     std::vector<BlockInputStreams> ret;
     for (UInt64 partition_id = 0; partition_id < spiller->getPartitionNum(); ++partition_id)
     {
         if (spiller->hasSpilledData(partition_id))
-            ret.push_back(spiller->restoreBlocks(partition_id));
+            ret.push_back(spiller->restoreBlocks(partition_id, 1));
     }
-    return ret;
+    if (ret.empty())
+        return nullptr;
+    return std::make_shared<SpilledRestoreMergingBuckets>(std::move(ret), params, final, log->identifier());
 }
 
 void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size)
@@ -932,12 +936,20 @@ void Aggregator::spillImpl(
             max_temporary_block_size_bytes = block_size_bytes;
     };
 
-    Blocks blocks;
-    for (size_t bucket = 0; bucket < Method::Data::NUM_BUCKETS; ++bucket)
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dist(0, Method::Data::NUM_BUCKETS - 1);
+    size_t bucket_index = dist(gen);
+    auto next_bucket_index = [&]() {
+        auto tmp = bucket_index++;
+        if (bucket_index == Method::Data::NUM_BUCKETS)
+            bucket_index = 0;
+        return tmp;
+    };
+    for (size_t i = 0; i < Method::Data::NUM_BUCKETS; ++i)
     {
-        /// memory in hash table is released after `convertOneBucketToBlock`,
-        /// so the peak memory usage is not increased although we save all
-        /// the blocks before the actual spill
+        auto bucket = next_bucket_index();
+        /// memory in hash table is released after `convertOneBucketToBlock`, so the peak memory usage is not increased here.
         auto bucket_block = convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket);
         update_max_sizes(bucket_block);
         spiller->spillBlocks({std::move(bucket_block)}, bucket);

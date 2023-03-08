@@ -443,7 +443,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
             params,
             true,
             max_streams,
-            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             log->identifier());
 
         pipeline.streams.resize(1);

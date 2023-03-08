@@ -28,6 +28,11 @@ SpilledRestoreMergingBuckets::SpilledRestoreMergingBuckets(
 {
 }
 
+Block SpilledRestoreMergingBuckets::getHeader() const
+{
+    return aggregator.getHeader(final);
+}
+
 BlocksList SpilledRestoreMergingBuckets::restoreBucketDataToMerge(std::function<bool()> && is_cancelled)
 {
     if (current_bucket_num >= bucket_restore_streams.size())
