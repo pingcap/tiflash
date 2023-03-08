@@ -425,6 +425,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         log);
 
     // FIXME: get page_cache from context
+    RUNTIME_CHECK_MSG(false, "need to get page_cache from context");
     // task->page_cache = db_context.getDMRemoteManager()->getPageCache();
     task->segment = std::make_shared<Segment>(
         log,
@@ -465,7 +466,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
             }
         }
 
-        // FIXME: keep the guard to `task`?
+        // FIXME: this could block for a long time, refine it later
         auto occupy_space_res = task->page_cache->occupySpace(all_persisted_ids, page_sizes);
         task->page_ids_cache_miss.reserve(occupy_space_res.pages_not_in_cache.size());
         for (const auto & oid : occupy_space_res.pages_not_in_cache)
