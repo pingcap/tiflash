@@ -377,15 +377,13 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
         /// By default, multiple conditions with operator "and"
         RSOperators children;
         children.reserve(dag_info.filters.size() + dag_info.pushed_down_filters.size());
-        for (int i = 0; i < dag_info.filters.size(); ++i)
+        for (const auto & filter : dag_info.filters)
         {
-            const auto & filter = dag_info.filters[i];
-            children.emplace_back(cop::tryParse(filter, columns_to_read, creator, log));
+             children.emplace_back(cop::tryParse(filter, columns_to_read, creator, log));
         }
-        for (int i = 0; i < dag_info.pushed_down_filters.size(); ++i)
+        for (const auto & filter : dag_info.pushed_down_filters)
         {
-            const auto & filter = dag_info.pushed_down_filters[i];
-            children.emplace_back(cop::tryParse(filter, columns_to_read, creator, log));
+             children.emplace_back(cop::tryParse(filter, columns_to_read, creator, log));
         }
         op = createAnd(children);
     }
