@@ -39,12 +39,11 @@ RNLocalPageCache::RNLocalPageCache(const RNLocalPageCacheOptions & options)
         });
 
         std::unique_lock lock(mu);
-        LOG_DEBUG(log, "Initialized LRU from existing PS, stats={}", statistics(lock));
+        LOG_DEBUG(log, "Initialized local page cache from existing PS, stats={}", statistics(lock));
     }
     else
     {
-        LOG_WARNING(log, "Max capacity is not configured for page cache. This may cause disk being filled quickly. "
-                         "Set local_page_cache_max_size to limit the capacity of the page cache.");
+        LOG_WARNING(log, "Max capacity is not configured for local page cache. This may cause disk being filled quickly.");
     }
 }
 

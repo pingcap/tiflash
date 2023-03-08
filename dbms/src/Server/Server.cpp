@@ -993,7 +993,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.main_data_paths,
         storage_config.main_capacity_quota, //
         storage_config.latest_data_paths,
-        storage_config.latest_capacity_quota);
+        storage_config.latest_capacity_quota,
+        global_context->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.dir : "",
+        global_context->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.capacity : 0);
     TiFlashRaftConfig raft_config = TiFlashRaftConfig::parseSettings(config(), log);
     global_context->setPathPool( //
         storage_config.main_data_paths, //
@@ -1139,6 +1141,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (global_context->isDisaggregatedStorageMode())
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
+
+    if (global_context->isDisaggregatedComputeMode())
+        global_context->initializeReadNodePageCacheIfNeed(
+            global_context->getPathPool(),
+            storage_config.remote_cache_config.getPageCacheDir(),
+            storage_config.remote_cache_config.getPageCapacity());
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);

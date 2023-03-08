@@ -24,6 +24,7 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
+#include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -416,7 +417,9 @@ public:
         const Strings & main_data_paths,
         const std::vector<size_t> & main_capacity_quota,
         const Strings & latest_data_paths,
-        const std::vector<size_t> & latest_capacity_quota);
+        const std::vector<size_t> & latest_capacity_quota,
+        const String & remote_cache_data_path = "",
+        size_t remote_cache_capacity = 0);
     PathCapacityMetricsPtr getPathCapacity() const;
 
     void initializeTiFlashMetrics() const;
@@ -440,6 +443,9 @@ public:
 
     void initializeWriteNodePageStorageIfNeed(const PathPool & path_pool);
     UniversalPageStoragePtr getWriteNodePageStorage() const;
+
+    void initializeReadNodePageCacheIfNeed(const PathPool & path_pool, const String & cache_dir, size_t cache_capacity);
+    DM::Remote::RNLocalPageCachePtr getReadNodePageCache() const;
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
