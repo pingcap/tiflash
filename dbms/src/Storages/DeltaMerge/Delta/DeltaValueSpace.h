@@ -307,7 +307,7 @@ private:
 
     // The delta index of cached.
     DeltaIndexPtr shared_delta_index;
-    UInt64 delta_index_epoch;
+    UInt64 delta_index_epoch = 0;
 
     ColumnFileSetSnapshotPtr mem_table_snap;
 
