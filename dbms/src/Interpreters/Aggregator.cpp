@@ -937,7 +937,7 @@ void Aggregator::spillImpl(
         blocks.push_back(convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket));
         update_max_sizes(blocks.back());
     }
-    spiller->spillBlocks(blocks, 0);
+    spiller->spillBlocks(std::move(blocks), 0);
 
     /// Pass ownership of the aggregate functions states:
     /// `data_variants` will not destroy them in the destructor, they are now owned by ColumnAggregateFunction objects.
