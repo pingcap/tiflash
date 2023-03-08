@@ -112,9 +112,9 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 */
 
             aggregator.finishSpill();
-            BlockInputStreams input_streams = aggregator.restoreSpilledData();
+            auto bucket_restore_streams = aggregator.restoreSpilledData();
             impl = std::make_unique<MergingAggregatedMemoryEfficientBlockInputStream>(
-                input_streams,
+                bucket_restore_streams.back(),
                 params,
                 final,
                 temporary_data_merge_threads,
