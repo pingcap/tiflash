@@ -54,8 +54,8 @@ class NASemiJoinResult
 public:
     NASemiJoinResult(size_t row_num, NASemiJoinStep step, const void * map_it);
 
-    /// For convenience, callers can only consider the result of left semi join.
-    /// This function will correct the result if it's not left semi join.
+    /// For convenience, callers can only consider the result of semi join.
+    /// This function will correct the result if it's not semi join.
     template <NASemiJoinResultType RES>
     void setResult()
     {
@@ -92,7 +92,7 @@ public:
     }
 
     template <typename Mapped, NASemiJoinStep STEP>
-    void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const PaddedPODArray<Join::RowRef> & null_rows, size_t & current_offset, size_t max_pace);
+    void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const PaddedPODArray<Join::RowRefList *> & null_rows, size_t & current_offset, size_t max_pace);
 
     template <NASemiJoinStep STEP>
     void checkExprResult(ConstNullMapPtr eq_null_map, size_t offset_begin, size_t offset_end);
@@ -112,6 +112,7 @@ private:
 
     /// Iterating position of null rows.
     size_t null_rows_pos;
+    Join::RowRefList * null_rows_it;
 
     /// Mapped data for one cell.
     const void * map_it;
@@ -128,7 +129,7 @@ public:
         size_t left_columns,
         size_t right_columns,
         const BlocksList & right_blocks,
-        const PaddedPODArray<Join::RowRef> & null_rows,
+        const PaddedPODArray<Join::RowRefList *> & null_rows,
         size_t max_block_size,
         const JoinOtherConditions & other_conditions);
 
@@ -148,7 +149,7 @@ private:
     size_t left_columns;
     size_t right_columns;
     const BlocksList & right_blocks;
-    const PaddedPODArray<Join::RowRef> & null_rows;
+    const PaddedPODArray<Join::RowRefList *> & null_rows;
     size_t max_block_size;
 
     const JoinOtherConditions & other_conditions;

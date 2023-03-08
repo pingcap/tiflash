@@ -1198,6 +1198,49 @@ try
             executeAndAssertColumnsEqual(request, genSemiJoinResult(type, left, res));
         }
     }
+
+    /// Two join keys(t.a = s.a and t.b = s.b) + no other condition + collation(UTF8MB4_UNICODE_CI).
+    /// left table(t) + right table(s) + result column.
+    context.setCollation(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI);
+    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t6 = {
+        {
+            {toNullableVec<String>("a", {"a", "b", "c", "d", "e"}), toNullableVec<String>("b", {"A", "b", "c", "dd", "e"})},
+            {toNullableVec<String>("a", {"a", {}, "c", {}, "D", "E"}), toNullableVec<String>("b", {"a", "b", {}, "dD", "DD", {}})},
+            toNullableVec<Int8>({1, {}, {}, 1, {}}),
+        },
+        {
+            {toNullableVec<String>("a", {"aa", "bb", "cc", "dd"}), toNullableVec<String>("b", {"aa", "bb", {}, "dd"})},
+            {toNullableVec<String>("a", {"AA", {}, "cC", {}}), toNullableVec<String>("b", {"aa", "bb", {}, {}})},
+            toNullableVec<Int8>({1, {}, {}, {}}),
+        },
+        {
+            {toNullableVec<String>("a", {"a", "Bb", {}, "d", "E", {}, "d", {}}), toNullableVec<String>("b", {{}, "CC", "bb", "dD", "EE", "AA", {}, {}})},
+            {toNullableVec<String>("a", {"b", "bb", "b", "C", "D", "d"}), toNullableVec<String>("b", {"AA", "cc", {}, {}, "Dd", {}})},
+            toNullableVec<Int8>({0, 1, {}, 1, 0, {}, {}, {}}),
+        },
+    };
+
+    for (const auto & [left, right, res] : t6)
+    {
+        context.addMockTable("null_aware_semi", "t", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, left);
+        context.addMockTable("null_aware_semi", "s", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, right);
+
+        for (const auto type : {JoinType::TypeLeftOuterSemiJoin, JoinType::TypeAntiLeftOuterSemiJoin, JoinType::TypeAntiSemiJoin})
+        {
+            auto request = context.scan("null_aware_semi", "t")
+                               .join(context.scan("null_aware_semi", "s"),
+                                     type,
+                                     {col("a"), col("b")},
+                                     {},
+                                     {},
+                                     {},
+                                     {},
+                                     0,
+                                     true)
+                               .build(context);
+            executeAndAssertColumnsEqual(request, genSemiJoinResult(type, left, res));
+        }
+    }
 }
 CATCH
 

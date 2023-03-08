@@ -330,9 +330,9 @@ private:
     /// For null-aware semi join family, including rows with NULL join keys.
     std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
 
-    /// Combine all RowRef in `rows_not_inserted_to_map`.
-    /// Used for null-aware semi join family to speed up join process.
-    PaddedPODArray<RowRef> rows_with_null_keys;
+    /// The RowRefList pointer header in `rows_not_inserted_to_map` which
+    /// removes the NULL pointers.
+    PaddedPODArray<RowRefList *> rows_with_null_keys;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arenas pools;

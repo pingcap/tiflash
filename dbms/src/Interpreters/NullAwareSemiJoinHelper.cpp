@@ -19,6 +19,9 @@
 namespace DB
 {
 
+using enum ASTTableJoin::Strictness;
+using enum ASTTableJoin::Kind;
+
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoinStep step_, const void * map_it_)
     : row_num(row_num_)
@@ -26,15 +29,16 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
     , step_end(false)
     , result(NASemiJoinResultType::NULL_VALUE)
     , null_rows_pos(0)
+    , null_rows_it(nullptr)
     , map_it(map_it_)
 {
-    static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
-                  || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
+    static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftAnti
+                  || KIND == NullAware_LeftSemi);
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <typename Mapped, NASemiJoinStep STEP>
-void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const PaddedPODArray<Join::RowRef> & null_rows, size_t & current_offset, size_t max_pace)
+void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const PaddedPODArray<Join::RowRefList *> & null_rows, size_t & current_offset, size_t max_pace)
 {
     static_assert(STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
 
@@ -42,7 +46,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added
 
     if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS)
     {
-        static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
+        static_assert(STRICTNESS == All);
 
         const auto * iter = static_cast<const Mapped *>(map_it);
         for (size_t i = 0; i < max_pace && iter != nullptr; ++i)
@@ -61,17 +65,22 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added
     {
         for (size_t i = 0; i < max_pace; ++i)
         {
-            if (null_rows_pos >= null_rows.size())
+            if (null_rows_it == nullptr)
             {
-                step_end = true;
-                break;
+                if (null_rows_pos >= null_rows.size())
+                {
+                    step_end = true;
+                    break;
+                }
+                ++null_rows_pos;
+                null_rows_it = null_rows[null_rows_pos - 1];
             }
 
             for (size_t j = 0; j < right_columns; ++j)
-                added_columns[j + left_columns]->insertFrom(*null_rows[null_rows_pos].block->getByPosition(j).column.get(), null_rows[null_rows_pos].row_num);
+                added_columns[j + left_columns]->insertFrom(*null_rows_it->block->getByPosition(j).column.get(), null_rows_it->row_num);
             ++current_offset;
 
-            ++null_rows_pos;
+            null_rows_it = null_rows_it->next;
         }
     }
 }
@@ -80,7 +89,7 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <NASemiJoinStep STEP>
 void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(ConstNullMapPtr eq_null_map, size_t offset_begin, size_t offset_end)
 {
-    static_assert(STRICTNESS == ASTTableJoin::Strictness::Any);
+    static_assert(STRICTNESS == Any);
     static_assert(STEP != NASemiJoinStep::DONE);
 
     for (size_t i = offset_begin; i < offset_end; i++)
@@ -103,7 +112,7 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <NASemiJoinStep STEP>
 void NASemiJoinResult<KIND, STRICTNESS>::checkExprResult(ConstNullMapPtr eq_null_map, const PaddedPODArray<UInt8> & other_column, ConstNullMapPtr other_null_map, size_t offset_begin, size_t offset_end)
 {
-    static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
+    static_assert(STRICTNESS == All);
     static_assert(STEP != NASemiJoinStep::DONE);
 
     for (size_t i = offset_begin; i < offset_end; i++)
@@ -174,7 +183,7 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     size_t left_columns_,
     size_t right_columns_,
     const BlocksList & right_blocks_,
-    const PaddedPODArray<Join::RowRef> & null_rows_,
+    const PaddedPODArray<Join::RowRefList *> & null_rows_,
     size_t max_block_size_,
     const JoinOtherConditions & other_conditions_)
     : block(block_)
@@ -185,13 +194,13 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     , max_block_size(max_block_size_)
     , other_conditions(other_conditions_)
 {
-    static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
-                  || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
-    static_assert(STRICTNESS == ASTTableJoin::Strictness::Any || STRICTNESS == ASTTableJoin::Strictness::All);
+    static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftAnti
+                  || KIND == NullAware_LeftSemi);
+    static_assert(STRICTNESS == Any || STRICTNESS == All);
 
     RUNTIME_CHECK(block.columns() == left_columns + right_columns);
 
-    if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftAnti || KIND == ASTTableJoin::Kind::NullAware_LeftSemi)
+    if constexpr (KIND == NullAware_LeftAnti || KIND == NullAware_LeftSemi)
     {
         /// The last column is `match_helper`.
         right_columns -= 1;
@@ -201,7 +210,7 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
 void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NASemiJoinHelper::Result *> & res_list)
 {
-    if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+    if constexpr (STRICTNESS == All)
     {
         /// Step of NOT_NULL_KEY_CHECK_MATCHED_ROWS only exist when strictness is all.
         std::list<NASemiJoinHelper::Result *> next_step_res_list;
@@ -360,7 +369,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
     ///
     /// In summary, it's correct as long as null_aware_eq_cond_expr is not executed solely when other_cond_expr exists.
 
-    if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
+    if constexpr (STRICTNESS == All)
         other_conditions.other_cond_expr->execute(exec_block);
 
     ConstNullMapPtr eq_null_map = nullptr;
@@ -386,10 +395,10 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
         /// If STEP is NOT_NULL_KEY_CHECK_MATCHED_ROWS, it means these right rows have the same join keys to the corresponding left row.
         /// So do not need to run null_aware_eq_cond_expr.
         /// And other conditions must exist so STRICTNESS must be all.
-        static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
+        static_assert(STRICTNESS == All);
     }
 
-    if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+    if constexpr (STRICTNESS == Any)
     {
         size_t prev_offset = 0;
         auto it = res_list.begin();
@@ -450,22 +459,22 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
     }
 }
 
-template class NASemiJoinResult<ASTTableJoin::Kind::NullAware_Anti, ASTTableJoin::Strictness::Any>;
-template class NASemiJoinResult<ASTTableJoin::Kind::NullAware_Anti, ASTTableJoin::Strictness::All>;
+template class NASemiJoinResult<NullAware_Anti, Any>;
+template class NASemiJoinResult<NullAware_Anti, All>;
 
-template class NASemiJoinResult<ASTTableJoin::Kind::NullAware_LeftSemi, ASTTableJoin::Strictness::Any>;
-template class NASemiJoinResult<ASTTableJoin::Kind::NullAware_LeftSemi, ASTTableJoin::Strictness::All>;
+template class NASemiJoinResult<NullAware_LeftSemi, Any>;
+template class NASemiJoinResult<NullAware_LeftSemi, All>;
 
-template class NASemiJoinResult<ASTTableJoin::Kind::NullAware_LeftAnti, ASTTableJoin::Strictness::Any>;
-template class NASemiJoinResult<ASTTableJoin::Kind::NullAware_LeftAnti, ASTTableJoin::Strictness::All>;
+template class NASemiJoinResult<NullAware_LeftAnti, Any>;
+template class NASemiJoinResult<NullAware_LeftAnti, All>;
 
-template class NASemiJoinHelper<ASTTableJoin::Kind::NullAware_Anti, ASTTableJoin::Strictness::Any, Join::RowRef>;
-template class NASemiJoinHelper<ASTTableJoin::Kind::NullAware_Anti, ASTTableJoin::Strictness::All, Join::RowRefList>;
+template class NASemiJoinHelper<NullAware_Anti, Any, Join::RowRef>;
+template class NASemiJoinHelper<NullAware_Anti, All, Join::RowRefList>;
 
-template class NASemiJoinHelper<ASTTableJoin::Kind::NullAware_LeftSemi, ASTTableJoin::Strictness::Any, Join::RowRef>;
-template class NASemiJoinHelper<ASTTableJoin::Kind::NullAware_LeftSemi, ASTTableJoin::Strictness::All, Join::RowRefList>;
+template class NASemiJoinHelper<NullAware_LeftSemi, Any, Join::RowRef>;
+template class NASemiJoinHelper<NullAware_LeftSemi, All, Join::RowRefList>;
 
-template class NASemiJoinHelper<ASTTableJoin::Kind::NullAware_LeftAnti, ASTTableJoin::Strictness::Any, Join::RowRef>;
-template class NASemiJoinHelper<ASTTableJoin::Kind::NullAware_LeftAnti, ASTTableJoin::Strictness::All, Join::RowRefList>;
+template class NASemiJoinHelper<NullAware_LeftAnti, Any, Join::RowRef>;
+template class NASemiJoinHelper<NullAware_LeftAnti, All, Join::RowRefList>;
 
 } // namespace DB

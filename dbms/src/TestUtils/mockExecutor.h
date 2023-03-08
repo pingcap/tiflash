@@ -173,7 +173,7 @@ public:
     explicit MockDAGRequestContext(Context context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
         : index(0)
         , context(context_)
-        , collation(-abs(collation_))
+        , collation(convertToTiDBCollation(collation_))
     {
     }
 

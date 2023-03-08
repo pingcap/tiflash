@@ -2026,7 +2026,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     Block & block,
     size_t left_columns,
     const BlocksList & right_blocks,
-    const PaddedPODArray<Join::RowRef> & null_rows,
+    const PaddedPODArray<Join::RowRefList *> & null_rows,
     size_t max_block_size,
     const JoinOtherConditions & other_conditions,
     const ColumnRawPtrs & key_columns,
@@ -2196,13 +2196,13 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     for (size_t i = 0; i < right_columns; ++i)
         added_columns[i] = block.getByPosition(i + left_columns).column->cloneEmpty();
 
-    PaddedPODArray<UInt8> * left_semi_column_data = nullptr;
+    PaddedPODArray<Int8> * left_semi_column_data = nullptr;
     PaddedPODArray<UInt8> * left_semi_null_map = nullptr;
 
     if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi || KIND == ASTTableJoin::Kind::NullAware_LeftAnti)
     {
         auto * left_semi_column = typeid_cast<ColumnNullable *>(added_columns[right_columns - 1].get());
-        left_semi_column_data = &typeid_cast<ColumnVector<UInt8> &>(left_semi_column->getNestedColumn()).getData();
+        left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
         left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
         left_semi_column_data->reserve(rows);
         left_semi_null_map->reserve(rows);
@@ -2271,7 +2271,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     Block & block,
     size_t left_columns,
     const BlocksList & right_blocks,
-    const PaddedPODArray<Join::RowRef> & null_rows,
+    const PaddedPODArray<Join::RowRefList *> & null_rows,
     size_t max_block_size,
     const JoinOtherConditions & other_conditions,
     const ColumnRawPtrs & key_columns,
@@ -2453,28 +2453,12 @@ void Join::workAfterBuildFinish()
 {
     if (isNullAwareSemiFamily(kind))
     {
-        size_t count = 0;
+        rows_with_null_keys.reserve(rows_not_inserted_to_map.size());
         for (const auto & i : rows_not_inserted_to_map)
         {
             Join::RowRefList * p = i->next;
-            while (p != nullptr)
-            {
-                ++count;
-                p = p->next;
-            }
-        }
-        if (count == 0)
-            return;
-
-        rows_with_null_keys.reserve(count);
-        for (const auto & i : rows_not_inserted_to_map)
-        {
-            Join::RowRefList * p = i->next;
-            while (p != nullptr)
-            {
-                rows_with_null_keys.emplace_back(*p);
-                p = p->next;
-            }
+            if (p != nullptr)
+                rows_with_null_keys.emplace_back(p);
         }
     }
 }
