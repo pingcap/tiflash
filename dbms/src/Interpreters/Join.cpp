@@ -2597,11 +2597,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         RUNTIME_CHECK_MSG(build_concurrency > 1, "spilling is not is not supported when stream size = 1, please increase max_threads or set max_bytes_before_external_join = 0.");
         is_spilled = true;
 
-        LOG_DEBUG(log, fmt::format("all bytes used : {}", getTotalByteCount()));
-        for (size_t index = 0; index < partitions.size(); ++index)
-        {
-            LOG_DEBUG(log, fmt::format("partition id : {}, rows : {}, bytes : {}", index, partitions[index]->build_partition.rows, partitions[index]->memory_usage));
-        }
+        LOG_DEBUG(log, fmt::format("all bytes used : {} in join, partition size : {}", getTotalByteCount(), partitions.size()));
         LOG_DEBUG(log, fmt::format("make round : {}, partition : {} spill.", restore_round, target_partition_index));
 
         std::unique_lock partition_lock(partitions[target_partition_index]->partition_mutex);
