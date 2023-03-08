@@ -266,9 +266,7 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
     RUNTIME_CHECK_MSG(method_chosen != AggregatedDataVariants::Type::EMPTY, "Invalid aggregation method");
     if (AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen))
     {
-        /// for aggregation, the input block is sorted by bucket number
-        /// so it can work with MergingAggregatedMemoryEfficientBlockInputStream
-        spiller = std::make_unique<Spiller>(params.spill_config, true, 1, getHeader(false), log);
+        spiller = std::make_unique<Spiller>(params.spill_config, true, AggregatedDataVariants::getBucketNumberForTwoLevelHashTable(method_chosen), getHeader(false), log);
     }
 }
 
@@ -832,10 +830,16 @@ void Aggregator::finishSpill()
     spiller->finishSpill();
 }
 
-BlockInputStreams Aggregator::restoreSpilledData()
+std::vector<BlockInputStreams> Aggregator::restoreSpilledData()
 {
     assert(spiller != nullptr);
-    return spiller->restoreBlocks(0);
+    std::vector<BlockInputStreams> ret;
+    for (UInt64 partition_id = 0; partition_id < spiller->getPartitionNum(); ++partition_id)
+    {
+        if (spiller->hasSpilledData(partition_id))
+            ret.push_back(spiller->restoreBlocks(partition_id));
+    }
+    return ret;
 }
 
 void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size)
@@ -934,10 +938,10 @@ void Aggregator::spillImpl(
         /// memory in hash table is released after `convertOneBucketToBlock`,
         /// so the peak memory usage is not increased although we save all
         /// the blocks before the actual spill
-        blocks.push_back(convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket));
-        update_max_sizes(blocks.back());
+        auto bucket_block = convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket);
+        update_max_sizes(bucket_block);
+        spiller->spillBlocks({std::move(bucket_block)}, bucket);
     }
-    spiller->spillBlocks(std::move(blocks), 0);
 
     /// Pass ownership of the aggregate functions states:
     /// `data_variants` will not destroy them in the destructor, they are now owned by ColumnAggregateFunction objects.

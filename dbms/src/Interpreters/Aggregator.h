@@ -1062,7 +1062,7 @@ public:
     /// For external aggregation.
     void spill(AggregatedDataVariants & data_variants);
     void finishSpill();
-    BlockInputStreams restoreSpilledData();
+    std::vector<BlockInputStreams> restoreSpilledData();
     bool hasSpilledData() const { return spiller != nullptr && spiller->hasSpilledData(); }
     void useTwoLevelHashTable() { use_two_level_hash_table = true; }
     void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);
