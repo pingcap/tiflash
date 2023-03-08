@@ -250,6 +250,14 @@ struct TiFlashProxyConfig
     const String pd_endpoints = "pd-endpoints";
     const String engine_label = "engine-label";
 
+    void addExtraArgs(const std::string & k, const std::string & v)
+    {
+        std::string key = "--" + k;
+        val_map[key] = v;
+        args.push_back(val_map[key].data());
+        args.push_back(val_map[v].data());
+    }
+
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
         auto disaggregated_mode = getDisaggregatedMode(config);
@@ -865,6 +873,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
+
+    if (STORAGE_FORMAT_CURRENT.page == PageFormat::V4)
+    {
+        LOG_INFO(log, "use unips for proxy");
+        proxy_conf.addExtraArgs("unips-enabled", "true");
+    }
+    else
+    {
+        LOG_INFO(log, "not use unips for proxy");
+    }
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
 
