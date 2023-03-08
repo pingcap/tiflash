@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -330,8 +330,7 @@ private:
     /// For null-aware semi join family, including rows with NULL join keys.
     std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
 
-    /// The RowRefList pointer header in `rows_not_inserted_to_map` which
-    /// removes the NULL pointers.
+    /// The RowRefList in `rows_not_inserted_to_map` that removes the empty RowRefList.
     PaddedPODArray<RowRefList *> rows_with_null_keys;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
