@@ -16,6 +16,7 @@
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
@@ -30,6 +31,15 @@
 
 namespace DB
 {
+
+UniversalPageStorageService::UniversalPageStorageService(Context & global_context_)
+    : global_context(global_context_)
+    , uni_page_storage(nullptr)
+    , log(Logger::get())
+{
+    checkpoint_pool = std::make_unique<BackgroundProcessingPool>(1, "ps-checkpoint");
+}
+
 UniversalPageStorageServicePtr UniversalPageStorageService::create(
     Context & context,
     const String & name,
@@ -47,14 +57,13 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     }
     service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider(), s3_client, bucket);
     service->uni_page_storage->restore();
-    auto & bkg_pool = context.getBackgroundPool();
 
     if (s3factory.isEnabled())
     {
         // TODO: make this interval reloadable
         auto interval_s = context.getSettingsRef().remote_checkpoint_interval_seconds;
         // Only upload checkpoint when S3 is enabled
-        service->remote_checkpoint_handle = bkg_pool.addTask(
+        service->remote_checkpoint_handle = service->checkpoint_pool->addTask(
             [service] {
                 return service->uploadCheckpoint();
             },
@@ -62,6 +71,7 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
             /*interval_ms*/ interval_s * 1000);
     }
 
+    auto & bkg_pool = context.getBackgroundPool();
     service->gc_handle = bkg_pool.addTask(
         [service] {
             return service->gc();
@@ -212,16 +222,17 @@ UniversalPageStorageService::~UniversalPageStorageService()
 
 void UniversalPageStorageService::shutdown()
 {
-    auto & bkg_pool = global_context.getBackgroundPool();
-    if (gc_handle)
-    {
-        bkg_pool.removeTask(gc_handle);
-        gc_handle = nullptr;
-    }
     if (remote_checkpoint_handle)
     {
-        bkg_pool.removeTask(remote_checkpoint_handle);
+        checkpoint_pool->removeTask(remote_checkpoint_handle);
         remote_checkpoint_handle = nullptr;
+    }
+
+    if (gc_handle)
+    {
+        auto & bkg_pool = global_context.getBackgroundPool();
+        bkg_pool.removeTask(gc_handle);
+        gc_handle = nullptr;
     }
 }
 } // namespace DB

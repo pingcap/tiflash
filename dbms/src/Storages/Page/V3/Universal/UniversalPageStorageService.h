@@ -61,12 +61,7 @@ public:
         String bucket);
 
 private:
-    explicit UniversalPageStorageService(Context & global_context_)
-        : global_context(global_context_)
-        , uni_page_storage(nullptr)
-        , log(Logger::get())
-    {
-    }
+    explicit UniversalPageStorageService(Context & global_context_);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -78,10 +73,14 @@ public:
     Context & global_context;
     UniversalPageStoragePtr uni_page_storage;
     BackgroundProcessingPool::TaskHandle gc_handle;
-    BackgroundProcessingPool::TaskHandle remote_checkpoint_handle;
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
     LoggerPtr log;
+
+    // A standalone thread pool for avoid this being affected by
+    // other background tasks unexpectly.
+    std::unique_ptr<BackgroundProcessingPool> checkpoint_pool;
+    BackgroundProcessingPool::TaskHandle remote_checkpoint_handle;
 };
 } // namespace DB
