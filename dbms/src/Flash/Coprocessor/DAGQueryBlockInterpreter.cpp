@@ -620,7 +620,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.isTableScanSource())
     {
-        TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
+        TiDBTableScan table_scan(query_block.source, context.getTimezoneInfo(), query_block.source_name, dagContext());
         if (unlikely(context.isTest()))
             handleMockTableScan(table_scan, pipeline);
         else

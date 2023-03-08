@@ -13,19 +13,24 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 
 namespace DB
 {
 TiDBTableScan::TiDBTableScan(
     const tipb::Executor * table_scan_,
+    const TimezoneInfo & timezone_info_,
     const String & executor_id_,
     const DAGContext & dag_context)
     : table_scan(table_scan_)
+    , timezone_info(timezone_info_)
     , executor_id(executor_id_)
     , is_partition_table_scan(table_scan->tp() == tipb::TypePartitionTableScan)
     , columns(is_partition_table_scan ? std::move(TiDB::toTiDBColumnInfos(table_scan->partition_table_scan().columns())) : std::move(TiDB::toTiDBColumnInfos(table_scan->tbl_scan().columns())))
-    , pushed_down_filters(is_partition_table_scan ? std::move(table_scan->partition_table_scan().pushed_down_filter_conditions()) : std::move(table_scan->tbl_scan().pushed_down_filter_conditions()))
+    // Rewrite timezone expr to avoid add cast for timezone.
+    // And time functions will not be pushed down, so it is unnecessary to add cast before executing pushed down filters
+    , pushed_down_filters(is_partition_table_scan ? std::move(rewiteExprWithTimezone(timezone_info, table_scan->partition_table_scan().pushed_down_filter_conditions(), columns)) : std::move(rewiteExprWithTimezone(timezone_info, table_scan->tbl_scan().pushed_down_filter_conditions(), columns)))
     // Only No-partition table need keep order when tablescan executor required keep order.
     // If keep_order is not set, keep order for safety.
     , keep_order(!is_partition_table_scan && (table_scan->tbl_scan().keep_order() || !table_scan->tbl_scan().has_keep_order()))

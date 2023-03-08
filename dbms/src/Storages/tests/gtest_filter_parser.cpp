@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
@@ -98,11 +99,10 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
         std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info);
         const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
         dag_query = std::make_unique<DAGQueryInfo>(
-            conditions,
+            rewiteExprWithTimezone(timezone_info, conditions, table_info.columns),
             pushed_down_filters,
             DAGPreparedSets(),
-            source_columns,
-            timezone_info);
+            source_columns);
         for (const auto & column : table_info.columns)
         {
             columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
@@ -422,21 +422,17 @@ try
     ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
     UInt64 origin_time_stamp;
     tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer);
-    const auto & time_zone_utc = DateLUT::instance("UTC");
-    UInt64 converted_time = origin_time_stamp;
 
     {
         // Greater between TimeStamp col and Datetime literal, use local timezone
         auto ctx = TiFlashTestEnv::getContext();
-        auto & timezone_info = ctx.getTimezoneInfo();
-        convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
 
         auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"));
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time) + String("\"}"));
+        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(origin_time_stamp) + String("\"}"));
     }
 
     {
@@ -444,14 +440,13 @@ try
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx.getTimezoneInfo();
         timezone_info.resetByTimezoneName("America/Chicago");
-        convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
 
         auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time) + String("\"}"));
+        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(origin_time_stamp) + String("\"}"));
     }
 
     {
@@ -459,14 +454,13 @@ try
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx.getTimezoneInfo();
         timezone_info.resetByTimezoneOffset(28800);
-        convertTimeZoneByOffset(origin_time_stamp, converted_time, false, timezone_info.timezone_offset);
 
         auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getAttrs().size(), 1);
         EXPECT_EQ(rs_operator->getAttrs()[0].col_name, "col_timestamp");
         EXPECT_EQ(rs_operator->getAttrs()[0].col_id, 4);
-        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time) + String("\"}"));
+        EXPECT_EQ(rs_operator->toDebugString(), String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(origin_time_stamp) + String("\"}"));
     }
 
     {

@@ -97,7 +97,7 @@ void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
 
 void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Executor * executor)
 {
-    TiDBTableScan table_scan(executor, executor_id, dagContext());
+    TiDBTableScan table_scan(executor, context.getTimezoneInfo(), executor_id, dagContext());
     if (unlikely(context.isTest()))
         pushBack(PhysicalMockTableScan::build(context, executor_id, log, table_scan));
     else

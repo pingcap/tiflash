@@ -29,6 +29,7 @@ class TiDBTableScan
 public:
     TiDBTableScan(
         const tipb::Executor * table_scan_,
+        const TimezoneInfo & timezone_info_,
         const String & executor_id_,
         const DAGContext & dag_context);
     bool isPartitionTableScan() const
@@ -78,6 +79,7 @@ public:
 
 private:
     const tipb::Executor * table_scan;
+    const TimezoneInfo & timezone_info;
     String executor_id;
     bool is_partition_table_scan;
     const ColumnInfos columns;

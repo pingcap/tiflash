@@ -68,7 +68,7 @@ try
     auto dag_context = std::make_shared<DAGContext>(*dag_req, meta, true);
     auto * ori_dag_context = TiFlashTestEnv::getGlobalContext().getDAGContext();
     TiFlashTestEnv::getGlobalContext().setDAGContext(dag_context.get());
-    TiDBTableScan tidb_table_scan(&table_scan, table_scan.executor_id(), *dag_context);
+    TiDBTableScan tidb_table_scan(&table_scan, context.context.getTimezoneInfo(), table_scan.executor_id(), *dag_context);
 
     FilterConditions filter_conditions;
     StorageDisaggregated storage(TiFlashTestEnv::getGlobalContext(), tidb_table_scan, filter_conditions);

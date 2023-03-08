@@ -871,7 +871,7 @@ SourceOps StorageDeltaMerge::readSourceOps(
 
     auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, query_info.req_id, tracing_logger);
 
-    auto rs_operator = parseRoughSetFilter(query_info, columns_to_read, context, tracing_logger);
+    auto filter = parsePushDownFilter(query_info, columns_to_read, context, tracing_logger);
 
     const auto & scan_context = mvcc_query_info.scan_context;
 
@@ -883,7 +883,7 @@ SourceOps StorageDeltaMerge::readSourceOps(
         ranges,
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
-        rs_operator,
+        filter,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,
