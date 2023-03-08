@@ -1503,6 +1503,7 @@ public:
         std::unique_ptr<SegmentType> segment_ptr = nullptr;
         {
             /// release the lock before destruct related segment
+            assert(segments[segment_index]);
             std::unique_lock lock(segments[segment_index]->getMutex());
             ret = segments[segment_index]->getBufferSizeInBytes();
             segment_ptr.swap(segments[segment_index]);

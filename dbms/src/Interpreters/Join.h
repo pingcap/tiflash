@@ -145,10 +145,6 @@ public:
 
     bool isRestoreJoin() const;
 
-    void insertBlockToBuildPartition(Block && block, size_t partition_index);
-
-    void insertBlockToProbePartition(Block && block, size_t partition_index);
-
     void tryMarkBuildSpillFinish();
 
     void tryMarkProbeSpillFinish();
@@ -357,6 +353,26 @@ public:
         bool spill{};
         /// only update this field when spill is enabled. todo support this field in non-spill mode
         std::atomic<size_t> memory_usage{0};
+
+        void insertBlockForBuild(Block && block)
+        {
+            size_t rows = block.rows();
+            size_t bytes = block.bytes();
+            build_partition.rows += rows;
+            build_partition.bytes += bytes;
+            build_partition.blocks.push_back(block);
+            build_partition.original_blocks.push_back(std::move(block));
+            memory_usage += bytes;
+        }
+
+        void insertBlockForProbe(Block && block)
+        {
+            size_t rows = block.rows();
+            size_t bytes = block.bytes();
+            probe_partition.rows += rows;
+            probe_partition.bytes += bytes;
+            probe_partition.blocks.push_back(std::move(block));
+        }
     };
     using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
 

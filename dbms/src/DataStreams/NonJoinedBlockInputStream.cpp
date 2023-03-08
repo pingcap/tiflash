@@ -283,7 +283,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
 
     for (; *it != end || current_segment + step < map.getSegmentSize();)
     {
-        if (*it == end || (parent.max_bytes_before_external_join && parent.partitions[current_segment]->spill))
+        if (*it == end || parent.partitions[current_segment]->spill)
         {
             current_segment += step;
             while (parent.partitions[current_segment]->spill)

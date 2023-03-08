@@ -41,8 +41,6 @@ extern const char random_join_build_failpoint[];
 extern const char random_join_prob_failpoint[];
 extern const char exception_mpp_hash_build[];
 extern const char exception_mpp_hash_probe[];
-extern const char random_join_spill_to_disk_failpoint[];
-extern const char random_join_restore_from_disk_failpoint[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -1162,7 +1160,8 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
             {
                 const auto & join_partition = partitions[i];
                 std::unique_lock partition_lock(join_partition->partition_mutex);
-                insertBlockToBuildPartition(std::move(dispatch_blocks[i]), i);
+                //                insertBlockToBuildPartition(std::move(dispatch_blocks[i]), i);
+                partitions[i]->insertBlockForBuild(std::move(dispatch_blocks[i]));
                 if (join_partition->spill)
                     blocks_to_spill = trySpillBuildPartition(i, force_spill_partition_blocks, partition_lock);
                 else
@@ -1185,7 +1184,6 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
                     continue;
                 }
             }
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_spill_to_disk_failpoint);
             build_spiller->spillBlocks(blocks_to_spill, i);
         }
 #ifdef DBMS_PUBLIC_GTEST
@@ -2596,7 +2594,7 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         }
 
         RUNTIME_CHECK_MSG(restore_round < 4, "max_bytes_before_external_join is too small, join restore round exceeds limit, please make max_bytes_before_external_join larger and try again.");
-        RUNTIME_CHECK_MSG(build_concurrency > 1, "Join with build concurrency = 1 does not support spill.");
+        RUNTIME_CHECK_MSG(build_concurrency > 1, "spilling is not is not supported when stream size = 1, please increase max_threads or set max_bytes_before_external_join = 0.");
         is_spilled = true;
 
         LOG_DEBUG(log, fmt::format("all bytes used : {}", getTotalByteCount()));
@@ -2612,29 +2610,8 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         spilled_partition_indexes.push_back(target_partition_index);
         blocks_to_spill = trySpillBuildPartition(target_partition_index, true, partition_lock);
     }
-    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_spill_to_disk_failpoint);
     build_spiller->spillBlocks(blocks_to_spill, target_partition_index);
     LOG_DEBUG(log, fmt::format("all bytes used after spill : {}", getTotalByteCount()));
-}
-
-void Join::insertBlockToBuildPartition(Block && block, size_t partition_index)
-{
-    size_t rows = block.rows();
-    size_t bytes = block.bytes();
-    partitions[partition_index]->build_partition.rows += rows;
-    partitions[partition_index]->build_partition.bytes += bytes;
-    partitions[partition_index]->build_partition.blocks.push_back(block);
-    partitions[partition_index]->build_partition.original_blocks.push_back(std::move(block));
-    partitions[partition_index]->memory_usage += bytes;
-}
-
-void Join::insertBlockToProbePartition(Block && block, size_t partition_index)
-{
-    size_t rows = block.rows();
-    size_t bytes = block.bytes();
-    partitions[partition_index]->probe_partition.rows += rows;
-    partitions[partition_index]->probe_partition.bytes += bytes;
-    partitions[partition_index]->probe_partition.blocks.push_back(std::move(block));
 }
 
 void Join::tryMarkBuildSpillFinish()
@@ -2644,7 +2621,6 @@ void Join::tryMarkBuildSpillFinish()
         build_spiller->finishSpill();
     }
 }
-
 
 void Join::tryMarkProbeSpillFinish()
 {
@@ -2707,9 +2683,7 @@ std::tuple<JoinPtr, BlockInputStreamPtr, BlockInputStreamPtr, BlockInputStreamPt
         /// for restore join we make sure that the bulid concurrency is at least 2, so it can be spill again
         assert(restore_join_build_concurrency >= 2);
         LOG_DEBUG(log, "partition {}, round {}, build concurrency {}", spilled_partition_index, restore_round, restore_join_build_concurrency);
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_restore_from_disk_failpoint);
         restore_build_streams = build_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_restore_from_disk_failpoint);
         restore_probe_streams = probe_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
         restore_non_joined_data_streams.resize(restore_join_build_concurrency, nullptr);
         RUNTIME_CHECK_MSG(restore_build_streams.size() == static_cast<size_t>(restore_join_build_concurrency), "restore streams size must equal to restore_join_build_concurrency");
@@ -2760,14 +2734,14 @@ void Join::dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>
             std::unique_lock partition_lock(partitions[i]->partition_mutex);
             if (getPartitionSpilled(i))
             {
-                insertBlockToProbePartition(std::move(partition_blocks[i]), i);
+                //                insertBlockToProbePartition(std::move(partition_blocks[i]), i);
+                partitions[i]->insertBlockForProbe(std::move(partition_blocks[i]));
                 blocks_to_spill = trySpillProbePartition(i, false, partition_lock);
                 need_spill = true;
             }
         }
         if (need_spill)
         {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_spill_to_disk_failpoint);
             probe_spiller->spillBlocks(blocks_to_spill, i);
         }
         else
@@ -2805,7 +2779,6 @@ void Join::trySpillBuildPartitions(bool force)
             std::unique_lock partition_lock(partitions[i]->partition_mutex);
             blocks_to_spill = trySpillBuildPartition(i, force, partition_lock);
         }
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_spill_to_disk_failpoint);
         build_spiller->spillBlocks(blocks_to_spill, i);
     }
 }
@@ -2837,7 +2810,6 @@ void Join::trySpillProbePartitions(bool force)
             std::unique_lock partition_lock(partitions[i]->partition_mutex);
             blocks_to_spill = trySpillProbePartition(i, force, partition_lock);
         }
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_spill_to_disk_failpoint);
         probe_spiller->spillBlocks(blocks_to_spill, i);
     }
 }
