@@ -17,9 +17,13 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 
 #include <magic_enum.hpp>
 
@@ -621,9 +625,25 @@ void DeltaMergeStore::ingestFiles(
     WriteBatches ingest_wbs(*storage_pool, dm_context->getWriteLimiter());
     if (!files.empty())
     {
+        auto remote_data_store = dm_context->db_context.getRemoteDataStore();
         for (const auto & file : files)
         {
-            ingest_wbs.data.putExternal(file->fileId(), 0);
+            if (!remote_data_store)
+            {
+                ingest_wbs.data.putExternal(file->fileId(), 0);
+            }
+            else
+            {
+                auto store_id = dm_context->db_context.getTMTContext().getKVStore()->getStoreID();
+                Remote::DMFileOID oid{.store_id = store_id, .table_id = dm_context->physical_table_id, .file_id = file->fileId()};
+                remote_data_store->putDMFile(file, oid);
+                PS::V3::CheckpointLocation loc{
+                    .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
+                    .offset_in_file = 0,
+                    .size_in_file = 0,
+                };
+                ingest_wbs.data.putRemoteExternal(file->fileId(), loc);
+            }
         }
         ingest_wbs.writeLogAndData();
         ingest_wbs.setRollback(); // rollback if exception thrown
