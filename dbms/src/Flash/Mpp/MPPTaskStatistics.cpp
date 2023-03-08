@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <tipb/executor.pb.h>
 
 #include <magic_enum.hpp>
+#include <memory>
 
 namespace DB
 {
@@ -74,7 +75,6 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
 
     is_root = dag_context->isRootMPPTask();
     sender_executor_id = root_executor.executor_id();
-    // ywq todo not hold executor_statistics collector
     executor_statistics_collector = std::make_shared<ExecutorStatisticsCollector>();
     executor_statistics_collector->initialize(dag_context);
     dag_context->setExecutorStatisticCollector(executor_statistics_collector);
@@ -83,13 +83,13 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
 void MPPTaskStatistics::collectRuntimeStatistics()
 {
     LOG_INFO(logger, "collect runtime statistics");
-    const auto & executor_statistics_res = executor_statistics_collector->getResult();
+    const auto & executor_statistics_res = dag_context->executorStatisticCollector()->getResult();
     auto it = executor_statistics_res.find(sender_executor_id);
     RUNTIME_CHECK_MSG(it != executor_statistics_res.end(), "Can't find exchange sender statistics after `collectRuntimeStatistics`");
     const auto & return_statistics = it->second->getBaseRuntimeStatistics();
     // record io bytes
     output_bytes = return_statistics.bytes;
-    recordInputBytes(executor_statistics_collector->getDAGContext());
+    recordInputBytes(dag_context->executorStatisticCollector()->getDAGContext());
 }
 
 void MPPTaskStatistics::logTracingJson()

@@ -320,7 +320,7 @@ void ExecutorTest::testForExecutionSummary(
     auto collector = std::make_shared<ExecutorStatisticsCollector>();
     collector->initialize(&dag_context);
     dag_context.setExecutorStatisticCollector(collector);
-    ExecutionSummaryCollector summary_collector(dag_context, true);
+    ExecutionSummaryCollector summary_collector(dag_context, "test_execution_summary", true);
     auto summaries = summary_collector.genExecutionSummaryResponse().execution_summaries();
     ASSERT_EQ(summaries.size(), expect.size()) << "\n"
                                                << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);

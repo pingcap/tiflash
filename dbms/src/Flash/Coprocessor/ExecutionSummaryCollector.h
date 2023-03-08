@@ -18,20 +18,19 @@
 #include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
-#include "RemoteExecutionSummary.h"
-
 namespace DB
 {
 class DAGContext;
 
-struct RemoteExecutionSummary;
 class ExecutionSummaryCollector
 {
 public:
     explicit ExecutionSummaryCollector(
         DAGContext & dag_context_,
+        const String & req_id,
         bool fill_executor_id_ = false)
         : dag_context(dag_context_)
+        , log(Logger::get(req_id))
         , fill_executor_id(fill_executor_id_)
     {}
 
@@ -58,11 +57,9 @@ private:
         const String & executor_id,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map);
 
-    // RemoteExecutionSummary getRemoteExecutionSummaries(DAGContext & dag_context);
-
 private:
     DAGContext & dag_context;
-    const LoggerPtr log = Logger::get("ywq test");
+    const LoggerPtr log;
     bool fill_executor_id; // for testing list based executors in gtest_execution_summary.cpp
 };
 } // namespace DB

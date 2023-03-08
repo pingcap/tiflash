@@ -119,7 +119,7 @@ try
 
         if (dag_context.collect_execution_summaries)
         {
-            ExecutionSummaryCollector summary_collector(dag_context);
+            ExecutionSummaryCollector summary_collector(dag_context, log->identifier());
             summary_collector.addExecuteSummaries(*dag_response);
         }
     }
@@ -151,7 +151,7 @@ try
 
         if (dag_context.collect_execution_summaries)
         {
-            ExecutionSummaryCollector summary_collector(dag_context);
+            ExecutionSummaryCollector summary_collector(dag_context, log->identifier());
             auto execution_summary_response = summary_collector.genExecutionSummaryResponse();
             streaming_writer->write(execution_summary_response);
         }
