@@ -332,10 +332,10 @@ void UniversalPageStorage::initLocksLocalManager(StoreID store_id, S3::S3LockCli
     remote_locks_local_mgr->initStoreInfo(store_id, lock_client);
 }
 
-PS::V3::S3LockLocalManager::ExtraLockInfo UniversalPageStorage::getUploadLocksInfo() const
+PS::V3::S3LockLocalManager::ExtraLockInfo UniversalPageStorage::allocateNewUploadLocksInfo() const
 {
     assert(remote_locks_local_mgr != nullptr);
-    return remote_locks_local_mgr->getUploadLocksInfo();
+    return remote_locks_local_mgr->allocateNewUploadLocksInfo();
 }
 
 void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)

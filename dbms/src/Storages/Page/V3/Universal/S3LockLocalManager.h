@@ -47,7 +47,7 @@ public:
         UInt64 upload_sequence;
         std::unordered_set<String> pre_lock_keys;
     };
-    ExtraLockInfo getUploadLocksInfo();
+    ExtraLockInfo allocateNewUploadLocksInfo();
 
     void createS3LockForWriteBatch(UniversalWriteBatch & write_batch);
 

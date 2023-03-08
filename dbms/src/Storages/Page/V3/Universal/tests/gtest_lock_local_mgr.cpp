@@ -93,7 +93,7 @@ try
     auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(S3::ClientFactory::instance().sharedTiFlashClient());
     mgr.initStoreInfo(this_store_id, mock_s3lock_client);
 
-    auto info = mgr.getUploadLocksInfo();
+    auto info = mgr.allocateNewUploadLocksInfo();
     ASSERT_EQ(1, info.upload_sequence);
     ASSERT_TRUE(info.pre_lock_keys.empty());
 
@@ -134,7 +134,7 @@ try
     // mock UniversalPageStorage::write(wb)
     mgr.createS3LockForWriteBatch(wb);
 
-    info = mgr.getUploadLocksInfo();
+    info = mgr.allocateNewUploadLocksInfo();
     ASSERT_EQ(2, info.upload_sequence);
     ASSERT_EQ(2, info.pre_lock_keys.size());
     UInt64 lock_by_seq = info.upload_sequence;
@@ -145,8 +145,8 @@ try
     EXPECT_TRUE(S3::objectExists(*s3_client, s3_client->bucket(), expected_lockkey1));
     EXPECT_TRUE(S3::objectExists(*s3_client, s3_client->bucket(), expected_lockkey2));
 
-    // pre_lock_keys won't be cleaned after `getUploadLocksInfo`
-    info = mgr.getUploadLocksInfo();
+    // pre_lock_keys won't be cleaned after `allocateNewUploadLocksInfo`
+    info = mgr.allocateNewUploadLocksInfo();
     ASSERT_EQ(3, info.upload_sequence);
     ASSERT_EQ(2, info.pre_lock_keys.size());
     ASSERT_GT(info.pre_lock_keys.count(expected_lockkey1), 0) << fmt::format("{}", info.pre_lock_keys);
@@ -154,7 +154,7 @@ try
 
     // clean pre_lock_keys
     mgr.cleanAppliedS3ExternalFiles({expected_lockkey1, expected_lockkey2});
-    info = mgr.getUploadLocksInfo();
+    info = mgr.allocateNewUploadLocksInfo();
     ASSERT_EQ(4, info.upload_sequence);
     ASSERT_EQ(0, info.pre_lock_keys.size()); // empty
 }

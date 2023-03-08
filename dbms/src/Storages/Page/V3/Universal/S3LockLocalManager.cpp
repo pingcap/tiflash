@@ -76,7 +76,7 @@ void S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockCl
 }
 
 S3LockLocalManager::ExtraLockInfo
-S3LockLocalManager::getUploadLocksInfo()
+S3LockLocalManager::allocateNewUploadLocksInfo()
 {
     std::unique_lock wlatch_seq(mtx_sequence);
     std::unique_lock latch_keys(mtx_lock_keys);

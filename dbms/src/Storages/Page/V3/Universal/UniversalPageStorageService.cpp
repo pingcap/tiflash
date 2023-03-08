@@ -133,7 +133,7 @@ bool UniversalPageStorageService::uploadCheckpoint()
 bool UniversalPageStorageService::uploadCheckpointImpl(const metapb::Store & store_info, const S3::S3LockClientPtr & s3lock_client, const DM::Remote::IDataStorePtr & remote_store)
 {
     uni_page_storage->initLocksLocalManager(store_info.id(), s3lock_client);
-    const auto upload_info = uni_page_storage->getUploadLocksInfo();
+    const auto upload_info = uni_page_storage->allocateNewUploadLocksInfo();
 
     auto wi = PS::V3::CheckpointProto::WriterInfo();
     {
@@ -150,6 +150,11 @@ bool UniversalPageStorageService::uploadCheckpointImpl(const metapb::Store & sto
     Poco::File(local_dir).createDirectories();
     auto local_dir_str = local_dir.toString() + "/";
 
+    // Note that in order to make the locks within same `upload_sequence` are **all** public to S3GCManager
+    // atomically, we must use `upload_sequence` to override the CheckpoinDataFile and CheckpointManifest
+    // key.
+    // If using `snapshot->sequence` as a part of manifest name, we can NOT ensure all locks generated with
+    // sequence less than the checkpoint's snapshot->sequence are uploaded to S3.
     UniversalPageStorage::DumpCheckpointOptions opts{
         .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
         .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",
@@ -164,7 +169,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(const metapb::Store & sto
             .sequence = upload_info.upload_sequence,
             .remote_store = remote_store,
         },
-        .override_sequence = upload_info.upload_sequence,
+        .override_sequence = upload_info.upload_sequence, // override by upload_sequence
     };
     uni_page_storage->dumpIncrementalCheckpoint(opts);
 
