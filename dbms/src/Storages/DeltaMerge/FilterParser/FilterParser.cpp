@@ -379,11 +379,11 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
         children.reserve(dag_info.filters.size() + dag_info.pushed_down_filters.size());
         for (const auto & filter : dag_info.filters)
         {
-             children.emplace_back(cop::tryParse(filter, columns_to_read, creator, log));
+            children.emplace_back(cop::tryParse(filter, columns_to_read, creator, log));
         }
         for (const auto & filter : dag_info.pushed_down_filters)
         {
-             children.emplace_back(cop::tryParse(filter, columns_to_read, creator, log));
+            children.emplace_back(cop::tryParse(filter, columns_to_read, creator, log));
         }
         op = createAnd(children);
     }
