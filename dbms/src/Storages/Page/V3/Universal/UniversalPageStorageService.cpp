@@ -42,13 +42,15 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
 
     if (S3::ClientFactory::instance().isEnabled())
     {
+        // TODO: make this interval reloadable
+        auto interval_s = context.getSettingsRef().remote_checkpoint_interval_seconds;
         // Only upload checkpoint when S3 is enabled
         service->remote_checkpoint_handle = bkg_pool.addTask(
             [service] {
                 return service->uploadCheckpoint();
             },
             /*multi*/ false,
-            /*interval_ms*/ 5 * 60 * 1000);
+            /*interval_ms*/ interval_s * 1000);
     }
 
     service->gc_handle = bkg_pool.addTask(
