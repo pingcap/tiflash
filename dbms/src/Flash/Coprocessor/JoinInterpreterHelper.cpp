@@ -178,7 +178,7 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTy
         for (size_t i = 0; i < join_key_size; ++i)
         {
             // Don't need to check the collate for decimal format string.
-            if (unlikely(is_test) || (removeNullable(join_key_types[i].key_type)->isString() && !join_key_types[i].is_incompatible_decimal))
+            if ((removeNullable(join_key_types[i].key_type)->isString() && !join_key_types[i].is_incompatible_decimal) || unlikely(is_test))
             {
                 if (unlikely(join.probe_types(i).collate() != join.build_types(i).collate()))
                     throw TiFlashException("Join with different collators on the join key", Errors::Coprocessor::BadRequest);

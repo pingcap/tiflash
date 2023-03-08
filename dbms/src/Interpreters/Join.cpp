@@ -83,7 +83,7 @@ bool isCrossJoin(ASTTableJoin::Kind kind)
         || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Cross_Anti
         || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
 }
-/// (cartesian/null aware) (anti) left semi join.
+/// (cartesian/null-aware) (anti) left semi join.
 bool isLeftSemiFamily(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::LeftSemi || kind == ASTTableJoin::Kind::LeftAnti
@@ -904,11 +904,11 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
 
     if (isNullAwareSemiFamily(kind))
     {
+        if (rows > 0 && right_table_is_empty.load(std::memory_order_acquire))
+            right_table_is_empty.store(false, std::memory_order_release);
+
         if (strictness == ASTTableJoin::Strictness::Any)
         {
-            if (rows > 0 && right_table_is_empty.load(std::memory_order_acquire))
-                right_table_is_empty.store(false, std::memory_order_release);
-
             if (!right_has_all_key_null_row.load(std::memory_order_acquire))
             {
                 /// Note that `extractAllKeyNullMap` must be done before `extractNestedColumnsAndNullMap`
@@ -2067,16 +2067,13 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                 continue;
             }
         }
-        if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+        if (right_table_is_empty)
         {
-            if (right_table_is_empty)
-            {
-                /// If right table is empty, the result is false.
-                /// E.g. (1,2) in ().
-                res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
-                res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
-                continue;
-            }
+            /// If right table is empty, the result is false.
+            /// E.g. (1,2) in ().
+            res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+            res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
+            continue;
         }
         if constexpr (has_null_map)
         {
@@ -2155,7 +2152,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             {
                 /// If key size is 1 and all key in right table row is not NULL(right_has_all_key_null_row is false),
                 /// the result is false.
-                /// E.g. (1) in () or (1) in (1,2,3,4,5).
+                /// E.g. (1) in (2,3,4,5).
                 res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
                 res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
                 continue;
@@ -2189,6 +2186,8 @@ void NO_INLINE joinBlockImplNullAwareInternal(
         RUNTIME_CHECK_MSG(res_list.empty(), "NASemiJoinResult list must be empty after calculating join result");
     }
 
+    /// Now all results are known.
+
     std::unique_ptr<IColumn::Filter> filter;
     if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
         filter = std::make_unique<IColumn::Filter>(rows);
@@ -2202,8 +2201,8 @@ void NO_INLINE joinBlockImplNullAwareInternal(
 
     if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi || KIND == ASTTableJoin::Kind::NullAware_LeftAnti)
     {
-        auto * left_semi_column = static_cast<ColumnNullable *>(added_columns[right_columns - 1].get());
-        left_semi_column_data = &static_cast<ColumnVector<UInt8> &>(left_semi_column->getNestedColumn()).getData();
+        auto * left_semi_column = typeid_cast<ColumnNullable *>(added_columns[right_columns - 1].get());
+        left_semi_column_data = &typeid_cast<ColumnVector<UInt8> &>(left_semi_column->getNestedColumn()).getData();
         left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
         left_semi_column_data->reserve(rows);
         left_semi_null_map->reserve(rows);
@@ -2510,75 +2509,74 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
 
     Block block = probe_process_info.block;
 
-    /// TODO: after we bumping to C++20, use `using enum` to simplify code here.
-    /// using enum ASTTableJoin::Strictness;
-    /// using enum ASTTableJoin::Kind;
+    using enum ASTTableJoin::Strictness;
+    using enum ASTTableJoin::Kind;
 
-    if (kind == ASTTableJoin::Kind::Left && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any>(block, maps_any, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Inner && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::Any>(block, maps_any, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Left && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::All>(block, maps_all, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Inner && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::All>(block, maps_all, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Full && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any>(block, maps_any_full, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Right && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::Any>(block, maps_any_full, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Full && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::All>(block, maps_all_full, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Right && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::All>(block, maps_all_full, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any>(block, maps_any, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::All>(block, maps_all, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::LeftSemi && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::Any>(block, maps_any, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::LeftSemi && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::All>(block, maps_all, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::LeftAnti && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::Any>(block, maps_any, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::LeftAnti && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::All>(block, maps_all, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Cross && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross, ASTTableJoin::Strictness::All>(block);
-    else if (kind == ASTTableJoin::Kind::Cross && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross, ASTTableJoin::Strictness::Any>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_Left && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_Left, ASTTableJoin::Strictness::All>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_Left && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_Left, ASTTableJoin::Strictness::Any>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_Anti && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::All>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_Anti && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::Any>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_LeftSemi && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_LeftSemi, ASTTableJoin::Strictness::All>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_LeftSemi && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_LeftSemi, ASTTableJoin::Strictness::Any>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_LeftAnti && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_LeftSemi, ASTTableJoin::Strictness::All>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_LeftAnti && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_LeftSemi, ASTTableJoin::Strictness::Any>(block);
-    else if (kind == ASTTableJoin::Kind::NullAware_Anti && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_Anti, ASTTableJoin::Strictness::All>(block, maps_all);
-    else if (kind == ASTTableJoin::Kind::NullAware_Anti && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_Anti, ASTTableJoin::Strictness::Any>(block, maps_any);
-    else if (kind == ASTTableJoin::Kind::NullAware_LeftSemi && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_LeftSemi, ASTTableJoin::Strictness::All>(block, maps_all);
-    else if (kind == ASTTableJoin::Kind::NullAware_LeftSemi && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_LeftSemi, ASTTableJoin::Strictness::Any>(block, maps_any);
-    else if (kind == ASTTableJoin::Kind::NullAware_LeftAnti && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_LeftAnti, ASTTableJoin::Strictness::All>(block, maps_all);
-    else if (kind == ASTTableJoin::Kind::NullAware_LeftAnti && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplNullAware<ASTTableJoin::Kind::NullAware_LeftAnti, ASTTableJoin::Strictness::Any>(block, maps_any);
+    if (kind == Left && strictness == Any)
+        joinBlockImpl<Left, Any>(block, maps_any, probe_process_info);
+    else if (kind == Inner && strictness == Any)
+        joinBlockImpl<Inner, Any>(block, maps_any, probe_process_info);
+    else if (kind == Left && strictness == All)
+        joinBlockImpl<Left, All>(block, maps_all, probe_process_info);
+    else if (kind == Inner && strictness == All)
+        joinBlockImpl<Inner, All>(block, maps_all, probe_process_info);
+    else if (kind == Full && strictness == Any)
+        joinBlockImpl<Left, Any>(block, maps_any_full, probe_process_info);
+    else if (kind == Right && strictness == Any)
+        joinBlockImpl<Inner, Any>(block, maps_any_full, probe_process_info);
+    else if (kind == Full && strictness == All)
+        joinBlockImpl<Left, All>(block, maps_all_full, probe_process_info);
+    else if (kind == Right && strictness == All)
+        joinBlockImpl<Inner, All>(block, maps_all_full, probe_process_info);
+    else if (kind == Anti && strictness == Any)
+        joinBlockImpl<Anti, Any>(block, maps_any, probe_process_info);
+    else if (kind == Anti && strictness == All)
+        joinBlockImpl<Anti, All>(block, maps_all, probe_process_info);
+    else if (kind == LeftSemi && strictness == Any)
+        joinBlockImpl<LeftSemi, Any>(block, maps_any, probe_process_info);
+    else if (kind == LeftSemi && strictness == All)
+        joinBlockImpl<LeftSemi, All>(block, maps_all, probe_process_info);
+    else if (kind == LeftAnti && strictness == Any)
+        joinBlockImpl<LeftSemi, Any>(block, maps_any, probe_process_info);
+    else if (kind == LeftAnti && strictness == All)
+        joinBlockImpl<LeftSemi, All>(block, maps_all, probe_process_info);
+    else if (kind == Cross && strictness == All)
+        joinBlockImplCross<Cross, All>(block);
+    else if (kind == Cross && strictness == Any)
+        joinBlockImplCross<Cross, Any>(block);
+    else if (kind == Cross_Left && strictness == All)
+        joinBlockImplCross<Cross_Left, All>(block);
+    else if (kind == Cross_Left && strictness == Any)
+        joinBlockImplCross<Cross_Left, Any>(block);
+    else if (kind == Cross_Anti && strictness == All)
+        joinBlockImplCross<Cross_Anti, All>(block);
+    else if (kind == Cross_Anti && strictness == Any)
+        joinBlockImplCross<Cross_Anti, Any>(block);
+    else if (kind == Cross_LeftSemi && strictness == All)
+        joinBlockImplCross<Cross_LeftSemi, All>(block);
+    else if (kind == Cross_LeftSemi && strictness == Any)
+        joinBlockImplCross<Cross_LeftSemi, Any>(block);
+    else if (kind == Cross_LeftAnti && strictness == All)
+        joinBlockImplCross<Cross_LeftSemi, All>(block);
+    else if (kind == Cross_LeftAnti && strictness == Any)
+        joinBlockImplCross<Cross_LeftSemi, Any>(block);
+    else if (kind == NullAware_Anti && strictness == All)
+        joinBlockImplNullAware<NullAware_Anti, All>(block, maps_all);
+    else if (kind == NullAware_Anti && strictness == Any)
+        joinBlockImplNullAware<NullAware_Anti, Any>(block, maps_any);
+    else if (kind == NullAware_LeftSemi && strictness == All)
+        joinBlockImplNullAware<NullAware_LeftSemi, All>(block, maps_all);
+    else if (kind == NullAware_LeftSemi && strictness == Any)
+        joinBlockImplNullAware<NullAware_LeftSemi, Any>(block, maps_any);
+    else if (kind == NullAware_LeftAnti && strictness == All)
+        joinBlockImplNullAware<NullAware_LeftAnti, All>(block, maps_all);
+    else if (kind == NullAware_LeftAnti && strictness == Any)
+        joinBlockImplNullAware<NullAware_LeftAnti, Any>(block, maps_any);
     else
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
-    if (kind == ASTTableJoin::Kind::LeftAnti || kind == ASTTableJoin::Kind::Cross_LeftAnti)
+    if (kind == LeftAnti || kind == Cross_LeftAnti)
     {
         const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByName(match_helper_name).column.get());
         const auto & vec_matched = static_cast<const ColumnVector<Int8> *>(nullable_column->getNestedColumnPtr().get())->getData();

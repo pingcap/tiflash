@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnConst.h>
+#include <Common/typeid_cast.h>
 #include <Interpreters/NullAwareSemiJoinHelper.h>
 
 namespace DB
@@ -202,7 +203,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NASemiJoin
 {
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::All)
     {
-        /// Step of NOT_NULL_KEY_CHECK_OTHER_COND only exist when strictness is all.
+        /// Step of NOT_NULL_KEY_CHECK_MATCHED_ROWS only exist when strictness is all.
         std::list<NASemiJoinHelper::Result *> next_step_res_list;
         runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS>(res_list, next_step_res_list);
         res_list.swap(next_step_res_list);
@@ -352,9 +353,9 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
     /// There are three cases:
     /// 1. Strictness: Any, which means no other_cond_expr
     ///    - order: null_aware_eq_cond_expr
-    /// 2. Strictness: All, Step is NOT_NULL_KEY_CHECK_OTHER_COND
+    /// 2. Strictness: All, Step is NOT_NULL_KEY_CHECK_MATCHED_ROWS
     ///    - order: other_cond_expr
-    /// 3. Strictness: All, Step is not NOT_NULL_KEY_CHECK_OTHER_COND
+    /// 3. Strictness: All, Step is not NOT_NULL_KEY_CHECK_MATCHED_ROWS
     ///    - order: other_cond_expr -> null_aware_eq_cond_expr
     ///
     /// In summary, it's correct as long as null_aware_eq_cond_expr is not executed solely when other_cond_expr exists.
@@ -377,12 +378,12 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
 
         RUNTIME_CHECK_MSG(eq_column->isColumnNullable(), "The null-aware equal condition column should be nullable, otherwise Anti/LeftAnti/LeftSemi should be used instead");
 
-        const auto * nullable_eq_column = static_cast<const ColumnNullable *>(eq_column.get());
+        const auto * nullable_eq_column = typeid_cast<const ColumnNullable *>(eq_column.get());
         eq_null_map = &nullable_eq_column->getNullMapData();
     }
     else
     {
-        /// If STEP is NOT_NULL_KEY_CHECK_OTHER_COND, it means these right rows have the same join keys to the corresponding left row.
+        /// If STEP is NOT_NULL_KEY_CHECK_MATCHED_ROWS, it means these right rows have the same join keys to the corresponding left row.
         /// So do not need to run null_aware_eq_cond_expr.
         /// And other conditions must exist so STRICTNESS must be all.
         static_assert(STRICTNESS == ASTTableJoin::Strictness::All);
@@ -419,13 +420,13 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
         ConstNullMapPtr other_null_map = nullptr;
         if (other_column->isColumnNullable())
         {
-            const auto * nullable_other_column = static_cast<const ColumnNullable *>(other_column.get());
-            other_column_data = &static_cast<const ColumnVector<UInt8> *>(nullable_other_column->getNestedColumnPtr().get())->getData();
+            const auto * nullable_other_column = typeid_cast<const ColumnNullable *>(other_column.get());
+            other_column_data = &typeid_cast<const ColumnVector<UInt8> *>(nullable_other_column->getNestedColumnPtr().get())->getData();
             other_null_map = &nullable_other_column->getNullMapData();
         }
         else
         {
-            other_column_data = &static_cast<const ColumnVector<UInt8> *>(other_column.get())->getData();
+            other_column_data = &typeid_cast<const ColumnVector<UInt8> *>(other_column.get())->getData();
         }
 
         size_t prev_offset = 0;
