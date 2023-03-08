@@ -45,6 +45,7 @@ struct DMContext : private boost::noncopyable
 {
     const Context & db_context;
 
+    // leaving these pointers possible to be nullptr is dangerous for only reading from/writing to local storage. Find a better way to handle it later
     StoragePathPoolPtr path_pool;
     StoragePoolPtr storage_pool;
 
