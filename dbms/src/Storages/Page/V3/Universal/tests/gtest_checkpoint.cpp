@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/SyncPoint/SyncPoint.h>
+#include <Encryption/PosixRandomAccessFile.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
@@ -122,7 +123,10 @@ try
     ASSERT_TRUE(Poco::File(dir + "6.manifest").exists());
     ASSERT_TRUE(Poco::File(dir + "6_0.data").exists());
 
-    auto reader = CPManifestFileReader::create({.file_path = dir + "6.manifest"});
+    auto manifest_file = PosixRandomAccessFile::create(dir + "6.manifest");
+    auto reader = CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
     auto im = CheckpointProto::StringsInternMap{};
     auto prefix = reader->readPrefix();
     auto edits = reader->readEdits(im);
@@ -176,7 +180,10 @@ try
     ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
     ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
 
-    auto reader = CPManifestFileReader::create({.file_path = dir + "2.manifest"});
+    auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+    auto reader = CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
     auto im = CheckpointProto::StringsInternMap{};
     auto prefix = reader->readPrefix();
     auto edits = reader->readEdits(im);
@@ -206,7 +213,10 @@ try
     ASSERT_TRUE(Poco::File(dir + "3.manifest").exists());
     ASSERT_TRUE(Poco::File(dir + "3_0.data").exists());
 
-    auto reader = CPManifestFileReader::create({.file_path = dir + "3.manifest"});
+    auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+    auto reader = CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
     auto im = CheckpointProto::StringsInternMap{};
     auto prefix = reader->readPrefix();
     auto edits = reader->readEdits(im);
@@ -248,7 +258,10 @@ try
     ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
     ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
 
-    auto reader = CPManifestFileReader::create({.file_path = dir + "2.manifest"});
+    auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+    auto reader = CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
     auto im = CheckpointProto::StringsInternMap{};
     auto prefix = reader->readPrefix();
     auto edits = reader->readEdits(im);
@@ -289,7 +302,10 @@ try
     ASSERT_TRUE(Poco::File(dir + "3.manifest").exists());
     ASSERT_TRUE(Poco::File(dir + "3_0.data").exists());
 
-    auto reader = CPManifestFileReader::create({.file_path = dir + "3.manifest"});
+    auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+    auto reader = CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
     auto im = CheckpointProto::StringsInternMap{};
     auto prefix = reader->readPrefix();
     auto edits = reader->readEdits(im);
@@ -318,7 +334,10 @@ try
         ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "2.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -352,7 +371,10 @@ try
         ASSERT_TRUE(Poco::File(dir + "4.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "4_0.data").exists());
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "4.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "4.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -396,7 +418,10 @@ try
         ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "2.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -432,7 +457,10 @@ try
         ASSERT_TRUE(Poco::File(dir + "4.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "4_0.data").exists());
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "4.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "4.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -485,7 +513,10 @@ try
         ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "2.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -511,7 +542,10 @@ try
     {
         dumpCheckpoint();
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "3.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -558,7 +592,10 @@ try
         ASSERT_TRUE(Poco::File(dir + "3.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "3_0.data").exists());
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "3.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -585,7 +622,10 @@ try
     {
         dumpCheckpoint();
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "4.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "4.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -635,7 +675,10 @@ try
         ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "2.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -656,7 +699,10 @@ try
     {
         dumpCheckpoint();
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "3.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -672,5 +718,4 @@ try
     }
 }
 CATCH
-
 } // namespace DB::PS::universal::tests
