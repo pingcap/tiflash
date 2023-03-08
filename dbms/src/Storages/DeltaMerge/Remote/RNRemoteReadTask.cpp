@@ -424,6 +424,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         address,
         log);
 
+    // FIXME: get page_cache from context
     // task->page_cache = db_context.getDMRemoteManager()->getPageCache();
     task->segment = std::make_shared<Segment>(
         log,
@@ -446,6 +447,8 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         auto persisted_cfs = task->segment_snap->delta->getPersistedFileSetSnapshot();
         std::vector<Remote::PageOID> all_persisted_ids;
         all_persisted_ids.reserve(persisted_cfs->getColumnFileCount());
+        std::vector<size_t> page_sizes;
+        page_sizes.reserve(persisted_cfs->getColumnFileCount());
         for (const auto & cfs : persisted_cfs->getColumnFiles())
         {
             if (auto * tiny = cfs->tryToTinyFile(); tiny)
@@ -456,26 +459,27 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
                     .page_id = tiny->getDataPageId(),
                 };
                 all_persisted_ids.emplace_back(page_oid);
+                page_sizes.emplace_back(tiny->getBytes());
                 task->total_num_cftiny += 1;
                 total_persisted_size += tiny->getBytes();
             }
         }
 
-        UNUSED(total_persisted_size);
-        // auto pending_oids = task->page_cache->getMissingIds(all_persisted_ids);
-        // task->pending_page_ids.reserve(pending_oids.size());
-        // for (const auto & oid : pending_oids)
-        // {
-        //     task->pending_page_ids.emplace_back(oid.page_id);
-        // }
-        // LOG_INFO(log,
-        //          "mem-table cfs: {}, persisted cfs: {} (size={}), local cache hit rate: {}, pending_ids: {}, all_oids: {}",
-        //          task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
-        //          task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
-        //          total_persisted_size,
-        //          (all_persisted_ids.empty() ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * pending_oids.size() / all_persisted_ids.size())),
-        //          task->pendingPageIds(),
-        //          all_persisted_ids);
+        // FIXME: keep the guard to `task`?
+        auto occupy_space_res = task->page_cache->occupySpace(all_persisted_ids, page_sizes);
+        task->pending_page_ids.reserve(occupy_space_res.pages_not_in_cache.size());
+        for (const auto & oid : occupy_space_res.pages_not_in_cache)
+        {
+            task->pending_page_ids.emplace_back(oid.page_id);
+        }
+        LOG_INFO(log,
+                 "mem-table cfs: {}, persisted cfs: {} (size={}), local cache hit rate: {}, pending_ids: {}, all_oids: {}",
+                 task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
+                 task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
+                 total_persisted_size,
+                 (all_persisted_ids.empty() ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * occupy_space_res.pages_not_in_cache.size() / all_persisted_ids.size())),
+                 task->pendingPageIds(),
+                 all_persisted_ids);
     }
 
     task->dm_context = std::make_shared<DMContext>(
@@ -510,8 +514,7 @@ void RNRemoteSegmentReadTask::receivePage(RemotePb::RemotePage && remote_page)
     {
         field_sizes.emplace_back(field_sz);
     }
-    // FIXME: depends on local page cache
-    // page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
+    page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
     LOG_DEBUG(log, "receive page, oid={}", oid);
 }
 
