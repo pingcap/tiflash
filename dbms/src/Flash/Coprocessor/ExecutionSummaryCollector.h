@@ -29,8 +29,10 @@ class ExecutionSummaryCollector
 {
 public:
     explicit ExecutionSummaryCollector(
-        DAGContext & dag_context_)
+        DAGContext & dag_context_,
+        bool fill_executor_id_ = false)
         : dag_context(dag_context_)
+        , fill_executor_id(fill_executor_id_)
     {}
 
     void addExecuteSummaries(tipb::SelectResponse & response);
@@ -51,7 +53,7 @@ private:
         const BlockInputStreams & streams,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
-    void fillLocalExecutionSummary(
+    void fillExecutionSummary(
         tipb::SelectResponse & response,
         const String & executor_id,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map);
@@ -61,5 +63,6 @@ private:
 private:
     DAGContext & dag_context;
     const LoggerPtr log = Logger::get("ywq test");
+    bool fill_executor_id; // for testing list based executors in gtest_execution_summary.cpp
 };
 } // namespace DB

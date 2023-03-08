@@ -74,6 +74,7 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
 
     is_root = dag_context->isRootMPPTask();
     sender_executor_id = root_executor.executor_id();
+    // ywq todo not hold executor_statistics collector
     executor_statistics_collector = std::make_shared<ExecutorStatisticsCollector>();
     executor_statistics_collector->initialize(dag_context);
     dag_context->setExecutorStatisticCollector(executor_statistics_collector);
@@ -82,7 +83,6 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
 void MPPTaskStatistics::collectRuntimeStatistics()
 {
     LOG_INFO(logger, "collect runtime statistics");
-    executor_statistics_collector->collectRuntimeDetails();
     const auto & executor_statistics_res = executor_statistics_collector->getResult();
     auto it = executor_statistics_res.find(sender_executor_id);
     RUNTIME_CHECK_MSG(it != executor_statistics_res.end(), "Can't find exchange sender statistics after `collectRuntimeStatistics`");

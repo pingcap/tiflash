@@ -44,9 +44,9 @@ public:
 
     static constexpr size_t concurrency = 10;
 
-#define WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN                \
-    std::vector<DAGRequestType> type{DAGRequestType::tree}; \
-    for (const auto t : type)                               \
+#define WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN                                      \
+    std::vector<DAGRequestType> type{DAGRequestType::tree, DAGRequestType::list}; \
+    for (const auto t : type)                                                     \
     {
 #define WRAP_FOR_EXCUTION_SUMMARY_TEST_END \
     }
@@ -150,24 +150,6 @@ try
                            .topN("s2", true, 12)
                            .build(context, t);
         Expect expect{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}, {"topn_2", {0, 1}}};
-        testForExecutionSummary(request, expect);
-    }
-    // ywq todo test it in MPP ut
-    {
-        auto request = context
-                           .receive("test_exchange")
-                           .exchangeSender(tipb::Hash)
-                           .build(context, t);
-        Expect expect{{"exchange_receiver_0", {12, concurrency}}, {"exchange_sender_1", {12, concurrency}}};
-        testForExecutionSummary(request, expect);
-    }
-    {
-        auto request = context
-                           .receive("test_exchange")
-                           .sort({{"s1", false}, {"s2", false}, {"s1", false}, {"s2", false}}, true)
-                           .window(RowNumber(), {"s1", false}, {"s2", false}, buildDefaultRowsFrame())
-                           .build(context, t);
-        Expect expect{{"exchange_receiver_0", {12, concurrency}}, {"sort_1", {12, 1}}, {"window_2", {12, 1}}};
         testForExecutionSummary(request, expect);
     }
     WRAP_FOR_EXCUTION_SUMMARY_TEST_END

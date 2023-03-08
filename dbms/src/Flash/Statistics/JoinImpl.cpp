@@ -31,7 +31,6 @@ void JoinStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 }
 
 
-// ywq test todo time cal fix...
 void JoinStatistics::collectExtraRuntimeDetail()
 {
     const auto & join_execute_info_map = dag_context.getJoinExecuteInfoMap();
@@ -50,6 +49,11 @@ void JoinStatistics::collectExtraRuntimeDetail()
             }
         }
     }
+
+    /// In TiFlash, a hash join's build side is finished before probe side starts,
+    /// so the join probe side's running time does not include hash table's build time,
+    /// when construct ExecutionSummaries, we need add the build cost to probe executor
+    base.execution_time_ns += join_build_base.execution_time_ns;
 }
 
 JoinStatistics::JoinStatistics(const tipb::Executor * executor, DAGContext & dag_context_)

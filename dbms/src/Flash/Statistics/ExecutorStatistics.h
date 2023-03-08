@@ -51,7 +51,7 @@ public:
         });
     }
 
-    virtual String toJson() const override
+    String toJson() const override
     {
         FmtBuffer fmt_buffer;
         fmt_buffer.fmtAppend(
@@ -93,8 +93,6 @@ public:
                 }
             }
         }
-        
-        // ywq todo check here...
         if constexpr (ExecutorImpl::has_extra_info)
         {
             collectExtraRuntimeDetail();

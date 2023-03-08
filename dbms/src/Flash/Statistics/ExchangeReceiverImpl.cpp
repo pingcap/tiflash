@@ -61,6 +61,18 @@ void ExchangeReceiverStatistics::collectExtraRuntimeDetail()
             }
         }
     }
+
+    // Fill ExecutionSummary of ExchangeReceiver's children executors
+    for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
+    {
+        for (const auto & stream_ptr : map_entry.second)
+        {
+            if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()); exchange_receiver_stream_ptr)
+            {
+                exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
+            }
+        }
+    }
 }
 
 ExchangeReceiverStatistics::ExchangeReceiverStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
