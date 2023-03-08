@@ -59,15 +59,15 @@ void SchemaSyncService::addKeyspaceGCTasks()
         auto ks = iter.first;
         if (!ks_handle_map.count(ks))
         {
-            LOG_INFO(log, "add sync schema task for keyspace {}", ks);
-
+            auto ks_log = log->getChild(fmt::format("keyspace={}", ks));
+            LOG_INFO(ks_log, "add sync schema task");
             auto task_handle = background_pool.addTask(
-                [&, this, ks] {
+                [&, this, ks, ks_log] {
                     String stage;
                     bool done_anything = false;
                     try
                     {
-                        LOG_DEBUG(log, "sync schema for keyspace {}", ks);
+                        LOG_DEBUG(ks_log, "auto sync schema", ks);
                         /// Do sync schema first, then gc.
                         /// They must be performed synchronously,
                         /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
@@ -85,15 +85,15 @@ void SchemaSyncService::addKeyspaceGCTasks()
                     }
                     catch (const Exception & e)
                     {
-                        LOG_ERROR(log, "[keyspace {}] {} failed by {} \n stack : {}", ks, stage, e.displayText(), e.getStackTrace().toString());
+                        LOG_ERROR(ks_log, "{} failed by {} \n stack : {}", stage, e.displayText(), e.getStackTrace().toString());
                     }
                     catch (const Poco::Exception & e)
                     {
-                        LOG_ERROR(log, "[keyspace {}] {} failed by {}", ks, stage, e.displayText());
+                        LOG_ERROR(ks_log, "{} failed by {}", stage, e.displayText());
                     }
                     catch (const std::exception & e)
                     {
-                        LOG_ERROR(log, "[keyspace {}] {} failed by {}", ks, stage, e.what());
+                        LOG_ERROR(ks_log, "{} failed by {}", stage, e.what());
                     }
                     return false;
                 },
@@ -114,7 +114,8 @@ void SchemaSyncService::removeKeyspaceGCTasks()
     {
         if (!keyspaces.count(ks))
         {
-            LOG_INFO(log, "remove sync schema task for keyspace {}", ks);
+            auto ks_log = log->getChild(fmt::format("keyspace={}", ks));
+            LOG_INFO(ks_log, "remove sync schema task");
             ks_handle_map.erase(ks);
             background_pool.removeTask(task_handle);
         }

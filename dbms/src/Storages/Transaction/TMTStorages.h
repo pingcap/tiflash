@@ -34,8 +34,11 @@ class ManagedStorages : private boost::noncopyable
 public:
     void put(ManageableStoragePtr storage);
 
+    // Get storage by keyspace and table id
     ManageableStoragePtr get(KeyspaceID keyspace_id, TableID table_id) const;
+    // Get all the storages of all the keyspaces in this instance.
     StorageMap getAllStorage() const;
+    // Get all the existed keyspaces in this instance.
     KeyspaceSet getAllKeyspaces() const;
 
     ManageableStoragePtr getByName(const std::string & db, const std::string & table, bool include_tombstone) const;

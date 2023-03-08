@@ -48,8 +48,8 @@ bool GCManager::work()
     // Get a storage snapshot with weak_ptrs first
     // TODO: avoid gc on storage which have no data?
     std::map<KeyspaceTableID, std::weak_ptr<IManageableStorage>> storages;
-    for (const auto & [ks_tb_id, storage] : global_context.getTMTContext().getStorages().getAllStorage())
-        storages.emplace(ks_tb_id, storage);
+    for (const auto & [ks_tbl_id, storage] : global_context.getTMTContext().getStorages().getAllStorage())
+        storages.emplace(ks_tbl_id, storage);
     auto iter = storages.begin();
     if (next_keyspace_table_id != KeyspaceTableID{NullspaceID, InvalidTableID})
         iter = storages.lower_bound(next_keyspace_table_id);
@@ -74,13 +74,15 @@ bool GCManager::work()
 
         try
         {
+            auto keyspace_id = storage->getTableInfo().keyspace_id;
+            auto ks_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
             TableLockHolder table_read_lock = storage->lockForShare(RWLock::NO_QUERY);
             // Block this thread and do GC on the storage
-            // It is OK if any schema changes is apply to the storage while doing GC, so we
+            // It is OK if any schema changes is applied to the storage while doing GC, so we
             // do not acquire structure lock on the storage.
             auto gc_segments_num = storage->onSyncGc(gc_segments_limit, DM::GCOptions::newAll());
             gc_segments_limit = gc_segments_limit - gc_segments_num;
-            LOG_TRACE(log, "GCManager gc {} segments of keyspace {}, table {}", gc_segments_num, storage->getTableInfo().keyspace_id, storage->getTableInfo().id);
+            LOG_TRACE(ks_log, "GCManager gc {} segments of table {}", gc_segments_num, storage->getTableInfo().id);
             // Reach the limit on the number of segments to be gc, stop here
             if (gc_segments_limit <= 0)
                 break;

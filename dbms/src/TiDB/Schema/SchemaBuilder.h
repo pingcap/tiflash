@@ -34,7 +34,7 @@ struct SchemaBuilder
 
     Int64 target_version;
 
-    KeyspaceID keyspace_id;
+    const KeyspaceID keyspace_id;
 
     LoggerPtr log;
 

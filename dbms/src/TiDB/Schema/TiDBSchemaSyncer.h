@@ -105,6 +105,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     bool syncSchemas(Context & context, KeyspaceID keyspace_id) override
     {
         std::lock_guard lock(schema_mutex);
+        auto ks_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
         auto cur_version = cur_versions.try_emplace(keyspace_id, 0).first->second;
         auto getter = createSchemaGetter(keyspace_id);
 
@@ -116,7 +117,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         Stopwatch watch;
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
-        LOG_INFO(log, "[keyspace {}] Start to sync schemas. current version is: {} and try to sync schema version to: {}", keyspace_id, cur_version, version);
+        LOG_INFO(ks_log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", keyspace_id, cur_version, version);
 
         // Show whether the schema mutex is held for a long time or not.
         GET_METRIC(tiflash_schema_applying).Set(1.0);
@@ -139,7 +140,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         cur_versions[keyspace_id] = version_after_load_diff;
         // TODO: (keyspace) attach keyspace id to the metrics.
         GET_METRIC(tiflash_schema_version).Set(cur_version);
-        LOG_INFO(log, "[keyspace {}] End sync schema, version has been updated to {}{}", keyspace_id, cur_version, cur_version == version ? "" : "(latest diff is empty)");
+        LOG_INFO(ks_log, "End sync schema, version has been updated to {}{}", keyspace_id, cur_version, cur_version == version ? "" : "(latest diff is empty)");
         return true;
     }
 
