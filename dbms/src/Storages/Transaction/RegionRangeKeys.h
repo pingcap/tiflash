@@ -61,8 +61,8 @@ public:
 private:
     RegionRange ori;
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> raw;
-    TableID mapped_table_id;
-    KeyspaceID keyspace_id;
+    TableID mapped_table_id = InvalidTableID;
+    KeyspaceID keyspace_id = NullspaceID;
 };
 
 } // namespace DB
