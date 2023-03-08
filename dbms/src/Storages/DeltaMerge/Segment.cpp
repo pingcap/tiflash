@@ -35,10 +35,13 @@
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/PathPool.h>
+#include <Storages/S3/S3Filename.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
@@ -47,10 +50,6 @@
 
 #include <ext/scope_guard.h>
 #include <numeric>
-
-#include "Storages/DeltaMerge/Remote/ObjectId.h"
-#include "Storages/Page/V3/PageEntryCheckpointInfo.h"
-#include "Storages/S3/S3Filename.h"
 
 namespace ProfileEvents
 {

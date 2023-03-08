@@ -14,6 +14,8 @@
 
 #include <Common/Exception.h>
 #include <Interpreters/Context.h>
+#include <Poco/File.h>
+#include <Poco/Path.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
@@ -67,8 +69,7 @@ struct CheckpointUploadFunctor
     bool operator()(const PS::V3::LocalCheckpointFiles & checkpoint) const
     {
         // Persist checkpoint to remote_source
-        // Note that we use `upload_sequence` but not `snapshot.sequence` for
-        // the S3 key.
+
         return remote_store->putCheckpointFiles(checkpoint, store_id, sequence);
     }
 };
@@ -112,23 +113,32 @@ bool UniversalPageStorageService::uploadCheckpoint()
         wi.set_start_at_ms(store_info.start_timestamp() * 1000); // TODO: Check whether * 1000 is correct..
         auto * ri = wi.mutable_remote_info();
         ri->set_type_name("S3");
-        // ri->set_name(); FIXME: what does this field used for?
+        // ri->set_name(); this field is not used currently
     }
 
+    auto local_dir = Poco::Path(global_context.getTemporaryPath() + fmt::format("/checkpoint_upload_{}", upload_info.upload_sequence)).absolute();
+    Poco::File(local_dir).createDirectories();
+    auto local_dir_str = local_dir.toString() + "/";
+
     UniversalPageStorage::DumpCheckpointOptions opts{
-        .data_file_id_pattern = "",
-        .data_file_path_pattern = "",
-        .manifest_file_id_pattern = "",
-        .manifest_file_path_pattern = "",
+        .data_file_id_pattern = "{sequence}_{sub_file_index}.data",
+        .data_file_path_pattern = local_dir_str + "{sequence}_{sub_file_index}.data",
+        .manifest_file_id_pattern = "{sequence}.manifest",
+        .manifest_file_path_pattern = local_dir_str + "{sequence}.manifest",
         .writer_info = wi,
         .must_locked_files = upload_info.pre_lock_keys,
         .persist_checkpoint = CheckpointUploadFunctor{
             .store_id = store_info.id(),
+            // Note that we use `upload_sequence` but not `snapshot.sequence` for
+            // the S3 key.
             .sequence = upload_info.upload_sequence,
             .remote_store = remote_store,
         },
     };
     uni_page_storage->dumpIncrementalCheckpoint(opts);
+
+    // the checkpoint is uploaded to remote data store, remove local temp files
+    Poco::File(local_dir).remove(true);
 
     // always return false to run at fixed rate
     return false;
