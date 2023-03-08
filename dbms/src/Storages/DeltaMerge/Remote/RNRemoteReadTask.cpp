@@ -425,6 +425,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         log);
 
     // FIXME: get page_cache from context
+    UNUSED(task);
     RUNTIME_CHECK_MSG(false, "need to get page_cache from context");
     // task->page_cache = db_context.getDMRemoteManager()->getPageCache();
     task->segment = std::make_shared<Segment>(
