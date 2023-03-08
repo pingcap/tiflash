@@ -99,7 +99,7 @@ FetchPagesRequest::FetchPagesRequest(DM::RNRemoteSegmentReadTaskPtr seg_task_)
     *req->mutable_snapshot_id() = seg_task->snapshot_id.toMeta();
     req->set_table_id(seg_task->table_id);
     req->set_segment_id(seg_task->segment_id);
-    for (auto page_id : seg_task->pendingPageIds())
+    for (auto page_id : seg_task->cacheMissPageIds())
     {
         req->add_page_ids(page_id);
     }

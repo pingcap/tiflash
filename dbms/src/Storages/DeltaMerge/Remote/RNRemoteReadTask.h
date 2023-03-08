@@ -200,7 +200,7 @@ public:
         const LoggerPtr & log);
 
     // The page ids that is absent from local cache
-    const PageIdU64s & pendingPageIds() const { return pending_page_ids; }
+    const PageIdU64s & cacheMissPageIds() const { return page_ids_cache_miss; }
 
     size_t totalCFTinys() const { return total_num_cftiny; }
 
@@ -264,8 +264,9 @@ private:
     SegmentSnapshotPtr segment_snap;
 
     // The page ids need to fetch from write node
-    std::vector<UInt64> pending_page_ids;
+    std::vector<UInt64> page_ids_cache_miss;
     size_t total_num_cftiny;
+    Remote::RNLocalPageCacheGuardPtr local_cache_guard;
 
 public:
     std::atomic<size_t> num_msg_to_consume;

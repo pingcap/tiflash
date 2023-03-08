@@ -71,7 +71,7 @@ RNRemoteReadTask::RNRemoteReadTask(std::vector<RNRemoteTableReadTaskPtr> && task
             // can simply skip the fetch page pharse and
             // push it into ready queue
             total_num_cftiny += task->totalCFTinys();
-            total_num_cftiny_to_fetch += task->pendingPageIds().size();
+            total_num_cftiny_to_fetch += task->cacheMissPageIds().size();
 
             if (auto iter = ready_segment_tasks.find(task->state); iter != ready_segment_tasks.end())
             {
@@ -467,18 +467,19 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
 
         // FIXME: keep the guard to `task`?
         auto occupy_space_res = task->page_cache->occupySpace(all_persisted_ids, page_sizes);
-        task->pending_page_ids.reserve(occupy_space_res.pages_not_in_cache.size());
+        task->page_ids_cache_miss.reserve(occupy_space_res.pages_not_in_cache.size());
         for (const auto & oid : occupy_space_res.pages_not_in_cache)
         {
-            task->pending_page_ids.emplace_back(oid.page_id);
+            task->page_ids_cache_miss.emplace_back(oid.page_id);
         }
+        task->local_cache_guard = occupy_space_res.pages_guard;
         LOG_INFO(log,
-                 "mem-table cfs: {}, persisted cfs: {} (size={}), local cache hit rate: {}, pending_ids: {}, all_oids: {}",
+                 "mem-table cfs: {}, persisted cfs: {} (size={}), local cache hit rate: {}, cache_miss_oids: {}, all_oids: {}",
                  task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
                  task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
                  total_persisted_size,
-                 (all_persisted_ids.empty() ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * occupy_space_res.pages_not_in_cache.size() / all_persisted_ids.size())),
-                 task->pendingPageIds(),
+                 (all_persisted_ids.empty() ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * task->page_ids_cache_miss.size() / all_persisted_ids.size())),
+                 task->cacheMissPageIds(),
                  all_persisted_ids);
     }
 
