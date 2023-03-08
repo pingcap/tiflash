@@ -88,7 +88,7 @@ ColumnFileSetReader::ColumnFileSetReader(
         total_rows += f->getRows();
         column_file_rows.push_back(f->getRows());
         column_file_rows_end.push_back(total_rows);
-        column_file_readers.push_back(f->getReader(context, snapshot->getStorageSnapshot(), col_defs));
+        column_file_readers.push_back(f->getReader(context, snapshot->getDataProvider(), col_defs));
     }
 }
 

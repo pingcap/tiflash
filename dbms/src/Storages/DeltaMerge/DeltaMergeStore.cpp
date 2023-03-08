@@ -426,10 +426,10 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     // Because db_context could be a temporary object and won't last long enough during the query process.
     // Like the context created by InterpreterSelectWithUnionQuery.
     auto * ctx = new DMContext(db_context.getGlobalContext(),
-                               *path_pool,
-                               *storage_pool,
+                               path_pool,
+                               storage_pool,
                                latest_gc_safe_point.load(std::memory_order_acquire),
-                               settings.not_compress_columns,
+                               physical_table_id,
                                is_common_handle,
                                rowkey_column_size,
                                db_settings,
