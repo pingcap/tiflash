@@ -21,6 +21,7 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <aws/s3/model/DeleteBucketRequest.h>
 #include <common/logger_useful.h>
@@ -38,22 +39,24 @@ class S3LockLocalManagerTest : public testing::Test
 {
 public:
     S3LockLocalManagerTest()
-        : s3_client(S3::ClientFactory::instance().sharedTiFlashClient())
+        : s3_client(S3::ClientFactory::instance().sharedClient())
+        , bucket(S3::ClientFactory::instance().bucket())
         , log(Logger::get())
     {}
 
     void SetUp() override
     {
-        ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, s3_client->bucket());
+        ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket);
     }
 
     void TearDown() override
     {
-        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client, s3_client->bucket());
+        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client, bucket);
     }
 
 protected:
-    std::shared_ptr<S3::TiFlashS3Client> s3_client;
+    std::shared_ptr<Aws::S3::S3Client> s3_client;
+    String bucket;
     LoggerPtr log;
 };
 
@@ -62,7 +65,7 @@ try
 {
     StoreID this_store_id = 100;
     PS::V3::S3LockLocalManager mgr;
-    auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(S3::ClientFactory::instance().sharedTiFlashClient());
+    auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client, bucket);
     mgr.initStoreInfo(this_store_id, mock_s3lock_client);
 
     auto info = mgr.allocateNewUploadLocksInfo();
@@ -78,7 +81,7 @@ try
     auto s3name_dtfile = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = old_store_id, .table_id = 10, .file_id = 5});
     auto s3name_datafile = S3::S3Filename::newCheckpointData(old_store_id, old_store_seq, 1);
     {
-        S3::uploadEmptyFile(*s3_client, s3_client->bucket(), s3name_dtfile.toFullKey());
+        S3::uploadEmptyFile(*s3_client, bucket, s3name_dtfile.toFullKey());
         PS::V3::CheckpointLocation loc{
             .data_file_id = std::make_shared<String>(s3name_dtfile.toFullKey()),
             .offset_in_file = 0,
@@ -88,7 +91,7 @@ try
     }
     {
         auto key = std::make_shared<String>(s3name_datafile.toFullKey());
-        S3::uploadEmptyFile(*s3_client, s3_client->bucket(), *key);
+        S3::uploadEmptyFile(*s3_client, bucket, *key);
         PS::V3::CheckpointLocation loc2{
             .data_file_id = key,
             .offset_in_file = 0,
@@ -114,8 +117,8 @@ try
     ASSERT_GT(info.pre_lock_keys.count(expected_lockkey1), 0) << fmt::format("{}", lock_by_seq);
     const String expected_lockkey2 = s3name_dtfile.toView().getLockKey(this_store_id, info.upload_sequence);
     ASSERT_GT(info.pre_lock_keys.count(expected_lockkey2), 0) << fmt::format("{}", info.pre_lock_keys);
-    EXPECT_TRUE(S3::objectExists(*s3_client, s3_client->bucket(), expected_lockkey1));
-    EXPECT_TRUE(S3::objectExists(*s3_client, s3_client->bucket(), expected_lockkey2));
+    EXPECT_TRUE(S3::objectExists(*s3_client, bucket, expected_lockkey1));
+    EXPECT_TRUE(S3::objectExists(*s3_client, bucket, expected_lockkey2));
 
     // pre_lock_keys won't be cleaned after `allocateNewUploadLocksInfo`
     info = mgr.allocateNewUploadLocksInfo();
@@ -137,7 +140,7 @@ try
 {
     StoreID this_store_id = 100;
     PS::V3::S3LockLocalManager mgr;
-    auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(S3::ClientFactory::instance().sharedTiFlashClient());
+    auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client, bucket);
     mgr.initStoreInfo(this_store_id, mock_s3lock_client);
 
     // Mock FAP ingest following pages from another store
@@ -149,7 +152,7 @@ try
     auto s3name_dtfile = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = old_store_id, .table_id = 10, .file_id = 5});
     auto s3name_datafile = S3::S3Filename::newCheckpointData(old_store_id, old_store_seq, 1);
     {
-        S3::uploadEmptyFile(*s3_client, s3_client->bucket(), s3name_dtfile.toFullKey());
+        S3::uploadEmptyFile(*s3_client, bucket, s3name_dtfile.toFullKey());
         PS::V3::CheckpointLocation loc{
             .data_file_id = std::make_shared<String>(s3name_dtfile.toFullKey()),
             .offset_in_file = 0,
@@ -159,7 +162,7 @@ try
     }
     {
         auto key = std::make_shared<String>(s3name_datafile.toFullKey());
-        S3::uploadEmptyFile(*s3_client, s3_client->bucket(), *key);
+        S3::uploadEmptyFile(*s3_client, bucket, *key);
         PS::V3::CheckpointLocation loc2{
             .data_file_id = key,
             .offset_in_file = 0,

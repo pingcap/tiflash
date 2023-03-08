@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <IO/ReadBufferFromRandomAccessFile.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
@@ -21,6 +22,8 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB::PS::V3::tests
 {
@@ -637,7 +640,7 @@ try
     writer->writeSuffix();
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_1");
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
