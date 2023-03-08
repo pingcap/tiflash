@@ -621,7 +621,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
         if (unlikely(context.isTest()))
+        {
             handleMockTableScan(table_scan, pipeline);
+            recordProfileStreams(pipeline, query_block.source_name);
+        }
         else
             handleTableScan(table_scan, pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;

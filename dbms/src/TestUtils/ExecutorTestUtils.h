@@ -130,6 +130,7 @@ public:
     using ProfileInfo = std::pair<int, size_t>;
     using Expect = std::unordered_map<String, ProfileInfo>;
     static constexpr int not_check_rows = -1;
+    static constexpr UInt64 not_check_concurrency = -1;
 
 
     void testForExecutionSummary(

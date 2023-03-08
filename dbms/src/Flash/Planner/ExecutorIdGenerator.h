@@ -33,9 +33,6 @@ public:
         assert(!executor_id.empty());
         RUNTIME_CHECK(ids.find(executor_id) == ids.end(), executor_id);
         ids.insert(executor_id);
-
-        auto * mutable_executor = const_cast<tipb::Executor *>(&executor);
-        mutable_executor->set_executor_id(executor_id);
         return executor_id;
     }
 

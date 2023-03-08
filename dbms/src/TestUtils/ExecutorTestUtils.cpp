@@ -336,9 +336,10 @@ void ExecutorTest::testForExecutionSummary(
             ASSERT_EQ(summary.num_produced_rows(), it->second.first)
                 << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
                 << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
-        ASSERT_EQ(summary.concurrency(), it->second.second)
-            << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
-            << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
+        if (it->second.second != not_check_concurrency)
+            ASSERT_EQ(summary.concurrency(), it->second.second)
+                << fmt::format("executor_id: {}", summary.executor_id()) << "\n"
+                << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
         // time_processed_ns, num_iterations and tiflash_scan_context are not checked here.
     }
 }

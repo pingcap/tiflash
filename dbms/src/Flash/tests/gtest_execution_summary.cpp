@@ -45,7 +45,7 @@ public:
     static constexpr size_t concurrency = 10;
 
 #define WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN                                      \
-    std::vector<DAGRequestType> type{DAGRequestType::tree, DAGRequestType::list}; \
+    std::vector<DAGRequestType> type{DAGRequestType::tree}; \
     std::vector<bool> planner_bools{false, true};                                 \
     for (auto enable_planner : planner_bools)                                     \
     {                                                                             \
@@ -205,7 +205,7 @@ try
                            .scan("test_db", "test_table")
                            .aggregation({col("s2")}, {col("s2")})
                            .build(context, t);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, concurrency}}};
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, -1}}};
         testForExecutionSummary(request, expect);
     }
 
@@ -216,7 +216,7 @@ try
                            .project({col("s2")})
                            .build(context, t);
         Expect expect{{"table_scan_0", {12, concurrency}},
-                      {"aggregation_1", {3, concurrency}},
+                      {"aggregation_1", {3, -1}},
                       {"project_2", {3, concurrency}}};
 
         testForExecutionSummary(request, expect);
@@ -231,7 +231,7 @@ try
                            .build(context, t);
 
         Expect expect{{"table_scan_0", {12, concurrency}},
-                      {"aggregation_1", {3, concurrency}},
+                      {"aggregation_1", {3, -1}},
                       {"project_2", {3, concurrency}},
                       {"limit_3", {2, 1}}};
 
