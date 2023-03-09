@@ -32,6 +32,9 @@ namespace ProfileEvents
 {
 extern const Event S3GetObject;
 extern const Event S3ReadBytes;
+extern const Event FileCacheHit;
+extern const Event FileCacheMiss;
+extern const Event FileCacheEvict;
 } // namespace ProfileEvents
 
 namespace DB::ErrorCodes
@@ -80,13 +83,16 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname)
         f->setLastAccessTime(std::chrono::system_clock::now());
         if (f->isReadyToRead())
         {
+            ProfileEvents::increment(ProfileEvents::FileCacheHit);
             return f;
         }
         else
         {
+            ProfileEvents::increment(ProfileEvents::FileCacheMiss);
             return nullptr;
         }
     }
+    ProfileEvents::increment(ProfileEvents::FileCacheMiss);
 
     if (!canCache(file_type))
     {
@@ -163,7 +169,7 @@ std::pair<UInt64, std::list<String>::iterator> FileCache::removeImpl(LRUFileTabl
     {
         return {0, {}};
     }
-
+    ProfileEvents::increment(ProfileEvents::FileCacheEvict);
     const auto & local_fname = f->getLocalFileName();
     removeDiskFile(local_fname);
     auto temp_fname = toTemporaryFilename(local_fname);
