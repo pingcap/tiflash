@@ -282,7 +282,8 @@ void deserializePutExternalFrom([[maybe_unused]] const EditRecordType record_typ
         readIntBinary(flags, buf);
         if (isCheckpointInfoExists(flags))
         {
-            CheckpointInfo checkpoint_info;
+            OptionalCheckpointInfo checkpoint_info = std::nullopt;
+            checkpoint_info.is_set = true;
             checkpoint_info.is_local_data_reclaimed = true;
             readIntBinary(checkpoint_info.data_location.offset_in_file, buf);
             readIntBinary(checkpoint_info.data_location.size_in_file, buf);
