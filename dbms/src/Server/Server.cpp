@@ -874,6 +874,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
 
+    if (storage_config.format_version)
+    {
+        setStorageFormat(storage_config.format_version);
+        LOG_INFO(log, "Using format_version={} (explicit stable storage format detected).", storage_config.format_version);
+    }
+    else
+    {
+        LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
+    }
+
     if (STORAGE_FORMAT_CURRENT.page == PageFormat::V4)
     {
         LOG_INFO(log, "use unips for proxy");
@@ -881,7 +891,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     else
     {
-        LOG_INFO(log, "not use unips for proxy");
+        LOG_INFO(log, "not use unips for proxy current {}", STORAGE_FORMAT_CURRENT.page);
     }
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
@@ -993,16 +1003,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             throw Exception("Cannot support S3 when encryption enabled.");
         }
         S3::ClientFactory::instance().init(storage_config.s3_config);
-    }
-
-    if (storage_config.format_version)
-    {
-        setStorageFormat(storage_config.format_version);
-        LOG_INFO(log, "Using format_version={} (explicit stable storage format detected).", storage_config.format_version);
-    }
-    else
-    {
-        LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
     }
 
     global_context->initializePathCapacityMetric( //
