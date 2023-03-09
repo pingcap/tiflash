@@ -879,7 +879,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (storage_config.format_version)
     {
         setStorageFormat(storage_config.format_version);
-        LOG_INFO(log, "Using format_version={} (explicit stable storage format detected).", storage_config.format_version);
+        LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
     }
     else
     {
@@ -894,12 +894,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (STORAGE_FORMAT_CURRENT.page == PageFormat::V4)
     {
-        LOG_INFO(log, "use unips for proxy");
+        LOG_INFO(log, "Using unips for proxy");
         proxy_conf.addExtraArgs("unips-enabled", "1");
     }
     else
     {
-        LOG_INFO(log, "not use unips for proxy current {}", STORAGE_FORMAT_CURRENT.page);
+        LOG_INFO(log, "unips is not enabled for proxy, page_version={}", STORAGE_FORMAT_CURRENT.page);
     }
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
