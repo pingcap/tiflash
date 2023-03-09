@@ -245,7 +245,7 @@ void serializePutExternalTo(const EditRecord & record, WriteBuffer & buf)
         UInt32 flags = 0;
         if (record.entry.checkpoint_info.has_value())
         {
-            setCheckpointInfoExists(flags);
+            flags = setCheckpointInfoExists(flags);
             writeIntBinary(flags, buf);
             writeIntBinary(record.entry.checkpoint_info->data_location.offset_in_file, buf);
             writeIntBinary(record.entry.checkpoint_info->data_location.size_in_file, buf);
