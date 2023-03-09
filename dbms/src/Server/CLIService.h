@@ -85,7 +85,7 @@ struct CLIService : public BaseDaemon
     Func func;
     RaftStoreFFIFunc ffi_function;
     const Args & args;
-    DB::ContextPtr global_context;
+    std::unique_ptr<DB::Context> global_context;
 
     explicit CLIService(Func func_, const Args & args_, const std::string & config_file, RaftStoreFFIFunc ffi_function = nullptr);
 

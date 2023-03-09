@@ -45,12 +45,12 @@ struct SharedContextDisagg : private boost::noncopyable
 
     bool use_autoscaler = true; // TODO: remove this after AutoScaler is stable. Only meaningful in DisaggregatedComputeMode.
 
+    DM::Remote::IDataStorePtr remote_data_store;
+
     /// The PS instance available on Read Node.
     UniversalPageStorageServicePtr rn_cache_ps;
     /// The page cache in Read Node. It uses ps_rn_page_cache as storage to cache page data to local disk based on the LRU mechanism.
     DB::DM::Remote::RNLocalPageCachePtr rn_cache;
-
-    DM::Remote::IDataStorePtr remote_data_store;
 
     static SharedContextDisaggPtr create(Context & global_context_) { return std::make_shared<SharedContextDisagg>(global_context_); }
 

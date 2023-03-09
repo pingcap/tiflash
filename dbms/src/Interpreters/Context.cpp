@@ -309,9 +309,9 @@ private:
 Context::Context() = default;
 
 
-ContextPtr Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
+std::unique_ptr<Context> Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
 {
-    std::shared_ptr<Context> res(new Context());
+    std::unique_ptr<Context> res(new Context());
     res->setGlobalContext(*res);
     res->runtime_components_factory = runtime_components_factory;
     res->shared = std::make_shared<ContextShared>(runtime_components_factory);
@@ -321,7 +321,7 @@ ContextPtr Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runt
     return res;
 }
 
-ContextPtr Context::createGlobal()
+std::unique_ptr<Context> Context::createGlobal()
 {
     return createGlobal(std::make_unique<RuntimeComponentsFactory>());
 }

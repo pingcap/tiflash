@@ -151,7 +151,7 @@ private:
 
     bool has_vertical_output_suffix = false; /// Is \G present at the end of the query string?
 
-    ContextPtr context = Context::createGlobal();
+    std::unique_ptr<Context> context = Context::createGlobal();
 
     /// Buffer that reads from stdin in batch mode.
     ReadBufferFromFileDescriptor std_in{STDIN_FILENO};

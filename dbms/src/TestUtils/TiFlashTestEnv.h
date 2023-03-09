@@ -112,6 +112,6 @@ public:
     TiFlashTestEnv() = delete;
 
 private:
-    static std::vector<std::shared_ptr<Context>> global_contexts;
+    static std::vector<ContextPtr> global_contexts;
 };
 } // namespace DB::tests
