@@ -266,7 +266,7 @@ public:
     bool reserveSpace(FileSegment::FileType reserve_for, UInt64 size, bool try_evict);
     bool finalizeReservedSize(FileSegment::FileType reserve_for, UInt64 reserved_size, UInt64 content_length);
     void tryEvictFile(FileSegment::FileType evict_for, UInt64 size);
-    UInt64 tryEvictFrom(FileSegment::FileType file_type, UInt64 size, FileSegment::FileType evict_from);
+    UInt64 tryEvictFrom(FileSegment::FileType evict_for, UInt64 size, FileSegment::FileType evict_from);
 
     // This function is used for test.
     std::vector<FileSegmentPtr> getAll();
