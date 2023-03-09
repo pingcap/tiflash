@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -50,7 +51,7 @@ static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tm
     fiu_do_on(FailPoints::force_no_local_region_for_mpp_task, { return true; });
     // For tiflash_compute node, all regions will be fetched from tiflash_storage node.
     // So treat all regions as remote regions.
-    if (tmt_context.getContext().isDisaggregatedComputeMode())
+    if (tmt_context.getContext().getSharedContextDisagg()->isDisaggregatedComputeMode())
         return true;
     RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
     if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)

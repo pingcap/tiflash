@@ -52,6 +52,7 @@
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/loadMetadata.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Net/HTTPServer.h>
@@ -939,11 +940,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
       */
-    global_context = std::make_unique<Context>(Context::createGlobal());
-    global_context->setGlobalContext(*global_context);
+    global_context = Context::createGlobal();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
-    global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
-    global_context->setUseAutoScaler(useAutoScaler(config()));
+    global_context->getSharedContextDisagg()->disaggregated_mode = getDisaggregatedMode(config());
+    global_context->getSharedContextDisagg()->use_autoscaler = useAutoScaler(config());
 
     /// Init File Provider
     bool enable_encryption = false;
@@ -988,7 +988,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         S3::ClientFactory::instance().init(storage_config.s3_config);
     }
-    global_context->initializeRemoteDataStore(global_context->getFileProvider(), storage_config.s3_config.isS3Enabled());
+    global_context->getSharedContextDisagg()->initRemoteDataStore(global_context->getFileProvider(), storage_config.s3_config.isS3Enabled());
 
     if (storage_config.format_version)
     {
@@ -1008,8 +1008,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.main_capacity_quota, //
         storage_config.latest_data_paths,
         storage_config.latest_capacity_quota,
-        global_context->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.dir : "",
-        global_context->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.capacity : 0);
+        global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.dir : "",
+        global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.capacity : 0);
     TiFlashRaftConfig raft_config = TiFlashRaftConfig::parseSettings(config(), log);
     global_context->setPathPool( //
         storage_config.main_data_paths, //
@@ -1153,11 +1153,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
-    if (global_context->isDisaggregatedStorageMode())
+    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
 
-    if (global_context->isDisaggregatedComputeMode())
-        global_context->initializeReadNodePageCacheIfNeed(
+    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+        global_context->getSharedContextDisagg()->initReadNodePageCache(
             global_context->getPathPool(),
             storage_config.remote_cache_config.getPageCacheDir(),
             storage_config.remote_cache_config.getPageCapacity());
@@ -1268,7 +1268,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
 
-    if (!global_context->isDisaggregatedComputeMode())
+    if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         /// Then, sync schemas with TiDB, and initialize schema sync service.
         /// If in API V2 mode, each keyspace's schema is fetch lazily.

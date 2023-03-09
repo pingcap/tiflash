@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Config.h>
@@ -32,8 +33,6 @@
 namespace DB
 {
 class UniversalWriteBatch;
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;
