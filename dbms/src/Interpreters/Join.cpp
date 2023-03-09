@@ -1196,7 +1196,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         }
 #ifdef DBMS_PUBLIC_GTEST
         // for join spill to disk gtest
-        if (restore_round == 1)
+        if (restore_round == 2)
             return;
 #endif
         spillMostMemoryUsedPartitionIfNeed();
@@ -3030,7 +3030,13 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         if (restore_round == 1 && spilled_partition_indexes.size() >= partitions.size() / 2)
             return;
 #endif
-        if (max_bytes_before_external_join && getTotalByteCount() <= max_bytes_before_external_join)
+        if (!disable_spill && restore_round >= 4)
+        {
+            LOG_DEBUG(log, fmt::format("restore round reach to 4, spilling will be disabled."));
+            disable_spill = true;
+            return;
+        }
+        if ((max_bytes_before_external_join && getTotalByteCount() <= max_bytes_before_external_join) || disable_spill)
         {
             return;
         }
