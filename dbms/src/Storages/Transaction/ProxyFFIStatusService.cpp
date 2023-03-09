@@ -38,21 +38,31 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         auto * log = &Poco::Logger::get("HandleHttpRequestSyncStatus");
         LOG_DEBUG(log, "handling sync status request, path: {}, api_name: {}", path, api_name);
 
-        // Query schema: /keyspace/{keyspace_id}/table/{table_id}
+        // Try to handle sync status request with old schema.
+        // Old schema: /{table_id}
+        // New schema: /keyspace/{keyspace_id}/table/{table_id}
         auto query = path.substr(api_name.size());
         std::vector<std::string> query_parts;
         boost::split(query_parts, query, boost::is_any_of("/"));
-        if (query_parts.size() < 4 || query_parts[0] != "keyspace" || query_parts[2] != "table")
+        if (query_parts.size() != 1 && (query_parts.size() != 4 || query_parts[0] != "keyspace" || query_parts[2] != "table"))
         {
             LOG_ERROR(log, "invalid SyncStatus request: {}", query);
             status = HttpRequestStatus::ErrorParam;
             return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
         }
 
+
         try
         {
-            keyspace_id = std::stoll(query_parts[1]);
-            table_id = std::stoll(query_parts[3]);
+            if (query_parts.size() == 4)
+            {
+                keyspace_id = std::stoll(query_parts[1]);
+                table_id = std::stoll(query_parts[3]);
+            }
+            else
+            {
+                table_id = std::stoll(query_parts[0]);
+            }
         }
         catch (...)
         {
