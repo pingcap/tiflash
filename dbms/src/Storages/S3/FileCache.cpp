@@ -25,6 +25,7 @@
 #include <Storages/S3/S3Common.h>
 #include <aws/s3/model/GetObjectRequest.h>
 
+#include <atomic>
 #include <chrono>
 #include <fstream>
 
@@ -96,7 +97,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname)
 
     if (!canCache(file_type))
     {
-        // Don't cache this file type.
+        // Don't cache this file type or too many downloading task.
         return nullptr;
     }
 
@@ -291,7 +292,8 @@ void FileCache::releaseSpace(UInt64 size)
 
 bool FileCache::canCache(FileType file_type) const
 {
-    return static_cast<UInt64>(file_type) <= cache_level;
+    return static_cast<UInt64>(file_type) <= cache_level ||
+        bg_downloading_count.load(std::memory_order_relaxed) >= IOThreadPool::get().getMaxThreads();
 }
 
 FileType FileCache::getFileTypeOfColData(const std::filesystem::path & p)
