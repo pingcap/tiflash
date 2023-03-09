@@ -54,7 +54,7 @@ void MockExchangeReceiverInputStream::initTotalRows()
 MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const ColumnsWithTypeAndName & columns, size_t max_block_size)
     : max_block_size(max_block_size)
 {
-    assert(columns.size() > 0);
+    assert(!columns.empty());
     columns_vector.push_back(columns);
     initTotalRows();
 }
@@ -63,7 +63,7 @@ MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const std::vect
     : columns_vector(columns_vector_)
     , max_block_size(max_block_size)
 {
-    assert(columns_vector.size() > 0 && columns_vector[0].size() > 0);
+    assert(!columns_vector.empty() && !columns_vector[0].empty());
     initTotalRows();
 }
 
