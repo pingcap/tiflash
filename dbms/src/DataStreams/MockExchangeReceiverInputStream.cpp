@@ -85,6 +85,7 @@ Block MockExchangeReceiverInputStream::readImpl()
     if (output_rows >= rows)
         return {};
     ColumnsWithTypeAndName output_columns;
+    assert(columns_vector.size() > output_columns_index);
     for (const auto & elem : columns_vector[output_columns_index])
     {
         output_columns.push_back({makeColumn(elem), elem.type, elem.name, elem.column_id});
