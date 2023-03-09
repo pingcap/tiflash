@@ -53,6 +53,8 @@ public:
 
     void execute(DAGPipeline & pipeline);
 
+    void execute(PipelineExecGroupBuilder & group_builder);
+
     /// Members will be transferred to DAGQueryBlockInterpreter after execute
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
@@ -72,13 +74,25 @@ private:
         const SelectQueryInfo & query_info,
         const RegionException & e,
         int num_allow_retry);
+    
     DM::Remote::DisaggPhysicalTableReadSnapshotPtr
     buildLocalStreamsForPhysicalTable(
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         DAGPipeline & pipeline,
         size_t max_block_size);
+
+    void buildLocalOperatorsForPhysicalTable(
+         const TableID & table_id,
+        const SelectQueryInfo & query_info,
+        PipelineExecGroupBuilder & group_builder,
+        size_t max_block_size);
+
+
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
+
+    void buildLocalOperators(PipelineExecGroupBuilder & group_builder, size_t max_block_size);
+
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
@@ -104,6 +118,7 @@ private:
     void prepare();
 
     void executeImpl(DAGPipeline & pipeline);
+    void executeImpl(PipelineExecGroupBuilder & group_builder);
 
 private:
     std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
