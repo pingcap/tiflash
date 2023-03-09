@@ -203,7 +203,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
             break;
         case EditRecordType::PUT_EXTERNAL:
         {
-            auto holder = version_list->createNewExternal(restored_version);
+            auto holder = version_list->createNewExternal(restored_version, r.entry);
             if (holder)
             {
                 *holder = r.page_id;

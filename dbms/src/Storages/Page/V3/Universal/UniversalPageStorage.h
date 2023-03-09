@@ -134,6 +134,8 @@ public:
 
     DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
 
+    std::optional<DB::PS::V3::CheckpointLocation> getCheckpointLocation(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
+
     void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client) const;
 
     PS::V3::S3LockLocalManager::ExtraLockInfo allocateNewUploadLocksInfo() const;

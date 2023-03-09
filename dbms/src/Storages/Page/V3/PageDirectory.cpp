@@ -208,7 +208,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
 // If create success, then return a shared_ptr as a holder for page_id. The holder
 // will be release when this external version is totally removed.
 template <typename Trait>
-std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntries<Trait>::createNewExternal(const PageVersion & ver)
+std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntries<Trait>::createNewExternal(const PageVersion & ver, const PageEntryV3 & entry)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_DELETE)
@@ -218,6 +218,8 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
         create_ver = ver;
         delete_ver = PageVersion(0);
         being_ref_count = 1;
+        RUNTIME_CHECK(entries.empty());
+        entries.emplace(create_ver, EntryOrDelete::newNormalEntry(entry));
         // return the new created holder to caller to set the page_id
         external_holder = std::make_shared<typename Trait::PageId>();
         return external_holder;
@@ -234,6 +236,7 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
                 create_ver = ver;
                 delete_ver = PageVersion(0);
                 being_ref_count = 1;
+                entries.emplace(create_ver, EntryOrDelete::newNormalEntry(entry));
                 // return the new created holder to caller to set the page_id
                 external_holder = std::make_shared<typename Trait::PageId>();
                 return external_holder;
@@ -458,6 +461,10 @@ VersionedPageEntries<Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, Pag
         bool ok = ignore_delete || (!is_deleted || seq < delete_ver.sequence);
         if (create_ver.sequence <= seq && ok)
         {
+            auto iter = entries.find(create_ver);
+            RUNTIME_CHECK(iter != entries.end());
+            if (entry != nullptr)
+                *entry = iter->second.entry;
             return {ResolveResult::TO_NORMAL, Trait::PageIdTrait::getInvalidID(), PageVersion(0)};
         }
     }
@@ -865,7 +872,9 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
     {
         if (create_ver.sequence > seq)
             return;
-        edit.varExternal(page_id, create_ver, being_ref_count);
+        auto iter = entries.find(create_ver);
+        RUNTIME_CHECK(iter != entries.end());
+        edit.varExternal(page_id, create_ver, iter->second.entry, being_ref_count);
         if (is_deleted && delete_ver.sequence <= seq)
         {
             edit.varDel(page_id, delete_ver);
@@ -1479,7 +1488,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 {
                 case EditRecordType::PUT_EXTERNAL:
                 {
-                    auto holder = version_list->createNewExternal(r.version);
+                    auto holder = version_list->createNewExternal(r.version, r.entry);
                     if (holder)
                     {
                         // put the new created holder into `external_ids`

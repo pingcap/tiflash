@@ -171,7 +171,7 @@ public:
 
     bool createNewRef(const PageVersion & ver, const PageId & ori_page_id);
 
-    std::shared_ptr<PageId> createNewExternal(const PageVersion & ver);
+    std::shared_ptr<PageId> createNewExternal(const PageVersion & ver, const PageEntryV3 & entry);
 
     void createDelete(const PageVersion & ver);
 
