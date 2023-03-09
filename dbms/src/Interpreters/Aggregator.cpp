@@ -838,7 +838,7 @@ SpilledRestoreMergingBucketsPtr Aggregator::restoreSpilledData(bool final)
     for (UInt64 partition_id = 0; partition_id < spiller->getPartitionNum(); ++partition_id)
     {
         if (spiller->hasSpilledData(partition_id))
-            ret.push_back(spiller->restoreBlocks(partition_id, 1));
+            ret.push_back(spiller->restoreBlocks(partition_id, /*max_stream_size=*/1));
     }
     if (ret.empty())
         return nullptr;

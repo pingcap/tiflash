@@ -37,7 +37,6 @@ Block SpilledFilesInputStream::readImpl()
     Block ret = current_file_stream->block_in->read();
     if (ret)
         return ret;
-    spilled_file_infos.begin();
     for (++current_reading_file_index; current_reading_file_index < static_cast<int64_t>(spilled_file_infos.size()); ++current_reading_file_index)
     {
         current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[current_reading_file_index]),
