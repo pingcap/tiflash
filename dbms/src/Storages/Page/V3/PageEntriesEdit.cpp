@@ -39,6 +39,11 @@ CheckpointProto::EditRecord PageEntriesEdit<UniversalPageId>::EditRecord::toProt
             proto_edit.add_entry_fields_checksum(checksum);
         }
     }
+    if (type == EditRecordType::VAR_EXTERNAL)
+    {
+        RUNTIME_CHECK(entry.checkpoint_info.has_value());
+        proto_edit.mutable_entry_location()->CopyFrom(entry.checkpoint_info->data_location.toProto());
+    }
     return proto_edit;
 }
 
@@ -73,6 +78,13 @@ typename PageEntriesEdit<UniversalPageId>::EditRecord PageEntriesEdit<UniversalP
         }
         // Note: rec.entry.* is untouched, leaving zero value.
         // We need to take care when restoring the PS instance.
+    }
+    if (rec.type == EditRecordType::VAR_EXTERNAL)
+    {
+        rec.entry.checkpoint_info = CheckpointInfo{
+            .data_location = CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map),
+            .is_local_data_reclaimed = true,
+        };
     }
     return rec;
 }
