@@ -359,7 +359,7 @@ TEST_F(CheckpointFileTest, FromBlobStore)
 try
 {
     const auto delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(std::vector{dir});
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto blob_store = BlobStore<universal::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, BlobConfig{});
 
     auto edits = universal::PageEntriesEdit{};

@@ -123,7 +123,7 @@ protected:
         {
             // Maybe another test has already registed, ignore exception here.
         }
-        String path = TiFlashTestEnv::getContext().getPath();
+        String path = TiFlashTestEnv::getContext()->getPath();
         auto p = path + "/metadata/";
         TiFlashTestEnv::tryCreatePath(p);
         p = path + "/data/";

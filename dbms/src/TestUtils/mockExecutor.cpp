@@ -108,7 +108,7 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
     initDAGRequest(dag_request);
-    root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, mock_context.context);
+    root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, *mock_context.context);
     root.reset();
     executor_index = 0;
 
@@ -145,8 +145,8 @@ void columnPrune(mock::ExecutorBinderPtr executor)
 QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties)
 {
     columnPrune(root);
-    mock_context.context.setMPPTest();
-    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
+    mock_context.context->setMPPTest();
+    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, *mock_context.context);
     root.reset();
     executor_index = 0;
     return query_tasks;
@@ -158,8 +158,8 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     DAGProperties properties;
     properties.is_mpp_query = true;
     properties.mpp_partition_num = 1;
-    mock_context.context.setMPPTest();
-    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
+    mock_context.context->setMPPTest();
+    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, *mock_context.context);
     root.reset();
     executor_index = 0;
     return query_tasks;
@@ -439,7 +439,7 @@ void MockDAGRequestContext::addMockDeltaMergeData(const String & db, const Strin
     for (const auto & column : columns)
         RUNTIME_ASSERT(!column.name.empty(), "mock column must have column name");
 
-    mock_storage->addTableDataForDeltaMerge(context, db + "." + table, columns);
+    mock_storage->addTableDataForDeltaMerge(*context, db + "." + table, columns);
 }
 
 void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns)

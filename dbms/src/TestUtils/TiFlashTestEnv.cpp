@@ -16,6 +16,7 @@
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
@@ -160,7 +161,12 @@ void TiFlashTestEnv::addGlobalContext(const DB::Settings & settings_, Strings te
     global_context->initializeSharedBlockSchemas(10000);
 }
 
-Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
+ContextPtr TiFlashTestEnv::getContext()
+{
+    return getContext({});
+}
+
+ContextPtr TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
 {
     Context context = *global_contexts[0];
     context.setGlobalContext(*global_contexts[0]);
@@ -179,7 +185,12 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
     global_contexts[0]->initializeWriteNodePageStorageIfNeed(context.getPathPool());
     context.getSettingsRef() = settings;
-    return context;
+    return std::make_shared<Context>(context);
+}
+
+FileProviderPtr TiFlashTestEnv::getDefaultFileProvider()
+{
+    return global_contexts[0]->getFileProvider();
 }
 
 void TiFlashTestEnv::shutdown()

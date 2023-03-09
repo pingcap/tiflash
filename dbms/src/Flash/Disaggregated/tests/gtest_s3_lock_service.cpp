@@ -43,7 +43,7 @@ public:
     void SetUp() override
     try
     {
-        db_context = std::make_unique<Context>(DB::tests::TiFlashTestEnv::getContext());
+        db_context = DB::tests::TiFlashTestEnv::getContext();
         log = Logger::get();
 
         auto & client_factory = DB::S3::ClientFactory::instance();

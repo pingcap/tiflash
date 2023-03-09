@@ -29,7 +29,7 @@ public:
     {
         ExecutorTest::initializeContext();
 
-        context.context.setExecutorTest();
+        context.context->setExecutorTest();
 
         context.addMockTable({"test_db", "test_table"},
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
@@ -53,10 +53,10 @@ public:
         PipelineExecutorStatus & exec_status)
     {
         DAGContext dag_context(*request, "operator_test", /*concurrency=*/1);
-        context.context.setDAGContext(&dag_context);
-        context.context.setMockStorage(context.mockStorage());
+        context.context->setDAGContext(&dag_context);
+        context.context->setMockStorage(context.mockStorage());
 
-        PhysicalPlan physical_plan{context.context, ""};
+        PhysicalPlan physical_plan{*context.context, ""};
         physical_plan.build(request.get());
         assert(!result_handler.isIgnored());
         auto plan_tree = PhysicalGetResultSink::build(std::move(result_handler), physical_plan.outputAndOptimize());
@@ -64,7 +64,7 @@ public:
         PipelineExecGroupBuilder group_builder{exec_status};
         PhysicalPlanVisitor::visitPostOrder(plan_tree, [&](const PhysicalPlanNodePtr & plan) {
             assert(plan);
-            plan->buildPipelineExec(group_builder, context.context, /*concurrency=*/1);
+            plan->buildPipelineExec(group_builder, *context.context, /*concurrency=*/1);
         });
         auto result = group_builder.build();
         assert(result.size() == 1);

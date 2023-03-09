@@ -16,6 +16,7 @@
 #include <Common/UnifiedLogFormatter.h>
 #include <Common/formatReadable.h>
 #include <Common/tests/TestChannel.h>
+#include <Poco/AutoPtr.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Message.h>
 #include <TestUtils/TiFlashTestBasic.h>

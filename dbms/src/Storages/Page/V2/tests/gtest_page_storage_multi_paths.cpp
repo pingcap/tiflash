@@ -48,7 +48,7 @@ class PageStorageMultiPathsTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     PageStorageMultiPathsTest()
-        : file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
+        : file_provider{DB::tests::TiFlashTestEnv::getDefaultFileProvider()}
     {}
 
     static void SetUpTestCase() {}

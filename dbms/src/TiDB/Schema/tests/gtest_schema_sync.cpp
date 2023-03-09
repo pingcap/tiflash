@@ -168,7 +168,7 @@ public:
 private:
     static void recreateMetadataPath()
     {
-        String path = TiFlashTestEnv::getContext().getPath();
+        String path = TiFlashTestEnv::getContext()->getPath();
         auto p = path + "/metadata/";
         TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
         p = path + "/data/";

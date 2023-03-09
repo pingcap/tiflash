@@ -16,7 +16,6 @@
 #include <Columns/ColumnString.h>
 #include <Common/Exception.h>
 #include <Functions/FunctionFactory.h>
-#include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>

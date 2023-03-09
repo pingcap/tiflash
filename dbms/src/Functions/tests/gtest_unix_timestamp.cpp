@@ -15,7 +15,6 @@
 #include <Columns/ColumnConst.h>
 #include <Common/Exception.h>
 #include <Functions/FunctionsDateTime.h>
-#include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -37,7 +36,7 @@ TEST_F(TestUnixTimestamp, TestInputType)
 try
 {
     /// set timezone to UTC
-    context.getTimezoneInfo().resetByTimezoneName("UTC");
+    context->getTimezoneInfo().resetByTimezoneName("UTC");
 
     std::vector<DataTypeMyDate::FieldType> date_data{
         /// zero date
@@ -152,7 +151,7 @@ TEST_F(TestUnixTimestamp, TestTimezone)
 try
 {
     /// name based timezone
-    context.getTimezoneInfo().resetByTimezoneName("Asia/Shanghai");
+    context->getTimezoneInfo().resetByTimezoneName("Asia/Shanghai");
     std::vector<DataTypeMyDateTime::FieldType> date_time_data{
         /// min-max valid timestamp
         MyDateTime(1970, 1, 1, 8, 0, 0, 0).toPackedUInt(),
@@ -183,7 +182,7 @@ try
         createColumn<Decimal64>(std::make_tuple(12, 0), date_time_decimal_result),
         executeFunction(func_name_dec, createColumn<MyDateTime>(date_time_data)));
 
-    context.getTimezoneInfo().resetByTimezoneName("America/Santiago");
+    context->getTimezoneInfo().resetByTimezoneName("America/Santiago");
     date_time_data = {
         /// min-max valid timestamp
         MyDateTime(1969, 12, 31, 21, 0, 0, 0).toPackedUInt(),
@@ -216,7 +215,7 @@ try
         executeFunction(func_name_dec, createColumn<MyDateTime>(date_time_data)));
 
     /// offset based timezone
-    context.getTimezoneInfo().resetByTimezoneOffset(28800);
+    context->getTimezoneInfo().resetByTimezoneOffset(28800);
     date_time_data = {
         /// min-max valid timestamp
         MyDateTime(1970, 1, 1, 8, 0, 0, 0).toPackedUInt(),
@@ -233,7 +232,7 @@ try
         createColumn<Decimal64>(std::make_tuple(12, 0), date_time_decimal_result),
         executeFunction(func_name_dec, createColumn<MyDateTime>(date_time_data)));
 
-    context.getTimezoneInfo().resetByTimezoneOffset(-10800);
+    context->getTimezoneInfo().resetByTimezoneOffset(-10800);
     date_time_data = {
         /// min-max valid timestamp
         MyDateTime(1969, 12, 31, 21, 0, 0, 0).toPackedUInt(),

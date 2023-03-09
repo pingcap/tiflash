@@ -55,14 +55,14 @@ try
                        .scan("spill_sort_test", "simple_table")
                        .aggregation({Min(col("c")), Max(col("d")), Count(col("e"))}, {col("a"), col("b")})
                        .build(context);
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// disable spill
-    context.context.setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
+    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
     auto ref_columns = executeStreams(request, original_max_streams, true);
     /// enable spill
-    context.context.setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(total_data_size / 200)));
-    context.context.setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
-    context.context.setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
+    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(total_data_size / 200)));
+    context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
+    context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
     /// don't use `executeAndAssertColumnsEqual` since it takes too long to run
     /// test single thread aggregation
     /// need to enable memory tracker since currently, the memory usage in aggregator is
@@ -71,7 +71,7 @@ try
     /// test parallel aggregation
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams, true));
     /// enable spill and use small max_cached_data_bytes_in_spiller
-    context.context.setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 200)));
+    context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 200)));
     /// test single thread aggregation
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1, true));
     /// test parallel aggregation
@@ -80,7 +80,7 @@ try
     /// the avg rows in one bucket is ~10240/256 = 400, so set the small_max_block_size to 300
     /// is enough to test the output spilt
     size_t small_max_block_size = 300;
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(small_max_block_size)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(small_max_block_size)));
     auto blocks = getExecuteStreamsReturnBlocks(request, 1, true);
     for (auto & block : blocks)
     {

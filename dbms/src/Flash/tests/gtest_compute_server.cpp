@@ -123,7 +123,7 @@ try
         {{"s1", TiDB::TP::TypeLong}},
         expected_cols);
 
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(100)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(100)));
 
     WRAP_FOR_SERVER_TEST_BEGIN
     // For PassThrough and Broadcast, use only one server for testing, as multiple servers will double the result size.

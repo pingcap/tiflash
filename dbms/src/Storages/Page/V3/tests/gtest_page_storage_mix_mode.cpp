@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Poco/Logger.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatchImpl.h>

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
+#include <Interpreters/Context.h>
 #include <Common/SyncPoint/Ctl.h>
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
@@ -1801,7 +1801,7 @@ CATCH
 TEST_F(PageStorageTest, ReloadConfig)
 try
 {
-    auto & global_context = DB::tests::TiFlashTestEnv::getContext().getGlobalContext();
+    auto & global_context = DB::tests::TiFlashTestEnv::getContext()->getGlobalContext();
     auto & settings = global_context.getSettingsRef();
     auto old_dt_page_gc_threshold = settings.dt_page_gc_threshold;
 

@@ -38,7 +38,7 @@ public:
         std::vector<size_t> block_sizes{1, 2, 3, 4, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
-            context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, 2));
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, max_concurrency_level));

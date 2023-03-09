@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromMemory.h>
+#include <Interpreters/Context.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
@@ -53,7 +54,7 @@ class PageStorage_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
     PageStorage_test()
-        : file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
+        : file_provider{DB::tests::TiFlashTestEnv::getDefaultFileProvider()}
     {}
 
 protected:

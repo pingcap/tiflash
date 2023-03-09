@@ -62,7 +62,7 @@ public:
         auto path = getTemporaryPath();
         remote_dir = path;
         createIfNotExist(path);
-        file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
+        file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         s3_client = S3::ClientFactory::instance().sharedClient();
         bucket = S3::ClientFactory::instance().bucket();

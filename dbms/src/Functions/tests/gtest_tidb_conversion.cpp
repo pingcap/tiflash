@@ -920,10 +920,10 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<Int32>>({-999}), createCastTypeConstColumn("Nullable(Decimal(4, 1))")}));
 
-    DAGContext * dag_context = context.getDAGContext();
-    UInt64 ori_flags = dag_context->getFlags();
-    dag_context->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
-    dag_context->clearWarnings();
+    auto & dag_context = getDAGContext();
+    UInt64 ori_flags = dag_context.getFlags();
+    dag_context.addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
+    dag_context.clearWarnings();
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal32>>(
@@ -953,7 +953,7 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<Int32>>({-9999}), createCastTypeConstColumn("Nullable(Decimal(2, 2))")}));
 
-    dag_context->setFlags(ori_flags);
+    dag_context.setFlags(ori_flags);
 }
 CATCH
 
@@ -1167,10 +1167,10 @@ try
     // in default mode
     // for round test, tidb throw warnings: Truncated incorrect DECIMAL value: xxx
     // tiflash is same as mysql, don't throw warnings.
-    DAGContext * dag_context = context.getDAGContext();
-    UInt64 ori_flags = dag_context->getFlags();
-    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
-    dag_context->clearWarnings();
+    auto & dag_context = getDAGContext();
+    UInt64 ori_flags = dag_context.getFlags();
+    dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    dag_context.clearWarnings();
 
     testNotOnlyNull<Float32, Decimal32>(12.213f, DecimalField32(1221, 2), std::make_tuple(9, 2));
     testNotOnlyNull<Float32, Decimal32>(-12.213f, DecimalField32(-1221, 2), std::make_tuple(9, 2));
@@ -1227,8 +1227,8 @@ try
     // TiFlash:    123.12345678912344293376
     testNotOnlyNull<Float64, Decimal256>(123.123456789123456789, DecimalField256(Decimal256(Int256("12312345678912344293376")), 20), std::make_tuple(50, 20));
 
-    dag_context->setFlags(ori_flags);
-    dag_context->clearWarnings();
+    dag_context.setFlags(ori_flags);
+    dag_context.clearWarnings();
 }
 CATCH
 
@@ -1750,10 +1750,10 @@ try
     ASSERT_FALSE(FunctionTiDBCast<>::canSkipCheckOverflowForDecimal<DataTypeInt8>(int8_ptr, to_prec, to_scale));
 
     // from_prec(3) + to_scale(7) > Int32::real_prec(10) - 1, so CastInternalType should be **Int64**.
-    DAGContext * dag_context = context.getDAGContext();
-    UInt64 ori_flags = dag_context->getFlags();
-    dag_context->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
-    dag_context->clearWarnings();
+    auto & dag_context = getDAGContext();
+    UInt64 ori_flags = dag_context.getFlags();
+    dag_context.addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
+    dag_context.clearWarnings();
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal32>>(
             std::make_tuple(to_prec, to_scale),
@@ -1761,7 +1761,7 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<Int8>>({MAX_INT8, MIN_INT8, {}}),
                          createCastTypeConstColumn("Nullable(Decimal(9,7))")}));
-    dag_context->setFlags(ori_flags);
+    dag_context.setFlags(ori_flags);
 
     // case3: cast(bigint as decimal(40, 20))
     // from_prec(19) + to_scale(20) <= Decimal256::prec(40), so we **CAN** skip check overflow.
@@ -1942,8 +1942,8 @@ CATCH
 TEST_F(TestTidbConversion, castStringAsDateTime3595)
 try
 {
-    DAGContext * dag_context = context.getDAGContext();
-    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    auto & dag_context = getDAGContext();
+    dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     auto to_datetime_column = createConstColumn<String>(1, "Nullable(MyDateTime(6))");
     ColumnWithTypeAndName expect_datetime_column(
         createColumn<Nullable<DataTypeMyDateTime::FieldType>>({{}}).column,

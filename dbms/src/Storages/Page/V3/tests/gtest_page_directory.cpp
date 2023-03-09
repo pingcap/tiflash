@@ -117,8 +117,7 @@ public:
     static u128::PageDirectoryPtr restoreFromDisk()
     {
         auto path = getTemporaryPath();
-        auto ctx = DB::tests::TiFlashTestEnv::getContext();
-        FileProviderPtr provider = ctx.getFileProvider();
+        auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;
         return factory.create("PageDirectoryTest", provider, delegator, WALConfig());
@@ -1911,8 +1910,7 @@ try
     auto edit = dir->dumpSnapshotToEdit(s0);
     auto restore_from_edit = [](const PageEntriesEdit & edit) {
         auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
-        auto ctx = DB::tests::TiFlashTestEnv::getContext();
-        auto provider = ctx.getFileProvider();
+        auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;
@@ -1934,8 +1932,7 @@ try
 {
     auto restore_from_edit = [](const PageEntriesEdit & edit) {
         auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
-        auto ctx = DB::tests::TiFlashTestEnv::getContext();
-        auto provider = ctx.getFileProvider();
+        auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;
@@ -2159,8 +2156,7 @@ try
     }
 
     auto restore_from_edit = [](PageEntriesEdit & edit, BlobStats & stats) {
-        auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
-        auto provider = ctx.getFileProvider();
+        auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;
@@ -2203,8 +2199,7 @@ try
     PageEntryV3 entry_50_2{.file_id = 2, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
 
     auto restore_from_edit = [](PageEntriesEdit & edit) {
-        auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
-        auto provider = ctx.getFileProvider();
+        auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;

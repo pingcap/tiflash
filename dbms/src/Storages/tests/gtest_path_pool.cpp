@@ -14,6 +14,7 @@
 
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
@@ -59,7 +60,7 @@ try
     Strings paths = getMultiTestPaths();
     auto ctx = TiFlashTestEnv::getContext();
 
-    PathPool pool(paths, paths, Strings{}, ctx.getPathCapacity(), ctx.getFileProvider());
+    PathPool pool(paths, paths, Strings{}, ctx->getPathCapacity(), ctx->getFileProvider());
     auto spool = pool.withTable("test", "t", false);
 
     // Stable delegate
@@ -83,7 +84,7 @@ try
 
         for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            auto stat = std::get<0>(ctx->getPathCapacity()->getFsStatsOfPath(r));
             LOG_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
@@ -116,7 +117,7 @@ try
 
         for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            auto stat = std::get<0>(ctx->getPathCapacity()->getFsStatsOfPath(r));
             LOG_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
@@ -150,7 +151,7 @@ try
 
         for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            auto stat = std::get<0>(ctx->getPathCapacity()->getFsStatsOfPath(r));
             LOG_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
@@ -184,7 +185,7 @@ try
 
         for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            auto stat = std::get<0>(ctx->getPathCapacity()->getFsStatsOfPath(r));
             LOG_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
@@ -204,7 +205,7 @@ try
     Strings latest_paths(paths.begin(), paths.begin() + 1);
     auto ctx = TiFlashTestEnv::getContext();
 
-    PathPool pool(paths, latest_paths, Strings{}, ctx.getPathCapacity(), ctx.getFileProvider());
+    PathPool pool(paths, latest_paths, Strings{}, ctx->getPathCapacity(), ctx->getFileProvider());
     auto spool = pool.withTable("test", "t", false);
     // Stable delegate
     {
@@ -227,7 +228,7 @@ try
 
         for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            auto stat = std::get<0>(ctx->getPathCapacity()->getFsStatsOfPath(r));
             LOG_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
@@ -260,7 +261,7 @@ try
 
         for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            auto stat = std::get<0>(ctx->getPathCapacity()->getFsStatsOfPath(r));
             LOG_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
@@ -294,7 +295,7 @@ try
 
         for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            auto stat = std::get<0>(ctx->getPathCapacity()->getFsStatsOfPath(r));
             LOG_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
@@ -328,7 +329,7 @@ try
 
         for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            auto stat = std::get<0>(ctx->getPathCapacity()->getFsStatsOfPath(r));
             LOG_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
@@ -347,7 +348,7 @@ TEST_F(PathPoolTest, FileLifecycle)
     Strings latest_paths(paths.begin(), paths.begin() + 1);
     auto ctx = TiFlashTestEnv::getContext();
 
-    PathPool pool(paths, paths, Strings{}, ctx.getPathCapacity(), ctx.getFileProvider());
+    PathPool pool(paths, paths, Strings{}, ctx->getPathCapacity(), ctx->getFileProvider());
     auto delegator = pool.getPSDiskDelegatorGlobalMulti("log");
     PageFileIdAndLevel id_lvl{100, 0};
     // create new page data file

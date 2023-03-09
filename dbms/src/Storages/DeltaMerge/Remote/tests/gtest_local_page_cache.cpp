@@ -29,7 +29,7 @@ public:
         auto path = getTemporaryPath();
         dropDataOnDisk(path);
         createIfNotExist(path);
-        auto file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
+        auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         page_storage = UniversalPageStorage::create("cache_store", delegator, {}, file_provider);
         page_storage->restore();

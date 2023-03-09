@@ -30,7 +30,7 @@ public:
         TiFlashStorageTestBasic::SetUp();
         auto path = getTemporaryPath();
         createIfNotExist(path);
-        file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
+        file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         page_storage = UniversalPageStorage::create("test.t", delegator, config, file_provider);
         page_storage->restore();

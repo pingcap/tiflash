@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Mpp/MPPTunnelSetHelper.h>
-#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TiDB.h>
@@ -302,12 +301,10 @@ protected:
         dag_context_ptr->is_root_mpp_task = true;
         dag_context_ptr->result_field_types = makeFields();
         dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
-        context.setDAGContext(dag_context_ptr.get());
     }
 
 public:
     TestTiRemoteBlockInputStream()
-        : context(TiFlashTestEnv::getContext())
     {}
 
     static Block squashBlocks(std::vector<Block> & blocks)
@@ -523,7 +520,6 @@ public:
         checkChunkInResponse(source_blocks, decoded_blocks, receiver_stream, writer);
     }
 
-    Context context;
     std::unique_ptr<DAGContext> dag_context_ptr{};
 };
 

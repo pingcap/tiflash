@@ -48,7 +48,7 @@ protected:
 
     void SetUp() override
     {
-        context = std::make_unique<Context>(DMTestEnv::getContext());
+        context = DMTestEnv::getContext();
         if (!context->getMinMaxIndexCache())
         {
             context->setMinMaxIndexCache(5368709120);
@@ -63,7 +63,7 @@ protected:
 private:
 protected:
     // a ptr to context, we can reload context with different settings if need.
-    std::unique_ptr<Context> context;
+    ContextPtr context;
 };
 
 Attr attr(String type)

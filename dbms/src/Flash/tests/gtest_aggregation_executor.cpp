@@ -555,13 +555,13 @@ try
         for (const auto & request : requests)
         {
             auto expect = executeStreams(request, 1);
-            context.context.setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+            context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
             // 0: use one level merge
             // 1: use two level merge
             std::vector<UInt64> two_level_thresholds{0, 1};
             for (auto two_level_threshold : two_level_thresholds)
             {
-                context.context.setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
+                context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
                 executeAndAssertColumnsEqual(request, expect);
             }
         }
@@ -582,7 +582,7 @@ try
                            .scan("test_db", tables[i])
                            .aggregation({Max(col("value"))}, {col("key")})
                            .build(context);
-        context.context.setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+        context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
         // 0: use one level
         // 1: use two level
         std::vector<UInt64> two_level_thresholds{0, 1};
@@ -592,8 +592,8 @@ try
             {
                 for (auto concurrency : concurrences)
                 {
-                    context.context.setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
-                    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+                    context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
+                    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     size_t actual_row = 0;
                     for (auto & block : blocks)

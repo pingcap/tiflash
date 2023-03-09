@@ -73,15 +73,15 @@ public:
     {
         // Clean all database from context.
         auto ctx = TiFlashTestEnv::getContext();
-        for (const auto & [name, db] : ctx.getDatabases())
+        for (const auto & [name, db] : ctx->getDatabases())
         {
-            ctx.detachDatabase(name);
+            ctx->detachDatabase(name);
             db->shutdown();
         }
     }
     static void recreateMetadataPath()
     {
-        String path = TiFlashTestEnv::getContext().getPath();
+        String path = TiFlashTestEnv::getContext()->getPath();
         auto p = path + "/metadata/";
         TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
         p = path + "/data/";
@@ -116,16 +116,16 @@ TableID createDBAndTable(String db_name, String table_name)
         const String statement = "CREATE DATABASE " + db_name + " ENGINE=TiFlash";
         ASTPtr ast = parseCreateStatement(statement);
         EXPECT_NE(ast, nullptr);
-        InterpreterCreateQuery interpreter(ast, ctx);
+        InterpreterCreateQuery interpreter(ast, *ctx);
         interpreter.setInternal(true);
         interpreter.setForceRestoreData(false);
         interpreter.execute();
     }
 
-    auto db = ctx.tryGetDatabase(db_name);
+    auto db = ctx->tryGetDatabase(db_name);
     EXPECT_NE(db, nullptr);
     EXPECT_EQ(db->getEngineName(), "TiFlash");
-    EXPECT_TRUE(db->empty(ctx));
+    EXPECT_TRUE(db->empty(*ctx));
 
     {
         /// Create table
@@ -138,19 +138,19 @@ TableID createDBAndTable(String db_name, String table_name)
               ") ENGINE = DeltaMerge(c_custkey)";
         ASTPtr ast = parseQuery(parser, stmt, 0);
 
-        InterpreterCreateQuery interpreter(ast, ctx);
+        InterpreterCreateQuery interpreter(ast, *ctx);
         interpreter.setInternal(true);
         interpreter.setForceRestoreData(false);
         interpreter.execute();
     }
 
-    EXPECT_FALSE(db->empty(ctx));
-    EXPECT_TRUE(db->isTableExist(ctx, table_name));
+    EXPECT_FALSE(db->empty(*ctx));
+    EXPECT_TRUE(db->isTableExist(*ctx, table_name));
 
     TableID table_id;
     {
         // Get storage from database
-        auto storage = db->tryGetTable(ctx, table_name);
+        auto storage = db->tryGetTable(*ctx, table_name);
         EXPECT_NE(storage, nullptr);
 
         StorageDeltaMergePtr storage_ptr = std::static_pointer_cast<StorageDeltaMerge>(storage);
@@ -172,16 +172,16 @@ void dropDataBase(String db_name)
     drop_query->database = db_name;
     drop_query->if_exists = false;
     ASTPtr ast_drop_query = drop_query;
-    InterpreterDropQuery drop_interpreter(ast_drop_query, ctx);
+    InterpreterDropQuery drop_interpreter(ast_drop_query, *ctx);
     drop_interpreter.execute();
 
-    auto db = ctx.tryGetDatabase(db_name);
+    auto db = ctx->tryGetDatabase(db_name);
     ASSERT_EQ(db, nullptr);
 }
 
 void createRegions(size_t region_num, TableID table_id)
 {
-    auto & tmt = TiFlashTestEnv::getContext().getTMTContext();
+    auto & tmt = TiFlashTestEnv::getContext()->getTMTContext();
     for (size_t i = 0; i < region_num; i++)
     {
         auto region = makeRegion(i, RecordKVFormat::genKey(table_id, i), RecordKVFormat::genKey(table_id, i + region_num + 10));
@@ -191,7 +191,7 @@ void createRegions(size_t region_num, TableID table_id)
 
 void makeRegionsLag(size_t lag_num)
 {
-    auto & tmt = TiFlashTestEnv::getContext().getTMTContext();
+    auto & tmt = TiFlashTestEnv::getContext()->getTMTContext();
     for (size_t i = 0; i < lag_num; i++)
     {
         tmt.getRegionTable().updateSafeTS(i, (RegionTable::SafeTsDiffThreshold + 1) << TsoPhysicalShiftBits, 0);
@@ -205,7 +205,7 @@ try
     createRegions(20, table_id);
     makeRegionsLag(10);
     EngineStoreServerWrap store_server_wrap{};
-    store_server_wrap.tmt = &TiFlashTestEnv::getContext().getTMTContext();
+    store_server_wrap.tmt = &TiFlashTestEnv::getContext()->getTMTContext();
     auto helper = GetEngineStoreServerHelper(&store_server_wrap);
     String path = fmt::format("/tiflash/sync-status/{}", table_id);
     auto res = helper.fn_handle_http_request(&store_server_wrap, BaseBuffView{path.data(), path.length()}, BaseBuffView{path.data(), path.length()}, BaseBuffView{"", 0});
@@ -224,7 +224,7 @@ try
     TableID table_id = createDBAndTable("db_1", "t_1");
     createRegions(20, table_id);
     EngineStoreServerWrap store_server_wrap{};
-    store_server_wrap.tmt = &TiFlashTestEnv::getContext().getTMTContext();
+    store_server_wrap.tmt = &TiFlashTestEnv::getContext()->getTMTContext();
     auto helper = GetEngineStoreServerHelper(&store_server_wrap);
     String path = fmt::format("/tiflash/sync-status/{}", table_id);
     auto res = helper.fn_handle_http_request(&store_server_wrap, BaseBuffView{path.data(), path.length()}, BaseBuffView{path.data(), path.length()}, BaseBuffView{"", 0});

@@ -720,7 +720,7 @@ try
     std::vector<std::vector<size_t>> expect{{5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {5, 5, 5, 5, 5, 5, 5, 5, 5, 5}, {25, 25}, {45, 5}, {50}, {50}, {50}};
     for (size_t i = 0; i < block_sizes.size(); ++i)
     {
-        context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
+        context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
         auto blocks = getExecuteStreamsReturnBlocks(request);
         ASSERT_EQ(expect[i].size(), blocks.size());
         for (size_t j = 0; j < blocks.size(); ++j)
@@ -802,7 +802,7 @@ try
                        .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")})
                        .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
                        .build(context);
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use right_table left join left_table as the reference
     auto ref_columns = executeStreams(request, original_max_streams);
 
@@ -838,7 +838,7 @@ try
                   .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")}, {gt(col(right_table_names[0] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, {}, 0)
                   .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
                   .build(context);
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use right_table left join left_table as the reference
     ref_columns = executeStreams(request, original_max_streams);
     /// case 2.1 table scan join table scan
