@@ -117,7 +117,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         Stopwatch watch;
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
-        LOG_INFO(ks_log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", keyspace_id, cur_version, version);
+        LOG_INFO(ks_log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
 
         // Show whether the schema mutex is held for a long time or not.
         GET_METRIC(tiflash_schema_applying).Set(1.0);
@@ -132,7 +132,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
         // to X-1 and try to fetch the schema diff X next time.
         Int64 version_after_load_diff = 0;
-        if (version_after_load_diff = tryLoadSchemaDiffs(getter, cur_version, version, context); version_after_load_diff == -1)
+        if (version_after_load_diff = tryLoadSchemaDiffs(getter, cur_version, version, context, ks_log); version_after_load_diff == -1)
         {
             GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
             version_after_load_diff = loadAllSchema(getter, version, context);
@@ -168,15 +168,15 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     // - if latest schema diff is not empty, return the (latest_version)
     // - if latest schema diff is empty, return the (latest_version - 1)
     // - if schema_diff.regenerate_schema_map == true, need reload all schema info from TiKV, return (-1)
-    // - if error happend, return (-1)
-    Int64 tryLoadSchemaDiffs(Getter & getter, Int64 cur_version, Int64 latest_version, Context & context)
+    // - if error happens, return (-1)
+    Int64 tryLoadSchemaDiffs(Getter & getter, Int64 cur_version, Int64 latest_version, Context & context, const LoggerPtr & ks_log)
     {
         if (isTooOldSchema(cur_version, latest_version))
         {
             return -1;
         }
 
-        LOG_DEBUG(log, "Try load schema diffs.");
+        LOG_DEBUG(ks_log, "Try load schema diffs.");
 
         Int64 used_version = cur_version;
         // First get all schema diff from `cur_version` to `latest_version`. Only apply the schema diff(s) if we fetch all
@@ -187,12 +187,12 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             used_version++;
             diffs.push_back(getter.getSchemaDiff(used_version));
         }
-        LOG_DEBUG(log, "End load schema diffs with total {} entries.", diffs.size());
+        LOG_DEBUG(ks_log, "End load schema diffs with total {} entries.", diffs.size());
 
 
         if (diffs.empty())
         {
-            LOG_WARNING(log, "Schema Diff is empty.");
+            LOG_WARNING(ks_log, "Schema Diff is empty.");
             return -1;
         }
         // Since the latest schema diff may be empty, and schemaBuilder may need to update the latest version for storageDeltaMerge,
@@ -249,19 +249,19 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 throw;
             }
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+            LOG_WARNING(ks_log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
             return -1;
         }
         catch (Poco::Exception & e)
         {
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_WARNING(log, "apply diff meets exception : {}", e.displayText());
+            LOG_WARNING(ks_log, "apply diff meets exception : {}", e.displayText());
             return -1;
         }
         catch (std::exception & e)
         {
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_WARNING(log, "apply diff meets exception : {}", e.what());
+            LOG_WARNING(ks_log, "apply diff meets exception : {}", e.what());
             return -1;
         }
 

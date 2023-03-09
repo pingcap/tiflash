@@ -44,7 +44,7 @@ struct SchemaBuilder
         , databases(dbs_)
         , target_version(version)
         , keyspace_id(getter_.getKeyspaceID())
-        , log(Logger::get())
+        , log(Logger::get(fmt::format("keyspace={}", keyspace_id)))
     {}
 
     void applyDiff(const SchemaDiff & diff);
