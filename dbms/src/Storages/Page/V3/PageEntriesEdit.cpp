@@ -61,9 +61,9 @@ typename PageEntriesEdit<UniversalPageId>::EditRecord PageEntriesEdit<UniversalP
     rec.being_ref_count = 1;
     if (rec.type == EditRecordType::VAR_ENTRY)
     {
-        rec.entry.checkpoint_info = CheckpointInfo{
-            .data_location = CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map),
-            .is_local_data_reclaimed = true,
+        rec.entry.checkpoint_info = OptionalCheckpointInfo{
+            CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map),
+            /*is_local_data_reclaimed*/ true,
         };
         rec.entry.size = proto_edit.entry_size();
         rec.entry.checksum = proto_edit.entry_checksum();

@@ -18,6 +18,7 @@
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
@@ -288,11 +289,11 @@ try
             .entry = {
                 .size = 10,
                 .offset = 5,
-                .checkpoint_info = CheckpointInfo{
-                    .data_location = {
+                .checkpoint_info = OptionalCheckpointInfo{
+                    CheckpointLocation{
                         .data_file_id = std::make_shared<String>("my_file_id"),
                     },
-                    .is_local_data_reclaimed = false,
+                    /*is_local_data_reclaimed*/ false,
                 },
             },
         });
@@ -566,11 +567,11 @@ try
             .page_id = "abc",
             .entry = {
                 .offset = 5,
-                .checkpoint_info = CheckpointInfo{
-                    .data_location = {
+                .checkpoint_info = OptionalCheckpointInfo{
+                    CheckpointLocation{
                         .data_file_id = std::make_shared<String>("my_file_id"),
                     },
-                    .is_local_data_reclaimed = false,
+                    /*is_local_data_reclaimed*/ false,
                 },
             },
         });

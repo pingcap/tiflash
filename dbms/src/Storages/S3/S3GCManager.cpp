@@ -18,6 +18,7 @@
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Flash/Disaggregated/S3LockClient.h>
 #include <Interpreters/Context.h>
+#include <Poco/File.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
@@ -390,6 +391,7 @@ std::vector<UInt64> S3GCManager::getAllStoreIds() const
 std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const String & manifest_key)
 {
     // download the latest manifest from S3 to local file
+    Poco::File(config.temp_path).createDirectories();
     const String local_manifest_path = getTemporaryDownloadFile(manifest_key);
     downloadFile(*client, client->bucket(), local_manifest_path, manifest_key);
     LOG_INFO(log, "Download manifest, from={} to={}", manifest_key, local_manifest_path);

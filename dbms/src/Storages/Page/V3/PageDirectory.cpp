@@ -1517,7 +1517,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 }
 
                 // collect the applied remote data_file_ids
-                if (r.entry.checkpoint_info)
+                if (r.entry.checkpoint_info.has_value())
                 {
                     applied_data_files.emplace(*r.entry.checkpoint_info->data_location.data_file_id);
                 }

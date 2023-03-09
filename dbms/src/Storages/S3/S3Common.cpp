@@ -322,7 +322,7 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
     {
         throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} key={}", local_fname, bucket, remote_fname);
     }
-    auto write_bytes = istr->tellg();
+    auto write_bytes = istr->tellp();
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);

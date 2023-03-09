@@ -237,9 +237,9 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
             PageEntryV3 entry;
             entry.file_id = INVALID_BLOBFILE_ID;
             entry.tag = write.tag;
-            entry.checkpoint_info = CheckpointInfo{
-                .data_location = *write.data_location,
-                .is_local_data_reclaimed = true,
+            entry.checkpoint_info = OptionalCheckpointInfo{
+                *write.data_location,
+                /*is_local_data_reclaimed_*/ true,
             };
             if (!write.offsets.empty())
             {
@@ -302,9 +302,9 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
                 PageEntryV3 entry;
                 entry.file_id = INVALID_BLOBFILE_ID;
                 entry.tag = write.tag;
-                entry.checkpoint_info = CheckpointInfo{
-                    .data_location = *write.data_location,
-                    .is_local_data_reclaimed = true,
+                entry.checkpoint_info = OptionalCheckpointInfo{
+                    *write.data_location,
+                    /*is_local_data_reclaimed*/ true,
                 };
                 if (!write.offsets.empty())
                 {
@@ -435,9 +435,9 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
             PageEntryV3 entry;
             entry.file_id = INVALID_BLOBFILE_ID;
             entry.tag = write.tag;
-            entry.checkpoint_info = CheckpointInfo{
-                .data_location = *write.data_location,
-                .is_local_data_reclaimed = true,
+            entry.checkpoint_info = OptionalCheckpointInfo{
+                *write.data_location,
+                /*is_local_data_reclaimed*/ true,
             };
             if (!write.offsets.empty())
             {

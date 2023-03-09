@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
+#include <common/defines.h>
 
 namespace DB::PS::V3
 {
@@ -46,9 +47,54 @@ struct CheckpointLocation
         CheckpointProto::StringsInternMap & strings_map);
 };
 
-struct CheckpointInfo
+// A more memory compact struct compared to std::optional<CheckpointInfo>
+class OptionalCheckpointInfo
 {
+public:
+    OptionalCheckpointInfo(std::nullopt_t) // NOLINT(google-explicit-constructor)
+        : is_set(false)
+    {}
+    OptionalCheckpointInfo(CheckpointLocation data_loc, bool is_local_data_reclaimed_)
+        : data_location(std::move(data_loc))
+        , is_set(true)
+        , is_local_data_reclaimed(is_local_data_reclaimed_)
+    {
+    }
+
+    // Mock as if std::optional<...>
+    ALWAYS_INLINE bool has_value() const { return is_set; } // NOLINT(readability-identifier-naming)
+    ALWAYS_INLINE OptionalCheckpointInfo * operator->()
+    {
+        assert(is_set); // should only be used when contains valid
+        return this;
+    }
+    ALWAYS_INLINE const OptionalCheckpointInfo * operator->() const
+    {
+        assert(is_set); // should only be used when contains valid
+        return this;
+    }
+
+    // copy ctor
+    OptionalCheckpointInfo(const OptionalCheckpointInfo & rhs) = default;
+    OptionalCheckpointInfo & operator=(const OptionalCheckpointInfo & rhs) = default;
+
+    // move ctor
+    OptionalCheckpointInfo(OptionalCheckpointInfo && c) noexcept = default;
+    OptionalCheckpointInfo & operator=(OptionalCheckpointInfo && rhs) noexcept = default;
+    OptionalCheckpointInfo(std::nullopt_t &&) noexcept // NOLINT(google-explicit-constructor)
+        : data_location()
+        , is_set(false)
+        , is_local_data_reclaimed(false)
+    {
+    }
+
+public:
     CheckpointLocation data_location;
+
+    /**
+     * Whether this object contains valid value or not
+     */
+    bool is_set = false;
 
     /**
      * Whether the PageEntry's local BlobData has been reclaimed.

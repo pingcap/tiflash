@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 
 namespace DB::PS::V3
 {
@@ -72,10 +73,12 @@ bool CPFilesWriter::writeEditsAndApplyCheckpointInfo(universal::PageEntriesEdit 
     {
         if (rec_edit.type == EditRecordType::VAR_EXTERNAL)
         {
-            RUNTIME_CHECK(
-                rec_edit.entry.checkpoint_info.has_value() && //
-                rec_edit.entry.checkpoint_info->data_location.data_file_id && //
-                !rec_edit.entry.checkpoint_info->data_location.data_file_id->empty());
+            RUNTIME_CHECK_MSG(
+                rec_edit.entry.checkpoint_info.has_value()
+                    && rec_edit.entry.checkpoint_info->data_location.data_file_id
+                    && !rec_edit.entry.checkpoint_info->data_location.data_file_id->empty(),
+                "the checkpoint info of external id is not set, record={}",
+                rec_edit);
             // for example, the s3 fullpath of external id
             locked_files.emplace(*rec_edit.entry.checkpoint_info->data_location.data_file_id);
             continue;
@@ -94,16 +97,16 @@ bool CPFilesWriter::writeEditsAndApplyCheckpointInfo(universal::PageEntriesEdit 
         // 2. For entry edits without the checkpoint info, write them to the data file,
         // and assign a new checkpoint info.
         auto page = data_source->read({rec_edit.page_id, rec_edit.entry});
-        RUNTIME_CHECK(page.isValid());
+        RUNTIME_CHECK_MSG(page.isValid(), "failed to read page, record={}", rec_edit);
         auto data_location = data_writer->write(
             rec_edit.page_id,
             rec_edit.version,
             page.data.begin(),
             page.data.size());
         RUNTIME_CHECK(page.data.size() == rec_edit.entry.size, page.data.size(), rec_edit.entry.size);
-        rec_edit.entry.checkpoint_info = {
-            .data_location = data_location,
-            .is_local_data_reclaimed = false,
+        rec_edit.entry.checkpoint_info = OptionalCheckpointInfo{
+            data_location,
+            /*is_local_data_reclaimed*/ false,
         };
         locked_files.emplace(*data_location.data_file_id);
     }

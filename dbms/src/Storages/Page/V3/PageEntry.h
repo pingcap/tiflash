@@ -42,7 +42,7 @@ public:
      * Whether this page entry's data is stored in a checkpoint and where it is stored.
      * If this page entry is not stored in a checkpoint file, this field is nullopt.
      */
-    std::optional<CheckpointInfo> checkpoint_info = std::nullopt;
+    OptionalCheckpointInfo checkpoint_info = std::nullopt;
 
     // The offset to the beginning of specify field.
     PageFieldOffsetChecksums field_offsets{};

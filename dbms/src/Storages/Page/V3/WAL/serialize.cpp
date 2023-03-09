@@ -90,7 +90,8 @@ inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry, bool has
     }
     if (has_checkpoint_info)
     {
-        CheckpointInfo checkpoint_info;
+        OptionalCheckpointInfo checkpoint_info = std::nullopt;
+        checkpoint_info.is_set = true;
         checkpoint_info.is_local_data_reclaimed = (entry.file_id == INVALID_BLOBFILE_ID);
         readIntBinary(checkpoint_info.data_location.offset_in_file, buf);
         readIntBinary(checkpoint_info.data_location.size_in_file, buf);
