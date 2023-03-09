@@ -229,7 +229,7 @@ UInt64 FileCache::tryEvictFrom(FileType evict_for, UInt64 size, FileType evict_f
 {
     auto & table = tables[static_cast<UInt64>(evict_from)];
     UInt64 total_released_size = 0;
-    constexpr UInt32 max_try_evict_count = 100;
+    constexpr UInt32 max_try_evict_count = 10;
     bool check_last_access_time = evict_for >= evict_from;
     auto itr = table.begin();
     auto end = table.end();
