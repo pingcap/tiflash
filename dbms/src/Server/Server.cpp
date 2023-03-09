@@ -878,7 +878,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (storage_config.format_version)
     {
         setStorageFormat(storage_config.format_version);
-        LOG_INFO(log, "Using format_version={} (explicit stable storage format detected).", storage_config.format_version);
+        LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
     }
     else
     {
