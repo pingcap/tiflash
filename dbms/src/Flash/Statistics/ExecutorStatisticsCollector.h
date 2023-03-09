@@ -16,6 +16,7 @@
 
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
 #include <tipb/executor.pb.h>
+#include <Common/Exception.h>
 
 #include <map>
 
@@ -59,6 +60,5 @@ private:
         return (doAppend<Ts>(executor_id, executor) || ...);
     }
 };
-
 using ExecutorStatisticsCollectorPtr = std::shared_ptr<ExecutorStatisticsCollector>;
 } // namespace DB

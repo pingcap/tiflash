@@ -199,7 +199,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
             if (executors[i].has_executor_id())
                 source_name = executors[i].executor_id();
             else
-                source_name = std::to_string(i) + "_tablescan";
+                source_name = fmt::format("table_scan_{}", i);
             break;
         case tipb::ExecType::TypeSelection:
             GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
@@ -207,7 +207,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
             if (executors[i].has_executor_id())
                 selection_name = executors[i].executor_id();
             else
-                selection_name = std::to_string(i) + "_selection";
+                selection_name = fmt::format("selection_{}", i);
             break;
         case tipb::ExecType::TypeStreamAgg:
             RUNTIME_CHECK_MSG(executors[i].aggregation().group_by_size() == 0, STREAM_AGG_ERROR);
@@ -217,7 +217,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
             if (executors[i].has_executor_id())
                 aggregation_name = executors[i].executor_id();
             else
-                aggregation_name = std::to_string(i) + "_aggregation";
+                aggregation_name = fmt::format("aggregation_{}", i);
             break;
         case tipb::ExecType::TypeTopN:
             GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
@@ -225,7 +225,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
             if (executors[i].has_executor_id())
                 limit_or_topn_name = executors[i].executor_id();
             else
-                limit_or_topn_name = std::to_string(i) + "_limitOrTopN";
+                limit_or_topn_name = fmt::format("topn_{}", i);
             break;
         case tipb::ExecType::TypeLimit:
             GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
@@ -233,11 +233,11 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
             if (executors[i].has_executor_id())
                 limit_or_topn_name = executors[i].executor_id();
             else
-                limit_or_topn_name = std::to_string(i) + "_limitOrTopN";
+                limit_or_topn_name = fmt::format("limit_{}", i);
             break;
         default:
             throw TiFlashException(
-                "Unsupported executor in DAG request: " + executors[i].DebugString(),
+                fmt::format("Unsupported executor in DAG request: {}", executors[i].DebugString()),
                 Errors::Coprocessor::Unimplemented);
         }
     }

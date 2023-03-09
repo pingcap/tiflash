@@ -40,14 +40,15 @@ public:
     ExecutorStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
         : dag_context(dag_context_)
     {
-        if (executor->has_executor_id())
-        {
-            executor_id = executor->executor_id();
-            getChildren(*executor).forEach([&](const tipb::Executor & child) {
-                RUNTIME_CHECK(child.has_executor_id());
-                children.push_back(child.executor_id());
-            });
-        }
+        // Only tree based executor need to collect its children
+        RUNTIME_CHECK(executor->has_executor_id());
+        executor_id = executor->executor_id();
+
+        getChildren(*executor).forEach([&](const tipb::Executor & child) {
+            RUNTIME_CHECK(child.has_executor_id());
+            children.push_back(child.executor_id());
+        });
+
         type = ExecutorImpl::type;
     }
 

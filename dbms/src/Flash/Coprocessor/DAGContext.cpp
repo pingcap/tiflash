@@ -19,6 +19,8 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Flash/Statistics/ExecutorStatisticsCollector.h>
+
 
 namespace DB
 {

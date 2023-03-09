@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Flash/Statistics/BaseRuntimeStatistics.h>
-#include <common/types.h>
 
 #include <memory>
 

@@ -31,7 +31,6 @@
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
-#include <Flash/Statistics/ExecutorStatisticsCollector.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/Transaction/TiDB.h>
@@ -62,6 +61,9 @@ struct JoinExecuteInfo
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 class ProcessListEntry;
+
+class ExecutorStatisticsCollector;
+using ExecutorStatisticsCollectorPtr = std::shared_ptr<ExecutorStatisticsCollector>;
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 {
@@ -287,7 +289,7 @@ public:
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
     bool return_executor_id{};
-    String root_executor_id = "";
+    String root_executor_id;
     /* const */ bool is_mpp_task = false;
     /* const */ bool is_root_mpp_task = false;
     /* const */ bool is_batch_cop = false;

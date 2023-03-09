@@ -14,6 +14,7 @@
 
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Planner/ExecutorIdGenerator.h>
 #include <Flash/Statistics/CommonExecutorImpl.h>
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
 #include <Flash/Statistics/ExchangeSenderImpl.h>
@@ -50,9 +51,20 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
     assert(dag_context_);
     dag_context = dag_context_;
     assert(dag_context->dag_request);
-    traverseExecutors(dag_context->dag_request, [&](const tipb::Executor & executor) {
-        RUNTIME_CHECK(executor.has_executor_id());
-        const auto & executor_id = executor.executor_id();
+    ExecutorIdGenerator id_generator;
+
+    traverseExecutorsReverse(dag_context->dag_request, [&](const tipb::Executor & executor) {
+        String executor_id;
+        if (executor.has_executor_id())
+            executor_id = executor.executor_id();
+        else
+        {
+            executor_id = id_generator.generate(executor);
+            // add executor id for list based executors
+            auto & mutable_executor = const_cast<tipb::Executor &>(executor);
+            mutable_executor.set_executor_id(executor_id);
+        }
+
         if (!append<
                 AggStatistics,
                 ExchangeReceiverStatistics,

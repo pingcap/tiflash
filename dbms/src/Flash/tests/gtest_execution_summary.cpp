@@ -45,7 +45,7 @@ public:
     static constexpr size_t concurrency = 10;
 
 #define WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN                                      \
-    std::vector<DAGRequestType> type{DAGRequestType::tree}; \
+    std::vector<DAGRequestType> type{DAGRequestType::tree, DAGRequestType::list}; \
     std::vector<bool> planner_bools{false, true};                                 \
     for (auto enable_planner : planner_bools)                                     \
     {                                                                             \
@@ -55,9 +55,17 @@ public:
 #define WRAP_FOR_EXCUTION_SUMMARY_TEST_END \
     }                                      \
     }
+
+#define WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_BEGIN \
+    std::vector<bool> planner_bools{false, true};       \
+    for (auto enable_planner : planner_bools)           \
+    {                                                   \
+        enablePlanner(enable_planner);
+#define WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END \
+    }
 };
 
-TEST_F(ExecutionSummaryTestRunner, test)
+TEST_F(ExecutionSummaryTestRunner, testBasic)
 try
 {
     WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN
@@ -82,17 +90,6 @@ try
     {
         auto request = context
                            .scan("test_db", "test_table")
-                           .filter(eq(col("s1"), col("s2")))
-                           .limit(2)
-                           .project({col("s1")})
-                           .build(context, t);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}, {"limit_2", {2, 1}}, {"project_3", {2, concurrency}}};
-
-        testForExecutionSummary(request, expect);
-    }
-    {
-        auto request = context
-                           .scan("test_db", "test_table")
                            .limit(5)
                            .build(context, t);
         Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"limit_1", {5, 1}}};
@@ -107,56 +104,6 @@ try
         testForExecutionSummary(request, expect);
     }
 
-    {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .topN("s1", true, 5)
-                           .project({col("s2")})
-                           .build(context, t);
-        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, 1}}, {"project_2", {not_check_rows, concurrency}}};
-        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, concurrency}}, {"project_2", {not_check_rows, concurrency}}};
-
-        testForExecutionSummary(request, expect);
-    }
-    {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .project({col("s2")})
-                           .build(context, t);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"project_1", {12, concurrency}}};
-
-        testForExecutionSummary(request, expect);
-    }
-
-    {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .project({col("s2")})
-                           .project({col("s2")})
-                           .build(context, t);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"project_1", {12, concurrency}}, {"project_2", {12, concurrency}}};
-        testForExecutionSummary(request, expect);
-    }
-
-    {
-        auto request = context
-                           .scan("test_db", "empty_table")
-                           .project({col("s2")})
-                           .build(context, t);
-        Expect expect{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}};
-
-        testForExecutionSummary(request, expect);
-    }
-
-    {
-        auto request = context
-                           .scan("test_db", "empty_table")
-                           .project({col("s2")})
-                           .topN("s2", true, 12)
-                           .build(context, t);
-        Expect expect{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}, {"topn_2", {0, 1}}};
-        testForExecutionSummary(request, expect);
-    }
     WRAP_FOR_EXCUTION_SUMMARY_TEST_END
 }
 CATCH
@@ -174,9 +121,110 @@ try
 }
 CATCH
 
+TEST_F(ExecutionSummaryTestRunner, treeBased)
+try
+{
+    WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_BEGIN
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .limit(2)
+                           .project({col("s1")})
+                           .build(context);
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}, {"limit_2", {2, 1}}, {"project_3", {2, concurrency}}};
+
+        testForExecutionSummary(request, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .topN("s1", true, 5)
+                           .project({col("s2")})
+                           .build(context);
+        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, 1}}, {"project_2", {not_check_rows, concurrency}}};
+        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, concurrency}}, {"project_2", {not_check_rows, concurrency}}};
+
+        testForExecutionSummary(request, expect);
+    }
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .project({col("s2")})
+                           .build(context);
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"project_1", {12, concurrency}}};
+
+        testForExecutionSummary(request, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .project({col("s2")})
+                           .project({col("s2")})
+                           .build(context);
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"project_1", {12, concurrency}}, {"project_2", {12, concurrency}}};
+        testForExecutionSummary(request, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "empty_table")
+                           .project({col("s2")})
+                           .build(context);
+        Expect expect{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}};
+
+        testForExecutionSummary(request, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "empty_table")
+                           .project({col("s2")})
+                           .topN("s2", true, 12)
+                           .build(context);
+        Expect expect{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}, {"topn_2", {0, 1}}};
+        testForExecutionSummary(request, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .aggregation({col("s2")}, {col("s2")})
+                           .project({col("s2")})
+                           .build(context);
+        Expect expect{{"table_scan_0", {12, concurrency}},
+                      {"aggregation_1", {3, -1}},
+                      {"project_2", {3, concurrency}}};
+
+        testForExecutionSummary(request, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .aggregation({}, {col("s2")})
+                           .project({col("s2")})
+                           .limit(2)
+                           .build(context);
+
+        Expect expect{{"table_scan_0", {12, concurrency}},
+                      {"aggregation_1", {3, -1}},
+                      {"project_2", {3, concurrency}},
+                      {"limit_3", {2, 1}}};
+
+        testForExecutionSummary(request, expect);
+    }
+
+    WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END
+}
+CATCH
+
 TEST_F(ExecutionSummaryTestRunner, expand)
 try
 {
+    WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_BEGIN
     {
         auto request = context
                            .scan("test_db", "test_table")
@@ -193,6 +241,7 @@ try
         Expect expect{{"table_scan_0", {12, concurrency}}, {"expand_1", {24, concurrency}}};
         testForExecutionSummary(request, expect);
     }
+    WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END
 }
 CATCH
 
@@ -206,35 +255,6 @@ try
                            .aggregation({col("s2")}, {col("s2")})
                            .build(context, t);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, -1}}};
-        testForExecutionSummary(request, expect);
-    }
-
-    {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .aggregation({col("s2")}, {col("s2")})
-                           .project({col("s2")})
-                           .build(context, t);
-        Expect expect{{"table_scan_0", {12, concurrency}},
-                      {"aggregation_1", {3, -1}},
-                      {"project_2", {3, concurrency}}};
-
-        testForExecutionSummary(request, expect);
-    }
-
-    {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .aggregation({}, {col("s2")})
-                           .project({col("s2")})
-                           .limit(2)
-                           .build(context, t);
-
-        Expect expect{{"table_scan_0", {12, concurrency}},
-                      {"aggregation_1", {3, -1}},
-                      {"project_2", {3, concurrency}},
-                      {"limit_3", {2, 1}}};
-
         testForExecutionSummary(request, expect);
     }
     WRAP_FOR_EXCUTION_SUMMARY_TEST_END
