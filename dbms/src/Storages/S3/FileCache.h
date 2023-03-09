@@ -265,6 +265,7 @@ public:
     void releaseSpace(UInt64 size);
     bool reserveSpace(FileSegment::FileType reserve_for, UInt64 size, bool try_evict);
     bool finalizeReservedSize(FileSegment::FileType reserve_for, UInt64 reserved_size, UInt64 content_length);
+    static std::vector<FileSegment::FileType> getEvictFileTypes(FileSegment::FileType evict_for);
     void tryEvictFile(FileSegment::FileType evict_for, UInt64 size);
     UInt64 tryEvictFrom(FileSegment::FileType evict_for, UInt64 size, FileSegment::FileType evict_from);
 

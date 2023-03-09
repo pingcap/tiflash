@@ -198,20 +198,27 @@ bool FileCache::reserveSpaceImpl(FileType reserve_for, UInt64 size, bool try_evi
 }
 
 // The basic evict logic:
-// 1. Distinguish cache priority according to file type. The larger the file type, the lower the priority.
-// 2. Files with higher priority can be evicted from files with lower priority.
-// 3. Files of the same priority can only evict files that have not been accessed recently.
+// Distinguish cache priority according to file type. The larger the file type, the lower the priority.
+// First, try to evict files which not be used recently with the same type. => Try to evict old files.
+// Second, try to evict files with lower priority. => Try to evict lower priority files.
+std::vector<FileType> FileCache::getEvictFileTypes(FileType evict_for)
+{
+    std::vector<FileType> evict_types;
+    evict_types.push_back(evict_for); // First, try evict with the same file type.
+    constexpr auto all_file_types = magic_enum::enum_values<FileType>(); // all_file_types are sorted by enum value.
+    // Second, try evict from the lower proirity file type.
+    for (auto itr = std::rbegin(all_file_types); itr != std::rend(all_file_types) && *itr > evict_for; ++itr)
+    {
+        evict_types.push_back(*itr);
+    }
+    return evict_types;
+}
+
 void FileCache::tryEvictFile(FileType evict_for, UInt64 size)
 {
-    auto file_types = magic_enum::enum_values<FileType>();
-    for (auto itr = std::rbegin(file_types); itr != std::rend(file_types); ++itr)
+    auto file_types = getEvictFileTypes(evict_for);
+    for (auto evict_from : file_types)
     {
-        auto evict_from = *itr;
-        if (evict_from < evict_for)
-        {
-            LOG_DEBUG(log, "Do not evict {} for {}", magic_enum::enum_name(evict_from), magic_enum::enum_name(evict_for));
-            break;
-        }
         auto evicted_size = tryEvictFrom(evict_for, size, evict_from);
         LOG_DEBUG(log, "tryEvictFrom {} required_size={} evicted_size={}", magic_enum::enum_name(evict_from), size, evicted_size);
         if (size > evicted_size)
@@ -230,6 +237,8 @@ UInt64 FileCache::tryEvictFrom(FileType evict_for, UInt64 size, FileType evict_f
     auto & table = tables[static_cast<UInt64>(evict_from)];
     UInt64 total_released_size = 0;
     constexpr UInt32 max_try_evict_count = 10;
+    // File type that we evict for does not have higher priority,
+    // so we need check last access time to prevent recently used files from evicting.
     bool check_last_access_time = evict_for >= evict_from;
     auto itr = table.begin();
     auto end = table.end();
