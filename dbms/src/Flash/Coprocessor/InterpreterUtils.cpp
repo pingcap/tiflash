@@ -250,13 +250,14 @@ google::protobuf::RepeatedPtrField<tipb::Expr> rewiteExprWithTimezone(
     }
 
     google::protobuf::RepeatedPtrField<tipb::Expr> rewrote_conditions;
+    rewrote_conditions.Reserve(conditions.size());
     for (const auto & condition : conditions)
     {
         const auto col_idxs = getColumnsForExpr(condition);
         tipb::Expr expr = condition;
         for (const auto idx : col_idxs)
         {
-            if (!timezone_info.is_utc_timezone && table_scan_columns[idx].id != -1 && table_scan_columns[idx].tp == TiDB::TP::TypeTimestamp)
+            if (table_scan_columns[idx].id != -1 && table_scan_columns[idx].tp == TiDB::TP::TypeTimestamp)
             {
                 expr = ::DB::rewriteTimeStampLiteral(expr, timezone_info);
                 break;

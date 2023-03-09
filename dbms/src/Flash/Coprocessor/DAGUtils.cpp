@@ -1015,7 +1015,7 @@ std::vector<Int64> getColumnsForExpr(const tipb::Expr & expr)
 tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, const TimezoneInfo & timezone_info)
 {
     tipb::Expr ret_expr = expr;
-    if (expr.tp() == tipb::ExprType::MysqlTime && expr.field_type().tp() == TiDB::TypeDatetime)
+    if (isLiteralExpr(expr) && (expr.field_type().tp() == TiDB::TypeTimestamp || expr.field_type().tp() == TiDB::TypeDatetime))
     {
         // for example:
         //      when timezone is +08:00
