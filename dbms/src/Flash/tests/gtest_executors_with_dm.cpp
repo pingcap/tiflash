@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Debug/MockStorage.h>
+#include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/mockExecutor.h>

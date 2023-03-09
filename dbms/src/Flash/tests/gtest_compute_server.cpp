@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Interpreters/Context.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 
 namespace DB

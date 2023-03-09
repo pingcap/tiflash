@@ -12,29 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DMContext.h>
 
-#include <Common/FmtUtils.h>
-#include <Flash/Statistics/traverseExecutors.h>
-#include <TestUtils/TiFlashTestException.h>
-
-namespace DB
+namespace DB::DM
 {
-namespace tests
+
+WriteLimiterPtr DMContext::getWriteLimiter() const
 {
-class ExecutorSerializer
+    return db_context.getWriteLimiter();
+}
+ReadLimiterPtr DMContext::getReadLimiter() const
 {
-public:
-    String serialize(const tipb::DAGRequest * dag_request);
+    return db_context.getReadLimiter();
+}
 
-private:
-    void serializeListStruct(const tipb::DAGRequest * dag_request);
-    void serializeTreeStruct(const tipb::Executor & root_executor, size_t level);
-    void addPrefix(size_t level) { buf.append(String(level, ' ')); }
-
-private:
-    FmtBuffer buf;
-};
-} // namespace tests
-
-} // namespace DB
+} // namespace DB::DM

@@ -15,6 +15,7 @@
 #include <Common/Logger.h>
 #include <Core/BlockGen.h>
 #include <DataTypes/DataTypeEnum.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -29,6 +30,7 @@
 #include <ctime>
 #include <ext/scope_guard.h>
 #include <memory>
+
 namespace DB
 {
 namespace DM

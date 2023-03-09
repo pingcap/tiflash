@@ -359,11 +359,7 @@ public:
         const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
-    bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)
-    {
-        auto dm_context = newDMContext(context, context.getSettingsRef());
-        return flushCache(dm_context, range, try_until_succeed);
-    }
+    bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true);
 
     bool flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed = true);
 

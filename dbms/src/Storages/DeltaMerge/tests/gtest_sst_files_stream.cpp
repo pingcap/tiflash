@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/BlocksListBlockInputStream.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/StorageDeltaMerge.h>

@@ -21,6 +21,7 @@
 #include <Common/assert_cast.h>
 #include <Core/SortDescription.h>
 #include <Functions/FunctionsConversion.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/sortBlock.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Poco/Exception.h>
@@ -694,6 +695,12 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
     // TODO: Update the tracing_id before checkSegmentUpdate?
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+}
+
+bool DeltaMergeStore::flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed)
+{
+    auto dm_context = newDMContext(context, context.getSettingsRef());
+    return flushCache(dm_context, range, try_until_succeed);
 }
 
 bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed)
