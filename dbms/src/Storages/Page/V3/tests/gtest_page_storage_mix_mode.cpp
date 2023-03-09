@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Poco/Logger.h>
 #include <Interpreters/Context.h>
+#include <Poco/Logger.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatchImpl.h>

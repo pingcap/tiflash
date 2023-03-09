@@ -143,7 +143,7 @@ private:
 
     Poco::Logger * log;
 
-    std::unique_ptr<Context> context;
+    ContextPtr context;
     std::unique_ptr<WorkloadOptions> opts;
     std::unique_ptr<TableInfo> table_info;
     std::unique_ptr<KeyGenerator> key_gen;
