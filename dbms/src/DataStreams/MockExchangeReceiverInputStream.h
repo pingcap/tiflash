@@ -39,7 +39,7 @@ public:
     size_t output_index_in_current_columns = 0;
     size_t output_columns_index = 0;
     size_t max_block_size;
-    size_t rows;
+    size_t rows = 0;
     size_t source_num = 0;
 
 protected:
