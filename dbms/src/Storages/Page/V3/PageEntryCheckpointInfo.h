@@ -51,6 +51,7 @@ struct CheckpointLocation
 class OptionalCheckpointInfo
 {
 public:
+    // ctor
     OptionalCheckpointInfo(std::nullopt_t) // NOLINT(google-explicit-constructor)
         : is_set(false)
     {}
@@ -61,16 +62,16 @@ public:
     {
     }
 
-    // Mock as if std::optional<...>
+    // Act as if std::optional<...>
     ALWAYS_INLINE bool has_value() const { return is_set; } // NOLINT(readability-identifier-naming)
     ALWAYS_INLINE OptionalCheckpointInfo * operator->()
     {
-        assert(is_set); // should only be used when contains valid
+        assert(is_set); // should only be used when contains valid value
         return this;
     }
     ALWAYS_INLINE const OptionalCheckpointInfo * operator->() const
     {
-        assert(is_set); // should only be used when contains valid
+        assert(is_set); // should only be used when contains valid value
         return this;
     }
 
@@ -93,6 +94,8 @@ public:
 
     /**
      * Whether this object contains valid value or not
+     *
+     * Share the padding with following bits in this struct
      */
     bool is_set = false;
 

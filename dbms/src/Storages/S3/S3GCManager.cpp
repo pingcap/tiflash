@@ -18,13 +18,13 @@
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Flash/Disaggregated/S3LockClient.h>
 #include <Interpreters/Context.h>
-#include <Poco/File.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3GCManager.h>
+#include <Storages/S3/S3RandomAccessFile.h>
 #include <Storages/Transaction/Types.h>
 #include <TiDB/OwnerManager.h>
 #include <aws/core/utils/DateTime.h>
@@ -97,6 +97,11 @@ bool S3GCManager::runOnAllStores()
         if (shutdown_called)
         {
             LOG_INFO(log, "shutting down, break");
+            break;
+        }
+        if (bool is_gc_owner = gc_owner_manager->isOwner(); !is_gc_owner)
+        {
+            LOG_INFO(log, "GC owner changed, break");
             break;
         }
 
@@ -174,7 +179,7 @@ void S3GCManager::runForTombstonedStore(UInt64 gc_store_id)
     removeOutdatedManifest(manifests, nullptr);
 
     // TODO: write a mark file and skip `cleanUnusedLocks` and `removeOutdatedManifest`
-    //       in the next round.
+    //       in the next round to reduce S3 LIST calls.
 
     // After all the locks removed, the data files may still being locked by another
     // store id, we need to scan the data files with expired delmark
@@ -390,16 +395,11 @@ std::vector<UInt64> S3GCManager::getAllStoreIds() const
 
 std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const String & manifest_key)
 {
-    // download the latest manifest from S3 to local file
-    Poco::File(config.temp_path).createDirectories();
-    const String local_manifest_path = getTemporaryDownloadFile(manifest_key);
-    downloadFile(*client, client->bucket(), local_manifest_path, manifest_key);
-    LOG_INFO(log, "Download manifest, from={} to={}", manifest_key, local_manifest_path);
-
     // parse lock from manifest
     PS::V3::CheckpointProto::StringsInternMap strings_cache;
     using ManifestReader = DB::PS::V3::CPManifestFileReader;
-    auto manifest_file = PosixRandomAccessFile::create(local_manifest_path);
+    LOG_INFO(log, "Reading manifest, key={}", manifest_key);
+    auto manifest_file = S3RandomAccessFile::create(manifest_key);
     auto reader = ManifestReader::create(ManifestReader::Options{.plain_file = manifest_file});
     auto mf_prefix = reader->readPrefix();
 
@@ -453,13 +453,6 @@ void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifes
             mf.key,
             mf.last_modification.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
     }
-}
-
-String S3GCManager::getTemporaryDownloadFile(String s3_key)
-{
-    // TODO: Use DataStoreS3 for downloading manifest files
-    std::replace(s3_key.begin(), s3_key.end(), '/', '_');
-    return fmt::format("{}/{}_{}", config.temp_path, s3_key, std::hash<std::thread::id>()(std::this_thread::get_id()));
 }
 
 /// Service ///

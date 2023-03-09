@@ -150,8 +150,8 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     }
     else
     {
-        shared_client = std::make_unique<tests::MockS3Client>();
         shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket);
+        shared_client = shared_tiflash_client; // share the same object
     }
 }
 
@@ -329,7 +329,7 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
     static auto log = Logger::get();
-    LOG_DEBUG(log, "local_fname={}, remote_fname={}, write_bytes={} cost={}ms is_open:{}", local_fname, remote_fname, write_bytes, elapsed_seconds);
+    LOG_DEBUG(log, "local_fname={}, remote_fname={}, write_bytes={} cost={}ms", local_fname, remote_fname, write_bytes, elapsed_seconds);
 }
 
 void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname)
