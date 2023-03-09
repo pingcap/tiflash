@@ -868,12 +868,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
-    TiFlashProxyConfig proxy_conf(config());
-
-    EngineStoreServerWrap tiflash_instance_wrap{};
-    auto helper = GetEngineStoreServerHelper(
-        &tiflash_instance_wrap);
-
+    // Some Storage's config is necessary for Proxy
+    TiFlashStorageConfig storage_config;
+    std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
     if (storage_config.format_version)
     {
         setStorageFormat(storage_config.format_version);
@@ -883,6 +880,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
     }
+
+    // Init Proxy's config
+    TiFlashProxyConfig proxy_conf(config());
+    EngineStoreServerWrap tiflash_instance_wrap{};
+    auto helper = GetEngineStoreServerHelper(
+        &tiflash_instance_wrap);
 
     if (STORAGE_FORMAT_CURRENT.page == PageFormat::V4)
     {
@@ -990,8 +993,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
     // "0" by default, means no quota, the actual disk capacity is used.
     size_t global_capacity_quota = 0;
-    TiFlashStorageConfig storage_config;
-    std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
 
     storage_config.remote_cache_config.initCacheDir();
 
