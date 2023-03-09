@@ -518,6 +518,7 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
 
 bool StableDiskDelegator::updateDTFileSize(UInt64 file_id, size_t file_size)
 {
+    std::lock_guard lock{pool.mutex};
     auto iter = pool.dt_file_path_map.find(file_id);
     if (iter == pool.dt_file_path_map.end())
     {
