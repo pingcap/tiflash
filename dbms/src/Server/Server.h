@@ -65,7 +65,7 @@ protected:
     std::string getDefaultCorePath() const override;
 
 private:
-    ContextPtr global_context;
+    std::unique_ptr<Context> global_context;
 
     ServerInfo server_info;
 
