@@ -19,8 +19,8 @@
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ext/scope_guard.h>

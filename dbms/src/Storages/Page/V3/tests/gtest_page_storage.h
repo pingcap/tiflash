@@ -14,8 +14,8 @@
 
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 
 namespace DB
 {

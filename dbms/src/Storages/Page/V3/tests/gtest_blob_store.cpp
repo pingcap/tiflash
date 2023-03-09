@@ -23,9 +23,9 @@
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/Page/WriteBatchImpl.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/MockReadLimiter.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::PS::V3::tests

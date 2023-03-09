@@ -14,8 +14,8 @@
 
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 
 namespace DB::DM::Remote::tests
 {

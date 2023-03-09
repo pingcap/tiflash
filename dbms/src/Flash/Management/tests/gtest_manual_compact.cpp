@@ -21,7 +21,7 @@
 #include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <common/types.h>
 #include <fmt/ranges.h>
 #include <gtest/gtest.h>

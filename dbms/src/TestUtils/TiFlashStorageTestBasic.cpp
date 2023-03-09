@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Interpreters/Settings.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 
 namespace DB::base
 {
