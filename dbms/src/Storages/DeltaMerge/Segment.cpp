@@ -34,10 +34,16 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/PathPool.h>
+#include <Storages/S3/S3Filename.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
 #include <fmt/core.h>
@@ -170,16 +176,31 @@ StableValueSpacePtr createNewStable( //
     PageIdU64 stable_id,
     WriteBatches & wbs)
 {
-    auto delegator = context.path_pool.getStableDiskDelegator();
+    auto delegator = context.path_pool->getStableDiskDelegator();
     auto store_path = delegator.choosePath();
 
-    PageIdU64 dtfile_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    PageIdU64 dtfile_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path);
 
     auto stable = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
-    wbs.data.putExternal(dtfile_id, 0);
+    if (auto data_store = context.db_context.getRemoteDataStore(); !data_store)
+    {
+        wbs.data.putExternal(dtfile_id, 0);
+    }
+    else
+    {
+        auto store_id = context.db_context.getTMTContext().getKVStore()->getStoreID();
+        Remote::DMFileOID oid{.store_id = store_id, .table_id = context.physical_table_id, .file_id = dtfile_id};
+        data_store->putDMFile(dtfile, oid);
+        PS::V3::CheckpointLocation loc{
+            .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
+            .offset_in_file = 0,
+            .size_in_file = 0,
+        };
+        wbs.data.putRemoteExternal(dtfile_id, loc);
+    }
     delegator.addDTFile(dtfile_id, dtfile->getBytesOnDisk(), store_path);
 
     return stable;
@@ -224,7 +245,7 @@ SegmentPtr Segment::newSegment( //
     PageIdU64 delta_id,
     PageIdU64 stable_id)
 {
-    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
+    WriteBatches wbs(*context.storage_pool, context.getWriteLimiter());
 
     auto delta = std::make_shared<DeltaValueSpace>(delta_id);
     auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs);
@@ -257,8 +278,8 @@ SegmentPtr Segment::newSegment( //
         rowkey_range,
         segment_id,
         next_segment_id,
-        context.storage_pool.newMetaPageId(),
-        context.storage_pool.newMetaPageId());
+        context.storage_pool->newMetaPageId(),
+        context.storage_pool->newMetaPageId());
 }
 
 SegmentPtr Segment::restoreSegment( //
@@ -266,7 +287,7 @@ SegmentPtr Segment::restoreSegment( //
     DMContext & context,
     PageIdU64 segment_id)
 {
-    Page page = context.storage_pool.metaReader()->read(segment_id); // not limit restore
+    Page page = context.storage_pool->metaReader()->read(segment_id); // not limit restore
 
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     SegmentFormat::Version version;
@@ -339,7 +360,7 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
 bool Segment::write(DMContext & dm_context, const Block & block, bool flush_cache)
 {
     LOG_TRACE(log, "Segment write to disk, rows={}", block.rows());
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(*dm_context.storage_pool, dm_context.getWriteLimiter());
 
     auto column_file = ColumnFileTiny::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
@@ -888,7 +909,7 @@ BlockInputStreamPtr Segment::getInputStreamModeRaw(const DMContext & dm_context,
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(*dm_context.storage_pool, dm_context.getWriteLimiter());
     auto segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
     if (!segment_snap)
         return {};
@@ -993,7 +1014,7 @@ SegmentPtr Segment::replaceData(const Segment::Lock & lock, //
     ColumnFiles in_memory_files{};
     ColumnFilePersisteds persisted_files{};
 
-    WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
+    WriteBatches wbs(*context.storage_pool, context.getWriteLimiter());
 
     // If a snapshot is specified, we retain newly written data since the snapshot.
     // Otherwise, we just discard everything in the delta layer.
@@ -1039,7 +1060,7 @@ SegmentPtr Segment::replaceData(const Segment::Lock & lock, //
 
 SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, std::optional<RowKeyValue> opt_split_at, SplitMode opt_split_mode) const
 {
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(*dm_context.storage_pool, dm_context.getWriteLimiter());
     auto segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
     if (!segment_snap)
         return {};
@@ -1355,21 +1376,21 @@ Segment::prepareSplitLogical( //
     }
 
     GenPageId log_gen_page_id = [&]() {
-        return storage_pool.newLogPageId();
+        return storage_pool->newLogPageId();
     };
 
     DMFiles my_stable_files;
     DMFiles other_stable_files;
 
-    auto delegate = dm_context.path_pool.getStableDiskDelegator();
+    auto delegate = dm_context.path_pool->getStableDiskDelegator();
     for (const auto & dmfile : segment_snap->stable->getDMFiles())
     {
         auto ori_page_id = dmfile->pageId();
         auto file_id = dmfile->fileId();
         auto file_parent_path = delegate.getDTFilePath(file_id);
 
-        auto my_dmfile_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
-        auto other_dmfile_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto my_dmfile_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto other_dmfile_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
         // Note that the file id may has already been mark as deleted. We must
         // create a reference to the page id itself instead of create a reference
@@ -1395,7 +1416,7 @@ Segment::prepareSplitLogical( //
         other_stable_files.push_back(other_dmfile);
     }
 
-    auto other_stable_id = storage_pool.newMetaPageId();
+    auto other_stable_id = storage_pool->newMetaPageId();
 
     auto my_stable = std::make_shared<StableValueSpace>(segment_snap->stable->getId());
     auto other_stable = std::make_shared<StableValueSpace>(other_stable_id);
@@ -1500,7 +1521,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
             *read_info.read_columns,
             dm_context.min_version,
             is_common_handle);
-        auto other_stable_id = dm_context.storage_pool.newMetaPageId();
+        auto other_stable_id = dm_context.storage_pool->newMetaPageId();
         other_stable = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs);
     }
 
@@ -1548,8 +1569,8 @@ SegmentPair Segment::applySplit( //
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
-    auto other_segment_id = dm_context.storage_pool.newMetaPageId();
-    auto other_delta_id = dm_context.storage_pool.newMetaPageId();
+    auto other_segment_id = dm_context.storage_pool->newMetaPageId();
+    auto other_delta_id = dm_context.storage_pool->newMetaPageId();
 
     auto my_delta = std::make_shared<DeltaValueSpace>( //
         delta->getId(),
@@ -1597,7 +1618,7 @@ SegmentPair Segment::applySplit( //
 
 SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const std::vector<SegmentPtr> & ordered_segments)
 {
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    WriteBatches wbs(*dm_context.storage_pool, dm_context.getWriteLimiter());
 
     std::vector<SegmentSnapshotPtr> ordered_snapshots;
     for (const auto & seg : ordered_segments)
@@ -1818,10 +1839,15 @@ bool Segment::compactDelta(DMContext & dm_context)
 
 void Segment::placeDeltaIndex(DMContext & dm_context)
 {
-    // Update delta-index with persisted packs.
+    // Update delta-index with persisted packs. TODO: can use a read snapshot here?
     auto segment_snap = createSnapshot(dm_context, /*for_update=*/true, CurrentMetrics::DT_SnapshotOfPlaceIndex);
     if (!segment_snap)
         return;
+    placeDeltaIndex(dm_context, segment_snap);
+}
+
+void Segment::placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap)
+{
     getReadInfo(dm_context,
                 /*read_columns=*/{getExtraHandleColumnDefine(is_common_handle)},
                 segment_snap,

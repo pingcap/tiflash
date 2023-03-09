@@ -28,6 +28,7 @@
 #include <Debug/MockExecutor/TopNBinder.h>
 #include <Debug/MockExecutor/WindowBinder.h>
 #include <Debug/dbgQueryCompiler.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>

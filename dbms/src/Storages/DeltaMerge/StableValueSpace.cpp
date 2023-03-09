@@ -91,7 +91,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
 {
     auto stable = std::make_shared<StableValueSpace>(id);
 
-    Page page = context.storage_pool.metaReader()->read(id); // not limit restore
+    Page page = context.storage_pool->metaReader()->read(id); // not limit restore
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     UInt64 version, valid_rows, valid_bytes, size;
     readIntBinary(version, buf);
@@ -106,15 +106,14 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
     {
         readIntBinary(page_id, buf);
 
-        auto file_id = context.storage_pool.dataReader()->getNormalPageId(page_id);
-        auto path_delegate = context.path_pool.getStableDiskDelegator();
+        auto file_id = context.storage_pool->dataReader()->getNormalPageId(page_id);
+        auto path_delegate = context.path_pool->getStableDiskDelegator();
         auto file_parent_path = path_delegate.getDTFilePath(file_id);
 
         auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
         auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
         if (!res)
         {
-            // ? 这个值得 throw 吗？还是就打个 ERROR 就可以了呢？
             throw Exception(ErrorCodes::LOGICAL_ERROR, "update dt file size failed");
         }
         stable->files.push_back(dmfile);

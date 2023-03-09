@@ -42,6 +42,12 @@
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
+} // namespace ErrorCodes
+
 namespace FailPoints
 {
 extern const char pause_before_dt_background_delta_merge[];

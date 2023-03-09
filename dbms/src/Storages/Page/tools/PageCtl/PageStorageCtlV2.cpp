@@ -277,6 +277,7 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                     break;
                 default:
                     throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "illegal type: {}", magic_enum::enum_name(record.type));
+                    break;
                 }
             }
         }

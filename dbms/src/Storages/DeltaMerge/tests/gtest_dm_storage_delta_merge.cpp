@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/IColumn.h>
+#include <Common/FailPoint.h>
 #include <Core/Block.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/Field.h>
@@ -43,6 +44,7 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 
+#include <ext/scope_guard.h>
 #include <limits>
 
 namespace DB

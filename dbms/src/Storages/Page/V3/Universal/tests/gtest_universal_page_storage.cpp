@@ -40,7 +40,7 @@ public:
             c_buff[i] = i % 0xff;
         }
 
-        log = Logger::get("PageStorageTest");
+        log = Logger::get("UniPageStorageTest");
     }
 
     void reload()

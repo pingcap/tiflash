@@ -417,7 +417,7 @@ void SegmentTestBasic::ingestDTFileIntoDelta(PageIdU64 segment_id, UInt64 write_
 
     {
         auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
-        WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        WriteBatches ingest_wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
         auto delegator = storage_path_pool->getStableDiskDelegator();
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
@@ -428,7 +428,7 @@ void SegmentTestBasic::ingestDTFileIntoDelta(PageIdU64 segment_id, UInt64 write_
         ingest_wbs.writeLogAndData();
         delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
 
-        WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
         auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         wbs.data.putRefPage(ref_id, dm_file->pageId());
         auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
@@ -458,7 +458,7 @@ void SegmentTestBasic::ingestDTFileByReplace(PageIdU64 segment_id, UInt64 write_
 
     {
         auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
-        WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        WriteBatches ingest_wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
         auto delegator = storage_path_pool->getStableDiskDelegator();
         auto parent_path = delegator.choosePath();
         auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
@@ -468,7 +468,7 @@ void SegmentTestBasic::ingestDTFileByReplace(PageIdU64 segment_id, UInt64 write_
         ingest_wbs.writeLogAndData();
         delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
 
-        WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        WriteBatches wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
         auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         wbs.data.putRefPage(ref_id, dm_file->pageId());
         auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
@@ -540,7 +540,7 @@ void SegmentTestBasic::replaceSegmentData(PageIdU64 segment_id, const Block & bl
     auto parent_path = delegator.choosePath();
     auto file_provider = db_context->getFileProvider();
 
-    WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+    WriteBatches ingest_wbs(*dm_context->storage_pool, dm_context->getWriteLimiter());
 
     auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
@@ -691,8 +691,8 @@ std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceId
 SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings)
 {
     TiFlashStorageTestBasic::reload(std::move(db_settings));
-    storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-    storage_pool = std::make_unique<StoragePool>(*db_context, NAMESPACE_ID, *storage_path_pool, "test.t1");
+    storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+    storage_pool = std::make_shared<StoragePool>(*db_context, NAMESPACE_ID, *storage_path_pool, "test.t1");
     storage_pool->restore();
     ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID) : pre_define_columns;
     setColumns(cols);
@@ -703,10 +703,10 @@ SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPt
 void SegmentTestBasic::reloadDMContext()
 {
     dm_context = std::make_unique<DMContext>(*db_context,
-                                             *storage_path_pool,
-                                             *storage_pool,
+                                             storage_path_pool,
+                                             storage_pool,
                                              /*min_version_*/ 0,
-                                             settings.not_compress_columns,
+                                             /*physical_table_id*/ 100,
                                              options.is_common_handle,
                                              1,
                                              db_context->getSettingsRef());

@@ -17,6 +17,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 
 #include <vector>
 
@@ -41,6 +42,10 @@ enum class WriteBatchWriteType : UInt8
     // In V2, it is the same as `PUT`; In V3, we treated it as a different type from `PUT`
     // to get its lifetime management correct.
     PUT_EXTERNAL = 4,
+    // Put a remote page which data is stored on remote storage
+    PUT_REMOTE = 5,
+    // Update local cache for remote page
+    UPDATE_DATA_FROM_REMOTE = 6,
 };
 
 class WriteBatch : private boost::noncopyable
@@ -70,6 +75,8 @@ private:
         UInt64 page_offset;
         UInt64 page_checksum;
         PageFileIdAndLevel target_file_id;
+
+        std::optional<PS::V3::CheckpointLocation> data_location = std::nullopt;
     };
     using Writes = std::vector<Write>;
 
@@ -257,6 +264,9 @@ public:
                     break;
                 case WriteBatchWriteType::PUT_EXTERNAL:
                     fb.fmtAppend("E{}.{}", namespace_id, w.page_id);
+                    break;
+                case WriteBatchWriteType::PUT_REMOTE:
+                    fb.fmtAppend("R{}.{}", namespace_id, w.page_id);
                     break;
                 default:
                     fb.fmtAppend("Unknown {}.{}", namespace_id, w.page_id);

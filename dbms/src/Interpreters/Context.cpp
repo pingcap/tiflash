@@ -56,6 +56,9 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
+#include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
@@ -63,6 +66,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
@@ -166,8 +170,16 @@ struct ContextShared
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
 
+    /// The following members are only available in read-write disaggregated mode
+    ///
+    /// An abstraction for putting local files to remote data store (e.g. S3)
+    DM::Remote::IDataStorePtr remote_data_store;
     /// The PS instance available on Write Node.
     UniversalPageStorageServicePtr ps_write;
+    /// The PS instance available on Read Node.
+    UniversalPageStorageServicePtr ps_rn_page_cache;
+    /// The page cache in Read Node. It uses ps_rn_page_cache as storage to cache page data to local disk based on the LRU mechanism.
+    DB::DM::Remote::RNLocalPageCachePtr rn_page_cache;
 
     TiFlashSecurityConfigPtr security_config;
 
@@ -1450,7 +1462,9 @@ void Context::initializePathCapacityMetric( //
     const Strings & main_data_paths,
     const std::vector<size_t> & main_capacity_quota, //
     const Strings & latest_data_paths,
-    const std::vector<size_t> & latest_capacity_quota)
+    const std::vector<size_t> & latest_capacity_quota,
+    const String & remote_cache_data_path,
+    size_t remote_cache_capacity)
 {
     auto lock = getLock();
     if (shared->path_capacity_ptr)
@@ -1460,7 +1474,9 @@ void Context::initializePathCapacityMetric( //
         main_data_paths,
         main_capacity_quota,
         latest_data_paths,
-        latest_capacity_quota);
+        latest_capacity_quota,
+        remote_cache_data_path,
+        remote_cache_capacity);
 }
 
 PathCapacityMetricsPtr Context::getPathCapacity() const
@@ -1690,6 +1706,27 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
     return shared->global_storage_pool;
 }
 
+void Context::initializeRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled)
+{
+    if (!s3_enabled)
+        return;
+
+    // Now only S3 data store is supported
+    auto lock = getLock();
+    shared->remote_data_store = std::make_shared<DM::Remote::DataStoreS3>(file_provider);
+}
+
+DM::Remote::IDataStorePtr Context::getRemoteDataStore() const
+{
+    auto lock = getLock();
+    return shared->remote_data_store;
+}
+
+/**
+ * This PageStorage is initialized in two cases:
+ * 1. Not in disaggregated mode.
+ * 2. In disaggregated write mode.
+ */
 void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)
 {
     auto lock = getLock();
@@ -1732,8 +1769,57 @@ UniversalPageStoragePtr Context::getWriteNodePageStorage() const
     }
     else
     {
+        LOG_WARNING(shared->log, "Calling getWriteNodePageStorage() without initialization, stack={}", StackTrace().toString());
         return nullptr;
     }
+}
+
+void Context::initializeReadNodePageCacheIfNeed(const PathPool & path_pool, const String & cache_dir, size_t cache_capacity)
+{
+    auto lock = getLock();
+    if (shared->rn_page_cache)
+    {
+        LOG_WARNING(shared->log, "RN Page Cache has already been initialized.");
+        return;
+    }
+
+    try
+    {
+        PSDiskDelegatorPtr delegator;
+        if (!cache_dir.empty())
+        {
+            delegator = path_pool.getPSDiskDelegatorFixedDirectory(cache_dir);
+            LOG_INFO(shared->log, "Initialize Read Node page cache in cache directory. path={} capacity={}", cache_dir, cache_capacity);
+        }
+        else
+        {
+            delegator = path_pool.getPSDiskDelegatorGlobalMulti(PathPool::read_node_cache_path_prefix);
+            LOG_INFO(shared->log, "Initialize Read Node page cache in data directory. capacity={}", cache_capacity);
+        }
+
+        PageStorageConfig config;
+        shared->ps_rn_page_cache = UniversalPageStorageService::create( //
+            *this,
+            "read_cache",
+            delegator,
+            config);
+        shared->rn_page_cache = DM::Remote::RNLocalPageCache::create({
+            .underlying_storage = shared->ps_rn_page_cache->getUniversalPageStorage(),
+            .max_size_bytes = cache_capacity,
+        });
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        throw;
+    }
+}
+
+DM::Remote::RNLocalPageCachePtr Context::getReadNodePageCache() const
+{
+    auto lock = getLock();
+    RUNTIME_CHECK(shared->rn_page_cache != nullptr);
+    return shared->rn_page_cache;
 }
 
 UInt16 Context::getTCPPort() const

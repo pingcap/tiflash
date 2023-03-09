@@ -791,6 +791,52 @@ TEST_P(WALStoreTest, GetFileSnapshot)
     }
 }
 
+TEST_P(WALStoreTest, WriteReadWithDifferentFormat)
+{
+    auto ctx = DB::tests::TiFlashTestEnv::getContext();
+    auto provider = ctx.getFileProvider();
+    auto path = getTemporaryPath();
+
+    {
+        auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
+        ASSERT_NE(wal, nullptr);
+
+        PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        {
+            universal::PageEntriesEdit edit;
+            edit.put(UniversalPageId("aaa"), entry_p1_2);
+            edit.put(UniversalPageId("bbb"), entry_p1_2);
+            edit.put(UniversalPageId("ccc"), entry_p1_2);
+            wal->apply(universal::Serializer::serializeInCompressedFormTo(edit));
+        }
+        {
+            universal::PageEntriesEdit edit;
+            edit.put(UniversalPageId("aaa"), entry_p1_2);
+            edit.put(UniversalPageId("bbb"), entry_p1_2);
+            edit.put(UniversalPageId("ccc"), entry_p1_2);
+            wal->apply(universal::Serializer::serializeTo(edit));
+        }
+    }
+
+    {
+        size_t num_pages_read = 0;
+        auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
+        while (reader->remained())
+        {
+            auto record = reader->next();
+            if (!record)
+            {
+                reader->throwIfError();
+                break;
+            }
+            auto edit = universal::Serializer::deserializeFrom(record.value());
+            num_pages_read += edit.size();
+        }
+        EXPECT_EQ(num_pages_read, 6);
+    }
+}
 
 INSTANTIATE_TEST_CASE_P(
     Disks,

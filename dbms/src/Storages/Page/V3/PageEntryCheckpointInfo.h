@@ -33,6 +33,8 @@ struct CheckpointLocation
     uint64_t offset_in_file = 0;
     uint64_t size_in_file = 0;
 
+    CheckpointLocation copyWithNewDataFileId(std::shared_ptr<const std::string> new_file_id);
+
     CheckpointProto::EntryDataLocation toProto() const;
 
     /**

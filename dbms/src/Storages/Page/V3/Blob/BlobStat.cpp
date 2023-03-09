@@ -44,8 +44,16 @@ BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobConfig &
 
 void BlobStats::restoreByEntry(const PageEntryV3 & entry)
 {
-    auto stat = blobIdToStat(entry.file_id);
-    stat->restoreSpaceMap(entry.offset, entry.getTotalSize());
+    if (entry.file_id != INVALID_BLOBFILE_ID)
+    {
+        auto stat = blobIdToStat(entry.file_id);
+        stat->restoreSpaceMap(entry.offset, entry.getTotalSize());
+    }
+    else
+    {
+        // It must be an entry point to remote data location
+        RUNTIME_CHECK(entry.checkpoint_info.has_value() && entry.checkpoint_info->is_local_data_reclaimed);
+    }
 }
 
 std::pair<BlobFileId, String> BlobStats::getBlobIdFromName(String blob_name)

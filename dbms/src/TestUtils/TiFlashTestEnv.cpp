@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/UnifiedLogFormatter.h>
+#include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Poco/ConsoleChannel.h>
@@ -24,6 +25,9 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <aws/s3/S3Client.h>
+#include <aws/s3/model/CreateBucketRequest.h>
+#include <aws/s3/model/DeleteBucketRequest.h>
 
 #include <memory>
 
@@ -216,4 +220,40 @@ void TiFlashTestEnv::setUpTestContext(Context & context, DAGContext * dag_contex
     /// collation sensitive group by setting `group_by_collation_sensitive` to true
     context.setSetting("group_by_collation_sensitive", Field(static_cast<UInt64>(1)));
 }
+
+FileProviderPtr TiFlashTestEnv::getMockFileProvider()
+{
+    bool encryption_enabled = false;
+    return std::make_shared<FileProvider>(std::make_shared<MockKeyManager>(encryption_enabled), encryption_enabled);
+}
+
+bool TiFlashTestEnv::createBucketIfNotExist(Aws::S3::S3Client & s3_client, const String & bucket)
+{
+    auto log = Logger::get();
+    Aws::S3::Model::CreateBucketRequest request;
+    request.SetBucket(bucket);
+    auto outcome = s3_client.CreateBucket(request);
+    if (outcome.IsSuccess())
+    {
+        LOG_DEBUG(log, "Created bucket {}", bucket);
+    }
+    else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
+    {
+        LOG_DEBUG(log, "Bucket {} already exist", bucket);
+    }
+    else
+    {
+        const auto & err = outcome.GetError();
+        LOG_ERROR(log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
+    }
+    return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
+}
+
+void TiFlashTestEnv::deleteBucket(Aws::S3::S3Client & s3_client, const String & bucket)
+{
+    Aws::S3::Model::DeleteBucketRequest request;
+    request.SetBucket(bucket);
+    s3_client.DeleteBucket(request);
+}
+
 } // namespace DB::tests

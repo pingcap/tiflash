@@ -965,6 +965,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashStorageConfig storage_config;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
 
+    storage_config.remote_cache_config.initCacheDir();
+
     if (storage_config.s3_config.isS3Enabled())
     {
         if (enable_encryption)
@@ -974,6 +976,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         S3::ClientFactory::instance().init(storage_config.s3_config);
     }
+    global_context->initializeRemoteDataStore(global_context->getFileProvider(), storage_config.s3_config.isS3Enabled());
 
     if (storage_config.format_version)
     {
@@ -990,7 +993,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.main_data_paths,
         storage_config.main_capacity_quota, //
         storage_config.latest_data_paths,
-        storage_config.latest_capacity_quota);
+        storage_config.latest_capacity_quota,
+        global_context->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.dir : "",
+        global_context->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.capacity : 0);
     TiFlashRaftConfig raft_config = TiFlashRaftConfig::parseSettings(config(), log);
     global_context->setPathPool( //
         storage_config.main_data_paths, //
@@ -1134,7 +1139,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
-    global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
+    if (global_context->isDisaggregatedStorageMode())
+        global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
+
+    if (global_context->isDisaggregatedComputeMode())
+        global_context->initializeReadNodePageCacheIfNeed(
+            global_context->getPathPool(),
+            storage_config.remote_cache_config.getPageCacheDir(),
+            storage_config.remote_cache_config.getPageCapacity());
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);

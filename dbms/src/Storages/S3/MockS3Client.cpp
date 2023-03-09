@@ -25,6 +25,7 @@
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <aws/s3/model/CreateBucketResult.h>
 #include <aws/s3/model/CreateMultipartUploadRequest.h>
+#include <aws/s3/model/DeleteBucketRequest.h>
 #include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/GetObjectResult.h>
@@ -173,6 +174,13 @@ Model::CreateBucketOutcome MockS3Client::CreateBucket(const Model::CreateBucketR
     std::lock_guard lock(mtx);
     [[maybe_unused]] auto & bucket_storage = storage[request.GetBucket()];
     return Model::CreateBucketResult{};
+}
+
+Model::DeleteBucketOutcome MockS3Client::DeleteBucket(const Model::DeleteBucketRequest & request) const
+{
+    std::lock_guard lock(mtx);
+    storage.erase(request.GetBucket());
+    return Model::DeleteBucketOutcome{};
 }
 
 

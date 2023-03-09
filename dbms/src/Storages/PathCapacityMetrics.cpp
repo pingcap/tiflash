@@ -46,7 +46,9 @@ PathCapacityMetrics::PathCapacityMetrics(
     const Strings & main_paths_,
     const std::vector<size_t> & main_capacity_quota_,
     const Strings & latest_paths_,
-    const std::vector<size_t> & latest_capacity_quota_)
+    const std::vector<size_t> & latest_capacity_quota_,
+    String remote_cache_path,
+    size_t remote_cache_capacity)
     : capacity_quota(capacity_quota_)
     , log(Logger::get())
 {
@@ -77,6 +79,10 @@ PathCapacityMetrics::PathCapacityMetrics(
         {
             all_paths[latest_paths_[i]] = safeGetQuota(latest_capacity_quota_, i);
         }
+    }
+    if (!remote_cache_path.empty())
+    {
+        all_paths[remote_cache_path] = remote_cache_capacity;
     }
 
     for (auto && [path, quota] : all_paths)

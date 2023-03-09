@@ -102,15 +102,28 @@ struct StorageS3Config
     UInt64 max_connections = 1024;
     UInt64 connection_timeout_ms = 1000;
     UInt64 request_timeout_ms = 3000;
-    String cache_dir;
-    UInt64 cache_capacity = 0;
 
     inline static String S3_ACCESS_KEY_ID = "S3_ACCESS_KEY_ID";
     inline static String S3_SECRET_ACCESS_KEY = "S3_SECRET_ACCESS_KEY";
 
     void parse(const String & content, const LoggerPtr & log);
     bool isS3Enabled() const;
-    bool isFileCacheEnabled() const;
+};
+
+struct StorageRemoteCacheConfig
+{
+    String dir;
+    UInt64 capacity = 0;
+    UInt64 dtfile_level = 100;
+    double delta_rate = 0.3;
+
+    bool isCacheEnabled() const;
+    void initCacheDir() const;
+    String getDTFileCacheDir() const;
+    String getPageCacheDir() const;
+    UInt64 getDTFileCapacity() const;
+    UInt64 getPageCapacity() const;
+    void parse(const String & content, const LoggerPtr & log);
 };
 
 struct TiFlashStorageConfig
@@ -126,6 +139,7 @@ public:
     bool lazily_init_store = true;
 
     StorageS3Config s3_config;
+    StorageRemoteCacheConfig remote_cache_config;
 
 public:
     TiFlashStorageConfig() = default;

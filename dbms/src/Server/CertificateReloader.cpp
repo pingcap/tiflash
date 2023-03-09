@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashSecurity.h>
+#include <Interpreters/Context.h>
 #include <Server/CertificateReloader.h>
 
 #if Poco_NetSSL_FOUND
