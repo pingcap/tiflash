@@ -870,6 +870,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     // Some Storage's config is necessary for Proxy
     TiFlashStorageConfig storage_config;
+    // Deprecated settings.
+    // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
+    // "0" by default, means no quota, the actual disk capacity is used.
+    size_t global_capacity_quota = 0;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
     if (storage_config.format_version)
     {
@@ -988,11 +992,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // 1. capacity
     // 2. path pool
     // 3. TMTContext
-
-    // Deprecated settings.
-    // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
-    // "0" by default, means no quota, the actual disk capacity is used.
-    size_t global_capacity_quota = 0;
 
     storage_config.remote_cache_config.initCacheDir();
 
