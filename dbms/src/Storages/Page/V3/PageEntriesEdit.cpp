@@ -81,9 +81,9 @@ typename PageEntriesEdit<UniversalPageId>::EditRecord PageEntriesEdit<UniversalP
     }
     if (rec.type == EditRecordType::VAR_EXTERNAL)
     {
-        rec.entry.checkpoint_info = CheckpointInfo{
-            .data_location = CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map),
-            .is_local_data_reclaimed = true,
+        rec.entry.checkpoint_info = OptionalCheckpointInfo{
+            CheckpointLocation::fromProto(proto_edit.entry_location(), strings_map),
+            /*is_local_data_reclaimed*/ true,
         };
     }
     return rec;

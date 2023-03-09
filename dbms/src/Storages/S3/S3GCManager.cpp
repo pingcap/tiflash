@@ -495,6 +495,7 @@ void S3GCManagerService::shutdown()
     {
         global_ctx.getBackgroundPool().removeTask(timer);
         timer = nullptr;
+        manager = nullptr;
     }
 }
 

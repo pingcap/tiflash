@@ -33,6 +33,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <fstream>
+#include <ios>
 #include <memory>
 
 namespace ProfileEvents
@@ -315,6 +316,8 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
     req.SetContentType("binary/octet-stream");
     auto istr = Aws::MakeShared<Aws::FStream>("PutObjectInputStream", local_fname, std::ios_base::in | std::ios_base::binary);
     RUNTIME_CHECK_MSG(istr->is_open(), "Open {} fail: {}", local_fname, strerror(errno));
+    auto write_bytes = istr->seekg(0, std::ios::end).tellg(); // get the file size
+    istr->seekg(0, std::ios::beg); // rewind to the begin
     req.SetBody(istr);
     ProfileEvents::increment(ProfileEvents::S3PutObject);
     auto result = client.PutObject(req);
@@ -322,12 +325,11 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
     {
         throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} key={}", local_fname, bucket, remote_fname);
     }
-    auto write_bytes = istr->tellp();
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
     static auto log = Logger::get();
-    LOG_DEBUG(log, "local_fname={}, remote_fname={}, write_bytes={} cost={}ms", local_fname, remote_fname, write_bytes, elapsed_seconds);
+    LOG_DEBUG(log, "local_fname={}, remote_fname={}, write_bytes={} cost={}ms is_open:{}", local_fname, remote_fname, write_bytes, elapsed_seconds);
 }
 
 void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname)
