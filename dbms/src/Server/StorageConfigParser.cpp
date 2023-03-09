@@ -210,6 +210,11 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, const Logge
         format_version = *version;
     }
 
+    if (auto version = table->get_qualified_as<UInt64>("api_version"); version)
+    {
+        api_version = *version;
+    }
+
     auto get_bool_config_or_default = [&](const String & name, bool default_value) {
         if (auto value = table->get_qualified_as<Int32>(name); value)
         {

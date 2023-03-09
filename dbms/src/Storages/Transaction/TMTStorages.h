@@ -38,7 +38,7 @@ public:
     ManageableStoragePtr get(KeyspaceID keyspace_id, TableID table_id) const;
     // Get all the storages of all the keyspaces in this instance.
     StorageMap getAllStorage() const;
-    // Get all the existed keyspaces in this instance.
+    // Get all the existing keyspaces in this instance. A map of `{KeySpaceID => num of physical tables}`.
     KeyspaceSet getAllKeyspaces() const;
 
     ManageableStoragePtr getByName(const std::string & db, const std::string & table, bool include_tombstone) const;

@@ -873,7 +873,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashProxyConfig proxy_conf(config());
 
-    auto api_version = config().getInt("api_version", 1);
 
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
@@ -999,6 +998,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
     }
+
+    LOG_INFO(log, "Using api_version={}", storage_config.api_version);
 
     global_context->initializePathCapacityMetric( //
         global_capacity_quota, //
@@ -1181,7 +1182,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (updated)
                 {
                     auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
-                    auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, api_version, log);
+                    auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, storage_config.api_version, log);
                     global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
                     LOG_DEBUG(log, "TMTContext updated security config");
                 }
@@ -1238,7 +1239,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, api_version, log);
+        auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, storage_config.api_version, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }
@@ -1261,7 +1262,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         /// Then, sync schemas with TiDB, and initialize schema sync service.
         /// If in API V2 mode, each keyspace's schema is fetch lazily.
-        if (api_version == 1)
+        if (storage_config.api_version == 1)
         {
             for (int i = 0; i < 60; i++) // retry for 3 mins
             {

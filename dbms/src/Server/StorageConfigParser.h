@@ -137,6 +137,7 @@ public:
 
     UInt64 format_version = 0;
     bool lazily_init_store = true;
+    UInt64 api_version = 1;
 
     StorageS3Config s3_config;
     StorageRemoteCacheConfig remote_cache_config;
