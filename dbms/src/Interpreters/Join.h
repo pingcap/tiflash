@@ -33,6 +33,7 @@
 namespace DB
 {
 struct ProbeProcessInfo;
+struct RestoreInfo;
 
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
@@ -154,7 +155,7 @@ public:
 
     bool isSpilled() const { return is_spilled; }
 
-    std::tuple<JoinPtr, BlockInputStreamPtr, BlockInputStreamPtr, BlockInputStreamPtr> getOneRestoreStream(size_t max_block_size);
+    RestoreInfo getOneRestoreStream(size_t max_block_size);
 
     void dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>> & partition_blocks_list);
 
@@ -559,6 +560,19 @@ private:
     void joinBlockImplNullAware(Block & block, const Maps & maps) const;
 };
 
+struct RestoreInfo
+{
+    JoinPtr join;
+    BlockInputStreamPtr non_joined_stream;
+    BlockInputStreamPtr build_stream;
+    BlockInputStreamPtr probe_stream;
+
+    RestoreInfo(JoinPtr join_, BlockInputStreamPtr non_joined_data_stream_, BlockInputStreamPtr build_stream_, BlockInputStreamPtr probe_stream_)
+        : join(std::move(join_))
+        , non_joined_stream(non_joined_data_stream_)
+        , build_stream(build_stream_)
+        , probe_stream(probe_stream_){};
+};
 
 struct ProbeProcessInfo
 {
