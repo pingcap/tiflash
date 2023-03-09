@@ -954,13 +954,13 @@ public:
         /// Return empty result when aggregating without keys on empty set.
         bool empty_result_for_aggregation_by_empty_set;
 
-        SpillConfig spill_config;
-
-        UInt64 max_block_size;
-        
         // There is only one concurrency to handle the build and merge phases of aggregate,
         // such as fine grained shuffle agg and possible partial agg in the future.
         bool is_local_agg;
+
+        SpillConfig spill_config;
+
+        UInt64 max_block_size;
 
         TiDB::TiDBCollators collators;
 
@@ -972,9 +972,9 @@ public:
             size_t group_by_two_level_threshold_bytes_,
             size_t max_bytes_before_external_group_by_,
             bool empty_result_for_aggregation_by_empty_set_,
+            bool is_local_agg_,
             const SpillConfig & spill_config_,
             UInt64 max_block_size_,
-            bool is_local_agg_ = false,
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
             : src_header(src_header_)
             , keys(keys_)
@@ -982,9 +982,9 @@ public:
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
             , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
+            , is_local_agg(is_local_agg_)
             , spill_config(spill_config_)
             , max_block_size(max_block_size_)
-            , is_local_agg(is_local_agg_)
             , collators(collators_)
             , group_by_two_level_threshold(group_by_two_level_threshold_)
             , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
@@ -998,9 +998,8 @@ public:
                const AggregateDescriptions & aggregates_,
                const SpillConfig & spill_config,
                UInt64 max_block_size_,
-               bool is_local_agg_ = false,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, 0, 0, 0, false, spill_config, max_block_size_, is_local_agg_, collators_)
+            : Params(Block(), keys_, aggregates_, 0, 0, 0, false, false, spill_config, max_block_size_, collators_)
         {
             intermediate_header = intermediate_header_;
         }

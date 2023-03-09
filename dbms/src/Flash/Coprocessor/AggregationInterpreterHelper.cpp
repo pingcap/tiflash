@@ -108,8 +108,8 @@ Aggregator::Params buildParams(
         getAverageThreshold(total_two_level_threshold_bytes, agg_streams_size),
         getAverageThreshold(settings.max_bytes_before_external_group_by, agg_streams_size),
         !is_final_agg,
-        spill_config,
         is_local_agg,
+        spill_config,
         context.getSettingsRef().max_block_size,
         has_collator ? collators : TiDB::dummy_collators);
 }

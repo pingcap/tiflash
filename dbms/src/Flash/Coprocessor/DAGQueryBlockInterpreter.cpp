@@ -411,7 +411,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         settings.max_spilled_bytes_per_file,
         context.getFileProvider());
     assert(!pipeline.streams.empty());
-    bool is_local_agg = enable_fine_grained_shuffle || pipeline.streams.size() == 1;
+    bool is_local_agg = enable_fine_grained_shuffle || (1 == pipeline.streams.size());
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,

@@ -1751,8 +1751,9 @@ MergingBucketsPtr Aggregator::mergeAndConvertToBlocks(
                                        non_empty_data[i]->aggregates_pools.end());
     }
 
+    // for local agg merge, concurrency must be 1.
     // for single level merge, concurrency must be 1.
-    size_t merge_concurrency = has_at_least_one_two_level ? std::max(max_threads, 1) : 1;
+    size_t merge_concurrency = params.is_local_agg ? 1 : (has_at_least_one_two_level ? std::max(max_threads, 1) : 1);
     return std::make_shared<MergingBuckets>(*this, non_empty_data, final, merge_concurrency);
 }
 

@@ -55,9 +55,9 @@ private:
 
     std::vector<BlockInputStreams> bucket_restore_streams;
 
-    // for concurrency > 1
+    // for non local agg
     std::atomic_uint32_t current_bucket_num = 0;
-    // for concurrency == 1
+    // for local agg
     int32_t concurrent_stream_num = -1;
 };
 using SpilledRestoreMergingBucketsPtr = std::shared_ptr<SpilledRestoreMergingBuckets>;
