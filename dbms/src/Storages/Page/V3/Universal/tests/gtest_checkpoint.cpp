@@ -13,12 +13,25 @@
 // limitations under the License.
 
 #include <Common/SyncPoint/SyncPoint.h>
+#include <Encryption/FileProvider.h>
+#include <Encryption/PosixRandomAccessFile.h>
+#include <Flash/Disaggregated/MockS3LockClient.h>
 #include <IO/ReadBufferFromFile.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
+#include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
+#include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3Filename.h>
+#include <Storages/S3/S3RandomAccessFile.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashTestEnv.h>
+#include <aws/s3/S3Client.h>
+#include <aws/s3/model/CreateBucketRequest.h>
 
 #include <future>
 
@@ -78,14 +91,18 @@ public:
         return ret;
     }
 
-    void dumpCheckpoint()
+    void dumpCheckpoint(bool upload_success = true)
     {
         page_storage->dumpIncrementalCheckpoint({
-            .data_file_id_pattern = "{sequence}_{sub_file_index}.data",
-            .data_file_path_pattern = dir + "{sequence}_{sub_file_index}.data",
-            .manifest_file_id_pattern = "{sequence}.manifest",
-            .manifest_file_path_pattern = dir + "{sequence}.manifest",
+            .data_file_id_pattern = "{seq}_{index}.data",
+            .data_file_path_pattern = dir + "{seq}_{index}.data",
+            .manifest_file_id_pattern = "{seq}.manifest",
+            .manifest_file_path_pattern = dir + "{seq}.manifest",
             .writer_info = *writer_info,
+            .must_locked_files = {},
+            .persist_checkpoint = [upload_success](const PS::V3::LocalCheckpointFiles &) {
+                return upload_success;
+            },
         });
     }
 
@@ -117,7 +134,10 @@ try
     ASSERT_TRUE(Poco::File(dir + "6.manifest").exists());
     ASSERT_TRUE(Poco::File(dir + "6_0.data").exists());
 
-    auto reader = CPManifestFileReader::create({.file_path = dir + "6.manifest"});
+    auto manifest_file = PosixRandomAccessFile::create(dir + "6.manifest");
+    auto reader = CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
     auto im = CheckpointProto::StringsInternMap{};
     auto prefix = reader->readPrefix();
     auto edits = reader->readEdits(im);
@@ -171,7 +191,10 @@ try
     ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
     ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
 
-    auto reader = CPManifestFileReader::create({.file_path = dir + "2.manifest"});
+    auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+    auto reader = CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
     auto im = CheckpointProto::StringsInternMap{};
     auto prefix = reader->readPrefix();
     auto edits = reader->readEdits(im);
@@ -201,7 +224,10 @@ try
     ASSERT_TRUE(Poco::File(dir + "3.manifest").exists());
     ASSERT_TRUE(Poco::File(dir + "3_0.data").exists());
 
-    auto reader = CPManifestFileReader::create({.file_path = dir + "3.manifest"});
+    auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+    auto reader = CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
     auto im = CheckpointProto::StringsInternMap{};
     auto prefix = reader->readPrefix();
     auto edits = reader->readEdits(im);
@@ -243,7 +269,10 @@ try
     ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
     ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
 
-    auto reader = CPManifestFileReader::create({.file_path = dir + "2.manifest"});
+    auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+    auto reader = CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
     auto im = CheckpointProto::StringsInternMap{};
     auto prefix = reader->readPrefix();
     auto edits = reader->readEdits(im);
@@ -284,7 +313,10 @@ try
     ASSERT_TRUE(Poco::File(dir + "3.manifest").exists());
     ASSERT_TRUE(Poco::File(dir + "3_0.data").exists());
 
-    auto reader = CPManifestFileReader::create({.file_path = dir + "3.manifest"});
+    auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+    auto reader = CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
     auto im = CheckpointProto::StringsInternMap{};
     auto prefix = reader->readPrefix();
     auto edits = reader->readEdits(im);
@@ -313,7 +345,10 @@ try
         ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "2.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -347,7 +382,10 @@ try
         ASSERT_TRUE(Poco::File(dir + "4.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "4_0.data").exists());
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "4.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "4.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -365,6 +403,93 @@ try
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("4", iter->page_id);
         ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("5", iter->page_id);
+        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
+        ASSERT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info->data_location));
+    }
+}
+CATCH
+
+TEST_F(PSCheckpointTest, DumpWriteDumpWithUploadFailure)
+try
+{
+    {
+        UniversalWriteBatch batch;
+        batch.putPage("3", tag, "The flower carriage rocked");
+        batch.putPage("4", tag, "Nahida opened her eyes");
+        page_storage->write(std::move(batch));
+    }
+    // mock that local files are generated, but uploading to remote data source is failed
+    dumpCheckpoint(/*upload_success*/ false);
+    {
+        ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
+        ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
+
+        auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
+        auto im = CheckpointProto::StringsInternMap{};
+        auto prefix = reader->readPrefix();
+        auto edits = reader->readEdits(im);
+        auto records = edits->getRecords();
+
+        ASSERT_EQ(2, records.size());
+
+        auto iter = records.begin();
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("3", iter->page_id);
+        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
+        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("4", iter->page_id);
+        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+    }
+
+    // Write and dump again.
+    // This time the checkpoint should also contains the
+    // data in previous write
+
+    {
+        UniversalWriteBatch batch;
+        batch.putPage("3", tag, "Said she just dreamed a dream"); // Override
+        batch.putPage("5", tag, "Dreamed of the day that she was born"); // New
+        page_storage->write(std::move(batch));
+    }
+    dumpCheckpoint(/*upload_success*/ true);
+    {
+        ASSERT_TRUE(Poco::File(dir + "4.manifest").exists());
+        ASSERT_TRUE(Poco::File(dir + "4_0.data").exists());
+
+        auto manifest_file = PosixRandomAccessFile::create(dir + "4.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
+        auto im = CheckpointProto::StringsInternMap{};
+        auto prefix = reader->readPrefix();
+        auto edits = reader->readEdits(im);
+        auto records = edits->getRecords();
+
+        ASSERT_EQ(3, records.size());
+
+        auto iter = records.begin();
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("3", iter->page_id);
+        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
+        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("4", iter->page_id);
+        // 2_0.data is not uploaded and the data_location only get updated after success upload
+        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
         ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
 
         iter++;
@@ -399,7 +524,10 @@ try
         ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "2.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -425,7 +553,10 @@ try
     {
         dumpCheckpoint();
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "3.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -472,7 +603,10 @@ try
         ASSERT_TRUE(Poco::File(dir + "3.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "3_0.data").exists());
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "3.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -499,7 +633,10 @@ try
     {
         dumpCheckpoint();
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "4.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "4.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -549,7 +686,10 @@ try
         ASSERT_TRUE(Poco::File(dir + "2.manifest").exists());
         ASSERT_TRUE(Poco::File(dir + "2_0.data").exists());
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "2.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "2.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -570,7 +710,10 @@ try
     {
         dumpCheckpoint();
 
-        auto reader = CPManifestFileReader::create({.file_path = dir + "3.manifest"});
+        auto manifest_file = PosixRandomAccessFile::create(dir + "3.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
         auto im = CheckpointProto::StringsInternMap{};
         auto prefix = reader->readPrefix();
         auto edits = reader->readEdits(im);
@@ -584,6 +727,205 @@ try
         ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
         ASSERT_EQ("updated value", readData(iter->entry.checkpoint_info->data_location));
     }
+}
+CATCH
+
+
+class UniversalPageStorageServiceCheckpointTest : public DB::base::TiFlashStorageTestBasic
+{
+public:
+    void SetUp() override
+    {
+        TiFlashStorageTestBasic::SetUp();
+        auto path = getTemporaryPath();
+        auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
+        s3_client = S3::ClientFactory::instance().sharedClient();
+        bucket = S3::ClientFactory::instance().bucket();
+        uni_ps_service = UniversalPageStorageService::createForTest(
+            global_context,
+            "test.t",
+            delegator,
+            PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0},
+            s3_client,
+            bucket);
+        log = Logger::get("UniversalPageStorageServiceCheckpointTest");
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
+    }
+
+protected:
+    static std::string readData(const V3::CheckpointLocation & location)
+    {
+        RUNTIME_CHECK(location.offset_in_file > 0);
+        RUNTIME_CHECK(location.data_file_id != nullptr && !location.data_file_id->empty());
+
+        std::string ret;
+        ret.resize(location.size_in_file);
+
+        // Note: We will introduce a DataReader when compression is added later.
+        // When there is compression, we first need to seek and read compressed blocks, decompress them, and then seek to the data we want.
+        // A DataReader will encapsulate this logic.
+        // Currently there is no compression, so reading data is rather easy.
+
+        // parse from lockkey to data_file_key
+        auto data_file_key = S3::S3FilenameView::fromKey(*location.data_file_id).asDataFile().toFullKey();
+
+        auto data_file = S3::S3RandomAccessFile::create(data_file_key);
+        ReadBufferFromRandomAccessFile buf(data_file);
+        buf.seek(location.offset_in_file);
+        auto n = buf.readBig(ret.data(), location.size_in_file);
+        RUNTIME_CHECK(n == location.size_in_file);
+
+        return ret;
+    }
+
+protected:
+    UniversalPageStorageServicePtr uni_ps_service;
+    std::shared_ptr<Aws::S3::S3Client> s3_client;
+    String bucket;
+    UInt64 tag = 0;
+    UInt64 store_id = 2;
+
+    LoggerPtr log;
+};
+
+TEST_F(UniversalPageStorageServiceCheckpointTest, DumpAndRead)
+try
+{
+    auto page_storage = uni_ps_service->getUniversalPageStorage();
+    auto store_info = metapb::Store{};
+    store_info.set_id(store_id);
+    auto s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client, bucket);
+    auto remote_store = std::make_shared<DM::Remote::DataStoreS3>(::DB::tests::TiFlashTestEnv::getMockFileProvider());
+    // Mock normal writes
+    {
+        UniversalWriteBatch batch;
+        batch.putPage("5", tag, "The flower carriage rocked");
+        batch.putPage("3", tag, "Said she just dreamed a dream");
+        page_storage->write(std::move(batch));
+    }
+    {
+        UniversalWriteBatch batch;
+        batch.delPage("1");
+        batch.putRefPage("2", "5");
+        batch.putPage("10", tag, "Nahida opened her eyes");
+        batch.delPage("3");
+        page_storage->write(std::move(batch));
+    }
+    uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store);
+
+    { // check the first manifest
+        UInt64 upload_seq = 1;
+        auto s3_manifest_name = S3::S3Filename::newCheckpointManifest(store_id, upload_seq);
+        auto manifest_file = S3::S3RandomAccessFile::create(s3_manifest_name.toFullKey());
+        auto reader = CPManifestFileReader::create({.plain_file = manifest_file});
+        auto im = CheckpointProto::StringsInternMap{};
+        reader->readPrefix();
+        auto edits = reader->readEdits(im);
+        auto records = edits->getRecords();
+
+        ASSERT_EQ(5, records.size());
+
+        auto iter = records.begin();
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("10", iter->page_id);
+        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info->data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_REF, iter->type);
+        ASSERT_EQ("2", iter->page_id);
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("3", iter->page_id);
+        ASSERT_TRUE(iter->entry.checkpoint_info.has_value());
+        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info->data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
+        ASSERT_EQ("3", iter->page_id);
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("5", iter->page_id);
+        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info->data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+    } // check the first manifest
+
+#if 0
+    // Mock normal writes && FAP ingest remote page
+    {
+        UniversalWriteBatch batch;
+        batch.putPage("20", tag, "Dreamed of the day that she was born");
+        page_storage->write(std::move(batch));
+    }
+    StoreID another_store_id = 99;
+    auto ingest_from_data_file = S3::S3Filename::newCheckpointData(another_store_id, 100, 1);
+    auto ingest_from_dtfile = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = another_store_id, .table_id = 50, .file_id = 999});
+    {
+        // create object on s3 for locking
+        S3::uploadEmptyFile(*s3_client, bucket, ingest_from_data_file.toFullKey());
+        S3::uploadEmptyFile(*s3_client, bucket, ingest_from_dtfile.toFullKey());
+
+        UniversalWriteBatch batch;
+        PS::V3::CheckpointLocation loc21{
+            .data_file_id = std::make_shared<String>(ingest_from_data_file.toFullKey()),
+            .offset_in_file = 1024,
+            .size_in_file = 1024,
+        };
+        batch.putRemotePage("21", tag, loc21, {});
+        PS::V3::CheckpointLocation loc22{
+            .data_file_id = std::make_shared<String>(ingest_from_dtfile.toFullKey()),
+            .offset_in_file = 0,
+            .size_in_file = 0,
+        };
+        batch.putRemoteExternal("22", loc22);
+        page_storage->write(std::move(batch));
+    }
+    uni_ps_service->uploadCheckpointImpl(store_info, s3lock_client, remote_store);
+
+    { // check the second manifest
+        UInt64 upload_seq = 2;
+        auto s3_manifest_name = S3::S3Filename::newCheckpointManifest(store_id, upload_seq);
+        auto manifest_file = S3::S3RandomAccessFile::create(s3_manifest_name.toFullKey());
+        auto reader = CPManifestFileReader::create({.plain_file = manifest_file});
+        auto im = CheckpointProto::StringsInternMap{};
+        reader->readPrefix();
+        auto edits = reader->readEdits(im);
+        auto records = edits->getRecords();
+
+        ASSERT_EQ(5 + 3, records.size());
+
+        auto iter = records.begin();
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("10", iter->page_id);
+        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info->data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_REF, iter->type);
+        ASSERT_EQ("2", iter->page_id);
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("3", iter->page_id);
+        ASSERT_TRUE(iter->entry.checkpoint_info.has_value());
+        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info->data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
+        ASSERT_EQ("3", iter->page_id);
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("5", iter->page_id);
+        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info->data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+    } // check the first manifest
+#endif
 }
 CATCH
 

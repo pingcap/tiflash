@@ -1425,7 +1425,7 @@ void PageDirectory<Trait>::applyRefEditRecord(
 }
 
 template <typename Trait>
-void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
+std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     // We need to make sure there is only one apply thread to write wal and then increase `sequence`.
     // Note that, as read threads use current `sequence` as read_seq, we cannot increase `sequence`
@@ -1458,6 +1458,7 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
     watch.restart();
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds()); });
 
+    std::unordered_set<String> applied_data_files;
     {
         std::unique_lock table_lock(table_rw_mutex);
 
@@ -1504,6 +1505,12 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
                 case EditRecordType::UPDATE_DATA_FROM_REMOTE:
                     throw Exception(fmt::format("should not handle edit with invalid type [type={}]", magic_enum::enum_name(r.type)));
                 }
+
+                // collect the applied remote data_file_ids
+                if (r.entry.checkpoint_info)
+                {
+                    applied_data_files.emplace(*r.entry.checkpoint_info->data_location.data_file_id);
+                }
             }
             catch (DB::Exception & e)
             {
@@ -1515,6 +1522,7 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
         // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
         sequence.fetch_add(edit_size);
     }
+    return applied_data_files;
 }
 
 template <typename Trait>

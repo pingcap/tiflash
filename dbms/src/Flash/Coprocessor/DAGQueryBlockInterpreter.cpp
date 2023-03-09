@@ -23,7 +23,6 @@
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
-#include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/MockExchangeSenderInputStream.h>
 #include <DataStreams/MockTableScanBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
@@ -45,8 +44,8 @@
 #include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/Expand.h>
 #include <Interpreters/Join.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -201,7 +200,7 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
 {
     const auto filter_conditions = FilterConditions::filterConditionsFrom(query_block.selection_name, query_block.selection);
 
-    if (context.isDisaggregatedComputeMode())
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, table_scan, filter_conditions, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);
@@ -223,7 +222,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         throw TiFlashException("Join query block must have 2 input streams", Errors::BroadcastJoin::Internal);
     }
 
-    JoinInterpreterHelper::TiFlashJoin tiflash_join{join};
+    JoinInterpreterHelper::TiFlashJoin tiflash_join(join, context.isTest());
 
     DAGPipeline probe_pipeline;
     DAGPipeline build_pipeline;
@@ -244,7 +243,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     bool is_tiflash_right_join = tiflash_join.isTiFlashRightJoin();
 
     // prepare probe side
-    auto [probe_side_prepare_actions, probe_key_names, probe_filter_column_name] = JoinInterpreterHelper::prepareJoin(
+    auto [probe_side_prepare_actions, probe_key_names, original_probe_key_names, probe_filter_column_name] = JoinInterpreterHelper::prepareJoin(
         context,
         probe_pipeline.firstStream()->getHeader(),
         tiflash_join.getProbeJoinKeys(),
@@ -255,7 +254,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
 
     // prepare build side
-    auto [build_side_prepare_actions, build_key_names, build_filter_column_name] = JoinInterpreterHelper::prepareJoin(
+    auto [build_side_prepare_actions, build_key_names, original_build_key_names, build_filter_column_name] = JoinInterpreterHelper::prepareJoin(
         context,
         build_pipeline.firstStream()->getHeader(),
         tiflash_join.getBuildJoinKeys(),
@@ -265,12 +264,11 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         tiflash_join.getBuildConditions());
     RUNTIME_ASSERT(build_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
 
-    auto [other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name]
-        = tiflash_join.genJoinOtherConditionAction(context, left_input_header, right_input_header, probe_side_prepare_actions);
+    auto join_other_conditions = tiflash_join.genJoinOtherConditionsAction(context, left_input_header, right_input_header, probe_side_prepare_actions, original_probe_key_names, original_build_key_names);
 
     const Settings & settings = context.getSettingsRef();
-    size_t max_block_size_for_cross_join = settings.max_block_size;
-    fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
+    size_t max_block_size = settings.max_block_size;
+    fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size = 1; });
 
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
@@ -283,10 +281,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,
-        other_filter_column_name,
-        other_eq_filter_from_in_column_name,
-        other_condition_expr,
-        max_block_size_for_cross_join,
+        join_other_conditions,
+        max_block_size,
         match_helper_name);
 
     recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);

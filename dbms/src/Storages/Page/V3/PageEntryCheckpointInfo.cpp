@@ -17,6 +17,15 @@
 namespace DB::PS::V3
 {
 
+CheckpointLocation CheckpointLocation::copyWithNewDataFileId(std::shared_ptr<const std::string> new_file_id)
+{
+    return CheckpointLocation{
+        .data_file_id = std::move(new_file_id),
+        .offset_in_file = this->offset_in_file,
+        .size_in_file = this->size_in_file,
+    };
+}
+
 CheckpointProto::EntryDataLocation CheckpointLocation::toProto() const
 {
     CheckpointProto::EntryDataLocation proto_rec;
