@@ -143,8 +143,12 @@ try
 
                 // for spill to disk tests
                 context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
-                ASSERT_THROW(executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j], {1}), Exception);
-                executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j], {2, 5, 10});
+                ASSERT_THROW(executeStreams(request), Exception);
+                auto concurrences = {2, 5, 10};
+                for (auto concurrency : concurrences)
+                {
+                    ASSERT_COLUMNS_EQ_UR(expected_cols[i * simple_test_num + j], executeStreams(request, concurrency));
+                }
             }
         }
     }
@@ -750,13 +754,17 @@ try
                        .build(context);
 
     auto join_restore_concurrences = {-1, 0, 1, 5};
+    auto concurrences = {2, 5, 10};
     const ColumnsWithTypeAndName expect = {toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0})};
     context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
     for (const auto & join_restore_concurrency : join_restore_concurrences)
     {
         context.context.setSetting("join_restore_concurrency", Field(static_cast<Int64>(join_restore_concurrency)));
-        ASSERT_THROW(executeAndAssertColumnsEqual(request, expect, {1}, {DEFAULT_BLOCK_SIZE}), Exception);
-        executeAndAssertColumnsEqual(request, expect, {2, 5, 10}, {1, 2, 5, DEFAULT_BLOCK_SIZE});
+        ASSERT_THROW(executeStreams(request), Exception);
+        for (auto concurrency : concurrences)
+        {
+            ASSERT_COLUMNS_EQ_UR(expect, executeStreams(request, concurrency));
+        }
     }
 }
 CATCH
