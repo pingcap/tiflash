@@ -239,6 +239,23 @@ void serializePutExternalTo(const EditRecord & record, WriteBuffer & buf)
     }
     serializeVersionTo(record.version, buf);
     writeIntBinary(record.being_ref_count, buf);
+
+    if constexpr (std::is_same_v<EditRecord, universal::PageEntriesEdit::EditRecord>)
+    {
+        UInt32 flags = 0;
+        if (record.entry.checkpoint_info.has_value())
+        {
+            flags = setCheckpointInfoExists(flags);
+            writeIntBinary(flags, buf);
+            writeIntBinary(record.entry.checkpoint_info->data_location.offset_in_file, buf);
+            writeIntBinary(record.entry.checkpoint_info->data_location.size_in_file, buf);
+            writeStringBinary(*(record.entry.checkpoint_info->data_location.data_file_id), buf);
+        }
+        else
+        {
+            writeIntBinary(flags, buf);
+        }
+    }
 }
 
 template <typename EditType>
@@ -258,6 +275,23 @@ void deserializePutExternalFrom([[maybe_unused]] const EditRecordType record_typ
     }
     deserializeVersionFrom(buf, rec.version);
     readIntBinary(rec.being_ref_count, buf);
+    if constexpr (std::is_same_v<typename EditType::PageId, UniversalPageId>)
+    {
+        UInt32 flags = 0;
+        readIntBinary(flags, buf);
+        if (isCheckpointInfoExists(flags))
+        {
+            CheckpointInfo checkpoint_info;
+            checkpoint_info.is_local_data_reclaimed = true;
+            readIntBinary(checkpoint_info.data_location.offset_in_file, buf);
+            readIntBinary(checkpoint_info.data_location.size_in_file, buf);
+            String data_file_id;
+            readStringBinary(data_file_id, buf);
+            // TODO: different entries' data_file_id could be highly duplicated, try to reuse the ptr to reduce memory overhead later.
+            checkpoint_info.data_location.data_file_id = std::make_shared<String>(data_file_id);
+            rec.entry.checkpoint_info = checkpoint_info;
+        }
+    }
     edit.appendRecord(rec);
 }
 

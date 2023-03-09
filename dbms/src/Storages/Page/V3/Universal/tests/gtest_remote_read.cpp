@@ -39,11 +39,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char force_skip_s3_lock_create[];
-} // namespace FailPoints
-
 namespace PS::universal::tests
 {
 class UniPageStorageRemoteReadTest : public DB::base::TiFlashStorageTestBasic
@@ -55,9 +50,6 @@ public:
 
     void SetUp() override
     {
-        // These test focus on read/write data, skip the lockkey logic
-        FailPointHelper::enableFailPoint(FailPoints::force_skip_s3_lock_create);
-
         TiFlashStorageTestBasic::SetUp();
         auto path = getTemporaryPath();
         remote_dir = path;
@@ -71,11 +63,6 @@ public:
 
         page_storage = UniversalPageStorage::create("write", delegator, config, file_provider, s3_client, bucket);
         page_storage->restore();
-    }
-
-    void TearDown() override
-    {
-        FailPointHelper::disableFailPoint(FailPoints::force_skip_s3_lock_create);
     }
 
     void reload()
@@ -162,6 +149,7 @@ try
         ASSERT_EQ(1, r.size());
 
         UniversalWriteBatch wb;
+        wb.disableRemoteLock();
         wb.putPage(r[0].page_id, 0, "local data");
         wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info->data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
@@ -222,6 +210,7 @@ try
         ASSERT_EQ(1, r.size());
 
         UniversalWriteBatch wb;
+        wb.disableRemoteLock();
         wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info->data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
@@ -290,6 +279,7 @@ try
         ASSERT_EQ(2, r.size());
 
         UniversalWriteBatch wb;
+        wb.disableRemoteLock();
         wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info->data_location, std::move(r[0].entry.field_offsets));
         wb.putRemotePage(r[1].page_id, 0, r[1].entry.checkpoint_info->data_location, std::move(r[1].entry.field_offsets));
         page_storage->write(std::move(wb));
@@ -327,6 +317,7 @@ try
     auto edits = PS::V3::universal::PageEntriesEdit{};
     {
         UniversalWriteBatch wb;
+        wb.disableRemoteLock();
         wb.putPage("page_foo", 0, "The flower carriage rocked", {4, 10, 12});
         auto blob_store_edits = blob_store.write(std::move(wb), nullptr);
 
@@ -363,6 +354,7 @@ try
         ASSERT_EQ(1, r.size());
 
         UniversalWriteBatch wb;
+        wb.disableRemoteLock();
         wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info->data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
@@ -382,6 +374,39 @@ try
         ASSERT_EQ("The ", String(fields0_buf.begin(), fields0_buf.size()));
         auto fields3_buf = page.getFieldData(2);
         ASSERT_EQ("riage rocked", String(fields3_buf.begin(), fields3_buf.size()));
+    }
+}
+CATCH
+
+TEST_F(UniPageStorageRemoteReadTest, WriteReadExternal)
+try
+{
+    UniversalPageId page_id{"aaabbb"};
+    {
+        UniversalWriteBatch wb;
+        wb.disableRemoteLock();
+        PS::V3::CheckpointLocation data_location{
+            .data_file_id = std::make_shared<String>("nahida opened her eyes"),
+            .offset_in_file = 0,
+            .size_in_file = 0,
+        };
+        wb.putRemoteExternal(page_id, data_location);
+        page_storage->write(std::move(wb));
+    }
+
+    {
+        auto location = page_storage->getCheckpointLocation(page_id);
+        ASSERT_TRUE(location.has_value());
+        ASSERT_EQ(*(location->data_file_id), "nahida opened her eyes");
+    }
+
+    // restart and do another read
+    reload();
+
+    {
+        auto location = page_storage->getCheckpointLocation(page_id);
+        ASSERT_TRUE(location.has_value());
+        ASSERT_EQ(*(location->data_file_id), "nahida opened her eyes");
     }
 }
 CATCH
