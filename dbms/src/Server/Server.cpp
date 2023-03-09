@@ -254,8 +254,9 @@ struct TiFlashProxyConfig
     {
         std::string key = "--" + k;
         val_map[key] = v;
-        args.push_back(key.data());
-        args.push_back(val_map[v].data());
+        auto iter = val_map.find(key);
+        args.push_back(iter->first.data());
+        args.push_back(iter->second.data());
     }
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
