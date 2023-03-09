@@ -931,7 +931,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context = Context::createGlobal();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->getSharedContextDisagg()->disaggregated_mode = getDisaggregatedMode(config());
-    global_context->setUseAutoScaler(useAutoScaler(config()));
+    global_context->getSharedContextDisagg()->use_autoscaler = useAutoScaler(config());
 
     /// Init File Provider
     bool enable_encryption = false;
@@ -994,8 +994,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.main_capacity_quota, //
         storage_config.latest_data_paths,
         storage_config.latest_capacity_quota,
-        global_context->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.dir : "",
-        global_context->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.capacity : 0);
+        global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.dir : "",
+        global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.capacity : 0);
     TiFlashRaftConfig raft_config = TiFlashRaftConfig::parseSettings(config(), log);
     global_context->setPathPool( //
         storage_config.main_data_paths, //
@@ -1139,10 +1139,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
-    if (global_context->isDisaggregatedStorageMode())
+    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
 
-    if (global_context->isDisaggregatedComputeMode())
+    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
         global_context->getSharedContextDisagg()->initReadNodePageCache(
             global_context->getPathPool(),
             storage_config.remote_cache_config.getPageCacheDir(),
@@ -1254,7 +1254,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
 
-    if (!global_context->isDisaggregatedComputeMode())
+    if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         /// Then, sync schemas with TiDB, and initialize schema sync service.
         for (int i = 0; i < 60; i++) // retry for 3 mins
