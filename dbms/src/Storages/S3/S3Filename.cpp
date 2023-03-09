@@ -17,6 +17,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/S3/S3Filename.h>
+#include <Storages/Transaction/Types.h>
 #include <common/types.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
@@ -33,13 +34,13 @@ namespace details
 // Ref: https://github.com/google/re2/wiki/Syntax
 
 /// parsing LockFile
-const static re2::RE2 rgx_lock("^lock/s(?P<store_id>[0-9]+)/(?P<data_subpath>.+)$");
-const static re2::RE2 rgx_lock_suffix(".lock_s(?P<lock_store_id>[0-9]+)_(?P<lock_seq>[0-9]+)");
+const static thread_local re2::RE2 rgx_lock("^lock/s(?P<store_id>[0-9]+)/(?P<data_subpath>.+)$");
+const static thread_local re2::RE2 rgx_lock_suffix(".lock_s(?P<lock_store_id>[0-9]+)_(?P<lock_seq>[0-9]+)");
 
 /// parsing CheckpointManifest or DataFile
-const static re2::RE2 rgx_store_prefix("^s(?P<store_id>[0-9]+)/$");
-const static re2::RE2 rgx_data_or_manifest("^s(?P<store_id>[0-9]+)/(data|manifest)/(?P<data_subpath>.+)$");
-const static re2::RE2 rgx_subpath_manifest("mf_(?P<upload_seq>[0-9]+)");
+const static thread_local re2::RE2 rgx_store_prefix("^s(?P<store_id>[0-9]+)/$");
+const static thread_local re2::RE2 rgx_data_or_manifest("^s(?P<store_id>[0-9]+)/(data|manifest)/(?P<data_subpath>.+)$");
+const static thread_local re2::RE2 rgx_subpath_manifest("mf_(?P<upload_seq>[0-9]+)");
 
 constexpr static std::string_view DELMARK_SUFFIX = ".del";
 

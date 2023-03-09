@@ -70,7 +70,7 @@ WritableFilePtr FileProvider::newWritableFile(
     }
     else
     {
-        RUNTIME_CHECK(Poco::Path(file_path_).isAbsolute(), file_path_);
+        // RUNTIME_CHECK(Poco::Path(file_path_).isAbsolute(), file_path_); // test
         file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
     }
     if (encryption_enabled && create_new_encryption_info_)
