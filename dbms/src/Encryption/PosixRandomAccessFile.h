@@ -32,6 +32,8 @@ using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 class PosixRandomAccessFile : public RandomAccessFile
 {
 public:
+    static RandomAccessFilePtr create(const String & file_name_);
+
     PosixRandomAccessFile(const std::string & file_name_, int flags, const ReadLimiterPtr & read_limiter_ = nullptr);
 
     ~PosixRandomAccessFile() override;

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,11 @@
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Join.h>
+#include <Interpreters/NullAwareSemiJoinHelper.h>
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
+
+#include <ext/scope_guard.h>
 
 
 namespace DB
@@ -81,11 +84,17 @@ bool isCrossJoin(ASTTableJoin::Kind kind)
         || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Cross_Anti
         || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
 }
-/// (cartesian) (anti) left semi join.
+/// (cartesian/null-aware) (anti) left semi join.
 bool isLeftSemiFamily(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::LeftSemi || kind == ASTTableJoin::Kind::LeftAnti
-        || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
+        || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti
+        || kind == ASTTableJoin::Kind::NullAware_LeftSemi || kind == ASTTableJoin::Kind::NullAware_LeftAnti;
+}
+bool isNullAwareSemiFamily(ASTTableJoin::Kind kind)
+{
+    return kind == ASTTableJoin::Kind::NullAware_Anti || kind == ASTTableJoin::Kind::NullAware_LeftAnti
+        || kind == ASTTableJoin::Kind::NullAware_LeftSemi;
 }
 
 ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block)
@@ -215,9 +224,7 @@ Join::Join(
     const TiDB::TiDBCollators & collators_,
     const String & left_filter_column_,
     const String & right_filter_column_,
-    const String & other_filter_column_,
-    const String & other_eq_filter_from_in_column_,
-    ExpressionActionsPtr other_condition_ptr_,
+    const JoinOtherConditions & other_conditions,
     size_t max_block_size_,
     const String & match_helper_name,
     size_t restore_round_)
@@ -234,11 +241,9 @@ Join::Join(
     , collators(collators_)
     , left_filter_column(left_filter_column_)
     , right_filter_column(right_filter_column_)
-    , other_filter_column(other_filter_column_)
-    , other_eq_filter_from_in_column(other_eq_filter_from_in_column_)
-    , other_condition_ptr(other_condition_ptr_)
+    , other_conditions(other_conditions)
     , original_strictness(strictness)
-    , max_block_size_for_cross_join(max_block_size_)
+    , max_block_size(max_block_size_)
     , max_bytes_before_external_join(max_bytes_before_external_join_)
     , build_spill_config(build_spill_config_)
     , probe_spill_config(probe_spill_config_)
@@ -247,7 +252,7 @@ Join::Join(
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
-    if (other_condition_ptr != nullptr)
+    if (other_conditions.other_cond_expr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
         if (strictness == ASTTableJoin::Strictness::Any)
@@ -259,6 +264,11 @@ Join::Join(
         throw Exception("Not supported: non left join with left conditions");
     if (unlikely(!right_filter_column.empty() && !isRightJoin(kind)))
         throw Exception("Not supported: non right join with right conditions");
+
+    String err = other_conditions.validate(isNullAwareSemiFamily(kind));
+    if (unlikely(!err.empty()))
+        throw Exception("Validate join conditions error: {}" + err);
+
     LOG_INFO(log, "FineGrainedShuffle flag {}, stream count {}", enable_fine_grained_shuffle, fine_grained_shuffle_count);
 }
 
@@ -559,16 +569,16 @@ void Join::initMapImpl(Type type_)
     if (!getFullness(kind))
     {
         if (strictness == ASTTableJoin::Strictness::Any)
-            initImpl(maps_any, type, getBuildConcurrencyInternal());
+            initImpl(maps_any, type, getBuildConcurrency());
         else
-            initImpl(maps_all, type, getBuildConcurrencyInternal());
+            initImpl(maps_all, type, getBuildConcurrency());
     }
     else
     {
         if (strictness == ASTTableJoin::Strictness::Any)
-            initImpl(maps_any_full, type, getBuildConcurrencyInternal());
+            initImpl(maps_any_full, type, getBuildConcurrency());
         else
-            initImpl(maps_all_full, type, getBuildConcurrencyInternal());
+            initImpl(maps_all_full, type, getBuildConcurrency());
     }
 }
 
@@ -662,7 +672,7 @@ void Join::setBuildConcurrencyAndInitJoinPartition(size_t build_concurrency_)
     }
 
     // init for non-joined-streams.
-    if (getFullness(kind))
+    if (getFullness(kind) || isNullAwareSemiFamily(kind))
     {
         for (size_t i = 0; i < getBuildConcurrencyInternal(); ++i)
             rows_not_inserted_to_map.push_back(std::make_unique<RowRefList>());
@@ -722,10 +732,8 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         collators,
         left_filter_column,
         right_filter_column,
-        other_filter_column,
-        other_eq_filter_from_in_column,
-        other_condition_ptr,
-        max_block_size_for_cross_join,
+        other_conditions,
+        max_block_size,
         match_helper_name,
         restore_round + 1);
 }
@@ -745,7 +753,12 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     {
         /// todo support spill for cross join
         max_bytes_before_external_join = 0;
-        LOG_WARNING(log, "Cross join does not support spill, so set max_bytes_before_external_join = 0");
+        LOG_WARNING(log, "Cross join does not support spilling, so set max_bytes_before_external_join = 0");
+    }
+    if (isNullAwareSemiFamily(kind))
+    {
+        max_bytes_before_external_join = 0;
+        LOG_WARNING(log, "null aware join does not support spilling, so set max_bytes_before_external_join = 0");
     }
     setSampleBlock(sample_block);
     for (size_t i = 0; i < build_concurrency; i++)
@@ -901,7 +914,9 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             continue;
         }
         auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
+        SCOPE_EXIT(keyHolderDiscardKey(key_holder));
         auto key = keyHolderGetKey(key_holder);
+
         size_t segment_index = 0;
         size_t hash_value = 0;
         if (!ZeroTraits::check(key))
@@ -910,7 +925,6 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             segment_index = hash_value % segment_size;
         }
         segment_index_info[segment_index].push_back(i);
-        keyHolderDiscardKey(key_holder);
     }
     for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
     {
@@ -922,7 +936,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             /// here ignore mutex because rows_not_inserted_to_map is privately owned by each stream thread
             for (auto index : segment_index_info[segment_index])
             {
-                /// for right/full out join, need to record the rows not inserted to map
+                /// for right/full out join or null-aware semi join, need to record the rows not inserted to map
                 auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
                 insertRowToList(rows_not_inserted_to_map, elem, stored_block, index);
             }
@@ -1047,6 +1061,7 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
     auto column = block.getByName(filter_column).column;
     if (column->isColumnConst())
         column = column->convertToFullColumnIfConst();
+    const PaddedPODArray<UInt8> * column_data;
     if (column->isColumnNullable())
     {
         const auto & column_nullable = static_cast<const ColumnNullable &>(*column);
@@ -1065,33 +1080,26 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
 
             null_map_holder = std::move(mutable_null_map_holder);
         }
+        column_data = &static_cast<const ColumnVector<UInt8> *>(column_nullable.getNestedColumnPtr().get())->getData();
+    }
+    else
+    {
+        if (!null_map_holder)
+        {
+            null_map_holder = ColumnVector<UInt8>::create(column->size(), 0);
+        }
+        column_data = &static_cast<const ColumnVector<UInt8> *>(column.get())->getData();
     }
 
-    if (!null_map_holder)
-    {
-        null_map_holder = ColumnVector<UInt8>::create(column->size(), 0);
-    }
     MutableColumnPtr mutable_null_map_holder = (*std::move(null_map_holder)).mutate();
     PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
 
-    const auto & nested_column = column->isColumnNullable() ? static_cast<const ColumnNullable &>(*column).getNestedColumnPtr() : column;
-    for (size_t i = 0, size = nested_column->size(); i < size; ++i)
-        mutable_null_map[i] |= (!nested_column->getInt(i));
+    for (size_t i = 0, size = column_data->size(); i < size; ++i)
+        mutable_null_map[i] |= !(*column_data)[i];
 
     null_map_holder = std::move(mutable_null_map_holder);
 
     null_map = &static_cast<const ColumnUInt8 &>(*null_map_holder).getData();
-}
-
-void Join::insertFromBlock(const Block & block)
-{
-    std::unique_lock lock(rwlock);
-    if (unlikely(!initialized))
-        throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
-    total_input_build_rows += block.rows();
-    blocks.push_back(block);
-    Block * stored_block = &blocks.back();
-    insertFromBlockInternal(stored_block, 0);
 }
 
 /// the block should be valid.
@@ -1211,20 +1219,50 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
 
     const Block & block = *stored_block;
 
+    size_t rows = block.rows();
+
     /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
     /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
     Columns materialized_columns;
     ColumnRawPtrs key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names_right);
 
+    if (isNullAwareSemiFamily(kind))
+    {
+        if (rows > 0 && right_table_is_empty.load(std::memory_order_acquire))
+            right_table_is_empty.store(false, std::memory_order_release);
+
+        if (strictness == ASTTableJoin::Strictness::Any)
+        {
+            if (!right_has_all_key_null_row.load(std::memory_order_acquire))
+            {
+                /// Note that `extractAllKeyNullMap` must be done before `extractNestedColumnsAndNullMap`
+                /// because `extractNestedColumnsAndNullMap` will change the nullable column to its nested column.
+                ColumnPtr all_key_null_map_holder;
+                ConstNullMapPtr all_key_null_map{};
+                extractAllKeyNullMap(key_columns, all_key_null_map_holder, all_key_null_map);
+
+                if (all_key_null_map)
+                {
+                    for (UInt8 is_null : *all_key_null_map)
+                    {
+                        if (is_null)
+                        {
+                            right_has_all_key_null_row.store(true, std::memory_order_release);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// We will insert to the map only keys, where all components are not NULL.
     ColumnPtr null_map_holder;
     ConstNullMapPtr null_map{};
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
-    /// reuse null_map to record the filtered rows, the rows contains NULL or does not
+    /// Reuse null_map to record the filtered rows, the rows contains NULL or does not
     /// match the join filter will not insert to the maps
     recordFilteredRows(block, right_filter_column, null_map_holder, null_map);
-
-    size_t rows = block.rows();
 
     if (getFullness(kind))
     {
@@ -1273,19 +1311,26 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     {
         assert(partitions[stream_index]->pool != nullptr);
         /// Fill the hash table.
-        if (!getFullness(kind))
+        if (isNullAwareSemiFamily(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrencyInternal(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrencyInternal(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrencyInternal(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrencyInternal(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
         }
-        else
+        else if (getFullness(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
                 insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrencyInternal(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
             else
                 insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrencyInternal(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+        }
+        else
+        {
+            if (strictness == ASTTableJoin::Strictness::Any)
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrencyInternal(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+            else
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrencyInternal(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
         }
     }
 }
@@ -1427,7 +1472,7 @@ struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
 
         current_offset += rows_joined;
         (*offsets)[i] = current_offset;
-        if (KIND == ASTTableJoin::Kind::Anti)
+        if constexpr (KIND == ASTTableJoin::Kind::Anti)
             /// anti join with other condition is very special: if the row is matched during probe stage, we can not throw it
             /// away because it might failed in other condition, so we add the matched rows to the result, but set (*filter)[i] = 0
             /// to indicate that the row is matched during probe stage, this will be used in handleOtherConditions
@@ -1522,10 +1567,12 @@ void NO_INLINE joinBlockImplTypeCase(
         else
         {
             auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
+            SCOPE_EXIT(keyHolderDiscardKey(key_holder));
             auto key = keyHolderGetKey(key_holder);
+
             size_t hash_value = 0;
             bool zero_flag = ZeroTraits::check(key);
-            if (segment_size > 0 && !zero_flag)
+            if (!zero_flag)
             {
                 hash_value = map.hash(key);
             }
@@ -1537,7 +1584,6 @@ void NO_INLINE joinBlockImplTypeCase(
             }
             else if (join_build_info.needVirtualDispatchForProbeBlock())
             {
-                RUNTIME_CHECK(segment_size > 0);
                 /// Need to calculate the correct segment_index so that rows with same key will map to the same segment_index both in Build and Prob
                 /// The "reproduce" of segment_index generated in Build phase relies on the facts that:
                 /// Possible pipelines(FineGrainedShuffleWriter => ExchangeReceiver => HashBuild)
@@ -1559,15 +1605,12 @@ void NO_INLINE joinBlockImplTypeCase(
             }
             else
             {
-                if (segment_size > 0 && !zero_flag)
-                {
-                    segment_index = hash_value % segment_size;
-                }
+                segment_index = hash_value % segment_size;
             }
 
             auto & internal_map = map.getSegmentTable(segment_index);
             /// do not require segment lock because in join, the hash table can not be changed in probe stage.
-            auto it = segment_size > 0 ? internal_map.find(key, hash_value) : internal_map.find(key);
+            auto it = internal_map.find(key, hash_value);
             if (it != internal_map.end())
             {
                 it->getMapped().setUsed();
@@ -1591,7 +1634,6 @@ void NO_INLINE joinBlockImplTypeCase(
                     current_offset,
                     offsets_to_replicate.get(),
                     probe_process_info);
-            keyHolderDiscardKey(key_holder);
         }
 
         // if block_full is true means that the current offset is greater than max_block_size, we need break the loop.
@@ -1697,14 +1739,14 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
  */
 void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & anti_filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_columns) const
 {
-    other_condition_ptr->execute(block);
+    other_conditions.other_cond_expr->execute(block);
 
     auto filter_column = ColumnUInt8::create();
     auto & filter = filter_column->getData();
     filter.assign(block.rows(), static_cast<UInt8>(1));
-    if (!other_filter_column.empty())
+    if (!other_conditions.other_cond_name.empty())
     {
-        mergeNullAndFilterResult(block, filter, other_filter_column, false);
+        mergeNullAndFilterResult(block, filter, other_conditions.other_cond_name, false);
     }
 
     ColumnUInt8::Container row_filter(filter.size(), 0);
@@ -1733,9 +1775,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
         /// nullmap and data of `other_eq_filter_from_in_column`.
         const ColumnUInt8::Container *eq_in_vec = nullptr, *eq_in_nullmap = nullptr;
-        if (!other_eq_filter_from_in_column.empty())
+        if (!other_conditions.other_eq_cond_from_in_name.empty())
         {
-            auto orig_filter_column = block.getByName(other_eq_filter_from_in_column).column;
+            auto orig_filter_column = block.getByName(other_conditions.other_eq_cond_from_in_name).column;
             if (orig_filter_column->isColumnConst())
                 orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
             if (orig_filter_column->isColumnNullable())
@@ -1791,13 +1833,13 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         return;
     }
 
-    if (!other_eq_filter_from_in_column.empty())
+    if (!other_conditions.other_eq_cond_from_in_name.empty())
     {
         /// other_eq_filter_from_in_column is used in anti semi join:
         /// if there is a row that return null or false for other_condition, then for anti semi join, this row should be returned.
         /// otherwise, it will check other_eq_filter_from_in_column, if other_eq_filter_from_in_column return false, this row should
         /// be returned, if other_eq_filter_from_in_column return true or null this row should not be returned.
-        mergeNullAndFilterResult(block, filter, other_eq_filter_from_in_column, isAntiJoin(kind));
+        mergeNullAndFilterResult(block, filter, other_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
     }
 
     if (isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All)
@@ -1926,14 +1968,17 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
 
     /// Add new columns to the block.
     size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
-    MutableColumns added_columns;
-    added_columns.reserve(num_columns_to_add);
 
     std::vector<size_t> right_table_column_indexes;
+    right_table_column_indexes.reserve(num_columns_to_add);
+
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
         right_table_column_indexes.push_back(i + existing_columns);
     }
+
+    MutableColumns added_columns;
+    added_columns.reserve(num_columns_to_add);
 
     std::vector<size_t> right_indexes;
     right_indexes.reserve(num_columns_to_add);
@@ -2033,7 +2078,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     }
 
     /// handle other conditions
-    if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
+    if (!other_conditions.other_cond_name.empty() || !other_conditions.other_eq_cond_from_in_name.empty())
     {
         if (!offsets_to_replicate)
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
@@ -2206,13 +2251,13 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
         right_table_rows += block_right.rows();
 
     size_t left_rows_per_iter = std::max(rows_left, 1);
-    if (max_block_size_for_cross_join > 0 && right_table_rows > 0 && other_condition_ptr != nullptr
+    if (max_block_size > 0 && right_table_rows > 0 && other_conditions.other_cond_expr != nullptr
         && CrossJoinAdder<KIND, STRICTNESS>::allRightRowsMaybeAdded())
     {
         /// if other_condition is not null, and all right columns maybe added during join, try to use multiple iter
         /// to make memory usage under control, for anti semi cross join that is converted by not in subquery,
         /// it is likely that other condition may filter out most of the rows
-        left_rows_per_iter = std::max(max_block_size_for_cross_join / right_table_rows, 1);
+        left_rows_per_iter = std::max(max_block_size / right_table_rows, 1);
     }
 
     std::vector<size_t> right_column_index;
@@ -2256,7 +2301,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
             }
         }
         auto block_per_iter = block.cloneWithColumns(std::move(dst_columns));
-        if (other_condition_ptr != nullptr)
+        if (other_conditions.other_cond_expr != nullptr)
             handleOtherConditions(block_per_iter, is_row_matched, expanded_row_size_after_join, right_column_index);
         if (start == 0 || block_per_iter.rows() > 0)
             /// always need to generate at least one block
@@ -2293,6 +2338,389 @@ void Join::joinBlockImplCross(Block & block) const
 void Join::checkTypes(const Block & block) const
 {
     checkTypesOfKeys(block, sample_block_with_keys);
+}
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map, bool has_filter_map>
+void NO_INLINE joinBlockImplNullAwareInternal(
+    const Map & map,
+    Block & block,
+    size_t left_columns,
+    const BlocksList & right_blocks,
+    const PaddedPODArray<Join::RowRefList *> & null_rows,
+    size_t max_block_size,
+    const JoinOtherConditions & other_conditions,
+    const ColumnRawPtrs & key_columns,
+    const Sizes & key_sizes,
+    const ConstNullMapPtr & null_map,
+    const ConstNullMapPtr & filter_map,
+    const ConstNullMapPtr & all_key_null_map,
+    const TiDB::TiDBCollators & collators,
+    bool right_has_all_key_null_row,
+    bool right_table_is_empty)
+{
+    static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
+                  || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
+    static_assert(STRICTNESS == ASTTableJoin::Strictness::Any || STRICTNESS == ASTTableJoin::Strictness::All);
+
+    size_t rows = block.rows();
+    KeyGetter key_getter(key_columns, key_sizes, collators);
+    std::vector<std::string> sort_key_containers;
+    sort_key_containers.resize(key_columns.size());
+
+    Arena pool;
+    size_t segment_size = map.getSegmentSize();
+
+    PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>> res;
+    res.reserve(rows);
+    std::list<NASemiJoinResult<KIND, STRICTNESS> *> res_list;
+    /// We can just consider the result of semi join because `NASemiJoinResult::setResult` will correct
+    /// the result if it's not semi join.
+    for (size_t i = 0; i < rows; ++i)
+    {
+        if constexpr (has_filter_map)
+        {
+            if ((*filter_map)[i])
+            {
+                /// Filter out by left_conditions so the result set is empty.
+                res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+                res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
+                continue;
+            }
+        }
+        if (right_table_is_empty)
+        {
+            /// If right table is empty, the result is false.
+            /// E.g. (1,2) in ().
+            res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+            res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
+            continue;
+        }
+        if constexpr (has_null_map)
+        {
+            if ((*null_map)[i])
+            {
+                if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+                {
+                    if (key_columns.size() == 1 || right_has_all_key_null_row || (all_key_null_map && (*all_key_null_map)[i]))
+                    {
+                        /// Note that right_table_is_empty must be false here so the right table is not empty.
+                        /// The result is NULL if
+                        ///   1. key column size is 1. E.g. (null) in (1,2).
+                        ///   2. right table has a all-key-null row. E.g. (1,null) in ((2,2),(null,null)).
+                        ///   3. this row is all-key-null. E.g. (null,null) in ((1,1),(2,2)).
+                        res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+                        res.back().template setResult<NASemiJoinResultType::NULL_VALUE>();
+                        continue;
+                    }
+                }
+                /// Check null rows first to speed up getting the NULL result if possible.
+                /// In the worse case, all rows in the right table will be checked.
+                /// E.g. (1,null) in ((2,1),(2,3),(2,null),(3,null)) => false.
+                res.emplace_back(i, NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS, nullptr);
+                res_list.push_back(&res.back());
+                continue;
+            }
+        }
+
+        auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
+        SCOPE_EXIT(keyHolderDiscardKey(key_holder));
+        auto key = keyHolderGetKey(key_holder);
+
+        size_t segment_index = 0;
+        size_t hash_value = 0;
+        if (!ZeroTraits::check(key))
+        {
+            hash_value = map.hash(key);
+            segment_index = hash_value % segment_size;
+        }
+
+        auto & internal_map = map.getSegmentTable(segment_index);
+        /// do not require segment lock because in join, the hash table can not be changed in probe stage.
+        auto it = internal_map.find(key, hash_value);
+        if (it != internal_map.end())
+        {
+            /// Find the matched row(s).
+            if (STRICTNESS == ASTTableJoin::Strictness::Any)
+            {
+                /// If strictness is any, the result is true.
+                /// E.g. (1,2) in ((1,2),(1,3),(null,3))
+                res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+                res.back().template setResult<NASemiJoinResultType::TRUE_VALUE>();
+            }
+            else
+            {
+                /// Else the other condition must be checked for these matched right row(s).
+                auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
+                res.emplace_back(i, NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS, static_cast<const void *>(map_it));
+                res_list.push_back(&res.back());
+            }
+            continue;
+        }
+
+        /// Not find the matched row.
+        if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+        {
+            if (right_has_all_key_null_row)
+            {
+                /// If right table has a all-key-null row, the result is NULL.
+                /// E.g. (1) in (null) or (1,2) in ((1,3),(null,null)).
+                res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+                res.back().template setResult<NASemiJoinResultType::NULL_VALUE>();
+                continue;
+            }
+            else if (key_columns.size() == 1)
+            {
+                /// If key size is 1 and all key in right table row is not NULL(right_has_all_key_null_row is false),
+                /// the result is false.
+                /// E.g. (1) in (2,3,4,5).
+                res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
+                res.back().template setResult<NASemiJoinResultType::FALSE_VALUE>();
+                continue;
+            }
+            /// Then key size is greater than 1 and right table does not have a all-key-null row.
+            /// E.g. (1,2) in ((1,3),(1,null)) => NULL, (1,2) in ((1,3),(2,null)) => false.
+        }
+        /// We have to compare them to the null rows one by one.
+        /// In the worse case, all null rows in the right table will be checked.
+        /// E.g. (1,2) in ((2,null),(3,null),(null,1),(null,3)) => false.
+        res.emplace_back(i, NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS, nullptr);
+        res_list.push_back(&res.back());
+    }
+    RUNTIME_ASSERT(res.size() == rows, "NASemiJoinResult size {} must be equal to block size {}", res.size(), rows);
+
+    size_t right_columns = block.columns() - left_columns;
+
+    if (!res_list.empty())
+    {
+        NASemiJoinHelper<KIND, STRICTNESS, typename Map::mapped_type::Base_t> helper(
+            block,
+            left_columns,
+            right_columns,
+            right_blocks,
+            null_rows,
+            max_block_size,
+            other_conditions);
+
+        helper.joinResult(res_list);
+
+        RUNTIME_CHECK_MSG(res_list.empty(), "NASemiJoinResult list must be empty after calculating join result");
+    }
+
+    /// Now all results are known.
+
+    std::unique_ptr<IColumn::Filter> filter;
+    if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+        filter = std::make_unique<IColumn::Filter>(rows);
+
+    MutableColumns added_columns(right_columns);
+    for (size_t i = 0; i < right_columns; ++i)
+        added_columns[i] = block.getByPosition(i + left_columns).column->cloneEmpty();
+
+    PaddedPODArray<Int8> * left_semi_column_data = nullptr;
+    PaddedPODArray<UInt8> * left_semi_null_map = nullptr;
+
+    if constexpr (KIND == ASTTableJoin::Kind::NullAware_LeftSemi || KIND == ASTTableJoin::Kind::NullAware_LeftAnti)
+    {
+        auto * left_semi_column = typeid_cast<ColumnNullable *>(added_columns[right_columns - 1].get());
+        left_semi_column_data = &typeid_cast<ColumnVector<Int8> &>(left_semi_column->getNestedColumn()).getData();
+        left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
+        left_semi_column_data->reserve(rows);
+        left_semi_null_map->reserve(rows);
+    }
+
+    size_t rows_for_anti = 0;
+    for (size_t i = 0; i < rows; ++i)
+    {
+        auto result = res[i].getResult();
+        if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+        {
+            if (result == NASemiJoinResultType::TRUE_VALUE)
+            {
+                // If the result is true, this row should be kept.
+                (*filter)[i] = 1;
+                ++rows_for_anti;
+            }
+            else
+            {
+                // If the result is null or false, this row should be filtered.
+                (*filter)[i] = 0;
+            }
+        }
+        else
+        {
+            switch (result)
+            {
+            case NASemiJoinResultType::FALSE_VALUE:
+                left_semi_column_data->push_back(0);
+                left_semi_null_map->push_back(0);
+                break;
+            case NASemiJoinResultType::TRUE_VALUE:
+                left_semi_column_data->push_back(1);
+                left_semi_null_map->push_back(0);
+                break;
+            case NASemiJoinResultType::NULL_VALUE:
+                left_semi_column_data->push_back(0);
+                left_semi_null_map->push_back(1);
+                break;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < right_columns; ++i)
+    {
+        if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+            added_columns[i]->insertManyDefaults(rows_for_anti);
+        else if (i < right_columns - 1)
+        {
+            /// The last column is match_helper_name.
+            added_columns[i]->insertManyDefaults(rows);
+        }
+        block.getByPosition(i + left_columns).column = std::move(added_columns[i]);
+    }
+
+    if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
+    {
+        for (size_t i = 0; i < left_columns; ++i)
+            block.getByPosition(i).column = block.getByPosition(i).column->filter(*filter, rows_for_anti);
+    }
+}
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
+void NO_INLINE joinBlockImplNullAwareCast(
+    const Map & map,
+    Block & block,
+    size_t left_columns,
+    const BlocksList & right_blocks,
+    const PaddedPODArray<Join::RowRefList *> & null_rows,
+    size_t max_block_size,
+    const JoinOtherConditions & other_conditions,
+    const ColumnRawPtrs & key_columns,
+    const Sizes & key_sizes,
+    const ConstNullMapPtr & null_map,
+    const ConstNullMapPtr & filter_map,
+    const ConstNullMapPtr & all_key_null_map,
+    const TiDB::TiDBCollators & collators,
+    bool right_has_all_key_null_row,
+    bool right_table_is_empty)
+{
+#define impl(has_null_map, has_filter_map)                                                          \
+    joinBlockImplNullAwareInternal<KIND, STRICTNESS, KeyGetter, Map, has_null_map, has_filter_map>( \
+        map,                                                                                        \
+        block,                                                                                      \
+        left_columns,                                                                               \
+        right_blocks,                                                                               \
+        null_rows,                                                                                  \
+        max_block_size,                                                                             \
+        other_conditions,                                                                           \
+        key_columns,                                                                                \
+        key_sizes,                                                                                  \
+        null_map,                                                                                   \
+        filter_map,                                                                                 \
+        all_key_null_map,                                                                           \
+        collators,                                                                                  \
+        right_has_all_key_null_row,                                                                 \
+        right_table_is_empty);
+
+    if (null_map)
+    {
+        if (filter_map)
+        {
+            impl(true, true);
+        }
+        else
+        {
+            impl(true, false);
+        }
+    }
+    else
+    {
+        if (filter_map)
+        {
+            impl(false, true);
+        }
+        else
+        {
+            impl(false, false);
+        }
+    }
+}
+
+template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
+{
+    size_t keys_size = key_names_left.size();
+    ColumnRawPtrs key_columns(keys_size);
+
+    /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
+    /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
+    Columns materialized_columns;
+
+    /// Memoize key columns to work with.
+    for (size_t i = 0; i < keys_size; ++i)
+    {
+        key_columns[i] = block.getByName(key_names_left[i]).column.get();
+
+        if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
+        {
+            materialized_columns.emplace_back(converted);
+            key_columns[i] = materialized_columns.back().get();
+        }
+    }
+
+    /// Note that `extractAllKeyNullMap` must be done before `extractNestedColumnsAndNullMap`
+    /// because `extractNestedColumnsAndNullMap` will change the nullable column to its nested column.
+    ColumnPtr all_key_null_map_holder;
+    ConstNullMapPtr all_key_null_map{};
+    extractAllKeyNullMap(key_columns, all_key_null_map_holder, all_key_null_map);
+
+    ColumnPtr null_map_holder;
+    ConstNullMapPtr null_map{};
+    extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
+
+    ColumnPtr filter_map_holder;
+    ConstNullMapPtr filter_map{};
+    recordFilteredRows(block, left_filter_column, filter_map_holder, filter_map);
+
+    size_t existing_columns = block.columns();
+
+    /// Add new columns to the block.
+    size_t num_columns_to_add = sample_block_with_columns_to_add.columns();
+
+    for (size_t i = 0; i < num_columns_to_add; ++i)
+    {
+        const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
+        RUNTIME_CHECK_MSG(!block.has(src_column.name), "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add", src_column.name);
+        block.insert(src_column);
+    }
+
+    switch (type)
+    {
+#define M(TYPE)                                                                                                                                         \
+    case Join::Type::TYPE:                                                                                                                              \
+        joinBlockImplNullAwareCast<KIND, STRICTNESS, typename KeyGetterForType<Join::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
+            *maps.TYPE,                                                                                                                                 \
+            block,                                                                                                                                      \
+            existing_columns,                                                                                                                           \
+            blocks,                                                                                                                                     \
+            rows_with_null_keys,                                                                                                                        \
+            max_block_size,                                                                                                                             \
+            other_conditions,                                                                                                                           \
+            key_columns,                                                                                                                                \
+            key_sizes,                                                                                                                                  \
+            null_map,                                                                                                                                   \
+            filter_map,                                                                                                                                 \
+            all_key_null_map,                                                                                                                           \
+            collators,                                                                                                                                  \
+            right_has_all_key_null_row.load(std::memory_order_relaxed),                                                                                 \
+            right_table_is_empty.load(std::memory_order_relaxed));                                                                                      \
+        break;
+        APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+
+    default:
+        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+    }
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
 }
 
 void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right) const
@@ -2332,7 +2760,22 @@ void Join::finishOneBuild()
                 tryMarkBuildSpillFinish();
             }
         }
+        workAfterBuildFinish();
         build_cv.notify_all();
+    }
+}
+
+void Join::workAfterBuildFinish()
+{
+    if (isNullAwareSemiFamily(kind))
+    {
+        rows_with_null_keys.reserve(rows_not_inserted_to_map.size());
+        for (const auto & i : rows_not_inserted_to_map)
+        {
+            Join::RowRefList * p = i->next;
+            if (p != nullptr)
+                rows_with_null_keys.emplace_back(p);
+        }
     }
 }
 
@@ -2406,63 +2849,74 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
 
     Block block = probe_process_info.block;
 
-    /// TODO: after we bumping to C++20, use `using enum` to simplify code here.
-    /// using enum ASTTableJoin::Strictness;
-    /// using enum ASTTableJoin::Kind;
+    using enum ASTTableJoin::Strictness;
+    using enum ASTTableJoin::Kind;
 
-    if (kind == ASTTableJoin::Kind::Left && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any>(block, maps_any, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Inner && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::Any>(block, maps_any, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Left && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::All>(block, maps_all, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Inner && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::All>(block, maps_all, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Full && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any>(block, maps_any_full, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Right && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::Any>(block, maps_any_full, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Full && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::All>(block, maps_all_full, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Right && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::All>(block, maps_all_full, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any>(block, maps_any, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::All>(block, maps_all, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::LeftSemi && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::Any>(block, maps_any, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::LeftSemi && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::All>(block, maps_all, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::LeftAnti && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImpl<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::Any>(block, maps_any, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::LeftAnti && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImpl<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::All>(block, maps_all, probe_process_info);
-    else if (kind == ASTTableJoin::Kind::Cross && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross, ASTTableJoin::Strictness::All>(block);
-    else if (kind == ASTTableJoin::Kind::Cross && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross, ASTTableJoin::Strictness::Any>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_Left && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_Left, ASTTableJoin::Strictness::All>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_Left && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_Left, ASTTableJoin::Strictness::Any>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_Anti && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::All>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_Anti && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_Anti, ASTTableJoin::Strictness::Any>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_LeftSemi && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_LeftSemi, ASTTableJoin::Strictness::All>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_LeftSemi && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_LeftSemi, ASTTableJoin::Strictness::Any>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_LeftAnti && strictness == ASTTableJoin::Strictness::All)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_LeftSemi, ASTTableJoin::Strictness::All>(block);
-    else if (kind == ASTTableJoin::Kind::Cross_LeftAnti && strictness == ASTTableJoin::Strictness::Any)
-        joinBlockImplCross<ASTTableJoin::Kind::Cross_LeftSemi, ASTTableJoin::Strictness::Any>(block);
+    if (kind == Left && strictness == Any)
+        joinBlockImpl<Left, Any>(block, maps_any, probe_process_info);
+    else if (kind == Inner && strictness == Any)
+        joinBlockImpl<Inner, Any>(block, maps_any, probe_process_info);
+    else if (kind == Left && strictness == All)
+        joinBlockImpl<Left, All>(block, maps_all, probe_process_info);
+    else if (kind == Inner && strictness == All)
+        joinBlockImpl<Inner, All>(block, maps_all, probe_process_info);
+    else if (kind == Full && strictness == Any)
+        joinBlockImpl<Left, Any>(block, maps_any_full, probe_process_info);
+    else if (kind == Right && strictness == Any)
+        joinBlockImpl<Inner, Any>(block, maps_any_full, probe_process_info);
+    else if (kind == Full && strictness == All)
+        joinBlockImpl<Left, All>(block, maps_all_full, probe_process_info);
+    else if (kind == Right && strictness == All)
+        joinBlockImpl<Inner, All>(block, maps_all_full, probe_process_info);
+    else if (kind == Anti && strictness == Any)
+        joinBlockImpl<Anti, Any>(block, maps_any, probe_process_info);
+    else if (kind == Anti && strictness == All)
+        joinBlockImpl<Anti, All>(block, maps_all, probe_process_info);
+    else if (kind == LeftSemi && strictness == Any)
+        joinBlockImpl<LeftSemi, Any>(block, maps_any, probe_process_info);
+    else if (kind == LeftSemi && strictness == All)
+        joinBlockImpl<LeftSemi, All>(block, maps_all, probe_process_info);
+    else if (kind == LeftAnti && strictness == Any)
+        joinBlockImpl<LeftSemi, Any>(block, maps_any, probe_process_info);
+    else if (kind == LeftAnti && strictness == All)
+        joinBlockImpl<LeftSemi, All>(block, maps_all, probe_process_info);
+    else if (kind == Cross && strictness == All)
+        joinBlockImplCross<Cross, All>(block);
+    else if (kind == Cross && strictness == Any)
+        joinBlockImplCross<Cross, Any>(block);
+    else if (kind == Cross_Left && strictness == All)
+        joinBlockImplCross<Cross_Left, All>(block);
+    else if (kind == Cross_Left && strictness == Any)
+        joinBlockImplCross<Cross_Left, Any>(block);
+    else if (kind == Cross_Anti && strictness == All)
+        joinBlockImplCross<Cross_Anti, All>(block);
+    else if (kind == Cross_Anti && strictness == Any)
+        joinBlockImplCross<Cross_Anti, Any>(block);
+    else if (kind == Cross_LeftSemi && strictness == All)
+        joinBlockImplCross<Cross_LeftSemi, All>(block);
+    else if (kind == Cross_LeftSemi && strictness == Any)
+        joinBlockImplCross<Cross_LeftSemi, Any>(block);
+    else if (kind == Cross_LeftAnti && strictness == All)
+        joinBlockImplCross<Cross_LeftSemi, All>(block);
+    else if (kind == Cross_LeftAnti && strictness == Any)
+        joinBlockImplCross<Cross_LeftSemi, Any>(block);
+    else if (kind == NullAware_Anti && strictness == All)
+        joinBlockImplNullAware<NullAware_Anti, All>(block, maps_all);
+    else if (kind == NullAware_Anti && strictness == Any)
+        joinBlockImplNullAware<NullAware_Anti, Any>(block, maps_any);
+    else if (kind == NullAware_LeftSemi && strictness == All)
+        joinBlockImplNullAware<NullAware_LeftSemi, All>(block, maps_all);
+    else if (kind == NullAware_LeftSemi && strictness == Any)
+        joinBlockImplNullAware<NullAware_LeftSemi, Any>(block, maps_any);
+    else if (kind == NullAware_LeftAnti && strictness == All)
+        joinBlockImplNullAware<NullAware_LeftAnti, All>(block, maps_all);
+    else if (kind == NullAware_LeftAnti && strictness == Any)
+        joinBlockImplNullAware<NullAware_LeftAnti, Any>(block, maps_any);
     else
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
-    if (kind == ASTTableJoin::Kind::LeftAnti || kind == ASTTableJoin::Kind::Cross_LeftAnti)
+    if (kind == LeftAnti || kind == Cross_LeftAnti)
     {
         const auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByName(match_helper_name).column.get());
         const auto & vec_matched = static_cast<const ColumnVector<Int8> *>(nullable_column->getNestedColumnPtr().get())->getData();
@@ -2476,7 +2930,7 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
         block.getByName(match_helper_name).column = ColumnNullable::create(std::move(col_non_matched), std::move(nullable_column->getNullMapColumnPtr()));
     }
 
-    if (isCrossJoin(kind))
+    if (isCrossJoin(kind) || isNullAwareSemiFamily(kind))
     {
         probe_process_info.all_rows_joined_finish = true;
     }

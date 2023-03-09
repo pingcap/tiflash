@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <Common/Logger.h>
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/SettingsCommon.h>
@@ -106,9 +107,7 @@ public:
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const String & left_filter_column = "",
          const String & right_filter_column = "",
-         const String & other_filter_column = "",
-         const String & other_eq_filter_from_in_column = "",
-         ExpressionActionsPtr other_condition_ptr = nullptr,
+         const JoinOtherConditions & conditions = {},
          size_t max_block_size = 0,
          const String & match_helper_name = "",
          size_t restore_round = 0);
@@ -121,8 +120,6 @@ public:
     void initBuild(const Block & sample_block, size_t build_concurrency_ = 1);
 
     void initProbe(const Block & sample_block, size_t probe_concurrency_ = 1);
-
-    void insertFromBlock(const Block & block);
 
     void insertFromBlock(const Block & block, size_t stream_index);
 
@@ -181,7 +178,7 @@ public:
     void setInitActiveBuildConcurrency()
     {
         std::unique_lock lock(build_probe_mutex);
-        active_build_concurrency = getBuildConcurrencyInternal();
+        active_build_concurrency = getBuildConcurrency();
     }
 
     size_t getProbeConcurrency() const
@@ -259,7 +256,7 @@ public:
         using Base::Base;
         using Base_t = Base;
         void setUsed() const { used.store(true, std::memory_order_relaxed); } /// Could be set simultaneously from different threads.
-        bool getUsed() const { return used; }
+        bool getUsed() const { return used.load(std::memory_order_relaxed); }
     };
 
     template <typename Base>
@@ -407,17 +404,22 @@ private:
     bool meet_error = false;
     String error_message;
 
-private:
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
     String left_filter_column;
     String right_filter_column;
-    String other_filter_column;
-    String other_eq_filter_from_in_column;
-    ExpressionActionsPtr other_condition_ptr;
+
+    const JoinOtherConditions other_conditions;
+
+    /// For null-aware semi join with no other condition.
+    /// Indicate if the right table is empty.
+    std::atomic<bool> right_table_is_empty{true};
+    /// Indicate if the right table has a all-key-null row.
+    std::atomic<bool> right_has_all_key_null_row{false};
+
     ASTTableJoin::Strictness original_strictness;
-    size_t max_block_size_for_cross_join;
+    size_t max_block_size;
     /** Blocks of "right" table.
       */
     BlocksList blocks;
@@ -453,7 +455,15 @@ private:
     /// For right/full join, including
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions
+    /// For null-aware semi join family, including rows with NULL join keys.
     std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
+
+    /// The RowRefList in `rows_not_inserted_to_map` that removes the empty RowRefList.
+    PaddedPODArray<RowRefList *> rows_with_null_keys;
+
+    /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
+    Arenas pools;
+
 
 private:
     Type type = Type::EMPTY;
@@ -542,9 +552,16 @@ private:
     void releaseProbePartitionBlocks(size_t partition_index, std::unique_lock<std::mutex> & partition_lock);
     void releaseAllPartitions();
 
+
     void spillMostMemoryUsedPartitionIfNeed();
     std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
+
+    void workAfterBuildFinish();
+
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+    void joinBlockImplNullAware(Block & block, const Maps & maps) const;
 };
+
 
 struct ProbeProcessInfo
 {

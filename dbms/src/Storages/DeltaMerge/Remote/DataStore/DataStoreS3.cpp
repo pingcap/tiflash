@@ -17,6 +17,9 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3Filename.h>
+
+#include <future>
 
 namespace DB::DM::Remote
 {
@@ -72,6 +75,41 @@ void DataStoreS3::copyDMFileMetaToLocalPath(const S3::DMFileOID & remote_oid, co
     std::vector<String> target_fnames = {DMFile::metav2FileName(), IDataType::getFileNameForStream(DB::toString(-1), {}) + ".idx"};
     copyToLocal(remote_oid, target_fnames, local_dir);
     LOG_DEBUG(log, "copyDMFileMetaToLocalPath finished. Local_dir={} cost={}ms", local_dir, sw.elapsedMilliseconds());
+}
+
+bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq)
+{
+    auto s3_client = S3::ClientFactory::instance().sharedClient();
+    const auto & bucket = S3::ClientFactory::instance().bucket();
+
+    /// First upload all CheckpointData files and theirs lock,
+    /// then upload the CheckpointManifest to make the files within
+    /// `upload_seq` public to S3GCManager.
+
+    std::vector<std::future<void>> upload_results;
+    // upload in parallel
+    for (size_t file_idx = 0; file_idx < local_files.data_files.size(); ++file_idx)
+    {
+        auto task = std::make_shared<std::packaged_task<void()>>([&, idx = file_idx] {
+            const auto & local_datafile = local_files.data_files[idx];
+            auto s3key = S3::S3Filename::newCheckpointData(store_id, upload_seq, idx);
+            auto lock_key = s3key.toView().getLockKey(store_id, upload_seq);
+            S3::uploadFile(*s3_client, bucket, local_datafile, s3key.toFullKey());
+            S3::uploadEmptyFile(*s3_client, bucket, lock_key);
+        });
+        upload_results.push_back(task->get_future());
+        IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+    }
+    for (auto & f : upload_results)
+    {
+        f.get();
+    }
+
+    // upload manifest after all CheckpointData uploaded
+    auto s3key = S3::S3Filename::newCheckpointManifest(store_id, upload_seq);
+    S3::uploadFile(*s3_client, bucket, local_files.manifest_file, s3key.toFullKey());
+
+    return true; // upload success
 }
 
 void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vector<String> & target_short_fnames, const String & local_dir)

@@ -56,6 +56,8 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
@@ -64,6 +66,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
@@ -169,6 +172,8 @@ struct ContextShared
 
     /// The following members are only available in read-write disaggregated mode
     ///
+    /// An abstraction for putting local files to remote data store (e.g. S3)
+    DM::Remote::IDataStorePtr remote_data_store;
     /// The PS instance available on Write Node.
     UniversalPageStorageServicePtr ps_write;
     /// The PS instance available on Read Node.
@@ -1699,6 +1704,22 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
 {
     auto lock = getLock();
     return shared->global_storage_pool;
+}
+
+void Context::initializeRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled)
+{
+    if (!s3_enabled)
+        return;
+
+    // Now only S3 data store is supported
+    auto lock = getLock();
+    shared->remote_data_store = std::make_shared<DM::Remote::DataStoreS3>(file_provider);
+}
+
+DM::Remote::IDataStorePtr Context::getRemoteDataStore() const
+{
+    auto lock = getLock();
+    return shared->remote_data_store;
 }
 
 /**

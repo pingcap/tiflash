@@ -58,6 +58,7 @@ Serializer::serializeTo(
     RemotePb::RemoteSegment remote;
     remote.set_segment_id(segment_id);
     remote.set_segment_epoch(segment_epoch);
+    remote.set_delta_index_epoch(snap->delta->getDeltaIndexEpoch());
 
     WriteBufferFromOwnString wb;
     {

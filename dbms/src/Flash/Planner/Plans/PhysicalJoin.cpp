@@ -73,7 +73,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const Block & left_input_header = left->getSampleBlock();
     const Block & right_input_header = right->getSampleBlock();
 
-    JoinInterpreterHelper::TiFlashJoin tiflash_join{join};
+    JoinInterpreterHelper::TiFlashJoin tiflash_join(join, context.isTest());
 
     const auto & probe_plan = tiflash_join.build_side_index == 0 ? right : left;
     const auto & build_plan = tiflash_join.build_side_index == 0 ? left : right;
@@ -91,7 +91,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     bool is_tiflash_right_join = tiflash_join.isTiFlashRightJoin();
 
     // prepare probe side
-    auto [probe_side_prepare_actions, probe_key_names, probe_filter_column_name] = JoinInterpreterHelper::prepareJoin(
+    auto [probe_side_prepare_actions, probe_key_names, original_probe_key_names, probe_filter_column_name] = JoinInterpreterHelper::prepareJoin(
         context,
         probe_side_header,
         tiflash_join.getProbeJoinKeys(),
@@ -102,7 +102,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
 
     // prepare build side
-    auto [build_side_prepare_actions, build_key_names, build_filter_column_name] = JoinInterpreterHelper::prepareJoin(
+    auto [build_side_prepare_actions, build_key_names, original_build_key_names, build_filter_column_name] = JoinInterpreterHelper::prepareJoin(
         context,
         build_side_header,
         tiflash_join.getBuildJoinKeys(),
@@ -112,14 +112,13 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         tiflash_join.getBuildConditions());
     RUNTIME_ASSERT(build_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
 
-    auto [other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name]
-        = tiflash_join.genJoinOtherConditionAction(context, left_input_header, right_input_header, probe_side_prepare_actions);
+    auto join_other_conditions = tiflash_join.genJoinOtherConditionsAction(context, left_input_header, right_input_header, probe_side_prepare_actions, original_probe_key_names, original_build_key_names);
 
     const Settings & settings = context.getSettingsRef();
-    size_t max_block_size_for_cross_join = settings.max_block_size;
     SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_build", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
     SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_probe", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
-    fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
+    size_t max_block_size = settings.max_block_size;
+    fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size = 1; });
 
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
@@ -136,10 +135,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,
-        other_filter_column_name,
-        other_eq_filter_from_in_column_name,
-        other_condition_expr,
-        max_block_size_for_cross_join,
+        join_other_conditions,
+        max_block_size,
         match_helper_name);
 
     recordJoinExecuteInfo(dag_context, executor_id, build_plan->execId(), join_ptr);
