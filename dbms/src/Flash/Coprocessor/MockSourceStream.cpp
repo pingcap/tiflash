@@ -74,7 +74,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreamsForExchangeRecei
                 {
                     columns_for_mock_exchange_receiver[i % output_stream_count].push_back(columns_with_type_and_name_vector[i]);
                 }
-                for (size_t i = 0; i < output_stream_count; i++)
+                for (size_t i = 0; i < output_stream_count; ++i)
                     mock_streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(columns_for_mock_exchange_receiver[i], context.getSettingsRef().max_block_size));
             }
             for (const auto & col : mock_streams.back()->getHeader())
