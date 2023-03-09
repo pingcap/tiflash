@@ -567,6 +567,7 @@ struct RestoreInfo
     BlockInputStreamPtr build_stream;
     BlockInputStreamPtr probe_stream;
 
+    RestoreInfo() = default;
     RestoreInfo(JoinPtr join_, BlockInputStreamPtr non_joined_data_stream_, BlockInputStreamPtr build_stream_, BlockInputStreamPtr probe_stream_)
         : join(std::move(join_))
         , non_joined_stream(non_joined_data_stream_)

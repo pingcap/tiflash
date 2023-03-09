@@ -58,15 +58,13 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
     /// and expects these meaningless blocks won't be used to produce meaningful result.
 
     JoinPtr current_join;
-    BlockInputStreamPtr current_non_joined_stream;
-    BlockInputStreamPtr current_restore_build_stream;
-    BlockInputStreamPtr current_restore_probe_stream;
+    RestoreInfo restore_info;
     {
         std::lock_guard lock(mutex);
         current_join = join;
-        current_non_joined_stream = non_joined_stream;
-        current_restore_build_stream = restore_build_stream;
-        current_restore_probe_stream = restore_probe_stream;
+        restore_info.non_joined_stream = non_joined_stream;
+        restore_info.build_stream = restore_build_stream;
+        restore_info.probe_stream = restore_probe_stream;
     }
     /// Cancel join just wake up all the threads waiting in Join::waitUntilAllBuildFinished/Join::waitUntilAllProbeFinished,
     /// the ongoing join process will not be interrupted
@@ -80,21 +78,21 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
     ///       it is safe because when any of the data stream read empty block because of early exit, the execution framework ensures that no further
     ///       data will be used.
     current_join->cancel();
-    if (current_non_joined_stream != nullptr)
+    if (restore_info.non_joined_stream != nullptr)
     {
-        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(current_non_joined_stream.get());
+        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_info.non_joined_stream.get());
         if (p_stream != nullptr)
             p_stream->cancel(kill);
     }
-    if (current_restore_probe_stream != nullptr)
+    if (restore_info.probe_stream != nullptr)
     {
-        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(current_restore_probe_stream.get());
+        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_info.probe_stream.get());
         if (p_stream != nullptr)
             p_stream->cancel(kill);
     }
-    if (current_restore_build_stream != nullptr)
+    if (restore_info.build_stream != nullptr)
     {
-        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(current_restore_build_stream.get());
+        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_info.build_stream.get());
         if (p_stream != nullptr)
             p_stream->cancel(kill);
     }
