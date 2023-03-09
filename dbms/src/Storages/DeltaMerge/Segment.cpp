@@ -2583,7 +2583,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         segment_snap->stable->getDMFilesRows(),
         dm_context.tracing_id);
 
-    return std::make_shared<LateMaterializationBlockInputStream>(columns_to_read, filter_column_stream, rest_column_stream, bitmap_filter, dm_context.tracing_id);
+    return std::make_shared<LateMaterializationBlockInputStream>(columns_to_read, filter->filter_column_name, filter_column_stream, rest_column_stream, bitmap_filter, dm_context.tracing_id);
 }
 
 RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges)

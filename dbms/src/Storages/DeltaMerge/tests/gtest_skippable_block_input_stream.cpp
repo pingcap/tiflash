@@ -90,16 +90,20 @@ protected:
 
         stream = getInputStream(segment, snapshot, columns_to_read, read_ranges);
 
+        size_t offset = 0;
         stream->readPrefix();
         for (size_t i = 0; i < expected_blks.size(); ++i)
         {
             if (std::find(skip_block_idxs.begin(), skip_block_idxs.end(), i) != skip_block_idxs.end())
             {
+                offset += expected_blks[i].rows();
                 size_t skipped_rows = stream->skipNextBlock();
                 ASSERT_EQ(skipped_rows, expected_blks[i].rows());
                 continue;
             }
             auto blk = stream->read();
+            ASSERT_EQ(offset, blk.startOffset());
+            offset += blk.rows();
             ASSERT_BLOCK_EQ(expected_blks[i], blk);
         }
         ASSERT_BLOCK_EQ(stream->read(), Block{});
@@ -124,22 +128,87 @@ protected:
         stream1->readPrefix();
         stream2->readPrefix();
 
-        std::default_random_engine e;
+        std::default_random_engine e(time(nullptr));
         for (auto blk = stream1->read(); blk; blk = stream1->read())
         {
             IColumn::Filter filter(blk.rows(), 1);
-            std::transform(filter.begin(), filter.end(), filter.begin(), [&e](auto) { return e() % 2 == 0 ? 0 : 1; });
+            std::transform(filter.begin(), filter.end(), filter.begin(), [&e](auto) { return e() % 8192 == 0 ? 1 : 0; });
+            filter[e() % blk.rows()] = 1; // should not be all 0.
             size_t passed_count = countBytesInFilter(filter);
             for (auto & col : blk)
             {
                 col.column = col.column->filter(filter, passed_count);
             }
             auto blk2 = stream2->readWithFilter(filter);
+            ASSERT_EQ(blk.startOffset(), blk2.startOffset());
             ASSERT_BLOCK_EQ(blk, blk2);
         }
         ASSERT_BLOCK_EQ(stream2->read(), Block{});
         stream1->readSuffix();
         stream2->readSuffix();
+    }
+
+    void testLateMaterializationCase(std::string_view seg_data)
+    {
+        auto seg_data_units = parseSegData(seg_data);
+        for (const auto & unit : seg_data_units)
+        {
+            writeSegment(unit);
+        }
+
+        auto [segment, snapshot] = getSegmentForRead(SEG_ID);
+        ColumnDefines columns_to_read = {getExtraHandleColumnDefine(options.is_common_handle),
+                                         getVersionColumnDefine()};
+
+        auto stream = getInputStream(segment, snapshot, columns_to_read, read_ranges);
+
+        stream->readPrefix();
+        std::vector<Block> expected_blks;
+        for (auto blk = stream->read(); blk; blk = stream->read())
+        {
+            expected_blks.push_back(std::move(blk));
+        }
+        stream->readSuffix();
+
+        stream = getInputStream(segment, snapshot, columns_to_read, read_ranges);
+
+        std::default_random_engine e(time(nullptr));
+        
+        size_t offset = 0;
+        stream->readPrefix();
+        for (auto & eblk : expected_blks)
+        {
+            if (e() % 3 == 0)
+            {
+                offset += eblk.rows();
+                size_t skipped_rows = stream->skipNextBlock();
+                ASSERT_EQ(skipped_rows, eblk.rows());
+            }
+            else if (e() % 3 == 1)
+            {
+                IColumn::Filter filter(eblk.rows(), 1);
+                std::transform(filter.begin(), filter.end(), filter.begin(), [&e](auto) { return e() % 8192 == 0 ? 1 : 0; });
+                filter[e() % eblk.rows()] = 1; // should not be all 0.
+                auto blk = stream->readWithFilter(filter);
+                ASSERT_EQ(offset, blk.startOffset());
+                ASSERT_EQ(blk.rows(), countBytesInFilter(filter));
+                offset += eblk.rows();
+                for (auto & col : eblk)
+                {
+                    col.column = col.column->filter(filter, -1);
+                }
+                ASSERT_BLOCK_EQ(eblk, blk);
+            } 
+            else 
+            {
+                auto blk = stream->read();
+                ASSERT_EQ(offset, blk.startOffset());
+                offset += blk.rows();
+                ASSERT_BLOCK_EQ(eblk, blk);
+            }
+        }
+        ASSERT_BLOCK_EQ(stream->read(), Block{});
+        stream->readSuffix();
     }
 
     void writeSegment(const SegDataUnit & unit)
@@ -190,6 +259,7 @@ try
 {
     testSkipBlockCase("d_mem:[0, 1000)");
     testReadWithFilterCase("d_mem:[0, 1000)");
+    testLateMaterializationCase("d_mem:[0, 1000)");
 }
 CATCH
 
@@ -198,6 +268,7 @@ try
 {
     testSkipBlockCase("d_mem:[0, 1000)|d_mem:[0, 1000)", {0});
     testReadWithFilterCase("d_mem:[0, 1000)|d_mem:[0, 1000)");
+    testLateMaterializationCase("d_mem:[0, 1000)|d_mem:[0, 1000)");
 }
 CATCH
 
@@ -206,6 +277,7 @@ try
 {
     testSkipBlockCase("d_mem:[0, 1000)|d_mem:[100, 200)", {3, 6, 9});
     testReadWithFilterCase("d_mem:[0, 1000)|d_mem:[100, 200)");
+    testLateMaterializationCase("d_mem:[0, 1000)|d_mem:[100, 200)");
 }
 CATCH
 
@@ -214,6 +286,7 @@ try
 {
     testSkipBlockCase("d_mem:[0, 1000)|d_mem:[-100, 100)", {0, 1, 3, 4, 5, 6, 7, 8});
     testReadWithFilterCase("d_mem:[0, 1000)|d_mem:[-100, 100)");
+    testLateMaterializationCase("d_mem:[0, 1000)|d_mem:[-100, 100)");
 }
 CATCH
 
@@ -222,6 +295,7 @@ try
 {
     testSkipBlockCase("d_mem:[0, 1000)|d_mem_del:[0, 1000)", {4, 5, 6});
     testReadWithFilterCase("d_mem:[0, 1000)|d_mem_del:[0, 1000)");
+    testLateMaterializationCase("d_mem:[0, 1000)|d_mem_del:[0, 1000)");
 }
 CATCH
 
@@ -230,6 +304,7 @@ try
 {
     testSkipBlockCase("d_mem:[0, 1000)|d_mem_del:[100, 200)", {});
     testReadWithFilterCase("d_mem:[0, 1000)|d_mem_del:[100, 200)");
+    testLateMaterializationCase("d_mem:[0, 1000)|d_mem_del:[100, 200)");
 }
 CATCH
 
@@ -238,6 +313,7 @@ try
 {
     testSkipBlockCase("d_mem:[0, 1000)|d_mem_del:[-100, 100)", {0, 1, 2, 3, 4, 5, 6, 7, 8});
     testReadWithFilterCase("d_mem:[0, 1000)|d_mem_del:[-100, 100)");
+    testLateMaterializationCase("d_mem:[0, 1000)|d_mem_del:[-100, 100)");
 }
 CATCH
 
@@ -246,6 +322,7 @@ try
 {
     testSkipBlockCase("d_tiny:[100, 500)|d_mem:[200, 1000)", {1, 2, 3, 4, 5, 6});
     testReadWithFilterCase("d_tiny:[100, 500)|d_mem:[200, 1000)");
+    testLateMaterializationCase("d_tiny:[100, 500)|d_mem:[200, 1000)");
 }
 CATCH
 
@@ -254,6 +331,7 @@ try
 {
     testSkipBlockCase("d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)", {7, 8, 9});
     testReadWithFilterCase("d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)");
+    testLateMaterializationCase("d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)");
 }
 CATCH
 
@@ -262,6 +340,7 @@ try
 {
     testSkipBlockCase("d_tiny:[100, 500)|d_dr:[250, 300)|d_mem:[240, 290)", {1, 2, 3, 4, 5, 9});
     testReadWithFilterCase("d_tiny:[100, 500)|d_dr:[250, 300)|d_mem:[240, 290)");
+    testLateMaterializationCase("d_tiny:[100, 500)|d_dr:[250, 300)|d_mem:[240, 290)");
 }
 CATCH
 
@@ -270,6 +349,7 @@ try
 {
     testSkipBlockCase("d_tiny:[100, 500)|d_big:[250, 1000)|d_mem:[240, 290)", {1, 3, 4, 9});
     testReadWithFilterCase("d_tiny:[100, 500)|d_big:[250, 1000)|d_mem:[240, 290)");
+    testLateMaterializationCase("d_tiny:[100, 500)|d_big:[250, 1000)|d_mem:[240, 290)");
 }
 CATCH
 
@@ -278,6 +358,7 @@ try
 {
     testSkipBlockCase("s:[0, 1024)|d_dr:[0, 1023)", {0});
     testReadWithFilterCase("s:[0, 1024)|d_dr:[0, 1023)");
+    testLateMaterializationCase("s:[0, 1024)|d_dr:[0, 1023)");
 }
 CATCH
 
@@ -286,6 +367,7 @@ try
 {
     testSkipBlockCase("s:[0, 102294)|d_dr:[0, 1023)", {2});
     testReadWithFilterCase("s:[0, 102294)|d_dr:[0, 1023)");
+    testLateMaterializationCase("s:[0, 102294)|d_dr:[0, 1023)");
 }
 CATCH
 
@@ -295,6 +377,7 @@ try
 {
     testSkipBlockCase("s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)", {0});
     testReadWithFilterCase("s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)");
+    testLateMaterializationCase("s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)");
 }
 CATCH
 
@@ -304,6 +387,7 @@ try
 {
     testSkipBlockCase("s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)", {1, 2});
     testReadWithFilterCase("s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)");
+    testLateMaterializationCase("s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)");
 }
 CATCH
 
