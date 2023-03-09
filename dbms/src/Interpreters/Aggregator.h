@@ -964,7 +964,6 @@ public:
             const Block & src_header_,
             const ColumnNumbers & keys_,
             const AggregateDescriptions & aggregates_,
-            size_t concurrency_,
             size_t group_by_two_level_threshold_,
             size_t group_by_two_level_threshold_bytes_,
             size_t max_bytes_before_external_group_by_,
@@ -975,7 +974,6 @@ public:
             : src_header(src_header_)
             , keys(keys_)
             , aggregates(aggregates_)
-            , concurrency(concurrency_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
             , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
@@ -986,7 +984,6 @@ public:
             , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
             , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
         {
-            assert(concurrency > 0);
         }
 
         /// Only parameters that matter during merge.
@@ -996,7 +993,7 @@ public:
                const SpillConfig & spill_config,
                UInt64 max_block_size_,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, 1, 0, 0, 0, false, spill_config, max_block_size_, collators_)
+            : Params(Block(), keys_, aggregates_, 0, 0, 0, false, spill_config, max_block_size_, collators_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -1067,9 +1064,9 @@ public:
     void setCancellationHook(CancellationHook cancellation_hook);
 
     /// For external aggregation.
-    void spill(AggregatedDataVariants & data_variants);
+    void spill(AggregatedDataVariants & data_variants, bool is_bucket_partition);
     void finishSpill();
-    SpilledRestoreMergingBucketsPtr restoreSpilledData(bool final);
+    SpilledRestoreMergingBucketsPtr restoreSpilledData(bool final, size_t max_threads, bool is_bucket_partition);
     bool hasSpilledData() const { return spiller != nullptr && spiller->hasSpilledData(); }
     void useTwoLevelHashTable() { use_two_level_hash_table = true; }
     void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);
@@ -1180,7 +1177,8 @@ protected:
     template <typename Method>
     void spillImpl(
         AggregatedDataVariants & data_variants,
-        Method & method);
+        Method & method,
+        bool is_bucket_partition);
 
 protected:
     /// Merge data from hash table `src` into `dst`.

@@ -101,7 +101,6 @@ Aggregator::Params buildParams(
         before_agg_header,
         keys,
         aggregate_descriptions,
-        agg_streams_size,
         /// do not use the average value for key count threshold, because for a random distributed data, the key count
         /// in every threads should almost be the same
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),

@@ -28,6 +28,8 @@ public:
         std::vector<BlockInputStreams> && bucket_restore_streams_,
         const Aggregator::Params & params,
         bool final_,
+        size_t restore_concurrency_,
+        bool is_bucket_partition_,
         const String & req_id);
 
     Block getHeader() const;
@@ -36,11 +38,11 @@ public:
 
     BlocksList mergeBucketData(BlocksList && bucket_data_to_merge);
 
-    size_t getConcurrency() const { return std::min(concurrency, bucket_restore_streams.size()); }
+    size_t getConcurrency() const { return restore_concurrency; }
 
 private:
-    BlocksList restoreBucketDataToMergeInConcurrency(std::function<bool()> && is_cancelled);
-    BlocksList restoreBucketDataToMergeNotConcurrency(std::function<bool()> && is_cancelled);
+    BlocksList restoreBucketDataToMergeInBucketPartition(std::function<bool()> && is_cancelled);
+    BlocksList restoreBucketDataToMergeInWholePartition(std::function<bool()> && is_cancelled);
 
 private:
     const LoggerPtr log;
@@ -48,7 +50,9 @@ private:
     Aggregator aggregator;
     bool final;
 
-    size_t concurrency;
+    size_t restore_concurrency;
+
+    bool is_bucket_partition;
 
     std::vector<BlockInputStreams> bucket_restore_streams;
 

@@ -161,8 +161,7 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
 
 void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)
 {
-    auto aggregate_context = std::make_shared<AggregateContext>(
-        log->identifier());
+    auto aggregate_context = std::make_shared<AggregateContext>(log->identifier());
     // TODO support fine grained shuffle.
     assert(!fine_grained_shuffle.enable());
     auto agg_build = std::make_shared<PhysicalAggregationBuild>(
