@@ -242,16 +242,18 @@ void serializePutExternalTo(const EditRecord & record, WriteBuffer & buf)
 
     if constexpr (std::is_same_v<EditRecord, universal::PageEntriesEdit::EditRecord>)
     {
+        UInt32 flags = 0;
         if (record.entry.checkpoint_info.has_value())
         {
-            writeIntBinary(static_cast<UInt64>(1), buf);
+            setCheckpointInfoExists(flags);
+            writeIntBinary(flags, buf);
             writeIntBinary(record.entry.checkpoint_info->data_location.offset_in_file, buf);
             writeIntBinary(record.entry.checkpoint_info->data_location.size_in_file, buf);
             writeStringBinary(*(record.entry.checkpoint_info->data_location.data_file_id), buf);
         }
         else
         {
-            writeIntBinary(static_cast<UInt64>(0), buf);
+            writeIntBinary(flags, buf);
         }
     }
 }
@@ -275,9 +277,9 @@ void deserializePutExternalFrom([[maybe_unused]] const EditRecordType record_typ
     readIntBinary(rec.being_ref_count, buf);
     if constexpr (std::is_same_v<typename EditType::PageId, UniversalPageId>)
     {
-        UInt64 has_checkpoint_info = 0;
-        readIntBinary(has_checkpoint_info, buf);
-        if (has_checkpoint_info)
+        UInt32 flags = 0;
+        readIntBinary(flags, buf);
+        if (isCheckpointInfoExists(flags))
         {
             CheckpointInfo checkpoint_info;
             checkpoint_info.is_local_data_reclaimed = true;
