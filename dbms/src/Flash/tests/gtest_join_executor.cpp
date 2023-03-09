@@ -917,7 +917,7 @@ try
                           .build(context);
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
             ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_big));
-
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_small));
             // test spill to disk
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
             if (right_table_name == "right_table_1_concurrency")
@@ -943,6 +943,7 @@ try
                           .build(context);
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
             ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_big));
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, max_streams_small));
 
             // test spill to disk
             context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
