@@ -15,12 +15,12 @@
 #pragma once
 
 #include <Encryption/EncryptionPath.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <IO/WriteBufferFromWritableFile.h>
 
 namespace DB
 {
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
+
 class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 

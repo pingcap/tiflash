@@ -16,6 +16,7 @@
 
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorageService_fwd.h>
 
 namespace DB::DM::Remote
 {
@@ -25,8 +26,6 @@ using IDataStorePtr = std::shared_ptr<IDataStore>;
 
 namespace DB
 {
-class UniversalPageStorageService;
-using UniversalPageStorageServicePtr = std::shared_ptr<UniversalPageStorageService>;
 
 // This is wrapper class for UniversalPageStorage.
 // It mainly manages background tasks like gc for UniversalPageStorage.
@@ -34,8 +33,7 @@ using UniversalPageStorageServicePtr = std::shared_ptr<UniversalPageStorageServi
 class UniversalPageStorageService final
 {
 public:
-    static UniversalPageStorageServicePtr
-    create(
+    static UniversalPageStorageServicePtr create(
         Context & context,
         const String & name,
         PSDiskDelegatorPtr delegator,

@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/BackgroundProcessingPool.h>
@@ -130,7 +131,7 @@ bool UniversalPageStorageService::uploadCheckpoint()
         LOG_INFO(log, "Skip checkpoint because store meta is not initialized");
         return false;
     }
-    auto remote_store = global_context.getRemoteDataStore();
+    auto remote_store = global_context.getSharedContextDisagg()->remote_data_store;
     if (remote_store == nullptr)
     {
         LOG_INFO(log, "Skip checkpoint because remote data store is not initialized");
