@@ -21,6 +21,24 @@
 
 namespace DB
 {
+namespace
+{
+RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context)
+{
+    RemoteExecutionSummary exchange_execution_summary;
+    for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
+    {
+        for (const auto & stream_ptr : map_entry.second)
+        {
+            if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()); exchange_receiver_stream_ptr)
+            {
+                exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
+            }
+        }
+    }
+    return exchange_execution_summary;
+}
+} // namespace
 
 void ExecutionSummaryCollector::fillTiExecutionSummary(
     tipb::ExecutorExecutionSummary * execution_summary,
@@ -50,28 +68,16 @@ void ExecutionSummaryCollector::fillExecutionSummary(
     const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map)
 {
     ExecutionSummary current;
-    auto statistic = dag_context.executorStatisticCollector()->getResult().find(executor_id)->second;
+    const auto & statistic_result = dag_context.executorStatisticCollector()->getResult();
+    auto it = statistic_result.find(executor_id);
+    RUNTIME_CHECK(it != statistic_result.end());
 
-    // handle remote execution summary
-    if (auto * exchange_receiver = dynamic_cast<ExchangeReceiverStatistics *>(statistic.get()); exchange_receiver)
-    {
-        for (auto & p : exchange_receiver->exchangeExecutionSummary().execution_summaries)
-            fillTiExecutionSummary(response.add_execution_summaries(), p.second, p.first);
-    }
+    const auto & statistic = it->second->getBaseRuntimeStatistics();
 
-    auto res = statistic->getBaseRuntimeStatistics();
-    LOG_INFO(log,
-             "exeuctor_id: {}, blocks: {}, rows: {}, concurrency: {}, time_processed_ns: {}",
-             executor_id,
-             res.blocks,
-             res.rows,
-             res.concurrency,
-             res.execution_time_ns);
-
-    current.num_iterations = res.blocks;
-    current.num_produced_rows = res.rows;
-    current.concurrency = res.concurrency;
-    current.time_processed_ns = res.execution_time_ns;
+    current.num_iterations = statistic.blocks;
+    current.num_produced_rows = statistic.rows;
+    current.concurrency = statistic.concurrency;
+    current.time_processed_ns = statistic.execution_time_ns;
 
     if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
         current.scan_context->merge(*(iter->second));
@@ -89,7 +95,8 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
 {
     if (!dag_context.collect_execution_summaries)
         return;
-    LOG_INFO(log, "collect execution summary");
+    LOG_DEBUG(log, "start collecting execution summary");
+
     collect();
 
     if (dag_context.return_executor_id)
@@ -108,6 +115,14 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
             assert(it != profiles.end());
             fillExecutionSummary(response, executor_id, dag_context.scan_context_map);
         }
+    }
+
+    // TODO support cop remote read and disaggregated mode.
+    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(dag_context);
+    // fill execution_summary to reponse for remote executor received by exchange.
+    for (auto & p : exchange_execution_summary.execution_summaries)
+    {
+        fillTiExecutionSummary(response.add_execution_summaries(), p.second, p.first);
     }
 }
 } // namespace DB

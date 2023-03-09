@@ -50,17 +50,12 @@ class ExchangeReceiverStatistics : public ExchangeReceiverStatisticsBase
 {
 public:
     ExchangeReceiverStatistics(const tipb::Executor * executor, DAGContext & dag_context_);
-    RemoteExecutionSummary exchangeExecutionSummary()
-    {
-        return exchange_execution_summary;
-    }
 
 private:
     std::vector<Int64> receiver_source_task_ids;
     size_t partition_num;
 
     std::vector<ExchangeReceiveDetail> exchange_receive_details;
-    RemoteExecutionSummary exchange_execution_summary;
 
 protected:
     void appendExtraJson(FmtBuffer &) const override;
