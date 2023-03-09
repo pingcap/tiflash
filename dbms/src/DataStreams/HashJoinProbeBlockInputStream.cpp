@@ -158,12 +158,12 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
         /// first check if current join has a partition to restore
         if (join->hasPartitionSpilledWithLock())
         {
-            auto [restore_join, build_stream, probe_stream, restore_non_joined_stream] = join->getOneRestoreStream(max_block_size);
+            auto restore_info = join->getOneRestoreStream(max_block_size);
             /// get a restore join
-            if (restore_join)
+            if (restore_info.join)
             {
                 /// restored join should always enable spill
-                assert(restore_join->isEnableSpill());
+                assert(restore_info.join->isEnableSpill());
                 parents.push_back(join);
                 {
                     std::lock_guard lock(mutex);
@@ -172,10 +172,10 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
                         status = ProbeStatus::FINISHED;
                         return;
                     }
-                    join = restore_join;
-                    restore_build_stream = build_stream;
-                    restore_probe_stream = probe_stream;
-                    non_joined_stream = restore_non_joined_stream;
+                    join = restore_info.join;
+                    restore_build_stream = restore_info.build_stream;
+                    restore_probe_stream = restore_info.probe_stream;
+                    non_joined_stream = restore_info.non_joined_stream;
                     current_probe_stream = restore_probe_stream;
                     if (non_joined_stream != nullptr)
                         current_non_joined_stream_index = dynamic_cast<NonJoinedBlockInputStream *>(non_joined_stream.get())->getNonJoinedIndex();
