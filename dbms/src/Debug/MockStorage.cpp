@@ -170,7 +170,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
         const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
-            google::protobuf::RepeatedPtrField<tipb::Expr> {}, // Not care now
+            google::protobuf::RepeatedPtrField<tipb::Expr>{}, // Not care now
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());

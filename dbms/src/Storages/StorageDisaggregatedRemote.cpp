@@ -321,7 +321,7 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
 
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filter_conditions.conditions,
-        google::protobuf::RepeatedPtrField<tipb::Expr> {}, // Not care now
+        google::protobuf::RepeatedPtrField<tipb::Expr>{}, // Not care now
         DAGPreparedSets{}, // Not care now
         NamesAndTypes{}, // Not care now
         db_context.getTimezoneInfo());

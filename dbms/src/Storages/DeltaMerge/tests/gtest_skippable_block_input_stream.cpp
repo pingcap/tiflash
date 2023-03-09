@@ -173,7 +173,7 @@ protected:
         stream = getInputStream(segment, snapshot, columns_to_read, read_ranges);
 
         std::default_random_engine e(time(nullptr));
-        
+
         size_t offset = 0;
         stream->readPrefix();
         for (auto & eblk : expected_blks)
@@ -198,8 +198,8 @@ protected:
                     col.column = col.column->filter(filter, -1);
                 }
                 ASSERT_BLOCK_EQ(eblk, blk);
-            } 
-            else 
+            }
+            else
             {
                 auto blk = stream->read();
                 ASSERT_EQ(offset, blk.startOffset());

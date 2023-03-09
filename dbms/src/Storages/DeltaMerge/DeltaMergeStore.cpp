@@ -1017,7 +1017,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto read_mode = getReadMode(db_context, is_fast_scan, keep_order);
-    RUNTIME_CHECK_MSG(!filter || !filter->beofre_where || read_mode != ReadMode::Bitmap , "Push down filters needs bitmap");
+    RUNTIME_CHECK_MSG(!filter || !filter->beofre_where || read_mode != ReadMode::Bitmap, "Push down filters needs bitmap");
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
