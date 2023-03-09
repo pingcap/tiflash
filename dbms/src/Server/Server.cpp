@@ -893,7 +893,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (STORAGE_FORMAT_CURRENT.page == PageFormat::V4)
     {
-        LOG_INFO(log, "use unips for proxy");
+        LOG_INFO(log, "Using unips for proxy");
         proxy_conf.addExtraArgs("unips-enabled", "1");
     }
     else
