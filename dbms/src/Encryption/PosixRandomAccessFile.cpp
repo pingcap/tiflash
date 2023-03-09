@@ -38,6 +38,11 @@ extern const int CANNOT_SEEK_THROUGH_FILE;
 extern const int CANNOT_SELECT;
 } // namespace ErrorCodes
 
+RandomAccessFilePtr PosixRandomAccessFile::create(const String & file_name_)
+{
+    return std::make_shared<PosixRandomAccessFile>(file_name_, /*flags*/ -1, /*read_limiter_*/ nullptr);
+}
+
 PosixRandomAccessFile::PosixRandomAccessFile(const std::string & file_name_, int flags, const ReadLimiterPtr & read_limiter_)
     : file_name{file_name_}
     , read_limiter(read_limiter_)

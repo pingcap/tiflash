@@ -972,7 +972,7 @@ String DAGExpressionAnalyzer::appendDurationCast(
     return applyFunction(func_name, {dur_expr, fsp_expr}, actions, nullptr);
 }
 
-std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
+std::tuple<bool, Names, Names> DAGExpressionAnalyzer::buildJoinKey(
     const ExpressionActionsPtr & actions,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const JoinKeyTypes & join_key_types,
@@ -982,6 +982,7 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
     bool has_actions_of_keys = false;
 
     Names key_names;
+    Names original_key_names;
 
     UniqueNameGenerator unique_name_generator;
     for (int i = 0; i < keys.size(); ++i)
@@ -990,6 +991,8 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
         bool has_actions = key.tp() != tipb::ExprType::ColumnRef;
 
         String key_name = getActions(key, actions);
+        original_key_names.push_back(key_name);
+
         DataTypePtr current_type = actions->getSampleBlock().getByName(key_name).type;
         const auto & join_key_type = join_key_types[i];
         if (!removeNullable(current_type)->equals(*removeNullable(join_key_type.key_type)))
@@ -1035,7 +1038,7 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
         has_actions_of_keys |= has_actions;
     }
 
-    return std::make_pair(has_actions_of_keys, std::move(key_names));
+    return {has_actions_of_keys, std::move(key_names), std::move(original_key_names)};
 }
 
 bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
@@ -1043,6 +1046,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const JoinKeyTypes & join_key_types,
     Names & key_names,
+    Names & original_key_names,
     bool left,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
@@ -1052,7 +1056,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsPtr actions = chain.getLastActions();
 
     bool ret = false;
-    std::tie(ret, key_names) = buildJoinKey(actions, keys, join_key_types, left, is_right_out_join);
+    std::tie(ret, key_names, original_key_names) = buildJoinKey(actions, keys, join_key_types, left, is_right_out_join);
 
     if (!filters.empty())
     {
@@ -1092,6 +1096,30 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
         }
     }
     return ret;
+}
+
+String DAGExpressionAnalyzer::appendNullAwareSemiJoinEqColumn(
+    ExpressionActionsChain & chain,
+    const Names & probe_key_names,
+    const Names & build_key_names,
+    const TiDB::TiDBCollators & collators)
+{
+    RUNTIME_ASSERT(probe_key_names.size() == build_key_names.size());
+    if (probe_key_names.empty())
+        return "";
+
+    auto & last_step = initAndGetLastStep(chain);
+
+    Names and_arg_names(probe_key_names.size());
+    for (size_t i = 0; i < probe_key_names.size(); ++i)
+    {
+        Names arg_names;
+        arg_names.emplace_back(probe_key_names[i]);
+        arg_names.emplace_back(build_key_names[i]);
+        const TiDB::TiDBCollatorPtr & collator = i < collators.size() ? collators[i] : nullptr;
+        and_arg_names[i] = applyFunction("equals", arg_names, last_step.actions, collator);
+    }
+    return and_arg_names.size() == 1 ? and_arg_names[0] : applyFunction("and", and_arg_names, last_step.actions, nullptr);
 }
 
 void DAGExpressionAnalyzer::appendCastAfterWindow(

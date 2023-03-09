@@ -98,10 +98,11 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
         std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info);
         const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
         dag_query = std::make_unique<DAGQueryInfo>(
-            rewiteExprWithTimezone(timezone_info, conditions, table_info.columns),
+            conditions,
             pushed_down_filters,
             DAGPreparedSets(),
-            source_columns);
+            source_columns,
+            timezone_info);
         for (const auto & column : table_info.columns)
         {
             columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));

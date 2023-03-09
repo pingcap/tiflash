@@ -17,6 +17,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 
 #include <unordered_map>
 
@@ -27,21 +28,23 @@ namespace DB
 struct DAGQueryInfo
 {
     DAGQueryInfo(
-        const google::protobuf::RepeatedPtrField<tipb::Expr> filters_,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & filters_,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters_,
         DAGPreparedSets dag_sets_,
-        const NamesAndTypes & source_columns_)
-        : filters(std::move(filters_))
-        , pushed_down_filters(pushed_down_filters_)
-        , dag_sets(std::move(dag_sets_))
-        , source_columns(source_columns_){};
+        const NamesAndTypes & source_columns_,
+        const TimezoneInfo & timezone_info)
+        : source_columns(source_columns_)
+        , filters(rewiteExprWithTimezone(timezone_info, filters_, source_columns))
+        , pushed_down_filters(rewiteExprWithTimezone(timezone_info, pushed_down_filters_, source_columns))
+        , dag_sets(std::move(dag_sets_)){};
+
+    const NamesAndTypes & source_columns;
     // filters in dag request
     const google::protobuf::RepeatedPtrField<tipb::Expr> filters;
     // filters have been push down to storage engine in dag request
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters;
+    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
     // Prepared sets extracted from dag request, which are used for indices
     // by storage engine.
     DAGPreparedSets dag_sets;
-    const NamesAndTypes & source_columns;
 };
 } // namespace DB

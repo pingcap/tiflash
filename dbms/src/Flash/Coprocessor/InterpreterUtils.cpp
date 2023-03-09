@@ -24,6 +24,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
 
 namespace DB
@@ -242,7 +243,7 @@ void executeGeneratedColumnPlaceholder(
 google::protobuf::RepeatedPtrField<tipb::Expr> rewiteExprWithTimezone(
     const TimezoneInfo & timezone_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
-    const DB::ColumnInfos & table_scan_columns)
+    const NamesAndTypes & table_scan_columns)
 {
     if (timezone_info.is_utc_timezone || conditions.empty())
     {
@@ -257,7 +258,7 @@ google::protobuf::RepeatedPtrField<tipb::Expr> rewiteExprWithTimezone(
         tipb::Expr expr = condition;
         for (const auto idx : col_idxs)
         {
-            if (table_scan_columns[idx].id != -1 && table_scan_columns[idx].tp == TiDB::TP::TypeTimestamp)
+            if (table_scan_columns[idx].name != EXTRA_HANDLE_COLUMN_NAME && table_scan_columns[idx].type->getTypeId() == TypeIndex::MyTimeStamp)
             {
                 expr = ::DB::rewriteTimeStampLiteral(expr, timezone_info);
                 break;

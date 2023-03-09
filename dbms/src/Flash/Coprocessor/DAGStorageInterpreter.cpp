@@ -588,10 +588,11 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         /// to avoid null point exception
         query_info.query = dagContext().dummy_ast;
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
-            rewiteExprWithTimezone(context.getTimezoneInfo(), filter_conditions.conditions, table_scan.getColumns()),
+            filter_conditions.conditions,
             table_scan.getPushedDownFilters(),
             analyzer->getPreparedSets(),
-            analyzer->getCurrentInputColumns());
+            analyzer->getCurrentInputColumns(),
+            context.getTimezoneInfo());
         query_info.req_id = fmt::format("{} table_id={}", log->identifier(), table_id);
         query_info.keep_order = table_scan.keepOrder();
         query_info.is_fast_scan = table_scan.isFastScan();

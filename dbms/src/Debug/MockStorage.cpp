@@ -170,9 +170,10 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
         const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
-            pushed_down_filters,
+            google::protobuf::RepeatedPtrField<tipb::Expr> {}, // Not care now
             analyzer->getPreparedSets(),
-            analyzer->getCurrentInputColumns());
+            analyzer->getCurrentInputColumns(),
+            context.getTimezoneInfo());
         auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
         BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
         // TODO: set num_streams, then ins.size() != 1

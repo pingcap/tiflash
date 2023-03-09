@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
+#include <Encryption/PosixRandomAccessFile.h>
+#include <IO/ReadBufferFromRandomAccessFile.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
@@ -19,6 +22,8 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB::PS::V3::tests
 {
@@ -41,7 +46,8 @@ public:
         std::string ret;
         ret.resize(location.size_in_file);
 
-        auto buf = ReadBufferFromFile(dir + "/" + *location.data_file_id);
+        auto data_file = PosixRandomAccessFile::create(dir + "/" + *location.data_file_id);
+        ReadBufferFromRandomAccessFile buf(data_file);
         buf.seek(location.offset_in_file);
         auto n = buf.readBig(ret.data(), location.size_in_file);
         RUNTIME_CHECK(n == location.size_in_file);
@@ -75,8 +81,9 @@ try
     ASSERT_TRUE(Poco::File(dir + "/data_1").exists());
     ASSERT_TRUE(Poco::File(dir + "/manifest_foo").exists());
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     auto prefix = manifest_reader->readPrefix();
     ASSERT_EQ(5, prefix.local_sequence());
@@ -129,8 +136,9 @@ try
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     auto prefix = manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -193,8 +201,9 @@ try
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -295,8 +304,9 @@ try
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -383,8 +393,9 @@ try
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -471,8 +482,9 @@ try
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -513,8 +525,9 @@ try
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -567,8 +580,9 @@ try
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -626,8 +640,9 @@ try
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_1");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_1",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;

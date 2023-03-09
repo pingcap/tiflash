@@ -92,6 +92,6 @@ void executeGeneratedColumnPlaceholder(
 google::protobuf::RepeatedPtrField<tipb::Expr> rewiteExprWithTimezone(
     const TimezoneInfo & timezone_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
-    const DB::ColumnInfos & table_scan_columns);
+    const NamesAndTypes & table_scan_columns);
 
 } // namespace DB

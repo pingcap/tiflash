@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
@@ -68,7 +69,7 @@ public:
         s3_client = S3::ClientFactory::instance().sharedClient();
         bucket = S3::ClientFactory::instance().bucket();
         data_store = std::make_shared<DM::Remote::DataStoreS3>(dbContext().getFileProvider());
-        ASSERT_TRUE(createBucketIfNotExist());
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
     }
 
     void reload()
@@ -79,26 +80,6 @@ public:
     Context & dbContext() { return *db_context; }
 
 protected:
-    bool createBucketIfNotExist()
-    {
-        Aws::S3::Model::CreateBucketRequest request;
-        request.SetBucket(bucket);
-        auto outcome = s3_client->CreateBucket(request);
-        if (outcome.IsSuccess())
-        {
-            LOG_DEBUG(log, "Created bucket {}", bucket);
-        }
-        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
-        {
-            LOG_DEBUG(log, "Bucket {} already exist", bucket);
-        }
-        else
-        {
-            const auto & err = outcome.GetError();
-            LOG_ERROR(log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
-        }
-        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
-    }
     void writeFile(const String & key, size_t size, const WriteSettings & write_setting)
     {
         S3WritableFile file(s3_client, bucket, key, write_setting);
@@ -165,7 +146,7 @@ protected:
         return local_dmfile->listInternalFiles();
     }
 
-    void downloadDMFile(const DMFileOID & remote_oid, const String & local_dir, const std::vector<String> & target_files)
+    static void downloadDMFile(const DMFileOID & remote_oid, const String & local_dir, const std::vector<String> & target_files)
     {
         Remote::DataStoreS3::copyToLocal(remote_oid, target_files, local_dir);
     }
@@ -197,7 +178,7 @@ try
 {
     for (int i = 0; i < 10; i++)
     {
-        const size_t size = 256 * i + ::rand() % 256;
+        const size_t size = 256 * i + ::rand() % 256; // NOLINT(cert-msc50-cpp)
         const String key = "/a/b/c/singlepart";
         writeFile(key, size, WriteSettings{});
         ASSERT_EQ(last_upload_info.part_number, 0);
@@ -371,4 +352,43 @@ try
     }
 }
 CATCH
+
+TEST_F(S3FileTest, CheckpointUpload)
+try
+{
+    // prepare
+    Strings data_files{
+        getTemporaryPath() + "/data_file_1",
+        getTemporaryPath() + "/data_file_2",
+    };
+    String manifest_file = getTemporaryPath() + "/manifest";
+
+    {
+        for (const auto & f : data_files)
+        {
+            Poco::File(f).createFile();
+        }
+        Poco::File(manifest_file).createFile();
+    }
+
+    PS::V3::LocalCheckpointFiles checkpoint{.data_files = data_files, .manifest_file = manifest_file};
+
+    // test upload
+    StoreID store_id = 987;
+    UInt64 sequence = 200;
+    data_store->putCheckpointFiles(checkpoint, store_id, sequence);
+
+    // ensure CheckpointDataFile, theirs lock file and CheckpointManifest are uploaded
+    auto s3client = S3::ClientFactory::instance().sharedClient();
+    auto s3bucket = S3::ClientFactory::instance().bucket();
+    auto cp_data0 = S3::S3Filename::newCheckpointData(store_id, sequence, 0);
+    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, cp_data0.toFullKey()));
+    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, cp_data0.toView().getLockKey(store_id, sequence)));
+    auto cp_data1 = S3::S3Filename::newCheckpointData(store_id, sequence, 1);
+    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, cp_data1.toFullKey()));
+    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, cp_data1.toView().getLockKey(store_id, sequence)));
+    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey()));
+}
+CATCH
+
 } // namespace DB::tests
