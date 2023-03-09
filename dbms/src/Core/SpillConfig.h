@@ -14,12 +14,11 @@
 
 #pragma once
 
+#include <Encryption/FileProvider_fwd.h>
 #include <common/types.h>
 
 namespace DB
 {
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 
 struct SpillConfig
 {
