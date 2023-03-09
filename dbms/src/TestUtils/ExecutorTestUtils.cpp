@@ -162,13 +162,13 @@ String testInfoMsg(const std::shared_ptr<tipb::DAGRequest> & request, bool enabl
 
 void ExecutorTest::executeExecutor(
     const std::shared_ptr<tipb::DAGRequest> & request,
-    std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func,
-    std::vector<size_t> concurrencies,
-    std::vector<size_t> block_sizes)
+    std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
 {
     WRAP_FOR_TEST_BEGIN
+    std::vector<size_t> concurrencies{1, 2, 10};
     for (auto concurrency : concurrencies)
     {
+        std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
             context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
@@ -211,7 +211,7 @@ void ExecutorTest::checkBlockSorted(
     }
 }
 
-void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, std::vector<size_t> concurrencies, std::vector<size_t> block_sizes)
+void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
 {
     executeExecutor(
         request,
@@ -220,9 +220,7 @@ void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGR
                                                                           << getColumnsContent(expect_columns)
                                                                           << "\n actual_block: \n"
                                                                           << getColumnsContent(res);
-        },
-        concurrencies,
-        block_sizes);
+        });
 }
 
 void ExecutorTest::executeAndAssertSortedBlocks(const std::shared_ptr<tipb::DAGRequest> & request, const SortInfos & sort_infos)

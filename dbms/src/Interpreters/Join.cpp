@@ -3053,7 +3053,6 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
             return;
         }
 
-        RUNTIME_CHECK_MSG(restore_round < 4, "max_bytes_before_external_join is too small, join restore round exceeds limit, please make max_bytes_before_external_join larger and try again.");
         RUNTIME_CHECK_MSG(build_concurrency > 1, "spilling is not is not supported when stream size = 1, please increase max_threads or set max_bytes_before_external_join = 0.");
         is_spilled = true;
 
