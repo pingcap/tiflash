@@ -43,7 +43,7 @@ std::string KeyspaceSnapshot::Get(pingcap::kv::Backoffer & bo, const std::string
 KeyspaceScanner KeyspaceSnapshot::Scan(const std::string & begin, const std::string & end)
 {
     auto inner = snap.Scan(encodeKey(begin), encodeKey(end));
-    return KeyspaceScanner(inner, !prefix.empty());
+    return KeyspaceScanner(inner, /* need_cut_ */ !prefix.empty());
 }
 
 std::string KeyspaceSnapshot::encodeKey(const std::string & key)

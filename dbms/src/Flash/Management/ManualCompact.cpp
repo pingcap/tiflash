@@ -101,7 +101,6 @@ grpc::Status ManualCompactManager::doWorkWithCatch(const ::kvrpcpb::CompactReque
 grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
 {
     const auto & tmt_context = global_context.getTMTContext();
-    // TODO(iosmanthus): support compact keyspace tables;
     auto storage = tmt_context.getStorages().get(request->keyspace_id(), request->physical_table_id());
     if (storage == nullptr)
     {
