@@ -19,6 +19,7 @@
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
+#include <Columns/ColumnNullable.h>
 
 
 namespace DB
@@ -86,7 +87,7 @@ struct SortCursorImpl
 
             sort_columns.push_back(block.safeGetByPosition(column_number).column.get());
 
-            need_collation[j] = desc[j].collator != nullptr && typeid_cast<const ColumnString *>(sort_columns.back()); /// TODO Nullable(String)
+            need_collation[j] = desc[j].collator != nullptr && typeid_cast<const ColumnString *>(std::get<0>(removeNullable(sort_columns.back())));
             has_collation |= need_collation[j];
         }
 
