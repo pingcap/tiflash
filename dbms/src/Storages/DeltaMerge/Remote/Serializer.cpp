@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
@@ -175,8 +176,32 @@ RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileInMemory & cf
 
 ColumnFileInMemoryPtr Serializer::deserializeCFInMemory(const RemotePb::ColumnFileInMemory & proto)
 {
-    UNUSED(proto);
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "");
+    LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileInMemory from remote, rows={}", proto.rows());
+
+    BlockPtr block_schema;
+    {
+        auto read_buf = ReadBufferFromString(proto.schema());
+        block_schema = deserializeSchema(read_buf);
+    }
+
+    auto columns = block_schema->cloneEmptyColumns();
+    RUNTIME_CHECK(static_cast<int>(columns.size()) == proto.block_columns().size());
+
+    for (size_t index = 0; index < block_schema->columns(); ++index)
+    {
+        const auto & data = proto.block_columns()[index];
+        const auto data_buf = std::string_view(data.data(), data.size());
+        const auto & type = block_schema->getByPosition(index).type;
+        auto & column = columns[index];
+        deserializeColumn(*column, type, data_buf, proto.rows());
+    }
+
+    auto block = block_schema->cloneWithColumns(std::move(columns));
+    auto cache = std::make_shared<ColumnFile::Cache>(std::move(block));
+
+    // We do not try to reuse the CFSchema from `SharedBlockSchemas`, because the ColumnFile will be freed immediately after the request.
+    auto schema = std::make_shared<ColumnFileSchema>(*block_schema);
+    return std::make_shared<ColumnFileInMemory>(schema, cache);
 }
 
 RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileTiny & cf_tiny)
@@ -196,8 +221,15 @@ RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileTiny & cf_tin
 
 ColumnFileTinyPtr Serializer::deserializeCFTiny(const RemotePb::ColumnFileTiny & proto)
 {
-    UNUSED(proto);
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "");
+    BlockPtr block_schema;
+    {
+        auto read_buf = ReadBufferFromString(proto.schema());
+        block_schema = deserializeSchema(read_buf);
+    }
+
+    // We do not try to reuse the CFSchema from `SharedBlockSchemas`, because the ColumnFile will be freed immediately after the request.
+    auto schema = std::make_shared<ColumnFileSchema>(*block_schema);
+    return std::make_shared<ColumnFileTiny>(schema, proto.rows(), proto.bytes(), proto.page_id());
 }
 
 RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileDeleteRange & cf_delete_range)
@@ -232,10 +264,19 @@ RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileBig & cf_big)
     return ret;
 }
 
-ColumnFileBigPtr Serializer::deserializeCFBig(const RemotePb::ColumnFileBig & proto)
+ColumnFileBigPtr Serializer::deserializeCFBig(
+    const RemotePb::ColumnFileBig & proto,
+    const Remote::DMFileOID & oid,
+    const Remote::IDataStorePtr & data_store,
+    const RowKeyRange & segment_range)
 {
-    UNUSED(proto);
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "");
+    RUNTIME_CHECK(proto.file_id() == oid.file_id);
+    LOG_DEBUG(Logger::get(), "Rebuild local ColumnFileBig from remote, dmf_oid={}", oid);
+
+    auto prepared = data_store->prepareDMFile(oid);
+    auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+    auto cf_big = new ColumnFileBig(dmfile, proto.valid_rows(), proto.valid_bytes(), segment_range); // This constructor is private, so we cannot use make_shared.
+    return std::shared_ptr<ColumnFileBig>(cf_big);
 }
 
 } // namespace DB::DM::Remote

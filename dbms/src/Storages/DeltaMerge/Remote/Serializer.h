@@ -15,6 +15,8 @@
 #include <IO/CompressedStream.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
+#include <Interpreters/Context_fwd.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
@@ -24,7 +26,6 @@
 
 namespace DB
 {
-class Context;
 class IColumn;
 class IDataType;
 using DataTypePtr = std::shared_ptr<const IDataType>;
@@ -97,6 +98,10 @@ struct Serializer
     static ColumnFileDeleteRangePtr deserializeCFDeleteRange(const RemotePb::ColumnFileDeleteRange & proto);
 
     static RemotePb::ColumnFileRemote serializeTo(const ColumnFileBig & cf_big);
-    static ColumnFileBigPtr deserializeCFBig(const RemotePb::ColumnFileBig & proto);
+    static ColumnFileBigPtr deserializeCFBig(
+        const RemotePb::ColumnFileBig & proto,
+        const Remote::DMFileOID & oid,
+        const Remote::IDataStorePtr & data_store,
+        const RowKeyRange & segment_range);
 };
 } // namespace DB::DM::Remote
