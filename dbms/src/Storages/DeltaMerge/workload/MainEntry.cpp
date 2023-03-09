@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Interpreters/Context.h>
 #include <Server/ServerInfo.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>

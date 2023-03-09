@@ -15,6 +15,7 @@
 #include <Common/Config/TOMLConfiguration.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Interpreters/Context.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
