@@ -44,12 +44,12 @@ public:
         RUNTIME_CHECK(executor->has_executor_id());
         executor_id = executor->executor_id();
 
+        type = ExecutorImpl::type;
+
         getChildren(*executor).forEach([&](const tipb::Executor & child) {
             RUNTIME_CHECK(child.has_executor_id());
             children.push_back(child.executor_id());
         });
-
-        type = ExecutorImpl::type;
     }
 
     String toJson() const override

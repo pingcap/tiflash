@@ -51,6 +51,8 @@ void ExecutionSummaryCollector::fillTiExecutionSummary(
     execution_summary->set_concurrency(current.concurrency);
     execution_summary->mutable_tiflash_scan_context()->CopyFrom(current.scan_context->serialize());
 
+    // tree-based executors will have executor_id.
+    // In ut, list-based executor will have executor_id for result comparision.
     if (dag_context.return_executor_id || fill_executor_id)
         execution_summary->set_executor_id(executor_id);
 }
@@ -65,20 +67,12 @@ tipb::SelectResponse ExecutionSummaryCollector::genExecutionSummaryResponse()
 void ExecutionSummaryCollector::fillExecutionSummary(
     tipb::SelectResponse & response,
     const String & executor_id,
+    const BaseRuntimeStatistics & statistic,
     const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map)
 {
     ExecutionSummary current;
-    const auto & statistic_result = dag_context.executorStatisticCollector()->getResult();
-    auto it = statistic_result.find(executor_id);
-    RUNTIME_CHECK(it != statistic_result.end());
-
-    const auto & statistic = it->second->getBaseRuntimeStatistics();
-
-    current.num_iterations = statistic.blocks;
-    current.num_produced_rows = statistic.rows;
-    current.concurrency = statistic.concurrency;
-    current.time_processed_ns = statistic.execution_time_ns;
-
+    current.set(statistic);
+    // merge detailed table scan profile
     if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
         current.scan_context->merge(*(iter->second));
 
@@ -86,40 +80,37 @@ void ExecutionSummaryCollector::fillExecutionSummary(
     fillTiExecutionSummary(response.add_execution_summaries(), current, executor_id);
 }
 
-void ExecutionSummaryCollector::collect()
-{
-    dag_context.executorStatisticCollector()->collectRuntimeDetails();
-}
-
 void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & response)
 {
     if (!dag_context.collect_execution_summaries)
         return;
-    LOG_DEBUG(log, "start collecting execution summary");
 
-    collect();
+    LOG_DEBUG(log, "start collecting execution summary");
+    dag_context.executorStatisticCollector()->collectRuntimeDetails();
 
     if (dag_context.return_executor_id)
     {
+        // fill in tree-based executors' execution summary
         auto profiles = dag_context.executorStatisticCollector()->getResult();
         for (auto & p : profiles)
-            fillExecutionSummary(response, p.first, dag_context.scan_context_map);
+            fillExecutionSummary(response, p.first, p.second->getBaseRuntimeStatistics(), dag_context.scan_context_map);
     }
     else
     {
+        // fill in list-based executors' execution summary
         auto profiles = dag_context.executorStatisticCollector()->getResult();
         assert(profiles.size() == dag_context.list_based_executors_order.size());
         for (const auto & executor_id : dag_context.list_based_executors_order)
         {
             auto it = profiles.find(executor_id);
             assert(it != profiles.end());
-            fillExecutionSummary(response, executor_id, dag_context.scan_context_map);
+            fillExecutionSummary(response, executor_id, it->second->getBaseRuntimeStatistics(), dag_context.scan_context_map);
         }
     }
 
     // TODO support cop remote read and disaggregated mode.
     auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(dag_context);
-    // fill execution_summary to reponse for remote executor received by exchange.
+    // fill execution_summary to reponse for remote executor received by exchange. TODO: remove this logic
     for (auto & p : exchange_execution_summary.execution_summaries)
     {
         fillTiExecutionSummary(response.add_execution_summaries(), p.second, p.first);

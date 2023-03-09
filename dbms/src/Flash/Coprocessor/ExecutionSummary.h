@@ -22,6 +22,8 @@
 
 namespace DB
 {
+
+struct BaseRuntimeStatistics;
 /// do not need be thread safe since it is only used in single thread env
 struct ExecutionSummary
 {
@@ -36,6 +38,7 @@ struct ExecutionSummary
 
     void merge(const ExecutionSummary & other);
     void merge(const tipb::ExecutorExecutionSummary & other);
+    void set(const BaseRuntimeStatistics & other);
     void init(const tipb::ExecutorExecutionSummary & other);
 };
 

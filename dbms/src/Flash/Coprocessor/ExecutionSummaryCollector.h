@@ -21,6 +21,7 @@
 namespace DB
 {
 class DAGContext;
+struct BaseRuntimeStatistics;
 
 class ExecutionSummaryCollector
 {
@@ -38,8 +39,6 @@ public:
 
     tipb::SelectResponse genExecutionSummaryResponse();
 
-    void collect();
-
 private:
     void fillTiExecutionSummary(
         tipb::ExecutorExecutionSummary * execution_summary,
@@ -55,6 +54,7 @@ private:
     void fillExecutionSummary(
         tipb::SelectResponse & response,
         const String & executor_id,
+        const BaseRuntimeStatistics & statistic,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map);
 
 private:
