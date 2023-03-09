@@ -254,7 +254,7 @@ struct TiFlashProxyConfig
     {
         std::string key = "--" + k;
         val_map[key] = v;
-        args.push_back(val_map[key].data());
+        args.push_back(key.data());
         args.push_back(val_map[v].data());
     }
 
@@ -894,7 +894,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (STORAGE_FORMAT_CURRENT.page == PageFormat::V4)
     {
         LOG_INFO(log, "use unips for proxy");
-        proxy_conf.addExtraArgs("unips-enabled", "true");
+        proxy_conf.addExtraArgs("unips-enabled", "1");
     }
     else
     {
