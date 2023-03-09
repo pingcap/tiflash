@@ -17,7 +17,7 @@
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Operators/Operator.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/BackgroundProcessingPool.h>
@@ -34,6 +34,7 @@
 
 namespace DB
 {
+
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 

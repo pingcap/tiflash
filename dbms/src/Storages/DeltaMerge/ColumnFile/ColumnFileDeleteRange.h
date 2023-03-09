@@ -41,9 +41,10 @@ public:
     {}
     ColumnFileDeleteRange(const ColumnFileDeleteRange &) = default;
 
-    ColumnFileReaderPtr getReader(const DMContext & /*context*/,
-                                  const StorageSnapshotPtr & /*storage_snap*/,
-                                  const ColumnDefinesPtr & /*col_defs*/) const override;
+    ColumnFileReaderPtr getReader(
+        const DMContext &,
+        const IColumnFileDataProviderPtr &,
+        const ColumnDefinesPtr &) const override;
 
     const auto & getDeleteRange() { return delete_range; }
 

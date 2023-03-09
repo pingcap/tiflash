@@ -129,7 +129,8 @@ public:
     /// @param other_conds other conditional expressions
     /// @param other_eq_conds_from_in equality expressions within in subquery whose join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
     /// @param fine_grained_shuffle_stream_count decide the generated tipb executor's find_grained_shuffle_stream_count
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds, MockAstVec right_conds, MockAstVec other_conds, MockAstVec other_eq_conds_from_in, uint64_t fine_grained_shuffle_stream_count = 0);
+    /// @param is_null_aware_semi_join indicates whether to use null-aware semi join and join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds, MockAstVec right_conds, MockAstVec other_conds, MockAstVec other_eq_conds_from_in, uint64_t fine_grained_shuffle_stream_count = 0, bool is_null_aware_semi_join = false);
     DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, uint64_t fine_grained_shuffle_stream_count = 0)
     {
         return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count);
@@ -172,7 +173,7 @@ public:
     explicit MockDAGRequestContext(Context context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
         : index(0)
         , context(context_)
-        , collation(-abs(collation_))
+        , collation(convertToTiDBCollation(collation_))
     {
     }
 

@@ -22,6 +22,12 @@
 #include <TestUtils/TiFlashTestException.h>
 #include <fmt/core.h>
 
+
+namespace Aws::S3
+{
+class S3Client;
+}
+
 namespace DB::tests
 {
 enum class TestType
@@ -83,6 +89,12 @@ public:
     static Context & getGlobalContext(int idx) { return *global_contexts[idx]; }
     static int globalContextSize() { return global_contexts.size(); }
     static void shutdown();
+
+    static FileProviderPtr getMockFileProvider();
+
+    static bool createBucketIfNotExist(Aws::S3::S3Client & s3_client, const String & bucket);
+
+    static void deleteBucket(Aws::S3::S3Client & s3_client, const String & bucket);
 
     TiFlashTestEnv() = delete;
 

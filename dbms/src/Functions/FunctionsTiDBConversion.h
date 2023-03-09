@@ -51,7 +51,7 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteBufferFromVector.h>
 #include <IO/parseDateTimeBestEffort.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/Transaction/Collator.h>
 

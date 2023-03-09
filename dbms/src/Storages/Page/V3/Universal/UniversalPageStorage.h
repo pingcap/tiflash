@@ -22,8 +22,10 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/Universal/S3LockLocalManager.h>
 #include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <common/defines.h>
 
@@ -41,6 +43,18 @@ class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+
+namespace S3
+{
+class IS3LockClient;
+using S3LockClientPtr = std::shared_ptr<IS3LockClient>;
+} // namespace S3
+
+namespace PS::V3
+{
+class S3LockLocalManager;
+using S3LockLocalManagerPtr = std::unique_ptr<S3LockLocalManager>;
+} // namespace PS::V3
 
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
@@ -77,7 +91,7 @@ public:
     {
     }
 
-    ~UniversalPageStorage() = default;
+    ~UniversalPageStorage();
 
     void restore();
 
@@ -120,10 +134,14 @@ public:
 
     DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
 
+    void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client) const;
+
+    PS::V3::S3LockLocalManager::ExtraLockInfo allocateNewUploadLocksInfo() const;
+
     struct DumpCheckpointOptions
     {
         /**
-         * The data file id and path. Available placeholders: {sequence}, {sub_file_index}.
+         * The data file id and path. Available placeholders: {seq}, {index}.
          * We accept "/" in the file name.
          *
          * File path is where the data file is put in the local FS. It should be a valid FS path.
@@ -133,7 +151,7 @@ public:
         const std::string & data_file_path_pattern;
 
         /**
-         * The manifest file id and path. Available placeholders: {sequence}.
+         * The manifest file id and path. Available placeholders: {seq}.
          * We accept "/" in the file name.
          *
          * File path is where the manifest file is put in the local FS. It should be a valid FS path.
@@ -146,20 +164,31 @@ public:
          * The writer info field in the dumped files.
          */
         const PS::V3::CheckpointProto::WriterInfo & writer_info;
+
+        /**
+         * The list of lock files that will be always appended to the checkpoint file.
+         *
+         * Note: In addition to the specified lock files, the checkpoint file will also contain
+         * lock files from `writeEditsAndApplyCheckpointInfo`.
+         */
+        const std::unordered_set<String> & must_locked_files = {};
+
+        /**
+         * A callback to persist the checkpoint to remote data store.
+         *
+         * If the checkpoint persist failed, it must throw an exception or return false
+         * to prevent the incremental data lost between checkpoints.
+         */
+        const std::function<bool(const PS::V3::LocalCheckpointFiles &)> persist_checkpoint;
+
+        /**
+         * Override the value of `seq` placeholder in the data files and manifest file.
+         * By default it is std::nullopt, use the snapshot->sequence as `seq` value.
+         */
+        std::optional<UInt64> override_sequence = std::nullopt;
     };
 
-    struct DumpCheckpointResult
-    {
-        struct FileInfo
-        {
-            const String id;
-            const String path;
-        };
-        std::vector<FileInfo> new_data_files;
-        std::vector<FileInfo> new_manifest_files;
-    };
-
-    DumpCheckpointResult dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+    void dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
 
     PageIdU64 getMaxIdAfterRestart() const;
 
@@ -194,6 +223,7 @@ public:
     BlobStorePtr blob_store;
 
     PS::V3::S3PageReaderPtr remote_reader;
+    PS::V3::S3LockLocalManagerPtr remote_locks_local_mgr;
 
     PS::V3::universal::ExternalPageCallbacksManager manager;
 
