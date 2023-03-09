@@ -33,6 +33,7 @@
 #include <Flash/Mpp/Utils.h>
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Server/IServer.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/S3/S3Common.h>
@@ -80,7 +81,7 @@ void FlashService::init(Context & context_)
         context->getGlobalContext().getSettingsRef());
 
     // Only when the s3 storage is enabled on write node, provide the lock service interfaces
-    if (!context->isDisaggregatedComputeMode() && S3::ClientFactory::instance().isEnabled())
+    if (!context->getSharedContextDisagg()->isDisaggregatedComputeMode() && S3::ClientFactory::instance().isEnabled())
         s3_lock_service = std::make_unique<S3::S3LockService>(*context);
 
     auto settings = context->getSettingsRef();
@@ -566,7 +567,7 @@ grpc::Status FlashService::tryAddLock(grpc::ServerContext * grpc_context, const 
                             fmt::format(
                                 "can not handle tryAddLock, s3enabled={} compute_node={}",
                                 S3::ClientFactory::instance().isEnabled(),
-                                context->isDisaggregatedComputeMode()));
+                                context->getSharedContextDisagg()->isDisaggregatedComputeMode()));
     }
 
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
@@ -585,7 +586,7 @@ grpc::Status FlashService::tryMarkDelete(grpc::ServerContext * grpc_context, con
                             fmt::format(
                                 "can not handle tryMarkDelete, s3enabled={} compute_node={}",
                                 S3::ClientFactory::instance().isEnabled(),
-                                context->isDisaggregatedComputeMode()));
+                                context->getSharedContextDisagg()->isDisaggregatedComputeMode()));
     }
 
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
@@ -609,7 +610,7 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
     db_context->setMockStorage(mock_storage);
     db_context->setMockMPPServerInfo(mpp_test_info);
 
-    RUNTIME_CHECK(context->isDisaggregatedStorageMode());
+    RUNTIME_CHECK(context->getSharedContextDisagg()->isDisaggregatedStorageMode());
 
     const auto & meta = request->meta();
     DM::DisaggTaskId task_id(meta);
