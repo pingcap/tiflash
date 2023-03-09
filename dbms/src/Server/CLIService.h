@@ -85,7 +85,7 @@ struct CLIService : public BaseDaemon
     Func func;
     RaftStoreFFIFunc ffi_function;
     const Args & args;
-    std::unique_ptr<DB::Context> global_context;
+    DB::ContextPtr global_context;
 
     explicit CLIService(Func func_, const Args & args_, const std::string & config_file, RaftStoreFFIFunc ffi_function = nullptr);
 
@@ -210,8 +210,7 @@ int CLIService<Func, Args>::main(const std::vector<std::string> &)
         proxy_runner.join();
     });
 
-    global_context = std::make_unique<Context>(Context::createGlobal());
-    global_context->setGlobalContext(*global_context);
+    global_context = Context::createGlobal();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
 
     /// Init File Provider

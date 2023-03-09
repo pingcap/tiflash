@@ -24,7 +24,7 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
-#include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
+#include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -189,8 +189,8 @@ private:
 
 public:
     /// Create initial Context with ContextShared and etc.
-    static Context createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
-    static Context createGlobal();
+    static ContextPtr createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
+    static ContextPtr createGlobal();
 
     ~Context();
 
@@ -436,8 +436,7 @@ public:
     void initializeWriteNodePageStorageIfNeed(const PathPool & path_pool);
     UniversalPageStoragePtr getWriteNodePageStorage() const;
 
-    void initializeReadNodePageCacheIfNeed(const PathPool & path_pool, const String & cache_dir, size_t cache_capacity);
-    DM::Remote::RNLocalPageCachePtr getReadNodePageCache() const;
+    SharedContextDisaggPtr getSharedContextDisagg() const;
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();

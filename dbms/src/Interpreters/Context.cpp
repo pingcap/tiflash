@@ -41,6 +41,7 @@
 #include <Interpreters/Quota.h>
 #include <Interpreters/RuntimeComponentsFactory.h>
 #include <Interpreters/Settings.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/SharedQueries.h>
 #include <Interpreters/SystemLog.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -56,7 +57,6 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-#include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
@@ -167,14 +167,11 @@ struct ContextShared
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
 
-    /// The following members are only available in read-write disaggregated mode
-    ///
     /// The PS instance available on Write Node.
     UniversalPageStorageServicePtr ps_write;
-    /// The PS instance available on Read Node.
-    UniversalPageStorageServicePtr ps_rn_page_cache;
-    /// The page cache in Read Node. It uses ps_rn_page_cache as storage to cache page data to local disk based on the LRU mechanism.
-    DB::DM::Remote::RNLocalPageCachePtr rn_page_cache;
+
+    /// Everything related with Disaggregation.
+    SharedContextDisaggPtr ctx_disagg;
 
     TiFlashSecurityConfigPtr security_config;
 
@@ -312,18 +309,20 @@ private:
 Context::Context() = default;
 
 
-Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
+ContextPtr Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
 {
-    Context res;
-    res.runtime_components_factory = runtime_components_factory;
-    res.shared = std::make_shared<ContextShared>(runtime_components_factory);
-    res.quota = std::make_shared<QuotaForIntervals>();
-    res.timezone_info.init();
-    res.disaggregated_mode = DisaggregatedMode::None;
+    std::shared_ptr<Context> res(new Context());
+    res->setGlobalContext(*res);
+    res->runtime_components_factory = runtime_components_factory;
+    res->shared = std::make_shared<ContextShared>(runtime_components_factory);
+    res->shared->ctx_disagg = SharedContextDisagg::create(*res);
+    res->quota = std::make_shared<QuotaForIntervals>();
+    res->timezone_info.init();
+    res->disaggregated_mode = DisaggregatedMode::None;
     return res;
 }
 
-Context Context::createGlobal()
+ContextPtr Context::createGlobal()
 {
     return createGlobal(std::make_unique<RuntimeComponentsFactory>());
 }
@@ -1753,52 +1752,11 @@ UniversalPageStoragePtr Context::getWriteNodePageStorage() const
     }
 }
 
-void Context::initializeReadNodePageCacheIfNeed(const PathPool & path_pool, const String & cache_dir, size_t cache_capacity)
+SharedContextDisaggPtr Context::getSharedContextDisagg() const
 {
     auto lock = getLock();
-    if (shared->rn_page_cache)
-    {
-        LOG_WARNING(shared->log, "RN Page Cache has already been initialized.");
-        return;
-    }
-
-    try
-    {
-        PSDiskDelegatorPtr delegator;
-        if (!cache_dir.empty())
-        {
-            delegator = path_pool.getPSDiskDelegatorFixedDirectory(cache_dir);
-            LOG_INFO(shared->log, "Initialize Read Node page cache in cache directory. path={} capacity={}", cache_dir, cache_capacity);
-        }
-        else
-        {
-            delegator = path_pool.getPSDiskDelegatorGlobalMulti(PathPool::read_node_cache_path_prefix);
-            LOG_INFO(shared->log, "Initialize Read Node page cache in data directory. capacity={}", cache_capacity);
-        }
-
-        PageStorageConfig config;
-        shared->ps_rn_page_cache = UniversalPageStorageService::create( //
-            *this,
-            "read_cache",
-            delegator,
-            config);
-        shared->rn_page_cache = DM::Remote::RNLocalPageCache::create({
-            .underlying_storage = shared->ps_rn_page_cache->getUniversalPageStorage(),
-            .max_size_bytes = cache_capacity,
-        });
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        throw;
-    }
-}
-
-DM::Remote::RNLocalPageCachePtr Context::getReadNodePageCache() const
-{
-    auto lock = getLock();
-    RUNTIME_CHECK(shared->rn_page_cache != nullptr);
-    return shared->rn_page_cache;
+    RUNTIME_CHECK(shared->ctx_disagg != nullptr);
+    return shared->ctx_disagg;
 }
 
 UInt16 Context::getTCPPort() const
