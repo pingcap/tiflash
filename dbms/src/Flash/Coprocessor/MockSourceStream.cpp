@@ -70,7 +70,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreamsForExchangeRecei
             else
             {
                 std::vector<std::vector<ColumnsWithTypeAndName>> columns_for_mock_exchange_receiver(output_stream_count);
-                for (size_t i = 0; i < columns_with_type_and_name_vector.size(); i++)
+                for (size_t i = 0; i < columns_with_type_and_name_vector.size(); ++i)
                 {
                     columns_for_mock_exchange_receiver[i % output_stream_count].push_back(columns_with_type_and_name_vector[i]);
                 }
