@@ -97,7 +97,7 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageR
 void TiFlashTestEnv::addGlobalContext(const DB::Settings & settings_, Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
 {
     // set itself as global context
-    auto global_context = DB::Context::createGlobal();
+    auto global_context = std::shared_ptr<Context>(DB::Context::createGlobal());
     global_contexts.push_back(global_context);
     global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
     global_context->setTemporaryPath(getTemporaryPath());

@@ -188,8 +188,8 @@ private:
 
 public:
     /// Create initial Context with ContextShared and etc.
-    static ContextPtr createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
-    static ContextPtr createGlobal();
+    static std::unique_ptr<Context> createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
+    static std::unique_ptr<Context> createGlobal();
 
     ~Context();
 
