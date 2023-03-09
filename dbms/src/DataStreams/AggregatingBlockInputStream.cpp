@@ -74,6 +74,7 @@ Block AggregatingBlockInputStream::readImpl()
             }
             else
             {
+                RUNTIME_CHECK(1 == merging_buckets->getConcurrency());
                 impl = std::make_unique<SpilledRestoreMergingBlockInputStream>(merging_buckets, log->identifier());
             }
         }

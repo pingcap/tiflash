@@ -117,7 +117,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
             }
             else
             {
-                size_t restore_merge_stream_num = std::min(max_threads, merging_buckets->getBucketNum());
+                size_t restore_merge_stream_num = std::min(max_threads, merging_buckets->getConcurrency());
                 RUNTIME_CHECK(restore_merge_stream_num > 0);
                 if (restore_merge_stream_num > 1)
                 {

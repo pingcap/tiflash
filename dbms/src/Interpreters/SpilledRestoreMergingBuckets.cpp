@@ -24,8 +24,12 @@ SpilledRestoreMergingBuckets::SpilledRestoreMergingBuckets(
     : log(Logger::get(req_id))
     , aggregator(params, req_id)
     , final(final_)
+    , concurrency(params.concurrency)
     , bucket_restore_streams(std::move(bucket_restore_streams_))
 {
+    RUNTIME_CHECK(!bucket_restore_streams.empty() && concurrency > 0);
+    // for !is_concurrency_restore, the size of bucket_restore_streams must be 1.
+    RUNTIME_CHECK(concurrency > 1 || bucket_restore_streams.size() == 1);
 }
 
 Block SpilledRestoreMergingBuckets::getHeader() const
@@ -33,7 +37,7 @@ Block SpilledRestoreMergingBuckets::getHeader() const
     return aggregator.getHeader(final);
 }
 
-BlocksList SpilledRestoreMergingBuckets::restoreBucketDataToMerge(std::function<bool()> && is_cancelled)
+BlocksList SpilledRestoreMergingBuckets::restoreBucketDataToMergeInConcurrency(std::function<bool()> && is_cancelled)
 {
     if (current_bucket_num >= bucket_restore_streams.size())
         return {};
@@ -69,6 +73,45 @@ BlocksList SpilledRestoreMergingBuckets::restoreBucketDataToMerge(std::function<
             continue;
         return ret;
     }
+}
+
+BlocksList SpilledRestoreMergingBuckets::restoreBucketDataToMergeNotConcurrency(std::function<bool()> && is_cancelled)
+{
+    assert(bucket_restore_streams.size() == 1);
+    const auto & restore_streams = bucket_restore_streams.back();
+    if unlikely (restore_streams.empty())
+        return {};
+
+    while (true)
+    {
+        if unlikely (is_cancelled())
+            return {};
+
+        if (concurrent_stream_num >= static_cast<int32_t>(restore_streams.size()))
+            return {};
+
+        if unlikely (concurrent_stream_num == -1)
+        {
+            concurrent_stream_num = 0;
+            restore_streams[0]->readPrefix();
+        }
+
+        const auto & restore_stream = restore_streams[concurrent_stream_num];
+        if (Block block = restore_stream->read(); block)
+        {
+            return {std::move(block)};
+        }
+        else
+        {
+            restore_stream->readSuffix();
+            ++concurrent_stream_num;
+        }
+    }
+}
+
+BlocksList SpilledRestoreMergingBuckets::restoreBucketDataToMerge(std::function<bool()> && is_cancelled)
+{
+    return concurrency > 0 ? restoreBucketDataToMergeInConcurrency(std::move(is_cancelled)) : restoreBucketDataToMergeNotConcurrency(std::move(is_cancelled));
 }
 
 BlocksList SpilledRestoreMergingBuckets::mergeBucketData(BlocksList && bucket_data_to_merge)

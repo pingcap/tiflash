@@ -267,7 +267,8 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
     RUNTIME_CHECK_MSG(method_chosen != AggregatedDataVariants::Type::EMPTY, "Invalid aggregation method");
     if (AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen))
     {
-        spiller = std::make_unique<Spiller>(params.spill_config, true, AggregatedDataVariants::getBucketNumberForTwoLevelHashTable(method_chosen), getHeader(false), log);
+        size_t partition_num = params.concurrency > 1 ? AggregatedDataVariants::getBucketNumberForTwoLevelHashTable(method_chosen) : 1;
+        spiller = std::make_unique<Spiller>(params.spill_config, true, partition_num, getHeader(false), log);
     }
 }
 
@@ -935,23 +936,37 @@ void Aggregator::spillImpl(
             max_temporary_block_size_bytes = block_size_bytes;
     };
 
-    // To avoid multiple threads spilling the same partition at the same time.
-    // This will allow the spiller's append to take effect as far as possible.
-    std::uniform_int_distribution<> dist(0, Method::Data::NUM_BUCKETS - 1);
-    size_t bucket_index = dist(gen);
-    auto next_bucket_index = [&]() {
-        auto tmp = bucket_index++;
-        if (bucket_index == Method::Data::NUM_BUCKETS)
-            bucket_index = 0;
-        return tmp;
-    };
-    for (size_t i = 0; i < Method::Data::NUM_BUCKETS; ++i)
+    if (params.concurrency > 1)
     {
-        auto bucket = next_bucket_index();
-        /// memory in hash table is released after `convertOneBucketToBlock`, so the peak memory usage is not increased here.
-        auto bucket_block = convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket);
-        update_max_sizes(bucket_block);
-        spiller->spillBlocks({std::move(bucket_block)}, bucket);
+        // To avoid multiple threads spilling the same partition at the same time.
+        // This will allow the spiller's append to take effect as far as possible.
+        std::uniform_int_distribution<> dist(0, Method::Data::NUM_BUCKETS - 1);
+        size_t bucket_index = dist(gen);
+        auto next_bucket_index = [&]() {
+            auto tmp = bucket_index++;
+            if (bucket_index == Method::Data::NUM_BUCKETS)
+                bucket_index = 0;
+            return tmp;
+        };
+        for (size_t i = 0; i < Method::Data::NUM_BUCKETS; ++i)
+        {
+            auto bucket = next_bucket_index();
+            /// memory in hash table is released after `convertOneBucketToBlock`, so the peak memory usage is not increased here.
+            auto bucket_block = convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket);
+            update_max_sizes(bucket_block);
+            spiller->spillBlocks({std::move(bucket_block)}, bucket);
+        }
+    }
+    else
+    {
+        Blocks blocks;
+        for (size_t bucket = 0; bucket < Method::Data::NUM_BUCKETS; ++bucket)
+        {
+            /// memory in hash table is released after `convertOneBucketToBlock`, so the peak memory usage is not increased here.
+            blocks.push_back(convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket));
+            update_max_sizes(blocks.back());
+        }
+        spiller->spillBlocks(std::move(blocks), 0);
     }
 
     /// Pass ownership of the aggregate functions states:

@@ -948,6 +948,7 @@ public:
         /// What to count.
         ColumnNumbers keys;
         AggregateDescriptions aggregates;
+        size_t concurrency;
         size_t keys_size;
         size_t aggregates_size;
 
@@ -963,6 +964,7 @@ public:
             const Block & src_header_,
             const ColumnNumbers & keys_,
             const AggregateDescriptions & aggregates_,
+            size_t concurrency_,
             size_t group_by_two_level_threshold_,
             size_t group_by_two_level_threshold_bytes_,
             size_t max_bytes_before_external_group_by_,
@@ -973,6 +975,7 @@ public:
             : src_header(src_header_)
             , keys(keys_)
             , aggregates(aggregates_)
+            , concurrency(concurrency_)
             , keys_size(keys.size())
             , aggregates_size(aggregates.size())
             , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
@@ -983,6 +986,7 @@ public:
             , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
             , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
         {
+            assert(concurrency > 0);
         }
 
         /// Only parameters that matter during merge.
@@ -992,7 +996,7 @@ public:
                const SpillConfig & spill_config,
                UInt64 max_block_size_,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, 0, 0, 0, false, spill_config, max_block_size_, collators_)
+            : Params(Block(), keys_, aggregates_, 1, 0, 0, 0, false, spill_config, max_block_size_, collators_)
         {
             intermediate_header = intermediate_header_;
         }

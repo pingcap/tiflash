@@ -36,7 +36,11 @@ public:
 
     BlocksList mergeBucketData(BlocksList && bucket_data_to_merge);
 
-    size_t getBucketNum() const { return bucket_restore_streams.size(); }
+    size_t getConcurrency() const { return std::min(concurrency, bucket_restore_streams.size()); }
+
+private:
+    BlocksList restoreBucketDataToMergeInConcurrency(std::function<bool()> && is_cancelled);
+    BlocksList restoreBucketDataToMergeNotConcurrency(std::function<bool()> && is_cancelled);
 
 private:
     const LoggerPtr log;
@@ -44,9 +48,14 @@ private:
     Aggregator aggregator;
     bool final;
 
-    std::atomic_uint32_t current_bucket_num = 0;
+    size_t concurrency;
 
     std::vector<BlockInputStreams> bucket_restore_streams;
+
+    // for concurrency > 1
+    std::atomic_uint32_t current_bucket_num = 0;
+    // for concurrency == 1
+    int32_t concurrent_stream_num = -1;
 };
 using SpilledRestoreMergingBucketsPtr = std::shared_ptr<SpilledRestoreMergingBuckets>;
 
