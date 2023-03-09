@@ -38,7 +38,7 @@
 
 #include <functional>
 #include <memory>
-
+#include <random>
 
 namespace DB
 {
@@ -1076,6 +1076,8 @@ public:
 protected:
     friend struct AggregatedDataVariants;
     friend class MergingBuckets;
+
+    std::mt19937 gen{std::random_device{}()};
 
     Params params;
 

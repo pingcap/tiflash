@@ -66,7 +66,7 @@ private:
     };
 
     std::vector<SpilledFileInfo> spilled_file_infos;
-    size_t current_reading_file_index;
+    int64_t current_reading_file_index = -1;
     Block header;
     FileProviderPtr file_provider;
     Int64 max_supported_spill_version;

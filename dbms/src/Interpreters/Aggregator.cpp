@@ -26,7 +26,6 @@
 
 #include <array>
 #include <cassert>
-#include <random>
 
 namespace DB
 {
@@ -936,8 +935,8 @@ void Aggregator::spillImpl(
             max_temporary_block_size_bytes = block_size_bytes;
     };
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    // To avoid multiple threads spilling the same partition at the same time.
+    // This will allow the spiller's append to take effect as far as possible.
     std::uniform_int_distribution<> dist(0, Method::Data::NUM_BUCKETS - 1);
     size_t bucket_index = dist(gen);
     auto next_bucket_index = [&]() {

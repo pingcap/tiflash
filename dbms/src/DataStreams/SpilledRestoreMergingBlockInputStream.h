@@ -41,7 +41,7 @@ protected:
             Block out_block = popBlocksListFront(cur_block_list);
             if (out_block)
                 return out_block;
-    
+
             auto bucket_data_to_merge = merging_buckets->restoreBucketDataToMerge([&]() { return isCancelled(); });
             if (bucket_data_to_merge.empty())
                 return {};

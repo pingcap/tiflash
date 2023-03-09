@@ -23,19 +23,22 @@ SpilledFilesInputStream::SpilledFilesInputStream(std::vector<SpilledFileInfo> &&
     , max_supported_spill_version(max_supported_spill_version_)
 {
     RUNTIME_CHECK_MSG(!spilled_file_infos.empty(), "Spilled files must not be empty");
-    current_reading_file_index = 0;
-    current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[0]), header, file_provider, max_supported_spill_version);
 }
 
 Block SpilledFilesInputStream::readImpl()
 {
+    if (unlikely(current_reading_file_index == -1))
+    {
+        current_reading_file_index = 0;
+        current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[0]), header, file_provider, max_supported_spill_version);
+    }
     if (unlikely(current_file_stream == nullptr))
         return {};
     Block ret = current_file_stream->block_in->read();
     if (ret)
         return ret;
-
-    for (++current_reading_file_index; current_reading_file_index < spilled_file_infos.size(); ++current_reading_file_index)
+    spilled_file_infos.begin();
+    for (++current_reading_file_index; current_reading_file_index < static_cast<int64_t>(spilled_file_infos.size()); ++current_reading_file_index)
     {
         current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[current_reading_file_index]),
                                                                   header,
