@@ -14,12 +14,12 @@
 
 #pragma once
 
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/IColumn.h>
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
-#include <Columns/ColumnNullable.h>
 
 
 namespace DB
