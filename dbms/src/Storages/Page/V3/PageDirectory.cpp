@@ -402,6 +402,7 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
         is_deleted = false;
         create_ver = rec.version;
         being_ref_count = rec.being_ref_count;
+        entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.being_ref_count));
         external_holder = std::make_shared<typename Trait::PageId>(rec.page_id);
         return external_holder;
     }
