@@ -77,7 +77,7 @@ Based on the above analysis, it is impossible to find a perfect shared storage t
     * RN read most of the data from S3, and requests WN for other data (the latest data) during queries.
 2. IO latency sensitive data is directly written to Write Node's local disk and uploaded to S3 periodically. I.e. it uses the local disk as a buffer
     * About durability - if data from local disk is lost, recover from TiKV. Equivalent to relying on upstream TiKV to provide high durability.
-    * About availability - Data needs to be resynchronized after restart. And the time for service recovery is affected by the delay of synchronized data. Since we upload data peroidically (for example 30s), the actual data to be resynchronized is incremental data relative to the last upload point. The total amount of data should be small, so it should not take very long time. It means the available duration should not be a big issue.
+    * About availability - Data needs to be resynchronized after restart. And the time for service recovery is affected by the delay of synchronized data. Since we upload data periodically (for example 30s), the actual data to be resynchronized is incremental data relative to the last upload point. The total amount of data should be small, so it should not take very long time. It means the available duration should not be a big issue.
 
 
 ### How to upload S3?
