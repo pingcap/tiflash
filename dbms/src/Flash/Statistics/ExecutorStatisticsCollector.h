@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
 #include <tipb/executor.pb.h>
-#include <Common/Exception.h>
 
 #include <map>
 
