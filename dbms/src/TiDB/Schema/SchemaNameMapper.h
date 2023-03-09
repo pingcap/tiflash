@@ -26,12 +26,12 @@ struct SchemaNameMapper
 
     static constexpr auto DATABASE_PREFIX = "db_";
     static constexpr auto TABLE_PREFIX = "t_";
-    static constexpr auto KEYSPACE_PREFIX = "ks_";
+    static constexpr std::string_view KEYSPACE_PREFIX = "ks_";
 
 
     static KeyspaceID getMappedNameKeyspaceID(const String & name)
     {
-        auto keyspace_prefix_len = std::strlen(KEYSPACE_PREFIX);
+        auto keyspace_prefix_len = KEYSPACE_PREFIX.length();
         auto pos = name.find(KEYSPACE_PREFIX);
         if (pos == String::npos)
             return NullspaceID;
@@ -43,7 +43,7 @@ struct SchemaNameMapper
 
     static String map2Keyspace(KeyspaceID keyspace_id, const String & name)
     {
-        return keyspace_id == NullspaceID ? name : KEYSPACE_PREFIX + std::to_string(keyspace_id) + "_" + name;
+        return keyspace_id == NullspaceID ? name : KEYSPACE_PREFIX.data() + std::to_string(keyspace_id) + "_" + name;
     }
 
     virtual String mapDatabaseName(const TiDB::DBInfo & db_info) const
