@@ -2985,18 +2985,29 @@ IColumn::Selector Join::hashToSelector(const WeakHash32 & hash) const
 
     IColumn::Selector selector(num_rows);
 
-    if (num_shards & (num_shards - 1))
+    if unlikely (enable_fine_grained_shuffle && fine_grained_shuffle_count != build_concurrency)
     {
         for (size_t i = 0; i < num_rows; ++i)
         {
-            selector[i] = data[i] % num_shards;
+            selector[i] = data[i] % fine_grained_shuffle_count;
+            selector[i] = selector[i] % num_shards;
         }
     }
     else
     {
-        for (size_t i = 0; i < num_rows; ++i)
+        if (num_shards & (num_shards - 1))
         {
-            selector[i] = data[i] & (num_shards - 1);
+            for (size_t i = 0; i < num_rows; ++i)
+            {
+                selector[i] = data[i] % num_shards;
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < num_rows; ++i)
+            {
+                selector[i] = data[i] & (num_shards - 1);
+            }
         }
     }
 
