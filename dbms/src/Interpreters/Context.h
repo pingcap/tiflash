@@ -508,32 +508,8 @@ public:
     MockMPPServerInfo mockMPPServerInfo() const;
     void setMockMPPServerInfo(MockMPPServerInfo & info);
 
-    void setDisaggregatedMode(DisaggregatedMode mode)
-    {
-        disaggregated_mode = mode;
-    }
-    bool isDisaggregatedComputeMode() const
-    {
-        return disaggregated_mode == DisaggregatedMode::Compute;
-    }
-    bool isDisaggregatedStorageMode() const
-    {
-        // there is no difference
-        return disaggregated_mode == DisaggregatedMode::Storage || disaggregated_mode == DisaggregatedMode::None;
-    }
-
     const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
     void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
-
-    // todo: remove after AutoScaler is stable.
-    void setUseAutoScaler(bool use)
-    {
-        use_autoscaler = use;
-    }
-    bool useAutoScaler() const
-    {
-        return use_autoscaler;
-    }
 
 private:
     /** Check if the current client has access to the specified database.
@@ -552,8 +528,6 @@ private:
     void checkIsConfigLoaded() const;
 
     bool is_config_loaded = false; /// Is configuration loaded from toml file.
-    DisaggregatedMode disaggregated_mode = DisaggregatedMode::None;
-    bool use_autoscaler = true; /// todo: remove this after AutoScaler is stable. Only meaningful in DisaggregatedComputeMode.
 };
 
 

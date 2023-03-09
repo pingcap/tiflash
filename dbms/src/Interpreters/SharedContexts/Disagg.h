@@ -41,6 +41,10 @@ struct SharedContextDisagg : private boost::noncopyable
 {
     Context & global_context;
 
+    DisaggregatedMode disaggregated_mode = DisaggregatedMode::None;
+
+    bool use_autoscaler = true; // TODO: remove this after AutoScaler is stable. Only meaningful in DisaggregatedComputeMode.
+
     /// The PS instance available on Read Node.
     UniversalPageStorageServicePtr rn_cache_ps;
     /// The page cache in Read Node. It uses ps_rn_page_cache as storage to cache page data to local disk based on the LRU mechanism.
@@ -58,6 +62,16 @@ struct SharedContextDisagg : private boost::noncopyable
     void initReadNodePageCache(const PathPool & path_pool, const String & cache_dir, size_t cache_capacity);
 
     void initRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled);
+
+    bool isDisaggregatedComputeMode() const
+    {
+        return disaggregated_mode == DisaggregatedMode::Compute;
+    }
+    bool isDisaggregatedStorageMode() const
+    {
+        // there is no difference
+        return disaggregated_mode == DisaggregatedMode::Storage || disaggregated_mode == DisaggregatedMode::None;
+    }
 };
 
 } // namespace DB

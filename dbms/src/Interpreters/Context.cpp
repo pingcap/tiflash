@@ -318,7 +318,6 @@ ContextPtr Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runt
     res->shared->ctx_disagg = SharedContextDisagg::create(*res);
     res->quota = std::make_shared<QuotaForIntervals>();
     res->timezone_info.init();
-    res->disaggregated_mode = DisaggregatedMode::None;
     return res;
 }
 

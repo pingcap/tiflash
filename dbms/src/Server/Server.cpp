@@ -930,7 +930,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
       */
     global_context = Context::createGlobal();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
-    global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
+    global_context->getSharedContextDisagg()->disaggregated_mode = getDisaggregatedMode(config());
     global_context->setUseAutoScaler(useAutoScaler(config()));
 
     /// Init File Provider

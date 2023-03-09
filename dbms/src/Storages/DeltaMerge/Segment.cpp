@@ -18,7 +18,6 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
-#include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
@@ -50,7 +49,6 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
-#include <numeric>
 
 namespace ProfileEvents
 {
