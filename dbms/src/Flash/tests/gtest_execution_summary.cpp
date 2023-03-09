@@ -104,6 +104,26 @@ try
         testForExecutionSummary(request, expect);
     }
 
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .topN("s1", true, 12)
+                           .build(context, t);
+        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {4, concurrency}}, {"topn_2", {4, not_check_concurrency}}};
+        testForExecutionSummary(request, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .aggregation({col("s2")}, {col("s2")})
+                           .topN("s2", true, 12)
+                           .build(context, t);
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, not_check_concurrency}}, {"topn_2", {3, not_check_concurrency}}};
+        testForExecutionSummary(request, expect);
+    }
+
     WRAP_FOR_EXCUTION_SUMMARY_TEST_END
 }
 CATCH
@@ -264,6 +284,8 @@ CATCH
 
 #undef WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN
 #undef WRAP_FOR_EXCUTION_SUMMARY_TEST_END
+#undef WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_BEGIN
+#undef WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END
 
 } // namespace tests
 } // namespace DB
