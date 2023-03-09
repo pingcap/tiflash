@@ -33,6 +33,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <fstream>
+#include <memory>
 
 namespace ProfileEvents
 {
@@ -141,13 +142,14 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     config = config_;
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
-    shared_client = mock_s3_ ? std::make_unique<tests::MockS3Client>() : create();
     if (!mock_s3_)
     {
+        shared_client = create();
         shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, create());
     }
     else
     {
+        shared_client = std::make_unique<tests::MockS3Client>();
         shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket);
     }
 }

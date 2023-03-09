@@ -32,6 +32,9 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
+class FileProvider;
+using FileProviderPtr = std::shared_ptr<FileProvider>;
+
 class FileProvider
 {
 public:
@@ -111,5 +114,4 @@ private:
     bool encryption_enabled;
 };
 
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 } // namespace DB

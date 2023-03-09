@@ -99,6 +99,14 @@ public:
             uwb->putExternal(page_id, tag);
     }
 
+    void putRemoteExternal(PageIdU64 page_id, const PS::V3::CheckpointLocation & data_location)
+    {
+        if (uwb)
+            uwb->putRemoteExternal(page_id, data_location);
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "try to put external page with remote location with u64 id, page_id={}", page_id);
+    }
+
     // Add RefPage{ref_id} -> Page{page_id}
     void putRefPage(PageIdU64 ref_id, PageIdU64 page_id)
     {

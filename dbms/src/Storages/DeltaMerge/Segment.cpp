@@ -34,10 +34,16 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/PathPool.h>
+#include <Storages/S3/S3Filename.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
 #include <fmt/core.h>
@@ -179,7 +185,22 @@ StableValueSpacePtr createNewStable( //
     auto stable = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
-    wbs.data.putExternal(dtfile_id, 0);
+    if (auto data_store = context.db_context.getRemoteDataStore(); !data_store)
+    {
+        wbs.data.putExternal(dtfile_id, 0);
+    }
+    else
+    {
+        auto store_id = context.db_context.getTMTContext().getKVStore()->getStoreID();
+        Remote::DMFileOID oid{.store_id = store_id, .table_id = context.physical_table_id, .file_id = dtfile_id};
+        data_store->putDMFile(dtfile, oid);
+        PS::V3::CheckpointLocation loc{
+            .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
+            .offset_in_file = 0,
+            .size_in_file = 0,
+        };
+        wbs.data.putRemoteExternal(dtfile_id, loc);
+    }
     delegator.addDTFile(dtfile_id, dtfile->getBytesOnDisk(), store_path);
 
     return stable;
