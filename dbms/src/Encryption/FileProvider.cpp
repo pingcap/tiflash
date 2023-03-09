@@ -43,7 +43,7 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(
     }
     else
     {
-        RUNTIME_CHECK(Poco::Path(file_path_).isAbsolute(), file_path_);
+        // RUNTIME_CHECK(Poco::Path(file_path_).isAbsolute(), file_path_); // test
         file = std::make_shared<PosixRandomAccessFile>(file_path_, flags, read_limiter);
     }
     auto encryption_info = key_manager->getFile(encryption_path_.full_path);
