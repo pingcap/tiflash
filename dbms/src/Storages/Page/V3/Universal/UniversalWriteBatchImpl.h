@@ -177,7 +177,15 @@ public:
     // This write batch contains any `putRemotePage` or `putRemoteExternal`
     bool hasWritesFromRemote() const
     {
-        return has_writes_from_remote;
+        return !remote_lock_disabled && has_writes_from_remote;
+    }
+
+    // There are some cases that we don't want to do remote lock when write to ps:
+    // 1. Parse checkpoint files and write its contents to a temp ps for later use when do FAP;
+    // 2. When do some tests which just involves read/write logic;
+    void disableRemoteLock()
+    {
+        remote_lock_disabled = true;
     }
 
     size_t getTotalDataSize() const
@@ -259,5 +267,6 @@ private:
     Writes writes;
     size_t total_data_size = 0;
     bool has_writes_from_remote = false;
+    bool remote_lock_disabled = false;
 };
 } // namespace DB

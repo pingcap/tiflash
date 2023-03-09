@@ -31,11 +31,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char force_skip_s3_lock_create[];
-} // namespace FailPoints
-
 UniversalPageStoragePtr UniversalPageStorage::create(
     const String & name,
     PSDiskDelegatorPtr delegator,
@@ -83,11 +78,6 @@ void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const Write
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
     bool has_writes_from_remote = write_batch.hasWritesFromRemote();
-    fiu_do_on(FailPoints::force_skip_s3_lock_create, {
-        // some unit test we want to focus on read/write logic, skip these lock logic
-        has_writes_from_remote = false;
-        LOG_WARNING(log, "!!!skip remote_locks_local_mgr!!!");
-    });
     if (has_writes_from_remote)
     {
         assert(remote_locks_local_mgr != nullptr);
@@ -303,6 +293,33 @@ DB::PageEntry UniversalPageStorage::getEntry(const UniversalPageId & page_id, Sn
     {
         LOG_WARNING(log, "{}", e.message());
         return {.file_id = INVALID_BLOBFILE_ID}; // return invalid PageEntry
+    }
+}
+
+std::optional<DB::PS::V3::CheckpointLocation> UniversalPageStorage::getCheckpointLocation(const UniversalPageId & page_id, SnapshotPtr snapshot) const
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot("");
+    }
+
+    try
+    {
+        const auto & [id, entry] = page_directory->getByIDOrNull(page_id, snapshot);
+        (void)id;
+        if (entry.checkpoint_info.has_value())
+        {
+            return entry.checkpoint_info->data_location;
+        }
+        else
+        {
+            return std::nullopt;
+        }
+    }
+    catch (DB::Exception & e)
+    {
+        LOG_WARNING(log, "{}", e.message());
+        return std::nullopt;
     }
 }
 
