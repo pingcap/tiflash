@@ -953,9 +953,8 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     const DB::ColumnInfos & table_scan_columns)
 {
     auto & step = initAndGetLastStep(chain);
-    auto & actions = step.actions;
 
-    auto has_cast = buildExtraCastsAfterTS(actions, table_scan_columns);
+    auto has_cast = buildExtraCastsAfterTS(step.actions, table_scan_columns);
 
     for (auto & col : source_columns)
         step.required_output.push_back(col.name);

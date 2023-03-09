@@ -167,7 +167,6 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
     if (filter_conditions && filter_conditions->hasValue())
     {
         auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
-        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
             google::protobuf::RepeatedPtrField<tipb::Expr>{}, // Not care now

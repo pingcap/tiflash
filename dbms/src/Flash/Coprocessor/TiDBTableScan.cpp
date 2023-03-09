@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 
 namespace DB

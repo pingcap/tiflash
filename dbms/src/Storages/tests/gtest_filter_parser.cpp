@@ -19,7 +19,6 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
