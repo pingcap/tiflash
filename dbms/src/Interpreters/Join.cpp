@@ -569,16 +569,16 @@ void Join::initMapImpl(Type type_)
     if (!getFullness(kind))
     {
         if (strictness == ASTTableJoin::Strictness::Any)
-            initImpl(maps_any, type, getBuildConcurrency());
+            initImpl(maps_any, type, getBuildConcurrencyInternal());
         else
-            initImpl(maps_all, type, getBuildConcurrency());
+            initImpl(maps_all, type, getBuildConcurrencyInternal());
     }
     else
     {
         if (strictness == ASTTableJoin::Strictness::Any)
-            initImpl(maps_any_full, type, getBuildConcurrency());
+            initImpl(maps_any_full, type, getBuildConcurrencyInternal());
         else
-            initImpl(maps_all_full, type, getBuildConcurrency());
+            initImpl(maps_all_full, type, getBuildConcurrencyInternal());
     }
 }
 

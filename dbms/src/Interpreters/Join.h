@@ -461,10 +461,6 @@ private:
     /// The RowRefList in `rows_not_inserted_to_map` that removes the empty RowRefList.
     PaddedPODArray<RowRefList *> rows_with_null_keys;
 
-    /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
-    Arenas pools;
-
-
 private:
     Type type = Type::EMPTY;
 
