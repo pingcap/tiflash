@@ -110,7 +110,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 */
 
             aggregator.finishSpill();
-            auto merging_buckets = aggregator.restoreSpilledData(final, max_threads, /*is_bucket_partition=*/true);
+            auto merging_buckets = aggregator.restoreSpilledData(final, max_threads);
             if (!merging_buckets)
             {
                 impl = std::make_unique<NullBlockInputStream>(aggregator.getHeader(final));
@@ -167,7 +167,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_
             data.convertToTwoLevel();
 
         if (!data.empty())
-            parent.aggregator.spill(data, /*is_bucket_partition=*/true);
+            parent.aggregator.spill(data);
     }
 }
 
@@ -183,7 +183,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
                 data->convertToTwoLevel();
 
             if (!data->empty())
-                parent.aggregator.spill(*data, /*is_bucket_partition=*/true);
+                parent.aggregator.spill(*data);
         }
     }
 }

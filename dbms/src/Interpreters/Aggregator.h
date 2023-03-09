@@ -948,7 +948,6 @@ public:
         /// What to count.
         ColumnNumbers keys;
         AggregateDescriptions aggregates;
-        size_t concurrency;
         size_t keys_size;
         size_t aggregates_size;
 
@@ -958,6 +957,11 @@ public:
         SpillConfig spill_config;
 
         UInt64 max_block_size;
+        
+        // There is only one concurrency to handle the build and merge phases of aggregate,
+        // such as fine grained shuffle agg and possible partial agg in the future.
+        bool is_local_agg;
+
         TiDB::TiDBCollators collators;
 
         Params(
@@ -970,6 +974,7 @@ public:
             bool empty_result_for_aggregation_by_empty_set_,
             const SpillConfig & spill_config_,
             UInt64 max_block_size_,
+            bool is_local_agg_ = false,
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
             : src_header(src_header_)
             , keys(keys_)
@@ -979,6 +984,7 @@ public:
             , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
             , spill_config(spill_config_)
             , max_block_size(max_block_size_)
+            , is_local_agg(is_local_agg_)
             , collators(collators_)
             , group_by_two_level_threshold(group_by_two_level_threshold_)
             , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
@@ -992,8 +998,9 @@ public:
                const AggregateDescriptions & aggregates_,
                const SpillConfig & spill_config,
                UInt64 max_block_size_,
+               bool is_local_agg_ = false,
                const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
-            : Params(Block(), keys_, aggregates_, 0, 0, 0, false, spill_config, max_block_size_, collators_)
+            : Params(Block(), keys_, aggregates_, 0, 0, 0, false, spill_config, max_block_size_, is_local_agg_, collators_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -1064,9 +1071,9 @@ public:
     void setCancellationHook(CancellationHook cancellation_hook);
 
     /// For external aggregation.
-    void spill(AggregatedDataVariants & data_variants, bool is_bucket_partition);
+    void spill(AggregatedDataVariants & data_variants);
     void finishSpill();
-    SpilledRestoreMergingBucketsPtr restoreSpilledData(bool final, size_t max_threads, bool is_bucket_partition);
+    SpilledRestoreMergingBucketsPtr restoreSpilledData(bool final, size_t max_threads);
     bool hasSpilledData() const { return spiller != nullptr && spiller->hasSpilledData(); }
     void useTwoLevelHashTable() { use_two_level_hash_table = true; }
     void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);
@@ -1177,8 +1184,7 @@ protected:
     template <typename Method>
     void spillImpl(
         AggregatedDataVariants & data_variants,
-        Method & method,
-        bool is_bucket_partition);
+        Method & method);
 
 protected:
     /// Merge data from hash table `src` into `dst`.

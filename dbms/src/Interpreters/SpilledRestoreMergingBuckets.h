@@ -29,7 +29,6 @@ public:
         const Aggregator::Params & params,
         bool final_,
         size_t restore_concurrency_,
-        bool is_bucket_partition_,
         const String & req_id);
 
     Block getHeader() const;
@@ -41,8 +40,8 @@ public:
     size_t getConcurrency() const { return restore_concurrency; }
 
 private:
-    BlocksList restoreBucketDataToMergeInBucketPartition(std::function<bool()> && is_cancelled);
-    BlocksList restoreBucketDataToMergeInWholePartition(std::function<bool()> && is_cancelled);
+    BlocksList restoreBucketDataToMergeForLocalAgg(std::function<bool()> && is_cancelled);
+    BlocksList restoreBucketDataToMergeForNonLocalAgg(std::function<bool()> && is_cancelled);
 
 private:
     const LoggerPtr log;
@@ -52,7 +51,7 @@ private:
 
     size_t restore_concurrency;
 
-    bool is_bucket_partition;
+    bool is_local_agg;
 
     std::vector<BlockInputStreams> bucket_restore_streams;
 

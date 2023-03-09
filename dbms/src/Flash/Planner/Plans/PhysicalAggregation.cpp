@@ -103,6 +103,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
         context.getSettingsRef().max_spilled_rows_per_file,
         context.getSettingsRef().max_spilled_bytes_per_file,
         context.getFileProvider());
+    assert(!pipeline.streams.empty());
+    bool is_local_agg = fine_grained_shuffle.enable() || pipeline.streams.size() == 1;
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
@@ -112,21 +114,23 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
         aggregation_collators,
         aggregate_descriptions,
         is_final_agg,
+        is_local_agg,
         spill_config);
 
-    if (fine_grained_shuffle.enable())
+    if (is_local_agg)
     {
-        /// For fine_grained_shuffle, just do aggregation in streams independently
+        auto extra_info = fine_grained_shuffle.enable() ? String(enableFineGrainedShuffleExtraInfo) : "";
+        /// For local agg, just do aggregation in streams independently.
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<AggregatingBlockInputStream>(
                 stream,
                 params,
                 true,
                 log->identifier());
-            stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
+            stream->setExtraInfo(extra_info);
         });
     }
-    else if (pipeline.streams.size() > 1)
+    else
     {
         /// If there are several sources, then we perform parallel aggregation
         BlockInputStreamPtr stream = std::make_shared<ParallelAggregatingBlockInputStream>(
@@ -141,15 +145,6 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
         pipeline.firstStream() = std::move(stream);
 
         restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
-    }
-    else
-    {
-        assert(pipeline.streams.size() == 1);
-        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
-            pipeline.firstStream(),
-            params,
-            true,
-            log->identifier());
     }
 
     // we can record for agg after restore concurrency.

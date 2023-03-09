@@ -42,6 +42,7 @@ Aggregator::Params buildParams(
     const TiDB::TiDBCollators & collators,
     const AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg,
+    bool is_local_agg,
     const SpillConfig & spill_config);
 
 void fillArgColumnNumbers(AggregateDescriptions & aggregate_descriptions, const Block & before_agg_header);

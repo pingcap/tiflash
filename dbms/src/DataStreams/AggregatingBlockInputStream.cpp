@@ -64,10 +64,10 @@ Block AggregatingBlockInputStream::readImpl()
             {
                 /// Flush data in the RAM to disk also. It's easier than merging on-disk and RAM data.
                 if (!data_variants->empty())
-                    aggregator.spill(*data_variants, /*is_bucket_partition=*/false);
+                    aggregator.spill(*data_variants);
             }
             aggregator.finishSpill();
-            auto merging_buckets = aggregator.restoreSpilledData(final, 1, /*is_bucket_partition=*/false);
+            auto merging_buckets = aggregator.restoreSpilledData(final, 1);
             if (!merging_buckets)
             {
                 impl = std::make_unique<NullBlockInputStream>(aggregator.getHeader(final));

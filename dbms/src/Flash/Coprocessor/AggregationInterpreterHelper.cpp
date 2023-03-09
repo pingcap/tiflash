@@ -82,6 +82,7 @@ Aggregator::Params buildParams(
     const TiDB::TiDBCollators & collators,
     const AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg,
+    bool is_local_agg,
     const SpillConfig & spill_config)
 {
     ColumnNumbers keys;
@@ -108,6 +109,7 @@ Aggregator::Params buildParams(
         getAverageThreshold(settings.max_bytes_before_external_group_by, agg_streams_size),
         !is_final_agg,
         spill_config,
+        is_local_agg,
         context.getSettingsRef().max_block_size,
         has_collator ? collators : TiDB::dummy_collators);
 }

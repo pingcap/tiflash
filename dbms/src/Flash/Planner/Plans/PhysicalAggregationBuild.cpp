@@ -54,6 +54,7 @@ void PhysicalAggregationBuild::buildPipelineExec(PipelineExecGroupBuilder & grou
         aggregation_collators,
         aggregate_descriptions,
         is_final_agg,
+        /*is_local_agg=*/false,
         spill_config);
 
     aggregate_context->initBuild(params, concurrency);

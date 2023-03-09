@@ -267,8 +267,8 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
     RUNTIME_CHECK_MSG(method_chosen != AggregatedDataVariants::Type::EMPTY, "Invalid aggregation method");
     if (AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen))
     {
-        size_t partition_num = params.concurrency > 1 ? AggregatedDataVariants::getBucketNumberForTwoLevelHashTable(method_chosen) : 1;
-        spiller = std::make_unique<Spiller>(params.spill_config, true, partition_num, getHeader(false), log);
+        size_t partition_num = params.is_local_agg ? 1 : AggregatedDataVariants::getBucketNumberForTwoLevelHashTable(method_chosen);
+        spiller = std::make_unique<Spiller>(params.spill_config, /*is_input_sorted=*/false, partition_num, getHeader(false), log);
     }
 }
 
@@ -819,7 +819,7 @@ bool Aggregator::executeOnBlock(
     {
         if (!result.isTwoLevel())
             result.convertToTwoLevel();
-        spill(result, /*is_bucket_partition=*/false);
+        spill(result);
     }
 
     return true;
@@ -832,7 +832,7 @@ void Aggregator::finishSpill()
     spiller->finishSpill();
 }
 
-SpilledRestoreMergingBucketsPtr Aggregator::restoreSpilledData(bool final, size_t max_threads, bool is_bucket_partition)
+SpilledRestoreMergingBucketsPtr Aggregator::restoreSpilledData(bool final, size_t max_threads)
 {
     assert(spiller != nullptr);
     std::vector<BlockInputStreams> ret;
@@ -843,8 +843,8 @@ SpilledRestoreMergingBucketsPtr Aggregator::restoreSpilledData(bool final, size_
     }
     if (ret.empty())
         return nullptr;
-    size_t restore_concurrency = is_bucket_partition ? std::max(std::min(max_threads, ret.size()), 1) : 1;
-    return std::make_shared<SpilledRestoreMergingBuckets>(std::move(ret), params, final, restore_concurrency, is_bucket_partition, log->identifier());
+    size_t restore_concurrency = params.is_local_agg ? 1 : std::max(std::min(max_threads, ret.size()), 1);
+    return std::make_shared<SpilledRestoreMergingBuckets>(std::move(ret), params, final, restore_concurrency, log->identifier());
 }
 
 void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size)
@@ -854,15 +854,14 @@ void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_dat
     max_bytes_before_external_group_by = getAverageThreshold(params.getMaxBytesBeforeExternalGroupBy(), aggregated_data_variants_size);
 }
 
-void Aggregator::spill(AggregatedDataVariants & data_variants, bool is_bucket_partition)
+void Aggregator::spill(AggregatedDataVariants & data_variants)
 {
     /// Flush only two-level data and possibly overflow data.
 #define M(NAME)                                                                          \
     case AggregationMethodType(NAME):                                                    \
     {                                                                                    \
         spillImpl(data_variants,                                                         \
-                  *ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl),  \
-                  is_bucket_partition);                                                  \
+                  *ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl)); \
         break;                                                                           \
     }
 
@@ -922,8 +921,7 @@ BlocksList Aggregator::convertOneBucketToBlocks(
 template <typename Method>
 void Aggregator::spillImpl(
     AggregatedDataVariants & data_variants,
-    Method & method,
-    bool is_bucket_partition)
+    Method & method)
 {
     RUNTIME_ASSERT(spiller != nullptr, "spiller must not be nullptr in Aggregator when spilling");
     size_t max_temporary_block_size_rows = 0;
@@ -939,10 +937,31 @@ void Aggregator::spillImpl(
             max_temporary_block_size_bytes = block_size_bytes;
     };
 
-    if (is_bucket_partition)
+    if (params.is_local_agg)
     {
+        /// For local agg, we write all the blocks of the bucket to the same partition and do not guarantee the order of the buckets.
+        /// And then restore all blocks of a bucket from the same partition.
+        assert(spiller->getPartitionNum() == 1);
+
+        Blocks blocks;
+        for (size_t bucket = 0; bucket < Method::Data::NUM_BUCKETS; ++bucket)
+        {
+            /// memory in hash table is released after `convertOneBucketToBlock`,
+            /// so the peak memory usage is not increased although we save all
+            /// the blocks before the actual spill
+            blocks.push_back(convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket));
+            update_max_sizes(blocks.back());
+        }
+        spiller->spillBlocks(std::move(blocks), 0);
+    }
+    else
+    {
+        /// For non local agg, blocks of different buckets are written to different partitions.
+        /// And then the blocks in multi-buckets are recovered in parallel.
+        assert(spiller->getPartitionNum() == Method::Data::NUM_BUCKETS);
+
         // To avoid multiple threads spilling the same partition at the same time.
-        // This will allow the spiller's append to take effect as far as possible.
+        // This will allow the spiller's `append` to take effect as far as possible.
         std::uniform_int_distribution<> dist(0, Method::Data::NUM_BUCKETS - 1);
         size_t bucket_index = dist(gen);
         auto next_bucket_index = [&]() {
@@ -959,17 +978,6 @@ void Aggregator::spillImpl(
             update_max_sizes(bucket_block);
             spiller->spillBlocks({std::move(bucket_block)}, bucket);
         }
-    }
-    else
-    {
-        Blocks blocks;
-        for (size_t bucket = 0; bucket < Method::Data::NUM_BUCKETS; ++bucket)
-        {
-            /// memory in hash table is released after `convertOneBucketToBlock`, so the peak memory usage is not increased here.
-            blocks.push_back(convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket));
-            update_max_sizes(blocks.back());
-        }
-        spiller->spillBlocks(std::move(blocks), 0);
     }
 
     /// Pass ownership of the aggregate functions states:

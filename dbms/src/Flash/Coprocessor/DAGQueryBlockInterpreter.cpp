@@ -410,6 +410,8 @@ void DAGQueryBlockInterpreter::executeAggregation(
         settings.max_spilled_rows_per_file,
         settings.max_spilled_bytes_per_file,
         context.getFileProvider());
+    assert(!pipeline.streams.empty());
+    bool is_local_agg = enable_fine_grained_shuffle || pipeline.streams.size() == 1;
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
@@ -419,24 +421,26 @@ void DAGQueryBlockInterpreter::executeAggregation(
         collators,
         aggregate_descriptions,
         is_final_agg,
+        is_local_agg,
         spill_config);
 
-    if (enable_fine_grained_shuffle)
+    if (is_local_agg)
     {
-        /// Go straight forward without merging phase when enable_fine_grained_shuffle
+        auto extra_info = enable_fine_grained_shuffle ? String(enableFineGrainedShuffleExtraInfo) : "";
+        /// Go straight forward without merging phase for local agg. 
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<AggregatingBlockInputStream>(
                 stream,
                 params,
                 true,
                 log->identifier());
-            stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
+            stream->setExtraInfo(extra_info);
         });
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
-    else if (pipeline.streams.size() > 1)
+    else
     {
-        /// If there are several sources, then we perform parallel aggregation
+        /// If there are several sources(non local agg), then we perform parallel aggregation
         BlockInputStreamPtr stream = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
             BlockInputStreams{},
@@ -451,16 +455,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
         // should record for agg before restore concurrency. See #3804.
         recordProfileStreams(pipeline, query_block.aggregation_name);
         restorePipelineConcurrency(pipeline);
-    }
-    else
-    {
-        assert(pipeline.streams.size() == 1);
-        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
-            pipeline.firstStream(),
-            params,
-            true,
-            log->identifier());
-        recordProfileStreams(pipeline, query_block.aggregation_name);
     }
 }
 
