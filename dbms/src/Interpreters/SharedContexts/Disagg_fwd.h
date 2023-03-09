@@ -22,4 +22,4 @@ namespace DB
 struct SharedContextDisagg;
 using SharedContextDisaggPtr = std::shared_ptr<SharedContextDisagg>;
 
-}
+} // namespace DB

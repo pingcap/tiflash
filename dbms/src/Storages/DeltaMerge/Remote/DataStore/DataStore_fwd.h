@@ -16,10 +16,13 @@
 
 #include <memory>
 
-namespace DB
+namespace DB::DM::Remote
 {
 
-class UniversalPageStorageService;
-using UniversalPageStorageServicePtr = std::shared_ptr<UniversalPageStorageService>;
+class IDataStore;
+using IDataStorePtr = std::shared_ptr<IDataStore>;
 
-} // namespace DB
+class IPreparedDMFileToken;
+using IPreparedDMFileTokenPtr = std::shared_ptr<IPreparedDMFileToken>;
+
+} // namespace DB::DM::Remote

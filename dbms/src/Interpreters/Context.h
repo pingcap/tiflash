@@ -18,13 +18,14 @@
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
+#include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
-#include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -91,8 +92,6 @@ class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class KeyManager;
 using KeyManagerPtr = std::shared_ptr<KeyManager>;
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 struct TiFlashRaftConfig;
 class DAGContext;
 class IORateLimiter;

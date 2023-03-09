@@ -15,8 +15,10 @@
 #pragma once
 
 #include <Core/TiFlashDisaggregatedMode.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/SharedContexts/Disagg_fwd.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService_fwd.h>
 #include <Storages/PathPool_fwd.h>
@@ -44,14 +46,18 @@ struct SharedContextDisagg : private boost::noncopyable
     /// The page cache in Read Node. It uses ps_rn_page_cache as storage to cache page data to local disk based on the LRU mechanism.
     DB::DM::Remote::RNLocalPageCachePtr rn_cache;
 
+    DM::Remote::IDataStorePtr remote_data_store;
+
     static SharedContextDisaggPtr create(Context & global_context_) { return std::make_shared<SharedContextDisagg>(global_context_); }
 
     /// Use `SharedContextDisagg::create` instead.
-    SharedContextDisagg(Context & global_context_)
+    explicit SharedContextDisagg(Context & global_context_)
         : global_context(global_context_)
     {}
 
     void initReadNodePageCache(const PathPool & path_pool, const String & cache_dir, size_t cache_capacity);
+
+    void initRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled);
 };
 
 } // namespace DB

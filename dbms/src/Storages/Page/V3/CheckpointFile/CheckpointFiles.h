@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
 
 #pragma once
 
-#include <memory>
+#include <Core/Types.h>
+#include <common/types.h>
 
-namespace DB
+namespace DB::PS::V3
 {
-
-class UniversalPageStorageService;
-using UniversalPageStorageServicePtr = std::shared_ptr<UniversalPageStorageService>;
-
-} // namespace DB
+struct LocalCheckpointFiles
+{
+    Strings data_files;
+    String manifest_file;
+};
+} // namespace DB::PS::V3

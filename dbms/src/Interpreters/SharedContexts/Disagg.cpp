@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathPool.h>
@@ -54,6 +55,15 @@ void SharedContextDisagg::initReadNodePageCache(const PathPool & path_pool, cons
         tryLogCurrentException(__PRETTY_FUNCTION__);
         throw;
     }
+}
+
+void SharedContextDisagg::initRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled)
+{
+    if (!s3_enabled)
+        return;
+
+    // Now only S3 data store is supported
+    remote_data_store = std::make_shared<DM::Remote::DataStoreS3>(file_provider);
 }
 
 } // namespace DB

@@ -264,7 +264,7 @@ private:
         context->setApplicationType(Context::ApplicationType::CLIENT);
 
         /// settings and limits could be specified in config file, but passed settings has higher priority
-#define EXTRACT_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION)              \
+#define EXTRACT_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION)               \
     if (config().has(#NAME) && !context->getSettingsRef().NAME.changed) \
         context->setSetting(#NAME, config().getString(#NAME));
         APPLY_FOR_SETTINGS(EXTRACT_SETTING)

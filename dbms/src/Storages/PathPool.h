@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <Core/Types.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/PathPool_fwd.h>
 
@@ -27,8 +28,6 @@ namespace DB
 {
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 
 class PSDiskDelegatorMulti;
 class PSDiskDelegatorSingle;

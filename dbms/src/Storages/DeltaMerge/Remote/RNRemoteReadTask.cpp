@@ -21,6 +21,7 @@
 #include <IO/IOThreadPool.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadBufferFromString.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -424,10 +425,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         address,
         log);
 
-    // FIXME: get page_cache from context
-    UNUSED(task);
-    RUNTIME_CHECK_MSG(false, "need to get page_cache from context");
-    // task->page_cache = db_context.getDMRemoteManager()->getPageCache();
+    task->page_cache = db_context.getSharedContextDisagg()->rn_cache;
     task->segment = std::make_shared<Segment>(
         log,
         /*epoch*/ 0,

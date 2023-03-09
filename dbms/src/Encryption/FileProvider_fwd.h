@@ -19,7 +19,7 @@
 namespace DB
 {
 
-class UniversalPageStorageService;
-using UniversalPageStorageServicePtr = std::shared_ptr<UniversalPageStorageService>;
+class FileProvider;
+using FileProviderPtr = std::shared_ptr<FileProvider>;
 
 } // namespace DB
