@@ -15,6 +15,7 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
+#include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathPool.h>
 
@@ -55,6 +56,13 @@ void SharedContextDisagg::initReadNodePageCache(const PathPool & path_pool, cons
         tryLogCurrentException(__PRETTY_FUNCTION__);
         throw;
     }
+}
+
+void SharedContextDisagg::initWriteNodeSnapManager()
+{
+    RUNTIME_CHECK(wn_snapshot_manager == nullptr);
+
+    wn_snapshot_manager = std::make_shared<DM::Remote::WNDisaggSnapshotManager>(global_context.getBackgroundPool());
 }
 
 void SharedContextDisagg::initRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled)
