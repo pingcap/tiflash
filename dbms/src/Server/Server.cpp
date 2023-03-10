@@ -1235,17 +1235,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Limit on total number of concurrently executed queries.
     global_context->getProcessList().setMaxSize(config().getInt("max_concurrent_queries", 0));
 
-    /// Setup protection to avoid accidental DROP for big tables (that are greater than 50 GB by default)
-    if (config().has("max_table_size_to_drop"))
-        global_context->setMaxTableSizeToDrop(config().getUInt64("max_table_size_to_drop"));
-
     /// Size of cache for uncompressed blocks. Zero means disabled.
     size_t uncompressed_cache_size = config().getUInt64("uncompressed_cache_size", 0);
     if (uncompressed_cache_size)
         global_context->setUncompressedCache(uncompressed_cache_size);
-
-    bool use_l0_opt = config().getBool("l0_optimize", false);
-    global_context->setUseL0Opt(use_l0_opt);
 
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
     size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
