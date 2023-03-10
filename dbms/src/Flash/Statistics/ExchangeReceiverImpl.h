@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <tipb/executor.pb.h>

@@ -340,12 +340,7 @@ const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }
 
-void DAGContext::setExecutorStatisticCollector(ExecutorStatisticsCollectorPtr & executor_statistics_collector_)
-{
-    executor_statistics_collector = executor_statistics_collector_;
-}
-
-ExecutorStatisticsCollectorPtr DAGContext::executorStatisticCollector() const
+ExecutorStatisticsCollector DAGContext::executorStatisticCollector() const
 {
     return executor_statistics_collector;
 }

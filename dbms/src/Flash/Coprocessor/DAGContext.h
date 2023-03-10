@@ -31,6 +31,7 @@
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Statistics/ExecutorStatisticsCollector.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/Transaction/TiDB.h>
@@ -63,7 +64,6 @@ using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 class ProcessListEntry;
 
 class ExecutorStatisticsCollector;
-using ExecutorStatisticsCollectorPtr = std::shared_ptr<ExecutorStatisticsCollector>;
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 {
@@ -269,10 +269,7 @@ public:
 
     String getRootExecutorId();
 
-    void setExecutorStatisticCollector(ExecutorStatisticsCollectorPtr & executor_statistics_collector_);
-
-    ExecutorStatisticsCollectorPtr executorStatisticCollector() const;
-
+    ExecutorStatisticsCollector executorStatisticCollector() const;
 
     const tipb::DAGRequest * dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
@@ -319,7 +316,7 @@ public:
     /// thus we need to pay attention to scan_context_map usage that time.
     std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
 
-    ExecutorStatisticsCollectorPtr executor_statistics_collector;
+    ExecutorStatisticsCollector executor_statistics_collector;
 
 private:
     void initExecutorIdToJoinIdMap();

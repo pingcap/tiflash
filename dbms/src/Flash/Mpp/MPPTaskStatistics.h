@@ -57,6 +57,8 @@ private:
 
     const LoggerPtr logger;
 
+    DAGContext * dag_context = nullptr;
+
     // common
     const MPPTaskId id;
     const String host;
@@ -77,7 +79,6 @@ private:
     // executor dag
     bool is_root = false;
     String sender_executor_id;
-    ExecutorStatisticsCollectorPtr executor_statistics_collector;
 
     // resource
     Int64 working_time = 0;

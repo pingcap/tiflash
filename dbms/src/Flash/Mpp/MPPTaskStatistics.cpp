@@ -64,30 +64,29 @@ Int64 toNanoseconds(MPPTaskStatistics::Timestamp timestamp)
 }
 } // namespace
 
-void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context)
+void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context_)
 {
-    assert(dag_context);
-    assert(dag_context->isMPPTask());
+    assert(dag_context_);
+    assert(dag_context_->isMPPTask());
+    dag_context = dag_context_;
     RUNTIME_CHECK(dag_context->dag_request && dag_context->dag_request->has_root_executor());
     const auto & root_executor = dag_context->dag_request->root_executor();
     RUNTIME_CHECK(root_executor.has_exchange_sender());
 
     is_root = dag_context->isRootMPPTask();
     sender_executor_id = root_executor.executor_id();
-    executor_statistics_collector = std::make_shared<ExecutorStatisticsCollector>();
-    executor_statistics_collector->initialize(dag_context);
-    dag_context->setExecutorStatisticCollector(executor_statistics_collector);
+    dag_context->executorStatisticCollector().initialize(dag_context);
 }
 
 void MPPTaskStatistics::collectRuntimeStatistics()
 {
-    const auto & executor_statistics_res = executor_statistics_collector->getResult();
+    const auto & executor_statistics_res = dag_context->executorStatisticCollector().getResult();
     auto it = executor_statistics_res.find(sender_executor_id);
     RUNTIME_CHECK_MSG(it != executor_statistics_res.end(), "Can't find exchange sender statistics after `collectRuntimeStatistics`");
     const auto & return_statistics = it->second->getBaseRuntimeStatistics();
     // record io bytes
     output_bytes = return_statistics.bytes;
-    recordInputBytes(executor_statistics_collector->getDAGContext());
+    recordInputBytes(*dag_context);
 }
 
 void MPPTaskStatistics::logTracingJson()
@@ -104,7 +103,7 @@ void MPPTaskStatistics::logTracingJson()
         id.task_id,
         is_root,
         sender_executor_id,
-        executor_statistics_collector->resToJson(),
+        dag_context->executorStatisticCollector().resToJson(),
         host,
         toNanoseconds(task_init_timestamp),
         toNanoseconds(task_start_timestamp),

@@ -31,8 +31,11 @@ public:
 
     const BaseRuntimeStatistics & getBaseRuntimeStatistics() const { return base; }
 
+    UInt64 processTimeForJoinBuild() const { return process_time_for_join_build; }
+
 protected:
     BaseRuntimeStatistics base;
+    UInt64 process_time_for_join_build = 0;
 };
 
 using ExecutorStatisticsPtr = std::shared_ptr<ExecutorStatisticsBase>;

@@ -55,6 +55,7 @@ private:
         tipb::SelectResponse & response,
         const String & executor_id,
         const BaseRuntimeStatistics & statistic,
+        UInt64 join_build_time,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map);
 
 private:

@@ -68,10 +68,12 @@ void ExecutionSummaryCollector::fillExecutionSummary(
     tipb::SelectResponse & response,
     const String & executor_id,
     const BaseRuntimeStatistics & statistic,
+    UInt64 join_build_time,
     const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map)
 {
     ExecutionSummary current;
     current.set(statistic);
+    current.time_processed_ns += join_build_time;
     // merge detailed table scan profile
     if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
         current.scan_context->merge(*(iter->second));
@@ -86,25 +88,25 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
         return;
 
     LOG_DEBUG(log, "start collecting execution summary");
-    dag_context.executorStatisticCollector()->collectRuntimeDetails();
+    dag_context.executorStatisticCollector().collectRuntimeDetails();
 
     if (dag_context.return_executor_id)
     {
         // fill in tree-based executors' execution summary
-        auto profiles = dag_context.executorStatisticCollector()->getResult();
+        auto profiles = dag_context.executorStatisticCollector().getResult();
         for (auto & p : profiles)
-            fillExecutionSummary(response, p.first, p.second->getBaseRuntimeStatistics(), dag_context.scan_context_map);
+            fillExecutionSummary(response, p.first, p.second->getBaseRuntimeStatistics(), p.second->processTimeForJoinBuild(), dag_context.scan_context_map);
     }
     else
     {
         // fill in list-based executors' execution summary
-        auto profiles = dag_context.executorStatisticCollector()->getResult();
+        auto profiles = dag_context.executorStatisticCollector().getResult();
         assert(profiles.size() == dag_context.list_based_executors_order.size());
         for (const auto & executor_id : dag_context.list_based_executors_order)
         {
             auto it = profiles.find(executor_id);
             assert(it != profiles.end());
-            fillExecutionSummary(response, executor_id, it->second->getBaseRuntimeStatistics(), dag_context.scan_context_map);
+            fillExecutionSummary(response, executor_id, it->second->getBaseRuntimeStatistics(), 0, dag_context.scan_context_map);
         }
     }
 

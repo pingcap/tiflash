@@ -91,9 +91,7 @@ try
 {
     auto start_time = Clock::now();
     DAGContext & dag_context = *context.getDAGContext();
-    auto executor_statistics_collector = std::make_shared<ExecutorStatisticsCollector>();
-    executor_statistics_collector->initialize(&dag_context);
-    dag_context.setExecutorStatisticCollector(executor_statistics_collector);
+    dag_context.executorStatisticCollector().initialize(&dag_context);
 
     auto query_executor = queryExecute(context, internal);
     if (!query_executor)
