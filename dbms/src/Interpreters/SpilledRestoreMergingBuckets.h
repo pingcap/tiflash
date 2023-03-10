@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <DatStreams/ConcatBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
 
 #include <atomic>
@@ -53,12 +54,18 @@ private:
 
     bool is_local_agg;
 
-    std::vector<BlockInputStreams> bucket_restore_streams;
+    std::atomic_int32_t current_bucket_num = -1;
+    struct Input
+    {
+        BlockInputStreamPtr stream;
+        Block block;
+        bool is_exhausted = false;
 
-    // for non local agg
-    std::atomic_uint32_t current_bucket_num = 0;
-    // for local agg
-    int32_t concurrent_stream_num = -1;
+        Input(BlockInputStreams && streams, const String & req_id)
+            : stream(std::make_shared<ConcatBlockInputStream>(std::move(streams), req_id))
+        {}
+    };
+    std::vector<Input> restore_inputs;
 };
 using SpilledRestoreMergingBucketsPtr = std::shared_ptr<SpilledRestoreMergingBuckets>;
 

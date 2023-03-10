@@ -27,11 +27,9 @@ SpilledRestoreMergingBuckets::SpilledRestoreMergingBuckets(
     , final(final_)
     , restore_concurrency(restore_concurrency_)
     , is_local_agg(params.is_local_agg)
-    , bucket_restore_streams(std::move(bucket_restore_streams_))
+    , restore_inputs(bucket_restore_streams_.begin(), bucket_restore_streams_.end())
 {
-    RUNTIME_CHECK(!bucket_restore_streams.empty() && restore_concurrency > 0);
-    // for local agg, restore_concurrency and bucket_restore_streams.size() must be 1.
-    RUNTIME_CHECK(!is_local_agg || (restore_concurrency == 1 && bucket_restore_streams.size() == 1));
+    RUNTIME_CHECK(!restore_inputs.empty() && restore_concurrency > 0);
 }
 
 Block SpilledRestoreMergingBuckets::getHeader() const
@@ -41,19 +39,20 @@ Block SpilledRestoreMergingBuckets::getHeader() const
 
 BlocksList SpilledRestoreMergingBuckets::restoreBucketDataToMergeForNonLocalAgg(std::function<bool()> && is_cancelled)
 {
-    if (current_bucket_num >= bucket_restore_streams.size())
+    if (current_bucket_num >= restore_inputs.size())
         return {};
 
     while (true)
     {
         auto local_bucket_num = current_bucket_num.fetch_add(1);
-        if (local_bucket_num >= bucket_restore_streams.size())
+        if (local_bucket_num >= restore_inputs.size())
             return {};
 
-        if (bucket_restore_streams[local_bucket_num].empty())
-            continue;
-
         BlocksList ret;
+        const auto & cur_input = restore_inputs[local_bucket_num];
+        assert(!restore_inputs.is_exhausted);
+        
+        
         for (const auto & bucket_restore_stream : bucket_restore_streams[local_bucket_num])
         {
             if unlikely (is_cancelled())
@@ -84,6 +83,10 @@ BlocksList SpilledRestoreMergingBuckets::restoreBucketDataToMergeForLocalAgg(std
     if unlikely (restore_streams.empty())
         return {};
 
+    if unlikely (current_bucket_num == -1)
+    {
+
+    }
     while (true)
     {
         if unlikely (is_cancelled())

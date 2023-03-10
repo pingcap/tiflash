@@ -267,8 +267,21 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
     RUNTIME_CHECK_MSG(method_chosen != AggregatedDataVariants::Type::EMPTY, "Invalid aggregation method");
     if (AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen))
     {
-        size_t partition_num = params.is_local_agg ? 1 : AggregatedDataVariants::getBucketNumberForTwoLevelHashTable(method_chosen);
-        spiller = std::make_unique<Spiller>(params.spill_config, /*is_input_sorted=*/false, partition_num, getHeader(false), log);
+        // for local agg, use sort base spiller.
+        // for non local agg, use partition base spiller.
+        spiller = params.is_local_agg
+            ? std::make_unique<Spiller>(
+                params.spill_config, 
+                /*is_input_sorted=*/true, 
+                /*partition_num=*/1, 
+                getHeader(false), 
+                log)
+            : std::make_unique<Spiller>(
+                params.spill_config,
+                /*is_input_sorted=*/false, 
+                /*partition_num=*/AggregatedDataVariants::getBucketNumberForTwoLevelHashTable(method_chosen), 
+                getHeader(false), 
+                log);
     }
 }
 
@@ -836,10 +849,19 @@ SpilledRestoreMergingBucketsPtr Aggregator::restoreSpilledData(bool final, size_
 {
     assert(spiller != nullptr);
     std::vector<BlockInputStreams> ret;
-    for (UInt64 partition_id = 0; partition_id < spiller->getPartitionNum(); ++partition_id)
+    if (params.is_local_agg)
     {
-        if (spiller->hasSpilledData(partition_id))
-            ret.push_back(spiller->restoreBlocks(partition_id, /*max_stream_size=*/1));
+        assert(0 == spiller->getPartitionNum());
+        if (spiller->hasSpilledData(0))
+            ret.push_back(spiller->restoreBlocks(0));
+    }
+    else
+    {
+        for (UInt64 partition_id = 0; partition_id < spiller->getPartitionNum(); ++partition_id)
+        {
+            if (spiller->hasSpilledData(partition_id))
+                ret.push_back(spiller->restoreBlocks(partition_id, /*max_stream_size=*/1));
+        }
     }
     if (ret.empty())
         return nullptr;
@@ -939,8 +961,8 @@ void Aggregator::spillImpl(
 
     if (params.is_local_agg)
     {
-        /// For local agg, we write all the blocks of the bucket to the same partition and do not guarantee the order of the buckets.
-        /// And then restore all blocks of a bucket from the same partition.
+        /// For local agg, we write all the blocks of the bucket to the same partition and guarantee the order of the buckets.
+        /// And then restore all blocks from the same partition for multi-bucket and use sort base merging.
         assert(spiller->getPartitionNum() == 1);
 
         Blocks blocks;
