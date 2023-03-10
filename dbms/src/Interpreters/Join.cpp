@@ -2756,15 +2756,6 @@ void Join::finishOneBuild()
 
 void Join::workAfterBuildFinish()
 {
-    if (isEnableSpill())
-    {
-        if (hasPartitionSpilled())
-        {
-            trySpillBuildPartitions(true);
-            tryMarkBuildSpillFinish();
-        }
-    }
-
     if (isNullAwareSemiFamily(kind))
     {
         rows_with_null_keys.reserve(rows_not_inserted_to_map.size());
@@ -2773,6 +2764,15 @@ void Join::workAfterBuildFinish()
             Join::RowRefList * p = i->next;
             if (p != nullptr)
                 rows_with_null_keys.emplace_back(p);
+        }
+    }
+
+    if (isEnableSpill())
+    {
+        if (hasPartitionSpilled())
+        {
+            trySpillBuildPartitions(true);
+            tryMarkBuildSpillFinish();
         }
     }
 }
