@@ -155,8 +155,8 @@ try
     auto iter = records.begin();
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("10", iter->page_id);
-    ASSERT_EQ("7_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-    ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+    ASSERT_EQ("7_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
     iter++;
     ASSERT_EQ(EditRecordType::VAR_REF, iter->type);
@@ -166,8 +166,8 @@ try
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("3", iter->page_id);
     ASSERT_TRUE(iter->entry.checkpoint_info.has_value());
-    ASSERT_EQ("7_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-    ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+    ASSERT_EQ("7_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 
     iter++;
     ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
@@ -176,13 +176,13 @@ try
     iter++;
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("5", iter->page_id);
-    ASSERT_EQ("7_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-    ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+    ASSERT_EQ("7_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
 
     iter++;
     ASSERT_EQ(EditRecordType::VAR_EXTERNAL, iter->type);
     ASSERT_EQ("9", iter->page_id);
-    ASSERT_EQ("dt file path", *iter->entry.checkpoint_info->data_location.data_file_id);
+    ASSERT_EQ("dt file path", *iter->entry.checkpoint_info.data_location.data_file_id);
 }
 CATCH
 
@@ -217,8 +217,8 @@ try
     auto iter = records.begin();
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("5", iter->page_id);
-    ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-    ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+    ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+    ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 }
 CATCH
 
@@ -250,17 +250,17 @@ try
     auto iter = records.begin();
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("14", iter->page_id);
-    ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+    ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
 
     iter++;
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("3", iter->page_id);
-    ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+    ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 
     iter++;
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("7", iter->page_id);
-    ASSERT_EQ("", readData(iter->entry.checkpoint_info->data_location));
+    ASSERT_EQ("", readData(iter->entry.checkpoint_info.data_location));
 }
 CATCH
 
@@ -295,7 +295,7 @@ try
     auto iter = records.begin();
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("3", iter->page_id);
-    ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+    ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
 
     iter++;
     ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
@@ -339,7 +339,7 @@ try
     auto iter = records.begin();
     ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
     ASSERT_EQ("3", iter->page_id);
-    ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+    ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 }
 CATCH
 
@@ -371,14 +371,14 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("4", iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
     }
 
     // Write and dump again.
@@ -408,20 +408,20 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("4", iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("5", iter->page_id);
-        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info.data_location));
     }
 }
 CATCH
@@ -455,14 +455,14 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("4", iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
     }
 
     // Write and dump again.
@@ -494,21 +494,21 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("4", iter->page_id);
         // 2_0.data is not uploaded and the data_location only get updated after success upload
-        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("5", iter->page_id);
-        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info.data_location));
     }
 }
 CATCH
@@ -550,8 +550,8 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
@@ -579,8 +579,8 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("5", iter->page_id);
-        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
     }
 }
 CATCH
@@ -629,8 +629,8 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
@@ -639,8 +639,8 @@ try
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("foo", iter->page_id);
-        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Value", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Value", readData(iter->entry.checkpoint_info.data_location));
     }
     {
         dumpCheckpoint();
@@ -663,8 +663,8 @@ try
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("foo", iter->page_id);
-        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Value", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Value", readData(iter->entry.checkpoint_info.data_location));
     }
 }
 CATCH
@@ -712,8 +712,8 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
@@ -736,8 +736,8 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
-        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("updated value", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("3_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("updated value", readData(iter->entry.checkpoint_info.data_location));
     }
 }
 CATCH
@@ -841,8 +841,8 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("10", iter->page_id);
-        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info->data_location.data_file_id); // this is the lock key to CPDataFile
-        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_REF, iter->type);
@@ -852,8 +852,8 @@ try
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
         ASSERT_TRUE(iter->entry.checkpoint_info.has_value());
-        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info->data_location.data_file_id); // this is the lock key to CPDataFile
-        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
@@ -862,8 +862,8 @@ try
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("5", iter->page_id);
-        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info->data_location.data_file_id); // this is the lock key to CPDataFile
-        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
     } // check the first manifest
 
 #if 0
@@ -913,8 +913,8 @@ try
         auto iter = records.begin();
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("10", iter->page_id);
-        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info->data_location.data_file_id); // this is the lock key to CPDataFile
-        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_REF, iter->type);
@@ -924,8 +924,8 @@ try
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
         ASSERT_TRUE(iter->entry.checkpoint_info.has_value());
-        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info->data_location.data_file_id); // this is the lock key to CPDataFile
-        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
@@ -934,8 +934,8 @@ try
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("5", iter->page_id);
-        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info->data_location.data_file_id); // this is the lock key to CPDataFile
-        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info->data_location));
+        ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+        ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
     } // check the first manifest
 #endif
 }
