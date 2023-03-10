@@ -30,6 +30,10 @@
 ## The storage format version in storage engine. Valid values: 1, 2.
 ## format_version = 2
 
+## The storage api-version for the TiFlash engine. Valid values: 1, 2, default is 1.
+## while using api-version = 2, multiple keyspace data could be stored in a single storage.
+## api_version = 1
+
 ## If there are multiple SSD disks on the machine,
 ## specify the path list on `storage.main.dir` can improve TiFlash performance.
 
