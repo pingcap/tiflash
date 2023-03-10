@@ -21,7 +21,7 @@
 #include <Common/setThreadName.h>
 #include <Debug/MockStorage.h>
 #include <Flash/BatchCoprocessorHandler.h>
-#include <Flash/Disaggregated/DisaggregatedTask.h>
+#include <Flash/Disaggregated/WNEstablishDisaggTaskHandler.h>
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/Disaggregated/WNFetchPagesStreamWriter.h>
 #include <Flash/EstablishCall.h>
@@ -616,7 +616,9 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
 
     const auto & meta = request->meta();
     DM::DisaggTaskId task_id(meta);
-    auto task = std::make_shared<DisaggregatedTask>(db_context, task_id);
+    auto logger = Logger::get(task_id);
+
+    auto handler = std::make_shared<WNEstablishDisaggTaskHandler>(db_context, task_id);
     SCOPE_EXIT({
         current_memory_tracker = nullptr;
     });
@@ -631,27 +633,27 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
 
     try
     {
-        task->prepare(request);
-        task->execute(response);
+        handler->prepare(request);
+        handler->execute(response);
     }
     catch (Exception & e)
     {
-        LOG_ERROR(task->log, "EstablishDisaggTask meet Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        LOG_ERROR(logger, "EstablishDisaggTask meet Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
         record_error(grpc::StatusCode::INTERNAL, e.code(), e.message());
     }
     catch (const pingcap::Exception & e)
     {
-        LOG_ERROR(log, "EstablishDisaggTask meet KV Client Exception: {}", e.message());
+        LOG_ERROR(logger, "EstablishDisaggTask meet KV Client Exception: {}", e.message());
         record_error(grpc::StatusCode::INTERNAL, ErrorCodes::UNKNOWN_EXCEPTION, e.message());
     }
     catch (std::exception & e)
     {
-        LOG_ERROR(task->log, "EstablishDisaggTask meet std::exception: {}", e.what());
+        LOG_ERROR(logger, "EstablishDisaggTask meet std::exception: {}", e.what());
         record_error(grpc::StatusCode::INTERNAL, ErrorCodes::UNKNOWN_EXCEPTION, e.what());
     }
     catch (...)
     {
-        LOG_ERROR(task->log, "EstablishDisaggTask meet unknown exception");
+        LOG_ERROR(logger, "EstablishDisaggTask meet unknown exception");
         record_error(grpc::StatusCode::INTERNAL, ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
     }
 
@@ -668,7 +670,7 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
         }
     }
 
-    LOG_DEBUG(log, "Handle EstablishDisaggTask request done, resp_err={}", response->error().ShortDebugString());
+    LOG_DEBUG(logger, "Handle EstablishDisaggTask request done, resp_err={}", response->error().ShortDebugString());
     return ret_status;
 }
 
@@ -695,8 +697,9 @@ grpc::Status FlashService::FetchDisaggPages(
 
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const DM::DisaggTaskId task_id(request->snapshot_id());
+    auto logger = Logger::get(task_id);
 
-    LOG_DEBUG(log, "Fetching pages, task_id={} table_id={} segment_id={}", task_id, request->table_id(), request->segment_id());
+    LOG_DEBUG(logger, "Fetching pages, table_id={} segment_id={}", task_id, request->table_id(), request->segment_id());
 
     SCOPE_EXIT({
         // The snapshot is created in the 1st request (Establish), and will be destroyed when all FetchPages are finished.
@@ -719,32 +722,32 @@ grpc::Status FlashService::FetchDisaggPages(
         stream_writer->pipeTo(sync_writer);
         stream_writer.reset();
 
-        LOG_DEBUG(log, "FetchDisaggPages respond finished, task_id={}", task_id);
+        LOG_DEBUG(logger, "FetchDisaggPages respond finished, task_id={}", task_id);
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)
     {
-        LOG_ERROR(log, "FetchDisaggPages meet TiFlashException: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        LOG_ERROR(logger, "FetchDisaggPages meet TiFlashException: {}\n{}", e.displayText(), e.getStackTrace().toString());
         return record_error(grpc::StatusCode::INTERNAL, e.standardText());
     }
     catch (const Exception & e)
     {
-        LOG_ERROR(log, "FetchDisaggPages meet Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        LOG_ERROR(logger, "FetchDisaggPages meet Exception: {}\n{}", e.message(), e.getStackTrace().toString());
         return record_error(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
     }
     catch (const pingcap::Exception & e)
     {
-        LOG_ERROR(log, "FetchDisaggPages meet KV Client Exception: {}", e.message());
+        LOG_ERROR(logger, "FetchDisaggPages meet KV Client Exception: {}", e.message());
         return record_error(grpc::StatusCode::INTERNAL, e.message());
     }
     catch (const std::exception & e)
     {
-        LOG_ERROR(log, "FetchDisaggPages meet std::exception: {}", e.what());
+        LOG_ERROR(logger, "FetchDisaggPages meet std::exception: {}", e.what());
         return record_error(grpc::StatusCode::INTERNAL, e.what());
     }
     catch (...)
     {
-        LOG_ERROR(log, "FetchDisaggPages meet unknown exception");
+        LOG_ERROR(logger, "FetchDisaggPages meet unknown exception");
         return record_error(grpc::StatusCode::INTERNAL, "other exception");
     }
 }
