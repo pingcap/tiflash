@@ -27,6 +27,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 
 namespace ProfileEvents
@@ -130,7 +131,7 @@ void FileCache::removeDiskFile(const String & local_fname)
             auto s = p.string();
             if (s != cache_dir && (s == local_fname || std::filesystem::is_empty(p)))
             {
-                std::filesystem::remove(p);
+                std::filesystem::remove(p); // If p is a directory, remove success only when it is empty.
             }
             else
             {
@@ -292,8 +293,7 @@ void FileCache::releaseSpace(UInt64 size)
 
 bool FileCache::canCache(FileType file_type) const
 {
-    return static_cast<UInt64>(file_type) <= cache_level ||
-        bg_downloading_count.load(std::memory_order_relaxed) >= IOThreadPool::get().getMaxThreads();
+    return static_cast<UInt64>(file_type) <= cache_level || bg_downloading_count.load(std::memory_order_relaxed) >= IOThreadPool::get().getMaxThreads();
 }
 
 FileType FileCache::getFileTypeOfColData(const std::filesystem::path & p)
@@ -381,6 +381,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
     }
     auto & result = outcome.GetResult();
     auto content_length = result.GetContentLength();
+    RUNTIME_CHECK_MSG(content_length > 0, "s3_key={}, content_length={}", s3_key, content_length);
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, content_length);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
     if (!finalizeReservedSize(file_seg->getFileType(), file_seg->getSize(), content_length))
@@ -401,6 +402,8 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
         ostr.flush();
     }
     std::filesystem::rename(temp_fname, local_fname);
+    auto fsize = std::filesystem::file_size(local_fname);
+    RUNTIME_CHECK_MSG(fsize == static_cast<UInt64>(content_length), "local_fname={}, file_size={}, content_length={}", local_fname, fsize, content_length);
     file_seg->setStatus(FileSegment::Status::Complete);
     LOG_DEBUG(log, "Download s3_key={} to local={} size={} cost={}ms", s3_key, local_fname, content_length, sw.elapsedMilliseconds());
 }
