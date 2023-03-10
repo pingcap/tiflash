@@ -32,6 +32,7 @@
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <filesystem>
 #include <fstream>
 #include <ios>
 #include <memory>
@@ -316,8 +317,7 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
     req.SetContentType("binary/octet-stream");
     auto istr = Aws::MakeShared<Aws::FStream>("PutObjectInputStream", local_fname, std::ios_base::in | std::ios_base::binary);
     RUNTIME_CHECK_MSG(istr->is_open(), "Open {} fail: {}", local_fname, strerror(errno));
-    auto write_bytes = istr->seekg(0, std::ios::end).tellg(); // get the file size
-    istr->seekg(0, std::ios::beg); // rewind to the begin
+    auto write_bytes = std::filesystem::file_size(local_fname);
     req.SetBody(istr);
     ProfileEvents::increment(ProfileEvents::S3PutObject);
     auto result = client.PutObject(req);
