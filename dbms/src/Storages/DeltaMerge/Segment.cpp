@@ -2568,7 +2568,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         segment_snap->stable->getDMFilesRows(),
         dm_context.tracing_id);
 
-    filter_column_stream = std::make_shared<FilterBlockInputStream>(filter_column_stream, filter->beofre_where, filter->filter_column_name, dm_context.tracing_id);
+    filter_column_stream = std::make_shared<FilterBlockInputStream>(filter_column_stream, filter->before_where, filter->filter_column_name, dm_context.tracing_id);
     filter_column_stream->setExtraInfo("push down filter");
     if (filter_columns.size() == columns_to_read.size())
     {
@@ -2645,7 +2645,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
         max_version,
         expected_block_size);
 
-    if (filter && filter->beofre_where)
+    if (filter && filter->before_where)
     {
         // if has filter conditions pushed down, use late materialization
         return getLateMaterializationStream(

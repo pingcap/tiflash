@@ -756,12 +756,6 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
             filter_columns.push_back(*iter);
         }
 
-        for (const auto & col : filter_columns)
-        {
-            // do not support push down filter on datetime and time
-            RUNTIME_CHECK(col.id == -1 || (col.type->getTypeId() != TypeIndex::MyDateTime && col.type->getTypeId() != TypeIndex::MyTime));
-        }
-
         NamesAndTypes columns_to_read_name_and_type;
         for (const auto & col : columns_to_read)
         {

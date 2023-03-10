@@ -33,19 +33,19 @@ public:
                    const ColumnDefines & filter_columns_,
                    const String filter_column_name_)
         : rs_operator(rs_operator_)
-        , beofre_where(beofre_where_)
+        , before_where(beofre_where_)
         , filter_columns(std::move(filter_columns_))
         , filter_column_name(std::move(filter_column_name_))
     {}
 
     explicit PushDownFilter(const RSOperatorPtr & rs_operator_)
         : rs_operator(rs_operator_)
-        , beofre_where(nullptr)
+        , before_where(nullptr)
         , filter_columns({})
     {}
 
     RSOperatorPtr rs_operator;
-    ExpressionActionsPtr beofre_where;
+    ExpressionActionsPtr before_where;
     ColumnDefines filter_columns;
     String filter_column_name;
 };
