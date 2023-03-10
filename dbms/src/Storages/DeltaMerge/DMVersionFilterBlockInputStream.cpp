@@ -407,12 +407,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             Block res;
             if (cur_raw_block.segmentRowIdCol() == nullptr)
             {
-                for (const auto & c : header)
-                {
-                    auto & column = cur_raw_block.getByName(c.name);
-                    column.column = column.column->filter(filter, passed_count);
-                    res.insert(std::move(column));
-                }
+                res = name_trans_action.filterAndTransform(cur_raw_block, filter, passed_count);
             }
             else
             {

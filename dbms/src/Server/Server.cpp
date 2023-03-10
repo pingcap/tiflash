@@ -1012,11 +1012,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         S3::ClientFactory::instance().init(storage_config.s3_config);
     }
-    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled())
-    {
-        config.initCacheDir();
-        FileCache::initialize(config.getDTFileCacheDir(), config.getDTFileCapacity(), config.dtfile_level, config.dtfile_cache_min_age_seconds);
-    }
     global_context->getSharedContextDisagg()->initRemoteDataStore(global_context->getFileProvider(), storage_config.s3_config.isS3Enabled());
 
     global_context->initializePathCapacityMetric( //
@@ -1165,6 +1160,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
     initThreadPool(settings, server_info.cpu_info.logical_cores);
+    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled())
+    {
+        config.initCacheDir();
+        FileCache::initialize(config.getDTFileCacheDir(), config.getDTFileCapacity(), config.dtfile_level, config.dtfile_cache_min_age_seconds);
+    }
 
     /// PageStorage run mode has been determined above
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());

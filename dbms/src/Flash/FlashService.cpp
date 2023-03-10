@@ -670,7 +670,7 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
         }
     }
 
-    LOG_DEBUG(logger, "Handle EstablishDisaggTask request done, resp_err={}", response->error().ShortDebugString());
+    LOG_DEBUG(logger, "Handle EstablishDisaggTask request done, resp_err={} resp={}", response->error().ShortDebugString(), response->ShortDebugString());
     return ret_status;
 }
 
