@@ -15,6 +15,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Interpreters/Context.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>

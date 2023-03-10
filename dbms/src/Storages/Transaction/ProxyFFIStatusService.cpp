@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/ProxyFFICommon.h>

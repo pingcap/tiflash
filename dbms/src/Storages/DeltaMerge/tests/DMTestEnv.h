@@ -113,10 +113,8 @@ inline String genMockCommonHandle(Int64 value, size_t rowkey_column_size)
 class DMTestEnv
 {
 public:
-    static Context getContext(const ::DB::Settings & settings = DB::Settings())
-    {
-        return ::DB::tests::TiFlashTestEnv::getContext(settings);
-    }
+    static ContextPtr getContext() { return ::DB::tests::TiFlashTestEnv::getContext(); }
+    static ContextPtr getContext(const ::DB::Settings & settings) { return ::DB::tests::TiFlashTestEnv::getContext(settings); }
 
     static constexpr const char * pk_name = "_tidb_rowid";
 

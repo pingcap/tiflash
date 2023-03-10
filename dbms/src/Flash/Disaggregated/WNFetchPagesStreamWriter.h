@@ -20,8 +20,13 @@
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Transaction/Types.h>
-#include <grpcpp/support/sync_stream.h>
 #include <kvproto/disaggregated.pb.h>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#include <grpcpp/support/sync_stream.h>
+#pragma GCC diagnostic pop
+
 
 namespace DB
 {

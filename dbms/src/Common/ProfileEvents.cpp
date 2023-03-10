@@ -123,7 +123,10 @@
     M(S3GetObject)                             \
     M(S3HeadObject)                            \
     M(S3ListObjects)                           \
-    M(S3DeleteObject)
+    M(S3DeleteObject)                          \
+    M(FileCacheHit)                            \
+    M(FileCacheMiss)                           \
+    M(FileCacheEvict)
 
 namespace ProfileEvents
 {

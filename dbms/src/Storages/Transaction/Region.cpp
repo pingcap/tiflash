@@ -15,7 +15,6 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
-#include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>

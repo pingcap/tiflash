@@ -14,6 +14,7 @@
 
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Interpreters/Context.h>
 #include <Storages/StorageDisaggregated.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>

@@ -27,8 +27,8 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
@@ -60,7 +60,7 @@ public:
         auto path = getTemporaryPath();
         dropDataOnDisk(path);
         createIfNotExist(path);
-        auto file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
+        auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         page_storage = UniversalPageStorage::create("test.t", delegator, PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0}, file_provider);
         page_storage->restore();

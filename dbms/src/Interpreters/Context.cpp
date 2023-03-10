@@ -1753,8 +1753,7 @@ UniversalPageStoragePtr Context::getWriteNodePageStorage() const
 
 SharedContextDisaggPtr Context::getSharedContextDisagg() const
 {
-    auto lock = getLock();
-    RUNTIME_CHECK(shared->ctx_disagg != nullptr);
+    RUNTIME_CHECK(shared->ctx_disagg != nullptr); // We always initialize the shared context in createGlobal()
     return shared->ctx_disagg;
 }
 

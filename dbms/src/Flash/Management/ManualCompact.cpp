@@ -15,6 +15,7 @@
 #include <Common/setThreadName.h>
 #include <Flash/Management/ManualCompact.h>
 #include <Flash/ServiceUtils.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/TMTContext.h>

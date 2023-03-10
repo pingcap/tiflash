@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/ServiceUtils.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/TMTContext.h>
