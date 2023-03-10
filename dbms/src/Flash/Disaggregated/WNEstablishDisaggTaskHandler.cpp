@@ -18,6 +18,7 @@
 #include <Flash/Disaggregated/WNEstablishDisaggTaskHandler.h>
 #include <Flash/Executor/QueryExecutorHolder.h>
 #include <Flash/executeQuery.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
