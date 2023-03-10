@@ -115,6 +115,8 @@ struct StorageRemoteCacheConfig
     String dir;
     UInt64 capacity = 0;
     UInt64 dtfile_level = 100;
+    UInt64 dtfile_cache_min_age_seconds = 30 * 60; // Files of the same priority can only be evicted from files
+        // that were not accessed within `dtfile_cache_min_age_seconds` seconds.
     double delta_rate = 0.3;
 
     bool isCacheEnabled() const;
