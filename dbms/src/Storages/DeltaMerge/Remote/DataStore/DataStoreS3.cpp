@@ -82,7 +82,7 @@ bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_
     auto s3_client = S3::ClientFactory::instance().sharedClient();
     const auto & bucket = S3::ClientFactory::instance().bucket();
 
-    /// First upload all CheckpointData files and theirs lock,
+    /// First upload all CheckpointData files and their locks,
     /// then upload the CheckpointManifest to make the files within
     /// `upload_seq` public to S3GCManager.
 

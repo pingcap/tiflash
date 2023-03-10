@@ -74,10 +74,6 @@ struct S3GCConfig
     Int64 delmark_expired_hour = 1;
 
     Int64 mark_delete_timeout_seconds = 10;
-
-    // The temporary path for storing
-    // downloaded manifest
-    String temp_path;
 };
 
 class S3GCManager
@@ -125,8 +121,6 @@ public:
     std::unordered_set<String> getValidLocksFromManifest(const String & manifest_key);
 
     void removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime * const timepoint); // NOLINT(readability-avoid-const-params-in-decls)
-
-    String getTemporaryDownloadFile(String s3_key);
 
 private:
     const pingcap::pd::ClientPtr pd_client;

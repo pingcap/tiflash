@@ -32,7 +32,9 @@
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <filesystem>
 #include <fstream>
+#include <ios>
 #include <memory>
 
 namespace ProfileEvents
@@ -149,8 +151,8 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     }
     else
     {
-        shared_client = std::make_unique<tests::MockS3Client>();
         shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket);
+        shared_client = shared_tiflash_client; // share the same object
     }
 }
 
@@ -315,6 +317,7 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
     req.SetContentType("binary/octet-stream");
     auto istr = Aws::MakeShared<Aws::FStream>("PutObjectInputStream", local_fname, std::ios_base::in | std::ios_base::binary);
     RUNTIME_CHECK_MSG(istr->is_open(), "Open {} fail: {}", local_fname, strerror(errno));
+    auto write_bytes = std::filesystem::file_size(local_fname);
     req.SetBody(istr);
     ProfileEvents::increment(ProfileEvents::S3PutObject);
     auto result = client.PutObject(req);
@@ -322,7 +325,6 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
     {
         throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} key={}", local_fname, bucket, remote_fname);
     }
-    auto write_bytes = istr->tellg();
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
