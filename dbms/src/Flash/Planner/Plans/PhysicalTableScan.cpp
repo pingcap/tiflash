@@ -23,6 +23,7 @@
 #include <Flash/Planner/Plans/PhysicalTableScan.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 
 namespace DB
 {
@@ -56,7 +57,7 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
 {
     assert(pipeline.streams.empty());
 
-    if (context.isDisaggregatedComputeMode())
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, filter_conditions, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);

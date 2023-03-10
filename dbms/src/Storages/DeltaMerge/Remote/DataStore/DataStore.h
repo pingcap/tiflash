@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/S3/S3Filename.h>
 
@@ -22,9 +23,6 @@
 
 namespace DB::DM::Remote
 {
-
-class IDataStore;
-using IDataStorePtr = std::shared_ptr<IDataStore>;
 
 class IPreparedDMFileToken : boost::noncopyable
 {
@@ -46,8 +44,6 @@ protected:
         , oid(oid_)
     {}
 };
-
-using IPreparedDMFileTokenPtr = std::shared_ptr<IPreparedDMFileToken>;
 
 class IDataStore : boost::noncopyable
 {

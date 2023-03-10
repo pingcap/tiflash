@@ -643,7 +643,7 @@ try
 {
     {
         PageEntriesEdit edit;
-        edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 1));
+        edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 1), PageEntryV3{});
         dir->apply(std::move(edit));
     }
     {
