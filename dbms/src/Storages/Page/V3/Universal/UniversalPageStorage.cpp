@@ -106,7 +106,7 @@ Page UniversalPageStorage::read(const UniversalPageId & page_id, const ReadLimit
 
     auto page_entry = throw_on_not_exist ? page_directory->getByID(page_id, snapshot) : page_directory->getByIDOrNull(page_id, snapshot);
     auto & checkpoint_info = page_entry.second.checkpoint_info;
-    if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+    if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
     {
         auto page = remote_reader->read(page_entry);
         UniversalWriteBatch wb;
@@ -133,7 +133,7 @@ UniversalPageMap UniversalPageStorage::read(const UniversalPageIds & page_ids, c
         for (const auto & entry : page_entries)
         {
             const auto & checkpoint_info = entry.second.checkpoint_info;
-            if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+            if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
             {
                 remote_entries.emplace_back(std::move(entry));
             }
@@ -191,7 +191,7 @@ UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & 
         {
             auto info = PS::V3::universal::BlobStoreType::FieldReadInfo(page_id, entry, field_indices);
             const auto & checkpoint_info = entry.checkpoint_info;
-            if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+            if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
             {
                 remote_read_infos.emplace_back(info);
             }
@@ -309,7 +309,7 @@ std::optional<DB::PS::V3::CheckpointLocation> UniversalPageStorage::getCheckpoin
         (void)id;
         if (entry.checkpoint_info.has_value())
         {
-            return entry.checkpoint_info->data_location;
+            return entry.checkpoint_info.data_location;
         }
         else
         {

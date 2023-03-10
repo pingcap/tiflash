@@ -308,7 +308,7 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
         RUNTIME_CHECK(last_iter != entries.end() && last_iter->second.isEntry());
         auto & ori_entry = last_iter->second.entry;
         RUNTIME_CHECK(ori_entry.checkpoint_info.has_value());
-        if (!ori_entry.checkpoint_info->is_local_data_reclaimed)
+        if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
         {
             return false;
         }
@@ -316,7 +316,7 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
         ori_entry.size = entry.size;
         ori_entry.offset = entry.offset;
         ori_entry.checksum = entry.checksum;
-        ori_entry.checkpoint_info->is_local_data_reclaimed = false;
+        ori_entry.checkpoint_info.is_local_data_reclaimed = false;
         return true;
     }
     throw Exception(fmt::format(
@@ -1517,9 +1517,9 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 }
 
                 // collect the applied remote data_file_ids
-                if (r.entry.checkpoint_info)
+                if (r.entry.checkpoint_info.has_value())
                 {
-                    applied_data_files.emplace(*r.entry.checkpoint_info->data_location.data_file_id);
+                    applied_data_files.emplace(*r.entry.checkpoint_info.data_location.data_file_id);
                 }
             }
             catch (DB::Exception & e)

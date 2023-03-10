@@ -52,7 +52,7 @@ void BlobStats::restoreByEntry(const PageEntryV3 & entry)
     else
     {
         // It must be an entry point to remote data location
-        RUNTIME_CHECK(entry.checkpoint_info.has_value() && entry.checkpoint_info->is_local_data_reclaimed);
+        RUNTIME_CHECK(entry.checkpoint_info.is_valid && entry.checkpoint_info.is_local_data_reclaimed);
     }
 }
 
