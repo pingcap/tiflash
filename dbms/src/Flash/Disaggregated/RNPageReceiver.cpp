@@ -286,7 +286,7 @@ void RNPageReceiverBase<RPCContext>::readLoop()
 }
 
 template <typename RPCContext>
-std::tuple<bool, String> RNPageReceiverBase<RPCContext>::taskReadLoop(const Request & req)
+std::tuple<bool, String> RNPageReceiverBase<RPCContext>::taskReadLoop(const FetchPagesRequest & req)
 {
     auto status = RPCContext::getStatusOK();
     bool meet_error = false;

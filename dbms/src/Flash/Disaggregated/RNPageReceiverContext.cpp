@@ -111,13 +111,13 @@ const String & FetchPagesRequest::address() const
     return seg_task->address;
 }
 
-GRPCPagesReceiverContext::Request GRPCPagesReceiverContext::popRequest() const
+FetchPagesRequest GRPCPagesReceiverContext::popRequest() const
 {
     auto seg_task = remote_read_tasks->nextFetchTask();
-    return Request(std::move(seg_task));
+    return FetchPagesRequest(std::move(seg_task));
 }
 
-void GRPCPagesReceiverContext::finishTaskEstablish(const Request & req, bool meet_error)
+void GRPCPagesReceiverContext::finishTaskEstablish(const FetchPagesRequest & req, bool meet_error)
 {
     remote_read_tasks->updateTaskState(req.seg_task, DM::SegmentReadTaskState::Receiving, meet_error);
 }
@@ -137,7 +137,7 @@ void GRPCPagesReceiverContext::cancelDisaggTaskOnTiFlashStorageNode(LoggerPtr /*
     // TODO cancel
 }
 
-FetchPagesResponseReaderPtr GRPCPagesReceiverContext::doRequest(const Request & request) const
+FetchPagesResponseReaderPtr GRPCPagesReceiverContext::doRequest(const FetchPagesRequest & request) const
 {
     auto reader = std::make_shared<GRPCFetchPagesResponseReader>(request);
     reader->reader = cluster->rpc_client->sendStreamRequest(
