@@ -48,48 +48,8 @@ struct CheckpointLocation
 };
 
 // A more memory compact struct compared to std::optional<CheckpointInfo>
-class OptionalCheckpointInfo
+struct OptionalCheckpointInfo
 {
-public:
-    // ctor
-    OptionalCheckpointInfo(std::nullopt_t) // NOLINT(google-explicit-constructor)
-        : is_set(false)
-    {}
-    OptionalCheckpointInfo(CheckpointLocation data_loc, bool is_local_data_reclaimed_)
-        : data_location(std::move(data_loc))
-        , is_set(true)
-        , is_local_data_reclaimed(is_local_data_reclaimed_)
-    {
-    }
-
-    // Act as if std::optional<...>
-    ALWAYS_INLINE bool has_value() const { return is_set; } // NOLINT(readability-identifier-naming)
-    ALWAYS_INLINE OptionalCheckpointInfo * operator->()
-    {
-        assert(is_set); // should only be used when contains valid value
-        return this;
-    }
-    ALWAYS_INLINE const OptionalCheckpointInfo * operator->() const
-    {
-        assert(is_set); // should only be used when contains valid value
-        return this;
-    }
-
-    // copy ctor
-    OptionalCheckpointInfo(const OptionalCheckpointInfo & rhs) = default;
-    OptionalCheckpointInfo & operator=(const OptionalCheckpointInfo & rhs) = default;
-
-    // move ctor
-    OptionalCheckpointInfo(OptionalCheckpointInfo && c) noexcept = default;
-    OptionalCheckpointInfo & operator=(OptionalCheckpointInfo && rhs) noexcept = default;
-    OptionalCheckpointInfo(std::nullopt_t &&) noexcept // NOLINT(google-explicit-constructor)
-        : data_location()
-        , is_set(false)
-        , is_local_data_reclaimed(false)
-    {
-    }
-
-public:
     CheckpointLocation data_location;
 
     /**
@@ -97,13 +57,16 @@ public:
      *
      * Share the padding with following bits in this struct
      */
-    bool is_set = false;
+    bool is_valid = false;
 
     /**
      * Whether the PageEntry's local BlobData has been reclaimed.
      * If the data is reclaimed, you can only read out its data from the checkpoint.
      */
     bool is_local_data_reclaimed = false;
+
+public:
+    ALWAYS_INLINE bool has_value() const { return is_valid; } // NOLINT(readability-identifier-naming)
 };
 
 } // namespace DB::PS::V3

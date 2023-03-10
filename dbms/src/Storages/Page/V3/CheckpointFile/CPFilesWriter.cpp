@@ -74,13 +74,13 @@ bool CPFilesWriter::writeEditsAndApplyCheckpointInfo(universal::PageEntriesEdit 
         if (rec_edit.type == EditRecordType::VAR_EXTERNAL)
         {
             RUNTIME_CHECK_MSG(
-                rec_edit.entry.checkpoint_info.has_value()
-                    && rec_edit.entry.checkpoint_info->data_location.data_file_id
-                    && !rec_edit.entry.checkpoint_info->data_location.data_file_id->empty(),
+                rec_edit.entry.checkpoint_info.is_valid
+                    && rec_edit.entry.checkpoint_info.data_location.data_file_id
+                    && !rec_edit.entry.checkpoint_info.data_location.data_file_id->empty(),
                 "the checkpoint info of external id is not set, record={}",
                 rec_edit);
             // for example, the s3 fullpath of external id
-            locked_files.emplace(*rec_edit.entry.checkpoint_info->data_location.data_file_id);
+            locked_files.emplace(*rec_edit.entry.checkpoint_info.data_location.data_file_id);
             continue;
         }
 
@@ -90,7 +90,7 @@ bool CPFilesWriter::writeEditsAndApplyCheckpointInfo(universal::PageEntriesEdit 
         if (rec_edit.entry.checkpoint_info.has_value())
         {
             // for example, the s3 fullpath that was written in the previous uploaded CheckpointDataFile
-            locked_files.emplace(*rec_edit.entry.checkpoint_info->data_location.data_file_id);
+            locked_files.emplace(*rec_edit.entry.checkpoint_info.data_location.data_file_id);
             continue;
         }
 
@@ -105,8 +105,9 @@ bool CPFilesWriter::writeEditsAndApplyCheckpointInfo(universal::PageEntriesEdit 
             page.data.size());
         RUNTIME_CHECK(page.data.size() == rec_edit.entry.size, page.data.size(), rec_edit.entry.size);
         rec_edit.entry.checkpoint_info = OptionalCheckpointInfo{
-            data_location,
-            /*is_local_data_reclaimed*/ false,
+            .data_location = data_location,
+            .is_valid = true,
+            .is_local_data_reclaimed = false,
         };
         locked_files.emplace(*data_location.data_file_id);
     }

@@ -224,9 +224,10 @@ try
         ASSERT_EQ("abc", r[0].page_id);
         ASSERT_EQ(0, r[0].entry.offset); // The deserialized offset is not the same as the original one!
         ASSERT_EQ(29, r[0].entry.size);
-        ASSERT_TRUE(r[0].entry.checkpoint_info->is_local_data_reclaimed);
-        ASSERT_EQ("data_1", *r[0].entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Said she just dreamed a dream", readData(r[0].entry.checkpoint_info->data_location));
+        ASSERT_TRUE(r[0].entry.checkpoint_info.is_valid);
+        ASSERT_TRUE(r[0].entry.checkpoint_info.is_local_data_reclaimed);
+        ASSERT_EQ("data_1", *r[0].entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Said she just dreamed a dream", readData(r[0].entry.checkpoint_info.data_location));
 
         ASSERT_EQ(EditRecordType::VAR_REF, r[1].type);
         ASSERT_EQ("foo", r[1].page_id);
@@ -236,17 +237,18 @@ try
         ASSERT_EQ("aaabbb", r[2].page_id);
         ASSERT_EQ(0, r[2].entry.offset);
         ASSERT_EQ(22, r[2].entry.size);
-        ASSERT_TRUE(r[2].entry.checkpoint_info->is_local_data_reclaimed);
-        ASSERT_EQ("data_1", *r[2].entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("nahida opened her eyes", readData(r[2].entry.checkpoint_info->data_location));
+        ASSERT_TRUE(r[2].entry.checkpoint_info.is_valid);
+        ASSERT_TRUE(r[2].entry.checkpoint_info.is_local_data_reclaimed);
+        ASSERT_EQ("data_1", *r[2].entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("nahida opened her eyes", readData(r[2].entry.checkpoint_info.data_location));
 
         ASSERT_EQ(EditRecordType::VAR_DELETE, r[3].type);
         ASSERT_EQ("rain", r[3].page_id);
 
         // Check data_file_id is shared.
         ASSERT_EQ(
-            r[0].entry.checkpoint_info->data_location.data_file_id->data(),
-            r[2].entry.checkpoint_info->data_location.data_file_id->data());
+            r[0].entry.checkpoint_info.data_location.data_file_id->data(),
+            r[2].entry.checkpoint_info.data_location.data_file_id->data());
     }
     {
         auto edits_r = manifest_reader->readEdits(im);
@@ -290,10 +292,11 @@ try
                 .size = 10,
                 .offset = 5,
                 .checkpoint_info = OptionalCheckpointInfo{
-                    CheckpointLocation{
+                    .data_location = CheckpointLocation{
                         .data_file_id = std::make_shared<String>("my_file_id"),
                     },
-                    /*is_local_data_reclaimed*/ false,
+                    .is_valid = true,
+                    .is_local_data_reclaimed = false,
                 },
             },
         });
@@ -320,8 +323,9 @@ try
         ASSERT_EQ("abc", r[0].page_id);
         ASSERT_EQ(0, r[0].entry.offset); // The deserialized offset is not the same as the original one!
         ASSERT_EQ(10, r[0].entry.size);
-        ASSERT_TRUE(r[0].entry.checkpoint_info->is_local_data_reclaimed); // After deserialization, this field is always true!
-        ASSERT_EQ("my_file_id", *r[0].entry.checkpoint_info->data_location.data_file_id);
+        ASSERT_TRUE(r[0].entry.checkpoint_info.is_valid);
+        ASSERT_TRUE(r[0].entry.checkpoint_info.is_local_data_reclaimed); // After deserialization, this field is always true!
+        ASSERT_EQ("my_file_id", *r[0].entry.checkpoint_info.data_location.data_file_id);
 
         ASSERT_EQ(EditRecordType::VAR_REF, r[1].type);
         ASSERT_EQ("foo", r[1].page_id);
@@ -331,9 +335,10 @@ try
         ASSERT_EQ("aaabbb", r[2].page_id);
         ASSERT_EQ(0, r[2].entry.offset);
         ASSERT_EQ(22, r[2].entry.size);
-        ASSERT_TRUE(r[2].entry.checkpoint_info->is_local_data_reclaimed);
-        ASSERT_EQ("data_1", *r[2].entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("nahida opened her eyes", readData(r[2].entry.checkpoint_info->data_location));
+        ASSERT_TRUE(r[2].entry.checkpoint_info.is_valid);
+        ASSERT_TRUE(r[2].entry.checkpoint_info.is_local_data_reclaimed);
+        ASSERT_EQ("data_1", *r[2].entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("nahida opened her eyes", readData(r[2].entry.checkpoint_info.data_location));
 
         ASSERT_EQ(EditRecordType::VAR_DELETE, r[3].type);
         ASSERT_EQ("sun", r[3].page_id);
@@ -409,8 +414,9 @@ try
         ASSERT_EQ("page_foo", r[0].page_id);
         ASSERT_EQ(0, r[0].entry.offset);
         ASSERT_EQ(26, r[0].entry.size);
-        ASSERT_TRUE(r[0].entry.checkpoint_info->is_local_data_reclaimed);
-        ASSERT_EQ("The flower carriage rocked", readData(r[0].entry.checkpoint_info->data_location));
+        ASSERT_TRUE(r[0].entry.checkpoint_info.is_valid);
+        ASSERT_TRUE(r[0].entry.checkpoint_info.is_local_data_reclaimed);
+        ASSERT_EQ("The flower carriage rocked", readData(r[0].entry.checkpoint_info.data_location));
 
         int begin, end;
         std::tie(begin, end) = r[0].entry.getFieldOffsets(0);
@@ -430,8 +436,9 @@ try
         ASSERT_EQ("page_abc", r[2].page_id);
         ASSERT_EQ(0, r[2].entry.offset);
         ASSERT_EQ(36, r[2].entry.size);
-        ASSERT_TRUE(r[2].entry.checkpoint_info->is_local_data_reclaimed);
-        ASSERT_EQ("Dreamed of the day that she was born", readData(r[2].entry.checkpoint_info->data_location));
+        ASSERT_TRUE(r[2].entry.checkpoint_info.is_valid);
+        ASSERT_TRUE(r[2].entry.checkpoint_info.is_local_data_reclaimed);
+        ASSERT_EQ("Dreamed of the day that she was born", readData(r[2].entry.checkpoint_info.data_location));
     }
     EXPECT_THROW({
         // Call readLocks without draining readEdits should result in exceptions
@@ -568,10 +575,11 @@ try
             .entry = {
                 .offset = 5,
                 .checkpoint_info = OptionalCheckpointInfo{
-                    CheckpointLocation{
+                    .data_location = CheckpointLocation{
                         .data_file_id = std::make_shared<String>("my_file_id"),
                     },
-                    /*is_local_data_reclaimed*/ false,
+                    .is_valid = true,
+                    .is_local_data_reclaimed = false,
                 },
             },
         });

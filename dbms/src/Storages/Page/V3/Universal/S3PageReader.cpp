@@ -23,7 +23,7 @@ Page S3PageReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
 {
     const auto & page_entry = page_id_and_entry.second;
     RUNTIME_CHECK(page_entry.checkpoint_info.has_value());
-    auto location = page_entry.checkpoint_info->data_location;
+    auto location = page_entry.checkpoint_info.data_location;
     S3::S3RandomAccessFile file(s3_client, bucket, *location.data_file_id);
     file.seek(location.offset_in_file, SEEK_SET);
     auto buf_size = location.size_in_file;
