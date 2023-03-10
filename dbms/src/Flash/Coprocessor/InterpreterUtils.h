@@ -84,12 +84,12 @@ void executeGeneratedColumnPlaceholder(
     const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
     LoggerPtr log,
     DAGPipeline & pipeline);
-// Check timezone and all condition, if timezone is not UTC
+// Check timezone and all filter conditions, if timezone is not UTC
 // timestamp literal will be rewrote to UTC time
 // for example:
 //      when timezone is +08:00
 //      2019-01-01 00:00:00 +08:00 -> 2019-01-01 00:00:00 +00:00
-google::protobuf::RepeatedPtrField<tipb::Expr> rewiteExprWithTimezone(
+google::protobuf::RepeatedPtrField<tipb::Expr> rewiteExprsWithTimezone(
     const TimezoneInfo & timezone_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
     const NamesAndTypes & table_scan_columns);

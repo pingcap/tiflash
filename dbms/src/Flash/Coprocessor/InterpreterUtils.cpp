@@ -240,7 +240,7 @@ void executeGeneratedColumnPlaceholder(
     }
 }
 
-google::protobuf::RepeatedPtrField<tipb::Expr> rewiteExprWithTimezone(
+google::protobuf::RepeatedPtrField<tipb::Expr> rewiteExprsWithTimezone(
     const TimezoneInfo & timezone_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
     const NamesAndTypes & table_scan_columns)

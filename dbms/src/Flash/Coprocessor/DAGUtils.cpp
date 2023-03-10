@@ -1020,6 +1020,8 @@ tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, const TimezoneInfo &
             }
             return ret_expr;
         }
+        // If the column is timestamp type, and not handle column
+        // we should rewrite the literal to UTC time
         bool is_timestamp_column = false;
         for (const auto & child : expr.children())
         {
@@ -1040,6 +1042,7 @@ tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, const TimezoneInfo &
             }
         }
     }
+    // ignore other type of expr
     return ret_expr;
 }
 

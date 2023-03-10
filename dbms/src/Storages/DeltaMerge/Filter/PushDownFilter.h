@@ -34,8 +34,8 @@ public:
                    const String filter_column_name_)
         : rs_operator(rs_operator_)
         , before_where(beofre_where_)
-        , filter_columns(std::move(filter_columns_))
         , filter_column_name(std::move(filter_column_name_))
+        , filter_columns(std::move(filter_columns_))
     {}
 
     explicit PushDownFilter(const RSOperatorPtr & rs_operator_)
@@ -44,10 +44,14 @@ public:
         , filter_columns({})
     {}
 
+    // Rough set operator
     RSOperatorPtr rs_operator;
+    // Filter expression actions and the name of the tmp filter column
+    // Used construct the FilterBlockInputStream
     ExpressionActionsPtr before_where;
-    ColumnDefines filter_columns;
     String filter_column_name;
+    // The columns needed by the filter expression
+    ColumnDefines filter_columns;
 };
 
 } // namespace DB::DM

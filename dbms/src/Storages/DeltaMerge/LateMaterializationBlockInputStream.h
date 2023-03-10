@@ -50,6 +50,8 @@ protected:
 
 private:
     Block header;
+    // The name of the tmp filter column in filter_column_block which is added by the FilterBlockInputStream.
+    // The column is used to filter the block, but it is not included in the returned block.
     const String & filter_column_name;
     // The stream used to read the filter column, and filter the block.
     BlockInputStreamPtr filter_column_stream;

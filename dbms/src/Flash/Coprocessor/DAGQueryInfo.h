@@ -34,8 +34,8 @@ struct DAGQueryInfo
         const NamesAndTypes & source_columns_,
         const TimezoneInfo & timezone_info)
         : source_columns(source_columns_)
-        , filters(rewiteExprWithTimezone(timezone_info, filters_, source_columns))
-        , pushed_down_filters(rewiteExprWithTimezone(timezone_info, pushed_down_filters_, source_columns))
+        , filters(rewiteExprsWithTimezone(timezone_info, filters_, source_columns))
+        , pushed_down_filters(rewiteExprsWithTimezone(timezone_info, pushed_down_filters_, source_columns))
         , dag_sets(std::move(dag_sets_)){};
 
     const NamesAndTypes & source_columns;

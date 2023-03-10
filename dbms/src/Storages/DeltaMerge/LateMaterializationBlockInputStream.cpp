@@ -98,8 +98,6 @@ Block LateMaterializationBlockInputStream::readImpl()
                         continue;
                     col.column = col.column->filter(*filter, passed_count);
                 }
-                // remove the filter column to make sure the rows() return the correct value.
-                filter_column_block.erase(filter_column_name);
             }
             else if (filter_out_count > 0)
             {
@@ -117,7 +115,6 @@ Block LateMaterializationBlockInputStream::readImpl()
                         continue;
                     col.column = col.column->filter(*filter, passed_count);
                 }
-                filter_column_block.erase(filter_column_name);
             }
             else
             {
@@ -126,7 +123,7 @@ Block LateMaterializationBlockInputStream::readImpl()
             }
 
             // make sure the position and size of filter_column_block and rest_column_block are the same
-            RUNTIME_CHECK_MSG(rest_column_block.rows() == filter_column_block.rows() && rest_column_block.startOffset() == filter_column_block.startOffset(),
+            RUNTIME_CHECK_MSG(rest_column_block.startOffset() == filter_column_block.startOffset(),
                               "Late materialization meets unexpected block unmatched, filter_column_block: [start_offset={}, rows={}], rest_column_block: [start_offset={}, rows={}], pass_count={}",
                               filter_column_block.startOffset(),
                               filter_column_block.rows(),
