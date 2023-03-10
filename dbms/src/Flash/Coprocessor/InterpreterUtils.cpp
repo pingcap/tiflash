@@ -245,26 +245,16 @@ google::protobuf::RepeatedPtrField<tipb::Expr> rewiteExprWithTimezone(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
     const NamesAndTypes & table_scan_columns)
 {
-    if (timezone_info.is_utc_timezone || conditions.empty())
-    {
+    if (timezone_info.is_utc_timezone)
         return std::move(conditions);
-    }
+    if (conditions.empty())
+        return {};
 
     google::protobuf::RepeatedPtrField<tipb::Expr> rewrote_conditions;
     rewrote_conditions.Reserve(conditions.size());
     for (const auto & condition : conditions)
     {
-        const auto col_idxs = getColumnsForExpr(condition);
-        tipb::Expr expr = condition;
-        for (const auto idx : col_idxs)
-        {
-            if (table_scan_columns[idx].name != EXTRA_HANDLE_COLUMN_NAME && table_scan_columns[idx].type->getTypeId() == TypeIndex::MyTimeStamp)
-            {
-                expr = ::DB::rewriteTimeStampLiteral(expr, timezone_info);
-                break;
-            }
-        }
-        rewrote_conditions.Add(std::move(expr));
+        rewrote_conditions.Add(DB::rewriteTimeStampLiteral(condition, timezone_info, table_scan_columns));
     }
     return rewrote_conditions;
 }

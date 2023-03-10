@@ -47,13 +47,11 @@ String getJoinExecTypeName(const tipb::JoinExecType & tp);
 bool isColumnExpr(const tipb::Expr & expr);
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
-// get column index from tipb::Expr
-std::vector<Int64> getColumnsForExpr(const tipb::Expr & expr);
 // rewrite timestamp literal to UTC time
 // for example:
 //      when timezone is +08:00
 //      2019-01-01 00:00:00 +08:00 -> 2019-01-01 00:00:00 +00:00
-tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, const TimezoneInfo & timezone_info);
+tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, const TimezoneInfo & timezone_info, const NamesAndTypes & table_scan_columns, bool is_child = false);
 const String & getTypeName(const tipb::Expr & expr);
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 bool exprHasValidFieldType(const tipb::Expr & expr);

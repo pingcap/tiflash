@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -986,36 +987,12 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     return fmt_buf.toString();
 }
 
-std::vector<Int64> getColumnsForExpr(const tipb::Expr & expr)
-{
-    if (isLiteralExpr(expr))
-    {
-        return {};
-    }
-    else if (isColumnExpr(expr))
-    {
-        return {decodeDAGInt64(expr.val())};
-    }
-    else if (isScalarFunctionExpr(expr))
-    {
-        std::vector<Int64> cols;
-        for (const auto & child : expr.children())
-        {
-            auto child_col = getColumnsForExpr(child);
-            cols.insert(cols.end(), child_col.begin(), child_col.end());
-        }
-        return cols;
-    }
-    else
-    {
-        throw TiFlashException("Should not reach here: not a column or literal expression", Errors::Coprocessor::Internal);
-    }
-}
-
-tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, const TimezoneInfo & timezone_info)
+tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, const TimezoneInfo & timezone_info, const NamesAndTypes & table_scan_columns, bool is_child)
 {
     tipb::Expr ret_expr = expr;
-    if (isLiteralExpr(expr) && (expr.field_type().tp() == TiDB::TypeTimestamp || expr.field_type().tp() == TiDB::TypeDatetime))
+    // is_child means the expr is a child of a scalar function
+    // to avoid rewrite a dependent literal like `where '2019-01-01 00:00:00'`
+    if (is_child && isLiteralExpr(expr) && (expr.field_type().tp() == TiDB::TypeTimestamp || expr.field_type().tp() == TiDB::TypeDatetime))
     {
         // for example:
         //      when timezone is +08:00
@@ -1033,11 +1010,34 @@ tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, const TimezoneInfo &
     }
     else if (isScalarFunctionExpr(expr))
     {
-        ret_expr.clear_children();
-        ret_expr.mutable_children()->Reserve(expr.children().size());
+        if (expr.sig() == tipb::ScalarFuncSig::LogicalAnd || expr.sig() == tipb::ScalarFuncSig::LogicalOr)
+        {
+            ret_expr.clear_children();
+            ret_expr.mutable_children()->Reserve(expr.children().size());
+            for (const auto & child : expr.children())
+            {
+                ret_expr.mutable_children()->Add(rewriteTimeStampLiteral(child, timezone_info, table_scan_columns));
+            }
+            return ret_expr;
+        }
+        bool is_timestamp_column = false;
         for (const auto & child : expr.children())
         {
-            ret_expr.mutable_children()->Add(rewriteTimeStampLiteral(child, timezone_info));
+            if (isColumnExpr(child))
+            {
+                is_timestamp_column = (child.field_type().tp() == TiDB::TypeTimestamp);
+                is_timestamp_column &= getColumnNameForColumnExpr(child, table_scan_columns) != EXTRA_HANDLE_COLUMN_NAME;
+                break;
+            }
+        }
+        if (is_timestamp_column)
+        {
+            ret_expr.clear_children();
+            ret_expr.mutable_children()->Reserve(expr.children().size());
+            for (const auto & child : expr.children())
+            {
+                ret_expr.mutable_children()->Add(rewriteTimeStampLiteral(child, timezone_info, table_scan_columns, true));
+            }
         }
     }
     return ret_expr;
