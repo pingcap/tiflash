@@ -491,6 +491,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
     case raft_cmdpb::AdminCmdType::ComputeHash:
     case raft_cmdpb::AdminCmdType::PrepareFlashback:
     case raft_cmdpb::AdminCmdType::FinishFlashback:
+    case raft_cmdpb::AdminCmdType::BatchSwitchWitness
         return handleUselessAdminRaftCmd(type, curr_region_id, index, term, tmt);
     default:
         break;
