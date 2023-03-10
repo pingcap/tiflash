@@ -21,6 +21,7 @@
 #include <Storages/Page/V3/WAL/WALConfig.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/tests/gtest_page_storage.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <common/defines.h>
 #include <gtest/gtest-param-test.h>
 #include <gtest/gtest.h>
@@ -456,7 +457,7 @@ try
                     else if (r.page_id.low == ref_page_id4)
                         exist_id4_normal_entry = true;
                 }
-                LOG_INFO(log, PageEntriesEdit<PageIdV3Internal>::toDebugString(r));
+                LOG_INFO(log, "{}", r);
             }
         }
     }

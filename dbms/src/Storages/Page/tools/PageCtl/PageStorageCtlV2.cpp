@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Encryption/MockKeyManager.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
@@ -23,9 +24,11 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V2/gc/DataCompactor.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
+
+#include <magic_enum.hpp>
 
 using namespace DB::PS::V2;
 DB::WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
@@ -48,8 +51,8 @@ Usage: <path> <mode>
 
 void printPageEntry(const DB::PageIdU64 pid, const DB::PageEntry & entry)
 {
-    printf("\tpid:%9lld\t\t"
-           "%9llu\t%9u\t%9u\t%9llu\t%9llu\t%016llx\n",
+    printf("\tpid:%9llu\t\t"
+           "%9llu\t%9u\t%9llu\t%9llu\t%9llu\t%016llu\n",
            pid, //
            entry.file_id,
            entry.level,
@@ -260,17 +263,20 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
                 case DB::WriteBatchWriteType::DEL:
-                    printf("DEL\t%lld\t%llu\t%u\n", //
+                    printf("DEL\t%llu\t%llu\t%u\n", //
                            record.page_id,
                            page_file.getFileId(),
                            page_file.getLevel());
                     break;
                 case DB::WriteBatchWriteType::REF:
-                    printf("REF\t%lld\t%lld\t\t%llu\t%u\n", //
+                    printf("REF\t%llu\t%llu\t\t%llu\t%u\n", //
                            record.page_id,
                            record.ori_page_id,
                            page_file.getFileId(),
                            page_file.getLevel());
+                    break;
+                default:
+                    throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "illegal type: {}", magic_enum::enum_name(record.type));
                     break;
                 }
             }

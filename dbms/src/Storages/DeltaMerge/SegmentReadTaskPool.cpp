@@ -16,6 +16,8 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
+#include <magic_enum.hpp>
+
 namespace CurrentMetrics
 {
 extern const Metric DT_SegmentReadTasks;
@@ -259,6 +261,22 @@ void SegmentReadTaskPool::popBlock(Block & block)
     if (exceptionHappened())
     {
         throw exception;
+    }
+}
+
+bool SegmentReadTaskPool::tryPopBlock(Block & block)
+{
+    if (q.tryPop(block))
+    {
+        blk_stat.pop(block);
+        global_blk_stat.pop(block);
+        if (exceptionHappened())
+            throw exception;
+        return true;
+    }
+    else
+    {
+        return false;
     }
 }
 

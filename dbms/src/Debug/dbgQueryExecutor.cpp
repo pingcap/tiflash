@@ -215,7 +215,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
         }
 
         pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
-        context.getTMTContext().getCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
+        context.getTMTContext().getKVCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
         if (call.getResp()->has_error())
             throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
     }

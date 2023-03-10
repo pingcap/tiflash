@@ -26,12 +26,11 @@ class TopNTransformOp : public TransformOp
 public:
     TopNTransformOp(
         PipelineExecutorStatus & exec_status_,
+        const String & req_id_,
         const SortDescription & order_desc_,
         size_t limit_,
-        size_t max_block_size_,
-        const String & req_id_)
-        : TransformOp(exec_status_)
-        , log(Logger::get(req_id_))
+        size_t max_block_size_)
+        : TransformOp(exec_status_, req_id_)
         , order_desc(order_desc_)
         , limit(limit_)
         , max_block_size(max_block_size_)
@@ -51,7 +50,6 @@ protected:
 
 
 private:
-    const LoggerPtr log;
     SortDescription order_desc;
     size_t limit;
     size_t max_block_size;

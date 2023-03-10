@@ -124,7 +124,7 @@ void orderStreams(
                 settings.max_block_size,
                 limit,
                 getAverageThreshold(settings.max_bytes_before_external_sort, pipeline.streams.size()),
-                SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_spilled_size_per_spill, context.getFileProvider()),
+                SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
                 log->identifier());
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
@@ -142,7 +142,7 @@ void orderStreams(
             limit,
             settings.max_bytes_before_external_sort,
             // todo use identifier_executor_id as the spill id
-            SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_spilled_size_per_spill, context.getFileProvider()),
+            SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
             log->identifier());
     }
 }

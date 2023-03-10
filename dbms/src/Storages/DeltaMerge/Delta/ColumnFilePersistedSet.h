@@ -32,7 +32,6 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <fmt/format.h>
 
@@ -149,7 +148,7 @@ public:
     /// Update the metadata to commit the compaction results
     bool installCompactionResults(const MinorCompactionPtr & compaction, WriteBatches & wbs);
 
-    ColumnFileSetSnapshotPtr createSnapshot(const StorageSnapshotPtr & storage_snap);
+    ColumnFileSetSnapshotPtr createSnapshot(const IColumnFileDataProviderPtr & data_provider);
 };
 
 } // namespace DM

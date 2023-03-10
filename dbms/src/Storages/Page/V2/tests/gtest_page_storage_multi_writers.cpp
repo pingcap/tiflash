@@ -25,7 +25,7 @@
 #include <Storages/Page/V2/PageDefines.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/PageStorage.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -406,7 +406,7 @@ try
         ASSERT_EQ(old_entry.checksum, entry.checksum) << "of Page[" << page_id << "]";
 
         auto old_page = old_storage->read(page_id, nullptr, old_snapshot);
-        char * buf = old_page.data.begin();
+        const char * buf = old_page.data.begin();
         for (size_t i = 0; i < old_page.data.size(); ++i)
             ASSERT_EQ(((size_t) * (buf + i)) % 0xFF, page_id % 0xFF);
 

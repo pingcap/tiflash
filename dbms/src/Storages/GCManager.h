@@ -17,13 +17,10 @@
 #include <Common/Stopwatch.h>
 #include <Storages/Transaction/Types.h>
 
-namespace Poco
-{
-class Logger;
-}
-
 namespace DB
 {
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
 class Context;
 
 class GCManager
@@ -42,6 +39,6 @@ private:
 
     AtomicStopwatch gc_check_stop_watch;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 } // namespace DB

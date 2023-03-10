@@ -19,9 +19,10 @@
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalExchangeSender.h>
 #include <Interpreters/Context.h>
-
+#include <Operators/ExchangeSenderSinkOp.h>
 
 namespace DB
 {
@@ -59,8 +60,6 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
     auto & dag_context = *context.getDAGContext();
     restoreConcurrency(pipeline, dag_context.final_concurrency, log);
 
-    RUNTIME_ASSERT(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, log, "exchange_sender only run in MPP");
-
     String extra_info;
     if (fine_grained_shuffle.enable())
     {
@@ -71,7 +70,6 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
     pipeline.transform([&](auto & stream) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
-            dag_context.tunnel_set,
             partition_col_ids,
             partition_col_collators,
             exchange_type,
@@ -82,9 +80,35 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
             fine_grained_shuffle.stream_count,
             fine_grained_shuffle.batch_size,
             compression_mode,
-            context.getSettingsRef().batch_send_min_limit_compression);
+            context.getSettingsRef().batch_send_min_limit_compression,
+            log->identifier());
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         stream->setExtraInfo(extra_info);
+    });
+}
+
+void PhysicalExchangeSender::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
+{
+    // TODO support fine grained shuffle
+    RUNTIME_CHECK(!fine_grained_shuffle.enable());
+
+    group_builder.transform([&](auto & builder) {
+        // construct writer
+        std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
+            partition_col_ids,
+            partition_col_collators,
+            exchange_type,
+            context.getSettingsRef().dag_records_per_chunk,
+            context.getSettingsRef().batch_send_min_limit,
+            *context.getDAGContext(),
+            fine_grained_shuffle.enable(),
+            fine_grained_shuffle.stream_count,
+            fine_grained_shuffle.batch_size,
+            compression_mode,
+            context.getSettingsRef().batch_send_min_limit_compression,
+            log->identifier(),
+            /*is_async=*/true);
+        builder.setSinkOp(std::make_unique<ExchangeSenderSinkOp>(group_builder.exec_status, log->identifier(), std::move(response_writer)));
     });
 }
 

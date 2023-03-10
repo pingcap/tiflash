@@ -17,9 +17,10 @@
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider_fwd.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/DeltaMerge/StoragePool_fwd.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 namespace DB
@@ -126,8 +127,10 @@ public:
 
     ColumnFilePersisted * tryToColumnFilePersisted();
 
-    virtual ColumnFileReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;
+    virtual ColumnFileReaderPtr getReader(
+        const DMContext & context,
+        const IColumnFileDataProviderPtr & data_provider,
+        const ColumnDefinesPtr & col_defs) const = 0;
 
     /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
     /// been persisted in the disk and their data will be immutable.
@@ -159,6 +162,9 @@ public:
 
     /// This method is only used to read raw data.
     virtual Block readNextBlock() { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
+
+    /// This method used to skip next block.
+    virtual size_t skipNextBlock() { throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR); }
 
     /// Create a new reader from current reader with different columns to read.
     virtual ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & col_defs) = 0;

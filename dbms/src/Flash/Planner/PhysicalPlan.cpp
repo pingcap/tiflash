@@ -24,6 +24,7 @@
 #include <Flash/Planner/Plans/PhysicalAggregation.h>
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/Plans/PhysicalExchangeSender.h>
+#include <Flash/Planner/Plans/PhysicalExpand.h>
 #include <Flash/Planner/Plans/PhysicalFilter.h>
 #include <Flash/Planner/Plans/PhysicalJoin.h>
 #include <Flash/Planner/Plans/PhysicalLimit.h>
@@ -50,7 +51,7 @@ bool pushDownSelection(Context & context, const PhysicalPlanNodePtr & plan, cons
         auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
         return physical_table_scan->setFilterConditions(executor_id, selection);
     }
-    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest()))
+    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest() && !context.getSettingsRef().enable_pipeline))
     {
         auto physical_mock_table_scan = std::static_pointer_cast<PhysicalMockTableScan>(plan);
         if (context.mockStorage()->useDeltaMerge() && context.mockStorage()->tableExistsForDeltaMerge(physical_mock_table_scan->getLogicalTableID()))
@@ -197,6 +198,12 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), FineGrainedShuffle(executor), left, right));
         break;
     }
+    case tipb::ExecType::TypeExpand:
+    {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
+        pushBack(PhysicalExpand::build(context, executor_id, log, executor->expand(), popBack()));
+        break;
+    }
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
     }
@@ -295,7 +302,7 @@ void PhysicalPlan::buildBlockInputStream(DAGPipeline & pipeline, Context & conte
 PipelinePtr PhysicalPlan::toPipeline()
 {
     assert(root_node);
-    PipelineBuilder builder;
+    PipelineBuilder builder{log->identifier()};
     root_node->buildPipeline(builder);
     root_node.reset();
     auto pipeline = builder.build();

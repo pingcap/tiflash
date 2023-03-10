@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Logger.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/GCManager.h>
 #include <Storages/IManageableStorage.h>
@@ -26,7 +27,7 @@ extern const int TABLE_IS_DROPPED;
 
 GCManager::GCManager(Context & context)
     : global_context{context.getGlobalContext()}
-    , log(&Poco::Logger::get("GCManager"))
+    , log(Logger::get())
 {
 }
 

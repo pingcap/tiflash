@@ -18,7 +18,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
-#include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/MPPTunnelSetWriter.h>
 
 namespace DB
 {
@@ -93,6 +93,12 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
         batchWriteFineGrainedShuffle();
+}
+
+template <class ExchangeWriterPtr>
+bool FineGrainedShuffleWriter<ExchangeWriterPtr>::isReadyForWrite() const
+{
+    return writer->isReadyForWrite();
 }
 
 template <class ExchangeWriterPtr>
@@ -192,6 +198,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
     }
 }
 
-template class FineGrainedShuffleWriter<MPPTunnelSetPtr>;
+template class FineGrainedShuffleWriter<SyncMPPTunnelSetWriterPtr>;
+template class FineGrainedShuffleWriter<AsyncMPPTunnelSetWriterPtr>;
 
 } // namespace DB

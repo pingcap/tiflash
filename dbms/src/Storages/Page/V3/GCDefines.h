@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
+#include <Poco/Message.h>
 #include <Storages/Page/ExternalPageCallbacks.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDefines.h>
@@ -34,6 +35,10 @@ struct GCTimeStatistics
 {
     GCStageType stage = GCStageType::Unknown;
     bool executeNextImmediately() const { return stage == GCStageType::FullGC; };
+
+    bool compact_wal_happen = false;
+
+    Poco::Message::Priority getLoggingLevel() const;
 
     UInt64 total_cost_ms = 0;
 

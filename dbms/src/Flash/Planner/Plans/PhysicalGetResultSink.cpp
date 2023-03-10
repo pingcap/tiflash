@@ -29,7 +29,7 @@ void PhysicalGetResultSink::buildPipelineExec(PipelineExecGroupBuilder & group_b
 {
     auto this_shared_ptr = std::static_pointer_cast<PhysicalGetResultSink>(shared_from_this());
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<GetResultSinkOp>(group_builder.exec_status, this_shared_ptr));
+        builder.setSinkOp(std::make_unique<GetResultSinkOp>(group_builder.exec_status, log->identifier(), this_shared_ptr));
     });
 }
 } // namespace DB

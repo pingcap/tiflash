@@ -45,6 +45,8 @@ public:
         return mpp_exchange_receiver->getSourceNum();
     }
 
+    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
+
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 

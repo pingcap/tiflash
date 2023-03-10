@@ -111,6 +111,8 @@ public:
     /// Approximate number of bytes in memory - for profiling and limits.
     size_t bytes() const;
 
+    size_t estimateBytesForSpill() const;
+
     /// Approximate number of bytes between [offset, offset+limit) in memory - for profiling and limits.
     size_t bytes(size_t offset, size_t limit) const;
 

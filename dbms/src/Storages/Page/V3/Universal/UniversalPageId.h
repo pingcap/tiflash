@@ -73,10 +73,50 @@ public:
 private:
     String id;
 };
+
 using UniversalPageIds = std::vector<UniversalPageId>;
 
 inline bool operator==(const String & lhs, const UniversalPageId & rhs)
 {
     return lhs == rhs.id;
 }
+
+namespace details
+{
+struct UniversalPageIdFormatHelper
+{
+public:
+    static String format(const DB::UniversalPageId & value);
+};
+} // namespace details
+
 } // namespace DB
+
+template <>
+struct fmt::formatter<DB::UniversalPageId>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::UniversalPageId & value, FormatContext & ctx) const
+    {
+        return format_to(ctx.out(), "{}", DB::details::UniversalPageIdFormatHelper::format(value));
+    }
+};
+
+namespace std
+{
+
+template <>
+struct hash<DB::UniversalPageId>
+{
+    std::size_t operator()(const DB::UniversalPageId & k) const
+    {
+        return hash<std::string>()(k.asStr());
+    }
+};
+
+} // namespace std

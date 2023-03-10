@@ -39,6 +39,7 @@ using Version = UInt32;
 inline static constexpr Version V0 = 0;
 inline static constexpr Version V1 = 1; // Add column stats
 inline static constexpr Version V2 = 2; // Add checksum and configuration
+inline static constexpr Version V3 = 3; // Use Meta V2
 } // namespace DMFileFormat
 
 namespace StableFormat
@@ -122,7 +123,7 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V4 = StorageFormatVersio
 
 inline static const StorageFormatVersion STORAGE_FORMAT_V5 = StorageFormatVersion{
     .segment = SegmentFormat::V2,
-    .dm_file = DMFileFormat::V2,
+    .dm_file = DMFileFormat::V3, // diff
     .stable = StableFormat::V1,
     .delta = DeltaFormat::V3,
     .page = PageFormat::V4, // diff

@@ -622,6 +622,11 @@ try
                        .aggregation({Max(col("s1"))}, {col("s2")})
                        .build(context);
     executeAndAssertColumnsEqual(request, {});
+
+    request = context.scan("test_db", "empty_table")
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeAndAssertColumnsEqual(request, {toVec<UInt64>({0})});
 }
 CATCH
 

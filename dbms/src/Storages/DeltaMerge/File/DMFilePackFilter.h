@@ -63,6 +63,7 @@ public:
 
     inline const std::vector<RSResult> & getHandleRes() const { return handle_res; }
     inline const std::vector<UInt8> & getUsePacks() const { return use_packs; }
+    inline std::vector<UInt8> & getUsePacks() { return use_packs; }
 
     Handle getMinHandle(size_t pack_id)
     {
@@ -235,7 +236,7 @@ private:
         const auto file_name_base = DMFile::getFileNameBase(col_id);
 
         auto load = [&]() {
-            auto index_file_size = dmfile->colIndexSize(file_name_base);
+            auto index_file_size = dmfile->colIndexSize(col_id);
             if (index_file_size == 0)
                 return std::make_shared<MinMaxIndex>(*type);
             if (!dmfile->configuration)
@@ -246,14 +247,14 @@ private:
                     dmfile->encryptionIndexPath(file_name_base),
                     std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), index_file_size),
                     read_limiter);
-                return MinMaxIndex::read(*type, index_buf, dmfile->colIndexSize(file_name_base));
+                return MinMaxIndex::read(*type, index_buf, index_file_size);
             }
             else
             {
                 auto index_buf = createReadBufferFromFileBaseByFileProvider(file_provider,
                                                                             dmfile->colIndexPath(file_name_base),
                                                                             dmfile->encryptionIndexPath(file_name_base),
-                                                                            dmfile->colIndexSize(file_name_base),
+                                                                            index_file_size,
                                                                             read_limiter,
                                                                             dmfile->configuration->getChecksumAlgorithm(),
                                                                             dmfile->configuration->getChecksumFrameLength());

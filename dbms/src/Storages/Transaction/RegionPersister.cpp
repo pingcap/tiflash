@@ -22,6 +22,7 @@
 #include <Storages/Page/V1/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/WriteBatchWrapperImpl.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionManager.h>

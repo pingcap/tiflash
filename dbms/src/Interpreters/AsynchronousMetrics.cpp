@@ -20,10 +20,12 @@
 #include <Databases/IDatabase.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/AsynchronousMetrics.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MarkCache.h>
 #include <Storages/Page/FileUsage.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -121,7 +123,7 @@ static void calculateMaxAndSum(Max & max, Sum & sum, T x)
 
 FileUsageStatistics AsynchronousMetrics::getPageStorageFileUsage()
 {
-    RUNTIME_ASSERT(!(context.isDisaggregatedComputeMode() && context.useAutoScaler()));
+    RUNTIME_ASSERT(!(context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler));
     // Get from RegionPersister
     auto & tmt = context.getTMTContext();
     auto & kvstore = tmt.getKVStore();
@@ -196,7 +198,7 @@ void AsynchronousMetrics::update()
         set("MaxDTBackgroundTasksLength", max_dt_background_tasks_length);
     }
 
-    if (!(context.isDisaggregatedComputeMode() && context.useAutoScaler()))
+    if (!(context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler))
     {
         const FileUsageStatistics usage = getPageStorageFileUsage();
         set("BlobFileNums", usage.total_file_num);

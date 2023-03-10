@@ -33,6 +33,7 @@ class ColumnString final : public COWPtrHelper<IColumn, ColumnString>
 {
 public:
     using Chars_t = PaddedPODArray<UInt8>;
+    static const auto APPROX_STRING_SIZE = 64;
 
 private:
     friend class COWPtrHelper<IColumn, ColumnString>;

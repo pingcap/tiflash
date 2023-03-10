@@ -19,10 +19,8 @@
 
 namespace DB
 {
-
 namespace
 {
-
 bool isAtomicSet(std::atomic<bool> * val)
 {
     return ((val != nullptr) && val->load(std::memory_order_seq_cst));
@@ -54,7 +52,6 @@ void copyDataImpl(IBlockInputStream & from, IBlockOutputStream & to, TCancelCall
         if (input->getProfileInfo().hasAppliedLimit())
             to.setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
 
-        to.setTotals(input->getTotals());
         to.setExtremes(input->getExtremes());
     }
 
@@ -76,28 +73,6 @@ void copyData(IBlockInputStream & from, IBlockOutputStream & to, std::atomic<boo
 
     copyDataImpl(from, to, is_cancelled_pred, doNothing);
 }
-
-std::vector<Block> readData(IBlockInputStream & from, size_t max_return_size, const std::function<bool()> & is_cancelled)
-{
-    std::vector<Block> ret;
-
-    size_t current_return_size = 0;
-    while (Block block = from.read())
-    {
-        if (is_cancelled())
-            break;
-        ret.push_back(block);
-        current_return_size += ret.back().bytes();
-        if (max_return_size > 0 && current_return_size >= max_return_size)
-            break;
-    }
-
-    if (is_cancelled())
-        return {};
-
-    return ret;
-}
-
 
 void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled)
 {

@@ -41,6 +41,7 @@
 #include <Interpreters/Quota.h>
 #include <Interpreters/RuntimeComponentsFactory.h>
 #include <Interpreters/Settings.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/SharedQueries.h>
 #include <Interpreters/SystemLog.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -169,6 +170,9 @@ struct ContextShared
     /// The PS instance available on Write Node.
     UniversalPageStorageServicePtr ps_write;
 
+    /// Everything related with Disaggregation.
+    SharedContextDisaggPtr ctx_disagg;
+
     TiFlashSecurityConfigPtr security_config;
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
@@ -267,6 +271,11 @@ struct ContextShared
             ps_write->shutdown();
         }
 
+        if (tmt_context)
+        {
+            tmt_context->shutdown();
+        }
+
         /** At this point, some tables may have threads that block our mutex.
           * To complete them correctly, we will copy the current list of tables,
           *  and ask them all to finish their work.
@@ -300,18 +309,19 @@ private:
 Context::Context() = default;
 
 
-Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
+std::unique_ptr<Context> Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
 {
-    Context res;
-    res.runtime_components_factory = runtime_components_factory;
-    res.shared = std::make_shared<ContextShared>(runtime_components_factory);
-    res.quota = std::make_shared<QuotaForIntervals>();
-    res.timezone_info.init();
-    res.disaggregated_mode = DisaggregatedMode::None;
+    std::unique_ptr<Context> res(new Context());
+    res->setGlobalContext(*res);
+    res->runtime_components_factory = runtime_components_factory;
+    res->shared = std::make_shared<ContextShared>(runtime_components_factory);
+    res->shared->ctx_disagg = SharedContextDisagg::create(*res);
+    res->quota = std::make_shared<QuotaForIntervals>();
+    res->timezone_info.init();
     return res;
 }
 
-Context Context::createGlobal()
+std::unique_ptr<Context> Context::createGlobal()
 {
     return createGlobal(std::make_unique<RuntimeComponentsFactory>());
 }
@@ -1445,7 +1455,9 @@ void Context::initializePathCapacityMetric( //
     const Strings & main_data_paths,
     const std::vector<size_t> & main_capacity_quota, //
     const Strings & latest_data_paths,
-    const std::vector<size_t> & latest_capacity_quota)
+    const std::vector<size_t> & latest_capacity_quota,
+    const String & remote_cache_data_path,
+    size_t remote_cache_capacity)
 {
     auto lock = getLock();
     if (shared->path_capacity_ptr)
@@ -1455,7 +1467,9 @@ void Context::initializePathCapacityMetric( //
         main_data_paths,
         main_capacity_quota,
         latest_data_paths,
-        latest_capacity_quota);
+        latest_capacity_quota,
+        remote_cache_data_path,
+        remote_cache_capacity);
 }
 
 PathCapacityMetricsPtr Context::getPathCapacity() const
@@ -1685,6 +1699,11 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
     return shared->global_storage_pool;
 }
 
+/**
+ * This PageStorage is initialized in two cases:
+ * 1. Not in disaggregated mode.
+ * 2. In disaggregated write mode.
+ */
 void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)
 {
     auto lock = getLock();
@@ -1727,8 +1746,16 @@ UniversalPageStoragePtr Context::getWriteNodePageStorage() const
     }
     else
     {
+        LOG_WARNING(shared->log, "Calling getWriteNodePageStorage() without initialization, stack={}", StackTrace().toString());
         return nullptr;
     }
+}
+
+SharedContextDisaggPtr Context::getSharedContextDisagg() const
+{
+    auto lock = getLock();
+    RUNTIME_CHECK(shared->ctx_disagg != nullptr);
+    return shared->ctx_disagg;
 }
 
 UInt16 Context::getTCPPort() const
@@ -1934,9 +1961,9 @@ const std::shared_ptr<DB::DM::SharedBlockSchemas> & Context::getSharedBlockSchem
     return shared->shared_block_schemas;
 }
 
-void Context::initializeSharedBlockSchemas()
+void Context::initializeSharedBlockSchemas(size_t shared_block_schemas_size)
 {
-    shared->shared_block_schemas = std::make_shared<DB::DM::SharedBlockSchemas>(*this);
+    shared->shared_block_schemas = std::make_shared<DB::DM::SharedBlockSchemas>(shared_block_schemas_size);
 }
 
 size_t Context::getMaxStreams() const

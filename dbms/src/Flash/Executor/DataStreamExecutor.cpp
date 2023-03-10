@@ -15,16 +15,19 @@
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/getNumberOfCPUCores.h>
-#include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/DataStreamExecutor.h>
 
 namespace DB
 {
-DataStreamExecutor::DataStreamExecutor(Context & context_, const BlockIO & block_io)
-    : QueryExecutor(block_io.process_list_entry, context_)
-    , data_stream(block_io.in)
+DataStreamExecutor::DataStreamExecutor(
+    const MemoryTrackerPtr & memory_tracker_,
+    Context & context_,
+    const String & req_id,
+    const BlockInputStreamPtr & data_stream_)
+    : QueryExecutor(memory_tracker_, context_, req_id)
+    , data_stream(data_stream_)
 {
     assert(data_stream);
     thread_cnt_before_execute = GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Value();

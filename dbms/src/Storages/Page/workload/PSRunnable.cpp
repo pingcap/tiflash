@@ -20,6 +20,7 @@
 #include <Poco/File.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/Page/workload/PSRunnable.h>
 #include <Storages/Page/workload/PSStressEnv.h>
 #include <TestUtils/MockDiskDelegator.h>

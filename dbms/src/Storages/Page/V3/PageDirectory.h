@@ -19,7 +19,6 @@
 #include <Common/nocopyable.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
-#include <Storages/Page/Page.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/MapUtils.h>
@@ -45,6 +44,7 @@ extern const Metric PSMVCCNumSnapshots;
 
 namespace DB::PS::V3
 {
+
 class PageDirectorySnapshot : public DB::PageStorageSnapshot
 {
 public:
@@ -123,15 +123,6 @@ struct EntryOrDelete
 
     bool isDelete() const { return is_delete; }
     bool isEntry() const { return !is_delete; }
-
-    String toDebugString() const
-    {
-        return fmt::format(
-            "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
-            is_delete,
-            ::DB::PS::V3::toDebugString(entry),
-            being_ref_count);
-    }
 };
 
 using PageLock = std::lock_guard<std::mutex>;
@@ -180,9 +171,13 @@ public:
 
     bool createNewRef(const PageVersion & ver, const PageId & ori_page_id);
 
-    std::shared_ptr<PageId> createNewExternal(const PageVersion & ver);
+    std::shared_ptr<PageId> createNewExternal(const PageVersion & ver, const PageEntryV3 & entry);
 
     void createDelete(const PageVersion & ver);
+
+    // Update the local cache info for remote page,
+    // Must a hold snap to prevent the page being deleted.
+    bool updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry);
 
     std::shared_ptr<PageId> fromRestored(const typename PageEntriesEdit::EditRecord & rec);
 
@@ -194,6 +189,8 @@ public:
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
     std::optional<PageEntryV3> getLastEntry(std::optional<UInt64> seq) const;
+
+    void copyCheckpointInfoFromEdit(const typename PageEntriesEdit::EditRecord & edit);
 
     bool isVisible(UInt64 seq) const;
 
@@ -345,7 +342,18 @@ public:
 
     PageIdSet getAllPageIdsWithPrefix(const String & prefix, const DB::PageStorageSnapshotPtr & snap_);
 
-    void apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
+    // end is infinite if empty
+    PageIdSet getAllPageIdsInRange(const PageId & start, const PageId & end, const DB::PageStorageSnapshotPtr & snap_);
+
+    std::optional<PageId> getLowerBound(const PageId & start, const DB::PageStorageSnapshotPtr & snap_);
+
+    // Apply the edit into PageDirectory.
+    // If there are CheckpointInfo along with the applied edit, this function will
+    // returns the applied data file ids.
+    std::unordered_set<String> apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
+
+    // return ignored entries, and the corresponding space in BlobFile should be reclaimed
+    PageEntries updateLocalCacheForRemotePages(PageEntriesEdit && edit, const DB::PageStorageSnapshotPtr & snap_, const WriteLimiterPtr & write_limiter = nullptr);
 
     std::pair<GcEntriesMap, PageSize>
     getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;
@@ -356,6 +364,8 @@ public:
     /// Because there may be some upsert entry in later wal files, and we should keep the valid var_entry and the delete entry to delete the later upsert entry.
     /// And we don't restore the entries in blob store, because this PageDirectory is just read only for its entries.
     bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
+
+    void copyCheckpointInfoFromEdit(PageEntriesEdit & edit);
 
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
@@ -477,3 +487,24 @@ using VersionedPageEntries = DB::PS::V3::VersionedPageEntries<PageDirectoryTrait
 using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 } // namespace universal
 } // namespace DB::PS::V3
+
+
+template <>
+struct fmt::formatter<DB::PS::V3::EntryOrDelete>
+{
+    static constexpr auto parse(format_parse_context & ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::EntryOrDelete & entry, FormatContext & ctx) const
+    {
+        return format_to(
+            ctx.out(),
+            "{{is_delete:{}, entry:{}, being_ref_count:{}}}",
+            entry.is_delete,
+            entry.entry,
+            entry.being_ref_count);
+    }
+};

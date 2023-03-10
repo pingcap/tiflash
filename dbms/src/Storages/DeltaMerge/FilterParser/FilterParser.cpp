@@ -398,15 +398,15 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
 
     if (dag_info.filters.size() == 1)
     {
-        op = cop::tryParse(*dag_info.filters[0], columns_to_read, creator, dag_info.timezone_info, log);
+        op = cop::tryParse(dag_info.filters[0], columns_to_read, creator, dag_info.timezone_info, log);
     }
     else
     {
         /// By default, multiple conditions with operator "and"
         RSOperators children;
-        for (size_t i = 0; i < dag_info.filters.size(); ++i)
+        for (int i = 0; i < dag_info.filters.size(); ++i)
         {
-            const auto & filter = *dag_info.filters[i];
+            const auto & filter = dag_info.filters[i];
             children.emplace_back(cop::tryParse(filter, columns_to_read, creator, dag_info.timezone_info, log));
         }
         op = createAnd(children);

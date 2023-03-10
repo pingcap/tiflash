@@ -28,7 +28,7 @@ public:
     virtual BaseBuffView valueView() const = 0;
     virtual void next() = 0;
 
-    virtual ~SSTReader(){};
+    virtual ~SSTReader() = default;
 };
 
 class MonoSSTReader : public SSTReader
@@ -81,12 +81,12 @@ public:
     {
         mono->next();
         // If there are no remained keys, we try to switch to next mono reader.
-        this->maybe_next_reader();
+        this->maybeNextReader();
     }
 
     // Switch to next mono reader if current is drained,
     // and we have a next sst file to read.
-    void maybe_next_reader() const
+    void maybeNextReader() const
     {
         if (!mono->remained())
         {
@@ -101,8 +101,8 @@ public:
         }
     }
 
-    MultiSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, ColumnFamilyType type_, Initer initer_, std::vector<E> args_)
-        : log(Logger::get("MultiSSTReader"))
+    MultiSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, ColumnFamilyType type_, Initer initer_, std::vector<E> args_, LoggerPtr log_)
+        : log(log_)
         , proxy_helper(proxy_helper_)
         , type(type_)
         , initer(initer_)

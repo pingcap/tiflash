@@ -14,11 +14,15 @@
 
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <Columns/ColumnAggregateFunction.h>
+#include <Columns/ColumnString.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Functions/FunctionHelpers.h>
 #include <IO/WriteBufferFromArena.h>
 #include <fmt/format.h>
 
@@ -42,58 +46,6 @@ void ColumnAggregateFunction::addArena(ArenaPtr arena_)
 {
     arenas.push_back(arena_);
 }
-
-MutableColumnPtr ColumnAggregateFunction::convertToValues() const
-{
-    const IAggregateFunction * function = func.get();
-
-    /** If the aggregate function returns an unfinalized/unfinished state,
-        * then you just need to copy pointers to it and also shared ownership of data.
-        *
-        * Also replace the aggregate function with the nested function.
-        * That is, if this column is the states of the aggregate function `aggState`,
-        * then we return the same column, but with the states of the aggregate function `agg`.
-        * These are the same states, changing only the function to which they correspond.
-        *
-        * Further is quite difficult to understand.
-        * Example when this happens:
-        *
-        * SELECT k, finalizeAggregation(quantileTimingState(0.5)(x)) FROM ... GROUP BY k WITH TOTALS
-        *
-        * This calculates the aggregate function `quantileTimingState`.
-        * Its return type AggregateFunction(quantileTiming(0.5), UInt64)`.
-        * Due to the presence of WITH TOTALS, during aggregation the states of this aggregate function will be stored
-        *  in the ColumnAggregateFunction column of type
-        *  AggregateFunction(quantileTimingState(0.5), UInt64).
-        * Then, in `TotalsHavingBlockInputStream`, it will be called `convertToValues` method,
-        *  to get the "ready" values.
-        * But it just converts a column of type
-        *   `AggregateFunction(quantileTimingState(0.5), UInt64)`
-        * into `AggregateFunction(quantileTiming(0.5), UInt64)`
-        * - in the same states.
-        *
-        * Then `finalizeAggregation` function will be calculated, which will call `convertToValues` already on the result.
-        * And this converts a column of type
-        *   AggregateFunction(quantileTiming(0.5), UInt64)
-        * into UInt16 - already finished result of `quantileTiming`.
-        */
-    if (const auto * function_state = typeid_cast<const AggregateFunctionState *>(function))
-    {
-        auto res = createView();
-        res->set(function_state->getNestedFunction());
-        res->getData().assign(getData().begin(), getData().end());
-        return res;
-    }
-
-    MutableColumnPtr res = function->getReturnType()->createColumn();
-    res->reserve(getData().size());
-
-    for (auto * val : getData())
-        function->insertResultInto(val, *res, nullptr);
-
-    return res;
-}
-
 
 void ColumnAggregateFunction::insertRangeFrom(const IColumn & from, size_t start, size_t length)
 {
@@ -242,6 +194,26 @@ size_t ColumnAggregateFunction::allocatedBytes() const
         res += arena->size();
 
     return res;
+}
+
+size_t ColumnAggregateFunction::estimateByteSizeForSpill() const
+{
+    static const std::unordered_set<String> trivial_agg_func_name{"sum", "min", "max", "count", "avg", "first_row", "any"};
+    if (trivial_agg_func_name.find(func->getName()) != trivial_agg_func_name.end())
+    {
+        size_t res = func->sizeOfData() * size();
+        /// For trivial agg, we can estimate each element's size as `func->sizeofData()`, and
+        /// if the result is String, use `APPROX_STRING_SIZE` as the average size of the String
+        if (removeNullable(func->getReturnType())->isString())
+            res += size() * ColumnString::APPROX_STRING_SIZE;
+        return res;
+    }
+    else
+    {
+        /// For non-trivial agg like uniqXXX/group_concat, can't estimate the memory usage, so just return byteSize(),
+        /// it will highly overestimates size of a column if it was produced in AggregatingBlockInputStream (it contains size of other columns)
+        return byteSize();
+    }
 }
 
 MutableColumnPtr ColumnAggregateFunction::cloneEmpty() const

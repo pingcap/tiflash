@@ -43,7 +43,6 @@ public:
 
     void flush() override;
 
-    void setTotals(const Block & totals_) override { totals = totals_; }
     void setExtremes(const Block & extremes_) override { extremes = extremes_; }
 
     /// https://www.iana.org/assignments/media-types/text/csv
@@ -53,7 +52,6 @@ public:
     }
 
 protected:
-    void writeTotals();
     void writeExtremes();
 
     WriteBuffer & ostr;
@@ -61,9 +59,7 @@ protected:
     bool with_names;
     bool with_types;
     DataTypes data_types;
-    Block totals;
     Block extremes;
 };
 
-}
-
+} // namespace DB

@@ -25,7 +25,7 @@
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/gc/LegacyCompactor.h>
 #include <Storages/Page/V2/gc/restoreFromCheckpoints.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>

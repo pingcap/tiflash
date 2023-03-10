@@ -202,7 +202,6 @@ Connection::Packet MultiplexedConnections::drain()
         case Protocol::Server::Data:
         case Protocol::Server::Progress:
         case Protocol::Server::ProfileInfo:
-        case Protocol::Server::Totals:
         case Protocol::Server::Extremes:
         case Protocol::Server::EndOfStream:
             break;
@@ -260,7 +259,6 @@ Connection::Packet MultiplexedConnections::receivePacketUnlocked()
     case Protocol::Server::Data:
     case Protocol::Server::Progress:
     case Protocol::Server::ProfileInfo:
-    case Protocol::Server::Totals:
     case Protocol::Server::Extremes:
         break;
 

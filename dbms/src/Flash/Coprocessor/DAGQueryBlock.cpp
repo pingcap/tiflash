@@ -46,6 +46,7 @@ bool isSourceNode(const tipb::Executor * root)
 const static String SOURCE_NAME("source");
 const static String SEL_NAME("selection");
 const static String AGG_NAME("aggregation");
+const static String EXPAND_NAME("expand");
 const static String WINDOW_NAME("window");
 const static String WINDOW_SORT_NAME("window_sort");
 const static String HAVING_NAME("having");
@@ -53,7 +54,7 @@ const static String TOPN_NAME("topN");
 const static String LIMIT_NAME("limit");
 const static String EXCHANGE_SENDER_NAME("exchange_sender");
 
-const char * STREAM_AGG_ERROR = "Group by key is not supported in StreamAgg";
+constexpr const char * STREAM_AGG_ERROR = "Group by key is not supported in StreamAgg";
 
 static void assignOrThrowException(const tipb::Executor ** to, const tipb::Executor * from, const String & name)
 {
@@ -95,6 +96,12 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
                 selection_name = current->executor_id();
             }
             current = &current->selection().child();
+            break;
+        case tipb::ExecType::TypeExpand:
+            GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
+            assignOrThrowException(&expand, current, EXPAND_NAME);
+            expand_name = current->executor_id();
+            current = &current->expand().child();
             break;
         case tipb::ExecType::TypeStreamAgg:
             RUNTIME_CHECK_MSG(current->aggregation().group_by_size() == 0, STREAM_AGG_ERROR);

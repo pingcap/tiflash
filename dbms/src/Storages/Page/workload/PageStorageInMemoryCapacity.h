@@ -97,7 +97,7 @@ public:
             while (fgets(buffer, 128, file))
             {
                 if ((strncmp((buffer), (MEMORY_TOTAL_LABEL), strlen(MEMORY_TOTAL_LABEL)) == 0)
-                    && sscanf(buffer + strlen(MEMORY_TOTAL_LABEL), " %32llu kB", &total_mem)) // NOLINT
+                    && sscanf(buffer + strlen(MEMORY_TOTAL_LABEL), " %32lu kB", &total_mem)) // NOLINT
                 {
                     break;
                 }

@@ -19,7 +19,9 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -83,8 +85,8 @@ protected:
     DeltaValueSpacePtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
-        storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        storage_pool = std::make_unique<StoragePool>(*db_context, table_id, *storage_path_pool, "test.t1");
+        storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
+        storage_pool = std::make_shared<StoragePool>(*db_context, table_id, *storage_path_pool, "test.t1");
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
@@ -98,10 +100,10 @@ protected:
         *table_columns = *columns;
 
         dm_context = std::make_unique<DMContext>(*db_context,
-                                                 *storage_path_pool,
-                                                 *storage_pool,
+                                                 storage_path_pool,
+                                                 storage_pool,
                                                  /*min_version_*/ 0,
-                                                 settings.not_compress_columns,
+                                                 /*physical_table_id*/ 100,
                                                  false,
                                                  1,
                                                  db_context->getSettingsRef());
@@ -113,8 +115,8 @@ protected:
 
 protected:
     /// all these var lives as ref in dm_context
-    std::unique_ptr<StoragePathPool> storage_path_pool;
-    std::unique_ptr<StoragePool> storage_pool;
+    std::shared_ptr<StoragePathPool> storage_path_pool;
+    std::shared_ptr<StoragePool> storage_pool;
     ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
     /// dm_context
@@ -147,8 +149,8 @@ Block appendColumnFileTinyToDeltaValueSpace(DMContext & context, DeltaValueSpace
 Block appendColumnFileBigToDeltaValueSpace(DMContext & context, ColumnDefinesPtr column_defines, DeltaValueSpacePtr delta, size_t rows_start, size_t rows_num, WriteBatches & wbs, UInt64 tso = 2)
 {
     Block block = DMTestEnv::prepareSimpleWriteBlock(rows_start, rows_start + rows_num, false, tso);
-    auto delegator = context.path_pool.getStableDiskDelegator();
-    auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    auto delegator = context.path_pool->getStableDiskDelegator();
+    auto file_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
     auto store_path = delegator.choosePath();
     auto dmfile
@@ -215,7 +217,7 @@ TEST_F(DeltaValueSpaceTest, WriteRead)
 {
     Blocks write_blocks;
     size_t total_rows_write = 0;
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     // `ColumnFileInMemory`, `ColumnFileTiny`, `ColumnFileDeleteRange` and `ColumnFileBig` in `MemTableSet`
     {
         // `ColumnFileInMemory`
@@ -273,7 +275,7 @@ TEST_F(DeltaValueSpaceTest, Flush)
 {
     auto mem_table_set = delta->getMemTableSet();
     auto persisted_file_set = delta->getPersistedFileSet();
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     size_t total_rows_write = 0;
     // write some column_file
     {
@@ -315,7 +317,7 @@ TEST_F(DeltaValueSpaceTest, Flush)
 TEST_F(DeltaValueSpaceTest, MinorCompaction)
 {
     auto persisted_file_set = delta->getPersistedFileSet();
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     size_t total_rows_write = 0;
     // write some column_file and flush
     {
@@ -343,7 +345,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     // build compaction task and finish prepare stage
     MinorCompactionPtr compaction_task;
     {
-        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+        PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
         // There should be three compaction sub_tasks.
         // The first task try to compact the first three column files to a larger one.
@@ -358,7 +360,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         ASSERT_EQ(tasks[1].is_trivial_move, true);
         ASSERT_EQ(tasks[2].to_compact.size(), 1);
         ASSERT_EQ(tasks[2].is_trivial_move, true);
-        compaction_task->prepare(dmContext(), wbs, reader);
+        compaction_task->prepare(dmContext(), wbs, *reader);
     }
 
     // another thread write more data to the delta value space and flush it
@@ -384,10 +386,10 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
         EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
         // generate and commit
-        PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+        PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
         EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
-        compaction_task->prepare(dmContext(), wbs, reader);
+        compaction_task->prepare(dmContext(), wbs, *reader);
         ASSERT_TRUE(compaction_task->commit(persisted_file_set, wbs));
         ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
         ASSERT_EQ(persisted_file_set->getDeletes(), 1);
@@ -408,12 +410,12 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             delta->flush(dmContext());
             while (true)
             {
-                PageReader reader = dmContext().storage_pool.newLogReader(dmContext().getReadLimiter(), true, "");
+                PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
                 auto minor_compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
                 if (!minor_compaction_task)
                     break;
                 ASSERT_NE(minor_compaction_task->getFirsCompactIndex(), std::numeric_limits<size_t>::max());
-                minor_compaction_task->prepare(dmContext(), wbs, reader);
+                minor_compaction_task->prepare(dmContext(), wbs, *reader);
                 minor_compaction_task->commit(persisted_file_set, wbs);
             }
             wbs.writeRemoves();
@@ -429,7 +431,7 @@ TEST_F(DeltaValueSpaceTest, Restore)
     size_t total_rows_write = 0;
     // write some column_file, flush and compact it
     {
-        WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+        WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
         {
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
             total_rows_write += num_rows_write_per_batch;
@@ -495,7 +497,7 @@ TEST_F(DeltaValueSpaceTest, CloneNewlyAppendedColumnFiles)
 {
     auto persisted_file_set = delta->getPersistedFileSet();
     size_t total_rows_write = 0;
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     {
         {
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
@@ -574,7 +576,7 @@ TEST_F(DeltaValueSpaceTest, CloneNewlyAppendedColumnFiles)
 TEST_F(DeltaValueSpaceTest, GetPlaceItems)
 {
     size_t total_rows_write = 0;
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     // write some data to persisted_file_set and mem_table_set
     {
         appendColumnFileTinyToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch, wbs);
@@ -615,7 +617,7 @@ TEST_F(DeltaValueSpaceTest, GetPlaceItems)
 TEST_F(DeltaValueSpaceTest, ShouldPlace)
 {
     size_t tso = 100;
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     appendBlockToDeltaValueSpace(dmContext(), delta, 0, num_rows_write_per_batch, tso);
     {
         auto snapshot = delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
@@ -826,7 +828,7 @@ class DeltaValueSpaceCloneNewlyAppendedTest : public DeltaValueSpaceTest
 TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, SnapshotIsNotForUpdate)
 try
 {
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     wbs.setRollback();
 
     appendBlockToDeltaValueSpace(dmContext(), delta, 0, 1000);
@@ -849,7 +851,7 @@ CATCH
 TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, NoChangeAfterSnapshot)
 try
 {
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     wbs.setRollback();
 
     appendBlockToDeltaValueSpace(dmContext(), delta, 0, 1000);
@@ -870,7 +872,7 @@ CATCH
 TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, WriteAfterSnapshot)
 try
 {
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     wbs.setRollback();
 
     appendBlockToDeltaValueSpace(dmContext(), delta, 0, 1000);
@@ -894,7 +896,7 @@ CATCH
 TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, FlushAfterSnapshot)
 try
 {
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     wbs.setRollback();
 
     appendBlockToDeltaValueSpace(dmContext(), delta, 0, 1000);
@@ -917,7 +919,7 @@ CATCH
 TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, MultipleFlushWriteAfterSnapshot)
 try
 {
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     wbs.setRollback();
 
     appendBlockToDeltaValueSpace(dmContext(), delta, 0, 200);
@@ -948,7 +950,7 @@ CATCH
 TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, PersistedIsNotEmptyWhenSnapshot)
 try
 {
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     wbs.setRollback();
 
     appendBlockToDeltaValueSpace(dmContext(), delta, 0, 42);
@@ -992,7 +994,7 @@ CATCH
 TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, FlushPartially)
 try
 {
-    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     wbs.setRollback();
 
     // 2 CF in mem

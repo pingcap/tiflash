@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Checksum.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
@@ -28,8 +29,6 @@
 
 namespace DB
 {
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class PSDiskDelegator;
@@ -80,6 +79,10 @@ public:
         // If the WAL log file is not inited, it is an empty set.
         LogFilenameSet persisted_log_files;
 
+        // Some stats for logging
+        UInt64 num_records = 0;
+        UInt64 read_elapsed_ms = 0;
+
         // Note that persisted_log_files should not be empty for needSave() == true,
         // cause we get the largest log num from persisted_log_files as the new
         // file name.
@@ -94,7 +97,6 @@ public:
     bool saveSnapshot(
         FilesSnapshot && files_snap,
         String && serialized_snap,
-        size_t num_records,
         const WriteLimiterPtr & write_limiter = nullptr);
 
     const String & name() { return storage_name; }

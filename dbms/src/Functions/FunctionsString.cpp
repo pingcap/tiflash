@@ -4388,7 +4388,6 @@ public:
 
     // tidb mysql.MaxBlobWidth space max input : space(MAX_BLOB_WIDTH+1) will return NULL
     static constexpr auto MAX_BLOB_WIDTH = 16777216;
-    static const auto APPROX_STRING_SIZE = 64;
 
     FunctionSpace() = default;
 
@@ -4529,7 +4528,7 @@ private:
         ColumnString::Offsets & res_offsets)
     {
         ColumnString::Offset res_offset = 0;
-        res_data.reserve(val_num * APPROX_STRING_SIZE);
+        res_data.reserve(val_num * ColumnString::APPROX_STRING_SIZE);
         const auto & col_vector_space_num_value = col_vector_space_num->getData();
 
         for (size_t row = 0; row < val_num; ++row)

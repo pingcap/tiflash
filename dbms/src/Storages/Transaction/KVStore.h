@@ -141,7 +141,9 @@ public:
     void setStore(metapb::Store);
 
     // May return 0 if uninitialized
-    uint64_t getStoreID(std::memory_order = std::memory_order_relaxed) const;
+    StoreID getStoreID(std::memory_order = std::memory_order_relaxed) const;
+
+    metapb::Store getStoreMeta() const;
 
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const;
 
@@ -184,10 +186,13 @@ private:
     friend class ReadIndexStressTest;
     struct StoreMeta
     {
+        mutable std::mutex mu;
+
         using Base = metapb::Store;
         Base base;
         std::atomic_uint64_t store_id{0};
         void update(Base &&);
+        Base getMeta() const;
         friend class KVStore;
     };
     StoreMeta & getStore();

@@ -17,6 +17,7 @@
 #include <Common/formatReadable.h>
 #include <Common/tests/TestChannel.h>
 #include <Poco/FormattingChannel.h>
+#include <Poco/Message.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
@@ -56,7 +57,7 @@ TEST_F(LogMacroTest, Poco)
 
     ASSERT_EQ(
         channel->getLastMessage().getText().substr(32), // length of timestamp is 32
-        R"raw( [INFO] [gtest_logger.cpp:55] ["float-number: 3.1416, 3.14159, size: 9.01 GiB"] [source=LoggerTest] [thread_id=1])raw");
+        R"raw( [INFO] [gtest_logger.cpp:56] ["float-number: 3.1416, 3.14159, size: 9.01 GiB"] [source=LoggerTest] [thread_id=1])raw");
 }
 
 TEST_F(LogMacroTest, PropsLogger)
@@ -66,7 +67,7 @@ TEST_F(LogMacroTest, PropsLogger)
 
     ASSERT_EQ(
         channel->getLastMessage().getText().substr(32), // length of timestamp is 32
-        R"raw( [INFO] [gtest_logger.cpp:65] ["float-number: 3.1416, 3.14159, size: 9.01 GiB"] [source="props=foo"] [thread_id=1])raw");
+        R"raw( [INFO] [gtest_logger.cpp:66] ["float-number: 3.1416, 3.14159, size: 9.01 GiB"] [source="props=foo"] [thread_id=1])raw");
 }
 
 TEST_F(LogMacroTest, PureMessage)
@@ -76,7 +77,7 @@ TEST_F(LogMacroTest, PureMessage)
 
     ASSERT_EQ(
         channel->getLastMessage().getText().substr(32), // length of timestamp is 32
-        R"raw( [INFO] [gtest_logger.cpp:75] ["some arbitrary message {"] [thread_id=1])raw");
+        R"raw( [INFO] [gtest_logger.cpp:76] ["some arbitrary message {"] [thread_id=1])raw");
 }
 
 TEST(LogIdTest, Basic)

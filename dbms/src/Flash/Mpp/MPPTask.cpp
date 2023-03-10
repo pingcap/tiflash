@@ -154,7 +154,7 @@ void MPPTask::run()
 
 void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
-    auto tunnel_set_local = std::make_shared<MPPTunnelSet>(*dag_context, log->identifier());
+    auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
     const auto & exchange_sender = dag_req.root_executor().exchange_sender();
 

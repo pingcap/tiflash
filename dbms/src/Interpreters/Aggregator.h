@@ -686,9 +686,13 @@ struct AggregatedDataVariants : private boost::noncopyable
         : aggregates_pools(1, std::make_shared<Arena>())
         , aggregates_pool(aggregates_pools.back().get())
     {}
+    bool inited() const
+    {
+        return type != Type::EMPTY;
+    }
     bool empty() const
     {
-        return type == Type::EMPTY;
+        return size() == 0;
     }
     void invalidate()
     {
@@ -925,14 +929,6 @@ private:
     static constexpr Int32 NUM_BUCKETS = 256;
 };
 using MergingBucketsPtr = std::shared_ptr<MergingBuckets>;
-
-/** How are "total" values calculated with WITH TOTALS?
-  * (For more details, see TotalsHavingBlockInputStream.)
-  *
-  * The data is aggregated as usual, but the states of the aggregate functions are not finalized.
-  * Later, the aggregate function states for all rows (passed through HAVING) are merged into one - this will be TOTALS.
-  *
-  */
 
 /** Aggregates the source of the blocks.
   */

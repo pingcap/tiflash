@@ -44,11 +44,13 @@ inline size_t safeGetQuota(const std::vector<size_t> & quotas, size_t idx)
 PathCapacityMetrics::PathCapacityMetrics(
     const size_t capacity_quota_, // will be ignored if `main_capacity_quota` is not empty
     const Strings & main_paths_,
-    const std::vector<size_t> main_capacity_quota_,
+    const std::vector<size_t> & main_capacity_quota_,
     const Strings & latest_paths_,
-    const std::vector<size_t> latest_capacity_quota_)
+    const std::vector<size_t> & latest_capacity_quota_,
+    String remote_cache_path,
+    size_t remote_cache_capacity)
     : capacity_quota(capacity_quota_)
-    , log(&Poco::Logger::get("PathCapacityMetrics"))
+    , log(Logger::get())
 {
     if (!main_capacity_quota_.empty())
     {
@@ -77,6 +79,10 @@ PathCapacityMetrics::PathCapacityMetrics(
         {
             all_paths[latest_paths_[i]] = safeGetQuota(latest_capacity_quota_, i);
         }
+    }
+    if (!remote_cache_path.empty())
+    {
+        all_paths[remote_cache_path] = remote_cache_capacity;
     }
 
     for (auto && [path, quota] : all_paths)
@@ -248,7 +254,7 @@ ssize_t PathCapacityMetrics::locatePath(std::string_view file_path) const
     return max_match_index;
 }
 
-std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
+std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(const LoggerPtr & log) const
 {
     FsStats res{};
     /// Get capacity, used, available size for one path.

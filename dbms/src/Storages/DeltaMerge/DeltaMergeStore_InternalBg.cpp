@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 

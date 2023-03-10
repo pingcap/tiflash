@@ -14,6 +14,7 @@
 
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
 
 namespace DB

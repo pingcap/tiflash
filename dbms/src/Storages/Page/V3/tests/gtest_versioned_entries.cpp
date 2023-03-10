@@ -194,7 +194,7 @@ try
     ASSERT_FALSE(entries.isVisible(10000));
 
     // insert some entries
-    entries.createNewExternal(PageVersion(2));
+    entries.createNewExternal(PageVersion(2), PageEntryV3{});
 
     ASSERT_FALSE(entries.isVisible(1));
     ASSERT_TRUE(entries.isVisible(2));
@@ -212,7 +212,7 @@ try
     ASSERT_FALSE(entries.isVisible(10000));
 
     // insert entry after delete
-    entries.createNewExternal(PageVersion(7));
+    entries.createNewExternal(PageVersion(7), PageEntryV3{});
 
     // after re-create external page, the visible for 1~5 has changed
     ASSERT_FALSE(entries.isVisible(6));

@@ -15,6 +15,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -38,11 +39,19 @@ StorageDisaggregated::StorageDisaggregated(
 BlockInputStreams StorageDisaggregated::read(
     const Names &,
     const SelectQueryInfo &,
-    const Context &,
+    const Context & db_context,
     QueryProcessingStage::Enum &,
     size_t,
     unsigned num_streams)
 {
+    /// S3 config is enabled on the TiFlash compute node, let's read
+    /// data from S3.
+    bool remote_data_read = S3::ClientFactory::instance().isEnabled();
+    if (remote_data_read)
+        return readFromWriteNode(db_context, num_streams);
+
+    /// Fetch all data from write node through MPP exchange sender/receiver
+
     auto remote_table_ranges = buildRemoteTableRanges();
 
     auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
@@ -55,7 +64,10 @@ BlockInputStreams StorageDisaggregated::read(
 
     DAGPipeline pipeline;
     buildReceiverStreams(dispatch_reqs, num_streams, pipeline);
-    filterConditions(pipeline);
+
+    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
+    assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
+    filterConditions(std::move(source_columns), pipeline);
 
     return pipeline.streams;
 }
@@ -99,13 +111,16 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
+    pingcap::kv::LabelFilter label_filter = S3::ClientFactory::instance().isEnabled() ? pingcap::kv::labelFilterOnlyTiFlashWriteNode : pingcap::kv::labelFilterNoTiFlashWriteNode;
     auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(
         bo,
         cluster,
+        /*is_mpp=*/true,
         table_scan.isPartitionTableScan(),
         physical_table_ids,
         ranges_for_each_physical_table,
         store_type,
+        label_filter,
         &Poco::Logger::get("pingcap/coprocessor"));
     LOG_DEBUG(log, "batch cop tasks(nums: {}) build finish for tiflash_storage node", batch_cop_tasks.size());
     return batch_cop_tasks;
@@ -122,6 +137,10 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     dispatch_req_meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
     dispatch_req_meta->set_task_id(sender_target_mpp_task_id.task_id);
     dispatch_req_meta->set_address(batch_cop_task.store_addr);
+
+    // TODO: use different mpp version if necessary
+    // dispatch_req_meta->set_mpp_version(?);
+
     const auto & settings = context.getSettings();
     dispatch_req->set_timeout(60);
     dispatch_req->set_schema_ver(settings.schema_version);
@@ -154,6 +173,10 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
 
     tipb::ExchangeSender * sender = executor->mutable_exchange_sender();
     sender->set_tp(tipb::ExchangeType::PassThrough);
+
+    // TODO: enable data compression if necessary
+    // sender->set_compression(tipb::CompressionMode::FAST);
+
     sender->add_encoded_task_meta(sender_target_task_meta.SerializeAsString());
     auto * child = sender->mutable_child();
     child->CopyFrom(buildTableScanTiPB());
@@ -223,7 +246,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
             context.getTMTContext().getMPPTaskManager(),
             context.getSettingsRef().enable_local_tunnel,
             context.getSettingsRef().enable_async_grpc_client),
-        receiver.encoded_task_meta_size(),
+        /*source_num=*/receiver.encoded_task_meta_size(),
         num_streams,
         log->identifier(),
         executor_id,
@@ -256,13 +279,8 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     });
 }
 
-void StorageDisaggregated::filterConditions(DAGPipeline & pipeline)
+void StorageDisaggregated::filterConditions(NamesAndTypes && source_columns, DAGPipeline & pipeline)
 {
-    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
-    const auto & receiver_dag_schema = exchange_receiver->getOutputSchema();
-    assert(receiver_dag_schema.size() == source_columns.size());
-    UNUSED(receiver_dag_schema);
-
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     if (filter_conditions.hasValue())

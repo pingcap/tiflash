@@ -65,7 +65,7 @@ void TaskThreadPool::loop(size_t thread_no) noexcept
     LOG_INFO(thread_logger, "loop finished");
 }
 
-void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log)
+void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
 {
     assert(task);
     TRACE_MEMORY(task);
@@ -96,12 +96,12 @@ void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log)
     }
 }
 
-void TaskThreadPool::submit(TaskPtr && task)
+void TaskThreadPool::submit(TaskPtr && task) noexcept
 {
     task_queue->submit(std::move(task));
 }
 
-void TaskThreadPool::submit(std::vector<TaskPtr> & tasks)
+void TaskThreadPool::submit(std::vector<TaskPtr> & tasks) noexcept
 {
     task_queue->submit(tasks);
 }

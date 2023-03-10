@@ -17,6 +17,8 @@
 #include <Columns/ColumnsNumber.h>
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
 namespace DB
 {
@@ -25,10 +27,21 @@ namespace DM
 class SkippableBlockInputStream : public IBlockInputStream
 {
 public:
-    virtual ~SkippableBlockInputStream() = default;
+    ~SkippableBlockInputStream() override = default;
 
     /// Return false if it is the end of stream.
     virtual bool getSkippedRows(size_t & skip_rows) = 0;
+
+    /// Skip next block in the stream.
+    /// Return the number of rows of the next block.
+    /// Return 0 if failed to skip or the end of stream.
+    virtual size_t skipNextBlock() = 0;
+
+    /// Read specific rows of next block in the stream according to the filter.
+    /// Return empty block if failed to read or the end of stream.
+    /// Note: filter can not be all false.
+    /// Only used in Late Materialization.
+    virtual Block readWithFilter(const IColumn::Filter & filter) = 0;
 };
 
 using SkippableBlockInputStreamPtr = std::shared_ptr<SkippableBlockInputStream>;
@@ -37,7 +50,7 @@ using SkippableBlockInputStreams = std::vector<SkippableBlockInputStreamPtr>;
 class EmptySkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    EmptySkippableBlockInputStream(const ColumnDefines & read_columns_)
+    explicit EmptySkippableBlockInputStream(const ColumnDefines & read_columns_)
         : read_columns(read_columns_)
     {}
 
@@ -47,10 +60,14 @@ public:
 
     bool getSkippedRows(size_t &) override { return false; }
 
+    size_t skipNextBlock() override { return 0; }
+
+    Block readWithFilter(const IColumn::Filter &) override { return {}; }
+
     Block read() override { return {}; }
 
 private:
-    ColumnDefines read_columns;
+    ColumnDefines read_columns{};
 };
 
 template <bool need_row_id = false>
@@ -82,7 +99,7 @@ public:
         skip_rows = 0;
         while (current_stream != children.end())
         {
-            auto skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+            auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
 
             size_t skip;
             bool has_next_block = skippable_stream->getSkippedRows(skip);
@@ -101,6 +118,52 @@ public:
         }
 
         return false;
+    }
+
+    size_t skipNextBlock() override
+    {
+        while (current_stream != children.end())
+        {
+            auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+
+            size_t skipped_rows = skippable_stream->skipNextBlock();
+
+            if (skipped_rows > 0)
+            {
+                return skipped_rows;
+            }
+            else
+            {
+                (*current_stream)->readSuffix();
+                precede_stream_rows += rows[current_stream - children.begin()];
+                ++current_stream;
+            }
+        }
+        return 0;
+    }
+
+    Block readWithFilter(const IColumn::Filter & filter) override
+    {
+        Block res;
+
+        while (current_stream != children.end())
+        {
+            auto * skippable_stream = dynamic_cast<SkippableBlockInputStream *>((*current_stream).get());
+            res = skippable_stream->readWithFilter(filter);
+
+            if (res)
+            {
+                res.setStartOffset(res.startOffset() + precede_stream_rows);
+                break;
+            }
+            else
+            {
+                (*current_stream)->readSuffix();
+                precede_stream_rows += rows[current_stream - children.begin()];
+                ++current_stream;
+            }
+        }
+        return res;
     }
 
     Block read() override

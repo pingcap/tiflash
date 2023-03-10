@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,11 +21,11 @@
 #include <Common/HashTable/HashMap.h>
 #include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <common/ThreadPool.h>
 
 #include <shared_mutex>
 
@@ -98,9 +98,7 @@ public:
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const String & left_filter_column = "",
          const String & right_filter_column = "",
-         const String & other_filter_column = "",
-         const String & other_eq_filter_from_in_column = "",
-         ExpressionActionsPtr other_condition_ptr = nullptr,
+         const JoinOtherConditions & conditions = {},
          size_t max_block_size = 0,
          const String & match_helper_name = "");
 
@@ -108,8 +106,6 @@ public:
       * You must call this method before subsequent calls to insertFromBlock.
       */
     void init(const Block & sample_block, size_t build_concurrency_ = 1);
-
-    void insertFromBlock(const Block & block);
 
     void insertFromBlock(const Block & block, size_t stream_index);
 
@@ -119,21 +115,6 @@ public:
     Block joinBlock(ProbeProcessInfo & probe_process_info) const;
 
     void checkTypes(const Block & block) const;
-
-    /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
-      */
-    void setTotals(const Block & block)
-    {
-        std::unique_lock lock(rwlock);
-        totals = block;
-    }
-    bool hasTotals() const
-    {
-        std::shared_lock lock(rwlock);
-        return static_cast<bool>(totals);
-    };
-
-    void joinTotals(Block & block) const;
 
     bool needReturnNonJoinedData() const;
 
@@ -157,7 +138,7 @@ public:
     void setInitActiveBuildConcurrency()
     {
         std::unique_lock lock(build_probe_mutex);
-        active_build_concurrency = getBuildConcurrencyInternal();
+        active_build_concurrency = getBuildConcurrency();
     }
     void finishOneBuild();
     void waitUntilAllBuildFinished() const;
@@ -178,8 +159,9 @@ public:
 
     size_t getBuildConcurrency() const
     {
-        std::shared_lock lock(rwlock);
-        return getBuildConcurrencyInternal();
+        if (unlikely(build_concurrency == 0))
+            throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
+        return build_concurrency;
     }
 
     void meetError(const String & error_message);
@@ -222,7 +204,7 @@ public:
         using Base::Base;
         using Base_t = Base;
         void setUsed() const { used.store(true, std::memory_order_relaxed); } /// Could be set simultaneously from different threads.
-        bool getUsed() const { return used; }
+        bool getUsed() const { return used.load(std::memory_order_relaxed); }
     };
 
     template <typename Base>
@@ -289,7 +271,6 @@ public:
     // only use for left semi joins.
     const String match_helper_name;
 
-
 private:
     friend class NonJoinedBlockInputStream;
 
@@ -314,17 +295,22 @@ private:
     bool meet_error = false;
     String error_message;
 
-private:
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
     String left_filter_column;
     String right_filter_column;
-    String other_filter_column;
-    String other_eq_filter_from_in_column;
-    ExpressionActionsPtr other_condition_ptr;
+
+    const JoinOtherConditions other_conditions;
+
+    /// For null-aware semi join with no other condition.
+    /// Indicate if the right table is empty.
+    std::atomic<bool> right_table_is_empty{true};
+    /// Indicate if the right table has a all-key-null row.
+    std::atomic<bool> right_has_all_key_null_row{false};
+
     ASTTableJoin::Strictness original_strictness;
-    size_t max_block_size_for_cross_join;
+    size_t max_block_size;
     /** Blocks of "right" table.
       */
     BlocksList blocks;
@@ -341,7 +327,11 @@ private:
     /// For right/full join, including
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions
+    /// For null-aware semi join family, including rows with NULL join keys.
     std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
+
+    /// The RowRefList in `rows_not_inserted_to_map` that removes the empty RowRefList.
+    PaddedPODArray<RowRefList *> rows_with_null_keys;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arenas pools;
@@ -361,7 +351,6 @@ private:
 
     const LoggerPtr log;
 
-    Block totals;
     std::atomic<size_t> total_input_build_rows{0};
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
       * Note that these methods could be called simultaneously only while use of StorageJoin,
@@ -373,13 +362,6 @@ private:
     bool initialized = false;
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
-
-    size_t getBuildConcurrencyInternal() const
-    {
-        if (unlikely(build_concurrency == 0))
-            throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
-        return build_concurrency;
-    }
 
     /// Initialize map implementations for various join types.
     void initMapImpl(Type type_);
@@ -417,6 +399,11 @@ private:
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
     void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
+
+    void workAfterBuildFinish();
+
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+    void joinBlockImplNullAware(Block & block, const Maps & maps) const;
 };
 
 using JoinPtr = std::shared_ptr<Join>;

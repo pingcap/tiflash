@@ -20,7 +20,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>

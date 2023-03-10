@@ -23,7 +23,6 @@
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
-#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <common/logger_useful.h>
 
@@ -171,7 +170,7 @@ public:
 protected:
     void readSuffixImpl() override
     {
-        LOG_DEBUG(log, "finish read {} rows from remote", total_rows);
+        LOG_INFO(log, "finish read {} rows from remote", total_rows);
     }
 
     void appendInfo(FmtBuffer & buffer) const override

@@ -46,46 +46,46 @@
 	url = https://github.com/jemalloc/jemalloc.git
 [submodule "contrib/mimalloc"]
 	path = contrib/mimalloc
-	url = https://github.com/microsoft/mimalloc
+	url = https://github.com/microsoft/mimalloc.git
 [submodule "contrib/libunwind"]
 	path = contrib/libunwind
-	url = https://github.com/libunwind/libunwind
+	url = https://github.com/libunwind/libunwind.git
 [submodule "contrib/fmtlib"]
 	path = contrib/fmtlib
 	url = https://github.com/fmtlib/fmt.git
 [submodule "contrib/xxHash"]
 	path = contrib/xxHash
-	url = https://github.com/Cyan4973/xxHash
+	url = https://github.com/Cyan4973/xxHash.git
 [submodule "contrib/benchmark"]
 	path = contrib/benchmark
-	url = https://github.com/google/benchmark
+	url = https://github.com/google/benchmark.git
 [submodule "contrib/protobuf"]
 	path = contrib/protobuf
-	url = https://github.com/protocolbuffers/protobuf
+	url = https://github.com/protocolbuffers/protobuf.git
 [submodule "contrib/abseil-cpp"]
 	path = contrib/abseil-cpp
-	url = https://github.com/abseil/abseil-cpp
+	url = https://github.com/abseil/abseil-cpp.git
 [submodule "contrib/grpc"]
 	path = contrib/grpc
-	url = https://github.com/grpc/grpc
+	url = https://github.com/grpc/grpc.git
 	# ignore dirty status since we apply a patch to
 	# suppress a verbose logging
 	ignore = dirty
 [submodule "contrib/boringssl"]
 	path = contrib/boringssl
-	url = https://github.com/google/boringssl
+	url = https://github.com/google/boringssl.git
 [submodule "contrib/curl"]
 	path = contrib/curl
-	url = https://github.com/curl/curl
+	url = https://github.com/curl/curl.git
 [submodule "contrib/zlib-ng"]
 	path = contrib/zlib-ng
-	url = https://github.com/zlib-ng/zlib-ng
+	url = https://github.com/zlib-ng/zlib-ng.git
 [submodule "contrib/cpu_features"]
 	path = contrib/cpu_features
-	url = https://github.com/google/cpu_features
+	url = https://github.com/google/cpu_features.git
 [submodule "contrib/arm-optimized-routines"]
 	path = contrib/arm-optimized-routines
-	url = https://github.com/ARM-software/optimized-routines
+	url = https://github.com/ARM-software/optimized-routines.git
 [submodule "contrib/magic_enum"]
 	path = contrib/magic_enum
 	url = https://github.com/Neargye/magic_enum.git
@@ -94,43 +94,43 @@
 	url = https://github.com/guanzhi/GmSSL.git
 [submodule "contrib/aws"]
 	path = contrib/aws
-	url = git@github.com:aws/aws-sdk-cpp.git
+	url = https://github.com/aws/aws-sdk-cpp.git
 [submodule "contrib/aws-c-auth"]
 	path = contrib/aws-c-auth
-	url = git@github.com:awslabs/aws-c-auth.git
+	url = https://github.com/awslabs/aws-c-auth.git
 [submodule "contrib/aws-c-cal"]
 	path = contrib/aws-c-cal
-	url = git@github.com:ClickHouse/aws-c-cal.git
+	url = https://github.com/ClickHouse/aws-c-cal.git
 [submodule "contrib/aws-c-common"]
 	path = contrib/aws-c-common
-	url = git@github.com:awslabs/aws-c-common.git
+	url = https://github.com/awslabs/aws-c-common.git
 [submodule "contrib/aws-c-compression"]
 	path = contrib/aws-c-compression
-	url = git@github.com:awslabs/aws-c-compression.git
+	url = https://github.com/awslabs/aws-c-compression.git
 [submodule "contrib/aws-c-event-stream"]
 	path = contrib/aws-c-event-stream
-	url = git@github.com:awslabs/aws-c-event-stream.git
+	url = https://github.com/awslabs/aws-c-event-stream.git
 [submodule "contrib/aws-c-http"]
 	path = contrib/aws-c-http
-	url = git@github.com:awslabs/aws-c-http.git
+	url = https://github.com/awslabs/aws-c-http.git
 [submodule "contrib/aws-c-io"]
 	path = contrib/aws-c-io
-	url = git@github.com:awslabs/aws-c-io.git
+	url = https://github.com/awslabs/aws-c-io.git
 [submodule "contrib/aws-c-mqtt"]
 	path = contrib/aws-c-mqtt
-	url = git@github.com:awslabs/aws-c-mqtt.git
+	url = https://github.com/awslabs/aws-c-mqtt.git
 [submodule "contrib/aws-c-s3"]
 	path = contrib/aws-c-s3
-	url = git@github.com:awslabs/aws-c-s3.git
+	url = https://github.com/awslabs/aws-c-s3.git
 [submodule "contrib/aws-c-sdkutils"]
 	path = contrib/aws-c-sdkutils
-	url = git@github.com:awslabs/aws-c-sdkutils.git
+	url = https://github.com/awslabs/aws-c-sdkutils.git
 [submodule "contrib/aws-checksums"]
 	path = contrib/aws-checksums
-	url = git@github.com:awslabs/aws-checksums.git
+	url = https://github.com/awslabs/aws-checksums.git
 [submodule "contrib/aws-crt-cpp"]
 	path = contrib/aws-crt-cpp
-	url = git@github.com:awslabs/aws-crt-cpp.git
+	url = https://github.com/awslabs/aws-crt-cpp.git
 [submodule "contrib/aws-s2n-tls"]
 	path = contrib/aws-s2n-tls
-	url = git@github.com:aws/s2n-tls.git
+	url = https://github.com/aws/s2n-tls.git

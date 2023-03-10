@@ -255,7 +255,7 @@ public:
 
     /** Returns a permutation that sorts elements of this column,
       *  i.e. perm[i]-th element of source column should be i-th element of sorted column.
-      * reverse - reverse ordering (acsending).
+      * reverse - reverse ordering (ascending).
       * limit - if isn't 0, then only first limit elements of the result column could be sorted.
       * nan_direction_hint - see above.
       */
@@ -324,6 +324,9 @@ public:
 
     /// Size of column data in memory (may be approximate) - for profiling. Zero, if could not be determined.
     virtual size_t byteSize() const = 0;
+
+    /// Size of the column if it is spilled, the same as byteSize() except for ColumnAggregateFunction
+    virtual size_t estimateByteSizeForSpill() const { return byteSize(); }
 
     /// Size of column data between [offset, offset+limit) in memory (may be approximate) - for profiling.
     /// This method throws NOT_IMPLEMENTED exception if it is called with unimplemented subclass.

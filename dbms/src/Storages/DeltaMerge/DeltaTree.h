@@ -18,7 +18,6 @@
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/Tuple.h>
-#include <common/logger_useful.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -773,8 +772,6 @@ private:
     Allocator * allocator = nullptr;
     size_t bytes = 0;
 
-    Poco::Logger * log = nullptr;
-
 public:
     // For test cases only.
     ValueSpacePtr insert_value_space;
@@ -888,19 +885,21 @@ private:
     {
         allocator = new Allocator();
 
-        log = &Poco::Logger::get("DeltaTree");
-
         insert_value_space = insert_value_space_;
 
         root = createNode<Leaf>();
         left_leaf = right_leaf = as(Leaf, root);
-
-        LOG_TRACE(log, "create");
     }
 
 public:
-    DeltaTree() { init(std::make_shared<ValueSpace>()); }
-    explicit DeltaTree(const ValueSpacePtr & insert_value_space_) { init(insert_value_space_); }
+    DeltaTree()
+    {
+        init(std::make_shared<ValueSpace>());
+    }
+    explicit DeltaTree(const ValueSpacePtr & insert_value_space_)
+    {
+        init(insert_value_space_);
+    }
     DeltaTree(const Self & o);
 
     DeltaTree & operator=(const Self & o)
@@ -928,8 +927,6 @@ public:
         std::swap(num_deletes, other.num_deletes);
         std::swap(num_entries, other.num_entries);
 
-        std::swap(log, other.log);
-
         std::swap(allocator, allocator);
 
         insert_value_space.swap(other.insert_value_space);
@@ -946,8 +943,6 @@ public:
         }
 
         delete allocator;
-
-        LOG_TRACE(log, "free");
     }
 
     void checkAll() const
@@ -965,10 +960,19 @@ public:
         check(root, true);
     }
 
-    size_t getBytes() { return bytes; }
+    size_t getBytes()
+    {
+        return bytes;
+    }
 
-    size_t getHeight() const { return height; }
-    EntryIterator begin() const { return EntryIterator(left_leaf, 0, 0); }
+    size_t getHeight() const
+    {
+        return height;
+    }
+    EntryIterator begin() const
+    {
+        return EntryIterator(left_leaf, 0, 0);
+    }
     EntryIterator end() const
     {
         Int64 delta = isLeaf(root) ? as(Leaf, root)->getDelta() : as(Intern, root)->getDelta();
@@ -982,11 +986,23 @@ public:
         return std::make_shared<DTEntriesCopy<M, F, S, CopyAllocator>>(left_leaf, num_entries, delta);
     }
 
-    CompactedEntriesPtr getCompactedEntries() { return std::make_shared<CompactedEntries>(begin(), end(), num_entries); }
+    CompactedEntriesPtr getCompactedEntries()
+    {
+        return std::make_shared<CompactedEntries>(begin(), end(), num_entries);
+    }
 
-    size_t numEntries() const { return num_entries; }
-    size_t numInserts() const { return num_inserts; }
-    size_t numDeletes() const { return num_deletes; }
+    size_t numEntries() const
+    {
+        return num_entries;
+    }
+    size_t numInserts() const
+    {
+        return num_inserts;
+    }
+    size_t numDeletes() const
+    {
+        return num_deletes;
+    }
 
     void addDelete(UInt64 rid);
     void addInsert(UInt64 rid, UInt64 tuple_id);
@@ -1004,7 +1020,6 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
     , num_deletes(o.num_deletes)
     , num_entries(o.num_entries)
     , allocator(new Allocator())
-    , log(&Poco::Logger::get("DeltaTree"))
 {
     NodePtr my_root;
     if (isLeaf(o.root))
@@ -1407,14 +1422,18 @@ enum class DeltaTreeVariant
 
 static inline DeltaTreeVariant resolveDeltaTreeVariant()
 {
+#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
     if (DB::TargetSpecific::AVX512Checker::runtimeSupport())
     {
         return DeltaTreeVariant::AVX512;
     }
+#endif
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if (DB::TargetSpecific::AVXChecker::runtimeSupport())
     {
         return DeltaTreeVariant::AVX;
     }
+#endif
     if (DB::TargetSpecific::SSE4Checker::runtimeSupport())
     {
         return DeltaTreeVariant::SSE4;

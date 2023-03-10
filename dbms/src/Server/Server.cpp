@@ -27,6 +27,7 @@
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/UniThreadPool.h>
 #include <Common/assert_cast.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
@@ -46,10 +47,12 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
+#include <IO/IOThreadPool.h>
 #include <IO/ReadHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/loadMetadata.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Net/HTTPServer.h>
@@ -247,6 +250,15 @@ struct TiFlashProxyConfig
     const String engine_store_advertise_address = "advertise-engine-addr";
     const String pd_endpoints = "pd-endpoints";
     const String engine_label = "engine-label";
+
+    void addExtraArgs(const std::string & k, const std::string & v)
+    {
+        std::string key = "--" + k;
+        val_map[key] = v;
+        auto iter = val_map.find(key);
+        args.push_back(iter->first.data());
+        args.push_back(iter->second.data());
+    }
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
@@ -808,6 +820,21 @@ private:
     std::vector<std::unique_ptr<Poco::Net::TCPServer>> servers;
 };
 
+void initThreadPool(const Settings & settings, size_t logical_cores)
+{
+    // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
+    size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
+    // Currently, `GlobalThreadPool` is only used by `IOThreadPool`, so they have the same number of threads.
+    GlobalThreadPool::initialize(
+        /*max_threads*/ max_io_thread_count,
+        /*max_free_threads*/ max_io_thread_count / 2,
+        /*queue_size*/ max_io_thread_count * 2);
+    IOThreadPool::initialize(
+        /*max_threads*/ max_io_thread_count,
+        /*max_free_threads*/ max_io_thread_count / 2,
+        /*queue_size*/ max_io_thread_count * 2);
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
@@ -843,11 +870,38 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
-    TiFlashProxyConfig proxy_conf(config());
+    // Some Storage's config is necessary for Proxy
+    TiFlashStorageConfig storage_config;
+    // Deprecated settings.
+    // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
+    // "0" by default, means no quota, the actual disk capacity is used.
+    size_t global_capacity_quota = 0;
+    std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
+    if (storage_config.format_version)
+    {
+        setStorageFormat(storage_config.format_version);
+        LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
+    }
+    else
+    {
+        LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
+    }
 
+    // Init Proxy's config
+    TiFlashProxyConfig proxy_conf(config());
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
+
+    if (STORAGE_FORMAT_CURRENT.page == PageFormat::V4)
+    {
+        LOG_INFO(log, "Using unips for proxy");
+        proxy_conf.addExtraArgs("unips-enabled", "1");
+    }
+    else
+    {
+        LOG_INFO(log, "unips is not enabled for proxy, page_version={}", STORAGE_FORMAT_CURRENT.page);
+    }
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
 
@@ -910,16 +964,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
       */
-    global_context = std::make_unique<Context>(Context::createGlobal());
-    global_context->setGlobalContext(*global_context);
+    global_context = Context::createGlobal();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
-    global_context->setDisaggregatedMode(getDisaggregatedMode(config()));
-    global_context->setUseAutoScaler(useAutoScaler(config()));
+    global_context->getSharedContextDisagg()->disaggregated_mode = getDisaggregatedMode(config());
+    global_context->getSharedContextDisagg()->use_autoscaler = useAutoScaler(config());
 
     /// Init File Provider
+    bool enable_encryption = false;
     if (proxy_conf.is_proxy_runnable)
     {
-        bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
         if (enable_encryption)
         {
             auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
@@ -940,34 +994,27 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // 2. path pool
     // 3. TMTContext
 
-    // Deprecated settings.
-    // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
-    // "0" by default, means no quota, the actual disk capacity is used.
-    size_t global_capacity_quota = 0;
-    TiFlashStorageConfig storage_config;
-    std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
+    storage_config.remote_cache_config.initCacheDir();
 
     if (storage_config.s3_config.isS3Enabled())
     {
+        if (enable_encryption)
+        {
+            LOG_ERROR(log, "Cannot support S3 when encryption enabled.");
+            throw Exception("Cannot support S3 when encryption enabled.");
+        }
         S3::ClientFactory::instance().init(storage_config.s3_config);
     }
-
-    if (storage_config.format_version)
-    {
-        setStorageFormat(storage_config.format_version);
-        LOG_INFO(log, "Using format_version={} (explicit stable storage format detected).", storage_config.format_version);
-    }
-    else
-    {
-        LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
-    }
+    global_context->getSharedContextDisagg()->initRemoteDataStore(global_context->getFileProvider(), storage_config.s3_config.isS3Enabled());
 
     global_context->initializePathCapacityMetric( //
         global_capacity_quota, //
         storage_config.main_data_paths,
         storage_config.main_capacity_quota, //
         storage_config.latest_data_paths,
-        storage_config.latest_capacity_quota);
+        storage_config.latest_capacity_quota,
+        global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.dir : "",
+        global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() ? storage_config.remote_cache_config.capacity : 0);
     TiFlashRaftConfig raft_config = TiFlashRaftConfig::parseSettings(config(), log);
     global_context->setPathPool( //
         storage_config.main_data_paths, //
@@ -1105,12 +1152,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
+    initThreadPool(settings, server_info.cpu_info.logical_cores);
 
     /// PageStorage run mode has been determined above
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
-    global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
+    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
+        global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
+
+    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+        global_context->getSharedContextDisagg()->initReadNodePageCache(
+            global_context->getPathPool(),
+            storage_config.remote_cache_config.getPageCacheDir(),
+            storage_config.remote_cache_config.getPageCapacity());
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
@@ -1208,16 +1263,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DM::DMFileReaderPool::instance();
-    DM::SegmentReaderPoolManager::instance().init(server_info);
+    DM::SegmentReaderPoolManager::instance().init(server_info.cpu_info.logical_cores, settings.dt_read_thread_count_scale);
     DM::SegmentReadTaskScheduler::instance();
 
-    global_context->initializeSharedBlockSchemas();
+    auto schema_cache_size = config().getInt("schema_cache_size", 10000);
+    global_context->initializeSharedBlockSchemas(schema_cache_size);
 
     // Load remaining databases
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
 
-    if (!global_context->isDisaggregatedComputeMode())
+    if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         /// Then, sync schemas with TiDB, and initialize schema sync service.
         for (int i = 0; i < 60; i++) // retry for 3 mins

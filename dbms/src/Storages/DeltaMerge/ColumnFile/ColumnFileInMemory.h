@@ -16,18 +16,20 @@
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
+#include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 
 namespace DB
 {
 namespace DM
 {
 class ColumnFileInMemory;
-using ColumnInMemoryFilePtr = std::shared_ptr<ColumnFileInMemory>;
+using ColumnFileInMemoryPtr = std::shared_ptr<ColumnFileInMemory>;
 
 /// A column file which is only resides in memory
 class ColumnFileInMemory : public ColumnFile
 {
     friend class ColumnFileInMemoryReader;
+    friend struct Remote::Serializer;
 
 private:
     ColumnFileSchemaPtr schema;
@@ -65,13 +67,15 @@ public:
     /// The schema of this pack.
     ColumnFileSchemaPtr getSchema() const { return schema; }
 
-    ColumnInMemoryFilePtr clone()
+    ColumnFileInMemoryPtr clone()
     {
         return std::make_shared<ColumnFileInMemory>(*this);
     }
 
-    ColumnFileReaderPtr
-    getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const override;
+    ColumnFileReaderPtr getReader(
+        const DMContext & context,
+        const IColumnFileDataProviderPtr & data_provider,
+        const ColumnDefinesPtr & col_defs) const override;
 
     bool isAppendable() const override
     {
@@ -131,6 +135,8 @@ public:
     std::pair<size_t, size_t> readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;
 
     Block readNextBlock() override;
+
+    size_t skipNextBlock() override;
 
     ColumnFileReaderPtr createNewReader(const ColumnDefinesPtr & new_col_defs) override;
 };

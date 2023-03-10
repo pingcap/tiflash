@@ -720,14 +720,14 @@ CATCH
 
 std::pair<String, String> getS3Env()
 {
-    return {Poco::Environment::get("AWS_ACCESS_KEY_ID", /*default*/ ""),
-            Poco::Environment::get("AWS_SECRET_ACCESS_KEY", /*default*/ "")};
+    return {Poco::Environment::get(StorageS3Config::S3_ACCESS_KEY_ID, /*default*/ ""),
+            Poco::Environment::get(StorageS3Config::S3_SECRET_ACCESS_KEY, /*default*/ "")};
 }
 
 void setS3Env(const String & id, const String & key)
 {
-    Poco::Environment::set("AWS_ACCESS_KEY_ID", id);
-    Poco::Environment::set("AWS_SECRET_ACCESS_KEY", key);
+    Poco::Environment::set(StorageS3Config::S3_ACCESS_KEY_ID, id);
+    Poco::Environment::set(StorageS3Config::S3_SECRET_ACCESS_KEY, key);
 }
 
 TEST_F(StorageConfigTest, S3Config)
@@ -739,6 +739,8 @@ try
 [storage.main]
 dir = ["123"]
 [storage.s3]
+access_key_id = "11111111"
+secret_access_key = "22222222"
         )",
         R"(
 [storage]
@@ -747,25 +749,31 @@ dir = ["123"]
 [storage.s3]
 endpoint = "127.0.0.1:8080"
 bucket = "s3_bucket"
+access_key_id = "33333333"
+secret_access_key = "44444444"
         )",
     };
 
+    // Save env variables and restore when exit.
     auto id_key = getS3Env();
     SCOPE_EXIT({
         setS3Env(id_key.first, id_key.second);
     });
+
+
+    const String env_access_key_id{"abcdefgh"};
+    const String env_secret_access_key{"1234567890"};
+    setS3Env(env_access_key_id, env_secret_access_key);
+    // Env variables have been set, we except to use environment variables first.
     for (size_t i = 0; i < tests.size(); ++i)
     {
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
         LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
-        const String test_id{"abcdefgh"};
-        const String test_key{"1234567890"};
-        setS3Env(test_id, test_key);
         auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
         const auto & s3_config = storage.s3_config;
-        ASSERT_EQ(s3_config.access_key_id, test_id);
-        ASSERT_EQ(s3_config.secret_access_key, test_key);
+        ASSERT_EQ(s3_config.access_key_id, env_access_key_id);
+        ASSERT_EQ(s3_config.secret_access_key, env_secret_access_key);
         if (i == 0)
         {
             ASSERT_TRUE(s3_config.endpoint.empty());
@@ -781,6 +789,124 @@ bucket = "s3_bucket"
         else
         {
             throw Exception("Not support");
+        }
+    }
+
+    setS3Env("", "");
+    // Env variables have been cleared, we except to use configuration.
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+        const auto & s3_config = storage.s3_config;
+        if (i == 0)
+        {
+            ASSERT_TRUE(s3_config.endpoint.empty());
+            ASSERT_TRUE(s3_config.bucket.empty());
+            ASSERT_FALSE(s3_config.isS3Enabled());
+            ASSERT_EQ(s3_config.access_key_id, "11111111");
+            ASSERT_EQ(s3_config.secret_access_key, "22222222");
+        }
+        else if (i == 1)
+        {
+            ASSERT_EQ(s3_config.endpoint, "127.0.0.1:8080");
+            ASSERT_EQ(s3_config.bucket, "s3_bucket");
+            ASSERT_TRUE(s3_config.isS3Enabled());
+            ASSERT_EQ(s3_config.access_key_id, "33333333");
+            ASSERT_EQ(s3_config.secret_access_key, "44444444");
+        }
+        else
+        {
+            throw Exception("Not support");
+        }
+    }
+}
+CATCH
+
+TEST_F(StorageConfigTest, RemoteCacheConfig)
+try
+{
+    Strings tests = {
+        R"(
+[storage]
+[storage.main]
+dir = ["123"]
+[storage.remote.cache]
+dir = "/tmp/StorageConfigTest/RemoteCacheConfig/0"
+capacity = 10000000
+dtfile_level = 11
+delta_rate = 0.33
+        )",
+        R"(
+[storage]
+[storage.main]
+dir = ["123"]
+[storage.remote.cache]
+dir = "/tmp/StorageConfigTest/RemoteCacheConfig/0/"
+capacity = 10000000
+dtfile_level = 11
+delta_rate = 0.33
+        )",
+        R"(
+[storage]
+[storage.main]
+dir = ["123"]
+[storage.remote.cache]
+dir = "/tmp/StorageConfigTest/RemoteCacheConfig/1"
+capacity = 10000000
+dtfile_level = 101
+delta_rate = 0.33
+        )",
+        R"(
+[storage]
+[storage.main]
+dir = ["123"]
+[storage.remote.cache]
+dir = "/tmp/StorageConfigTest/RemoteCacheConfig/2"
+capacity = 10000000
+dtfile_level = 11
+delta_rate = 1.1
+        )"};
+
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        size_t global_capacity_quota;
+        TiFlashStorageConfig storage;
+        try
+        {
+            std::tie(global_capacity_quota, storage) = TiFlashStorageConfig::parseSettings(*config, log);
+            if (i == 2 || i == 3)
+            {
+                FAIL() << test_case; // Parse failed, should not come here.
+            }
+        }
+        catch (...)
+        {
+            continue;
+        }
+
+        const auto & remote_cache_config = storage.remote_cache_config;
+        if (i == 0 || i == 1)
+        {
+            auto target_dir = fmt::format("/tmp/StorageConfigTest/RemoteCacheConfig/0{}", i == 0 ? "" : "/");
+            ASSERT_EQ(remote_cache_config.dir, target_dir);
+            ASSERT_EQ(remote_cache_config.capacity, 10000000);
+            ASSERT_EQ(remote_cache_config.dtfile_level, 11);
+            ASSERT_DOUBLE_EQ(remote_cache_config.delta_rate, 0.33);
+            ASSERT_EQ(remote_cache_config.getDTFileCacheDir(), "/tmp/StorageConfigTest/RemoteCacheConfig/0/dtfile");
+            ASSERT_EQ(remote_cache_config.getPageCacheDir(), "/tmp/StorageConfigTest/RemoteCacheConfig/0/page");
+            ASSERT_EQ(remote_cache_config.getDTFileCapacity() + remote_cache_config.getPageCapacity(), remote_cache_config.capacity);
+            ASSERT_DOUBLE_EQ(remote_cache_config.getDTFileCapacity() * 1.0 / remote_cache_config.capacity, 1.0 - remote_cache_config.delta_rate);
+            ASSERT_TRUE(remote_cache_config.isCacheEnabled());
+        }
+        else
+        {
+            FAIL() << i; // Should not come here.
         }
     }
 }

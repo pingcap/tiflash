@@ -12,6 +12,3 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if (ENABLE_TESTS)
-    add_subdirectory (tests EXCLUDE_FROM_ALL)
-endif ()

@@ -27,9 +27,11 @@
 #include <Poco/Logger.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>

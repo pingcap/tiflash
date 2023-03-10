@@ -28,7 +28,6 @@
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefinesBase.h>
-#include <Storages/Page/WriteBatch.h>
 
 namespace DB::DM
 {
@@ -460,6 +459,7 @@ public:
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
     void placeDeltaIndex(DMContext & dm_context);
+    void placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap);
 
     /// Compact the delta layer, merging fragment column files into bigger column files.
     /// It does not merge the delta into stable layer.

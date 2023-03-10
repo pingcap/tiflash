@@ -24,8 +24,10 @@
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
+#include <Storages/PathPool.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -40,6 +42,12 @@
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
+} // namespace ErrorCodes
+
 namespace FailPoints
 {
 extern const char pause_before_dt_background_delta_merge[];
