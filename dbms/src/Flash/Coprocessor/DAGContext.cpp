@@ -15,6 +15,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/traverseExecutors.h>
@@ -80,7 +81,7 @@ DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMet
     , max_recorded_error_count(getMaxErrorCount(*dag_request))
     , warnings(max_recorded_error_count)
     , warning_count(0)
-    , keyspace_id(meta_.keyspace_id())
+    , keyspace_id(RequestUtils::deriveKeyspaceID(meta_))
 {
     RUNTIME_CHECK(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
     root_executor_id = dag_request->root_executor().executor_id();
