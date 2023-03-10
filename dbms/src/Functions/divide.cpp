@@ -62,7 +62,38 @@ struct TiDBDivideFloatingImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
+<<<<<<< HEAD
         return static_cast<Result>(a) / b;
+=======
+        /// ref https://github.com/pingcap/tiflash/issues/6462
+        /// For division of Decimal/Decimal or Int/Decimal or Decimal/Int, we should round the result to make compatible with TiDB.
+        /// basically refer to https://stackoverflow.com/a/71634489
+        if constexpr (std::is_integral_v<Result> || std::is_same_v<Result, Int256> || std::is_same_v<Result, Int512>)
+        {
+            /// 1. do division first, get the quotient and mod, todo:(perf) find a unified `divmod` function to speed up this.
+            Result quotient = x / d;
+            Result mod = x % d;
+            /// 2. get the half of divisor, which is threshold to decide whether to round up or down.
+            /// note: don't directly use bit operation here, it may cause unexpected result.
+            Result half = (d / 2) + (d % 2);
+
+            /// 3. compare the abstract values of mod and half, if mod >= half, then round up.
+            Result abs_m = mod < 0 ? -mod : mod;
+            Result abs_h = half < 0 ? -half : half;
+            if (abs_m >= abs_h)
+            {
+                /// 4. now we need to round up, i.e., add 1 to the quotient's absolute value.
+                ///    if the signs of dividend and divisor are the same, then the quotient should be positive, otherwise negative.
+                if ((x < 0) == (d < 0)) // same_sign, i.e., quotient >= 0
+                    quotient = quotient + 1;
+                else
+                    quotient = quotient - 1;
+            }
+            return quotient;
+        }
+        else
+            return static_cast<Result>(x) / d;
+>>>>>>> c6d55aff39 (fix(expr): round decimal divide result when return type is Int512 (#7035))
     }
     template <typename Result = ResultType>
     static Result apply(A a, B b, UInt8 & res_null)
