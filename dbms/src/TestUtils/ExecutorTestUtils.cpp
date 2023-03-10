@@ -317,9 +317,7 @@ void ExecutorTest::testForExecutionSummary(
     DAGContext dag_context(*request, "test_execution_summary", concurrency);
     executeStreams(&dag_context);
     ASSERT_TRUE(dag_context.collect_execution_summaries);
-    auto collector = std::make_shared<ExecutorStatisticsCollector>();
-    collector->initialize(&dag_context);
-    dag_context.setExecutorStatisticCollector(collector);
+    dag_context.executorStatisticCollector().initialize(&dag_context);
     ExecutionSummaryCollector summary_collector(dag_context, "test_execution_summary", true);
     auto summaries = summary_collector.genExecutionSummaryResponse().execution_summaries();
     ASSERT_EQ(summaries.size(), expect.size()) << "\n"

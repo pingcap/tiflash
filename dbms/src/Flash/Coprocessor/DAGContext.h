@@ -269,7 +269,7 @@ public:
 
     String getRootExecutorId();
 
-    ExecutorStatisticsCollector executorStatisticCollector() const;
+    ExecutorStatisticsCollector & executorStatisticCollector();
 
     const tipb::DAGRequest * dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
