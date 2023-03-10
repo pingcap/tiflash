@@ -96,6 +96,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
 #include <limits>
+#include <magic_enum.hpp>
 #include <memory>
 
 #if Poco_NetSSL_FOUND
@@ -993,6 +994,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // 1. capacity
     // 2. path pool
     // 3. TMTContext
+
+    LOG_INFO(
+        log,
+        "disaggregated_mode={} use_autoscaler={} enable_s3={}",
+        magic_enum::enum_name(global_context->getSharedContextDisagg()->disaggregated_mode),
+        global_context->getSharedContextDisagg()->use_autoscaler,
+        storage_config.s3_config.isS3Enabled());
 
     storage_config.remote_cache_config.initCacheDir();
 
