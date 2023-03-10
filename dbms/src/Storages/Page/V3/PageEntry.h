@@ -40,9 +40,9 @@ public:
 
     /**
      * Whether this page entry's data is stored in a checkpoint and where it is stored.
-     * If this page entry is not stored in a checkpoint file, this field is nullopt.
+     * If this page entry is not stored in a checkpoint file, this field.is_valid == false.
      */
-    std::optional<CheckpointInfo> checkpoint_info = std::nullopt;
+    OptionalCheckpointInfo checkpoint_info;
 
     // The offset to the beginning of specify field.
     PageFieldOffsetChecksums field_offsets{};
@@ -68,10 +68,10 @@ public:
                             ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
         {
-            if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+            if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
             {
                 // entry.size is not reliable under this case, use the size_in_file in checkpoint_info instead
-                return checkpoint_info->data_location.size_in_file - field_offsets.back().first;
+                return checkpoint_info.data_location.size_in_file - field_offsets.back().first;
             }
             else
             {
@@ -91,10 +91,10 @@ public:
                 ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
         {
-            if (checkpoint_info.has_value() && checkpoint_info->is_local_data_reclaimed)
+            if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
             {
                 // entry.size is not reliable under this case, use the size_in_file in checkpoint_info instead
-                return {field_offsets.back().first, checkpoint_info->data_location.size_in_file};
+                return {field_offsets.back().first, checkpoint_info.data_location.size_in_file};
             }
             else
             {
