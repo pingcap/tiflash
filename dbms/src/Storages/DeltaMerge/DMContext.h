@@ -89,7 +89,7 @@ struct DMContext : private boost::noncopyable
 
     String tracing_id;
 
-    ScanContextPtr scan_context;
+    const ScanContextPtr scan_context;
 
 public:
     DMContext(const Context & db_context_,

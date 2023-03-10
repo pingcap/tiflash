@@ -14,9 +14,12 @@
 
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
@@ -26,6 +29,14 @@
 #include <Storages/Page/PageDefinesBase.h>
 
 #include <magic_enum.hpp>
+
+using google::protobuf::RepeatedPtrField;
+
+namespace CurrentMetrics
+{
+extern const Metric DT_SnapshotOfDisaggReadNodeRead;
+}
+
 
 namespace DB::DM::Remote
 {
@@ -90,24 +101,67 @@ Serializer::serializeTo(
 }
 
 SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
-    const Context & db_context,
-    UInt64 write_node_id,
+    const DMContext & dm_context,
+    UInt64 remote_store_id,
     Int64 table_id,
     const RemotePb::RemoteSegment & proto)
 {
-    UNUSED(db_context, write_node_id, table_id, proto);
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "");
+    RowKeyRange segment_range;
+    {
+        ReadBufferFromString rb(proto.key_range());
+        segment_range = RowKeyRange::deserialize(rb);
+    }
+
+    auto data_store = dm_context.db_context.getSharedContextDisagg()->remote_data_store;
+
+    auto delta_snap = std::make_shared<DeltaValueSnapshot>(CurrentMetrics::DT_SnapshotOfDisaggReadNodeRead);
+    delta_snap->is_update = false;
+    delta_snap->mem_table_snap = deserializeColumnFileSet(
+        proto.column_files_memtable(),
+        data_store,
+        remote_store_id,
+        table_id,
+        segment_range);
+    delta_snap->persisted_files_snap = deserializeColumnFileSet(
+        proto.column_files_persisted(),
+        data_store,
+        remote_store_id,
+        table_id,
+        segment_range);
+
+    // TODO: Change to use the DeltaIndex cache.
+    delta_snap->shared_delta_index = std::make_shared<DeltaIndex>();
+    delta_snap->delta_index_epoch = proto.delta_index_epoch();
+
+    auto new_stable = std::make_shared<StableValueSpace>(/* id */ 0);
+    DMFiles dmfiles;
+    dmfiles.reserve(proto.stable_pages().size());
+    for (const auto & stable_file : proto.stable_pages())
+    {
+        auto oid = Remote::DMFileOID{
+            .store_id = remote_store_id,
+            .table_id = table_id,
+            .file_id = stable_file.file_id(),
+        };
+        auto prepared = data_store->prepareDMFile(oid);
+        auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+        dmfiles.emplace_back(std::move(dmfile));
+    }
+    new_stable->setFiles(dmfiles, segment_range, &dm_context);
+    auto stable_snap = new_stable->createSnapshot();
+
+    return std::make_shared<SegmentSnapshot>(
+        std::move(delta_snap),
+        std::move(stable_snap));
 }
 
-google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote>
+RepeatedPtrField<RemotePb::ColumnFileRemote>
 Serializer::serializeTo(const ColumnFileSetSnapshotPtr & snap)
 {
-    google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote> ret;
+    RepeatedPtrField<RemotePb::ColumnFileRemote> ret;
     ret.Reserve(snap->column_files.size());
     for (const auto & file : snap->column_files)
     {
-        // TODO: In order to make build snapshot return more quickly, we can return
-        //       the mem-table in another RPC call.
         if (auto * cf_in_mem = file->tryToInMemoryFile(); cf_in_mem)
         {
             ret.Add(serializeTo(*cf_in_mem));
@@ -132,15 +186,58 @@ Serializer::serializeTo(const ColumnFileSetSnapshotPtr & snap)
     return ret;
 }
 
-ColumnFileSetSnapshotPtr
-Serializer::deserializeColumnFileSet(
-    const google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote> & proto,
+ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
+    const RepeatedPtrField<RemotePb::ColumnFileRemote> & proto,
+    const Remote::IDataStorePtr & data_store,
     StoreID remote_store_id,
     TableID table_id,
     const RowKeyRange & segment_range)
 {
-    UNUSED(proto, remote_store_id, table_id, segment_range);
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "");
+    auto empty_data_provider = std::make_shared<ColumnFileDataProviderNop>();
+    auto ret = std::make_shared<ColumnFileSetSnapshot>(empty_data_provider);
+    ret->is_common_handle = segment_range.is_common_handle;
+    ret->rowkey_column_size = segment_range.rowkey_column_size;
+    ret->column_files.reserve(proto.size());
+    for (const auto & remote_column_file : proto)
+    {
+        if (remote_column_file.has_tiny())
+        {
+            ret->column_files.push_back(deserializeCFTiny(remote_column_file.tiny()));
+        }
+        else if (remote_column_file.has_delete_range())
+        {
+            ret->column_files.push_back(deserializeCFDeleteRange(remote_column_file.delete_range()));
+        }
+        else if (remote_column_file.has_big())
+        {
+            const auto & big_file = remote_column_file.big();
+            auto file_oid = Remote::DMFileOID{
+                .store_id = remote_store_id,
+                .table_id = table_id,
+                .file_id = big_file.file_id(),
+            };
+            ret->column_files.push_back(deserializeCFBig(
+                big_file,
+                file_oid,
+                data_store,
+                segment_range));
+        }
+        else if (remote_column_file.has_in_memory())
+        {
+            ret->column_files.push_back(deserializeCFInMemory(remote_column_file.in_memory()));
+        }
+        else
+        {
+            RUNTIME_CHECK_MSG(false, "Unexpected proto ColumnFile");
+        }
+    }
+    for (const auto & column_file : ret->column_files)
+    {
+        ret->rows += column_file->getRows();
+        ret->bytes += column_file->getBytes();
+        ret->deletes += column_file->getDeletes();
+    }
+    return ret;
 }
 
 RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileInMemory & cf_in_mem)

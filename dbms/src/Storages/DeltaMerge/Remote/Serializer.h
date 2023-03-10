@@ -15,7 +15,6 @@
 #include <IO/CompressedStream.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
-#include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
@@ -32,6 +31,7 @@ using DataTypePtr = std::shared_ptr<const IDataType>;
 } // namespace DB
 namespace DB::DM
 {
+struct DMContext;
 struct RowKeyRange;
 using RowKeyRanges = std::vector<RowKeyRange>;
 struct SegmentSnapshot;
@@ -54,34 +54,35 @@ namespace DB::DM::Remote
 {
 struct Serializer
 {
-    static RemotePb::RemotePhysicalTable
-    serializeTo(const DisaggPhysicalTableReadSnapshotPtr & snap, const DisaggTaskId & task_id);
+    static RemotePb::RemotePhysicalTable serializeTo(
+        const DisaggPhysicalTableReadSnapshotPtr & snap,
+        const DisaggTaskId & task_id);
 
     /// segment snapshot ///
 
-    static RemotePb::RemoteSegment
-    serializeTo(
+    static RemotePb::RemoteSegment serializeTo(
         const SegmentSnapshotPtr & snap,
         PageIdU64 segment_id,
         UInt64 segment_epoch,
         const RowKeyRange & segment_range,
         const RowKeyRanges & read_ranges);
 
-    static SegmentSnapshotPtr
-    deserializeSegmentSnapshotFrom(
-        const Context & db_context,
+    static SegmentSnapshotPtr deserializeSegmentSnapshotFrom(
+        const DMContext & dm_context,
         UInt64 write_node_id,
         Int64 table_id,
         const RemotePb::RemoteSegment & proto);
 
     /// column file set ///
 
-    static google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote>
-    serializeTo(const ColumnFileSetSnapshotPtr & snap);
+    static google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote> serializeTo(
+        const ColumnFileSetSnapshotPtr & snap);
 
-    static ColumnFileSetSnapshotPtr
-    deserializeColumnFileSet(
+    /// Note: This function always build a snapshot over nop data provider. In order to read from this snapshot,
+    /// you must explicitly assign a proper data provider.
+    static ColumnFileSetSnapshotPtr deserializeColumnFileSet(
         const google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote> & proto,
+        const Remote::IDataStorePtr & data_store,
         StoreID remote_store_id,
         TableID table_id,
         const RowKeyRange & segment_range);

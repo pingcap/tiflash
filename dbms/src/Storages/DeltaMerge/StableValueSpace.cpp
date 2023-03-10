@@ -33,7 +33,7 @@ extern const int LOGICAL_ERROR;
 
 namespace DM
 {
-void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context)
+void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, const DMContext * dm_context)
 {
     UInt64 rows = 0;
     UInt64 bytes = 0;
@@ -46,7 +46,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
             bytes += file->getBytes();
         }
     }
-    else
+    else if (dm_context != nullptr)
     {
         auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache();
         for (const auto & file : files_)
