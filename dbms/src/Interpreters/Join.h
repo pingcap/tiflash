@@ -212,8 +212,9 @@ public:
 
     size_t getBuildConcurrency() const
     {
-        std::shared_lock lock(rwlock);
-        return getBuildConcurrencyInternal();
+        if (unlikely(build_concurrency == 0))
+            throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
+        return build_concurrency;
     }
 
     void meetError(const String & error_message);
@@ -370,6 +371,7 @@ public:
             probe_partition.rows += rows;
             probe_partition.bytes += bytes;
             probe_partition.blocks.push_back(std::move(block));
+            memory_usage += bytes;
         }
     };
     using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
@@ -395,7 +397,6 @@ private:
     size_t build_concurrency;
     size_t active_build_concurrency;
 
-    mutable std::mutex probe_mutex;
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
     size_t active_probe_concurrency;
@@ -493,13 +494,6 @@ private:
     bool enable_fine_grained_shuffle = false;
     size_t fine_grained_shuffle_count = 0;
 
-    size_t getBuildConcurrencyInternal() const
-    {
-        if (unlikely(build_concurrency == 0))
-            throw Exception("Logical error: `setBuildConcurrencyAndInitJoinPartition` has not been called", ErrorCodes::LOGICAL_ERROR);
-        return build_concurrency;
-    }
-
     /// Initialize map implementations for various join types.
     void initMapImpl(Type type_);
 
@@ -555,6 +549,7 @@ private:
     std::shared_ptr<Join> createRestoreJoin(size_t max_bytes_before_external_join_);
 
     void workAfterBuildFinish();
+    void workAfterProbeFinish();
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void joinBlockImplNullAware(Block & block, const Maps & maps) const;
@@ -568,8 +563,8 @@ struct RestoreInfo
     BlockInputStreamPtr probe_stream;
 
     RestoreInfo() = default;
-    RestoreInfo(JoinPtr join_, BlockInputStreamPtr non_joined_data_stream_, BlockInputStreamPtr build_stream_, BlockInputStreamPtr probe_stream_)
-        : join(std::move(join_))
+    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr non_joined_data_stream_, BlockInputStreamPtr build_stream_, BlockInputStreamPtr probe_stream_)
+        : join(join_)
         , non_joined_stream(non_joined_data_stream_)
         , build_stream(build_stream_)
         , probe_stream(probe_stream_){};
