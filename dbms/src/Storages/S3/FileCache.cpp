@@ -295,9 +295,9 @@ void FileCache::releaseSpace(UInt64 size)
 
 bool FileCache::canCache(FileType file_type) const
 {
-    return file_type != FileType::Unknow &&
-        static_cast<UInt64>(file_type) <= cache_level &&
-        bg_downloading_count.load(std::memory_order_relaxed) < IOThreadPool::get().getMaxThreads();
+    return file_type != FileType::Unknow
+        && static_cast<UInt64>(file_type) <= cache_level
+        && bg_downloading_count.load(std::memory_order_relaxed) < IOThreadPool::get().getMaxThreads();
 }
 
 FileType FileCache::getFileTypeOfColData(const std::filesystem::path & p)

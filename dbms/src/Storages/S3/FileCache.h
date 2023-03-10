@@ -249,7 +249,7 @@ public:
     // TODO: The size of most objects, such as size and data type, can be parsed from the metadata file of DMFile.
     // We can try to pass this information, although it may be troublesome.
     static constexpr UInt64 estimated_size_of_file_type[] = {
-        0,        // Unknow type, currently never cache it.
+        0, // Unknow type, currently never cache it.
         8 * 1024, // Estimated size of meta.
         8 * 1024, // Estimated size of index.
         8 * 1024, // Estimated size of mark.
