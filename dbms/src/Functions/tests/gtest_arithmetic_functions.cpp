@@ -153,6 +153,7 @@ try
     doTiDBDivideDecimalRoundInternalTest<Int64>();
     doTiDBDivideDecimalRoundInternalTest<Int128>();
     doTiDBDivideDecimalRoundInternalTest<Int256>();
+    doTiDBDivideDecimalRoundInternalTest<Int512>();
 }
 CATCH
 
