@@ -745,6 +745,7 @@ try
     size_t common_rows = 20480;
     UInt64 max_block_size = 800;
     size_t original_max_streams = 20;
+    size_t original_max_streams_small = 4;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(left_column_infos))
     {
         ColumnGeneratorOpts opts{common_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
@@ -829,8 +830,8 @@ try
                           .scan("outer_join_test", left_table_name)
                           .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {}, {}, {}, exchange_concurrency)
                           .build(context);
-            auto result_columns = executeStreams(request, original_max_streams);
-            ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small));
         }
     }
     /// case 2, right join with right condition
@@ -865,8 +866,8 @@ try
                           .scan("outer_join_test", left_table_name)
                           .join(context.receive(fmt::format("right_exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency), tipb::JoinType::TypeRightOuterJoin, {col("a")}, {}, {gt(col(exchange_name + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, exchange_concurrency)
                           .build(context);
-            auto result_columns = executeStreams(request, original_max_streams);
-            ASSERT_COLUMNS_EQ_UR(ref_columns, result_columns);
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+            ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small));
         }
     }
 }

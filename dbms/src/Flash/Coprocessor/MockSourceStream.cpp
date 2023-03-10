@@ -48,7 +48,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreamsForExchangeRecei
         /// build with empty blocks.
         size_t stream_count = max_streams;
         if (fine_grained_stream_count > 0)
-            stream_count = fine_grained_stream_count;
+            stream_count = std::min(fine_grained_stream_count, max_streams);
         for (size_t i = 0; i < stream_count; ++i)
             mock_streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(exchange_receiver, context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
         for (const auto & col : mock_streams.back()->getHeader())
@@ -59,17 +59,23 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreamsForExchangeRecei
         /// build from user input blocks.
         if (fine_grained_stream_count > 0)
         {
+            size_t output_stream_count = std::min(fine_grained_stream_count, max_streams);
             std::vector<ColumnsWithTypeAndName> columns_with_type_and_name_vector;
             columns_with_type_and_name_vector = context.mockStorage()->getFineGrainedExchangeColumnsVector(executor_id, fine_grained_stream_count);
             if (columns_with_type_and_name_vector.empty())
             {
-                for (size_t i = 0; i < fine_grained_stream_count; ++i)
+                for (size_t i = 0; i < output_stream_count; ++i)
                     mock_streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(exchange_receiver, context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
             }
             else
             {
-                for (const auto & columns : columns_with_type_and_name_vector)
-                    mock_streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(columns, context.getSettingsRef().max_block_size));
+                std::vector<std::vector<ColumnsWithTypeAndName>> columns_for_mock_exchange_receiver(output_stream_count);
+                for (size_t i = 0; i < columns_with_type_and_name_vector.size(); ++i)
+                {
+                    columns_for_mock_exchange_receiver[i % output_stream_count].push_back(columns_with_type_and_name_vector[i]);
+                }
+                for (size_t i = 0; i < output_stream_count; ++i)
+                    mock_streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(columns_for_mock_exchange_receiver[i], context.getSettingsRef().max_block_size));
             }
             for (const auto & col : mock_streams.back()->getHeader())
                 schema.emplace_back(col.name, col.type);
