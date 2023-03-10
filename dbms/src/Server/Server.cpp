@@ -1162,14 +1162,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
-    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
+    if (
+        global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
+        || global_context->getSharedContextDisagg()->notDisaggregatedMode())
+    {
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
+    }
+
+    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        global_context->getSharedContextDisagg()->initWriteNodeSnapManager();
+    }
 
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    {
         global_context->getSharedContextDisagg()->initReadNodePageCache(
             global_context->getPathPool(),
             storage_config.remote_cache_config.getPageCacheDir(),
             storage_config.remote_cache_config.getPageCapacity());
+    }
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);

@@ -33,10 +33,11 @@
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
-#include <Storages/DeltaMerge/Remote/DisaggSnapshotManager.h>
+#include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
@@ -47,12 +48,8 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <common/logger_useful.h>
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
-#pragma GCC diagnostic pop
 
 
 namespace DB
@@ -819,12 +816,11 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     if (dag_context.is_disaggregated_task)
     {
         // register the snapshot to manager
-        auto & tmt = context.getTMTContext();
-        auto * snap_manager = tmt.getDisaggSnapshotManager();
+        auto snaps = context.getSharedContextDisagg()->wn_snapshot_manager;
         const auto & snap_id = *dag_context.getDisaggTaskId();
         auto timeout_s = context.getSettingsRef().disagg_task_snapshot_timeout;
         auto expired_at = Clock::now() + std::chrono::seconds(timeout_s);
-        bool register_snapshot_ok = snap_manager->registerSnapshot(snap_id, std::move(disaggregated_snap), expired_at);
+        bool register_snapshot_ok = snaps->registerSnapshot(snap_id, std::move(disaggregated_snap), expired_at);
         RUNTIME_CHECK_MSG(register_snapshot_ok, "disaggregated task has been registered {}", snap_id);
         LOG_INFO(log, "task snapshot registered, snapshot_id={}", snap_id);
     }

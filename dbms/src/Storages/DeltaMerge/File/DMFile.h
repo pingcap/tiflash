@@ -364,7 +364,7 @@ public:
     size_t colIndexSizeByName(const FileNameBase & file_name_base) { return Poco::File(colIndexPath(file_name_base)).getSize(); }
     size_t colDataSizeByName(const FileNameBase & file_name_base) { return Poco::File(colDataPath(file_name_base)).getSize(); }
     size_t colIndexSize(ColId id);
-    size_t colDataSize(ColId id);
+    size_t colDataSize(ColId id, bool is_null_map);
 
     String colDataPath(const FileNameBase & file_name_base) const { return subFilePath(colDataFileName(file_name_base)); }
     String colIndexPath(const FileNameBase & file_name_base) const { return subFilePath(colIndexFileName(file_name_base)); }

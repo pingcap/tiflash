@@ -154,7 +154,7 @@ public:
         return "<unknown>";
     }
 
-    static ColumnDefinesPtr getDefaultColumns(PkType pk_type = PkType::HiddenTiDBRowID)
+    static ColumnDefinesPtr getDefaultColumns(PkType pk_type = PkType::HiddenTiDBRowID, bool add_nullable = false)
     {
         // Return [handle, ver, del] column defines
         ColumnDefinesPtr columns = std::make_shared<ColumnDefines>();
@@ -177,6 +177,10 @@ public:
         }
         columns->emplace_back(getVersionColumnDefine());
         columns->emplace_back(getTagColumnDefine());
+        if (add_nullable)
+        {
+            columns->emplace_back(ColumnDefine{1, "Nullable(UInt64)", DataTypeFactory::instance().get("Nullable(UInt64)")});
+        }
         return columns;
     }
 
@@ -288,7 +292,8 @@ public:
                                          bool is_common_handle = false,
                                          size_t rowkey_column_size = 1,
                                          bool with_internal_columns = true,
-                                         bool is_deleted = false)
+                                         bool is_deleted = false,
+                                         bool with_nullable_uint64 = false)
     {
         Block block;
         const size_t num_rows = (end - beg);
@@ -337,9 +342,35 @@ public:
                 TAG_COLUMN_NAME,
                 TAG_COLUMN_ID));
         }
+        if (with_nullable_uint64)
+        {
+            std::vector<UInt64> data(num_rows);
+            std::iota(data.begin(), data.end(), beg);
+            std::vector<Int32> null_map(num_rows, 0);
+            block.insert(DB::tests::createNullableColumn<UInt64>(
+                data,
+                null_map,
+                "Nullable(UInt64)",
+                1));
+        }
         return block;
     }
 
+    static Block prepareSimpleWriteBlockWithNullable(size_t beg, size_t end)
+    {
+        return prepareSimpleWriteBlock(beg,
+                                       end,
+                                       /*reversed*/ false,
+                                       /*tso*/ 2,
+                                       pk_name,
+                                       EXTRA_HANDLE_COLUMN_ID,
+                                       EXTRA_HANDLE_COLUMN_INT_TYPE,
+                                       /* is_common_handle */ false,
+                                       /* rowkey_column_size */ 1,
+                                       /*with_internal_columns*/ true,
+                                       /*is_deleted*/ false,
+                                       /*with_nullable_uint64*/ true);
+    }
     /**
      * Create a simple block with 3 columns:
      *   * `pk` - Int64 / `version` / `tag`
