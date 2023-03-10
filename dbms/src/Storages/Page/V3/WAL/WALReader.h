@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/nocopyable.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -25,9 +26,6 @@ namespace ErrorCodes
 {
 extern const int CORRUPTED_DATA;
 }
-
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 
 namespace PS::V3
 {

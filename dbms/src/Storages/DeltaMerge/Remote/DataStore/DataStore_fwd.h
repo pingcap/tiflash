@@ -14,32 +14,15 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Core/Types.h>
-
 #include <memory>
 
-namespace Poco
+namespace DB::DM::Remote
 {
-class Logger;
-namespace Util
-{
-class LayeredConfiguration;
-}
-} // namespace Poco
 
-namespace DB
-{
-class Context;
-class ConfigReloader;
-using ConfigReloaderPtr = std::unique_ptr<ConfigReloader>;
-namespace UserConfig
-{
-ConfigReloaderPtr parseSettings(
-    Poco::Util::LayeredConfiguration & config,
-    const std::string & config_path,
-    const std::unique_ptr<Context> & global_context,
-    const LoggerPtr & log);
+class IDataStore;
+using IDataStorePtr = std::shared_ptr<IDataStore>;
 
-}
-} // namespace DB
+class IPreparedDMFileToken;
+using IPreparedDMFileTokenPtr = std::shared_ptr<IPreparedDMFileToken>;
+
+} // namespace DB::DM::Remote

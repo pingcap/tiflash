@@ -259,8 +259,18 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
             break;
         }
         case WriteBatchWriteType::PUT_EXTERNAL:
-            edit.putExternal(wb.getFullPageId(write.page_id));
+        {
+            PageEntryV3 entry;
+            if (write.data_location.has_value())
+            {
+                entry.checkpoint_info = CheckpointInfo{
+                    .data_location = *write.data_location,
+                    .is_local_data_reclaimed = true,
+                };
+            }
+            edit.putExternal(wb.getFullPageId(write.page_id), entry);
             break;
+        }
         case WriteBatchWriteType::UPSERT:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown write type: {}", magic_enum::enum_name(write.type));
             break;
@@ -315,8 +325,15 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
             }
             case WriteBatchWriteType::PUT_EXTERNAL:
             {
-                // putExternal won't have data.
-                edit.putExternal(wb.getFullPageId(write.page_id));
+                PageEntryV3 entry;
+                if (write.data_location.has_value())
+                {
+                    entry.checkpoint_info = CheckpointInfo{
+                        .data_location = *write.data_location,
+                        .is_local_data_reclaimed = true,
+                    };
+                }
+                edit.putExternal(wb.getFullPageId(write.page_id), entry);
                 break;
             }
             case WriteBatchWriteType::PUT:
@@ -440,8 +457,18 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
             break;
         }
         case WriteBatchWriteType::PUT_EXTERNAL:
-            edit.putExternal(wb.getFullPageId(write.page_id));
+        {
+            PageEntryV3 entry;
+            if (write.data_location.has_value())
+            {
+                entry.checkpoint_info = CheckpointInfo{
+                    .data_location = *write.data_location,
+                    .is_local_data_reclaimed = true,
+                };
+            }
+            edit.putExternal(wb.getFullPageId(write.page_id), entry);
             break;
+        }
         case WriteBatchWriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }

@@ -33,7 +33,7 @@
 
 namespace DB::tests
 {
-std::vector<std::shared_ptr<Context>> TiFlashTestEnv::global_contexts = {};
+std::vector<ContextPtr> TiFlashTestEnv::global_contexts = {};
 
 String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool get_abs)
 {
@@ -97,9 +97,8 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageR
 void TiFlashTestEnv::addGlobalContext(const DB::Settings & settings_, Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
 {
     // set itself as global context
-    auto global_context = std::make_shared<DB::Context>(DB::Context::createGlobal());
+    auto global_context = std::shared_ptr<Context>(DB::Context::createGlobal());
     global_contexts.push_back(global_context);
-    global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
     global_context->setTemporaryPath(getTemporaryPath());
 
