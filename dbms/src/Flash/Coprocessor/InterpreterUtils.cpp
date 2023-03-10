@@ -24,7 +24,8 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
-
+#include <Operators/ExpressionTransformOp.h>
+#include <Operators/FilterTransformOp.h>
 
 namespace DB
 {
@@ -219,6 +220,28 @@ void executePushedDownFilter(
         // after filter, do project action to keep the schema of local streams and remote streams the same.
         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
         stream->setExtraInfo("projection after push down filter");
+    }
+}
+
+void executePushedDownFilter(
+    size_t remote_read_sources_start_index,
+    const FilterConditions & filter_conditions,
+    DAGExpressionAnalyzer & analyzer,
+    LoggerPtr log,
+    PipelineExecGroupBuilder & group_builder)
+{
+    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions, analyzer);
+
+    assert(remote_read_sources_start_index <= group_builder.group.size());
+    auto input_header = group_builder.getCurrentHeader();
+
+    // for remote read, filter had been pushed down, don't need to execute again.
+    for (size_t i = 0; i < remote_read_sources_start_index; ++i)
+    {
+        auto & group = group_builder.group[i];
+        group.appendTransformOp(std::make_unique<FilterTransformOp>(group_builder.exec_status, log->identifier(), input_header, before_where, filter_column_name));
+        // after filter, do project action to keep the schema of local transforms and remote transforms the same.
+        group.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), project_after_where));
     }
 }
 

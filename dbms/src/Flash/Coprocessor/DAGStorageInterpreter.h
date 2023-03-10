@@ -74,7 +74,7 @@ private:
         const SelectQueryInfo & query_info,
         const RegionException & e,
         int num_allow_retry);
-    
+
     DM::Remote::DisaggPhysicalTableReadSnapshotPtr
     buildLocalStreamsForPhysicalTable(
         const TableID & table_id,
@@ -82,8 +82,8 @@ private:
         DAGPipeline & pipeline,
         size_t max_block_size);
 
-    void buildLocalOperatorsForPhysicalTable(
-         const TableID & table_id,
+    SourceOps buildLocalSourceOpsForPhysicalTable(
+        const TableID & table_id,
         const SelectQueryInfo & query_info,
         PipelineExecGroupBuilder & group_builder,
         size_t max_block_size);
@@ -91,8 +91,7 @@ private:
 
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
 
-    void buildLocalOperators(PipelineExecGroupBuilder & group_builder, size_t max_block_size);
-
+    SourceOps buildLocalSourceOps(PipelineExecGroupBuilder & group_builder, size_t max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
@@ -114,6 +113,10 @@ private:
     void executeCastAfterTableScan(
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);
+
+    void executeCastAfterTableScan(
+        size_t remote_read_sources_start_index,
+        PipelineExecGroupBuilder & group_builder);
 
     void prepare();
 

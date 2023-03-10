@@ -301,7 +301,7 @@ struct Settings
     M(SettingUInt64, max_spilled_bytes_per_file, 0, "Max spilled data bytes per spill file, 1GB as the default value, 0 means no limit.")                                                                                               \
                                                                                                                                                                                                                                         \
     M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
-    M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
+    M(SettingBool, enable_pipeline, true, "Enable pipeline model")                                                                                                                                                                     \
     M(SettingUInt64, pipeline_task_thread_pool_size, 0, "The size of task thread pool. 0 means using number_of_logical_cpu_cores.") \
     M(SettingUInt64, local_tunnel_version, 1, "1: not refined, 2: refined")
 // clang-format on

@@ -44,9 +44,13 @@ public:
 
     const String & getFilterConditionsId() const;
 
+    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
+
+
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
     void buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema);
+    void buildProjection(PipelineExecGroupBuilder & group_builder,const NamesAndTypes & storage_schema, Context & context);
 
 private:
     FilterConditions filter_conditions;

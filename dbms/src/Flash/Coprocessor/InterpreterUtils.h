@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 
 namespace DB
 {
@@ -78,6 +79,13 @@ void executePushedDownFilter(
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log,
     DAGPipeline & pipeline);
+
+void executePushedDownFilter(
+    size_t remote_read_sources_start_index,
+    const FilterConditions & filter_conditions,
+    DAGExpressionAnalyzer & analyzer,
+    LoggerPtr log,
+    PipelineExecGroupBuilder & group_builder);
 
 void executeGeneratedColumnPlaceholder(
     size_t remote_read_streams_start_index,
