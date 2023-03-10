@@ -22,6 +22,8 @@
 #include <Interpreters/Context_fwd.h>
 #include <Storages/IStorage.h>
 
+#include "pingcap/kv/RegionCache.h"
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/mpp.pb.h>
@@ -103,7 +105,9 @@ private:
 private:
     using RemoteTableRange = std::pair<Int64, pingcap::coprocessor::KeyRanges>;
     std::vector<RemoteTableRange> buildRemoteTableRanges();
-    std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(const std::vector<RemoteTableRange> & remote_table_ranges);
+    std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks(
+        const std::vector<RemoteTableRange> & remote_table_ranges,
+        const pingcap::kv::LabelFilter & label_filter);
     void buildReceiverStreams(const std::vector<RequestAndRegionIDs> & dispatch_reqs, unsigned num_streams, DAGPipeline & pipeline);
     void filterConditions(NamesAndTypes && source_columns, DAGPipeline & pipeline);
     tipb::Executor buildTableScanTiPB();
