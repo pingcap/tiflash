@@ -7,6 +7,7 @@
 set(SRC_DIR "${TiFlash_SOURCE_DIR}/contrib/re2")
 
 set(RE2_SOURCES
+    ${SRC_DIR}/re2/bitmap256.cc
     ${SRC_DIR}/re2/bitstate.cc
     ${SRC_DIR}/re2/compile.cc
     ${SRC_DIR}/re2/dfa.cc
