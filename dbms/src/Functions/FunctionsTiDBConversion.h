@@ -944,7 +944,7 @@ struct TiDBConvertToDecimal
         const Context & context)
     {
         using UType = typename U::NativeType;
-        CastInternalType value = static_cast<CastInternalType>(v.value);
+        auto value = static_cast<CastInternalType>(v.value);
 
         if (v_scale < scale)
         {
@@ -953,8 +953,8 @@ struct TiDBConvertToDecimal
         else if (v_scale > scale)
         {
             context.getDAGContext()->handleTruncateError("cast decimal as decimal");
-            value /= scale_mul;
             const bool need_to_round = ((value < 0 ? -value : value) % scale_mul) >= (scale_mul / 2);
+            value /= scale_mul;
             if (need_to_round)
             {
                 if (value < 0)
