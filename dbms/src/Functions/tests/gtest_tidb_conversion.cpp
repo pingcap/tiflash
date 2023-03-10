@@ -1317,44 +1317,44 @@ try
     dag_context->clearWarnings();
 
     /// decimal32 to decimal32/64/128/256
-    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
-    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(15, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(15,2)")}));
-    ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(25, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(25,2)")}));
-    ASSERT_COLUMN_EQ(createColumn<Decimal256>(std::make_tuple(45, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(45,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(15, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(15,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(25, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(25,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal256>(std::make_tuple(45, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal32>(std::make_tuple(5, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(45,2)")}));
 
     /// decimal64 to decimal32/64/128/256
-    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal64>(std::make_tuple(15, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
-    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(15, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal64>(std::make_tuple(15, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(15,2)")}));
-    ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(25, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal64>(std::make_tuple(15, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(25,2)")}));
-    ASSERT_COLUMN_EQ(createColumn<Decimal256>(std::make_tuple(45, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal64>(std::make_tuple(15, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(45,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal64>(std::make_tuple(15, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(15, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal64>(std::make_tuple(15, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(15,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(25, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal64>(std::make_tuple(15, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(25,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal256>(std::make_tuple(45, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal64>(std::make_tuple(15, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(45,2)")}));
 
     /// decimal128 to decimal32/64/128/256
-    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal128>(std::make_tuple(25, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
-    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(15, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal128>(std::make_tuple(25, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(15,2)")}));
-    ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(25, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal128>(std::make_tuple(25, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(25,2)")}));
-    ASSERT_COLUMN_EQ(createColumn<Decimal256>(std::make_tuple(45, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal128>(std::make_tuple(25, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(45,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal128>(std::make_tuple(25, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(15, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal128>(std::make_tuple(25, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(15,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(25, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal128>(std::make_tuple(25, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(25,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal256>(std::make_tuple(45, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal128>(std::make_tuple(25, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(45,2)")}));
 
     /// decimal256 to decimal32/64/128/256
-    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal256>(std::make_tuple(45, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
-    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(15, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal256>(std::make_tuple(45, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(15,2)")}));
-    ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(25, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal256>(std::make_tuple(45, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(25,2)")}));
-    ASSERT_COLUMN_EQ(createColumn<Decimal256>(std::make_tuple(45, 2), {"1.23", "1.56", "1.01", "1.00"}),
-                     executeFunction(func_name, {createColumn<Decimal256>(std::make_tuple(45, 4), {"1.2300", "1.5600", "1.0056", "1.0023"}), createCastTypeConstColumn("Decimal(45,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal32>(std::make_tuple(5, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal256>(std::make_tuple(45, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(5,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(15, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal256>(std::make_tuple(45, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(15,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal128>(std::make_tuple(25, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal256>(std::make_tuple(45, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(25,2)")}));
+    ASSERT_COLUMN_EQ(createColumn<Decimal256>(std::make_tuple(45, 2), {"1.23", "1.56", "1.01", "1.00", "-1.23", "-1.56", "-1.01", "-1.00"}),
+                     executeFunction(func_name, {createColumn<Decimal256>(std::make_tuple(45, 4), {"1.2300", "1.5600", "1.0056", "1.0023", "-1.2300", "-1.5600", "-1.0056", "-1.0023"}), createCastTypeConstColumn("Decimal(45,2)")}));
 
     dag_context->setFlags(ori_flags);
     dag_context->clearWarnings();
