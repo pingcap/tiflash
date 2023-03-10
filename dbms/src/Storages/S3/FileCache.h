@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <Encryption/RandomAccessFile.h>
+#include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/S3/S3Filename.h>
 #include <common/types.h>
 
@@ -186,9 +187,9 @@ private:
 class FileCache
 {
 public:
-    static void initialize(const String & cache_dir_, UInt64 cache_capacity_, UInt64 cache_level_)
+    static void initialize(const String & cache_dir_, UInt64 cache_capacity_, UInt64 cache_level_, UInt64 cache_min_age_seconds_)
     {
-        global_file_cache_instance = std::make_unique<FileCache>(cache_dir_, cache_capacity_, cache_level_);
+        global_file_cache_instance = std::make_unique<FileCache>(cache_dir_, cache_capacity_, cache_level_, cache_min_age_seconds_);
     }
 
     static FileCache * instance()
@@ -201,9 +202,11 @@ public:
         global_file_cache_instance = nullptr;
     }
 
-    FileCache(const String & cache_dir_, UInt64 cache_capacity_, UInt64 cache_level_);
+    FileCache(const String & cache_dir_, UInt64 cache_capacity_, UInt64 cache_level_, UInt64 cache_min_age_seconds_);
 
     RandomAccessFilePtr getRandomAccessFile(const S3::S3FilenameView & s3_fname);
+
+    void updateConfig(Poco::Util::AbstractConfiguration & config_);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -277,6 +280,7 @@ public:
     UInt64 cache_capacity;
     UInt64 cache_level;
     UInt64 cache_used;
+    std::atomic<UInt64> cache_min_age_seconds;
     std::array<LRUFileTable, magic_enum::enum_count<FileSegment::FileType>() + 1> tables; // `FileType` start from 1.
 
     // Currently, these variables are just use for testing.

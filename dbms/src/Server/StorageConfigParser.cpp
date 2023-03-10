@@ -588,9 +588,10 @@ void StorageRemoteCacheConfig::parse(const String & content, const LoggerPtr & l
     readConfig(table, "capacity", capacity);
     readConfig(table, "dtfile_level", dtfile_level);
     RUNTIME_CHECK(dtfile_level <= 100);
+    readConfig(table, "dtfile_cache_min_age_seconds", dtfile_cache_min_age_seconds);
     readConfig(table, "delta_rate", delta_rate);
     RUNTIME_CHECK(std::isgreaterequal(delta_rate, 0.1) && std::islessequal(delta_rate, 1.0), delta_rate);
-    LOG_INFO(log, "StorageRemoteCacheConfig: dir={}, capacity={}, dtfile_level={}, delta_rate={}", dir, capacity, dtfile_level, delta_rate);
+    LOG_INFO(log, "StorageRemoteCacheConfig: dir={}, capacity={}, dtfile_level={}, dtfile_cache_min_age_seconds={}, delta_rate={}", dir, capacity, dtfile_level, dtfile_cache_min_age_seconds, delta_rate);
 }
 
 bool StorageRemoteCacheConfig::isCacheEnabled() const

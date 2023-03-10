@@ -205,6 +205,7 @@ protected:
     String tmp_dir;
     UInt64 cache_capacity = 100 * 1024 * 1024;
     UInt64 cache_level = 5;
+    UInt64 cache_min_age_seconds = 30 * 60;
     LoggerPtr log;
 };
 
@@ -220,7 +221,7 @@ try
 
     {
         LOG_DEBUG(log, "Cache all data");
-        FileCache file_cache(cache_dir, /*cache_capacity*/ total_size, /*cache_level*/ 100);
+        FileCache file_cache(cache_dir, /*cache_capacity*/ total_size, /*cache_level*/ 100, cache_min_age_seconds);
         for (const auto & obj : objects)
         {
             auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
@@ -244,7 +245,7 @@ try
 
     {
         LOG_DEBUG(log, "Cache restore");
-        FileCache file_cache(cache_dir, /*cache_capacity*/ total_size, /*cache_level*/ 100);
+        FileCache file_cache(cache_dir, /*cache_capacity*/ total_size, /*cache_level*/ 100, cache_min_age_seconds);
         ASSERT_EQ(file_cache.cache_used, file_cache.cache_capacity);
         for (const auto & obj : objects)
         {
@@ -261,7 +262,7 @@ try
     ASSERT_EQ(meta_objects.size(), 2 * 2 * 2);
     {
         LOG_DEBUG(log, "Evict success");
-        FileCache file_cache(cache_dir, /*cache_capacity*/ total_size, /*cache_level*/ 100);
+        FileCache file_cache(cache_dir, /*cache_capacity*/ total_size, /*cache_level*/ 100, cache_min_age_seconds);
         ASSERT_LE(file_cache.cache_used, file_cache.cache_capacity);
         for (const auto & obj : meta_objects)
         {
@@ -283,7 +284,7 @@ try
     ASSERT_EQ(meta_objects2.size(), 2 * 2 * 2);
     {
         LOG_DEBUG(log, "Evict failed");
-        FileCache file_cache(cache_dir, /*cache_capacity*/ total_size, /*cache_level*/ 100);
+        FileCache file_cache(cache_dir, /*cache_capacity*/ total_size, /*cache_level*/ 100, cache_min_age_seconds);
         ASSERT_LE(file_cache.cache_used, file_cache.cache_capacity);
         UInt64 free_size = file_cache.cache_capacity - file_cache.cache_used;
         auto file_seg = file_cache.getAll(); // Prevent file_segment from evicted.
@@ -318,7 +319,7 @@ CATCH
 TEST_F(FileCacheTest, FileSystem)
 {
     auto cache_dir = fmt::format("{}/filesystem", tmp_dir);
-    FileCache file_cache(cache_dir, cache_capacity, cache_level);
+    FileCache file_cache(cache_dir, cache_capacity, cache_level, cache_min_age_seconds);
     DMFileOID dmfile_oid = {.store_id = 1, .table_id = 2, .file_id = 3};
 
     // s1/data/t_2/dmf_3
@@ -407,7 +408,7 @@ try
     {
         UInt64 cache_level_ = 0;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
-        FileCache file_cache(cache_dir, cache_capacity, cache_level_);
+        FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
         ASSERT_FALSE(file_cache.canCache(FileType::Meta));
         ASSERT_FALSE(file_cache.canCache(FileType::Index));
         ASSERT_FALSE(file_cache.canCache(FileType::Mark));
@@ -420,7 +421,7 @@ try
     {
         UInt64 cache_level_ = 1;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
-        FileCache file_cache(cache_dir, cache_capacity, cache_level_);
+        FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_FALSE(file_cache.canCache(FileType::Index));
         ASSERT_FALSE(file_cache.canCache(FileType::Mark));
@@ -433,7 +434,7 @@ try
     {
         UInt64 cache_level_ = 2;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
-        FileCache file_cache(cache_dir, cache_capacity, cache_level_);
+        FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_FALSE(file_cache.canCache(FileType::Mark));
@@ -446,7 +447,7 @@ try
     {
         UInt64 cache_level_ = 3;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
-        FileCache file_cache(cache_dir, cache_capacity, cache_level_);
+        FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
@@ -459,7 +460,7 @@ try
     {
         UInt64 cache_level_ = 4;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
-        FileCache file_cache(cache_dir, cache_capacity, cache_level_);
+        FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
@@ -472,7 +473,7 @@ try
     {
         UInt64 cache_level_ = 5;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
-        FileCache file_cache(cache_dir, cache_capacity, cache_level_);
+        FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
@@ -485,7 +486,7 @@ try
     {
         UInt64 cache_level_ = 6;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
-        FileCache file_cache(cache_dir, cache_capacity, cache_level_);
+        FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
@@ -498,7 +499,7 @@ try
     {
         UInt64 cache_level_ = 7;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
-        FileCache file_cache(cache_dir, cache_capacity, cache_level_);
+        FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
@@ -511,7 +512,7 @@ try
     {
         UInt64 cache_level_ = 8;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
-        FileCache file_cache(cache_dir, cache_capacity, cache_level_);
+        FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
@@ -527,7 +528,7 @@ CATCH
 TEST_F(FileCacheTest, Space)
 {
     auto cache_dir = fmt::format("{}/space", tmp_dir);
-    FileCache file_cache(cache_dir, cache_capacity, cache_level);
+    FileCache file_cache(cache_dir, cache_capacity, cache_level, cache_min_age_seconds);
     ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, cache_capacity - 1024, /*try_evict*/ false));
     ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 512, /*try_evict*/ false));
     ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 256, /*try_evict*/ false));

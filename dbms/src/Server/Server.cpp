@@ -1007,7 +1007,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled())
     {
         config.initCacheDir();
-        FileCache::initialize(config.getDTFileCacheDir(), config.getDTFileCapacity(), config.dtfile_level);
+        FileCache::initialize(config.getDTFileCacheDir(), config.getDTFileCapacity(), config.dtfile_level, config.dtfile_cache_min_age_seconds);
     }
     global_context->getSharedContextDisagg()->initRemoteDataStore(global_context->getFileProvider(), storage_config.s3_config.isS3Enabled());
 
@@ -1194,6 +1194,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
+            if (FileCache::instance() != nullptr)
+            {
+                FileCache::instance()->updateConfig(*config);
+            }
 
             {
                 // update TiFlashSecurity and related config in client for ssl certificate reload.
@@ -1321,6 +1325,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // `Context::shutdown()` will destroy `DeltaIndexManager`.
         // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
         DB::DM::SegmentReaderPoolManager::instance().stop();
+        FileCache::shutdown();
         if (storage_config.s3_config.isS3Enabled())
         {
             S3::ClientFactory::instance().shutdown();

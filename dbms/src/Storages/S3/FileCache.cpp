@@ -19,6 +19,7 @@
 #include <Common/escapeForFileName.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <IO/IOThreadPool.h>
+#include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/S3/FileCache.h>
@@ -49,11 +50,12 @@ namespace DB
 
 using FileType = FileSegment::FileType;
 
-FileCache::FileCache(const String & cache_dir_, UInt64 cache_capacity_, UInt64 cache_level_)
+FileCache::FileCache(const String & cache_dir_, UInt64 cache_capacity_, UInt64 cache_level_, UInt64 cache_min_age_seconds_)
     : cache_dir(cache_dir_)
     , cache_capacity(cache_capacity_)
     , cache_level(cache_level_)
     , cache_used(0)
+    , cache_min_age_seconds(cache_min_age_seconds_)
     , log(Logger::get("FileCache"))
 {
     prepareDir(cache_dir);
@@ -248,7 +250,7 @@ UInt64 FileCache::tryEvictFrom(FileType evict_for, UInt64 size, FileType evict_f
     {
         auto s3_key = *itr;
         auto f = table.get(s3_key);
-        if (!check_last_access_time || !f->isRecentlyAccess(std::chrono::seconds(60 * 30)))
+        if (!check_last_access_time || !f->isRecentlyAccess(std::chrono::seconds(cache_min_age_seconds.load(std::memory_order_relaxed))))
         {
             auto [released_size, next_itr] = removeImpl(table, s3_key, f);
             LOG_DEBUG(log, "tryRemoveFile {} size={}", s3_key, released_size);
@@ -561,6 +563,27 @@ std::vector<FileSegmentPtr> FileCache::getAll()
         file_segs.insert(file_segs.end(), values.begin(), values.end());
     }
     return file_segs;
+}
+
+void FileCache::updateConfig(Poco::Util::AbstractConfiguration & config_)
+{
+    if (!config_.has("storage.remote.cache"))
+    {
+        return;
+    }
+    try
+    {
+        StorageRemoteCacheConfig cache_config;
+        cache_config.parse(config_.getString("storage.remote.cache"), log);
+        if (cache_config.dtfile_cache_min_age_seconds != cache_min_age_seconds.load(std::memory_order_relaxed))
+        {
+            cache_min_age_seconds.store(cache_config.dtfile_cache_min_age_seconds, std::memory_order_relaxed);
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, "FileCache::updateConfig");
+    }
 }
 
 } // namespace DB
