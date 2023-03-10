@@ -460,10 +460,12 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     }
 
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
-    if (cmd_type == raft_cmdpb::AdminCmdType::PrepareFlashback || cmd_type == raft_cmdpb::AdminCmdType::FinishFlashback)
+    if (cmd_type == raft_cmdpb::AdminCmdType::PrepareFlashback
+        || cmd_type == raft_cmdpb::AdminCmdType::FinishFlashback
+        || cmd_type == raft_cmdpb::AdminCmdType::BatchSwitchWitness)
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
-        persistRegion(curr_region, region_task_lock, "admin cmd flashback");
+        persistRegion(curr_region, region_task_lock, fmt::format("admin cmd useless {}", cmd_type).c_str());
         return EngineStoreApplyRes::Persist;
     }
     return EngineStoreApplyRes::None;
@@ -489,6 +491,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
     case raft_cmdpb::AdminCmdType::ComputeHash:
     case raft_cmdpb::AdminCmdType::PrepareFlashback:
     case raft_cmdpb::AdminCmdType::FinishFlashback:
+    case raft_cmdpb::AdminCmdType::BatchSwitchWitness:
         return handleUselessAdminRaftCmd(type, curr_region_id, index, term, tmt);
     default:
         break;
