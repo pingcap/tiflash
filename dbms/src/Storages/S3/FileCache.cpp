@@ -333,8 +333,7 @@ FileType FileCache::getFileType(const String & fname)
     auto ext = p.extension();
     if (ext.empty())
     {
-        RUNTIME_CHECK(p.stem() == DM::DMFile::metav2FileName(), fname);
-        return FileType::Meta;
+        return p.stem() == DM::DMFile::metav2FileName() ? FileType::Meta : FileType::Unknow;
     }
     else if (ext == ".idx")
     {

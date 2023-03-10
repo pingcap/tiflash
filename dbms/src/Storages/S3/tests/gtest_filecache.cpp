@@ -404,11 +404,16 @@ try
     ASSERT_EQ(FileCache::getFileType(version_fname), FileType::VersionColData);
     auto delmark_fname = fmt::format("{}/{}.dat", s3_fname, IDataType::getFileNameForStream(std::to_string(TAG_COLUMN_ID), {}));
     ASSERT_EQ(FileCache::getFileType(delmark_fname), FileType::DeleteMarkColData);
+    auto unknow_fname0 = fmt::format("{}/123456", s3_fname);
+    ASSERT_EQ(FileCache::getFileType(unknow_fname0), FileType::Unknow);
+    auto unknow_fname1 = fmt::format("{}/123456.lock", s3_fname);
+    ASSERT_EQ(FileCache::getFileType(unknow_fname1), FileType::Unknow);
 
     {
         UInt64 cache_level_ = 0;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
         FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
+        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_FALSE(file_cache.canCache(FileType::Meta));
         ASSERT_FALSE(file_cache.canCache(FileType::Index));
         ASSERT_FALSE(file_cache.canCache(FileType::Mark));
@@ -422,6 +427,7 @@ try
         UInt64 cache_level_ = 1;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
         FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
+        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_FALSE(file_cache.canCache(FileType::Index));
         ASSERT_FALSE(file_cache.canCache(FileType::Mark));
@@ -435,6 +441,7 @@ try
         UInt64 cache_level_ = 2;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
         FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
+        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_FALSE(file_cache.canCache(FileType::Mark));
@@ -448,6 +455,7 @@ try
         UInt64 cache_level_ = 3;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
         FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
+        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
@@ -461,6 +469,7 @@ try
         UInt64 cache_level_ = 4;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
         FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
+        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
@@ -474,6 +483,7 @@ try
         UInt64 cache_level_ = 5;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
         FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
+        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
@@ -487,6 +497,7 @@ try
         UInt64 cache_level_ = 6;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
         FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
+        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
@@ -500,6 +511,7 @@ try
         UInt64 cache_level_ = 7;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
         FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
+        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
@@ -513,6 +525,7 @@ try
         UInt64 cache_level_ = 8;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
         FileCache file_cache(cache_dir, cache_capacity, cache_level_, cache_min_age_seconds);
+        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
