@@ -19,10 +19,11 @@
 #include <Flash/Executor/QueryExecutorHolder.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
-#include <Storages/DeltaMerge/Remote/DisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
+#include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
@@ -92,11 +93,10 @@ void DisaggregatedTask::execute(disaggregated::EstablishDisaggTaskResponse * res
         response->set_store_id(kvstore->getStoreID());
     }
 
-    auto * manager = tmt.getDisaggSnapshotManager();
+    auto snapshots = context->getSharedContextDisagg()->wn_snapshot_manager;
     const auto & task_id = *dag_context->getDisaggTaskId();
-    auto snap = manager->getSnapshot(task_id);
-    if (!snap)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Snapshot was missing, task_id={}", task_id);
+    auto snap = snapshots->getSnapshot(task_id);
+    RUNTIME_CHECK_MSG(snap, "Snapshot was missing, task_id={}", task_id);
 
     {
         auto snapshot_id = task_id.toMeta();

@@ -275,8 +275,8 @@ ColumnFileBigPtr Serializer::deserializeCFBig(
 
     auto prepared = data_store->prepareDMFile(oid);
     auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
-    auto cf_big = new ColumnFileBig(dmfile, proto.valid_rows(), proto.valid_bytes(), segment_range); // This constructor is private, so we cannot use make_shared.
-    return std::shared_ptr<ColumnFileBig>(cf_big);
+    auto * cf_big = new ColumnFileBig(dmfile, proto.valid_rows(), proto.valid_bytes(), segment_range);
+    return std::shared_ptr<ColumnFileBig>(cf_big); // The constructor is private, so we cannot use make_shared.
 }
 
 } // namespace DB::DM::Remote
