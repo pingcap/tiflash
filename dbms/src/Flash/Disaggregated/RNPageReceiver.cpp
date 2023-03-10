@@ -296,7 +296,7 @@ std::tuple<bool, String> RNPageReceiverBase<RPCContext>::taskReadLoop(const Requ
     LoggerPtr log = exc_log->getChild(req_info);
     for (int i = 0; i < max_retry_times; ++i)
     {
-        auto reader = rpc_context->makeReader(req);
+        auto resp_reader = rpc_context->doRequest(req);
         bool has_data = false;
         // Keep reading packets and push the packet
         // into msg_channels
@@ -304,7 +304,7 @@ std::tuple<bool, String> RNPageReceiverBase<RPCContext>::taskReadLoop(const Requ
         {
             LOG_TRACE(log, "begin next ");
             TrackedPageDataPacketPtr packet = std::make_shared<PageDataPacket>();
-            if (bool success = reader->read(packet); !success)
+            if (bool success = resp_reader->read(packet); !success)
                 break;
             has_data = true;
             if (packet->has_error())
@@ -334,10 +334,10 @@ std::tuple<bool, String> RNPageReceiverBase<RPCContext>::taskReadLoop(const Requ
         // if meet error, such as decode packet fails, it will not retry.
         if (meet_error)
         {
-            reader->cancel(local_err_msg);
+            resp_reader->cancel(local_err_msg);
             break;
         }
-        status = reader->finish();
+        status = resp_reader->finish();
         if (status.ok())
         {
             // LOG_DEBUG(log, "finish read: {}", req.debugString());
