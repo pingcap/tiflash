@@ -19,12 +19,7 @@
 namespace DB::DM::Remote
 {
 
-class DisaggReadSnapshot;
-using DisaggReadSnapshotPtr = std::shared_ptr<DisaggReadSnapshot>;
-
-class DisaggPhysicalTableReadSnapshot;
-using DisaggPhysicalTableReadSnapshotPtr = std::unique_ptr<DisaggPhysicalTableReadSnapshot>;
-
-struct SegmentPagesFetchTask;
+class WNDisaggSnapshotManager;
+using WNDisaggSnapshotManagerPtr = std::shared_ptr<WNDisaggSnapshotManager>;
 
 } // namespace DB::DM::Remote

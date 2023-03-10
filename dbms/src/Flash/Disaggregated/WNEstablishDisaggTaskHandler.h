@@ -16,6 +16,7 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/QueryExecutorHolder.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <kvproto/disaggregated.pb.h>
 #include <tipb/select.pb.h>
@@ -24,29 +25,28 @@
 
 namespace DB
 {
-class Context;
-using ContextPtr = std::shared_ptr<Context>;
-class DisaggregatedTask;
-using DisaggregatedTaskPtr = std::shared_ptr<DisaggregatedTask>;
+class WNEstablishDisaggTaskHandler;
+
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 
-class DisaggregatedTask
+/**
+ * Handling with the `EstablishDisaggTask` request on write node.
+ */
+class WNEstablishDisaggTaskHandler
 {
 public:
     void prepare(const disaggregated::EstablishDisaggTaskRequest * request);
 
     void execute(disaggregated::EstablishDisaggTaskResponse * response);
 
-    DisaggregatedTask(ContextPtr context_, const DM::DisaggTaskId & task_id);
+    WNEstablishDisaggTaskHandler(ContextPtr context_, const DM::DisaggTaskId & task_id);
 
 private:
     ContextPtr context;
     tipb::DAGRequest dag_req;
     std::unique_ptr<DAGContext> dag_context;
     QueryExecutorHolder query_executor_holder;
-
-public:
     const LoggerPtr log;
 };
 } // namespace DB
