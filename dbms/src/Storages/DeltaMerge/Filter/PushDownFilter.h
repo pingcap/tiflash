@@ -15,8 +15,7 @@
 #pragma once
 
 #include <Interpreters/ExpressionActions.h>
-
-#include "RSOperator.h"
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 
 namespace DB::DM
 {

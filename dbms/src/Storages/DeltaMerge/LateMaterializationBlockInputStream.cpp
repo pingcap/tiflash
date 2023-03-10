@@ -104,7 +104,6 @@ Block LateMaterializationBlockInputStream::readImpl()
                 // if the number of rows left after filtering out is small, we can't skip any packs of the next block
                 // so we call read() to get the next block, and then filter it.
                 rest_column_block = rest_column_stream->read();
-                RUNTIME_CHECK(rest_column_block.rows() == filter->size());
                 for (auto & col : rest_column_block)
                 {
                     col.column = col.column->filter(*filter, passed_count);
