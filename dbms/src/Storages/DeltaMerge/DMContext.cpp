@@ -12,23 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DMContext.h>
 
-#include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <AggregateFunctions/IAggregateFunction.h>
-#include <AggregateFunctions/registerAggregateFunctions.h>
-#include <TestUtils/TiFlashTestEnv.h>
-#include <gtest/gtest.h>
-
-namespace DB::tests
+namespace DB::DM
 {
 
-class AggregationTest : public ::testing::Test
+WriteLimiterPtr DMContext::getWriteLimiter() const
 {
-public:
-    ::testing::AssertionResult checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type);
+    return db_context.getWriteLimiter();
+}
+ReadLimiterPtr DMContext::getReadLimiter() const
+{
+    return db_context.getReadLimiter();
+}
 
-    static void SetUpTestCase();
-};
-
-} // namespace DB::tests
+} // namespace DB::DM

@@ -17,6 +17,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Databases/IDatabase.h>
 #include <Debug/MockTiDB.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/IAST.h>
@@ -168,7 +169,7 @@ public:
 private:
     static void recreateMetadataPath()
     {
-        String path = TiFlashTestEnv::getContext().getPath();
+        String path = TiFlashTestEnv::getContext()->getPath();
         auto p = path + "/metadata/";
         TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
         p = path + "/data/";

@@ -14,8 +14,8 @@
 
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 
 namespace DB::DM::Remote::tests
 {
@@ -29,7 +29,7 @@ public:
         auto path = getTemporaryPath();
         dropDataOnDisk(path);
         createIfNotExist(path);
-        auto file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
+        auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         page_storage = UniversalPageStorage::create("cache_store", delegator, {}, file_provider);
         page_storage->restore();

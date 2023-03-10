@@ -15,7 +15,6 @@
 #include <Columns/ColumnString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsString.h>
-#include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -39,7 +38,7 @@ class StringTrim : public DB::tests::FunctionTest
 
 TEST_F(StringTrim, stringTrimStringUnitTest)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -62,7 +61,7 @@ TEST_F(StringTrim, stringTrimStringUnitTest)
     ColumnNumbers cns{0};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("tidbTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -81,7 +80,7 @@ TEST_F(StringTrim, stringTrimStringUnitTest)
     }
 
     // test ltrim
-    bp = factory.tryGet("tidbLTrim", context);
+    bp = factory.tryGet("tidbLTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -98,7 +97,7 @@ TEST_F(StringTrim, stringTrimStringUnitTest)
     }
 
     // test rtrim
-    bp = factory.tryGet("tidbRTrim", context);
+    bp = factory.tryGet("tidbRTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -118,7 +117,7 @@ TEST_F(StringTrim, stringTrimStringUnitTest)
 
 TEST_F(StringTrim, stringTrimConstUnitTest)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
     auto & factory = FunctionFactory::instance();
     MutableColumnPtr cp = ColumnString::create();
     cp->insert(Field("  hello   ", 10));
@@ -138,7 +137,7 @@ TEST_F(StringTrim, stringTrimConstUnitTest)
     ColumnNumbers cns{0};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("tidbTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -159,7 +158,7 @@ TEST_F(StringTrim, stringTrimConstUnitTest)
     }
 
     // test ltrim
-    bp = factory.tryGet("tidbLTrim", context);
+    bp = factory.tryGet("tidbLTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -176,7 +175,7 @@ TEST_F(StringTrim, stringTrimConstUnitTest)
     }
 
     // test rtrim
-    bp = factory.tryGet("tidbRTrim", context);
+    bp = factory.tryGet("tidbRTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -201,7 +200,7 @@ TEST_F(StringTrim, stringTrimConstUnitTest)
 
 TEST_F(StringTrim, stringTrimwsConstUnitTest)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
     auto & factory = FunctionFactory::instance();
     MutableColumnPtr cp = ColumnString::create();
     cp->insert(Field("  hello   ", 10));
@@ -225,7 +224,7 @@ TEST_F(StringTrim, stringTrimwsConstUnitTest)
     ColumnNumbers cns{0, 1};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("tidbTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -246,7 +245,7 @@ TEST_F(StringTrim, stringTrimwsConstUnitTest)
     }
 
     // test ltrim
-    bp = factory.tryGet("tidbLTrim", context);
+    bp = factory.tryGet("tidbLTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -263,7 +262,7 @@ TEST_F(StringTrim, stringTrimwsConstUnitTest)
     }
 
     // test rtrim
-    bp = factory.tryGet("tidbRTrim", context);
+    bp = factory.tryGet("tidbRTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -288,7 +287,7 @@ TEST_F(StringTrim, stringTrimwsConstUnitTest)
 
 TEST_F(StringTrim, stringTrimwsUtf8UnitTest)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -315,7 +314,7 @@ TEST_F(StringTrim, stringTrimwsUtf8UnitTest)
     ColumnNumbers cns{0, 1};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("tidbTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -333,7 +332,7 @@ TEST_F(StringTrim, stringTrimwsUtf8UnitTest)
     }
 
     // test ltrim
-    bp = factory.tryGet("tidbLTrim", context);
+    bp = factory.tryGet("tidbLTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -350,7 +349,7 @@ TEST_F(StringTrim, stringTrimwsUtf8UnitTest)
     }
 
     // test rtrim
-    bp = factory.tryGet("tidbRTrim", context);
+    bp = factory.tryGet("tidbRTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -369,7 +368,7 @@ TEST_F(StringTrim, stringTrimwsUtf8UnitTest)
 
 TEST_F(StringTrim, stringTrimwsConstUtf8UnitTest)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -394,7 +393,7 @@ TEST_F(StringTrim, stringTrimwsConstUtf8UnitTest)
     ColumnNumbers cns{0, 1};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("tidbTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -412,7 +411,7 @@ TEST_F(StringTrim, stringTrimwsConstUtf8UnitTest)
     }
 
     // test ltrim
-    bp = factory.tryGet("tidbLTrim", context);
+    bp = factory.tryGet("tidbLTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -429,7 +428,7 @@ TEST_F(StringTrim, stringTrimwsConstUtf8UnitTest)
     }
 
     // test rtrim
-    bp = factory.tryGet("tidbRTrim", context);
+    bp = factory.tryGet("tidbRTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -448,7 +447,7 @@ TEST_F(StringTrim, stringTrimwsConstUtf8UnitTest)
 
 TEST_F(StringTrim, stringTrimUtf8UnitTest)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -469,7 +468,7 @@ TEST_F(StringTrim, stringTrimUtf8UnitTest)
     ColumnNumbers cns{0};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("tidbTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -487,7 +486,7 @@ TEST_F(StringTrim, stringTrimUtf8UnitTest)
     }
 
     // test ltrim
-    bp = factory.tryGet("tidbLTrim", context);
+    bp = factory.tryGet("tidbLTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -504,7 +503,7 @@ TEST_F(StringTrim, stringTrimUtf8UnitTest)
     }
 
     // test rtrim
-    bp = factory.tryGet("tidbRTrim", context);
+    bp = factory.tryGet("tidbRTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -523,7 +522,7 @@ TEST_F(StringTrim, stringTrimUtf8UnitTest)
 
 TEST_F(StringTrim, stringTrimConstUtf8UnitTest)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -543,7 +542,7 @@ TEST_F(StringTrim, stringTrimConstUtf8UnitTest)
     ColumnNumbers cns{0};
 
     // test trim
-    auto bp = factory.tryGet("tidbTrim", context);
+    auto bp = factory.tryGet("tidbTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -561,7 +560,7 @@ TEST_F(StringTrim, stringTrimConstUtf8UnitTest)
     }
 
     // test ltrim
-    bp = factory.tryGet("tidbLTrim", context);
+    bp = factory.tryGet("tidbLTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 
@@ -578,7 +577,7 @@ TEST_F(StringTrim, stringTrimConstUtf8UnitTest)
     }
 
     // test rtrim
-    bp = factory.tryGet("tidbRTrim", context);
+    bp = factory.tryGet("tidbRTrim", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_TRUE(bp->isVariadic());
 

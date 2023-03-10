@@ -15,6 +15,7 @@
 #include <Common/Config/TOMLConfiguration.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Interpreters/Context.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -58,7 +59,7 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
     , stat(opts_.write_thread_count, opts_.read_thread_count)
 {
     auto settings = createSettings(opts_);
-    context = std::make_unique<Context>(DB::tests::TiFlashTestEnv::getContext(settings, opts_.work_dirs));
+    context = DB::tests::TiFlashTestEnv::getContext(settings, opts_.work_dirs);
 
     auto v = table_info->toStrings();
     for (const auto & s : v)

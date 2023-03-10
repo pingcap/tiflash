@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/GCManager.h>
 #include <Storages/IManageableStorage.h>

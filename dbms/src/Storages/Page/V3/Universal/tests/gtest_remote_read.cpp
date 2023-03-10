@@ -28,8 +28,8 @@
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3WritableFile.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
@@ -54,7 +54,7 @@ public:
         auto path = getTemporaryPath();
         remote_dir = path;
         createIfNotExist(path);
-        file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
+        file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         s3_client = S3::ClientFactory::instance().sharedClient();
         bucket = S3::ClientFactory::instance().bucket();

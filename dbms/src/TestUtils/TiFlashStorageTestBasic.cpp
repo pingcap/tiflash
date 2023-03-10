@@ -12,23 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include <Interpreters/Settings.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 
-#include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <AggregateFunctions/IAggregateFunction.h>
-#include <AggregateFunctions/registerAggregateFunctions.h>
-#include <TestUtils/TiFlashTestEnv.h>
-#include <gtest/gtest.h>
-
-namespace DB::tests
+namespace DB::base
 {
 
-class AggregationTest : public ::testing::Test
+void TiFlashStorageTestBasic::reload()
 {
-public:
-    ::testing::AssertionResult checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type);
+    reload({});
+}
 
-    static void SetUpTestCase();
-};
-
-} // namespace DB::tests
+} // namespace DB::base
