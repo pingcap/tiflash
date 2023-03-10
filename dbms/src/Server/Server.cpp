@@ -251,6 +251,15 @@ struct TiFlashProxyConfig
     const String pd_endpoints = "pd-endpoints";
     const String engine_label = "engine-label";
 
+    void addExtraArgs(const std::string & k, const std::string & v)
+    {
+        std::string key = "--" + k;
+        val_map[key] = v;
+        auto iter = val_map.find(key);
+        args.push_back(iter->first.data());
+        args.push_back(iter->second.data());
+    }
+
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
         auto disaggregated_mode = getDisaggregatedMode(config);
@@ -872,12 +881,40 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
+    // Some Storage's config is necessary for Proxy
+    TiFlashStorageConfig storage_config;
+    // Deprecated settings.
+    // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
+    // "0" by default, means no quota, the actual disk capacity is used.
+    size_t global_capacity_quota = 0;
+    std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
+    if (storage_config.format_version)
+    {
+        setStorageFormat(storage_config.format_version);
+        LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
+    }
+    else
+    {
+        LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
+    }
+
+    LOG_INFO(log, "Using api_version={}", storage_config.api_version);
+
+    // Init Proxy's config
     TiFlashProxyConfig proxy_conf(config());
-
-
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
+
+    if (STORAGE_FORMAT_CURRENT.page == PageFormat::V4)
+    {
+        LOG_INFO(log, "Using unips for proxy");
+        proxy_conf.addExtraArgs("unips-enabled", "1");
+    }
+    else
+    {
+        LOG_INFO(log, "unips is not enabled for proxy, page_version={}", STORAGE_FORMAT_CURRENT.page);
+    }
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
 
@@ -970,13 +1007,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // 2. path pool
     // 3. TMTContext
 
-    // Deprecated settings.
-    // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
-    // "0" by default, means no quota, the actual disk capacity is used.
-    size_t global_capacity_quota = 0;
-    TiFlashStorageConfig storage_config;
-    std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
-
     storage_config.remote_cache_config.initCacheDir();
 
     if (storage_config.s3_config.isS3Enabled())
@@ -989,18 +1019,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         S3::ClientFactory::instance().init(storage_config.s3_config);
     }
     global_context->getSharedContextDisagg()->initRemoteDataStore(global_context->getFileProvider(), storage_config.s3_config.isS3Enabled());
-
-    if (storage_config.format_version)
-    {
-        setStorageFormat(storage_config.format_version);
-        LOG_INFO(log, "Using format_version={} (explicit stable storage format detected).", storage_config.format_version);
-    }
-    else
-    {
-        LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
-    }
-
-    LOG_INFO(log, "Using api_version={}", storage_config.api_version);
 
     global_context->initializePathCapacityMetric( //
         global_capacity_quota, //
