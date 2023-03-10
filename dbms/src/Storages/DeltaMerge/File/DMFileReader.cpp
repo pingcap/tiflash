@@ -30,7 +30,6 @@
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
-#include <filesystem>
 
 namespace CurrentMetrics
 {
@@ -87,7 +86,7 @@ DMFileReader::Stream::Stream(
     else
         marks = mark_load();
 
-    auto is_null_map = std::filesystem::path(file_name_base).extension() == ".null";
+    auto is_null_map = endsWith(file_name_base, ".null");
     size_t data_file_size = reader.dmfile->colDataSize(col_id, is_null_map);
     size_t packs = reader.dmfile->getPacks();
     size_t buffer_size = 0;
