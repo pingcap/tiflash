@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <Interpreters/Context_fwd.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/QueryExecutorHolder.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <kvproto/disaggregated.pb.h>
 #include <tipb/select.pb.h>
