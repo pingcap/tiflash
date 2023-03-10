@@ -111,7 +111,9 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-    pingcap::kv::LabelFilter label_filter = S3::ClientFactory::instance().isEnabled() ? pingcap::kv::labelFilterOnlyTiFlashWriteNode : pingcap::kv::labelFilterNoTiFlashWriteNode;
+    // FIXME: it depends on another PR, send request to tiflash node with {"engine"="tiflash"}
+    // pingcap::kv::LabelFilter label_filter = S3::ClientFactory::instance().isEnabled() ? pingcap::kv::labelFilterOnlyTiFlashWriteNode : pingcap::kv::labelFilterNoTiFlashWriteNode;
+    pingcap::kv::LabelFilter label_filter = pingcap::kv::labelFilterNoTiFlashWriteNode;
     auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(
         bo,
         cluster,
