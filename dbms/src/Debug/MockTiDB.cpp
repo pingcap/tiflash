@@ -82,9 +82,9 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_
             tables_by_id.erase(partition.id);
             if (drop_regions)
             {
-                for (auto & e : region_table.getRegionsByTable(partition.id))
+                for (auto & e : region_table.getRegionsByTable(NullspaceID, partition.id))
                     kvstore->mockRemoveRegion(e.first, region_table);
-                region_table.removeTable(partition.id);
+                region_table.removeTable(NullspaceID, partition.id);
             }
         }
     }
@@ -94,9 +94,9 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_
 
     if (drop_regions)
     {
-        for (auto & e : region_table.getRegionsByTable(table->id()))
+        for (auto & e : region_table.getRegionsByTable(NullspaceID, table->id()))
             kvstore->mockRemoveRegion(e.first, region_table);
-        region_table.removeTable(table->id());
+        region_table.removeTable(NullspaceID, table->id());
     }
 
     return table;

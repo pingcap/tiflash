@@ -309,7 +309,7 @@ struct TiFlashProxyConfig
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
-pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfigPtr security_config, const TiFlashRaftConfig & raft_config, const LoggerPtr & log)
+pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfigPtr security_config, const TiFlashRaftConfig & raft_config, const int api_version, const LoggerPtr & log)
 {
     pingcap::ClusterConfig config;
     config.tiflash_engine_key = raft_config.engine_key;
@@ -318,7 +318,18 @@ pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfigPtr security_config
     config.ca_path = ca_path;
     config.cert_path = cert_path;
     config.key_path = key_path;
-    LOG_INFO(log, "update cluster config, ca_path: {}, cert_path: {}, key_path: {}", ca_path, cert_path, key_path);
+    switch (api_version)
+    {
+    case 1:
+        config.api_version = kvrpcpb::APIVersion::V1;
+        break;
+    case 2:
+        config.api_version = kvrpcpb::APIVersion::V2;
+        break;
+    default:
+        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Invalid api version {}", api_version);
+    }
+    LOG_INFO(log, "update cluster config, ca_path: {}, cert_path: {}, key_path: {}, api_version: {}", ca_path, cert_path, key_path, config.api_version);
     return config;
 }
 
@@ -887,6 +898,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
     }
 
+    LOG_INFO(log, "Using api_version={}", storage_config.api_version);
+
     // Init Proxy's config
     TiFlashProxyConfig proxy_conf(config());
     EngineStoreServerWrap tiflash_instance_wrap{};
@@ -1208,7 +1221,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (updated)
                 {
                     auto raft_config = TiFlashRaftConfig::parseSettings(*config, log);
-                    auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, log);
+                    auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, storage_config.api_version, log);
                     global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
                     LOG_DEBUG(log, "TMTContext updated security config");
                 }
@@ -1265,7 +1278,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, log);
+        auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, storage_config.api_version, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }
@@ -1287,26 +1300,30 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         /// Then, sync schemas with TiDB, and initialize schema sync service.
-        for (int i = 0; i < 60; i++) // retry for 3 mins
+        /// If in API V2 mode, each keyspace's schema is fetch lazily.
+        if (storage_config.api_version == 1)
         {
-            try
+            for (int i = 0; i < 60; i++) // retry for 3 mins
             {
-                global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context);
-                break;
+                try
+                {
+                    global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context, NullspaceID);
+                    break;
+                }
+                catch (Poco::Exception & e)
+                {
+                    const int wait_seconds = 3;
+                    LOG_ERROR(
+                        log,
+                        "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
+                        " seconds and try again.",
+                        e.displayText(),
+                        wait_seconds);
+                    ::sleep(wait_seconds);
+                }
             }
-            catch (Poco::Exception & e)
-            {
-                const int wait_seconds = 3;
-                LOG_ERROR(
-                    log,
-                    "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
-                    " seconds and try again.",
-                    e.displayText(),
-                    wait_seconds);
-                ::sleep(wait_seconds);
-            }
+            LOG_DEBUG(log, "Sync schemas done.");
         }
-        LOG_DEBUG(log, "Sync schemas done.");
 
         initStores(*global_context, log, storage_config.lazily_init_store);
 
