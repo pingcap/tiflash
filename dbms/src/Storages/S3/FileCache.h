@@ -41,7 +41,8 @@ public:
 
     enum class FileType : UInt64
     {
-        Meta = 1,
+        Unknow = 0,
+        Meta,
         Index,
         Mark, // .mkr, .null.mrk
         NullMap,
@@ -248,7 +249,7 @@ public:
     // TODO: The size of most objects, such as size and data type, can be parsed from the metadata file of DMFile.
     // We can try to pass this information, although it may be troublesome.
     static constexpr UInt64 estimated_size_of_file_type[] = {
-        0,
+        0,        // Unknow type, currently never cache it.
         8 * 1024, // Estimated size of meta.
         8 * 1024, // Estimated size of index.
         8 * 1024, // Estimated size of mark.
@@ -258,7 +259,7 @@ public:
         5 * 1024 * 1024, // Estimated size of handle/version/delete mark.
         12 * 1024 * 1024, // Estimated size of other data columns.
     };
-    static_assert(sizeof(estimated_size_of_file_type) / sizeof(estimated_size_of_file_type[0]) == magic_enum::enum_count<FileSegment::FileType>() + 1);
+    static_assert(sizeof(estimated_size_of_file_type) / sizeof(estimated_size_of_file_type[0]) == magic_enum::enum_count<FileSegment::FileType>());
     static UInt64 getEstimatedSizeOfFileType(FileSegment::FileType file_type);
     static FileSegment::FileType getFileType(const String & fname);
     static FileSegment::FileType getFileTypeOfColData(const std::filesystem::path & p);
@@ -281,7 +282,7 @@ public:
     UInt64 cache_level;
     UInt64 cache_used;
     std::atomic<UInt64> cache_min_age_seconds;
-    std::array<LRUFileTable, magic_enum::enum_count<FileSegment::FileType>() + 1> tables; // `FileType` start from 1.
+    std::array<LRUFileTable, magic_enum::enum_count<FileSegment::FileType>()> tables;
 
     // Currently, these variables are just use for testing.
     std::atomic<UInt64> bg_downloading_count = 0;

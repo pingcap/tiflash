@@ -96,7 +96,6 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname)
             return nullptr;
         }
     }
-    ProfileEvents::increment(ProfileEvents::FileCacheMiss);
 
     if (!canCache(file_type))
     {
@@ -104,6 +103,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname)
         return nullptr;
     }
 
+    ProfileEvents::increment(ProfileEvents::FileCacheMiss);
     // File not exists, try to download and cache it in backgroud.
 
     // We don't know the exact size of a object/file, but we need reserve space to save the object/file.
@@ -295,7 +295,9 @@ void FileCache::releaseSpace(UInt64 size)
 
 bool FileCache::canCache(FileType file_type) const
 {
-    return static_cast<UInt64>(file_type) <= cache_level || bg_downloading_count.load(std::memory_order_relaxed) >= IOThreadPool::get().getMaxThreads();
+    return file_type != FileType::Unknow &&
+        static_cast<UInt64>(file_type) <= cache_level &&
+        bg_downloading_count.load(std::memory_order_relaxed) < IOThreadPool::get().getMaxThreads();
 }
 
 FileType FileCache::getFileTypeOfColData(const std::filesystem::path & p)
@@ -348,7 +350,7 @@ FileType FileCache::getFileType(const String & fname)
     }
     else
     {
-        throw Exception(fmt::format("File extension is not recognized: {}", fname));
+        return FileType::Unknow;
     }
 }
 
