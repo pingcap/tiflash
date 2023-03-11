@@ -661,7 +661,7 @@ std::set<UInt64> DMFile::listAllInPath(
     const DMFile::ListOptions & options)
 {
     auto s3_fname_view = S3::S3FilenameView::fromKeyWithPrefix(parent_path);
-    auto file_names = s3_fname_view.isValid() ? listS3(parent_path) : listLocal(s3_fname_view.toFullKey());
+    auto file_names = s3_fname_view.isValid() ? listS3(s3_fname_view.toFullKey()) : listLocal(parent_path);
 
     std::set<UInt64> file_ids;
     auto try_parse_file_id = [](const String & name) -> std::optional<UInt64> {
