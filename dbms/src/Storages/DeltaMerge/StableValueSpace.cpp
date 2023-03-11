@@ -115,12 +115,12 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
         auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
         if (restore_from_s3)
         {
-            auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
-            RUNTIME_CHECK_MSG(res, "update dt file size failed, path={}", dmfile->path());
+            path_delegate.addS3DTFileSize(file_id, dmfile->getBytesOnDisk());
         }
         else
         {
-            path_delegate.addS3DTFileSize(file_id, dmfile->getBytesOnDisk());
+            auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
+            RUNTIME_CHECK_MSG(res, "update dt file size failed, path={}", dmfile->path());
         }
         stable->files.push_back(dmfile);
     }

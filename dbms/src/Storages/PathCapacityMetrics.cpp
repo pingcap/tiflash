@@ -18,6 +18,7 @@
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <common/logger_useful.h>
 #include <sys/statvfs.h>
@@ -205,6 +206,13 @@ FsStats PathCapacityMetrics::getFsStats()
     CurrentMetrics::set(CurrentMetrics::StoreSizeCapacity, total_stat.capacity_size);
     CurrentMetrics::set(CurrentMetrics::StoreSizeAvailable, total_stat.avail_size);
     CurrentMetrics::set(CurrentMetrics::StoreSizeUsed, total_stat.used_size);
+
+    if (S3::ClientFactory::instance().isEnabled())
+    {
+        // When S3 enabled, use a large fake stat to avoid disk limitaion.
+        total_stat.capacity_size = 1024UL * 1024UL * 1024UL * 1024UL * 1024UL * 1024UL; // 1024PB
+        total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
+    }
 
     return total_stat;
 }

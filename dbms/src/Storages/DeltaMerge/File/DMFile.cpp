@@ -643,15 +643,21 @@ std::vector<String> DMFile::listS3(const String & parent_path)
     std::vector<String> filenames;
     auto client = S3::ClientFactory::instance().sharedClient();
     const auto & bucket = S3::ClientFactory::instance().bucket();
-    S3::listPrefix(*client, bucket, parent_path, [&filenames, &parent_path](const Aws::S3::Model::ListObjectsV2Result & result) {
-        const auto & objects = result.GetContents();
-        filenames.reserve(filenames.size() + objects.size());
-        for (const auto & object : objects)
-        {
-            filenames.push_back(object.GetKey().substr(parent_path.size())); // Cut prefix
-        }
-        return S3::PageResult{.num_keys = objects.size(), .more = true};
-    });
+    S3::listPrefix(
+        *client,
+        bucket,
+        /*prefix*/ parent_path,
+        /*delimiter*/ "/",
+        [&filenames, &parent_path](const Aws::S3::Model::ListObjectsV2Result & result) {
+            const Aws::Vector<Aws::S3::Model::CommonPrefix> & prefixes = result.GetCommonPrefixes();
+            filenames.reserve(filenames.size() + prefixes.size());
+            for (const auto & prefix : prefixes)
+            {
+                RUNTIME_CHECK(prefix.GetPrefix().size() > parent_path.size(), prefix.GetPrefix(), parent_path);
+                filenames.push_back(prefix.GetPrefix().substr(parent_path.size())); // Cut prefix
+            }
+            return S3::PageResult{.num_keys = prefixes.size(), .more = true};
+        });
     return filenames;
 }
 
