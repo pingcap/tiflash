@@ -22,6 +22,8 @@
 #define DISAGGREGATED_MODE_COMPUTE_PROXY_LABEL DISAGGREGATED_MODE_COMPUTE
 #define DISAGGREGATED_MODE_STORAGE "tiflash_storage"
 #define DISAGGREGATED_MODE_COMPUTE "tiflash_compute"
+// engine_role determine whether TiFlash use S3 to write.
+#define DISAGGREGATED_MODE_STORAGE_ENGINE_ROLE "write"
 
 namespace DB
 {
