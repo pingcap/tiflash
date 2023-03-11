@@ -18,6 +18,9 @@
 #include <common/defines.h>
 #include <common/logger_useful.h>
 
+#include <chrono>
+#include <thread>
+
 namespace DB
 {
 FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str)
@@ -36,6 +39,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     UNUSED(server, new_peer_id);
     auto * log = &Poco::Logger::get("FastAddPeer");
     LOG_DEBUG(log, "Try add peer for {}", region_id);
-    return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    return genFastAddPeerRes(FastAddPeerStatus::WaitForData, "", "");
 }
 } // namespace DB
