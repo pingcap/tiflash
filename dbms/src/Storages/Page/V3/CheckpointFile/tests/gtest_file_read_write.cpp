@@ -20,8 +20,8 @@
 #include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ext/scope_guard.h>
@@ -365,7 +365,7 @@ TEST_F(CheckpointFileTest, FromBlobStore)
 try
 {
     const auto delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(std::vector{dir});
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto blob_store = BlobStore<universal::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, BlobConfig{});
 
     auto edits = universal::PageEntriesEdit{};

@@ -41,8 +41,8 @@ try
 {
     ColumnsWithTypeAndName columns{toVec<Int64>("col0", col0), toNullableVec<String>("col1", col1)};
     auto table_id = mock_storage.addTableSchemaForDeltaMerge("test", {{"col0", TiDB::TP::TypeLongLong}, {"col1", TiDB::TP::TypeString}});
-    mock_storage.addTableDataForDeltaMerge(context.context, "test", columns);
-    auto in = mock_storage.getStreamFromDeltaMerge(context.context, table_id);
+    mock_storage.addTableDataForDeltaMerge(*context.context, "test", columns);
+    auto in = mock_storage.getStreamFromDeltaMerge(*context.context, table_id);
 
     ASSERT_INPUTSTREAM_BLOCK_UR(
         in,

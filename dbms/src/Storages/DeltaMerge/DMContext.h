@@ -129,8 +129,9 @@ public:
     {
     }
 
-    WriteLimiterPtr getWriteLimiter() const { return db_context.getWriteLimiter(); }
-    ReadLimiterPtr getReadLimiter() const { return db_context.getReadLimiter(); }
+    WriteLimiterPtr getWriteLimiter() const;
+    ReadLimiterPtr getReadLimiter() const;
+
     DM::DMConfigurationOpt createChecksumConfig() const
     {
         return DMChecksumConfig::fromDBContext(db_context);

@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <Storages/Page/V3/spacemap/SpaceMapSTDMap.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <map>

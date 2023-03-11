@@ -16,10 +16,12 @@
 #include <Debug/dbgQueryExecutor.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/CoprocessorHandler.h>
+#include <Interpreters/Context.h>
 #include <Server/MockComputeClient.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
+
 namespace DB
 {
 using TiFlashTestEnv = tests::TiFlashTestEnv;

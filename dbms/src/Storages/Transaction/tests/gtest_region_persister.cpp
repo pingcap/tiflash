@@ -16,6 +16,7 @@
 #include <Common/Stopwatch.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
+#include <Interpreters/Context.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/Region.h>

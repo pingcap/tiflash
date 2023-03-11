@@ -31,6 +31,7 @@
 #include <Flash/Disaggregated/RNPagePreparer.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
 #include <Flash/Disaggregated/RNPageReceiverContext.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>

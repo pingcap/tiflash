@@ -29,9 +29,9 @@ class TestFromDays : public DB::tests::FunctionTest
 TEST_F(TestFromDays, TestAll)
 try
 {
-    DAGContext * dag_context = context.getDAGContext();
-    UInt64 ori_flags = dag_context->getFlags();
-    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    auto & dag_context = getDAGContext();
+    UInt64 ori_flags = dag_context.getFlags();
+    dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     /// ColumnVector(nullable)
     const String func_name = "tidbFromDays";
     static auto const nullable_date_type_ptr = makeNullable(std::make_shared<DataTypeMyDate>());
@@ -75,7 +75,7 @@ try
     output_col = ColumnWithTypeAndName(createConstColumn<Nullable<DataTypeMyDate::FieldType>>(1, {}).column, nullable_date_type_ptr, "input");
     input_col = createConstColumn<Nullable<UInt32>>(1, {});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
-    dag_context->setFlags(ori_flags);
+    dag_context.setFlags(ori_flags);
 }
 CATCH
 

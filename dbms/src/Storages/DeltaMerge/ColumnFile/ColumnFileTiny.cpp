@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>

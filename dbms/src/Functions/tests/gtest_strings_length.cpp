@@ -18,7 +18,6 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsString.h>
-#include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -42,7 +41,7 @@ class StringLength : public DB::tests::FunctionTest
 // test string and string
 TEST_F(StringLength, strAndStrTest)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -66,7 +65,7 @@ TEST_F(StringLength, strAndStrTest)
         ColumnNumbers cns{0};
 
         // test length
-        auto bp = factory.tryGet("length", context);
+        auto bp = factory.tryGet("length", *context);
         ASSERT_TRUE(bp != nullptr);
         ASSERT_FALSE(bp->isVariadic());
 
@@ -90,7 +89,7 @@ TEST_F(StringLength, strAndStrTest)
 // test NULL
 TEST_F(StringLength, nullTest)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -122,7 +121,7 @@ TEST_F(StringLength, nullTest)
     test_block.insert(col1);
     ColumnNumbers cns{0};
 
-    auto bp = factory.tryGet("length", context);
+    auto bp = factory.tryGet("length", *context);
     ASSERT_TRUE(bp != nullptr);
     ASSERT_FALSE(bp->isVariadic());
     auto func = bp->build(ctns);

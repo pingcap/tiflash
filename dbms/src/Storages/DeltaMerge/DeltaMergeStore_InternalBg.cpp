@@ -16,6 +16,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/Segment.h>
