@@ -126,7 +126,7 @@ public:
     }
 
 protected:
-    ThreadPool pool;
+    legacy::ThreadPool pool;
 };
 } // namespace
 
