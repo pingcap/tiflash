@@ -506,8 +506,7 @@ private:
     const LoggerPtr & log;
 };
 
-// We only need this task run once.
-void initStores(Context & global_context, const LoggerPtr & log, bool lazily_init_store, EngineStoreServerWrap * tiflash_instance_wrap)
+std::unique_ptr<std::thread> initStores(Context & global_context, const LoggerPtr & log, bool lazily_init_store, EngineStoreServerWrap * tiflash_instance_wrap)
 {
     // If `tiflash_instance_wrap` is not nullptr, S3 is enabled.
     // We must wait for tiflash-proxy's initializtion finished before initialzing DeltaMergeStores,
@@ -560,12 +559,13 @@ void initStores(Context & global_context, const LoggerPtr & log, bool lazily_ini
     {
         LOG_INFO(log, "Lazily init store.");
         // apply the inited in another thread to shorten the start time of TiFlash
-        std::thread(do_init_stores).detach();
+        return std::make_unique<std::thread>(do_init_stores);
     }
     else
     {
         LOG_INFO(log, "Not lazily init store.");
         do_init_stores();
+        return nullptr;
     }
 }
 
@@ -1361,7 +1361,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Load remaining databases
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
-
+    std::unique_ptr<std::thread> init_stores_thread;
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         /// Then, sync schemas with TiDB, and initialize schema sync service.
@@ -1386,7 +1386,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         LOG_DEBUG(log, "Sync schemas done.");
 
-        initStores(*global_context, log, storage_config.lazily_init_store, storage_config.s3_config.isS3Enabled() ? &tiflash_instance_wrap : nullptr);
+        init_stores_thread = initStores(*global_context, log, storage_config.lazily_init_store, storage_config.s3_config.isS3Enabled() ? &tiflash_instance_wrap : nullptr);
 
         // After schema synced, set current database.
         global_context->setCurrentDatabase(default_database);
@@ -1464,6 +1464,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
     }
 
+    if (init_stores_thread != nullptr)
+    {
+        if (storage_config.s3_config.isS3Enabled())
+        {
+            // If S3 enabled, wait for all DeltaMergeStores' initialization
+            // before this instance can accept requests.
+            init_stores_thread->join();
+        }
+        else
+        {
+            init_stores_thread->detach();
+        }
+    }
     /// Then, startup grpc server to serve raft and/or flash services.
     FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
 
