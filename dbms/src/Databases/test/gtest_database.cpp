@@ -515,7 +515,7 @@ try
 
     {
         // If we loadTable for db2, new table meta should be removed.
-        ThreadPool thread_pool(2);
+        legacy::ThreadPool thread_pool(2);
         db2->loadTables(*ctx, &thread_pool, true);
 
         Poco::File new_meta_file(db2->getTableMetadataPath(tbl_name));
