@@ -831,7 +831,7 @@ private:
 // Later we will adjust it by `adjustThreadPoolSize`
 void initThreadPool()
 {
-    size_t default_num_threads = 2 * std::min(4UL, std::thread::hardware_concurrency());
+    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
     GlobalThreadPool::initialize(
         /*max_threads*/ default_num_threads,
         /*max_free_threads*/ default_num_threads / 2,
