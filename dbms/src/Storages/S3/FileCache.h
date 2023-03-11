@@ -21,6 +21,7 @@
 #include <Storages/S3/S3Filename.h>
 #include <common/types.h>
 
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <magic_enum.hpp>
@@ -191,11 +192,14 @@ public:
     static void initialize(const String & cache_dir_, UInt64 cache_capacity_, UInt64 cache_level_, UInt64 cache_min_age_seconds_)
     {
         global_file_cache_instance = std::make_unique<FileCache>(cache_dir_, cache_capacity_, cache_level_, cache_min_age_seconds_);
+        global_file_cache_initialized.store(true, std::memory_order_release);
     }
 
     static FileCache * instance()
     {
-        return global_file_cache_instance.get();
+        return global_file_cache_initialized.load(std::memory_order_acquire)
+            ? global_file_cache_instance.get()
+            : nullptr;
     }
 
     static void shutdown()
@@ -215,6 +219,7 @@ private:
 public:
 #endif
 
+    inline static std::atomic<bool> global_file_cache_initialized{false};
     inline static std::unique_ptr<FileCache> global_file_cache_instance;
 
     DISALLOW_COPY_AND_MOVE(FileCache);
