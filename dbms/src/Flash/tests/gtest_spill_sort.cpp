@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Interpreters/Context.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
@@ -55,17 +56,17 @@ try
                        .scan("spill_sort_test", "simple_table")
                        .topN(order_by_items, limit_size)
                        .build(context);
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// disable spill
-    context.context.setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
+    context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
     auto ref_columns = executeStreams(request, original_max_streams);
     /// enable spill
-    context.context.setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
+    context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
     // don't use `executeAndAssertColumnsEqual` since it takes too long to run
     /// todo use ASSERT_COLUMNS_EQ_R once TiFlash support final TopN
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
     /// enable spill and use small max_cached_data_bytes_in_spiller
-    context.context.setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
+    context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
 }
 CATCH

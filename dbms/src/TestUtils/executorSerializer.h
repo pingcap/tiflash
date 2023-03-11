@@ -16,8 +16,8 @@
 
 #include <Common/FmtUtils.h>
 #include <Flash/Statistics/traverseExecutors.h>
-#include <Interpreters/Context.h>
 #include <TestUtils/TiFlashTestException.h>
+
 namespace DB
 {
 namespace tests

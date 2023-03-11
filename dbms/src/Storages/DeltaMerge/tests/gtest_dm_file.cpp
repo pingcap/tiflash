@@ -26,9 +26,9 @@
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/PathPool.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <common/types.h>
 
 #include <algorithm>
@@ -157,7 +157,7 @@ protected:
 TEST_P(DMFileTest, WriteRead)
 try
 {
-    auto cols = DMTestEnv::getDefaultColumns();
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
 
     const size_t num_rows_write = 128;
 
@@ -175,9 +175,9 @@ try
     {
         // Prepare for write
         // Block 1: [0, 64)
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
+        Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
         // Block 2: [64, 128)
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
@@ -282,11 +282,15 @@ try
                                col_stat2.col_id,
                                col_stat2.type->getName());
 
-            ASSERT_EQ(dmfile1->colDataSize(col_def.id), dmfile2->colDataSize(col_def.id));
+            ASSERT_EQ(dmfile1->colDataSize(col_def.id, false), dmfile2->colDataSize(col_def.id, false));
             ASSERT_EQ(dmfile1->isColIndexExist(col_def.id), dmfile2->isColIndexExist(col_def.id));
             if (dmfile1->isColIndexExist(col_def.id))
             {
                 ASSERT_EQ(dmfile1->colIndexSize(col_def.id), dmfile2->colIndexSize(col_def.id));
+            }
+            if (col_def.type->isNullable())
+            {
+                ASSERT_EQ(dmfile1->colDataSize(col_def.id, true), dmfile2->colDataSize(col_def.id, true));
             }
         }
     };
@@ -328,26 +332,7 @@ try
         check_files(dmfile1, dmfile2);
     };
 
-    auto add_nullable_columns = [](Block & block, size_t beg, size_t end) {
-        auto num_rows = end - beg;
-        std::vector<UInt64> data(num_rows);
-        std::iota(data.begin(), data.end(), beg);
-        std::vector<Int32> null_map(num_rows, 0);
-        block.insert(DB::tests::createNullableColumn<UInt64>(
-            data,
-            null_map,
-            "Nullable(UInt64)",
-            3));
-    };
-
-    auto prepare_block = [&](size_t beg, size_t end) {
-        Block block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false);
-        add_nullable_columns(block, beg, end);
-        return block;
-    };
-
-    auto cols = DMTestEnv::getDefaultColumns();
-    cols->emplace_back(ColumnDefine{3, "Nullable(UInt64)", DataTypeFactory::instance().get("Nullable(UInt64)")});
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
 
     const size_t num_rows_write = 128;
 
@@ -364,8 +349,8 @@ try
     block_propertys.push_back(block_property2);
     DMFilePtr dmfile1, dmfile2;
     {
-        Block block1 = prepare_block(0, num_rows_write / 2);
-        Block block2 = prepare_block(num_rows_write / 2, num_rows_write);
+        Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
         auto mode = DMFileMode::DirectoryChecksum;
         auto configuration = createConfiguration(mode);
         dmfile1 = DMFile::create(1, parent_path, std::move(configuration), DMFileFormat::V2);
@@ -376,8 +361,8 @@ try
         stream->writeSuffix();
     }
     {
-        Block block1 = prepare_block(0, num_rows_write / 2);
-        Block block2 = prepare_block(num_rows_write / 2, num_rows_write);
+        Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
         auto mode = DMFileMode::DirectoryMetaV2;
         auto configuration = createConfiguration(mode);
         dmfile2 = DMFile::create(2, parent_path, std::move(configuration), DMFileFormat::V3);

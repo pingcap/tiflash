@@ -70,6 +70,7 @@ add_headers_and_sources(dbms src/Debug/MockExecutor)
 add_headers_and_sources(dbms src/Dictionaries)
 add_headers_and_sources(dbms src/Encryption)
 add_headers_and_sources(dbms src/Interpreters)
+add_headers_and_sources(dbms src/Interpreters/SharedContexts)
 add_headers_and_sources(dbms src/Columns)
 add_headers_and_sources(dbms src/Storages)
 add_headers_and_sources(dbms src/Storages/S3)
@@ -202,6 +203,7 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
+    RemoteTaskProto
     PSCheckpointProto
 )
 

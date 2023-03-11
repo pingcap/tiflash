@@ -19,6 +19,7 @@
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <IO/IOSWrapper.h>
+#include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
@@ -211,13 +212,13 @@ size_t DMFile::colIndexSize(ColId id)
     }
 }
 
-size_t DMFile::colDataSize(ColId id)
+size_t DMFile::colDataSize(ColId id, bool is_null_map)
 {
     if (useMetaV2())
     {
         if (auto itr = column_stats.find(id); itr != column_stats.end())
         {
-            return itr->second.data_bytes;
+            return is_null_map ? itr->second.nullmap_data_bytes : itr->second.data_bytes;
         }
         else
         {
@@ -226,7 +227,8 @@ size_t DMFile::colDataSize(ColId id)
     }
     else
     {
-        return colDataSizeByName(getFileNameBase(id));
+        auto namebase = is_null_map ? getFileNameBase(id, {IDataType::Substream::NullMap}) : getFileNameBase(id);
+        return colDataSizeByName(namebase);
     }
 }
 

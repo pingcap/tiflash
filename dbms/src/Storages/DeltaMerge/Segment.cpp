@@ -18,7 +18,8 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
-#include <DataTypes/DataTypeFactory.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -49,7 +50,6 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
-#include <numeric>
 
 namespace ProfileEvents
 {
@@ -185,7 +185,7 @@ StableValueSpacePtr createNewStable( //
     auto stable = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
-    if (auto data_store = context.db_context.getRemoteDataStore(); !data_store)
+    if (auto data_store = context.db_context.getSharedContextDisagg()->remote_data_store; !data_store)
     {
         wbs.data.putExternal(dtfile_id, 0);
     }

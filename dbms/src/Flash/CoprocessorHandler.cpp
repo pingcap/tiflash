@@ -20,6 +20,8 @@
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Flash/ServiceUtils.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
@@ -74,7 +76,7 @@ grpc::Status CoprocessorHandler::execute()
 
     try
     {
-        RUNTIME_CHECK_MSG(!cop_context.db_context.isDisaggregatedComputeMode(), "cannot run cop or batchCop request on tiflash_compute node");
+        RUNTIME_CHECK_MSG(!cop_context.db_context.getSharedContextDisagg()->isDisaggregatedComputeMode(), "cannot run cop or batchCop request on tiflash_compute node");
 
         switch (cop_request->tp())
         {

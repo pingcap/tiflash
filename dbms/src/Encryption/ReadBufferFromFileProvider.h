@@ -15,12 +15,12 @@
 #pragma once
 
 #include <Encryption/EncryptionPath.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <IO/ReadBufferFromRandomAccessFile.h>
 
 namespace DB
 {
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
+
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 

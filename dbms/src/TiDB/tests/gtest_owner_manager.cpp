@@ -104,7 +104,7 @@ try
     pingcap::pd::ClientPtr pd_client = std::make_shared<pingcap::pd::Client>(Strings{etcd_endpoint}, config);
     auto etcd_client = DB::Etcd::Client::create(pd_client, config);
     const String id = "owner_0";
-    auto owner0 = OwnerManager::createS3GCOwner(ctx, id, etcd_client, test_ttl);
+    auto owner0 = OwnerManager::createS3GCOwner(*ctx, id, etcd_client, test_ttl);
     while (owner0->getOwnerID().status != OwnerType::NoLeader)
     {
         LOG_INFO(log, "wait for previous test end");
@@ -149,7 +149,7 @@ try
     LOG_INFO(log, "test wait for n*ttl passed");
 
     const String new_id = "owner_1";
-    auto owner1 = OwnerManager::createS3GCOwner(ctx, new_id, etcd_client);
+    auto owner1 = OwnerManager::createS3GCOwner(*ctx, new_id, etcd_client);
     owner_info = owner1->getOwnerID();
     EXPECT_EQ(owner_info.status, OwnerType::NotOwner) << magic_enum::enum_name(owner_info.status);
     EXPECT_EQ(owner_info.owner_id, id);
@@ -223,7 +223,7 @@ try
     pingcap::pd::ClientPtr pd_client = std::make_shared<pingcap::pd::Client>(Strings{etcd_endpoint}, config);
     auto etcd_client = DB::Etcd::Client::create(pd_client, config);
     const String id = "owner_0";
-    auto owner0 = std::static_pointer_cast<EtcdOwnerManager>(OwnerManager::createS3GCOwner(ctx, id, etcd_client, test_ttl));
+    auto owner0 = std::static_pointer_cast<EtcdOwnerManager>(OwnerManager::createS3GCOwner(*ctx, id, etcd_client, test_ttl));
     auto owner_info = owner0->getOwnerID();
     EXPECT_EQ(owner_info.status, OwnerType::NoLeader) << magic_enum::enum_name(owner_info.status);
 
@@ -294,7 +294,7 @@ try
     pingcap::pd::ClientPtr pd_client = std::make_shared<pingcap::pd::Client>(Strings{etcd_endpoint}, config);
     auto etcd_client = DB::Etcd::Client::create(pd_client, config);
     const String id = "owner_0";
-    auto owner0 = std::static_pointer_cast<EtcdOwnerManager>(OwnerManager::createS3GCOwner(ctx, id, etcd_client, test_ttl));
+    auto owner0 = std::static_pointer_cast<EtcdOwnerManager>(OwnerManager::createS3GCOwner(*ctx, id, etcd_client, test_ttl));
     auto owner_info = owner0->getOwnerID();
     EXPECT_EQ(owner_info.status, OwnerType::NoLeader) << magic_enum::enum_name(owner_info.status);
 

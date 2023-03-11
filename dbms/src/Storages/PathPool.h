@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <Core/Types.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/PathPool_fwd.h>
 
@@ -27,8 +28,6 @@ namespace DB
 {
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 
 class PSDiskDelegatorMulti;
 class PSDiskDelegatorSingle;
@@ -152,6 +151,11 @@ public:
     String getDTFilePath(UInt64 file_id, bool throw_on_not_exist = true) const;
 
     void addDTFile(UInt64 file_id, size_t file_size, std::string_view path);
+
+    // Update the file size of the DTFile with file_id.
+    // Return true if the file size is updated.
+    // Return false if the file size is not updated because the file_id is not in StableDiskDelegator.
+    bool updateDTFileSize(UInt64 file_id, size_t file_size);
 
     void removeDTFile(UInt64 file_id);
 

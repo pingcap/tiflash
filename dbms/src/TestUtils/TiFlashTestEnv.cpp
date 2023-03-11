@@ -16,6 +16,7 @@
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
@@ -33,7 +34,7 @@
 
 namespace DB::tests
 {
-std::vector<std::shared_ptr<Context>> TiFlashTestEnv::global_contexts = {};
+std::vector<ContextPtr> TiFlashTestEnv::global_contexts = {};
 
 String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool get_abs)
 {
@@ -97,9 +98,8 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageR
 void TiFlashTestEnv::addGlobalContext(const DB::Settings & settings_, Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
 {
     // set itself as global context
-    auto global_context = std::make_shared<DB::Context>(DB::Context::createGlobal());
+    auto global_context = std::shared_ptr<Context>(DB::Context::createGlobal());
     global_contexts.push_back(global_context);
-    global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
     global_context->setTemporaryPath(getTemporaryPath());
 
@@ -161,7 +161,12 @@ void TiFlashTestEnv::addGlobalContext(const DB::Settings & settings_, Strings te
     global_context->initializeSharedBlockSchemas(10000);
 }
 
-Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
+ContextPtr TiFlashTestEnv::getContext()
+{
+    return getContext({});
+}
+
+ContextPtr TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
 {
     Context context = *global_contexts[0];
     context.setGlobalContext(*global_contexts[0]);
@@ -180,7 +185,12 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
     global_contexts[0]->initializeWriteNodePageStorageIfNeed(context.getPathPool());
     context.getSettingsRef() = settings;
-    return context;
+    return std::make_shared<Context>(context);
+}
+
+FileProviderPtr TiFlashTestEnv::getDefaultFileProvider()
+{
+    return global_contexts[0]->getFileProvider();
 }
 
 void TiFlashTestEnv::shutdown()

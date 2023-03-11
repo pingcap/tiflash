@@ -21,6 +21,8 @@
 #include <IO/IOThreadPool.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadBufferFromString.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -424,7 +426,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         address,
         log);
 
-    task->page_cache = db_context.getReadNodePageCache();
+    task->page_cache = db_context.getSharedContextDisagg()->rn_cache;
     task->segment = std::make_shared<Segment>(
         log,
         /*epoch*/ 0,

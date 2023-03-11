@@ -14,6 +14,8 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -625,7 +627,7 @@ void DeltaMergeStore::ingestFiles(
     WriteBatches ingest_wbs(*storage_pool, dm_context->getWriteLimiter());
     if (!files.empty())
     {
-        auto remote_data_store = dm_context->db_context.getRemoteDataStore();
+        auto remote_data_store = dm_context->db_context.getSharedContextDisagg()->remote_data_store;
         for (const auto & file : files)
         {
             if (!remote_data_store)
