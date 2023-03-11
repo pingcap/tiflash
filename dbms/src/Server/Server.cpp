@@ -1159,11 +1159,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     initThreadPool(settings, server_info.cpu_info.logical_cores);
 
     /// PageStorage run mode has been determined above
-    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
-    LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
+    if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    {
+        global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
+        LOG_INFO(log, "Global PageStorage run mode is {}", magic_enum::enum_name(global_context->getPageStorageRunMode()));
+    }
 
-    if (
-        global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
+    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
         || global_context->getSharedContextDisagg()->notDisaggregatedMode())
     {
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
@@ -1233,17 +1235,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Limit on total number of concurrently executed queries.
     global_context->getProcessList().setMaxSize(config().getInt("max_concurrent_queries", 0));
 
-    /// Setup protection to avoid accidental DROP for big tables (that are greater than 50 GB by default)
-    if (config().has("max_table_size_to_drop"))
-        global_context->setMaxTableSizeToDrop(config().getUInt64("max_table_size_to_drop"));
-
     /// Size of cache for uncompressed blocks. Zero means disabled.
     size_t uncompressed_cache_size = config().getUInt64("uncompressed_cache_size", 0);
     if (uncompressed_cache_size)
         global_context->setUncompressedCache(uncompressed_cache_size);
-
-    bool use_l0_opt = config().getBool("l0_optimize", false);
-    global_context->setUseL0Opt(use_l0_opt);
 
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
     size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
@@ -1466,7 +1461,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             // proxy update store-id before status set `RaftProxyStatus::Running`
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
-            LOG_INFO(log, "store {}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+            LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
             size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
             auto & kvstore_ptr = tmt_context.getKVStore();
             kvstore_ptr->initReadIndexWorkers(
