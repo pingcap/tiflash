@@ -98,6 +98,7 @@
 #include <ext/scope_guard.h>
 #include <limits>
 #include <memory>
+#include <thread>
 
 #if Poco_NetSSL_FOUND
 #include <Common/grpcpp.h>
@@ -821,19 +822,34 @@ private:
     std::vector<std::unique_ptr<Poco::Net::TCPServer>> servers;
 };
 
-void initThreadPool(const Settings & settings, size_t logical_cores)
+// By default init global thread pool by hardware_concurrency
+// Later we will adjust it by `adjustThreadPoolSize`
+void initThreadPool()
+{
+    size_t default_num_threads = 2 * std::min(4UL, std::thread::hardware_concurrency());
+    GlobalThreadPool::initialize(
+        /*max_threads*/ default_num_threads,
+        /*max_free_threads*/ default_num_threads / 2,
+        /*queue_size*/ default_num_threads * 2);
+    IOThreadPool::initialize(
+        /*max_threads*/ default_num_threads,
+        /*max_free_threads*/ default_num_threads / 2,
+        /*queue_size*/ default_num_threads * 2);
+}
+
+void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 {
     // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
     size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
     // Currently, `GlobalThreadPool` is only used by `IOThreadPool`, so they have the same number of threads.
-    GlobalThreadPool::initialize(
-        /*max_threads*/ max_io_thread_count,
-        /*max_free_threads*/ max_io_thread_count / 2,
-        /*queue_size*/ max_io_thread_count * 2);
-    IOThreadPool::initialize(
-        /*max_threads*/ max_io_thread_count,
-        /*max_free_threads*/ max_io_thread_count / 2,
-        /*queue_size*/ max_io_thread_count * 2);
+
+    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count);
+    GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count / 2);
+    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 2);
+
+    IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count);
+    IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+    IOThreadPool::instance->setQueueSize(max_io_thread_count * 2);
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
@@ -869,6 +885,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerTableFunctions();
     registerStorages();
 
+    // Later we may create thread pool from GlobalThreadPool
+    // init it before other components
+    initThreadPool(); 
+
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
     // Some Storage's config is necessary for Proxy
@@ -896,12 +916,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (STORAGE_FORMAT_CURRENT.page == PageFormat::V4)
     {
-        LOG_INFO(log, "Using unips for proxy");
+        LOG_INFO(log, "Using UniPS for proxy");
         proxy_conf.addExtraArgs("unips-enabled", "1");
     }
     else
     {
-        LOG_INFO(log, "unips is not enabled for proxy, page_version={}", STORAGE_FORMAT_CURRENT.page);
+        LOG_INFO(log, "UniPS is not enabled for proxy, page_version={}", STORAGE_FORMAT_CURRENT.page);
     }
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
@@ -1144,6 +1164,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Load global settings from default_profile and system_profile.
     /// It internally depends on UserConfig::parseSettings.
+    // TODO: Parse the settings from config file at the program beginning
     global_context->setDefaultProfiles(config());
     LOG_INFO(log, "Loaded global settings from default_profile and system_profile.");
 
@@ -1156,7 +1177,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
-    initThreadPool(settings, server_info.cpu_info.logical_cores);
+    // adjust the thread pool size according to settings and logical cores num
+    adjustThreadPoolSize(settings, server_info.cpu_info.logical_cores);
 
     /// PageStorage run mode has been determined above
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
