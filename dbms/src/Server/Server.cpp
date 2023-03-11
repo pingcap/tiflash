@@ -892,7 +892,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     // Later we may create thread pool from GlobalThreadPool
     // init it before other components
-    initThreadPool(); 
+    initThreadPool();
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
