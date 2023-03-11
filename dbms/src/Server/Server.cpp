@@ -98,14 +98,6 @@
 #include <ext/scope_guard.h>
 #include <limits>
 #include <memory>
-#if !__clang__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
-#include <cpptoml.h>
-#if !__clang__
-#pragma GCC diagnostic pop
-#endif
 
 #if Poco_NetSSL_FOUND
 #include <Common/grpcpp.h>
@@ -245,18 +237,6 @@ std::string Server::getDefaultCorePath() const
     return getCanonicalPath(config().getString("path")) + "cores";
 }
 
-bool hasS3Config(Poco::Util::LayeredConfiguration & config)
-{
-    if (!config.has("storage.s3"))
-    {
-        return false;
-    }
-    std::istringstream ss(config.getString("storage.s3"));
-    cpptoml::parser p(ss);
-    auto table = p.parse();
-    return table->contains_qualified("bucket");
-}
-
 struct TiFlashProxyConfig
 {
     static const std::string config_prefix;
@@ -282,7 +262,7 @@ struct TiFlashProxyConfig
         args.push_back(iter->second.data());
     }
 
-    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
+    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config, bool has_s3_config)
     {
         auto disaggregated_mode = getDisaggregatedMode(config);
 
@@ -312,7 +292,7 @@ struct TiFlashProxyConfig
                 args_map[engine_store_advertise_address] = args_map[engine_store_address];
 
             args_map[engine_label] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
-            if (disaggregated_mode != DisaggregatedMode::Compute && hasS3Config(config))
+            if (disaggregated_mode != DisaggregatedMode::Compute && has_s3_config)
             {
                 args_map[engine_role_label] = DISAGGREGATED_MODE_STORAGE_ENGINE_ROLE;
             }
@@ -914,7 +894,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     // Init Proxy's config
-    TiFlashProxyConfig proxy_conf(config());
+    TiFlashProxyConfig proxy_conf(config(), storage_config.s3_config.isS3Enabled());
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
