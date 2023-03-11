@@ -97,6 +97,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
 #include <limits>
+#include <magic_enum.hpp>
 #include <memory>
 #include <thread>
 
@@ -1020,6 +1021,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // 2. path pool
     // 3. TMTContext
 
+    LOG_INFO(
+        log,
+        "disaggregated_mode={} use_autoscaler={} enable_s3={}",
+        magic_enum::enum_name(global_context->getSharedContextDisagg()->disaggregated_mode),
+        global_context->getSharedContextDisagg()->use_autoscaler,
+        storage_config.s3_config.isS3Enabled());
+
     if (storage_config.s3_config.isS3Enabled())
     {
         if (enable_encryption)
@@ -1278,8 +1286,31 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
     /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
+    /// This setting is currently a bit tricky:
+    /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
+    //    controls the number of total bytes keep in the memory.
+    /// - In disaggregated mode, its default value is 0. 0 means cache is disabled, and it
+    ///   controls the **number** of trees keep in the memory. <-- Will be fixed.
+    ///   We cannot support unlimited delta index cache in disaggregated mode for now,
+    ///   because cache items will be never explicitly removed.
     size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 0);
-    global_context->setDeltaIndexManager(delta_index_cache_size);
+    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    {
+        // In disaggregate compute node, we will not use DeltaIndexManager to cache the delta index.
+        // Instead, we use RNDeltaIndexCache.
+
+        // TODO: Currently RNDeltaIndexCache caches by number of entities, instead of
+        // number of bytes!
+
+        if (delta_index_cache_size > 100000)
+            delta_index_cache_size = 100000; // In case of someone incorrectly uses byte size.
+
+        global_context->getSharedContextDisagg()->initReadNodeDeltaIndexCache(delta_index_cache_size);
+    }
+    else
+    {
+        global_context->setDeltaIndexManager(delta_index_cache_size);
+    }
 
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));

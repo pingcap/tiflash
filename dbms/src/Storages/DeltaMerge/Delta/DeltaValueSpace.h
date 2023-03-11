@@ -301,6 +301,7 @@ class DeltaValueSnapshot
     , private boost::noncopyable
 {
     friend class DeltaValueSpace;
+    friend struct DB::DM::Remote::Serializer;
 
 private:
     bool is_update{false};

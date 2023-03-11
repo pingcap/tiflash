@@ -32,14 +32,14 @@ class RNDeltaIndexCache : private boost::noncopyable
 public:
     // TODO: Currently we use a quantity based cache size. We could change to memory-size based.
     //       However, as the delta index's size could be changing, we need to implement our own LRU instead.
-    explicit RNDeltaIndexCache(size_t max_cache_keys = 1000)
+    explicit RNDeltaIndexCache(size_t max_cache_keys)
         : cache(max_cache_keys)
     {
     }
 
     struct CacheKey
     {
-        UInt64 write_node_id;
+        UInt64 store_id;
         Int64 table_id;
         UInt64 segment_id;
         UInt64 segment_epoch;
@@ -47,7 +47,7 @@ public:
 
         bool operator==(const CacheKey & other) const
         {
-            return write_node_id == other.write_node_id
+            return store_id == other.store_id
                 && table_id == other.table_id
                 && segment_id == other.segment_id
                 && segment_epoch == other.segment_epoch
@@ -61,7 +61,7 @@ public:
         {
             using std::hash;
 
-            return hash<UInt64>()(k.write_node_id) ^ //
+            return hash<UInt64>()(k.store_id) ^ //
                 hash<Int64>()(k.table_id) ^ //
                 hash<UInt64>()(k.segment_id) ^ //
                 hash<UInt64>()(k.segment_epoch) ^ //
