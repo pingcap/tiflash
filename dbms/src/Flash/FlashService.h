@@ -120,7 +120,7 @@ protected:
     MockMPPServerInfo mpp_test_info{};
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
-    std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
+    std::unique_ptr<legacy::ThreadPool> cop_pool, batch_cop_pool;
 };
 
 class AsyncFlashService final : public tikvpb::Tikv::WithAsyncMethod_EstablishMPPConnection<FlashService>
