@@ -26,12 +26,14 @@
 #include <Poco/Path.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
 #include <boost/algorithm/string/classification.hpp>
+#include <filesystem>
 #include <utility>
 
 namespace DB
@@ -625,18 +627,43 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
     initializeIndices();
 }
 
+std::vector<String> DMFile::listLocal(const String & parent_path)
+{
+    Poco::File folder(parent_path);
+    std::vector<String> file_names;
+    if (folder.exists())
+    {
+        folder.list(file_names);
+    }
+    return file_names;
+}
+
+std::vector<String> DMFile::listS3(const String & parent_path)
+{
+    std::vector<String> filenames;
+    auto client = S3::ClientFactory::instance().sharedClient();
+    const auto & bucket = S3::ClientFactory::instance().bucket();
+    S3::listPrefix(*client, bucket, parent_path, [&filenames, &parent_path](const Aws::S3::Model::ListObjectsV2Result & result) {
+        const auto & objects = result.GetContents();
+        filenames.reserve(filenames.size() + objects.size());
+        for (const auto & object : objects)
+        {
+            filenames.push_back(object.GetKey().substr(parent_path.size())); // Cut prefix
+        }
+        return S3::PageResult{.num_keys = objects.size(), .more = true};
+    });
+    return filenames;
+}
+
 std::set<UInt64> DMFile::listAllInPath(
     const FileProviderPtr & file_provider,
     const String & parent_path,
     const DMFile::ListOptions & options)
 {
-    Poco::File folder(parent_path);
-    if (!folder.exists())
-        return {};
-    std::vector<std::string> file_names;
-    folder.list(file_names);
-    std::set<UInt64> file_ids;
+    auto s3_fname_view = S3::S3FilenameView::fromKeyWithPrefix(parent_path);
+    auto file_names = s3_fname_view.isValid() ? listS3(parent_path) : listLocal(s3_fname_view.toFullKey());
 
+    std::set<UInt64> file_ids;
     auto try_parse_file_id = [](const String & name) -> std::optional<UInt64> {
         std::vector<std::string> ss;
         boost::split(ss, name, boost::is_any_of("_"));
@@ -1005,6 +1032,20 @@ std::vector<String> DMFile::listInternalFiles()
     }
     return fnames;
 }
+
+void DMFile::switchToRemote(const S3::DMFileOID & oid)
+{
+    RUNTIME_CHECK(useMetaV2());
+    RUNTIME_CHECK(status == Status::READABLE);
+
+    auto local_path = path();
+    // Update the parent_path so that it will read data from remote storage.
+    parent_path = S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKeyWithPrefix();
+
+    // Remove local directory.
+    std::filesystem::remove_all(local_path);
+}
+
 
 } // namespace DM
 } // namespace DB

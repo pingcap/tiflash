@@ -638,7 +638,7 @@ void DeltaMergeStore::ingestFiles(
             {
                 auto store_id = dm_context->db_context.getTMTContext().getKVStore()->getStoreID();
                 Remote::DMFileOID oid{.store_id = store_id, .table_id = dm_context->physical_table_id, .file_id = file->fileId()};
-                remote_data_store->putDMFile(file, oid);
+                remote_data_store->putDMFile(file, oid, /*remove_local*/ true);
                 PS::V3::CheckpointLocation loc{
                     .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
                     .offset_in_file = 0,

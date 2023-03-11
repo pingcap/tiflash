@@ -507,9 +507,26 @@ private:
 };
 
 // We only need this task run once.
-void initStores(Context & global_context, const LoggerPtr & log, bool lazily_init_store)
+void initStores(Context & global_context, const LoggerPtr & log, bool lazily_init_store, EngineStoreServerWrap * tiflash_instance_wrap)
 {
-    auto do_init_stores = [&global_context, log]() {
+    // If `tiflash_instance_wrap` is not nullptr, S3 is enabled.
+    // We must wait for tiflash-proxy's initializtion finished before initialzing DeltaMergeStores,
+    // because we need store_id to scan dmfiles from S3.
+    RUNTIME_CHECK_MSG(lazily_init_store || tiflash_instance_wrap == nullptr, "When S3 enabled, lazily_init_store must be true.");
+    auto wait_proxy = [](EngineStoreServerWrap * tiflash_instance_wrap) {
+        while (tiflash_instance_wrap->proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+        auto status = tiflash_instance_wrap->proxy_helper->getProxyStatus();
+        RUNTIME_CHECK_MSG(status == RaftProxyStatus::Running, "RaftProxyStatus::{}", magic_enum::enum_name(status));
+    };
+
+    auto do_init_stores = [&]() {
+        if (tiflash_instance_wrap != nullptr)
+        {
+            wait_proxy(tiflash_instance_wrap);
+        }
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
         int init_cnt = 0;
         int err_cnt = 0;
@@ -1369,7 +1386,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         LOG_DEBUG(log, "Sync schemas done.");
 
-        initStores(*global_context, log, storage_config.lazily_init_store);
+        initStores(*global_context, log, storage_config.lazily_init_store, storage_config.s3_config.isS3Enabled() ? &tiflash_instance_wrap : nullptr);
 
         // After schema synced, set current database.
         global_context->setCurrentDatabase(default_database);

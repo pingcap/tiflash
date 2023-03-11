@@ -22,6 +22,7 @@
 #include <Core/SortDescription.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/sortBlock.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Poco/Exception.h>
@@ -41,6 +42,8 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
+#include <Storages/S3/S3Filename.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
@@ -1608,10 +1611,19 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::restoreStableFiles()
+void DeltaMergeStore::restoreStableFilesFromS3()
 {
-    LOG_DEBUG(log, "Loading dt files");
+    auto file_provider = global_context.getFileProvider();
+    auto store_id = global_context.getTMTContext().getKVStore()->getStoreID();
+    auto stable_path = S3::S3Filename::fromTableID(store_id, physical_table_id).toFullKeyWithPrefix();
+    auto file_ids = DMFile::listAllInPath(file_provider, stable_path, DMFile::ListOptions{});
+    auto path_delegate = path_pool->getStableDiskDelegator();
+    path_delegate.addS3DTFiles(stable_path, std::move(file_ids));
+    // TODO: remove local dmfile?
+}
 
+void DeltaMergeStore::restoreStableFilesFromLocal()
+{
     DMFile::ListOptions options;
     options.only_list_can_gc = false; // We need all files to restore the bytes on disk
     options.clean_up = true;
@@ -1626,6 +1638,20 @@ void DeltaMergeStore::restoreStableFiles()
             //when we do DMFile::restore later, we then update the actually size of file.
             path_delegate.addDTFile(file_id, 0, root_path);
         }
+    }
+}
+
+void DeltaMergeStore::restoreStableFiles()
+{
+    LOG_DEBUG(log, "Loading dt files");
+
+    if (global_context.getSharedContextDisagg()->remote_data_store)
+    {
+        restoreStableFilesFromS3();
+    }
+    else
+    {
+        restoreStableFilesFromLocal();
     }
 }
 
