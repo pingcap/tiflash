@@ -252,6 +252,7 @@ struct TiFlashProxyConfig
     const String engine_store_advertise_address = "advertise-engine-addr";
     const String pd_endpoints = "pd-endpoints";
     const String engine_label = "engine-label";
+    const String engine_role_label = "engine-role-label";
 
     void addExtraArgs(const std::string & k, const std::string & v)
     {
@@ -262,7 +263,7 @@ struct TiFlashProxyConfig
         args.push_back(iter->second.data());
     }
 
-    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
+    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config, bool has_s3_config)
     {
         auto disaggregated_mode = getDisaggregatedMode(config);
 
@@ -292,6 +293,10 @@ struct TiFlashProxyConfig
                 args_map[engine_store_advertise_address] = args_map[engine_store_address];
 
             args_map[engine_label] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
+            if (disaggregated_mode != DisaggregatedMode::Compute && has_s3_config)
+            {
+                args_map[engine_role_label] = DISAGGREGATED_MODE_STORAGE_ENGINE_ROLE;
+            }
 
             for (auto && [k, v] : args_map)
             {
@@ -909,7 +914,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     // Init Proxy's config
-    TiFlashProxyConfig proxy_conf(config());
+    TiFlashProxyConfig proxy_conf(config(), storage_config.s3_config.isS3Enabled());
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
