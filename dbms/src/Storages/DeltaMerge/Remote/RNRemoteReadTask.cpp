@@ -478,7 +478,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         }
 
         // FIXME: this could block for a long time, refine it later
-        auto occupy_space_res = db_context.getSharedContextDisagg()->rn_cache->occupySpace(all_persisted_ids, page_sizes);
+        auto occupy_space_res = db_context.getSharedContextDisagg()->rn_page_cache->occupySpace(all_persisted_ids, page_sizes);
         task->page_ids_cache_miss.reserve(occupy_space_res.pages_not_in_cache.size());
         for (const auto & oid : occupy_space_res.pages_not_in_cache)
         {
@@ -517,7 +517,7 @@ void RNRemoteSegmentReadTask::receivePage(RemotePb::RemotePage && remote_page)
     {
         field_sizes.emplace_back(field_sz);
     }
-    auto & page_cache = dm_context->db_context.getSharedContextDisagg()->rn_cache;
+    auto & page_cache = dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
     page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
     LOG_DEBUG(log, "receive page, oid={}", oid);
 }

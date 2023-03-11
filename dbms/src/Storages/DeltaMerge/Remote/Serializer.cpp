@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
+#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -130,8 +131,22 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
         table_id,
         segment_range);
 
-    // TODO: Change to use the DeltaIndex cache.
-    delta_snap->shared_delta_index = std::make_shared<DeltaIndex>();
+    auto delta_index_cache = dm_context.db_context.getSharedContextDisagg()->rn_delta_index_cache;
+    if (delta_index_cache)
+    {
+        delta_snap->shared_delta_index = delta_index_cache->getDeltaIndex({
+            .store_id = remote_store_id,
+            .table_id = table_id,
+            .segment_id = proto.segment_id(),
+            .segment_epoch = proto.segment_epoch(),
+            .delta_index_epoch = proto.delta_index_epoch(),
+        });
+    }
+    else
+    {
+        delta_snap->shared_delta_index = std::make_shared<DeltaIndex>();
+    }
+    // Actually we will not access delta_snap->delta_index_epoch in read node. Just for completeness.
     delta_snap->delta_index_epoch = proto.delta_index_epoch();
 
     auto new_stable = std::make_shared<StableValueSpace>(/* id */ 0);
