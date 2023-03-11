@@ -24,27 +24,66 @@ ASSERT_USE_AVX2_COMPILE_FLAG
 
 namespace DB
 {
-#if defined(__AVX2__) || defined(__SSE2__)
-/// Transform 64-byte mask to 64-bit mask.
-inline UInt64 ToBits64(const Int8 * bytes64)
+
+UInt64 ToBits64(const UInt8 * bytes64)
 {
-#if defined(__AVX2__)
-    const auto check_block = _mm256_setzero_si256();
-    uint64_t mask0 = mem_utils::details::get_block32_cmp_eq_mask(bytes64, check_block);
-    uint64_t mask1 = mem_utils::details::get_block32_cmp_eq_mask(bytes64 + mem_utils::details::BLOCK32_SIZE, check_block);
-    auto res = mask0 | (mask1 << mem_utils::details::BLOCK32_SIZE);
-    return ~res;
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+    const __m512i vbytes = _mm512_loadu_si512(reinterpret_cast<const void *>(bytes64));
+    UInt64 res = _mm512_testn_epi8_mask(vbytes, vbytes);
+#elif defined(__AVX__) && defined(__AVX2__)
+    const __m256i zero32 = _mm256_setzero_si256();
+    UInt64 res = (static_cast<UInt64>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(
+                      _mm256_loadu_si256(reinterpret_cast<const __m256i *>(bytes64)),
+                      zero32)))
+                  & 0xffffffff)
+        | (static_cast<UInt64>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(
+               _mm256_loadu_si256(reinterpret_cast<const __m256i *>(bytes64 + 32)),
+               zero32)))
+           << 32);
 #elif defined(__SSE2__)
-    const auto zero16 = _mm_setzero_si128();
-    UInt64 res
-        = static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64)), zero16)))
-        | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 16)), zero16))) << 16)
-        | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 32)), zero16))) << 32)
-        | (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 48)), zero16))) << 48);
+    const __m128i zero16 = _mm_setzero_si128();
+    UInt64 res = (static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64)),
+                      zero16)))
+                  & 0xffff)
+        | ((static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 16)),
+                zero16)))
+            << 16)
+           & 0xffff0000)
+        | ((static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 32)),
+                zero16)))
+            << 32)
+           & 0xffff00000000)
+        | ((static_cast<UInt64>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 48)),
+                zero16)))
+            << 48)
+           & 0xffff000000000000);
+#elif defined(__aarch64__) && defined(__ARM_NEON)
+    const uint8x16_t bitmask = {0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80, 0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80};
+    const auto * src = reinterpret_cast<const unsigned char *>(bytes64);
+    const uint8x16_t p0 = vceqzq_u8(vld1q_u8(src));
+    const uint8x16_t p1 = vceqzq_u8(vld1q_u8(src + 16));
+    const uint8x16_t p2 = vceqzq_u8(vld1q_u8(src + 32));
+    const uint8x16_t p3 = vceqzq_u8(vld1q_u8(src + 48));
+    uint8x16_t t0 = vandq_u8(p0, bitmask);
+    uint8x16_t t1 = vandq_u8(p1, bitmask);
+    uint8x16_t t2 = vandq_u8(p2, bitmask);
+    uint8x16_t t3 = vandq_u8(p3, bitmask);
+    uint8x16_t sum0 = vpaddq_u8(t0, t1);
+    uint8x16_t sum1 = vpaddq_u8(t2, t3);
+    sum0 = vpaddq_u8(sum0, sum1);
+    sum0 = vpaddq_u8(sum0, sum0);
+    UInt64 res = vgetq_lane_u64(vreinterpretq_u64_u8(sum0), 0);
+#else
+    UInt64 res = 0;
+    for (size_t i = 0; i < 64; ++i)
+        res |= static_cast<UInt64>(0 == bytes64[i]) << i;
+#endif
     return ~res;
-#endif
 }
-#endif
 
 ALWAYS_INLINE inline static size_t
 CountBytesInFilter(const UInt8 * filt, size_t start, size_t end)
@@ -82,7 +121,7 @@ size_t countBytesInFilter(const IColumn::Filter & filt)
     return CountBytesInFilter(filt.data(), 0, filt.size());
 }
 
-static inline size_t CountBytesInFilterWithNull(const Int8 * p1, const Int8 * p2, size_t size)
+static inline size_t CountBytesInFilterWithNull(const UInt8 * p1, const UInt8 * p2, size_t size)
 {
     size_t count = 0;
     for (size_t i = 0; i < size; ++i)
@@ -96,13 +135,8 @@ static inline size_t CountBytesInFilterWithNull(const IColumn::Filter & filt, co
 {
     size_t count = 0;
 
-    /** NOTE: In theory, `filt` should only contain zeros and ones.
-      * But, just in case, here the condition > 0 (to signed bytes) is used.
-      * It would be better to use != 0, then this does not allow SSE2.
-      */
-
-    const Int8 * p1 = reinterpret_cast<const Int8 *>(filt.data()) + start;
-    const Int8 * p2 = reinterpret_cast<const Int8 *>(null_map) + start;
+    const UInt8 * p1 = reinterpret_cast<const UInt8 *>(filt.data()) + start;
+    const UInt8 * p2 = reinterpret_cast<const UInt8 *>(null_map) + start;
     size_t size = end - start;
 
 #if defined(__SSE2__) || defined(__AVX2__)

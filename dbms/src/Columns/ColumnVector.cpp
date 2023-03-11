@@ -203,6 +203,71 @@ void ColumnVector<T>::insertRangeFrom(const IColumn & src, size_t start, size_t 
     memcpy(&data[old_size], &src_vec.data[start], length * sizeof(data[0]));
 }
 
+namespace
+{
+
+/// If mask is a number of this kind: [0]*[1]+ function returns the length of the cluster of 1s.
+/// Otherwise it returns the special value: 0xFF.
+/// Note: mask must be non-zero.
+inline UInt8 prefixToCopy(UInt64 mask)
+{
+    static constexpr UInt64 all_match = 0xFFFFFFFFFFFFFFFFULL;
+    if (mask == all_match)
+        return 64;
+    /// Row with index 0 correspond to the least significant bit.
+    /// So the length of the prefix to copy is 64 - #(leading zeroes).
+    const UInt64 leading_zeroes = __builtin_clzll(mask);
+    if (mask == ((all_match << leading_zeroes) >> leading_zeroes))
+        return 64 - leading_zeroes;
+    else
+        return 0xFF;
+}
+
+inline UInt8 suffixToCopy(UInt64 mask)
+{
+    const auto prefix_to_copy = prefixToCopy(~mask);
+    return prefix_to_copy >= 64 ? prefix_to_copy : 64 - prefix_to_copy;
+}
+
+} // namespace
+
+template <typename T, typename Container, size_t SIMD_BYTES = 64>
+inline void doFilterAligned(const UInt8 *& filt_pos, const UInt8 *& filt_end_aligned, const T *& data_pos, Container & res_data)
+{
+    while (filt_pos < filt_end_aligned)
+    {
+        UInt64 mask = ToBits64(filt_pos);
+        if likely (0 != mask)
+        {
+            const UInt8 prefix_to_copy = prefixToCopy(mask);
+            if (0xFF != prefix_to_copy)
+            {
+                res_data.insert(data_pos, data_pos + prefix_to_copy);
+            }
+            else
+            {
+                const UInt8 suffix_to_copy = suffixToCopy(mask);
+                if (0xFF != suffix_to_copy)
+                {
+                    res_data.insert(data_pos + SIMD_BYTES - suffix_to_copy, data_pos + SIMD_BYTES);
+                }
+                else
+                {
+                    while (mask)
+                    {
+                        size_t index = __builtin_ctzll(mask);
+                        res_data.push_back(data_pos[index]);
+                        mask &= mask - 1;
+                    }
+                }
+            }
+        }
+
+        filt_pos += SIMD_BYTES;
+        data_pos += SIMD_BYTES;
+    }
+}
+
 template <typename T>
 ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_size_hint) const
 {
@@ -224,40 +289,16 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
     const UInt8 * filt_end = filt_pos + size;
     const T * data_pos = &data[0];
 
-#if __SSE2__
     /** A slightly more optimized version.
         * Based on the assumption that often pieces of consecutive values
         *  completely pass or do not pass the filter.
         * Therefore, we will optimistically check the parts of `SIMD_BYTES` values.
         */
 
-    static constexpr size_t SIMD_BYTES = 16;
-    const __m128i zero16 = _mm_setzero_si128();
-    const UInt8 * filt_end_sse = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
+    static constexpr size_t SIMD_BYTES = 64;
+    const UInt8 * filt_end_aligned = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
 
-    while (filt_pos < filt_end_sse)
-    {
-        int mask = _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)), zero16));
-
-        if (0 == mask)
-        {
-            /// Nothing is inserted.
-        }
-        else if (0xFFFF == mask)
-        {
-            res_data.insert(data_pos, data_pos + SIMD_BYTES);
-        }
-        else
-        {
-            for (size_t i = 0; i < SIMD_BYTES; ++i)
-                if (filt_pos[i])
-                    res_data.push_back(data_pos[i]);
-        }
-
-        filt_pos += SIMD_BYTES;
-        data_pos += SIMD_BYTES;
-    }
-#endif
+    doFilterAligned<T, Container, SIMD_BYTES>(filt_pos, filt_end_aligned, data_pos, res_data);
 
     while (filt_pos < filt_end)
     {

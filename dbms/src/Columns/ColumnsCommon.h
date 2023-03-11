@@ -49,4 +49,7 @@ void filterArraysImplOnlyData(
     const IColumn::Filter & filt,
     ssize_t result_size_hint);
 
+/// Transform 64-byte mask to 64-bit mask.
+UInt64 ToBits64(const UInt8 * bytes64);
+
 } // namespace DB
