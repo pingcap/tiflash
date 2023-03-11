@@ -22,11 +22,10 @@
 #include <Interpreters/Context_fwd.h>
 #include <Storages/IStorage.h>
 
-#include "pingcap/kv/RegionCache.h"
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/mpp.pb.h>
+#include <pingcap/kv/RegionCache.h>
 #include <tipb/executor.pb.h>
 #pragma GCC diagnostic pop
 

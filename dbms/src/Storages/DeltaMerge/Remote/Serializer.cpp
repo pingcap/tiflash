@@ -103,8 +103,8 @@ Serializer::serializeTo(
 
 SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     const DMContext & dm_context,
-    UInt64 remote_store_id,
-    Int64 table_id,
+    StoreID remote_store_id,
+    TableID table_id,
     const RemotePb::RemoteSegment & proto)
 {
     RowKeyRange segment_range;

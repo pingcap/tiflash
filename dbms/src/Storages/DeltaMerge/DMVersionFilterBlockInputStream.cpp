@@ -407,7 +407,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             Block res;
             if (cur_raw_block.segmentRowIdCol() == nullptr)
             {
-                res = name_trans_action.filterAndTransform(cur_raw_block, filter, passed_count);
+                res = select_by_colid_action.filterAndTransform(cur_raw_block, filter, passed_count);
             }
             else
             {

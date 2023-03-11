@@ -17,8 +17,8 @@
 #include <Columns/ColumnsCommon.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <DataStreams/SelectionByColumnIdTransformAction.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <DataStreams/SelectionByColumnIdTransformAction.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <common/logger_useful.h>
@@ -52,7 +52,7 @@ public:
         : version_limit(version_limit_)
         , is_common_handle(is_common_handle_)
         , header(toEmptyBlock(read_columns))
-        , name_trans_action(input->getHeader(), header)
+        , select_by_colid_action(input->getHeader(), header)
         , log(Logger::get((MODE == DM_VERSION_FILTER_MODE_MVCC ? MVCC_FILTER_NAME : COMPACT_FILTER_NAME),
                           tracing_id))
     {
@@ -205,7 +205,7 @@ private:
     {
         if (block.segmentRowIdCol() == nullptr)
         {
-            return name_trans_action.transform(block);
+            return select_by_colid_action.transform(block);
         }
         else
         {
@@ -262,7 +262,7 @@ private:
     size_t effective_num_rows = 0;
     size_t deleted_rows = 0;
 
-    SelectionByColumnIdTransformAction name_trans_action;
+    SelectionByColumnIdTransformAction select_by_colid_action;
 
     const LoggerPtr log;
 };
