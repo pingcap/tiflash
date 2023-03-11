@@ -294,7 +294,7 @@ struct TiFlashProxyConfig
             args_map[engine_label] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
             if (disaggregated_mode != DisaggregatedMode::Compute && has_s3_config)
             {
-                args_map[engine_role_label] = DISAGGREGATED_MODE_STORAGE_ENGINE_ROLE;
+                args_map[engine_role_label] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
             }
 
             for (auto && [k, v] : args_map)
