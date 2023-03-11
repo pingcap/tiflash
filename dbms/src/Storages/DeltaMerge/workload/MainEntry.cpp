@@ -32,6 +32,8 @@
 #include <fstream>
 #include <random>
 
+#include "Storages/S3/S3Common.h"
+
 using namespace DB::tests;
 using namespace DB::DM::tests;
 
@@ -50,6 +52,16 @@ void initWorkDirs(const std::vector<std::string> & dirs)
     }
 }
 
+void initReadThread()
+{
+    DB::ServerInfo server_info;
+    DB::DM::SegmentReaderPoolManager::instance().init(
+        server_info.cpu_info.logical_cores,
+        TiFlashTestEnv::getGlobalContext().getSettingsRef().dt_read_thread_count_scale);
+    DB::DM::SegmentReadTaskScheduler::instance();
+    DB::DM::DMFileReaderPool::instance();
+}
+
 void init(WorkloadOptions & opts)
 {
     log_ofs.open(opts.log_file, std::ios_base::out | std::ios_base::app);
@@ -60,6 +72,24 @@ void init(WorkloadOptions & opts)
     TiFlashTestEnv::setupLogger(opts.log_level, log_ofs);
     opts.initFailpoints();
     DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V5; // metav2 is used forcibly for test.
+    // For mixed mode, we need to run the test in ONLY_V2 mode first.
+    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.ps_run_mode == DB::PageStorageRunMode::ONLY_V3 ? DB::PageStorageRunMode::ONLY_V3 : DB::PageStorageRunMode::ONLY_V2, opts.bg_thread_count);
+
+    if (!opts.s3_bucket.empty())
+    {
+        DB::StorageS3Config config = {
+            .endpoint = opts.s3_endpoint,
+            .bucket = opts.s3_bucket,
+            .access_key_id = opts.s3_access_key_id,
+            .secret_access_key = opts.s3_secret_access_key,
+        };
+        DB::S3::ClientFactory::instance().init(config);
+    }
+
+    if (opts.enable_read_thread)
+    {
+        initReadThread();
+    }
 }
 
 void outputResultHeader()
@@ -255,16 +285,6 @@ void dailyRandomTest(WorkloadOptions & opts)
     }
 }
 
-void initReadThread()
-{
-    DB::ServerInfo server_info;
-    DB::DM::SegmentReaderPoolManager::instance().init(
-        server_info.cpu_info.logical_cores,
-        TiFlashTestEnv::getGlobalContext().getSettingsRef().dt_read_thread_count_scale);
-    DB::DM::SegmentReadTaskScheduler::instance();
-    DB::DM::DMFileReaderPool::instance();
-}
-
 int DTWorkload::mainEntry(int argc, char ** argv)
 {
     WorkloadOptions opts;
@@ -283,14 +303,6 @@ int DTWorkload::mainEntry(int argc, char ** argv)
     // or the logging in global context won't be output to
     // the log file
     init(opts);
-
-    // For mixed mode, we need to run the test in ONLY_V2 mode first.
-    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.ps_run_mode == PageStorageRunMode::ONLY_V3 ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::ONLY_V2, opts.bg_thread_count);
-
-    if (opts.enable_read_thread)
-    {
-        initReadThread();
-    }
 
     if (opts.testing_type == "daily_perf")
     {

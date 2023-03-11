@@ -654,7 +654,8 @@ std::vector<String> DMFile::listS3(const String & parent_path)
             for (const auto & prefix : prefixes)
             {
                 RUNTIME_CHECK(prefix.GetPrefix().size() > parent_path.size(), prefix.GetPrefix(), parent_path);
-                filenames.push_back(prefix.GetPrefix().substr(parent_path.size())); // Cut prefix
+                auto short_name_size = prefix.GetPrefix().size() - parent_path.size() - 1; // `1` for the delimiter in last.
+                filenames.push_back(prefix.GetPrefix().substr(parent_path.size(), short_name_size)); // Cut prefix and last delimiter.
             }
             return S3::PageResult{.num_keys = prefixes.size(), .more = true};
         });

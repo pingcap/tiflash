@@ -16,6 +16,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -60,6 +61,11 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
 {
     auto settings = createSettings(opts_);
     context = DB::tests::TiFlashTestEnv::getContext(settings, opts_.work_dirs);
+    if (!opts_.s3_bucket.empty())
+    {
+        context->getSharedContextDisagg()->initRemoteDataStore(context->getFileProvider(), /*is_s3_enabled*/ true);
+        context->initializeWriteNodePageStorageIfNeed(context->getPathPool());
+    }
 
     auto v = table_info->toStrings();
     for (const auto & s : v)
