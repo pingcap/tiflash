@@ -426,7 +426,18 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         address,
         log);
 
-    task->page_cache = db_context.getSharedContextDisagg()->rn_cache;
+    task->dm_context = std::make_shared<DMContext>(
+        db_context,
+        /* path_pool */ nullptr,
+        /* storage_pool */ nullptr,
+        /* min_version */ 0,
+        table_id,
+        /* is_common_handle */ segment_range.is_common_handle,
+        /* rowkey_column_size */ segment_range.rowkey_column_size,
+        db_context.getSettingsRef(),
+        /* scan_context */ std::make_shared<ScanContext>() // Currently we don't access its content
+    );
+
     task->segment = std::make_shared<Segment>(
         log,
         /*epoch*/ 0,
@@ -438,7 +449,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
     task->read_ranges = std::move(read_ranges);
 
     task->segment_snap = Remote::Serializer::deserializeSegmentSnapshotFrom(
-        db_context,
+        *(task->dm_context),
         store_id,
         table_id,
         proto);
@@ -467,34 +478,24 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         }
 
         // FIXME: this could block for a long time, refine it later
-        auto occupy_space_res = task->page_cache->occupySpace(all_persisted_ids, page_sizes);
+        auto occupy_space_res = db_context.getSharedContextDisagg()->rn_page_cache->occupySpace(all_persisted_ids, page_sizes);
         task->page_ids_cache_miss.reserve(occupy_space_res.pages_not_in_cache.size());
         for (const auto & oid : occupy_space_res.pages_not_in_cache)
         {
             task->page_ids_cache_miss.emplace_back(oid.page_id);
         }
         task->local_cache_guard = occupy_space_res.pages_guard;
-        LOG_INFO(log,
-                 "mem-table cfs: {}, persisted cfs: {} (size={}), local cache hit rate: {}, cache_miss_oids: {}, all_oids: {}",
-                 task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
-                 task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
-                 total_persisted_size,
-                 (all_persisted_ids.empty() ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * task->page_ids_cache_miss.size() / all_persisted_ids.size())),
-                 task->cacheMissPageIds(),
-                 all_persisted_ids);
+        LOG_INFO(
+            log,
+            "mem-table cfs: {}, persisted cfs: {} (size={}), local cache hit rate: {}, cache_miss_oids: {}, all_oids: {}",
+            task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
+            task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
+            total_persisted_size,
+            (all_persisted_ids.empty() ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * task->page_ids_cache_miss.size() / all_persisted_ids.size())),
+            task->cacheMissPageIds(),
+            all_persisted_ids);
     }
 
-    task->dm_context = std::make_shared<DMContext>(
-        db_context,
-        /* path_pool */ nullptr,
-        /* storage_pool */ nullptr,
-        /* min_version */ 0,
-        table_id,
-        /* is_common_handle */ segment_range.is_common_handle,
-        /* rowkey_column_size */ segment_range.rowkey_column_size,
-        db_context.getSettingsRef(),
-        /* scan_context */ std::make_shared<ScanContext>() // Currently we don't access its content
-    );
 
     return task;
 }
@@ -516,6 +517,7 @@ void RNRemoteSegmentReadTask::receivePage(RemotePb::RemotePage && remote_page)
     {
         field_sizes.emplace_back(field_sz);
     }
+    auto & page_cache = dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
     page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
     LOG_DEBUG(log, "receive page, oid={}", oid);
 }

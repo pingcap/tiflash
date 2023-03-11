@@ -34,7 +34,7 @@ ManualCompactManager::ManualCompactManager(const Context & global_context_, cons
     , settings(settings_)
     , log(&Poco::Logger::get("ManualCompactManager"))
 {
-    worker_pool = std::make_unique<ThreadPool>(static_cast<size_t>(settings.manual_compact_pool_size), [] { setThreadName("m-compact-pool"); });
+    worker_pool = std::make_unique<legacy::ThreadPool>(static_cast<size_t>(settings.manual_compact_pool_size), [] { setThreadName("m-compact-pool"); });
 }
 
 grpc::Status ManualCompactManager::handleRequest(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)

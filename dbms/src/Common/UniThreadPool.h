@@ -164,6 +164,7 @@ class GlobalThreadPool : public FreeThreadPool
 public:
     static void initialize(size_t max_threads = 10000, size_t max_free_threads = 1000, size_t queue_size = 10000);
     static GlobalThreadPool & instance();
+    ~GlobalThreadPool() noexcept;
 };
 
 

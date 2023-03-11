@@ -18,13 +18,11 @@
 #include <Core/Types.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/Transaction/Types.h>
+#include <common/ThreadPool.h>
 
 #include <ctime>
 #include <functional>
 #include <memory>
-
-
-class ThreadPool;
 
 
 namespace DB
@@ -74,7 +72,7 @@ public:
 
     /// Load a set of existing tables. If thread_pool is specified, use it.
     /// You can call only once, right after the object is created.
-    virtual void loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag) = 0;
+    virtual void loadTables(Context & context, legacy::ThreadPool * thread_pool, bool has_force_restore_data_flag) = 0;
 
     /// Check the existence of the table.
     virtual bool isTableExist(const Context & context, const String & name) const = 0;

@@ -100,7 +100,7 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
 
     {
         auto snapshot_id = task_id.toMeta();
-        response->set_allocated_snapshot_id(&snapshot_id);
+        response->mutable_snapshot_id()->Swap(&snapshot_id);
     }
 
     using DM::Remote::Serializer;

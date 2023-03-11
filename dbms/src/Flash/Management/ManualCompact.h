@@ -93,7 +93,7 @@ private:
     Poco::Logger * log;
 
     /// Placed last to be destroyed first.
-    std::unique_ptr<ThreadPool> worker_pool;
+    std::unique_ptr<legacy::ThreadPool> worker_pool;
 };
 
 } // namespace Management
