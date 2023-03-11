@@ -1616,7 +1616,9 @@ void DeltaMergeStore::restoreStableFilesFromS3()
     auto file_provider = global_context.getFileProvider();
     auto store_id = global_context.getTMTContext().getKVStore()->getStoreID();
     auto stable_path = S3::S3Filename::fromTableID(store_id, physical_table_id).toFullKeyWithPrefix();
-    auto file_ids = DMFile::listAllInPath(file_provider, stable_path, DMFile::ListOptions{});
+
+    auto file_ids = DMFile::listAllInPath(file_provider, stable_path, DMFile::ListOptions{.only_list_can_gc = false});
+    LOG_DEBUG(log, "s3_stable_path {} => file_ids {}", stable_path, file_ids);
     auto path_delegate = path_pool->getStableDiskDelegator();
     path_delegate.addS3DTFiles(stable_path, std::move(file_ids));
     // TODO: remove local dmfile?

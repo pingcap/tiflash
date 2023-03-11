@@ -175,6 +175,8 @@ StoragePathPool::StoragePathPool(StoragePathPool && rhs) noexcept
     , shutdown_called(rhs.shutdown_called.load())
     , global_capacity(std::move(rhs.global_capacity))
     , file_provider(std::move(rhs.file_provider))
+    , s3_stable_path(std::move(rhs.s3_stable_path))
+    , s3_file_ids(std::move(rhs.s3_file_ids))
     , log(std::move(rhs.log))
 {}
 
@@ -191,6 +193,8 @@ StoragePathPool & StoragePathPool::operator=(StoragePathPool && rhs)
         shutdown_called = rhs.shutdown_called.load();
         global_capacity.swap(rhs.global_capacity);
         file_provider.swap(rhs.file_provider);
+        s3_stable_path.swap(rhs.s3_stable_path);
+        s3_file_ids.swap(rhs.s3_file_ids);
         log.swap(rhs.log);
     }
     return *this;
@@ -552,16 +556,17 @@ void StableDiskDelegator::removeDTFile(UInt64 file_id)
 
 void StableDiskDelegator::addS3DTFiles(const String & s3_stable_path_, std::set<UInt64> && file_ids_)
 {
-    RUNTIME_CHECK(s3_stable_path.empty() && s3_file_ids.empty(), s3_stable_path); // Can only `addS3DTFiles` one time.
-    s3_stable_path = s3_stable_path_;
-    s3_file_ids = std::move(file_ids_);
+    RUNTIME_CHECK(!s3_stable_path_.empty(), s3_stable_path_);
+    RUNTIME_CHECK(pool.s3_stable_path.empty() && pool.s3_file_ids.empty(), pool.s3_stable_path); // Can only `addS3DTFiles` one time.
+    pool.s3_stable_path = s3_stable_path_;
+    pool.s3_file_ids = std::move(file_ids_);
 }
 
 String StableDiskDelegator::getS3DTFile(UInt64 file_id)
 {
-    auto iter = s3_file_ids.find(file_id);
-    RUNTIME_CHECK_MSG(iter != s3_file_ids.end(), "file_id={} is not a DMFile in S3", file_id);
-    return s3_stable_path;
+    auto iter = pool.s3_file_ids.find(file_id);
+    RUNTIME_CHECK_MSG(iter != pool.s3_file_ids.end(), "file_id={} is not a DMFile in S3", file_id);
+    return pool.s3_stable_path;
 }
 
 void StableDiskDelegator::addS3DTFileSize(UInt64 /*file_id*/, size_t /*size*/)

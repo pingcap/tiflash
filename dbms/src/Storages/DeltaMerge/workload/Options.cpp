@@ -163,20 +163,10 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     testing_type = vm["testing_type"].as<std::string>();
     log_write_request = vm["log_write_request"].as<bool>();
-    switch (vm["ps_run_mode"].as<uint64_t>())
-    {
-    case static_cast<uint64_t>(PageStorageRunMode::ONLY_V2):
-        ps_run_mode = PageStorageRunMode::ONLY_V2;
-        break;
-    case static_cast<uint64_t>(PageStorageRunMode::ONLY_V3):
-        ps_run_mode = PageStorageRunMode::ONLY_V3;
-        break;
-    case static_cast<uint64_t>(PageStorageRunMode::MIX_MODE):
-        ps_run_mode = PageStorageRunMode::MIX_MODE;
-        break;
-    default:
-        return {false, fmt::format("unknown ps_run_mode {}.", vm["ps_run_mode"].as<uint64_t>())};
-    }
+
+    auto opt_ps_run_mode = magic_enum::enum_cast<PageStorageRunMode>(vm["ps_run_mode"].as<uint64_t>());
+    RUNTIME_CHECK_MSG(opt_ps_run_mode.has_value(), "Invalid ps_run_mode={}", vm["ps_run_mode"].as<uint64_t>());
+    ps_run_mode = *opt_ps_run_mode;
 
     bg_thread_count = vm["bg_thread_count"].as<uint64_t>();
 

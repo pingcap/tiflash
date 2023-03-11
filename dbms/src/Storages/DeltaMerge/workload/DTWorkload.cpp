@@ -31,11 +31,14 @@
 #include <Storages/DeltaMerge/workload/TableGenerator.h>
 #include <Storages/DeltaMerge/workload/TimestampGenerator.h>
 #include <Storages/DeltaMerge/workload/Utils.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <cpptoml.h>
 
 namespace DB::DM::tests
 {
+static constexpr StoreID test_store_id = 100000;
 DB::Settings createSettings(const WorkloadOptions & opts)
 {
     DB::Settings settings;
@@ -63,6 +66,11 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
     context = DB::tests::TiFlashTestEnv::getContext(settings, opts_.work_dirs);
     if (!opts_.s3_bucket.empty())
     {
+        auto & kvstore = context->getTMTContext().getKVStore();
+        auto store_meta = kvstore->getStoreMeta();
+        store_meta.set_id(test_store_id);
+        kvstore->setStore(store_meta);
+
         context->getSharedContextDisagg()->initRemoteDataStore(context->getFileProvider(), /*is_s3_enabled*/ true);
         context->initializeWriteNodePageStorageIfNeed(context->getPathPool());
     }

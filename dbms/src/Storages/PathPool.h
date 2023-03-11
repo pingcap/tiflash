@@ -166,9 +166,6 @@ public:
 
 private:
     StoragePathPool & pool;
-
-    String s3_stable_path;
-    std::set<UInt64> s3_file_ids;
 };
 
 // TODO: the `freePageFileUsedSize` and `removePageFile`
@@ -509,6 +506,9 @@ private:
     PathCapacityMetricsPtr global_capacity;
 
     FileProviderPtr file_provider;
+
+    String s3_stable_path;
+    std::set<UInt64> s3_file_ids;
 
     LoggerPtr log;
 };

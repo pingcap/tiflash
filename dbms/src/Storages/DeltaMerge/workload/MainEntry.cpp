@@ -14,6 +14,8 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/UniThreadPool.h>
+#include <IO/IOThreadPool.h>
 #include <Interpreters/Context.h>
 #include <Server/ServerInfo.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
@@ -23,7 +25,9 @@
 #include <Storages/DeltaMerge/workload/Handle.h>
 #include <Storages/DeltaMerge/workload/Options.h>
 #include <Storages/DeltaMerge/workload/Utils.h>
+#include <Storages/Page/PageConstants.h>
 #include <Storages/PathPool.h>
+#include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <signal.h>
@@ -32,8 +36,7 @@
 #include <fstream>
 #include <random>
 
-#include "Storages/S3/S3Common.h"
-
+using namespace DB;
 using namespace DB::tests;
 using namespace DB::DM::tests;
 
@@ -50,6 +53,21 @@ void initWorkDirs(const std::vector<std::string> & dirs)
         }
         d.createDirectories();
     }
+}
+
+// By default init global thread pool by hardware_concurrency
+// Later we will adjust it by `adjustThreadPoolSize`
+void initThreadPool()
+{
+    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
+    GlobalThreadPool::initialize(
+        /*max_threads*/ default_num_threads,
+        /*max_free_threads*/ default_num_threads / 2,
+        /*queue_size*/ default_num_threads * 2);
+    IOThreadPool::initialize(
+        /*max_threads*/ default_num_threads,
+        /*max_free_threads*/ default_num_threads / 2,
+        /*queue_size*/ default_num_threads * 2);
 }
 
 void initReadThread()
@@ -73,7 +91,8 @@ void init(WorkloadOptions & opts)
     opts.initFailpoints();
     DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V5; // metav2 is used forcibly for test.
     // For mixed mode, we need to run the test in ONLY_V2 mode first.
-    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.ps_run_mode == DB::PageStorageRunMode::ONLY_V3 ? DB::PageStorageRunMode::ONLY_V3 : DB::PageStorageRunMode::ONLY_V2, opts.bg_thread_count);
+    auto ps_run_mode = opts.ps_run_mode == DB::PageStorageRunMode::MIX_MODE ? DB::PageStorageRunMode::ONLY_V2 : opts.ps_run_mode;
+    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, ps_run_mode, opts.bg_thread_count);
 
     if (!opts.s3_bucket.empty())
     {
@@ -84,6 +103,7 @@ void init(WorkloadOptions & opts)
             .secret_access_key = opts.s3_secret_access_key,
         };
         DB::S3::ClientFactory::instance().init(config);
+        initThreadPool();
     }
 
     if (opts.enable_read_thread)
