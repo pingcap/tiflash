@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Poco/Logger.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
 #include <common/defines.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -31,7 +33,9 @@ FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_
 
 FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, uint64_t new_peer_id)
 {
-    UNUSED(server, region_id, new_peer_id);
+    UNUSED(server, new_peer_id);
+    auto * log = &Poco::Logger::get("FastAddPeer");
+    LOG_DEBUG(log, "Try add peer for {}", region_id);
     return genFastAddPeerRes(FastAddPeerStatus::NoSuitable, "", "");
 }
 } // namespace DB
