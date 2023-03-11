@@ -58,7 +58,9 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider(), s3_client, bucket);
     service->uni_page_storage->restore();
 
-    if (s3factory.isEnabled())
+    // Starts the checkpoint upload timer
+    // for disagg tiflash write node
+    if (s3factory.isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         // TODO: make this interval reloadable
         auto interval_s = context.getSettingsRef().remote_checkpoint_interval_seconds;
