@@ -220,7 +220,7 @@ inline TableID getTableId(const T & key)
 
 inline HandleID getHandle(const DecodedTiKVKey & key)
 {
-    return decodeInt64(read<UInt64>(key.getUserKey().data()));
+    return decodeInt64(read<UInt64>(key.data() + RAW_KEY_NO_HANDLE_SIZE));
 }
 
 inline std::string_view getRawTiDBPKView(const DecodedTiKVKey & key)
