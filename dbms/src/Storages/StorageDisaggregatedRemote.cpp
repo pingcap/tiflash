@@ -62,7 +62,7 @@ struct RpcTypeTraits<disaggregated::EstablishDisaggTaskRequest>
 {
     using RequestType = disaggregated::EstablishDisaggTaskRequest;
     using ResultType = disaggregated::EstablishDisaggTaskResponse;
-    static const char * err_msg() { return "EstablishDisaggregatedTask Failed"; } // NOLINT(readability-identifier-naming)
+    static const char * err_msg() { return "EstablishDisaggTask Failed"; } // NOLINT(readability-identifier-naming)
     static ::grpc::Status doRPCCall(
         grpc::ClientContext * context,
         std::shared_ptr<KvConnClient> client,
@@ -99,7 +99,7 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
             // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
             // pingcap::kv::LabelFilter label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
             // FIXME: it depends on another PR, now send request to tiflash node with {"engine"="tiflash"}
-            auto label_filter = pingcap::kv::labelFilterNoTiFlashWriteNode;
+            auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
             auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
             RUNTIME_CHECK(!batch_cop_tasks.empty());
 
