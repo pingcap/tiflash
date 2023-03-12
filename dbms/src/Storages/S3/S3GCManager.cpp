@@ -116,7 +116,7 @@ bool S3GCManager::runOnAllStores()
             {
                 LOG_INFO(log, "store not found from pd, maybe already removed. gc_store_id={}", gc_store_id);
             }
-            runForTombstonedStore(gc_store_id);
+            runForTombstoneStore(gc_store_id);
         }
         else
         {
@@ -160,14 +160,14 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
     tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
 }
 
-void S3GCManager::runForTombstonedStore(UInt64 gc_store_id)
+void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
 {
     // get a timepoint at the begin, only remove objects that expired compare
     // to this timepoint
     const Aws::Utils::DateTime gc_timepoint = Aws::Utils::DateTime::Now();
     LOG_DEBUG(log, "run gc, gc_store_id={} timepoint={}", gc_store_id, gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
 
-    // If the store id is tombstoned, then run gc on the store as if no locks.
+    // If the store id is tombstone, then run gc on the store as if no locks.
     // Scan and remove all expired locks
     LOG_INFO(log, "store is tombstone, clean all locks");
     std::unordered_set<String> valid_lock_files;
@@ -238,7 +238,7 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     // delete S3 lock file
     deleteObject(*client, client->bucket(), lock_key);
 
-    // TODO: If `lock_key` is the only lock to datafile and GCManager crashs
+    // TODO: If `lock_key` is the only lock to datafile and GCManager crashes
     //       after the lock deleted but before delmark uploaded, then the
     //       datafile is not able to be cleaned.
     //       Need another logic to cover this corner case.
@@ -438,11 +438,11 @@ void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifes
     {
         for (const auto & mf : manifests.objects())
         {
-            // store tombstoned, remove all manifests
+            // store is tombstone, remove all manifests
             deleteObject(*client, client->bucket(), mf.second.key);
             LOG_INFO(
                 log,
-                "remove outdated manifest because of store tombstone, key={} mtime={}",
+                "remove outdated manifest because store is tombstone, key={} mtime={}",
                 mf.second.key,
                 mf.second.last_modification.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
         }

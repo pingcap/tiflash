@@ -95,7 +95,7 @@ public:
     // private:
     void runForStore(UInt64 gc_store_id);
 
-    void runForTombstonedStore(UInt64 gc_store_id);
+    void runForTombstoneStore(UInt64 gc_store_id);
 
     void cleanUnusedLocks(
         UInt64 gc_store_id,
