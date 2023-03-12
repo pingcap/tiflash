@@ -30,8 +30,6 @@
 #include <aws/core/utils/DateTime.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CommonPrefix.h>
-#include <aws/s3/model/ListObjectsV2Request.h>
-#include <aws/s3/model/ListObjectsV2Result.h>
 #include <common/logger_useful.h>
 #include <kvproto/metapb.pb.h>
 #include <pingcap/pd/IClient.h>
@@ -88,6 +86,12 @@ bool S3GCManager::runOnAllStores()
         return false;
     }
 
+    if (config.method == S3GCMethod::Lifecycle && !lifecycle_has_been_set)
+    {
+        ensureLifecycleRuleExist(*client, client->bucket(), /*expire_days*/ 1);
+        lifecycle_has_been_set = true;
+    }
+
     const std::vector<UInt64> all_store_ids = getAllStoreIds();
     LOG_TRACE(log, "all_store_ids: {}", all_store_ids);
     // Get all store status from pd after getting the store ids from S3.
@@ -116,7 +120,7 @@ bool S3GCManager::runOnAllStores()
             {
                 LOG_INFO(log, "store not found from pd, maybe already removed. gc_store_id={}", gc_store_id);
             }
-            runForTombstonedStore(gc_store_id);
+            runForTombstoneStore(gc_store_id);
         }
         else
         {
@@ -144,8 +148,11 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
 
     LOG_INFO(log, "latest manifest, gc_store_id={} upload_seq={} key={}", gc_store_id, manifests.latestUploadSequence(), manifests.latestManifestKey());
     // Parse from the latest manifest and collect valid lock files
-    // TODO: collect valid lock files in multiple manifest?
-    std::unordered_set<String> valid_lock_files = getValidLocksFromManifest(manifests.latestManifestKey());
+    // collect valid lock files from preserved manifests
+    std::unordered_set<String> valid_lock_files = getValidLocksFromManifest(manifests.preservedManifests(
+        config.manifest_preserve_count,
+        config.manifest_expired_hour,
+        gc_timepoint));
     LOG_INFO(log, "latest manifest, key={} n_locks={}", manifests.latestManifestKey(), valid_lock_files.size());
 
     // Scan and remove the expired locks
@@ -155,35 +162,62 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
     // clean the outdated manifest objects
     removeOutdatedManifest(manifests, &gc_timepoint);
 
-    // After removing the expired lock, we need to scan the data files
-    // with expired delmark
-    tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+    switch (config.method)
+    {
+    case S3GCMethod::Lifecycle:
+    {
+        // nothing need to be done, the expired files will be deleted by S3-like
+        // system's lifecycle management
+        break;
+    }
+    case S3GCMethod::ScanThenDelete:
+    {
+        // After removing the expired lock, we need to scan the data files
+        // with expired delmark
+        tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+        break;
+    }
+    }
 }
 
-void S3GCManager::runForTombstonedStore(UInt64 gc_store_id)
+void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
 {
     // get a timepoint at the begin, only remove objects that expired compare
     // to this timepoint
     const Aws::Utils::DateTime gc_timepoint = Aws::Utils::DateTime::Now();
     LOG_DEBUG(log, "run gc, gc_store_id={} timepoint={}", gc_store_id, gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
 
-    // If the store id is tombstoned, then run gc on the store as if no locks.
+    // If the store id is tombstone, then run gc on the store as if no locks.
     // Scan and remove all expired locks
     LOG_INFO(log, "store is tombstone, clean all locks");
-    std::unordered_set<String> valid_lock_files;
     const auto lock_prefix = S3Filename::getLockPrefix();
+    // clean all by setting `safe_sequence` to MaxUInt64 and empty `valid_lock_files`
+    std::unordered_set<String> valid_lock_files;
     cleanUnusedLocks(gc_store_id, lock_prefix, std::numeric_limits<UInt64>::max(), valid_lock_files, gc_timepoint);
 
     // clean all manifest objects
     const auto manifests = CheckpointManifestS3Set::getFromS3(*client, gc_store_id);
     removeOutdatedManifest(manifests, nullptr);
 
-    // TODO: write a mark file and skip `cleanUnusedLocks` and `removeOutdatedManifest`
-    //       in the next round to reduce S3 LIST calls.
+    switch (config.method)
+    {
+    case S3GCMethod::Lifecycle:
+    {
+        // nothing need to be done, the expired files will be deleted by S3-like
+        // system's lifecycle management
+        break;
+    }
+    case S3GCMethod::ScanThenDelete:
+    {
+        // TODO: write a mark file and skip `cleanUnusedLocks` and `removeOutdatedManifest`
+        //       in the next round to reduce S3 LIST calls.
 
-    // After all the locks removed, the data files may still being locked by another
-    // store id, we need to scan the data files with expired delmark
-    tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+        // After all the locks removed, the data files may still being locked by another
+        // store id, we need to scan the data files with expired delmark
+        tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+        break;
+    }
+    }
 }
 
 void S3GCManager::cleanUnusedLocks(
@@ -238,7 +272,7 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     // delete S3 lock file
     deleteObject(*client, client->bucket(), lock_key);
 
-    // TODO: If `lock_key` is the only lock to datafile and GCManager crashs
+    // TODO: If `lock_key` is the only lock to datafile and GCManager crashes
     //       after the lock deleted but before delmark uploaded, then the
     //       datafile is not able to be cleaned.
     //       Need another logic to cover this corner case.
@@ -270,6 +304,23 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
         if (ok)
         {
             LOG_INFO(log, "delmark created, key={}", unlocked_datafile_key);
+            switch (config.method)
+            {
+            case S3GCMethod::Lifecycle:
+            {
+                // Note that the min time of lifecycle check is 1 day. There is some
+                // time gap between delmark's lifecycle and its datafile lifecycle.
+                // Or S3GCManage could crash between delmark created and rewriting
+                // the datafile.
+                // However, After the lock key is not seen in the manifest file after
+                // 1 day, we consider it is long enough for no other write node try
+                // access to the data file.
+                lifecycleMarkDataFileDeleted(unlocked_datafile_key);
+                return;
+            }
+            case S3GCMethod::ScanThenDelete:
+                break;
+            }
         }
         else
         {
@@ -280,7 +331,19 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     }
 
     assert(delmark_exists); // function should return in previous if-branch
-    removeDataFileIfDelmarkExpired(unlocked_datafile_key, unlocked_datafile_delmark_key, timepoint, mtime);
+    switch (config.method)
+    {
+    case S3GCMethod::Lifecycle:
+    {
+        return;
+    }
+    case S3GCMethod::ScanThenDelete:
+    {
+        // delmark exist, check whether we need to physical remove the datafile
+        removeDataFileIfDelmarkExpired(unlocked_datafile_key, unlocked_datafile_delmark_key, timepoint, mtime);
+        return;
+    }
+    }
 }
 
 void S3GCManager::removeDataFileIfDelmarkExpired(
@@ -351,21 +414,66 @@ void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils:
     });
 }
 
+void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
+{
+    assert(config.method == S3GCMethod::Lifecycle);
+
+    auto view = S3FilenameView::fromKey(datafile_key);
+    if (!view.isDMFile())
+    {
+        // CheckpointDataFile is a single object, add tagging for it and update its mtime
+        rewriteObjectWithTagging(*client, client->bucket(), datafile_key, String(TaggingObjectIsDeleted));
+        LOG_INFO(log, "datafile deleted by lifecycle tagging, key={}", datafile_key);
+    }
+    else
+    {
+        // DMFile is composed by multiple objects, need extra work to remove all of them.
+        // Rewrite all objects with tagging belong to this DMFile
+        // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
+        //       sub file for DMFile, try clean them later.
+        S3::listPrefix(*client, client->bucket(), datafile_key, [this, &datafile_key](const Aws::S3::Model::ListObjectsV2Result & result) {
+            const auto & objs = result.GetContents();
+            for (const auto & obj : objs)
+            {
+                const auto & sub_key = obj.GetKey();
+                rewriteObjectWithTagging(*client, client->bucket(), sub_key, String(TaggingObjectIsDeleted));
+                LOG_INFO(log, "datafile deleted by lifecycle tagging, key={} sub_key={}", datafile_key, sub_key);
+            }
+            return PageResult{.num_keys = objs.size(), .more = true};
+        });
+        LOG_INFO(log, "datafile deleted by lifecycle tagging, all sub keys are deleted, key={}", datafile_key);
+    }
+}
+
 void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
 {
+    assert(config.method == S3GCMethod::ScanThenDelete);
+
     auto view = S3FilenameView::fromKey(datafile_key);
     if (!view.isDMFile())
     {
         // CheckpointDataFile is a single object, remove it.
         deleteObject(*client, client->bucket(), datafile_key);
+        LOG_INFO(log, "datafile deleted, key={}", datafile_key);
     }
     else
     {
         // DMFile is composed by multiple objects, need extra work to remove all of them.
-        // TODO: remove all objects belong to this DMFile
-        LOG_WARNING(log, "remove dmfile, key={}", datafile_key);
+        // Remove all objects belong to this DMFile
+        // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
+        //       sub file for DMFile, try clean them later.
+        S3::listPrefix(*client, client->bucket(), datafile_key, [this, &datafile_key](const Aws::S3::Model::ListObjectsV2Result & result) {
+            const auto & objs = result.GetContents();
+            for (const auto & obj : objs)
+            {
+                const auto & sub_key = obj.GetKey();
+                deleteObject(*client, client->bucket(), sub_key);
+                LOG_INFO(log, "datafile deleted, key={} sub_key={}", datafile_key, sub_key);
+            }
+            return PageResult{.num_keys = objs.size(), .more = true};
+        });
+        LOG_INFO(log, "datafile deleted, all sub keys are deleted, key={}", datafile_key);
     }
-    LOG_INFO(log, "datafile deleted, key={}", datafile_key);
 }
 
 std::vector<UInt64> S3GCManager::getAllStoreIds() const
@@ -393,31 +501,34 @@ std::vector<UInt64> S3GCManager::getAllStoreIds() const
     return all_store_ids;
 }
 
-std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const String & manifest_key)
+std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const Strings & manifest_keys)
 {
     // parse lock from manifest
+    std::unordered_set<String> locks;
     PS::V3::CheckpointProto::StringsInternMap strings_cache;
     using ManifestReader = DB::PS::V3::CPManifestFileReader;
-    LOG_INFO(log, "Reading manifest, key={}", manifest_key);
-    auto manifest_file = S3RandomAccessFile::create(manifest_key);
-    auto reader = ManifestReader::create(ManifestReader::Options{.plain_file = manifest_file});
-    auto mf_prefix = reader->readPrefix();
-
-    while (true)
+    for (const auto & manifest_key : manifest_keys)
     {
-        // TODO: calculate the valid size of each CheckpointDataFile in the manifest
-        auto part_edit = reader->readEdits(strings_cache);
-        if (!part_edit)
-            break;
-    }
+        LOG_INFO(log, "Reading manifest, key={}", manifest_key);
+        auto manifest_file = S3RandomAccessFile::create(manifest_key);
+        auto reader = ManifestReader::create(ManifestReader::Options{.plain_file = manifest_file});
+        auto mf_prefix = reader->readPrefix();
 
-    std::unordered_set<String> locks;
-    while (true)
-    {
-        auto part_locks = reader->readLocks();
-        if (!part_locks)
-            break;
-        locks.merge(part_locks.value());
+        while (true)
+        {
+            // TODO: calculate the valid size of each CheckpointDataFile in the manifest
+            auto part_edit = reader->readEdits(strings_cache);
+            if (!part_edit)
+                break;
+        }
+
+        while (true)
+        {
+            auto part_locks = reader->readLocks();
+            if (!part_locks)
+                break;
+            locks.merge(part_locks.value());
+        }
     }
 
     return locks;
@@ -429,11 +540,11 @@ void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifes
     {
         for (const auto & mf : manifests.objects())
         {
-            // store tombstoned, remove all manifests
+            // store is tombstone, remove all manifests
             deleteObject(*client, client->bucket(), mf.second.key);
             LOG_INFO(
                 log,
-                "remove outdated manifest because of store tombstone, key={} mtime={}",
+                "remove outdated manifest because store is tombstone, key={} mtime={}",
                 mf.second.key,
                 mf.second.last_modification.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
         }

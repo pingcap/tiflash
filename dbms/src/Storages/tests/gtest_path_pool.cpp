@@ -438,7 +438,7 @@ TEST_F(PathCapacity, SingleDiskSinglePathTest)
         auto capacity = PathCapacityMetrics(0, {main_data_path}, {capactity}, {latest_data_path}, {capactity});
 
         capacity.addUsedSize(main_data_path, used);
-        auto stats = capacity.getFsStats();
+        auto stats = capacity.getFsStats(false);
         ASSERT_EQ(stats.capacity_size, capactity * 2);
         ASSERT_EQ(stats.used_size, used);
         ASSERT_EQ(stats.avail_size, capactity * 2 - used);
@@ -468,7 +468,7 @@ TEST_F(PathCapacity, SingleDiskSinglePathTest)
         capacity.addUsedSize(main_data_path1, used);
         capacity.addUsedSize(latest_data_path, used);
 
-        auto stats = capacity.getFsStats();
+        auto stats = capacity.getFsStats(false);
         ASSERT_EQ(stats.capacity_size, capactity * 6);
         ASSERT_EQ(stats.used_size, 3 * used);
         ASSERT_EQ(stats.avail_size, capactity * 6 - (3 * used));
@@ -508,7 +508,7 @@ TEST_F(PathCapacity, MultiDiskMultiPathTest)
                                   {.used_size = 12, .avail_size = 50, .capacity_size = 1000, .ok = 1},
                               }};
     capacity.setDiskStats(disk_capacity_map);
-    FsStats total_stats = capacity.getFsStats();
+    FsStats total_stats = capacity.getFsStats(false);
     ASSERT_EQ(total_stats.capacity_size, 100);
     ASSERT_EQ(total_stats.used_size, 16);
     ASSERT_EQ(total_stats.avail_size, 50);
@@ -533,7 +533,7 @@ TEST_F(PathCapacity, MultiDiskMultiPathTest)
                               }};
     capacity.setDiskStats(disk_capacity_map);
 
-    total_stats = capacity.getFsStats();
+    total_stats = capacity.getFsStats(false);
     ASSERT_EQ(total_stats.capacity_size, 100 + 98);
     ASSERT_EQ(total_stats.used_size, 16 + 52);
     ASSERT_EQ(total_stats.avail_size, 50 + 46);
@@ -547,14 +547,14 @@ try
     {
         PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {capacity}, {latest_data_path}, {capacity});
 
-        FsStats fs_stats = path_capacity.getFsStats();
+        FsStats fs_stats = path_capacity.getFsStats(false);
         EXPECT_EQ(fs_stats.capacity_size, 2 * capacity); // summing the capacity of main and latest path
     }
 
     {
         PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {}, {latest_data_path}, {});
 
-        FsStats fs_stats = path_capacity.getFsStats();
+        FsStats fs_stats = path_capacity.getFsStats(false);
         EXPECT_EQ(fs_stats.capacity_size, global_capacity_quota); // Use `global_capacity_quota` when `main_capacity_quota_` is empty
     }
 }

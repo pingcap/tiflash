@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <fmt/ranges.h>
 
 #include <atomic>
@@ -123,7 +124,7 @@ class DTWorkload
 public:
     static int mainEntry(int argc, char ** argv);
 
-    DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_, const TableInfo & table_info_);
+    DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_, const TableInfo & table_info_, ContextPtr context_);
     ~DTWorkload();
 
     void run(uint64_t r);

@@ -47,7 +47,7 @@ public:
     void TearDown() override
     {
         storage->drop();
-        db_context->getTMTContext().getStorages().remove(/* table id */ 100);
+        db_context->getTMTContext().getStorages().remove(NullspaceID, /* table id */ 100);
     }
 
     void setupStorage()
