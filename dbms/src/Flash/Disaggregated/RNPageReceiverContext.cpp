@@ -16,6 +16,9 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Disaggregated/RNPageReceiverContext.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/completion_queue.h>
@@ -99,9 +102,36 @@ FetchPagesRequest::FetchPagesRequest(DM::RNRemoteSegmentReadTaskPtr seg_task_)
     *req->mutable_snapshot_id() = seg_task->snapshot_id.toMeta();
     req->set_table_id(seg_task->table_id);
     req->set_segment_id(seg_task->segment_id);
-    for (auto page_id : seg_task->cacheMissPageIds())
+
     {
-        req->add_page_ids(page_id);
+        std::vector<DM::Remote::PageOID> persisted_oids;
+        persisted_oids.reserve(seg_task->delta_tinycf_page_ids.size());
+        for (const auto & page_id : seg_task->delta_tinycf_page_ids)
+        {
+            auto page_oid = DM::Remote::PageOID{
+                .store_id = seg_task->store_id,
+                .table_id = seg_task->table_id,
+                .page_id = page_id,
+            };
+            persisted_oids.emplace_back(page_oid);
+        }
+
+        auto page_cache = seg_task->dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
+        auto occupy_result = page_cache->occupySpace(persisted_oids, seg_task->delta_tinycf_page_sizes);
+        for (auto page_id : occupy_result.pages_not_in_cache)
+            req->add_page_ids(page_id.page_id);
+
+        auto cftiny_total = seg_task->delta_tinycf_page_ids.size();
+        auto cftiny_fetch = occupy_result.pages_not_in_cache.size();
+        LOG_INFO(
+            Logger::get(),
+            "read task local cache hit rate: {}, pages_not_in_cache={}",
+            cftiny_total == 0 ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * cftiny_fetch / cftiny_total),
+            occupy_result.pages_not_in_cache);
+        GET_METRIC(tiflash_disaggregated_details, type_cftiny_read).Increment(cftiny_total);
+        GET_METRIC(tiflash_disaggregated_details, type_cftiny_fetch).Increment(cftiny_fetch);
+
+        seg_task->initColumnFileDataProvider(occupy_result.pages_guard);
     }
 }
 
@@ -125,11 +155,6 @@ void GRPCPagesReceiverContext::finishTaskEstablish(const FetchPagesRequest & req
 void GRPCPagesReceiverContext::finishTaskReceive(const DM::RNRemoteSegmentReadTaskPtr & seg_task)
 {
     remote_read_tasks->updateTaskState(seg_task, DM::SegmentReadTaskState::DataReady, false);
-}
-
-void GRPCPagesReceiverContext::finishAllReceivingTasks(const String & err_msg)
-{
-    remote_read_tasks->allDataReceive(err_msg);
 }
 
 void GRPCPagesReceiverContext::cancelDisaggTaskOnTiFlashStorageNode(LoggerPtr /*log*/)
