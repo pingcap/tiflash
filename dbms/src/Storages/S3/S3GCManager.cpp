@@ -148,8 +148,11 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
 
     LOG_INFO(log, "latest manifest, gc_store_id={} upload_seq={} key={}", gc_store_id, manifests.latestUploadSequence(), manifests.latestManifestKey());
     // Parse from the latest manifest and collect valid lock files
-    // TODO: collect valid lock files in multiple manifest?
-    std::unordered_set<String> valid_lock_files = getValidLocksFromManifest(manifests.latestManifestKey());
+    // collect valid lock files from preserved manifests
+    std::unordered_set<String> valid_lock_files = getValidLocksFromManifest(manifests.preservedManifests(
+        config.manifest_preserve_count,
+        config.manifest_expired_hour,
+        gc_timepoint));
     LOG_INFO(log, "latest manifest, key={} n_locks={}", manifests.latestManifestKey(), valid_lock_files.size());
 
     // Scan and remove the expired locks
@@ -478,31 +481,34 @@ std::vector<UInt64> S3GCManager::getAllStoreIds() const
     return all_store_ids;
 }
 
-std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const String & manifest_key)
+std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const Strings & manifest_keys)
 {
     // parse lock from manifest
+    std::unordered_set<String> locks;
     PS::V3::CheckpointProto::StringsInternMap strings_cache;
     using ManifestReader = DB::PS::V3::CPManifestFileReader;
-    LOG_INFO(log, "Reading manifest, key={}", manifest_key);
-    auto manifest_file = S3RandomAccessFile::create(manifest_key);
-    auto reader = ManifestReader::create(ManifestReader::Options{.plain_file = manifest_file});
-    auto mf_prefix = reader->readPrefix();
-
-    while (true)
+    for (const auto & manifest_key : manifest_keys)
     {
-        // TODO: calculate the valid size of each CheckpointDataFile in the manifest
-        auto part_edit = reader->readEdits(strings_cache);
-        if (!part_edit)
-            break;
-    }
+        LOG_INFO(log, "Reading manifest, key={}", manifest_key);
+        auto manifest_file = S3RandomAccessFile::create(manifest_key);
+        auto reader = ManifestReader::create(ManifestReader::Options{.plain_file = manifest_file});
+        auto mf_prefix = reader->readPrefix();
 
-    std::unordered_set<String> locks;
-    while (true)
-    {
-        auto part_locks = reader->readLocks();
-        if (!part_locks)
-            break;
-        locks.merge(part_locks.value());
+        while (true)
+        {
+            // TODO: calculate the valid size of each CheckpointDataFile in the manifest
+            auto part_edit = reader->readEdits(strings_cache);
+            if (!part_edit)
+                break;
+        }
+
+        while (true)
+        {
+            auto part_locks = reader->readLocks();
+            if (!part_locks)
+                break;
+            locks.merge(part_locks.value());
+        }
     }
 
     return locks;
