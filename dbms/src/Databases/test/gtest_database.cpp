@@ -49,7 +49,7 @@ extern const char exception_before_rename_table_old_meta_removed[];
 extern const char force_context_path[];
 } // namespace FailPoints
 
-extern String createDatabaseStmt(Context & context, const TiDB::DBInfo & db_info, const SchemaNameMapper & name_mapper);
+extern String createDatabaseStmt(Context & context, const TiDB::as_slice & db_info, const SchemaNameMapper & name_mapper);
 
 namespace tests
 {
@@ -854,14 +854,14 @@ try
 
     for (const auto & [expect_name, json_str] : cases)
     {
-        TiDB::DBInfoPtr db_info = std::make_shared<TiDB::DBInfo>(json_str);
+        TiDB::DBInfoPtr db_info = std::make_shared<TiDB::DBInfo>(json_str, NullspaceID);
         ASSERT_NE(db_info, nullptr);
         ASSERT_EQ(db_info->name, expect_name);
 
         const auto seri = db_info->serialize();
 
         {
-            auto deseri = std::make_shared<TiDB::DBInfo>(seri);
+            auto deseri = std::make_shared<TiDB::DBInfo>(seri, NullspaceID);
             ASSERT_NE(deseri, nullptr);
             ASSERT_EQ(deseri->name, expect_name);
         }

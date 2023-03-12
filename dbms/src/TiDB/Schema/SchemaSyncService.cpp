@@ -110,15 +110,18 @@ void SchemaSyncService::removeKeyspaceGCTasks()
     std::unique_lock<std::shared_mutex> lock(ks_map_mutex);
 
     // Remove stale sync schema task.
-    for (auto const & [ks, task_handle] : ks_handle_map)
+    for (auto ks_handle_iter = ks_handle_map.begin(); ks_handle_iter != ks_handle_map.end(); /*empty*/)
     {
-        if (!keyspaces.count(ks))
+        const auto & ks = ks_handle_iter->first;
+        if (keyspaces.count(ks))
         {
-            auto ks_log = log->getChild(fmt::format("keyspace={}", ks));
-            LOG_INFO(ks_log, "remove sync schema task");
-            ks_handle_map.erase(ks);
-            background_pool.removeTask(task_handle);
+            ++ks_handle_iter;
+            continue;
         }
+        auto ks_log = log->getChild(fmt::format("keyspace={}", ks));
+        LOG_INFO(ks_log, "remove sync schema task");
+        background_pool.removeTask(ks_handle_iter->second);
+        ks_handle_iter = ks_handle_map.erase(ks_handle_iter);
     }
 }
 
