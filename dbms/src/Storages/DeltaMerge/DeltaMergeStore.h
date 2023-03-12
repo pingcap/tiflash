@@ -608,6 +608,8 @@ private:
     bool handleBackgroundTask(bool heavy);
 
     void restoreStableFiles();
+    void restoreStableFilesFromS3();
+    void restoreStableFilesFromLocal();
 
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
                                           const RowKeyRanges & sorted_ranges,

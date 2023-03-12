@@ -54,7 +54,7 @@ public:
      * Blocks until a local DMFile is successfully put in the remote data store.
      * Should be used by a write node.
      */
-    virtual void putDMFile(DMFilePtr local_dm_file, const S3::DMFileOID & oid) = 0;
+    virtual void putDMFile(DMFilePtr local_dm_file, const S3::DMFileOID & oid, bool remove_local) = 0;
 
     virtual void copyDMFileMetaToLocalPath(const S3::DMFileOID & remote_oid, const String & local_path) = 0;
 

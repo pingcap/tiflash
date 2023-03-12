@@ -193,7 +193,7 @@ StableValueSpacePtr createNewStable( //
     {
         auto store_id = context.db_context.getTMTContext().getKVStore()->getStoreID();
         Remote::DMFileOID oid{.store_id = store_id, .table_id = context.physical_table_id, .file_id = dtfile_id};
-        data_store->putDMFile(dtfile, oid);
+        data_store->putDMFile(dtfile, oid, /*remove_local*/ true);
         PS::V3::CheckpointLocation loc{
             .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
             .offset_in_file = 0,
