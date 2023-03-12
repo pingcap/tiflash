@@ -209,7 +209,7 @@ FsStats PathCapacityMetrics::getFsStats()
 
     if (S3::ClientFactory::instance().isEnabled())
     {
-        // When S3 enabled, use a large fake stat to avoid disk limitaion.
+        // When S3 is enabled, use a large fake stat to avoid disk limitation by PD.
         total_stat.capacity_size = 1024UL * 1024UL * 1024UL * 1024UL * 1024UL * 1024UL; // 1024PB
         total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
     }
