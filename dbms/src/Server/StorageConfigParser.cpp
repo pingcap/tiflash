@@ -552,6 +552,8 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     RUNTIME_CHECK(connection_timeout_ms > 0);
     readConfig(table, "request_timeout_ms", request_timeout_ms);
     RUNTIME_CHECK(request_timeout_ms > 0);
+    readConfig(table, "root", root);
+    RUNTIME_CHECK(!root.empty());
 
     auto read_s3_auth_info_from_env = [&]() {
         access_key_id = Poco::Environment::get(S3_ACCESS_KEY_ID, /*default*/ "");
