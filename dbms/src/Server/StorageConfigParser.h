@@ -102,6 +102,7 @@ struct StorageS3Config
     UInt64 max_connections = 1024;
     UInt64 connection_timeout_ms = 1000;
     UInt64 request_timeout_ms = 3000;
+    String root;
 
     inline static String S3_ACCESS_KEY_ID = "S3_ACCESS_KEY_ID";
     inline static String S3_SECRET_ACCESS_KEY = "S3_SECRET_ACCESS_KEY";
