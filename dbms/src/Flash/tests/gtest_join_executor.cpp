@@ -197,11 +197,11 @@ try
                                .build(context);
 
             {
-                context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+                context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
                 executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
 
                 // for spill to disk tests
-                context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
+                context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
                 ASSERT_THROW(executeStreams(request), Exception);
                 auto concurrences = {2, 5, 10};
                 for (auto concurrency : concurrences)
@@ -815,10 +815,10 @@ try
     auto join_restore_concurrences = {-1, 0, 1, 5};
     auto concurrences = {2, 5, 10};
     const ColumnsWithTypeAndName expect = {toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0}), toNullableVec<Int32>({2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}), toNullableVec<Int32>({1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0})};
-    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
     for (const auto & join_restore_concurrency : join_restore_concurrences)
     {
-        context.context.setSetting("join_restore_concurrency", Field(static_cast<Int64>(join_restore_concurrency)));
+        context.context->setSetting("join_restore_concurrency", Field(static_cast<Int64>(join_restore_concurrency)));
         ASSERT_THROW(executeStreams(request), Exception);
         for (auto concurrency : concurrences)
         {
@@ -838,7 +838,7 @@ try
     std::vector<String> right_table_names = {"right_table_1_concurrency", "right_table_3_concurrency", "right_table_5_concurrency", "right_table_10_concurrency"};
     std::vector<size_t> right_exchange_receiver_concurrency = {1, 3, 5, 10};
     /// disable spill
-    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
     /// case 1, right join without right condition
     auto request = context
                        .scan("outer_join_test", right_table_names[0])
@@ -931,13 +931,13 @@ try
                        .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")})
                        .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
                        .build(context);
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
-    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
     /// use right_table left join left_table as the reference
     auto ref_columns = executeStreams(request, original_max_streams);
 
     /// case 1.1 table scan join table scan
-    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
     for (auto & left_table_name : left_table_names)
     {
         for (auto & right_table_name : right_table_names)
@@ -983,12 +983,12 @@ try
                   .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")}, {gt(col(right_table_names[0] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, {}, 0)
                   .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
                   .build(context);
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use right_table left join left_table as the reference
-    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
     ref_columns = executeStreams(request, original_max_streams);
 
-    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join)));
     /// case 2.1 table scan join table scan
     for (auto & left_table_name : left_table_names)
     {
@@ -1050,12 +1050,12 @@ try
                        .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")})
                        .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
                        .build(context);
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
-    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
     /// use right_table left join left_table as the reference
     auto ref_columns = executeStreams(request, original_max_streams);
 
-    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join_will_no_spill_happens)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join_will_no_spill_happens)));
     /// case 1.1 table scan join table scan
     for (auto & left_table_name : left_table_names)
     {
@@ -1088,11 +1088,11 @@ try
                   .join(context.scan("outer_join_test", left_table_names[0]), tipb::JoinType::TypeLeftOuterJoin, {col("a")}, {gt(col(right_table_names[0] + ".b"), lit(Field(static_cast<Int64>(1000))))}, {}, {}, {}, 0)
                   .project({fmt::format("{}.a", left_table_names[0]), fmt::format("{}.b", left_table_names[0]), fmt::format("{}.a", right_table_names[0]), fmt::format("{}.b", right_table_names[0])})
                   .build(context);
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// use right_table left join left_table as the reference
-    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
     ref_columns = executeStreams(request, original_max_streams);
-    context.context.setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join_will_no_spill_happens)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(max_bytes_before_external_join_will_no_spill_happens)));
     /// case 2.1 table scan join table scan
     for (auto & left_table_name : left_table_names)
     {
