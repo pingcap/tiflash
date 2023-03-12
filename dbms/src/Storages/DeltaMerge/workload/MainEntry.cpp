@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Config/TOMLConfiguration.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/UniThreadPool.h>
 #include <IO/IOThreadPool.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Server/ServerInfo.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
@@ -28,8 +30,11 @@
 #include <Storages/Page/PageConstants.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
+#include <cpptoml.h>
 #include <signal.h>
 #include <sys/wait.h>
 
@@ -80,7 +85,23 @@ void initReadThread()
     DB::DM::DMFileReaderPool::instance();
 }
 
-void init(WorkloadOptions & opts)
+static constexpr StoreID test_store_id = 100000;
+DB::Settings createSettings(const WorkloadOptions & opts)
+{
+    DB::Settings settings;
+    if (!opts.config_file.empty())
+    {
+        auto table = cpptoml::parse_file(opts.config_file);
+        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration();
+        config->add(new DB::TOMLConfiguration(table), /*shared=*/false); // Take ownership of TOMLConfig
+        settings.setProfile("default", *config);
+    }
+
+    settings.dt_enable_read_thread = opts.enable_read_thread;
+    return settings;
+}
+
+ContextPtr init(WorkloadOptions & opts)
 {
     log_ofs.open(opts.log_file, std::ios_base::out | std::ios_base::app);
     if (!log_ofs)
@@ -110,6 +131,18 @@ void init(WorkloadOptions & opts)
     {
         initReadThread();
     }
+
+    auto settings = createSettings(opts);
+    auto context = DB::tests::TiFlashTestEnv::getContext(settings, opts.work_dirs);
+    if (!opts.s3_bucket.empty())
+    {
+        auto & kvstore = context->getTMTContext().getKVStore();
+        auto store_meta = kvstore->getStoreMeta();
+        store_meta.set_id(test_store_id);
+        kvstore->setStore(store_meta);
+        context->getSharedContextDisagg()->initRemoteDataStore(context->getFileProvider(), /*is_s3_enabled*/ true);
+    }
+    return context;
 }
 
 void outputResultHeader()
@@ -168,7 +201,7 @@ std::shared_ptr<SharedHandleTable> createHandleTable(WorkloadOptions & opts)
     return opts.verification ? std::make_unique<SharedHandleTable>(opts.max_key_count) : nullptr;
 }
 
-void run(WorkloadOptions & opts)
+void run(WorkloadOptions & opts, ContextPtr context)
 {
     auto * log = &Poco::Logger::get("DTWorkload_main");
     LOG_INFO(log, "{}", opts.toString());
@@ -184,7 +217,7 @@ void run(WorkloadOptions & opts)
         auto run_test = [&]() {
             for (uint64_t i = 0; i < opts.verify_round; i++)
             {
-                DTWorkload workload(opts, handle_table, table_info);
+                DTWorkload workload(opts, handle_table, table_info, context);
                 workload.run(i);
                 stats.push_back(workload.getStat());
                 LOG_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
@@ -232,7 +265,7 @@ void randomKill(WorkloadOptions & opts, pid_t pid)
     ::wait(&status);
 }
 
-void doRunAndRandomKill(WorkloadOptions & opts)
+void doRunAndRandomKill(WorkloadOptions & opts, ContextPtr context)
 {
     auto pid = fork();
     if (pid < 0)
@@ -245,7 +278,7 @@ void doRunAndRandomKill(WorkloadOptions & opts)
     if (pid == 0)
     {
         // Child process.
-        run(opts);
+        run(opts, context);
         exit(0);
     }
     else
@@ -255,13 +288,13 @@ void doRunAndRandomKill(WorkloadOptions & opts)
     }
 }
 
-void runAndRandomKill(WorkloadOptions & opts)
+void runAndRandomKill(WorkloadOptions & opts, ContextPtr context)
 {
     try
     {
         for (uint64_t i = 0; i < opts.random_kill; i++)
         {
-            doRunAndRandomKill(opts);
+            doRunAndRandomKill(opts, context);
         }
     }
     catch (const DB::Exception & e)
@@ -279,7 +312,7 @@ void runAndRandomKill(WorkloadOptions & opts)
     }
 }
 
-void dailyPerformanceTest(WorkloadOptions & opts)
+void dailyPerformanceTest(WorkloadOptions & opts, ContextPtr context)
 {
     outputResultHeader();
     std::vector<std::string> workloads{"uniform", "normal", "incremental"};
@@ -288,11 +321,11 @@ void dailyPerformanceTest(WorkloadOptions & opts)
         opts.write_key_distribution = workloads[i];
         opts.table_id = i;
         opts.table_name = workloads[i];
-        ::run(opts);
+        ::run(opts, context);
     }
 }
 
-void dailyRandomTest(WorkloadOptions & opts)
+void dailyRandomTest(WorkloadOptions & opts, ContextPtr context)
 {
     outputResultHeader();
     static std::random_device rd;
@@ -301,7 +334,7 @@ void dailyRandomTest(WorkloadOptions & opts)
     for (int i = 0; i < 3; i++)
     {
         opts.columns_count = rand_gen() % 40 + 10; // 10~49 columns.
-        ::run(opts);
+        ::run(opts, context);
     }
 }
 
@@ -322,27 +355,27 @@ int DTWorkload::mainEntry(int argc, char ** argv)
     // need to init logger before creating global context,
     // or the logging in global context won't be output to
     // the log file
-    init(opts);
+    auto context = init(opts);
 
     if (opts.testing_type == "daily_perf")
     {
-        dailyPerformanceTest(opts);
+        dailyPerformanceTest(opts, context);
     }
     else if (opts.testing_type == "daily_random")
     {
-        dailyRandomTest(opts);
+        dailyRandomTest(opts, context);
     }
     else
     {
         if (opts.random_kill <= 0)
         {
-            ::run(opts);
+            ::run(opts, context);
         }
         else
         {
             // Kill the running DeltaMergeStore could cause data loss, since we don't have raft-log here.
             // Disable random_kill by default.
-            runAndRandomKill(opts);
+            runAndRandomKill(opts, context);
         }
     }
     TiFlashTestEnv::shutdown();

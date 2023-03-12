@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Config/TOMLConfiguration.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -31,50 +29,20 @@
 #include <Storages/DeltaMerge/workload/TableGenerator.h>
 #include <Storages/DeltaMerge/workload/TimestampGenerator.h>
 #include <Storages/DeltaMerge/workload/Utils.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
-#include <cpptoml.h>
 
 namespace DB::DM::tests
 {
-static constexpr StoreID test_store_id = 100000;
-DB::Settings createSettings(const WorkloadOptions & opts)
-{
-    DB::Settings settings;
-    if (!opts.config_file.empty())
-    {
-        auto table = cpptoml::parse_file(opts.config_file);
-        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration();
-        config->add(new DB::TOMLConfiguration(table), /*shared=*/false); // Take ownership of TOMLConfig
-        settings.setProfile("default", *config);
-    }
 
-    settings.dt_enable_read_thread = opts.enable_read_thread;
-    return settings;
-}
-
-DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_, const TableInfo & table_info_)
+DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHandleTable> handle_table_, const TableInfo & table_info_, ContextPtr context_)
     : log(&Poco::Logger::get("DTWorkload"))
+    , context(context_)
     , opts(std::make_unique<WorkloadOptions>(opts_))
     , table_info(std::make_unique<TableInfo>(table_info_))
     , handle_table(handle_table_)
     , writing_threads(opts_.write_thread_count)
     , stat(opts_.write_thread_count, opts_.read_thread_count)
 {
-    auto settings = createSettings(opts_);
-    context = DB::tests::TiFlashTestEnv::getContext(settings, opts_.work_dirs);
-    if (!opts_.s3_bucket.empty())
-    {
-        auto & kvstore = context->getTMTContext().getKVStore();
-        auto store_meta = kvstore->getStoreMeta();
-        store_meta.set_id(test_store_id);
-        kvstore->setStore(store_meta);
-
-        context->getSharedContextDisagg()->initRemoteDataStore(context->getFileProvider(), /*is_s3_enabled*/ true);
-        context->initializeWriteNodePageStorageIfNeed(context->getPathPool());
-    }
-
     auto v = table_info->toStrings();
     for (const auto & s : v)
     {
