@@ -23,6 +23,7 @@
 #include <aws/core/utils/logging/LogSystemInterface.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/S3Errors.h>
+#include <aws/s3/model/CopyObjectRequest.h>
 #include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
@@ -46,6 +47,7 @@ extern const Event S3PutObject;
 extern const Event S3WriteBytes;
 extern const Event S3ListObjects;
 extern const Event S3DeleteObject;
+extern const Event S3CopyObject;
 } // namespace ProfileEvents
 
 namespace
@@ -244,8 +246,7 @@ Aws::S3::Model::HeadObjectOutcome headObject(const Aws::S3::S3Client & client, c
     Stopwatch sw;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_s3_request_seconds, type_head_object).Observe(sw.elapsedSeconds()); });
     Aws::S3::Model::HeadObjectRequest req;
-    req.SetBucket(bucket);
-    req.SetKey(key);
+    req.WithBucket(bucket).WithKey(key);
     if (!version_id.empty())
     {
         req.SetVersionId(version_id);
@@ -289,11 +290,13 @@ bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const
     throw fromS3Error(outcome.GetError(), "Failed to check existence of object, bucket={} key={}", bucket, key);
 }
 
-void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, const String & key)
+void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & tagging)
 {
     Stopwatch sw;
     Aws::S3::Model::PutObjectRequest req;
     req.WithBucket(bucket).WithKey(key);
+    if (!tagging.empty())
+        req.SetTagging(tagging);
     req.SetContentType("binary/octet-stream");
     auto istr = Aws::MakeShared<Aws::StringStream>("EmptyObjectInputStream", "", std::ios_base::in | std::ios_base::binary);
     req.SetBody(istr);
@@ -306,7 +309,7 @@ void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, co
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
     static auto log = Logger::get();
-    LOG_DEBUG(log, "remote_fname={}, cost={}ms", key, elapsed_seconds);
+    LOG_DEBUG(log, "uploadEmptyFile remote_fname={}, cost={:.2f}s", key, elapsed_seconds);
 }
 
 void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname)
@@ -329,7 +332,7 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
     static auto log = Logger::get();
-    LOG_DEBUG(log, "local_fname={}, remote_fname={}, write_bytes={} cost={}ms", local_fname, remote_fname, write_bytes, elapsed_seconds);
+    LOG_DEBUG(log, "uploadFile local_fname={}, remote_fname={}, write_bytes={} cost={:.2f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
 }
 
 void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname)
@@ -350,6 +353,24 @@ void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const
     RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} fail: {}", local_fname, strerror(errno));
     ostr << outcome.GetResult().GetBody().rdbuf();
     RUNTIME_CHECK_MSG(ostr.good(), "Write {} fail: {}", local_fname, strerror(errno));
+}
+
+void rewriteObjectWithTagging(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & tagging)
+{
+    Stopwatch sw;
+    Aws::S3::Model::CopyObjectRequest req;
+    // rewrite the object with `key`, adding tagging to the new object
+    req.WithBucket(bucket).WithCopySource(key).WithKey(key).WithTagging(tagging);
+    ProfileEvents::increment(ProfileEvents::S3CopyObject);
+    auto outcome = client.CopyObject(req);
+    if (!outcome.IsSuccess())
+    {
+        throw fromS3Error(outcome.GetError(), "key={}", key);
+    }
+    auto elapsed_seconds = sw.elapsedSeconds();
+    GET_METRIC(tiflash_storage_s3_request_seconds, type_copy_object).Observe(elapsed_seconds);
+    static auto log = Logger::get();
+    LOG_DEBUG(log, "rewrite object key={} cost={:.2f}s", key, elapsed_seconds);
 }
 
 void listPrefix(
@@ -404,10 +425,10 @@ void listPrefix(
         {
             const auto & next_token = result.GetNextContinuationToken();
             req.SetContinuationToken(next_token);
-            LOG_DEBUG(log, "prefix={}, keys={}, total_keys={}, next_token={}", prefix, page_res.num_keys, num_keys, next_token);
+            LOG_DEBUG(log, "listPrefix prefix={}, keys={}, total_keys={}, next_token={}", prefix, page_res.num_keys, num_keys, next_token);
         }
     }
-    LOG_DEBUG(log, "prefix={}, total_keys={}, cost={}", prefix, num_keys, sw.elapsedMilliseconds());
+    LOG_DEBUG(log, "listPrefix prefix={}, total_keys={}, cost={:.2f}s", prefix, num_keys, sw.elapsedSeconds());
 }
 
 std::unordered_map<String, size_t> listPrefixWithSize(const Aws::S3::S3Client & client, const String & bucket, const String & prefix)
@@ -457,8 +478,7 @@ void deleteObject(const Aws::S3::S3Client & client, const String & bucket, const
     auto o = client.DeleteObject(req);
     RUNTIME_CHECK(o.IsSuccess(), o.GetError().GetMessage());
     const auto & res = o.GetResult();
-    // "DeleteMark" of S3 service, don't know what will lead to this
-    RUNTIME_CHECK(!res.GetDeleteMarker(), bucket, key);
+    UNUSED(res);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_delete_object).Observe(sw.elapsedSeconds());
 }
 

@@ -155,9 +155,18 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
     // clean the outdated manifest objects
     removeOutdatedManifest(manifests, &gc_timepoint);
 
-    // After removing the expired lock, we need to scan the data files
-    // with expired delmark
-    tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+    switch (config.method)
+    {
+    case S3GCMethod::Lifecycle:
+        break;
+    case S3GCMethod::ScanThenDelete:
+    {
+        // After removing the expired lock, we need to scan the data files
+        // with expired delmark
+        tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+        break;
+    }
+    }
 }
 
 void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
@@ -170,20 +179,31 @@ void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
     // If the store id is tombstone, then run gc on the store as if no locks.
     // Scan and remove all expired locks
     LOG_INFO(log, "store is tombstone, clean all locks");
-    std::unordered_set<String> valid_lock_files;
     const auto lock_prefix = S3Filename::getLockPrefix();
+    // clean all by setting `safe_sequence` to MaxUInt64 and empty `valid_lock_files`
+    std::unordered_set<String> valid_lock_files;
     cleanUnusedLocks(gc_store_id, lock_prefix, std::numeric_limits<UInt64>::max(), valid_lock_files, gc_timepoint);
 
     // clean all manifest objects
     const auto manifests = CheckpointManifestS3Set::getFromS3(*client, gc_store_id);
     removeOutdatedManifest(manifests, nullptr);
 
-    // TODO: write a mark file and skip `cleanUnusedLocks` and `removeOutdatedManifest`
-    //       in the next round to reduce S3 LIST calls.
+    switch (config.method)
+    {
+    case S3GCMethod::Lifecycle:
+        // nothing need to be done, the expired files will be deleted by S3-like system
+        break;
+    case S3GCMethod::ScanThenDelete:
+    {
+        // TODO: write a mark file and skip `cleanUnusedLocks` and `removeOutdatedManifest`
+        //       in the next round to reduce S3 LIST calls.
 
-    // After all the locks removed, the data files may still being locked by another
-    // store id, we need to scan the data files with expired delmark
-    tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+        // After all the locks removed, the data files may still being locked by another
+        // store id, we need to scan the data files with expired delmark
+        tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+        break;
+    }
+    }
 }
 
 void S3GCManager::cleanUnusedLocks(
@@ -280,7 +300,25 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     }
 
     assert(delmark_exists); // function should return in previous if-branch
-    removeDataFileIfDelmarkExpired(unlocked_datafile_key, unlocked_datafile_delmark_key, timepoint, mtime);
+    switch (config.method)
+    {
+    case S3GCMethod::Lifecycle:
+    {
+        // Note that the min time of lifecycle check is 1 day. There is some
+        // time gap between delmark's lifecycle and its datafile lifecycle.
+        // However, After the lock key is not seen in the manifest file after
+        // 1 day, we consider it is long enough for no other write node try
+        // access to the data file.
+        lifecycleMarkDataFileDeleted(unlocked_datafile_key);
+        return;
+    }
+    case S3GCMethod::ScanThenDelete:
+    {
+        // delmark exist, check whether we need to physical remove the datafile
+        removeDataFileIfDelmarkExpired(unlocked_datafile_key, unlocked_datafile_delmark_key, timepoint, mtime);
+        return;
+    }
+    }
 }
 
 void S3GCManager::removeDataFileIfDelmarkExpired(
@@ -351,8 +389,39 @@ void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils:
     });
 }
 
+void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
+{
+    assert(config.method == S3GCMethod::Lifecycle);
+    auto view = S3FilenameView::fromKey(datafile_key);
+    if (!view.isDMFile())
+    {
+        // CheckpointDataFile is a single object, add tagging for it and update its mtime
+        rewriteObjectWithTagging(*client, client->bucket(), datafile_key, String(TaggingObjectIsDeleted));
+        LOG_INFO(log, "datafile deleted by lifecycle tagging, key={}", datafile_key);
+    }
+    else
+    {
+        // DMFile is composed by multiple objects, need extra work to remove all of them.
+        // Rewrite all objects with tagging belong to this DMFile
+        // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
+        //       sub file for DMFile, try clean them later.
+        S3::listPrefix(*client, client->bucket(), datafile_key, [this, &datafile_key](const Aws::S3::Model::ListObjectsV2Result & result) {
+            const auto & objs = result.GetContents();
+            for (const auto & obj : objs)
+            {
+                const auto & sub_key = obj.GetKey();
+                rewriteObjectWithTagging(*client, client->bucket(), sub_key, String(TaggingObjectIsDeleted));
+                LOG_INFO(log, "datafile deleted by lifecycle tagging, key={} sub_key={}", datafile_key, sub_key);
+            }
+            return PageResult{.num_keys = objs.size(), .more = true};
+        });
+        LOG_INFO(log, "datafile deleted by lifecycle tagging, all sub keys are deleted, key={}", datafile_key);
+    }
+}
+
 void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
 {
+    assert(config.method == S3GCMethod::ScanThenDelete);
     auto view = S3FilenameView::fromKey(datafile_key);
     if (!view.isDMFile())
     {
@@ -364,16 +433,19 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
     {
         // DMFile is composed by multiple objects, need extra work to remove all of them.
         // Remove all objects belong to this DMFile
+        // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
+        //       sub file for DMFile, try clean them later.
         S3::listPrefix(*client, client->bucket(), datafile_key, [this, &datafile_key](const Aws::S3::Model::ListObjectsV2Result & result) {
             const auto & objs = result.GetContents();
             for (const auto & obj : objs)
             {
                 const auto & sub_key = obj.GetKey();
                 deleteObject(*client, client->bucket(), sub_key);
-                LOG_INFO(log, "datafile deleted, dtfile_key={} sub_key={}", datafile_key, sub_key);
+                LOG_INFO(log, "datafile deleted, key={} sub_key={}", datafile_key, sub_key);
             }
             return PageResult{.num_keys = objs.size(), .more = true};
         });
+        LOG_INFO(log, "datafile deleted, all sub keys are deleted, key={}", datafile_key);
     }
 }
 

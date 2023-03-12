@@ -115,9 +115,17 @@ bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const
 
 void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
 
-void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, const String & key);
+constexpr std::string_view TaggingObjectIsDeleted = "deleted=true";
+
+/**
+ * tagging is the tag-set for the object. The tag-set must be encoded as URL Query
+ * parameters. (For example, "Key1=Value1")
+ */
+void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & tagging = "");
 
 void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
+
+void rewriteObjectWithTagging(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & tagging);
 
 struct PageResult
 {

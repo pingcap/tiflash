@@ -59,20 +59,30 @@ using S3LockClientPtr = std::shared_ptr<IS3LockClient>;
 class S3GCManagerService;
 using S3GCManagerServicePtr = std::unique_ptr<S3GCManagerService>;
 
+enum class S3GCMethod
+{
+    Lifecycle,
+    ScanThenDelete,
+};
+
 struct S3GCConfig
 {
     // The interval of the S3 GC routine runs
     Int64 interval_seconds = 600;
 
-    // The maximun number of manifest files preserve
+    // The maximum number of manifest files preserve
     // for each store
     size_t manifest_preserve_count = 10;
     // Only preserve the manifest that is created
     // recently.
     Int64 manifest_expired_hour = 1;
 
+    S3GCMethod method = S3GCMethod::Lifecycle;
+
+    // Only has meaning when method == ScanThenDelete
     Int64 delmark_expired_hour = 1;
 
+    // The RPC timeout for sending mark delete to S3LockService
     Int64 mark_delete_timeout_seconds = 10;
 };
 
@@ -114,6 +124,7 @@ public:
         const Aws::Utils::DateTime & timepoint,
         const Aws::Utils::DateTime & delmark_mtime);
 
+    void lifecycleMarkDataFileDeleted(const String & datafile_key);
     void physicalRemoveDataFile(const String & datafile_key);
 
     std::vector<UInt64> getAllStoreIds() const;
