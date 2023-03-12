@@ -59,12 +59,6 @@ using S3LockClientPtr = std::shared_ptr<IS3LockClient>;
 class S3GCManagerService;
 using S3GCManagerServicePtr = std::unique_ptr<S3GCManagerService>;
 
-enum class S3GCMethod
-{
-    Lifecycle,
-    ScanThenDelete,
-};
-
 struct S3GCConfig
 {
     // The interval of the S3 GC routine runs

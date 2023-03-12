@@ -64,6 +64,11 @@ private:
     const String bucket_name;
 };
 
+enum class S3GCMethod
+{
+    Lifecycle,
+    ScanThenDelete,
+};
 
 class ClientFactory
 {
@@ -82,6 +87,8 @@ public:
     std::shared_ptr<Aws::S3::S3Client> sharedClient() const;
 
     std::shared_ptr<TiFlashS3Client> sharedTiFlashClient() const;
+
+    S3GCMethod gc_method = S3GCMethod::Lifecycle;
 
 private:
     ClientFactory() = default;

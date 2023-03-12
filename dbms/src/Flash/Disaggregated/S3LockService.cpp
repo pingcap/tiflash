@@ -313,7 +313,12 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
     }
     // upload delete mark
     const auto delmark_key = key_view.getDelMarkKey();
-    DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), delmark_key, String(TaggingObjectIsDeleted));
+    String tagging;
+    if (S3::ClientFactory::instance().gc_method == S3GCMethod::Lifecycle)
+    {
+        tagging = TaggingObjectIsDeleted;
+    }
+    DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), delmark_key, tagging);
     if (!gc_owner->isOwner())
     {
         // owner changed happens when delmark is uploading, can not
