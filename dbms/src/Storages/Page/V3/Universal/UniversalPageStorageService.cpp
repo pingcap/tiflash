@@ -159,12 +159,12 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
      * In order to make the locks within same `upload_sequence` are public
      * to S3GCManager atomically, we must use a standalone `upload_sequence`
      * (which is managed by `S3LockLocalManager`) to override the
-     * CheckpoinDataFile and CheckpointManifest key.
+     * CheckpointDataFile and CheckpointManifest key.
      *
      * Example:
      * timeline:
      *    │--------------- A lockkey is uploading -----------------│
-     *    ^ snapshot->sequecne=10
+     *    ^ snapshot->sequence=10
      *             
      *             │-------- Checkpoint dumped and uploaded --│
      *             ^ snapshot->sequence=12

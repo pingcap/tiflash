@@ -23,6 +23,7 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -189,6 +190,8 @@ public:
 
     void dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
 
+    std::unordered_set<String> getFileIdsNeedRewrite(double rewrite_threshold) ;
+
     PageIdU64 getMaxIdAfterRestart() const;
 
     // We may skip the GC to reduce useless reading by default.
@@ -220,6 +223,8 @@ public:
 
     using BlobStorePtr = std::unique_ptr<PS::V3::universal::BlobStoreType>;
     BlobStorePtr blob_store;
+
+    PS::V3::CPDataFilesStatCache remote_data_files_stat_cache;
 
     PS::V3::S3PageReaderPtr remote_reader;
     PS::V3::S3LockLocalManagerPtr remote_locks_local_mgr;

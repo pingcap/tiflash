@@ -20,6 +20,7 @@
 #include <Storages/Page/V3/GCDefines.h>
 #include <fmt/format.h>
 
+#include <type_traits>
 
 namespace DB
 {
@@ -241,7 +242,14 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     statistics.compact_wal_ms = gc_watch.elapsedMillisecondsFromLastTime();
     GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_wal).Observe(statistics.compact_wal_ms / 1000.0);
 
-    const auto & del_entries = page_directory.gcInMemEntries();
+    RemoteFileValidSizes remote_valid_sizes;
+    typename Trait::PageDirectory::InMemGCOption options;
+    if constexpr (std::is_same_v<Trait, universal::ExternalPageCallbacksManagerTrait>)
+    {
+        options.need_remote_valid_size = true;
+        options.remote_valid_sizes = &remote_valid_sizes;
+    }
+    const auto & del_entries = page_directory.gcInMemEntries(options);
     statistics.compact_directory_ms = gc_watch.elapsedMillisecondsFromLastTime();
     GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_directory).Observe(statistics.compact_directory_ms / 1000.0);
 
@@ -255,7 +263,7 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_spacemap).Observe(statistics.compact_spacemap_ms / 1000.0);
 
     // Note that if full GC is not executed, below metrics won't be shown on grafana but it should
-    // only take few ms to fininsh these in-memory operations. Check them out by the logs if
+    // only take few ms to finish these in-memory operations. Check them out by the logs if
     // the total time cost not match.
 
     // 3. Check whether there are BlobFiles that need to do `full GC`.

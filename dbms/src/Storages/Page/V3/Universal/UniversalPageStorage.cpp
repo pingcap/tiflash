@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <IO/IOThreadPool.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
@@ -25,8 +26,13 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
+#include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3Filename.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
+
+#include <future>
+#include <mutex>
 
 
 namespace DB
@@ -418,7 +424,9 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
         .sequence = snap->sequence,
         .last_sequence = last_checkpoint_sequence,
     });
-    bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem);
+    // TODO: make this magic number configurable
+    const auto rewrite_file_ids = getFileIdsNeedRewrite(0.2);
+    bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, rewrite_file_ids);
     writer->writeSuffix();
     writer.reset();
 
@@ -457,6 +465,58 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
     }
 
     last_checkpoint_sequence = snap->sequence;
+}
+
+std::unordered_set<String> UniversalPageStorage::getFileIdsNeedRewrite(const double rewrite_threshold)
+{
+    auto stats = remote_data_files_stat_cache.getCopy();
+
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+
+    std::vector<std::future<std::tuple<String, size_t>>> actual_sizes;
+    for (const auto & [file_id, stat] : stats)
+    {
+        if (stat.total_size != 0)
+        {
+            continue;
+        }
+
+        auto task = std::make_shared<std::packaged_task<std::tuple<String, size_t>()>>(
+            [&s3_client, file_id = file_id, log = this->log]() noexcept {
+                auto view = S3::S3FilenameView::fromKey(file_id);
+                auto datafile_key = view.asDataFile().toFullKey();
+                auto actual_total_size = S3::getObjectSize(*s3_client, s3_client->bucket(), datafile_key, "", /*throw_on_error*/ false);
+                if (actual_total_size == 0)
+                {
+                    LOG_WARNING(log, "failed to get S3 object size, file_id={}", file_id);
+                }
+                return std::make_tuple(file_id, actual_total_size);
+            });
+        actual_sizes.emplace_back(task->get_future());
+        IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+    }
+    for (auto & f : actual_sizes)
+    {
+        const auto & [file_id, actual_size] = f.get();
+        auto iter = stats.find(file_id);
+        RUNTIME_CHECK(iter != stats.end(), file_id);
+        iter->second.total_size = actual_size;
+    }
+
+    remote_data_files_stat_cache.updateTotalSize(stats); // update cache
+
+    std::unordered_set<String> rewrite_files;
+    for (const auto & [file_id, stat] : stats)
+    {
+        if (stat.total_size == 0)
+            continue;
+        double valid_rate = 1.0 * stat.valid_size / stat.total_size;
+        if (valid_rate < rewrite_threshold)
+        {
+            rewrite_files.emplace(file_id);
+        }
+    }
+    return rewrite_files;
 }
 
 } // namespace DB

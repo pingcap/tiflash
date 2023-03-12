@@ -21,6 +21,7 @@
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
+#include <unordered_map>
 
 namespace DB::PS::V3
 {
@@ -103,6 +104,8 @@ private:
 
 private:
     std::atomic<bool> gc_is_running = false;
+
+    std::unordered_map<String, size_t> remote_file_sizes_cache;
 
     std::mutex callbacks_mutex;
     // Only std::map not std::unordered_map. We need insert/erase do not invalid other iterators.
