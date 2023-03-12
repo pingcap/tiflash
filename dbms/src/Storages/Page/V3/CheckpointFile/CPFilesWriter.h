@@ -67,7 +67,7 @@ public:
     void writePrefix(const PrefixInfo & info);
 
     /**
-     * If the entry's remote file_id is contains by `rewrite_file_id`, then the
+     * If the entry's remote file_id is contains by `file_ids_to_compact`, then the
      * entry data will be write down to the new data file.
      *
      * This function can be called multiple times if there are too many edits and

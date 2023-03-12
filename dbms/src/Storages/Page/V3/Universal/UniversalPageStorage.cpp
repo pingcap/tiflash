@@ -332,16 +332,17 @@ PageIdU64 UniversalPageStorage::getMaxIdAfterRestart() const
     return page_directory->getMaxIdAfterRestart();
 }
 
-bool UniversalPageStorage::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
+bool UniversalPageStorage::gc(const GCOptions & opts)
 {
     PS::V3::RemoteFileValidSizes remote_valid_sizes;
     bool done_anything = manager.gc(
         *blob_store,
         *page_directory,
-        write_limiter,
-        read_limiter,
+        opts.write_limiter,
+        opts.read_limiter,
         &remote_valid_sizes,
         log);
+    // update the valid size cache of remote file ids
     remote_data_files_stat_cache.updateValidSize(remote_valid_sizes);
     return done_anything;
 }
@@ -433,8 +434,8 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
         .sequence = snap->sequence,
         .last_sequence = last_checkpoint_sequence,
     });
-    // TODO: make this magic number configurable
-    const auto file_ids_to_compact = getRemoteFileIdsNeedCompact(0.2);
+    // get the remote file ids that need to be compacted
+    const auto file_ids_to_compact = getRemoteFileIdsNeedCompact(options.remote_gc_threshold);
     bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
     writer->writeSuffix();
     writer.reset();
@@ -476,7 +477,7 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
     last_checkpoint_sequence = snap->sequence;
 }
 
-std::unordered_set<String> UniversalPageStorage::getRemoteFileIdsNeedCompact(const double rewrite_threshold)
+std::unordered_set<String> UniversalPageStorage::getRemoteFileIdsNeedCompact(const double gc_threshold)
 {
     // In order to not block local GC updating the cache, get a copy of the cache
     auto stats = remote_data_files_stat_cache.getCopy();
@@ -523,7 +524,7 @@ std::unordered_set<String> UniversalPageStorage::getRemoteFileIdsNeedCompact(con
         if (stat.total_size == 0)
             continue;
         double valid_rate = 1.0 * stat.valid_size / stat.total_size;
-        if (valid_rate < rewrite_threshold)
+        if (valid_rate < gc_threshold)
         {
             rewrite_files.emplace(file_id);
         }

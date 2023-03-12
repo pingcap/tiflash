@@ -171,6 +171,8 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
      * The checkpoint with snapshot->sequence=12 could finished before the lockkey with
      * sequence=10 uploaded.
      */
+    const auto & settings = global_context.getSettingsRef(); // TODO: make it dynamic reloadable
+    double remote_gc_threshold = settings.remote_gc_threshold;
     UniversalPageStorage::DumpCheckpointOptions opts{
         .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
         .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",
@@ -186,6 +188,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
             .remote_store = remote_store,
         },
         .override_sequence = upload_info.upload_sequence, // override by upload_sequence
+        .remote_gc_threshold = remote_gc_threshold,
     };
     uni_page_storage->dumpIncrementalCheckpoint(opts);
 
@@ -207,7 +210,7 @@ bool UniversalPageStorageService::gc()
 
     last_try_gc_time = now;
     // TODO: reload config
-    return this->uni_page_storage->gc();
+    return this->uni_page_storage->gc({});
 }
 
 UniversalPageStorageService::~UniversalPageStorageService()
