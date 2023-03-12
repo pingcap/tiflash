@@ -358,14 +358,23 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
     {
         // CheckpointDataFile is a single object, remove it.
         deleteObject(*client, client->bucket(), datafile_key);
+        LOG_INFO(log, "datafile deleted, key={}", datafile_key);
     }
     else
     {
         // DMFile is composed by multiple objects, need extra work to remove all of them.
-        // TODO: remove all objects belong to this DMFile
-        LOG_WARNING(log, "remove dmfile, key={}", datafile_key);
+        // Remove all objects belong to this DMFile
+        S3::listPrefix(*client, client->bucket(), datafile_key, [this, &datafile_key](const Aws::S3::Model::ListObjectsV2Result & result) {
+            const auto & objs = result.GetContents();
+            for (const auto & obj : objs)
+            {
+                const auto & sub_key = obj.GetKey();
+                deleteObject(*client, client->bucket(), sub_key);
+                LOG_INFO(log, "datafile deleted, dtfile_key={} sub_key={}", datafile_key, sub_key);
+            }
+            return PageResult{.num_keys = objs.size(), .more = true};
+        });
     }
-    LOG_INFO(log, "datafile deleted, key={}", datafile_key);
 }
 
 std::vector<UInt64> S3GCManager::getAllStoreIds() const
