@@ -104,7 +104,7 @@ struct DecodedTiKVKey : std::string
 
 static_assert(sizeof(DecodedTiKVKey) == sizeof(std::string));
 
-struct RawTiDBPK : std::shared_ptr<const std::string>
+struct RawTiDBPK : private std::shared_ptr<const std::string>
 {
     using Base = std::shared_ptr<const std::string>;
 
@@ -116,6 +116,9 @@ struct RawTiDBPK : std::shared_ptr<const std::string>
     bool operator==(const RawTiDBPK & y) const { return (**this) == (*y); }
     bool operator!=(const RawTiDBPK & y) const { return !((*this) == y); }
     bool operator<(const RawTiDBPK & y) const { return (**this) < (*y); }
+    bool operator>(const RawTiDBPK & y) const { return (**this) > (*y); }
+    const std::string * operator->() const { return get(); }
+    const std::string & operator*() const { return *get(); }
 
     RawTiDBPK(const Base & o)
         : Base(o)
