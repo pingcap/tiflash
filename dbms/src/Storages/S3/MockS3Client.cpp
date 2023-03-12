@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/S3/MockS3Client.h>
 #include <aws/core/AmazonWebServiceRequest.h>
 #include <aws/core/AmazonWebServiceResult.h>
+#include <aws/core/utils/DateTime.h>
 #include <aws/core/utils/stream/ResponseStream.h>
 #include <aws/core/utils/xml/XmlSerializer.h>
 #include <aws/s3/S3Client.h>
@@ -37,7 +39,12 @@
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/UploadPartRequest.h>
 #include <common/types.h>
+#include <fiu.h>
 
+namespace DB::FailPoints
+{
+extern const char force_set_mocked_s3_object_mtime[];
+} // namespace DB::FailPoints
 namespace DB::S3::tests
 {
 using namespace Aws::S3;
@@ -128,7 +135,20 @@ Model::HeadObjectOutcome MockS3Client::HeadObject(const Model::HeadObjectRequest
     auto itr_obj = bucket_storage.find(request.GetKey());
     if (itr_obj != bucket_storage.end())
     {
-        return Model::HeadObjectResult{};
+        auto r = Model::HeadObjectResult{};
+        auto try_set_mtime = [&] {
+            if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_mocked_s3_object_mtime); v)
+            {
+                auto m = std::any_cast<std::map<String, Aws::Utils::DateTime>>(v.value());
+                if (auto iter_m = m.find(request.GetKey()); iter_m != m.end())
+                {
+                    r.SetLastModified(iter_m->second);
+                }
+            }
+        };
+
+        fiu_do_on(FailPoints::force_set_mocked_s3_object_mtime, { try_set_mtime(); });
+        return r;
     }
     return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuchKey");
 }

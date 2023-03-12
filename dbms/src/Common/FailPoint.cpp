@@ -95,7 +95,8 @@ namespace DB
     M(unblock_query_init_after_write)                        \
     M(exception_in_merged_task_init)                         \
     M(invalid_mpp_version)                                   \
-    M(force_fail_in_flush_region_data)
+    M(force_fail_in_flush_region_data)                       \
+    M(force_set_mocked_s3_object_mtime)
 
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
