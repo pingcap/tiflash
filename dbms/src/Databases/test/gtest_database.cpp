@@ -49,7 +49,7 @@ extern const char exception_before_rename_table_old_meta_removed[];
 extern const char force_context_path[];
 } // namespace FailPoints
 
-extern String createDatabaseStmt(Context & context, const TiDB::as_slice & db_info, const SchemaNameMapper & name_mapper);
+extern String createDatabaseStmt(Context & context, const TiDB:: DBInfo & db_info, const SchemaNameMapper & name_mapper);
 
 namespace tests
 {
