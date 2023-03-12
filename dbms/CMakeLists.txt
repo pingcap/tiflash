@@ -203,6 +203,7 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
+    RemoteTaskProto
     PSCheckpointProto
 )
 

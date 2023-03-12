@@ -18,6 +18,7 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>

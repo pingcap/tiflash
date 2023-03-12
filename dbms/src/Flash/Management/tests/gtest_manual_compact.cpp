@@ -14,13 +14,14 @@
 
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Flash/Management/ManualCompact.h>
+#include <Interpreters/Context.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <common/types.h>
 #include <fmt/ranges.h>
 #include <gtest/gtest.h>

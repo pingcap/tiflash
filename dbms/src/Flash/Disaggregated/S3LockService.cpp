@@ -16,6 +16,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/ServiceUtils.h>
+#include <Interpreters/Context.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/Transaction/TMTContext.h>

@@ -14,11 +14,15 @@
 
 #include <Common/Logger.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
+#include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
+#include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3GCManager.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/OwnerManager.h>
@@ -29,12 +33,13 @@
 #include <pingcap/pd/MockPDClient.h>
 
 #include <chrono>
+#include <memory>
 #include <unordered_set>
 
 namespace DB::S3::tests
 {
 
-class S3GCManagerTest : public ::testing::Test
+class S3GCManagerTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     S3GCManagerTest()
@@ -49,20 +54,27 @@ public:
     {
         S3GCConfig config{
             .delmark_expired_hour = 1,
-            .temp_path = ::DB::tests::TiFlashTestEnv::getTemporaryPath(),
         };
         mock_s3_client = ClientFactory::instance().sharedTiFlashClient();
         auto mock_gc_owner = OwnerManager::createMockOwner("owner_0");
         auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_s3_client);
         auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
         gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_s3_client, mock_gc_owner, mock_lock_client, config);
+
         ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client, mock_s3_client->bucket());
+
+        dir = getTemporaryPath();
+        dropDataOnDisk(dir);
+        createIfNotExist(dir);
     }
 
     void TearDown() override
     {
         ::DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client, mock_s3_client->bucket());
     }
+
+protected:
+    String dir;
 
     std::shared_ptr<TiFlashS3Client> mock_s3_client;
     std::unique_ptr<S3GCManager> gc_mgr;
@@ -193,18 +205,22 @@ try
     auto lock_key = df.toView().getLockKey(store_id, 400);
     auto lock_view = S3FilenameView::fromKey(lock_key);
 
+    auto delmark_key = df.toView().getDelMarkKey();
+
     auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
     {
         // delmark not exist, and no more lockfile
+        S3::uploadEmptyFile(*mock_s3_client, mock_s3_client->bucket(), df.toFullKey());
+        S3::uploadEmptyFile(*mock_s3_client, mock_s3_client->bucket(), lock_key);
+
+        ASSERT_FALSE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), delmark_key));
+
         gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
         // lock is deleted and delmark is created
-        auto delete_keys = mock_s3_client->delete_keys;
-        ASSERT_EQ(delete_keys.size(), 1);
-        ASSERT_EQ(delete_keys[0], lock_key);
-        auto put_keys = mock_s3_client->put_keys;
-        ASSERT_EQ(put_keys.size(), 1);
-        ASSERT_EQ(put_keys[0], df.toView().getDelMarkKey());
+        ASSERT_FALSE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), lock_key));
+        ASSERT_TRUE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), delmark_key));
+        ASSERT_TRUE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), df.toFullKey()));
     }
     {
         // delmark not exist, but still locked by another lockfile
@@ -307,6 +323,78 @@ try
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), expected_deleted_lock_key));
         ASSERT_TRUE(S3::objectExists(*mock_s3_client, mock_s3_client->bucket(), expected_created_delmark));
     }
+}
+CATCH
+
+
+TEST_F(S3GCManagerTest, ReadManifestFromS3)
+try
+{
+    using namespace ::DB::PS::V3;
+    const String mf_key = "manifest_foo";
+    { // prepare the manifest on S3
+        const String entry_data = "apple_value";
+        auto writer = CPFilesWriter::create({
+            .data_file_path = dir + "/data_1",
+            .data_file_id = "data_1",
+            .manifest_file_path = dir + "/" + mf_key,
+            .manifest_file_id = mf_key,
+            .data_source = CPWriteDataSourceFixture::create({{0, entry_data}, {entry_data.size(), entry_data}}),
+        });
+
+        writer->writePrefix({
+            .writer = {},
+            .sequence = 5,
+            .last_sequence = 3,
+        });
+        {
+            auto edits = universal::PageEntriesEdit{};
+            // remote entry ingest from other node
+            edits.varEntry(
+                "apple",
+                PageVersion(2),
+                PageEntryV3{
+                    .size = entry_data.size(),
+                    .checkpoint_info = {
+                        .data_location = CheckpointLocation{.data_file_id = std::make_shared<String>("apple_lock")},
+                        .is_valid = true,
+                        .is_local_data_reclaimed = false,
+                    }},
+                1);
+            // remote external entry ingest from other node
+            edits.varExternal(
+                "banana",
+                PageVersion(3),
+                PageEntryV3{
+                    .checkpoint_info = {
+                        .data_location = CheckpointLocation{.data_file_id = std::make_shared<String>("banana_lock")},
+                        .is_valid = true,
+                        .is_local_data_reclaimed = true,
+                    }},
+                1);
+            edits.varDel("banana", PageVersion(4));
+            edits.varEntry("orange", PageVersion(5), PageEntryV3{
+                                                         .size = entry_data.size(),
+                                                         .offset = entry_data.size(),
+                                                         .checkpoint_info = OptionalCheckpointInfo{}, // an entry written by this node, do not contains checkpoint_info
+                                                     },
+                           1);
+            writer->writeEditsAndApplyCheckpointInfo(edits);
+        }
+        writer->writeSuffix();
+        writer.reset();
+
+        S3::uploadFile(*mock_s3_client, mock_s3_client->bucket(), dir + "/" + mf_key, mf_key);
+    }
+
+    // read from S3 key
+    auto locks = gc_mgr->getValidLocksFromManifest(mf_key);
+    EXPECT_EQ(locks.size(), 3) << fmt::format("{}", locks);
+    // the lock ingest by FAP
+    EXPECT_TRUE(locks.contains("apple_lock")) << fmt::format("{}", locks);
+    EXPECT_TRUE(locks.contains("banana_lock")) << fmt::format("{}", locks);
+    // the lock generated by checkpoint dump
+    EXPECT_TRUE(locks.contains("data_1")) << fmt::format("{}", locks);
 }
 CATCH
 

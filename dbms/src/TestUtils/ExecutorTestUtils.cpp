@@ -18,6 +18,7 @@
 #include <Debug/MockStorage.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/executeQuery.h>
+#include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
 
@@ -106,8 +107,8 @@ void ExecutorTest::SetUpTestCase()
 
 void ExecutorTest::initializeClientInfo()
 {
-    context.context.setCurrentQueryId("test");
-    ClientInfo & client_info = context.context.getClientInfo();
+    context.context->setCurrentQueryId("test");
+    ClientInfo & client_info = context.context->getClientInfo();
     client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
     client_info.interface = ClientInfo::Interface::GRPC;
 }
@@ -115,19 +116,19 @@ void ExecutorTest::initializeClientInfo()
 void ExecutorTest::executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
     DAGContext dag_context(*request, "interpreter_test", concurrency);
-    TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::INTERPRETER_TEST);
+    TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::INTERPRETER_TEST);
 
     // Don't care regions information in interpreter tests.
-    auto query_executor = queryExecute(context.context, /*internal=*/true);
+    auto query_executor = queryExecute(*context.context, /*internal=*/true);
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->toString()));
 }
 
 void ExecutorTest::executeInterpreterWithDeltaMerge(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
     DAGContext dag_context(*request, "interpreter_test_with_delta_merge", concurrency);
-    TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
+    TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Don't care regions information in interpreter tests.
-    auto query_executor = queryExecute(context.context, /*internal=*/true);
+    auto query_executor = queryExecute(*context.context, /*internal=*/true);
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->toString()));
 }
 
@@ -171,7 +172,7 @@ void ExecutorTest::executeExecutor(
         std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
-            context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             auto res = executeStreams(request, concurrency);
             ASSERT_TRUE(assert_func(res)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
         }
@@ -192,7 +193,7 @@ void ExecutorTest::checkBlockSorted(
         std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
-            context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             auto return_blocks = getExecuteStreamsReturnBlocks(request, concurrency);
             if (!return_blocks.empty())
             {
@@ -271,12 +272,12 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
 
 void ExecutorTest::enablePlanner(bool is_enable)
 {
-    context.context.setSetting("enable_planner", is_enable ? "true" : "false");
+    context.context->setSetting("enable_planner", is_enable ? "true" : "false");
 }
 
 void ExecutorTest::enablePipeline(bool is_enable)
 {
-    context.context.setSetting("enable_pipeline", is_enable ? "true" : "false");
+    context.context->setSetting("enable_pipeline", is_enable ? "true" : "false");
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
@@ -290,10 +291,10 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(
 
 ColumnsWithTypeAndName ExecutorTest::executeStreams(DAGContext * dag_context, bool enable_memory_tracker)
 {
-    TiFlashTestEnv::setUpTestContext(context.context, dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
+    TiFlashTestEnv::setUpTestContext(*context.context, dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
-    queryExecute(context.context, /*internal=*/!enable_memory_tracker)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
+    queryExecute(*context.context, /*internal=*/!enable_memory_tracker)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
     return vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName();
 }
 
@@ -302,10 +303,10 @@ Blocks ExecutorTest::getExecuteStreamsReturnBlocks(const std::shared_ptr<tipb::D
                                                    bool enable_memory_tracker)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
-    TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
+    TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
     // Currently, don't care about regions information in tests.
     Blocks blocks;
-    queryExecute(context.context, /*internal=*/!enable_memory_tracker)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
+    queryExecute(*context.context, /*internal=*/!enable_memory_tracker)->execute([&blocks](const Block & block) { blocks.push_back(block); }).verify();
     return blocks;
 }
 
@@ -315,7 +316,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, s
     properties.is_mpp_query = false;
     properties.start_ts = 1;
     auto [query_tasks, func_wrap_output_stream] = compileQuery(
-        context.context,
+        *context.context,
         query,
         [&](const String & database_name, const String & table_name) {
             return context.mockStorage()->getTableInfo(database_name + "." + table_name);

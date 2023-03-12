@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/setThreadName.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/StorageDeltaMerge.h>

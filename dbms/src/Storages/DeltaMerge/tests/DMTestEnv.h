@@ -113,10 +113,8 @@ inline String genMockCommonHandle(Int64 value, size_t rowkey_column_size)
 class DMTestEnv
 {
 public:
-    static Context getContext(const ::DB::Settings & settings = DB::Settings())
-    {
-        return ::DB::tests::TiFlashTestEnv::getContext(settings);
-    }
+    static ContextPtr getContext() { return ::DB::tests::TiFlashTestEnv::getContext(); }
+    static ContextPtr getContext(const ::DB::Settings & settings) { return ::DB::tests::TiFlashTestEnv::getContext(settings); }
 
     static constexpr const char * pk_name = "_tidb_rowid";
 
@@ -443,7 +441,8 @@ public:
         const String & colname,
         const String & value,
         bool is_common_handle,
-        size_t rowkey_column_size)
+        size_t rowkey_column_size,
+        ColumnID column_id = 100)
     {
         Block block;
         const size_t num_rows = 1;
@@ -476,7 +475,8 @@ public:
         // string column
         block.insert(DB::tests::createColumn<String>(
             Strings{value},
-            colname));
+            colname,
+            /*column_id*/ column_id));
         return block;
     }
 

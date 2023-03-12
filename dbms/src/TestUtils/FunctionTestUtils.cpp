@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Columns/ColumnNothing.h>
-#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
 #include <Core/ColumnNumbers.h>
@@ -505,6 +504,26 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
 ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols)
 {
     return cols;
+}
+
+FunctionTest::FunctionTest()
+    : context(TiFlashTestEnv::getContext())
+{}
+
+void FunctionTest::initializeDAGContext()
+{
+    dag_context_ptr = std::make_unique<DAGContext>(1024);
+    context->setDAGContext(dag_context_ptr.get());
+}
+
+ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, TiDB::TiDBCollatorPtr const & collator, bool raw_function_test)
+{
+    return DB::tests::executeFunction(*context, func_name, columns, collator, raw_function_test);
+}
+
+ColumnWithTypeAndName FunctionTest::executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns, TiDB::TiDBCollatorPtr const & collator, bool raw_function_test)
+{
+    return DB::tests::executeFunction(*context, func_name, argument_column_numbers, columns, collator, raw_function_test);
 }
 
 } // namespace tests

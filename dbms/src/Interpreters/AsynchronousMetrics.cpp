@@ -20,6 +20,7 @@
 #include <Databases/IDatabase.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/AsynchronousMetrics.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/StoragePool.h>

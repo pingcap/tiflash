@@ -17,6 +17,7 @@
 #include <DataStreams/SegmentReadTransformAction.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteSegmentThreadInputStream.h>
 

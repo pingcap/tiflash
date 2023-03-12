@@ -58,9 +58,9 @@ inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf, bool 
     }
     if (has_checkpoint_info)
     {
-        writeIntBinary(entry.checkpoint_info->data_location.offset_in_file, buf);
-        writeIntBinary(entry.checkpoint_info->data_location.size_in_file, buf);
-        writeStringBinary(*(entry.checkpoint_info->data_location.data_file_id), buf);
+        writeIntBinary(entry.checkpoint_info.data_location.offset_in_file, buf);
+        writeIntBinary(entry.checkpoint_info.data_location.size_in_file, buf);
+        writeStringBinary(*(entry.checkpoint_info.data_location.data_file_id), buf);
     }
 }
 
@@ -90,7 +90,8 @@ inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry, bool has
     }
     if (has_checkpoint_info)
     {
-        CheckpointInfo checkpoint_info;
+        OptionalCheckpointInfo checkpoint_info;
+        checkpoint_info.is_valid = true; // contains valid value
         checkpoint_info.is_local_data_reclaimed = (entry.file_id == INVALID_BLOBFILE_ID);
         readIntBinary(checkpoint_info.data_location.offset_in_file, buf);
         readIntBinary(checkpoint_info.data_location.size_in_file, buf);
@@ -242,14 +243,14 @@ void serializePutExternalTo(const EditRecord & record, WriteBuffer & buf)
 
     if constexpr (std::is_same_v<EditRecord, universal::PageEntriesEdit::EditRecord>)
     {
-        UInt32 flags = 0;
+        UInt32 flags = 0x0;
         if (record.entry.checkpoint_info.has_value())
         {
             flags = setCheckpointInfoExists(flags);
             writeIntBinary(flags, buf);
-            writeIntBinary(record.entry.checkpoint_info->data_location.offset_in_file, buf);
-            writeIntBinary(record.entry.checkpoint_info->data_location.size_in_file, buf);
-            writeStringBinary(*(record.entry.checkpoint_info->data_location.data_file_id), buf);
+            writeIntBinary(record.entry.checkpoint_info.data_location.offset_in_file, buf);
+            writeIntBinary(record.entry.checkpoint_info.data_location.size_in_file, buf);
+            writeStringBinary(*(record.entry.checkpoint_info.data_location.data_file_id), buf);
         }
         else
         {
@@ -281,7 +282,8 @@ void deserializePutExternalFrom([[maybe_unused]] const EditRecordType record_typ
         readIntBinary(flags, buf);
         if (isCheckpointInfoExists(flags))
         {
-            CheckpointInfo checkpoint_info;
+            OptionalCheckpointInfo checkpoint_info;
+            checkpoint_info.is_valid = true; // contains valid value
             checkpoint_info.is_local_data_reclaimed = true;
             readIntBinary(checkpoint_info.data_location.offset_in_file, buf);
             readIntBinary(checkpoint_info.data_location.size_in_file, buf);

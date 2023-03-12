@@ -31,6 +31,7 @@
 #include <Flash/Disaggregated/RNPagePreparer.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
 #include <Flash/Disaggregated/RNPageReceiverContext.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
@@ -46,6 +47,7 @@
 #include <kvproto/disaggregated.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Cluster.h>
+#include <pingcap/kv/RegionCache.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
@@ -94,7 +96,11 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
         try
         {
             auto remote_table_ranges = buildRemoteTableRanges();
-            auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
+            // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
+            // pingcap::kv::LabelFilter label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
+            // FIXME: it depends on another PR, now send request to tiflash node with {"engine"="tiflash"}
+            auto label_filter = pingcap::kv::labelFilterNoTiFlashWriteNode;
+            auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
             RUNTIME_CHECK(!batch_cop_tasks.empty());
 
             // Fetch the remote segment read tasks from write nodes

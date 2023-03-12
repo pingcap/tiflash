@@ -15,6 +15,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Interpreters/Context.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -54,7 +55,8 @@ BlockInputStreams StorageDisaggregated::read(
 
     auto remote_table_ranges = buildRemoteTableRanges();
 
-    auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
+    // only send to tiflash node with label {"engine": "tiflash"}
+    auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, pingcap::kv::labelFilterNoTiFlashWriteNode);
     RUNTIME_CHECK(!batch_cop_tasks.empty());
 
     std::vector<RequestAndRegionIDs> dispatch_reqs;
@@ -96,7 +98,9 @@ std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildR
     return remote_table_ranges;
 }
 
-std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatchCopTasks(const std::vector<RemoteTableRange> & remote_table_ranges)
+std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatchCopTasks(
+    const std::vector<RemoteTableRange> & remote_table_ranges,
+    const pingcap::kv::LabelFilter & label_filter)
 {
     std::vector<Int64> physical_table_ids;
     physical_table_ids.reserve(remote_table_ranges.size());
@@ -111,7 +115,6 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-    pingcap::kv::LabelFilter label_filter = S3::ClientFactory::instance().isEnabled() ? pingcap::kv::labelFilterOnlyTiFlashWriteNode : pingcap::kv::labelFilterNoTiFlashWriteNode;
     auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(
         bo,
         cluster,

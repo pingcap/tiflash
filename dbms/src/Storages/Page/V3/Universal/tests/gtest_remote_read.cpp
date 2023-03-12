@@ -28,8 +28,8 @@
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3WritableFile.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
@@ -54,7 +54,7 @@ public:
         auto path = getTemporaryPath();
         remote_dir = path;
         createIfNotExist(path);
-        file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
+        file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         s3_client = S3::ClientFactory::instance().sharedClient();
         bucket = S3::ClientFactory::instance().bucket();
@@ -151,7 +151,7 @@ try
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
         wb.putPage(r[0].page_id, 0, "local data");
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info->data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -211,7 +211,7 @@ try
 
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info->data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -280,8 +280,8 @@ try
 
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info->data_location, std::move(r[0].entry.field_offsets));
-        wb.putRemotePage(r[1].page_id, 0, r[1].entry.checkpoint_info->data_location, std::move(r[1].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[1].page_id, 0, r[1].entry.checkpoint_info.data_location, std::move(r[1].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -355,7 +355,7 @@ try
 
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info->data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 

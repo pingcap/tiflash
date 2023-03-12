@@ -29,7 +29,7 @@ public:
     void initializeDAGContext() override
     {
         dag_context_ptr = std::make_unique<DAGContext>(5);
-        context.setDAGContext(dag_context_ptr.get());
+        context->setDAGContext(dag_context_ptr.get());
     }
 };
 

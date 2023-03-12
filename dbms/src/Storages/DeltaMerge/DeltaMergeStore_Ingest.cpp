@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>

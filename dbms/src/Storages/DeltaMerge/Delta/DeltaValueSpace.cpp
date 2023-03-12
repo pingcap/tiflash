@@ -16,6 +16,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>

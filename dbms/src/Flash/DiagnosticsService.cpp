@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/LogSearch.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Path.h>

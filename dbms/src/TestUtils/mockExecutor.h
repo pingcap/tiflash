@@ -19,7 +19,7 @@
 #include <Debug/MockExecutor/WindowBinder.h>
 #include <Debug/MockStorage.h>
 #include <Debug/dbgQueryCompiler.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTFunction.h>
 #include <Storages/Transaction/Collator.h>
 #include <tipb/executor.pb.h>
@@ -170,7 +170,7 @@ private:
 class MockDAGRequestContext
 {
 public:
-    explicit MockDAGRequestContext(Context context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
+    explicit MockDAGRequestContext(ContextPtr context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
         : index(0)
         , context(context_)
         , collation(convertToTiDBCollation(collation_))
@@ -231,7 +231,7 @@ public:
     // but we need it to contruct the TaskMeta.
     // In TiFlash, we use task_id to identify an Mpp Task.
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
-    Context context;
+    ContextPtr context;
     Int32 collation;
 };
 

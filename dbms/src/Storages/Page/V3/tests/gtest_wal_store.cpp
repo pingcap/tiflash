@@ -26,8 +26,8 @@
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
 #include <future>
@@ -391,8 +391,7 @@ TEST(WALStoreReaderTest, FindCheckpointFile)
 
 TEST_P(WALStoreTest, Empty)
 {
-    auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    auto provider = ctx.getFileProvider();
+    auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto path = getTemporaryPath();
     size_t num_callback_called = 0;
     auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
@@ -414,8 +413,7 @@ TEST_P(WALStoreTest, Empty)
 TEST_P(WALStoreTest, ReadWriteRestore)
 try
 {
-    auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    auto provider = ctx.getFileProvider();
+    auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto path = getTemporaryPath();
 
     // Stage 1. empty
@@ -537,8 +535,7 @@ CATCH
 TEST_P(WALStoreTest, ReadWriteRestore2)
 try
 {
-    auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    auto provider = ctx.getFileProvider();
+    auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto path = getTemporaryPath();
 
     auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
@@ -732,8 +729,7 @@ CATCH
 
 TEST_P(WALStoreTest, GetFileSnapshot)
 {
-    auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    auto provider = ctx.getFileProvider();
+    auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto path = getTemporaryPath();
 
     auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
@@ -794,8 +790,7 @@ TEST_P(WALStoreTest, GetFileSnapshot)
 
 TEST_P(WALStoreTest, WriteReadWithDifferentFormat)
 {
-    auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    auto provider = ctx.getFileProvider();
+    auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto path = getTemporaryPath();
 
     {
