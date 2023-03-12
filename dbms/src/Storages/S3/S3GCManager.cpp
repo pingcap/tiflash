@@ -88,7 +88,7 @@ bool S3GCManager::runOnAllStores()
 
     if (config.method == S3GCMethod::Lifecycle && !lifecycle_has_been_set)
     {
-        ensureLifecycleRuleExist(*client, client->bucket(), 1);
+        ensureLifecycleRuleExist(*client, client->bucket(), /*expire_days*/ 1);
         lifecycle_has_been_set = true;
     }
 
@@ -165,7 +165,11 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
     switch (config.method)
     {
     case S3GCMethod::Lifecycle:
+    {
+        // nothing need to be done, the expired files will be deleted by S3-like
+        // system's lifecycle management
         break;
+    }
     case S3GCMethod::ScanThenDelete:
     {
         // After removing the expired lock, we need to scan the data files
@@ -198,8 +202,11 @@ void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
     switch (config.method)
     {
     case S3GCMethod::Lifecycle:
-        // nothing need to be done, the expired files will be deleted by S3-like system
+    {
+        // nothing need to be done, the expired files will be deleted by S3-like
+        // system's lifecycle management
         break;
+    }
     case S3GCMethod::ScanThenDelete:
     {
         // TODO: write a mark file and skip `cleanUnusedLocks` and `removeOutdatedManifest`
@@ -399,6 +406,7 @@ void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils:
 void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
 {
     assert(config.method == S3GCMethod::Lifecycle);
+
     auto view = S3FilenameView::fromKey(datafile_key);
     if (!view.isDMFile())
     {
@@ -429,6 +437,7 @@ void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
 void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
 {
     assert(config.method == S3GCMethod::ScanThenDelete);
+
     auto view = S3FilenameView::fromKey(datafile_key);
     if (!view.isDMFile())
     {

@@ -394,13 +394,13 @@ void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & b
 
         auto res = outcome.GetResult();
         old_rules = res.GetRules();
-        static_assert(TaggingObjectIsDeleted == "deleted=true");
+        static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
         for (const auto & rule : old_rules)
         {
             const auto & filt = rule.GetFilter();
             const auto & tag = filt.GetTag();
             if (rule.GetStatus() == Aws::S3::Model::ExpirationStatus::Enabled
-                && tag.GetKey() == "deleted" && tag.GetValue() == "true")
+                && tag.GetKey() == "tiflash_deleted" && tag.GetValue() == "true")
             {
                 lifecycle_rule_has_been_set = true;
             }
@@ -410,9 +410,9 @@ void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & b
     if (lifecycle_rule_has_been_set)
         return;
 
-    static_assert(TaggingObjectIsDeleted == "deleted=true");
+    static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
     Aws::S3::Model::LifecycleRuleFilter filter;
-    filter.SetTag(Aws::S3::Model::Tag().WithKey("deleted").WithValue("true"));
+    filter.SetTag(Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true"));
 
     Aws::S3::Model::LifecycleRule rule;
     rule.WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)

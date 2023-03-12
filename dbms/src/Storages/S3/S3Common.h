@@ -122,7 +122,7 @@ bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const
 
 void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
 
-constexpr std::string_view TaggingObjectIsDeleted = "deleted=true";
+constexpr std::string_view TaggingObjectIsDeleted = "tiflash_deleted=true";
 void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & bucket, Int32 expire_days);
 
 /**
