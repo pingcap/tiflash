@@ -407,8 +407,12 @@ void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & b
         }
     }
 
+    static LoggerPtr log = Logger::get();
     if (lifecycle_rule_has_been_set)
+    {
+        LOG_INFO(log, "The lifecycle rule has been set, n_rules={} tag={}", old_rules.size(), TaggingObjectIsDeleted);
         return;
+    }
 
     static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
     Aws::S3::Model::LifecycleRuleFilter filter;
@@ -433,6 +437,7 @@ void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & b
     {
         throw fromS3Error(outcome.GetError(), "PutBucketLifecycle fail");
     }
+    LOG_INFO(log, "The lifecycle rule has been add, n_rules={} tag={}", old_rules.size() + 1, TaggingObjectIsDeleted);
 }
 
 void listPrefix(
