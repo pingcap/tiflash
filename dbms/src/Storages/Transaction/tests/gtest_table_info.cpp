@@ -84,7 +84,7 @@ try
 
     for (const auto & c : cases)
     {
-        TableInfo table_info(c.table_info_json);
+        TableInfo table_info(c.table_info_json, NullspaceID);
         c.check(table_info);
     }
 }
@@ -99,12 +99,12 @@ struct StmtCase
 
     void verifyTableInfo() const
     {
-        DBInfo db_info(db_info_json);
-        TableInfo table_info(table_info_json);
+        DBInfo db_info(db_info_json, NullspaceID);
+        TableInfo table_info(table_info_json, NullspaceID);
         if (table_info.is_partition_table)
             table_info = *table_info.producePartitionTableInfo(table_or_partition_id, MockSchemaNameMapper());
         auto json1 = table_info.serialize();
-        TableInfo table_info2(json1);
+        TableInfo table_info2(json1, NullspaceID);
         auto json2 = table_info2.serialize();
         ASSERT_EQ(json1, json2) << "Table info unescaped serde mismatch:\n" + json1 + "\n" + json2;
 
