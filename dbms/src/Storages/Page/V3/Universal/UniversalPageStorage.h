@@ -190,7 +190,7 @@ public:
 
     void dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
 
-    std::unordered_set<String> getFileIdsNeedRewrite(double rewrite_threshold) ;
+    std::unordered_set<String> getRemoteFileIdsNeedCompact(double rewrite_threshold);
 
     PageIdU64 getMaxIdAfterRestart() const;
 

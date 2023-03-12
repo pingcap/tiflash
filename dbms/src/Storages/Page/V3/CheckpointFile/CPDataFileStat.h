@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/Exception.h>
 #include <common/types.h>
 
 #include <mutex>
@@ -23,7 +22,10 @@
 
 namespace DB::PS::V3
 {
-struct CPFileStat
+
+using RemoteFileValidSizes = std::unordered_map<String, size_t>;
+
+struct CPDataFileStat
 {
     size_t valid_size = 0;
     size_t total_size = 0;
@@ -32,46 +34,23 @@ struct CPFileStat
 class CPDataFilesStatCache
 {
 public:
-    void updateValidSize(const std::unordered_map<String, size_t> & valid_sizes)
-    {
-        std::lock_guard lock(mtx);
-        // If the file is not exist in the latest valid_sizes, then we can
-        // remove the cache
-        for (auto iter = stats.begin(); iter != stats.end(); /*empty*/)
-        {
-            const auto & file_id = iter->first;
-            if (!valid_sizes.contains(file_id))
-            {
-                iter = stats.erase(iter);
-            }
-            else
-            {
-                ++iter;
-            }
-        }
-        // If the file_id exists, write down the valid size, keep total_size unchanged.
-        // Else create a cache entry to write down valid size but leave total_size == 0.
-        for (const auto & [file_id, valid_size] : valid_sizes)
-        {
-            auto res = stats.try_emplace(file_id, CPFileStat{});
-            res.first->second.valid_size = valid_size;
-        }
-    }
+    /**
+     * Update the valid size in the cache. Thread safe.
+     *
+     * If some file_id exist in `valid_sizes` but not exist in the cache, it
+     * will create a new `CPDataFileStat` with total_size == 0.
+     * If some file_id exist in the cache but not exist in the `valid_sizes`,
+     * it means the data file is not owned by this node any more, so it will
+     * be removed from the cache.
+     */
+    void updateValidSize(const RemoteFileValidSizes & valid_sizes);
 
-    void updateTotalSize(const std::unordered_map<String, CPFileStat> & total_sizes)
-    {
-        std::lock_guard lock(mtx);
-        for (const auto & [file_id, new_stat] : total_sizes)
-        {
-            if (auto iter = stats.find(file_id); iter != stats.end())
-            {
-                assert(new_stat.total_size != 0);
-                iter->second.total_size = new_stat.total_size;
-            }
-        }
-    }
+    /**
+     * Update the total size field in the cache. Thread safe.
+     */
+    void updateTotalSize(const std::unordered_map<String, CPDataFileStat> & total_sizes);
 
-    std::unordered_map<String, CPFileStat> getCopy() const
+    std::unordered_map<String, CPDataFileStat> getCopy() const
     {
         std::lock_guard lock(mtx);
         return stats;
@@ -79,6 +58,7 @@ public:
 
 private:
     mutable std::mutex mtx;
-    std::unordered_map<String, CPFileStat> stats;
+    // file_id -> CPDataFileStat
+    std::unordered_map<String, CPDataFileStat> stats;
 };
 } // namespace DB::PS::V3

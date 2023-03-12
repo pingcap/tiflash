@@ -810,7 +810,7 @@ try
             visible_page_ids.erase(x);
 
         if (gc_or_not)
-            dir->gcInMemEntries({.need_removed_entries=false});
+            dir->gcInMemEntries({.need_removed_entries = false});
         auto snap = dir->createSnapshot();
         for (const auto & cur_id : visible_page_ids)
         {

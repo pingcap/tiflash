@@ -18,10 +18,10 @@
 #include <Poco/Message.h>
 #include <Storages/Page/ExternalPageCallbacks.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
-#include <unordered_map>
 
 namespace DB::PS::V3
 {
@@ -91,6 +91,7 @@ public:
         typename Trait::PageDirectory & page_directory,
         const WriteLimiterPtr & write_limiter,
         const ReadLimiterPtr & read_limiter,
+        RemoteFileValidSizes * remote_valid_sizes,
         LoggerPtr log);
 
 private:
@@ -100,12 +101,11 @@ private:
         typename Trait::BlobStore & blob_store,
         typename Trait::PageDirectory & page_directory,
         const WriteLimiterPtr & write_limiter,
-        const ReadLimiterPtr & read_limiter);
+        const ReadLimiterPtr & read_limiter,
+        RemoteFileValidSizes * remote_valid_sizes);
 
 private:
     std::atomic<bool> gc_is_running = false;
-
-    std::unordered_map<String, size_t> remote_file_sizes_cache;
 
     std::mutex callbacks_mutex;
     // Only std::map not std::unordered_map. We need insert/erase do not invalid other iterators.

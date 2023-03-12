@@ -78,7 +78,7 @@ public:
      */
     bool /* has_new_data */ writeEditsAndApplyCheckpointInfo(
         universal::PageEntriesEdit & edit,
-        const std::unordered_set<String> & rewrite_file_ids = {});
+        const std::unordered_set<String> & file_ids_to_compact = {});
 
     /**
      * This function must be called, and must be called last, after other `writeXxx`.

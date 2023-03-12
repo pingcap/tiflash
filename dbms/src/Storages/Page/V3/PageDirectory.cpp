@@ -1888,7 +1888,6 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
     // The page_id that we need to decrease ref count
     // { id_0: <version, num to decrease>, id_1: <...>, ... }
     std::map<PageId, std::pair<PageVersion, Int64>> normal_entries_to_deref;
-    RemoteFileValidSizes remote_file_sizes;
     // Iterate all page_id and try to clean up useless var entries
     while (true)
     {
@@ -1937,7 +1936,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
             page_id,
             /*deref_ver=*/deref_counter.first,
             /*deref_count=*/deref_counter.second,
-            options.need_removed_entries? &all_del_entries : nullptr);
+            options.need_removed_entries ? &all_del_entries : nullptr);
 
         if (all_deleted)
         {

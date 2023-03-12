@@ -134,6 +134,7 @@ bool ExternalPageCallbacksManager<Trait>::gc(
     typename Trait::PageDirectory & page_directory,
     const WriteLimiterPtr & write_limiter,
     const ReadLimiterPtr & read_limiter,
+    RemoteFileValidSizes * remote_valid_sizes,
     LoggerPtr log)
 {
     // If another thread is running gc, just return;
@@ -141,7 +142,7 @@ bool ExternalPageCallbacksManager<Trait>::gc(
     if (!gc_is_running.compare_exchange_strong(v, true))
         return false;
 
-    const GCTimeStatistics statistics = doGC(blob_store, page_directory, write_limiter, read_limiter);
+    const GCTimeStatistics statistics = doGC(blob_store, page_directory, write_limiter, read_limiter, remote_valid_sizes);
     assert(statistics.stage != GCStageType::Unknown); // `doGC` must set the stage
     LOG_IMPL(log, statistics.getLoggingLevel(), statistics.toLogging());
 
@@ -216,7 +217,8 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     typename Trait::BlobStore & blob_store,
     typename Trait::PageDirectory & page_directory,
     const WriteLimiterPtr & write_limiter,
-    const ReadLimiterPtr & read_limiter)
+    const ReadLimiterPtr & read_limiter,
+    RemoteFileValidSizes * remote_valid_sizes)
 {
     Stopwatch gc_watch;
     SCOPE_EXIT({
@@ -242,12 +244,11 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     statistics.compact_wal_ms = gc_watch.elapsedMillisecondsFromLastTime();
     GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_wal).Observe(statistics.compact_wal_ms / 1000.0);
 
-    RemoteFileValidSizes remote_valid_sizes;
     typename Trait::PageDirectory::InMemGCOption options;
     if constexpr (std::is_same_v<Trait, universal::ExternalPageCallbacksManagerTrait>)
     {
-        options.need_remote_valid_size = true;
-        options.remote_valid_sizes = &remote_valid_sizes;
+        assert(remote_valid_sizes != nullptr);
+        options.remote_valid_sizes = remote_valid_sizes;
     }
     const auto & del_entries = page_directory.gcInMemEntries(options);
     statistics.compact_directory_ms = gc_watch.elapsedMillisecondsFromLastTime();

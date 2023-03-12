@@ -334,7 +334,16 @@ PageIdU64 UniversalPageStorage::getMaxIdAfterRestart() const
 
 bool UniversalPageStorage::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
-    return manager.gc(*blob_store, *page_directory, write_limiter, read_limiter, log);
+    PS::V3::RemoteFileValidSizes remote_valid_sizes;
+    bool done_anything = manager.gc(
+        *blob_store,
+        *page_directory,
+        write_limiter,
+        read_limiter,
+        &remote_valid_sizes,
+        log);
+    remote_data_files_stat_cache.updateValidSize(remote_valid_sizes);
+    return done_anything;
 }
 
 void UniversalPageStorage::registerUniversalExternalPagesCallbacks(const UniversalExternalPageCallbacks & callbacks)
@@ -425,8 +434,8 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
         .last_sequence = last_checkpoint_sequence,
     });
     // TODO: make this magic number configurable
-    const auto rewrite_file_ids = getFileIdsNeedRewrite(0.2);
-    bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, rewrite_file_ids);
+    const auto file_ids_to_compact = getRemoteFileIdsNeedCompact(0.2);
+    bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
     writer->writeSuffix();
     writer.reset();
 
@@ -467,12 +476,14 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
     last_checkpoint_sequence = snap->sequence;
 }
 
-std::unordered_set<String> UniversalPageStorage::getFileIdsNeedRewrite(const double rewrite_threshold)
+std::unordered_set<String> UniversalPageStorage::getRemoteFileIdsNeedCompact(const double rewrite_threshold)
 {
+    // In order to not block local GC updating the cache, get a copy of the cache
     auto stats = remote_data_files_stat_cache.getCopy();
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
+    // If the total_size is 0, try to get the actual size from S3
     std::vector<std::future<std::tuple<String, size_t>>> actual_sizes;
     for (const auto & [file_id, stat] : stats)
     {
@@ -503,7 +514,8 @@ std::unordered_set<String> UniversalPageStorage::getFileIdsNeedRewrite(const dou
         iter->second.total_size = actual_size;
     }
 
-    remote_data_files_stat_cache.updateTotalSize(stats); // update cache
+    // update cache by the S3 result
+    remote_data_files_stat_cache.updateTotalSize(stats);
 
     std::unordered_set<String> rewrite_files;
     for (const auto & [file_id, stat] : stats)

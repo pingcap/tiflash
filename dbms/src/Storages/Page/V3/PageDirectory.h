@@ -21,6 +21,7 @@
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 #include <Storages/Page/V3/MapUtils.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
@@ -126,8 +127,6 @@ struct EntryOrDelete
 };
 
 using PageLock = std::lock_guard<std::mutex>;
-
-using RemoteFileValidSizes = std::unordered_map<String, size_t>;
 
 enum class ResolveResult
 {
@@ -374,8 +373,9 @@ public:
     // If `return_removed_entries` is false, then just return an empty set.
     struct InMemGCOption
     {
+        // if true collect the removed entries and return
         bool need_removed_entries = true;
-        bool need_remote_valid_size = false;
+        // collect the valid size of remote ids if not nullptr
         RemoteFileValidSizes * remote_valid_sizes = nullptr;
     };
     PageEntries gcInMemEntries(const InMemGCOption & options);
