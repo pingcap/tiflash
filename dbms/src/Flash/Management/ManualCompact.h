@@ -90,7 +90,7 @@ private:
 #endif
     const Context & global_context;
     const Settings & settings;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Placed last to be destroyed first.
     std::unique_ptr<legacy::ThreadPool> worker_pool;
