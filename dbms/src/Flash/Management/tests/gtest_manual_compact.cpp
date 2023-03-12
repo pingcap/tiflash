@@ -102,7 +102,7 @@ public:
     void TearDown() override
     {
         storage->drop();
-        db_context->getTMTContext().getStorages().remove(TABLE_ID);
+        db_context->getTMTContext().getStorages().remove(NullspaceID, TABLE_ID);
     }
 
 protected:
