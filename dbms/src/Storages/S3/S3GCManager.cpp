@@ -304,6 +304,23 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
         if (ok)
         {
             LOG_INFO(log, "delmark created, key={}", unlocked_datafile_key);
+            switch (config.method)
+            {
+            case S3GCMethod::Lifecycle:
+            {
+                // Note that the min time of lifecycle check is 1 day. There is some
+                // time gap between delmark's lifecycle and its datafile lifecycle.
+                // Or S3GCManage could crash between delmark created and rewriting
+                // the datafile.
+                // However, After the lock key is not seen in the manifest file after
+                // 1 day, we consider it is long enough for no other write node try
+                // access to the data file.
+                lifecycleMarkDataFileDeleted(unlocked_datafile_key);
+                return;
+            }
+            case S3GCMethod::ScanThenDelete:
+                break;
+            }
         }
         else
         {
@@ -318,12 +335,6 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     {
     case S3GCMethod::Lifecycle:
     {
-        // Note that the min time of lifecycle check is 1 day. There is some
-        // time gap between delmark's lifecycle and its datafile lifecycle.
-        // However, After the lock key is not seen in the manifest file after
-        // 1 day, we consider it is long enough for no other write node try
-        // access to the data file.
-        lifecycleMarkDataFileDeleted(unlocked_datafile_key);
         return;
     }
     case S3GCMethod::ScanThenDelete:
