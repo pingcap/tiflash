@@ -521,7 +521,7 @@ std::unique_ptr<std::thread> initStores(Context & global_context, const LoggerPt
         RUNTIME_CHECK_MSG(status == RaftProxyStatus::Running, "RaftProxyStatus::{}", magic_enum::enum_name(status));
     };
 
-    auto do_init_stores = [&]() {
+    auto do_init_stores = [&global_context, &log, tiflash_instance_wrap, wait_proxy]() {
         if (tiflash_instance_wrap != nullptr)
         {
             wait_proxy(tiflash_instance_wrap);
