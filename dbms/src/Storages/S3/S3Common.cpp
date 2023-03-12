@@ -437,7 +437,7 @@ void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & b
     {
         throw fromS3Error(outcome.GetError(), "PutBucketLifecycle fail");
     }
-    LOG_INFO(log, "The lifecycle rule has been add, n_rules={} tag={}", old_rules.size() + 1, TaggingObjectIsDeleted);
+    LOG_INFO(log, "The lifecycle rule has been added, new_n_rules={} tag={}", old_rules.size() + 1, TaggingObjectIsDeleted);
 }
 
 void listPrefix(
