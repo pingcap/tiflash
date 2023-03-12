@@ -144,7 +144,7 @@ std::map<FSID, DiskCapacity> PathCapacityMetrics::getDiskStats()
     return disk_stats_map;
 }
 
-FsStats PathCapacityMetrics::getFsStats()
+FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
 {
     // Now we assume the size of `path_infos` will not change, don't acquire heavy lock on `path_infos`.
     FsStats total_stat{};
@@ -207,7 +207,7 @@ FsStats PathCapacityMetrics::getFsStats()
     CurrentMetrics::set(CurrentMetrics::StoreSizeAvailable, total_stat.avail_size);
     CurrentMetrics::set(CurrentMetrics::StoreSizeUsed, total_stat.used_size);
 
-    if (S3::ClientFactory::instance().isEnabled())
+    if (finalize_capacity && S3::ClientFactory::instance().isEnabled())
     {
         // When S3 is enabled, use a large fake stat to avoid disk limitation by PD.
         total_stat.capacity_size = 1024UL * 1024UL * 1024UL * 1024UL * 1024UL * 1024UL; // 1024PB
