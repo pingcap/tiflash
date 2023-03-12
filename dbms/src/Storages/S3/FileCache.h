@@ -18,6 +18,8 @@
 #include <Common/nocopyable.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Server/StorageConfigParser.h>
+#include <Storages/PathCapacityMetrics.h>
 #include <Storages/S3/S3Filename.h>
 #include <common/types.h>
 
@@ -189,9 +191,9 @@ private:
 class FileCache
 {
 public:
-    static void initialize(const String & cache_dir_, UInt64 cache_capacity_, UInt64 cache_level_, UInt64 cache_min_age_seconds_)
+    static void initialize(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
     {
-        global_file_cache_instance = std::make_unique<FileCache>(cache_dir_, cache_capacity_, cache_level_, cache_min_age_seconds_);
+        global_file_cache_instance = std::make_unique<FileCache>(capacity_metrics_, config_);
         global_file_cache_initialized.store(true, std::memory_order_release);
     }
 
@@ -207,7 +209,7 @@ public:
         global_file_cache_instance = nullptr;
     }
 
-    FileCache(const String & cache_dir_, UInt64 cache_capacity_, UInt64 cache_level_, UInt64 cache_min_age_seconds_);
+    FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_);
 
     RandomAccessFilePtr getRandomAccessFile(const S3::S3FilenameView & s3_fname);
 
@@ -282,6 +284,7 @@ public:
     std::vector<FileSegmentPtr> getAll();
 
     std::mutex mtx;
+    PathCapacityMetricsPtr capacity_metrics;
     String cache_dir;
     UInt64 cache_capacity;
     UInt64 cache_level;
