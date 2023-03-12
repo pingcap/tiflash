@@ -66,7 +66,7 @@ int main(int argc, char ** argv)
     install_fault_signal_handlers({SIGSEGV, SIGILL, SIGFPE, SIGABRT, SIGTERM});
 
     DB::tests::TiFlashTestEnv::setupLogger();
-    auto run_mode = DB::PageStorageRunMode::ONLY_V3;
+    auto run_mode = DB::PageStorageRunMode::UNI_PS;
     DB::tests::TiFlashTestEnv::initializeGlobalContext(/*testdata_path*/ {}, run_mode);
 
     DB::ServerInfo server_info;
