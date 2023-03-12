@@ -143,6 +143,7 @@ private:
 
     std::atomic<bool> shutdown_called;
 
+    bool lifecycle_has_been_set = false;
     S3GCConfig config;
 
     LoggerPtr log;

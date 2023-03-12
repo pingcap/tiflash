@@ -116,6 +116,7 @@ bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const
 void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
 
 constexpr std::string_view TaggingObjectIsDeleted = "deleted=true";
+void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & bucket, Int32 expire_days);
 
 /**
  * tagging is the tag-set for the object. The tag-set must be encoded as URL Query

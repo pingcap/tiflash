@@ -25,10 +25,17 @@
 #include <aws/s3/S3Errors.h>
 #include <aws/s3/model/CopyObjectRequest.h>
 #include <aws/s3/model/DeleteObjectRequest.h>
+#include <aws/s3/model/ExpirationStatus.h>
+#include <aws/s3/model/GetBucketLifecycleConfigurationRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
+#include <aws/s3/model/LifecycleConfiguration.h>
+#include <aws/s3/model/LifecycleExpiration.h>
+#include <aws/s3/model/LifecycleRule.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
+#include <aws/s3/model/ListObjectsV2Result.h>
+#include <aws/s3/model/PutBucketLifecycleConfigurationRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <common/logger_useful.h>
 
@@ -371,6 +378,61 @@ void rewriteObjectWithTagging(const Aws::S3::S3Client & client, const String & b
     GET_METRIC(tiflash_storage_s3_request_seconds, type_copy_object).Observe(elapsed_seconds);
     static auto log = Logger::get();
     LOG_DEBUG(log, "rewrite object key={} cost={:.2f}s", key, elapsed_seconds);
+}
+
+void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & bucket, Int32 expire_days)
+{
+    bool lifecycle_rule_has_been_set = false;
+    Aws::Vector<Aws::S3::Model::LifecycleRule> old_rules;
+    {
+        Aws::S3::Model::GetBucketLifecycleConfigurationRequest req;
+        auto outcome = client.GetBucketLifecycleConfiguration(req);
+        if (!outcome.IsSuccess())
+        {
+            throw fromS3Error(outcome.GetError(), "GetBucketLifecycle fail");
+        }
+
+        auto res = outcome.GetResult();
+        old_rules = res.GetRules();
+        static_assert(TaggingObjectIsDeleted == "deleted=true");
+        for (const auto & rule : old_rules)
+        {
+            const auto & filt = rule.GetFilter();
+            const auto & tag = filt.GetTag();
+            if (rule.GetStatus() == Aws::S3::Model::ExpirationStatus::Enabled
+                && tag.GetKey() == "deleted" && tag.GetValue() == "true")
+            {
+                lifecycle_rule_has_been_set = true;
+            }
+        }
+    }
+
+    if (lifecycle_rule_has_been_set)
+        return;
+
+    static_assert(TaggingObjectIsDeleted == "deleted=true");
+    Aws::S3::Model::LifecycleRuleFilter filter;
+    filter.SetTag(Aws::S3::Model::Tag().WithKey("deleted").WithValue("true"));
+
+    Aws::S3::Model::LifecycleRule rule;
+    rule.WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)
+        .WithFilter(filter)
+        .WithExpiration(Aws::S3::Model::LifecycleExpiration().WithDays(expire_days));
+
+    Aws::S3::Model::BucketLifecycleConfiguration lifecycle_config;
+    lifecycle_config
+        .WithRules(old_rules) // existing rules
+        .AddRules(rule);
+
+    Aws::S3::Model::PutBucketLifecycleConfigurationRequest request;
+    request.WithBucket(bucket)
+        .WithLifecycleConfiguration(lifecycle_config);
+
+    auto outcome = client.PutBucketLifecycleConfiguration(request);
+    if (!outcome.IsSuccess())
+    {
+        throw fromS3Error(outcome.GetError(), "PutBucketLifecycle fail");
+    }
 }
 
 void listPrefix(

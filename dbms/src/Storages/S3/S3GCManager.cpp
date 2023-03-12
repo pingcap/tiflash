@@ -30,8 +30,6 @@
 #include <aws/core/utils/DateTime.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CommonPrefix.h>
-#include <aws/s3/model/ListObjectsV2Request.h>
-#include <aws/s3/model/ListObjectsV2Result.h>
 #include <common/logger_useful.h>
 #include <kvproto/metapb.pb.h>
 #include <pingcap/pd/IClient.h>
@@ -86,6 +84,12 @@ bool S3GCManager::runOnAllStores()
     if (bool is_gc_owner = gc_owner_manager->isOwner(); !is_gc_owner)
     {
         return false;
+    }
+
+    if (config.method == S3GCMethod::Lifecycle && !lifecycle_has_been_set)
+    {
+        ensureLifecycleRuleExist(*client, client->bucket(), 1);
+        lifecycle_has_been_set = true;
     }
 
     const std::vector<UInt64> all_store_ids = getAllStoreIds();
