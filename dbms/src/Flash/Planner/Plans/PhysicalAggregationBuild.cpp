@@ -58,8 +58,9 @@ void PhysicalAggregationBuild::buildPipelineExec(PipelineExecGroupBuilder & grou
         /*is_local_agg=*/false,
         spill_config);
 
+    PipelineExecutorStatus & exec_status = group_builder.exec_status;
     Aggregator::CancellationHook hook = [&]() {
-        return group_builder.exec_status.isCancelled();
+        return exec_status.isCancelled();
     };
     aggregate_context->initBuild(params, concurrency, std::move(hook));
 }
