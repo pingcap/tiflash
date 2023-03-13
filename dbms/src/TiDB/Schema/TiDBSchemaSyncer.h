@@ -45,7 +45,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     KVClusterPtr cluster;
 
-    static constexpr Int64 maxNumberOfDiffs = 0;
+    static constexpr Int64 maxNumberOfDiffs = 100;
 
     SchemaVerMap cur_versions;
 

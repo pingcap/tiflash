@@ -45,8 +45,7 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
 
             return false;
         },
-        false,
-        300000);
+        false);
 }
 
 void SchemaSyncService::addKeyspaceGCTasks()
