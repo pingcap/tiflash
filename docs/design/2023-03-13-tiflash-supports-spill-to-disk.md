@@ -10,7 +10,7 @@
     *   [Hash Join](#hash-join)
     *   [Hash Aggregation](#hash-agg)
     *   [Sort/TopN](#sort)
-*   [Impacts & Risks](#impacts--risks)
+*   [Impacts & Risks](#impacts-risks)
 
 ## Motivation or Background
 At present, TiFlash does not support the operation of spilling to disk. All computing operations are based on memory. However, in actual application scenarios, many users do not have enough available memory resources. As a result, many queries containing memory intensive operators (such as hash join, hash agg, etc.) cannot be executed in TiFlash at all. So it is imperative to support the operation of spilling to disk in TiFlash.
@@ -29,7 +29,7 @@ The hash join spilling algorithm is complex. We dispatch the build and probe dat
 - #### Overview
   ![join_spill_overview](./images/2023-03-13-tiflash-supports-spill-to-disk-hash_join_with_spill.png)
 
-### HashAggregation
+### Hash Aggregation
 Each thread does operation of local aggregation with its own input data. If the memory exceeds the limit, each partition in the Hash table will be converted into an independent block and spilled to disk.
 - If there is no data spilled to disk, merging the local aggregation based on the original algorithm.
 - If some data is spilled to disk, doing final aggregation of the memory data and the spilled data
