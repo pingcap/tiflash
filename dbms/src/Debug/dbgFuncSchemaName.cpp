@@ -173,7 +173,7 @@ void dbgFuncGetPartitionTablesTiflashReplicaCount(Context & context, const ASTs 
     for (const auto & part_def : table_info.partition.definitions)
     {
         auto paritition_table_info = table_info.producePartitionTableInfo(part_def.id, name_mapper);
-        auto partition_storage = context.getTMTContext().getStorages().get(paritition_table_info->id);
+        auto partition_storage = context.getTMTContext().getStorages().get(NullspaceID, paritition_table_info->id);
         fmt_buf.append((std::to_string(partition_storage->getTableInfo().replica_info.count)));
         fmt_buf.append("/");
     }

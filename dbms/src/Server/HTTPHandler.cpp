@@ -34,6 +34,7 @@
 #include <IO/WriteHelpers.h>
 #include <IO/ZlibInflatingReadBuffer.h>
 #include <IO/copyData.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/Quota.h>
 #include <Interpreters/executeQuery.h>
 #include <Poco/File.h>

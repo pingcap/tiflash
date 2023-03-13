@@ -60,7 +60,7 @@ enum EditType {
 
 message EntryDataLocation {
     // There could be heavy duplicates. We rely on compression to reduce file size.
-    string data_file_id = 1;
+    bytes data_file_id = 1;
 
     uint64 offset_in_file = 2;
     uint64 size_in_file = 3;
@@ -68,8 +68,8 @@ message EntryDataLocation {
 
 message EditRecord {
     EditType type = 1;
-    string page_id = 2;
-    string ori_page_id = 3;
+    bytes page_id = 2;
+    bytes ori_page_id = 3;
     uint64 version_sequence = 4;
     uint64 version_epoch = 5;
 
@@ -83,6 +83,6 @@ message EditRecord {
 
 message LockFile {
     // There could be heavy duplicates. We rely on compression to reduce file size.
-    string name = 1;
+    bytes name = 1;
 }
 

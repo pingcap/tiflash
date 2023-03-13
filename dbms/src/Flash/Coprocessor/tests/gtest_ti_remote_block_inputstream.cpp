@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Mpp/MPPTunnelSetHelper.h>
-#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TiDB.h>
@@ -86,17 +85,48 @@ struct MockWriter
         return summary;
     }
 
-    void broadcastOrPassThroughWrite(Blocks & blocks)
+    void broadcastOrPassThroughWriteV0(Blocks & blocks)
     {
         auto && packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types);
         ++total_packets;
         if (!packet)
             return;
 
-        if (!packet->packet.chunks().empty())
-            total_bytes += packet->packet.ByteSizeLong();
+        total_bytes += packet->packet.ByteSizeLong();
         queue->push(std::move(packet));
     }
+
+    void broadcastWrite(Blocks & blocks)
+    {
+        return broadcastOrPassThroughWriteV0(blocks);
+    }
+    void passThroughWrite(Blocks & blocks)
+    {
+        return broadcastOrPassThroughWriteV0(blocks);
+    }
+    void broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        if (version == MPPDataPacketV0)
+            return broadcastOrPassThroughWriteV0(blocks);
+
+        size_t original_size{};
+        auto && packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
+        ++total_packets;
+        if (!packet)
+            return;
+
+        total_bytes += packet->packet.ByteSizeLong();
+        queue->push(std::move(packet));
+    }
+    void broadcastWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        return broadcastOrPassThroughWrite(blocks, version, compression_method);
+    }
+    void passThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    {
+        return broadcastOrPassThroughWrite(blocks, version, compression_method);
+    }
+
     void write(tipb::SelectResponse & response)
     {
         if (add_summary)
@@ -119,10 +149,6 @@ struct MockWriter
         queue->push(tracked_packet);
     }
     uint16_t getPartitionNum() const { return 1; }
-    bool isLocal(size_t index) const
-    {
-        return index == 0;
-    }
     bool isReadyForWrite() const { throw Exception("Unsupport async write"); }
 
     std::vector<tipb::FieldType> result_field_types;
@@ -275,12 +301,10 @@ protected:
         dag_context_ptr->is_root_mpp_task = true;
         dag_context_ptr->result_field_types = makeFields();
         dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
-        context.setDAGContext(dag_context_ptr.get());
     }
 
 public:
     TestTiRemoteBlockInputStream()
-        : context(TiFlashTestEnv::getContext())
     {}
 
     static Block squashBlocks(std::vector<Block> & blocks)
@@ -357,7 +381,10 @@ public:
         auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<MockWriterPtr>>(
             writer,
             batch_send_min_limit,
-            *dag_context_ptr);
+            *dag_context_ptr,
+            MPPDataPacketVersion::MPPDataPacketV1,
+            tipb::CompressionMode::FAST,
+            tipb::ExchangeType::Broadcast);
 
         // 2. encode all blocks
         for (const auto & block : source_blocks)
@@ -493,7 +520,6 @@ public:
         checkChunkInResponse(source_blocks, decoded_blocks, receiver_stream, writer);
     }
 
-    Context context;
     std::unique_ptr<DAGContext> dag_context_ptr{};
 };
 

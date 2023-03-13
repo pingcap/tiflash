@@ -19,18 +19,21 @@
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <IO/IOSWrapper.h>
+#include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
 #include <boost/algorithm/string/classification.hpp>
+#include <filesystem>
 #include <utility>
 
 namespace DB
@@ -211,13 +214,13 @@ size_t DMFile::colIndexSize(ColId id)
     }
 }
 
-size_t DMFile::colDataSize(ColId id)
+size_t DMFile::colDataSize(ColId id, bool is_null_map)
 {
     if (useMetaV2())
     {
         if (auto itr = column_stats.find(id); itr != column_stats.end())
         {
-            return itr->second.data_bytes;
+            return is_null_map ? itr->second.nullmap_data_bytes : itr->second.data_bytes;
         }
         else
         {
@@ -226,7 +229,8 @@ size_t DMFile::colDataSize(ColId id)
     }
     else
     {
-        return colDataSizeByName(getFileNameBase(id));
+        auto namebase = is_null_map ? getFileNameBase(id, {IDataType::Substream::NullMap}) : getFileNameBase(id);
+        return colDataSizeByName(namebase);
     }
 }
 
@@ -623,18 +627,51 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
     initializeIndices();
 }
 
+std::vector<String> DMFile::listLocal(const String & parent_path)
+{
+    Poco::File folder(parent_path);
+    std::vector<String> file_names;
+    if (folder.exists())
+    {
+        folder.list(file_names);
+    }
+    return file_names;
+}
+
+std::vector<String> DMFile::listS3(const String & parent_path)
+{
+    std::vector<String> filenames;
+    auto client = S3::ClientFactory::instance().sharedClient();
+    const auto & bucket = S3::ClientFactory::instance().bucket();
+    auto list_prefix = parent_path + "/";
+    S3::listPrefix(
+        *client,
+        bucket,
+        list_prefix,
+        /*delimiter*/ "/",
+        [&filenames, &list_prefix](const Aws::S3::Model::ListObjectsV2Result & result) {
+            const Aws::Vector<Aws::S3::Model::CommonPrefix> & prefixes = result.GetCommonPrefixes();
+            filenames.reserve(filenames.size() + prefixes.size());
+            for (const auto & prefix : prefixes)
+            {
+                RUNTIME_CHECK(prefix.GetPrefix().size() > list_prefix.size(), prefix.GetPrefix(), list_prefix);
+                auto short_name_size = prefix.GetPrefix().size() - list_prefix.size() - 1; // `1` for the delimiter in last.
+                filenames.push_back(prefix.GetPrefix().substr(list_prefix.size(), short_name_size)); // Cut prefix and last delimiter.
+            }
+            return S3::PageResult{.num_keys = prefixes.size(), .more = true};
+        });
+    return filenames;
+}
+
 std::set<UInt64> DMFile::listAllInPath(
     const FileProviderPtr & file_provider,
     const String & parent_path,
     const DMFile::ListOptions & options)
 {
-    Poco::File folder(parent_path);
-    if (!folder.exists())
-        return {};
-    std::vector<std::string> file_names;
-    folder.list(file_names);
-    std::set<UInt64> file_ids;
+    auto s3_fname_view = S3::S3FilenameView::fromKeyWithPrefix(parent_path);
+    auto file_names = s3_fname_view.isValid() ? listS3(s3_fname_view.toFullKey()) : listLocal(parent_path);
 
+    std::set<UInt64> file_ids;
     auto try_parse_file_id = [](const String & name) -> std::optional<UInt64> {
         std::vector<std::string> ss;
         boost::split(ss, name, boost::is_any_of("_"));
@@ -977,5 +1014,46 @@ void DMFile::finalizeDirName()
     }
     old_file.renameTo(new_path);
 }
+
+std::vector<String> DMFile::listInternalFiles()
+{
+    RUNTIME_CHECK(useMetaV2());
+    std::vector<String> fnames;
+    fnames.push_back(metav2FileName());
+    for (const auto & [col_id, stat] : column_stats)
+    {
+        auto name_base = getFileNameBase(col_id, {});
+        // .dat and .mrk are required.
+        fnames.push_back(colDataFileName(name_base));
+        fnames.push_back(colMarkFileName(name_base));
+        if (stat.index_bytes > 0)
+        {
+            fnames.push_back(colIndexFileName(name_base));
+        }
+
+        if (stat.type->isNullable())
+        {
+            auto null_name_base = getFileNameBase(col_id, {IDataType::Substream::NullMap});
+            fnames.push_back(colDataFileName(null_name_base));
+            fnames.push_back(colMarkFileName(null_name_base));
+        }
+    }
+    return fnames;
+}
+
+void DMFile::switchToRemote(const S3::DMFileOID & oid)
+{
+    RUNTIME_CHECK(useMetaV2());
+    RUNTIME_CHECK(status == Status::READABLE);
+
+    auto local_path = path();
+    // Update the parent_path so that it will read data from remote storage.
+    parent_path = S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKeyWithPrefix();
+
+    // Remove local directory.
+    std::filesystem::remove_all(local_path);
+}
+
+
 } // namespace DM
 } // namespace DB

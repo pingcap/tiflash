@@ -13,13 +13,14 @@
 // limitations under the License.
 
 #include <DataStreams/BlocksListBlockInputStream.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <magic_enum.hpp>
@@ -46,7 +47,7 @@ public:
     void TearDown() override
     {
         storage->drop();
-        db_context->getTMTContext().getStorages().remove(/* table id */ 100);
+        db_context->getTMTContext().getStorages().remove(NullspaceID, /* table id */ 100);
     }
 
     void setupStorage()

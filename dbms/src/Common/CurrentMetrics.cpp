@@ -56,6 +56,7 @@
     M(DT_SnapshotOfDeltaCompact)                \
     M(DT_SnapshotOfPlaceIndex)                  \
     M(DT_SnapshotOfBitmapFilter)                \
+    M(DT_SnapshotOfDisaggReadNodeRead)          \
     M(IOLimiterPendingBgWriteReq)               \
     M(IOLimiterPendingFgWriteReq)               \
     M(IOLimiterPendingBgReadReq)                \
@@ -65,7 +66,11 @@
     M(StoragePoolV3Only)                        \
     M(StoragePoolMixMode)                       \
     M(RegionPersisterRunMode)                   \
-    M(GlobalStorageRunMode)
+    M(GlobalStorageRunMode)                     \
+    M(GlobalThread)                             \
+    M(GlobalThreadActive)                       \
+    M(LocalThread)                              \
+    M(LocalThreadActive)
 
 namespace CurrentMetrics
 {

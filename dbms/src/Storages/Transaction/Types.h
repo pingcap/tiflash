@@ -16,6 +16,7 @@
 
 #include <Core/Types.h>
 #include <common/types.h>
+#include <pingcap/pd/IClient.h>
 
 #include <chrono>
 #include <unordered_set>
@@ -27,6 +28,11 @@ static constexpr StoreID InvalidStoreID = 0;
 
 using TableID = Int64;
 using TableIDSet = std::unordered_set<TableID>;
+using KeyspaceID = pingcap::pd::KeyspaceID;
+
+using KeyspaceTableID = std::pair<KeyspaceID, TableID>;
+
+static auto const NullspaceID = pingcap::pd::NullspaceID;
 
 enum : TableID
 {
@@ -34,6 +40,8 @@ enum : TableID
 };
 
 using DatabaseID = Int64;
+
+using KeyspaceDatabaseID = std::pair<KeyspaceID, DatabaseID>;
 
 using ColumnID = Int64;
 

@@ -248,6 +248,10 @@ struct CHBlockChunkCodecV1Impl
     {
         return encodeImpl(blocks, compression_method);
     }
+    CHBlockChunkCodecV1::EncodeRes encode(std::vector<Block> && blocks, CompressionMethod compression_method)
+    {
+        return encodeImpl(std::move(blocks), compression_method);
+    }
 
     static const ColumnPtr & toColumnPtr(const Columns & c, size_t index)
     {
@@ -268,6 +272,10 @@ struct CHBlockChunkCodecV1Impl
     static const ColumnPtr & toColumnPtr(const Block & block, size_t index)
     {
         return block.getByPosition(index).column;
+    }
+    static ColumnPtr toColumnPtr(Block && block, size_t index)
+    {
+        return std::move(block.getByPosition(index).column);
     }
 
     template <typename ColumnsHolder>
@@ -349,6 +357,13 @@ struct CHBlockChunkCodecV1Impl
         return encodeColumnImpl(block, ostr_ptr);
     }
     void encodeColumn(const std::vector<Block> & blocks, WriteBuffer * ostr_ptr)
+    {
+        for (auto && block : blocks)
+        {
+            encodeColumnImpl(block, ostr_ptr);
+        }
+    }
+    void encodeColumn(std::vector<Block> && blocks, WriteBuffer * ostr_ptr)
     {
         for (auto && block : blocks)
         {
@@ -495,6 +510,19 @@ CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(const std::vector<Blo
     return CHBlockChunkCodecV1Impl{*this}.encode(blocks, compression_method);
 }
 
+CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(std::vector<Block> && blocks, CompressionMethod compression_method, bool check_schema)
+{
+    if (check_schema)
+    {
+        for (auto && block : blocks)
+        {
+            checkSchema(header, block);
+        }
+    }
+
+    return CHBlockChunkCodecV1Impl{*this}.encode(std::move(blocks), compression_method);
+}
+
 static Block decodeCompression(const Block & header, ReadBuffer & istr)
 {
     size_t decoded_rows{};
@@ -502,6 +530,22 @@ static Block decodeCompression(const Block & header, ReadBuffer & istr)
     DecodeColumns(istr, decoded_block, decoded_rows, 0);
     assert(decoded_rows == decoded_block.rows());
     return decoded_block;
+}
+
+template <typename Buffer>
+extern size_t CompressionEncode(
+    std::string_view source,
+    const CompressionSettings & compression_settings,
+    Buffer & compressed_buffer);
+
+CHBlockChunkCodecV1::EncodeRes CHBlockChunkCodecV1::encode(std::string_view str, CompressionMethod compression_method)
+{
+    assert(compression_method != CompressionMethod::NONE);
+
+    String compressed_buffer;
+    size_t compressed_size = CompressionEncode(str, CompressionSettings(compression_method), compressed_buffer);
+    compressed_buffer.resize(compressed_size);
+    return compressed_buffer;
 }
 
 Block CHBlockChunkCodecV1::decode(const Block & header, std::string_view str)

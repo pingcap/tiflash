@@ -16,6 +16,7 @@
 
 #include <Core/Types.h>
 #include <Encryption/BlockAccessCipherStream.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <Encryption/KeyManager.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Encryption/WritableFile.h>
@@ -111,5 +112,4 @@ private:
     bool encryption_enabled;
 };
 
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 } // namespace DB

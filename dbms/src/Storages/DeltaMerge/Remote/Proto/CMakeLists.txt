@@ -12,3 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+file(GLOB PROTO_FILES CONFIGURE_DEPENDS *.proto)
+protobuf_generate_cpp(
+        rtproto_srcs rtproto_hdrs
+        ${PROTO_FILES}
+)
+
+add_library(RemoteTaskProto
+        ${rtproto_srcs})
+target_include_directories(RemoteTaskProto
+        PUBLIC ${Protobuf_INCLUDE_DIR})
+target_compile_options(RemoteTaskProto
+        PRIVATE -Wno-unused-parameter)

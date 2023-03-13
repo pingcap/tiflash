@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
+#include <Encryption/PosixRandomAccessFile.h>
+#include <IO/ReadBufferFromRandomAccessFile.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
+#include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB::PS::V3::tests
 {
@@ -29,7 +35,7 @@ public:
     void SetUp() override
     {
         dir = getTemporaryPath();
-        DB::tests::TiFlashTestEnv::tryRemovePath(dir);
+        dropDataOnDisk(dir);
         createIfNotExist(dir);
     }
 
@@ -41,7 +47,8 @@ public:
         std::string ret;
         ret.resize(location.size_in_file);
 
-        auto buf = ReadBufferFromFile(dir + "/" + *location.data_file_id);
+        auto data_file = PosixRandomAccessFile::create(dir + "/" + *location.data_file_id);
+        ReadBufferFromRandomAccessFile buf(data_file);
         buf.seek(location.offset_in_file);
         auto n = buf.readBig(ret.data(), location.size_in_file);
         RUNTIME_CHECK(n == location.size_in_file);
@@ -75,8 +82,9 @@ try
     ASSERT_TRUE(Poco::File(dir + "/data_1").exists());
     ASSERT_TRUE(Poco::File(dir + "/manifest_foo").exists());
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     auto prefix = manifest_reader->readPrefix();
     ASSERT_EQ(5, prefix.local_sequence());
@@ -99,7 +107,7 @@ try
     edits.appendRecord({.type = EditRecordType::DEL});
 
     ASSERT_THROW({
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     },
                  DB::Exception);
 }
@@ -124,13 +132,14 @@ try
     {
         auto edits = universal::PageEntriesEdit{};
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "water"});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     auto prefix = manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -180,7 +189,7 @@ try
     {
         auto edits = universal::PageEntriesEdit{};
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "water"});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     {
         auto edits = universal::PageEntriesEdit{};
@@ -188,13 +197,14 @@ try
         edits.appendRecord({.type = EditRecordType::VAR_REF, .page_id = "foo", .ori_page_id = "abc"});
         edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "rain"});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -214,9 +224,10 @@ try
         ASSERT_EQ("abc", r[0].page_id);
         ASSERT_EQ(0, r[0].entry.offset); // The deserialized offset is not the same as the original one!
         ASSERT_EQ(29, r[0].entry.size);
-        ASSERT_TRUE(r[0].entry.checkpoint_info->is_local_data_reclaimed);
-        ASSERT_EQ("data_1", *r[0].entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("Said she just dreamed a dream", readData(r[0].entry.checkpoint_info->data_location));
+        ASSERT_TRUE(r[0].entry.checkpoint_info.is_valid);
+        ASSERT_TRUE(r[0].entry.checkpoint_info.is_local_data_reclaimed);
+        ASSERT_EQ("data_1", *r[0].entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("Said she just dreamed a dream", readData(r[0].entry.checkpoint_info.data_location));
 
         ASSERT_EQ(EditRecordType::VAR_REF, r[1].type);
         ASSERT_EQ("foo", r[1].page_id);
@@ -226,17 +237,18 @@ try
         ASSERT_EQ("aaabbb", r[2].page_id);
         ASSERT_EQ(0, r[2].entry.offset);
         ASSERT_EQ(22, r[2].entry.size);
-        ASSERT_TRUE(r[2].entry.checkpoint_info->is_local_data_reclaimed);
-        ASSERT_EQ("data_1", *r[2].entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("nahida opened her eyes", readData(r[2].entry.checkpoint_info->data_location));
+        ASSERT_TRUE(r[2].entry.checkpoint_info.is_valid);
+        ASSERT_TRUE(r[2].entry.checkpoint_info.is_local_data_reclaimed);
+        ASSERT_EQ("data_1", *r[2].entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("nahida opened her eyes", readData(r[2].entry.checkpoint_info.data_location));
 
         ASSERT_EQ(EditRecordType::VAR_DELETE, r[3].type);
         ASSERT_EQ("rain", r[3].page_id);
 
         // Check data_file_id is shared.
         ASSERT_EQ(
-            r[0].entry.checkpoint_info->data_location.data_file_id->data(),
-            r[2].entry.checkpoint_info->data_location.data_file_id->data());
+            r[0].entry.checkpoint_info.data_location.data_file_id->data(),
+            r[2].entry.checkpoint_info.data_location.data_file_id->data());
     }
     {
         auto edits_r = manifest_reader->readEdits(im);
@@ -279,10 +291,11 @@ try
             .entry = {
                 .size = 10,
                 .offset = 5,
-                .checkpoint_info = CheckpointInfo{
-                    .data_location = {
+                .checkpoint_info = OptionalCheckpointInfo{
+                    .data_location = CheckpointLocation{
                         .data_file_id = std::make_shared<String>("my_file_id"),
                     },
+                    .is_valid = true,
                     .is_local_data_reclaimed = false,
                 },
             },
@@ -290,13 +303,14 @@ try
         edits.appendRecord({.type = EditRecordType::VAR_REF, .page_id = "foo", .ori_page_id = "abc"});
         edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "sun"});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -309,8 +323,9 @@ try
         ASSERT_EQ("abc", r[0].page_id);
         ASSERT_EQ(0, r[0].entry.offset); // The deserialized offset is not the same as the original one!
         ASSERT_EQ(10, r[0].entry.size);
-        ASSERT_TRUE(r[0].entry.checkpoint_info->is_local_data_reclaimed); // After deserialization, this field is always true!
-        ASSERT_EQ("my_file_id", *r[0].entry.checkpoint_info->data_location.data_file_id);
+        ASSERT_TRUE(r[0].entry.checkpoint_info.is_valid);
+        ASSERT_TRUE(r[0].entry.checkpoint_info.is_local_data_reclaimed); // After deserialization, this field is always true!
+        ASSERT_EQ("my_file_id", *r[0].entry.checkpoint_info.data_location.data_file_id);
 
         ASSERT_EQ(EditRecordType::VAR_REF, r[1].type);
         ASSERT_EQ("foo", r[1].page_id);
@@ -320,9 +335,10 @@ try
         ASSERT_EQ("aaabbb", r[2].page_id);
         ASSERT_EQ(0, r[2].entry.offset);
         ASSERT_EQ(22, r[2].entry.size);
-        ASSERT_TRUE(r[2].entry.checkpoint_info->is_local_data_reclaimed);
-        ASSERT_EQ("data_1", *r[2].entry.checkpoint_info->data_location.data_file_id);
-        ASSERT_EQ("nahida opened her eyes", readData(r[2].entry.checkpoint_info->data_location));
+        ASSERT_TRUE(r[2].entry.checkpoint_info.is_valid);
+        ASSERT_TRUE(r[2].entry.checkpoint_info.is_local_data_reclaimed);
+        ASSERT_EQ("data_1", *r[2].entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("nahida opened her eyes", readData(r[2].entry.checkpoint_info.data_location));
 
         ASSERT_EQ(EditRecordType::VAR_DELETE, r[3].type);
         ASSERT_EQ("sun", r[3].page_id);
@@ -349,7 +365,7 @@ TEST_F(CheckpointFileTest, FromBlobStore)
 try
 {
     const auto delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(std::vector{dir});
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto blob_store = BlobStore<universal::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, BlobConfig{});
 
     auto edits = universal::PageEntriesEdit{};
@@ -358,7 +374,7 @@ try
         wb.putPage("page_foo", 0, "The flower carriage rocked", {4, 10, 12});
         wb.delPage("id_bar");
         wb.putPage("page_abc", 0, "Dreamed of the day that she was born");
-        auto blob_store_edits = blob_store.write(wb, nullptr);
+        auto blob_store_edits = blob_store.write(std::move(wb), nullptr);
 
         ASSERT_EQ(blob_store_edits.size(), 3);
 
@@ -379,12 +395,13 @@ try
         .sequence = 5,
         .last_sequence = 3,
     });
-    writer->writeEditsAndApplyRemoteInfo(edits);
+    writer->writeEditsAndApplyCheckpointInfo(edits);
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -397,8 +414,9 @@ try
         ASSERT_EQ("page_foo", r[0].page_id);
         ASSERT_EQ(0, r[0].entry.offset);
         ASSERT_EQ(26, r[0].entry.size);
-        ASSERT_TRUE(r[0].entry.checkpoint_info->is_local_data_reclaimed);
-        ASSERT_EQ("The flower carriage rocked", readData(r[0].entry.checkpoint_info->data_location));
+        ASSERT_TRUE(r[0].entry.checkpoint_info.is_valid);
+        ASSERT_TRUE(r[0].entry.checkpoint_info.is_local_data_reclaimed);
+        ASSERT_EQ("The flower carriage rocked", readData(r[0].entry.checkpoint_info.data_location));
 
         int begin, end;
         std::tie(begin, end) = r[0].entry.getFieldOffsets(0);
@@ -418,8 +436,9 @@ try
         ASSERT_EQ("page_abc", r[2].page_id);
         ASSERT_EQ(0, r[2].entry.offset);
         ASSERT_EQ(36, r[2].entry.size);
-        ASSERT_TRUE(r[2].entry.checkpoint_info->is_local_data_reclaimed);
-        ASSERT_EQ("Dreamed of the day that she was born", readData(r[2].entry.checkpoint_info->data_location));
+        ASSERT_TRUE(r[2].entry.checkpoint_info.is_valid);
+        ASSERT_TRUE(r[2].entry.checkpoint_info.is_local_data_reclaimed);
+        ASSERT_EQ("Dreamed of the day that she was born", readData(r[2].entry.checkpoint_info.data_location));
     }
     EXPECT_THROW({
         // Call readLocks without draining readEdits should result in exceptions
@@ -461,18 +480,19 @@ try
     });
     {
         auto edits = universal::PageEntriesEdit{};
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     {
         auto edits = universal::PageEntriesEdit{};
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "snow"});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -513,8 +533,9 @@ try
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -553,22 +574,24 @@ try
             .page_id = "abc",
             .entry = {
                 .offset = 5,
-                .checkpoint_info = CheckpointInfo{
-                    .data_location = {
+                .checkpoint_info = OptionalCheckpointInfo{
+                    .data_location = CheckpointLocation{
                         .data_file_id = std::make_shared<String>("my_file_id"),
                     },
+                    .is_valid = true,
                     .is_local_data_reclaimed = false,
                 },
             },
         });
         edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;
@@ -621,13 +644,14 @@ try
                 .page_id = fmt::format("record_{}", i),
                 .entry = {.size = 22, .offset = 10},
             });
-        writer->writeEditsAndApplyRemoteInfo(edits);
+        writer->writeEditsAndApplyCheckpointInfo(edits);
     }
     writer->writeSuffix();
     writer.reset();
 
+    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_1");
     auto manifest_reader = CPManifestFileReader::create({
-        .file_path = dir + "/manifest_1",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     CheckpointProto::StringsInternMap im;

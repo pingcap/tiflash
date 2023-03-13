@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,11 +36,41 @@ struct JoinKeyType
 };
 using JoinKeyTypes = std::vector<JoinKeyType>;
 
+struct JoinOtherConditions
+{
+    String other_cond_name;
+    String other_eq_cond_from_in_name;
+    ExpressionActionsPtr other_cond_expr;
+
+    /// null_aware_eq_cond is used for checking the null-aware equal condition for not-matched rows.
+    String null_aware_eq_cond_name;
+    ExpressionActionsPtr null_aware_eq_cond_expr;
+
+    /// Validate this JoinConditions and return error message if any.
+    String validate(bool is_null_aware_semi_join) const
+    {
+        if unlikely ((!other_cond_name.empty() || !other_eq_cond_from_in_name.empty()) && other_cond_expr == nullptr)
+            return "other_cond_name and/or other_eq_cond_from_in_name are not empty but other_cond_expr is nullptr";
+        if unlikely (other_cond_name.empty() && other_eq_cond_from_in_name.empty() && other_cond_expr != nullptr)
+            return "other_cond_name and other_eq_cond_from_in_name are empty but other_cond_expr is not nullptr";
+
+        if (is_null_aware_semi_join)
+        {
+            if unlikely (null_aware_eq_cond_name.empty() || null_aware_eq_cond_expr == nullptr)
+                return "null-aware semi join does not have null_aware_eq_cond_name or null_aware_eq_cond_expr is nullptr";
+            if unlikely (!other_eq_cond_from_in_name.empty())
+                return "null-aware semi join should not have other_eq_cond_from_in_name";
+        }
+
+        return "";
+    }
+};
+
 namespace JoinInterpreterHelper
 {
 struct TiFlashJoin
 {
-    explicit TiFlashJoin(const tipb::Join & join_);
+    TiFlashJoin(const tipb::Join & join_, bool is_test);
 
     const tipb::Join & join;
 
@@ -93,22 +123,37 @@ struct TiFlashJoin
         const Block & right_input_header,
         const String & match_helper_name) const;
 
-    /// @other_condition_expr: generates other_filter_column and other_eq_filter_from_in_column
-    /// @other_filter_column_name: column name of `and(other_cond1, other_cond2, ...)`
-    /// @other_eq_filter_from_in_column_name: column name of `and(other_eq_cond1_from_in, other_eq_cond2_from_in, ...)`
-    /// such as
-    ///   `select * from t1 where col1 not in (select col2 from t2 where t1.col2 > t2.col3)`
-    ///   - other_filter is `t1.col2 > t2.col3`
-    ///   - other_eq_filter_from_in_column is `t1.col1 = t2.col2`
+    /// Example 1:
+    ///   `select * from t1 inner join t2 on t1.col1 = t2.col1 and t1.col2 > t2.col2`
+    ///   - join key are `t1.col1` and `t2.col1`
+    ///   - other_cond is `t1.col2 > t2.col2`
     ///
-    /// new columns from build side prepare join actions cannot be appended.
+    /// Example 2:
+    ///   `select * from t1 where col1 not in (select col1 from t2 where t1.col2 = t2.col2 and t1.col3 > t2.col3)`
+    ///   There are several possibilities which depends on TiDB's planner.
+    ///   1. cartesian anti semi join.
+    ///      - join key is empty
+    ///      - other_cond is `t1.col2 = t2.col2 and t1.col3 > t2.col3`
+    ///      - other_cond_from_in is `t1.col1 = t2.col1`
+    ///   2. anti semi join.
+    ///      - join keys are `t1.col2` and `t2.col2`
+    ///      - other_cond is `t1.col3 > t2.col3`
+    ///      - other_cond_from_in is `t1.col1 = t2.col1`
+    ///   3. null-aware anti semi join
+    ///      - join keys are `t1.col1` and `t2.col1`
+    ///      - other_cond is `t1.col2 = t2.col2 and t1.col3 > t2.col3`
+    ///      - null_aware_eq_cond is `t1.col1 = t2.col1`
+    ///
+    /// Note that new columns from build side prepare join actions cannot be appended.
     /// because the input that other filter accepts is
     /// {left_input_columns, right_input_columns, new_columns_from_probe_side_prepare, match_helper_name}.
-    std::tuple<ExpressionActionsPtr, String, String> genJoinOtherConditionAction(
+    JoinOtherConditions genJoinOtherConditionsAction(
         const Context & context,
         const Block & left_input_header,
         const Block & right_input_header,
-        const ExpressionActionsPtr & probe_side_prepare_join) const;
+        const ExpressionActionsPtr & probe_side_prepare_join,
+        const Names & probe_key_names,
+        const Names & build_key_names) const;
 
     NamesAndTypes genColumnsForOtherJoinFilter(
         const Block & left_input_header,
@@ -118,8 +163,9 @@ struct TiFlashJoin
 
 /// @join_prepare_expr_actions: generates join key columns and join filter column
 /// @key_names: column names of keys.
+/// @original_key_names: original column names of keys.(only used for null-aware semi join)
 /// @filter_column_name: column name of `and(filters)`
-std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
+std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     const Context & context,
     const Block & input_header,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,

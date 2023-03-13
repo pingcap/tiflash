@@ -64,6 +64,11 @@ private:
     const String bucket_name;
 };
 
+enum class S3GCMethod
+{
+    Lifecycle,
+    ScanThenDelete,
+};
 
 class ClientFactory
 {
@@ -75,12 +80,15 @@ public:
     bool isEnabled() const;
 
     void init(const StorageS3Config & config_, bool mock_s3_ = false);
+
     void shutdown();
 
     const String & bucket() const;
     std::shared_ptr<Aws::S3::S3Client> sharedClient() const;
 
     std::shared_ptr<TiFlashS3Client> sharedTiFlashClient() const;
+
+    S3GCMethod gc_method = S3GCMethod::Lifecycle;
 
 private:
     ClientFactory() = default;
@@ -114,9 +122,18 @@ bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const
 
 void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
 
-void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, const String & key);
+constexpr std::string_view TaggingObjectIsDeleted = "tiflash_deleted=true";
+void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & bucket, Int32 expire_days);
+
+/**
+ * tagging is the tag-set for the object. The tag-set must be encoded as URL Query
+ * parameters. (For example, "Key1=Value1")
+ */
+void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & tagging = "");
 
 void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
+
+void rewriteObjectWithTagging(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & tagging);
 
 struct PageResult
 {

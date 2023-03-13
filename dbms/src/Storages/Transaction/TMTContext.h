@@ -111,6 +111,8 @@ public:
 
     const OwnerManagerPtr & getS3GCOwnerManager() const;
 
+    S3::S3LockClientPtr getS3LockClient() const { return s3lock_client; }
+
     MPPTaskManagerPtr getMPPTaskManager();
 
     void shutdown();
@@ -150,7 +152,8 @@ private:
     Etcd::ClientPtr etcd_client;
 
     OwnerManagerPtr s3gc_owner;
-    S3::S3LockClientPtr s3_lock_client;
+    S3::S3LockClientPtr s3lock_client;
+    S3::S3GCManagerServicePtr s3gc_manager;
 
     mutable std::mutex mutex;
 

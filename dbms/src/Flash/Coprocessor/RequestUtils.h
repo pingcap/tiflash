@@ -75,4 +75,10 @@ setUpRegionInfos(const pingcap::coprocessor::BatchCopTask & batch_cop_task, cons
     return region_ids;
 }
 
+template <typename Context>
+pingcap::pd::KeyspaceID deriveKeyspaceID(const Context & ctx)
+{
+    return ctx.api_version() == kvrpcpb::APIVersion::V1 ? pingcap::pd::NullspaceID : static_cast<pingcap::pd::KeyspaceID>(ctx.keyspace_id());
+}
+
 } // namespace DB::RequestUtils

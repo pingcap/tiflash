@@ -97,9 +97,9 @@ public:
         size_t max_streams = 1;
 
         DAGContext dag_context(*request, "executor_test", max_streams);
-        TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
+        TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
 
-        PhysicalPlan physical_plan{context.context, log->identifier()};
+        PhysicalPlan physical_plan{*context.context, log->identifier()};
         assert(request);
         physical_plan.build(request.get());
         physical_plan.outputAndOptimize();
@@ -109,8 +109,8 @@ public:
         BlockInputStreamPtr final_stream;
         {
             DAGPipeline pipeline;
-            physical_plan.buildBlockInputStream(pipeline, context.context, max_streams);
-            executeCreatingSets(pipeline, context.context, max_streams, log);
+            physical_plan.buildBlockInputStream(pipeline, *context.context, max_streams);
+            executeCreatingSets(pipeline, *context.context, max_streams, log);
             final_stream = pipeline.firstStream();
             FmtBuffer fb;
             final_stream->dumpTree(fb);

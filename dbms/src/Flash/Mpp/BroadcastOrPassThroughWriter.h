@@ -22,6 +22,8 @@
 namespace DB
 {
 class DAGContext;
+enum class CompressionMethod;
+enum MPPDataPacketVersion : int64_t;
 
 template <class ExchangeWriterPtr>
 class BroadcastOrPassThroughWriter : public DAGResponseWriter
@@ -30,7 +32,10 @@ public:
     BroadcastOrPassThroughWriter(
         ExchangeWriterPtr writer_,
         Int64 batch_send_min_limit_,
-        DAGContext & dag_context_);
+        DAGContext & dag_context_,
+        MPPDataPacketVersion data_codec_version_,
+        tipb::CompressionMode compression_mode_,
+        tipb::ExchangeType exchange_type_);
     void write(const Block & block) override;
     bool isReadyForWrite() const override;
     void flush() override;
@@ -43,6 +48,12 @@ private:
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     size_t rows_in_blocks;
+    const tipb::ExchangeType exchange_type;
+
+    // support data compression
+    DataTypes expected_types;
+    MPPDataPacketVersion data_codec_version;
+    CompressionMethod compression_method{};
 };
 
 } // namespace DB

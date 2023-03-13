@@ -79,8 +79,6 @@ public:
         const ASTPtr & query_ptr_,
         const Context & context_);
 
-    void ignoreWithTotals();
-
 private:
     struct Pipeline
     {
@@ -176,7 +174,6 @@ private:
     void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expression);
     void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, bool final);
     void executeMergeAggregated(Pipeline & pipeline, bool final);
-    void executeTotalsAndHaving(Pipeline & pipeline, bool has_having, const ExpressionActionsPtr & expression);
     void executeHaving(Pipeline & pipeline, const ExpressionActionsPtr & expression);
     void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expression);
     void executeOrder(Pipeline & pipeline);

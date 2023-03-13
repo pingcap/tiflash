@@ -15,8 +15,8 @@
 #include <Storages/Page/V3/Universal/RaftDataReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 
 namespace DB
 {
@@ -30,7 +30,7 @@ public:
         TiFlashStorageTestBasic::SetUp();
         auto path = getTemporaryPath();
         createIfNotExist(path);
-        file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
+        file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         page_storage = UniversalPageStorage::create("test.t", delegator, config, file_provider);
         page_storage->restore();
@@ -40,7 +40,7 @@ public:
             c_buff[i] = i % 0xff;
         }
 
-        log = Logger::get("PageStorageTest");
+        log = Logger::get("UniPageStorageTest");
     }
 
     void reload()

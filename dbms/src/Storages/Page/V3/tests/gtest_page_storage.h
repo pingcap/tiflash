@@ -14,8 +14,8 @@
 
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 
 namespace DB
 {
@@ -34,7 +34,7 @@ public:
         log = Logger::get();
         auto path = getTemporaryPath();
         createIfNotExist(path);
-        file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+        file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         page_storage = std::make_shared<PageStorageImpl>(String(NAME), delegator, config, file_provider);
         page_storage->restore();

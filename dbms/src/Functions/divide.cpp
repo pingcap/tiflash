@@ -65,7 +65,7 @@ struct TiDBDivideFloatingImpl<A, B, false>
         /// ref https://github.com/pingcap/tiflash/issues/6462
         /// For division of Decimal/Decimal or Int/Decimal or Decimal/Int, we should round the result to make compatible with TiDB.
         /// basically refer to https://stackoverflow.com/a/71634489
-        if constexpr (std::is_integral_v<Result> || std::is_same_v<Result, Int256>)
+        if constexpr (std::is_integral_v<Result> || std::is_same_v<Result, Int256> || std::is_same_v<Result, Int512>)
         {
             /// 1. do division first, get the quotient and mod, todo:(perf) find a unified `divmod` function to speed up this.
             Result quotient = x / d;
