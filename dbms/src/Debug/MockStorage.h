@@ -28,7 +28,12 @@ namespace DB
 class StorageDeltaMerge;
 class Context;
 
-using MockColumnInfo = std::pair<String, TiDB::TP>;
+struct MockColumnInfo
+{
+    String name;
+    TiDB::TP type;
+    bool nullable = true;
+};
 using MockColumnInfoVec = std::vector<MockColumnInfo>;
 using TableInfo = TiDB::TableInfo;
 using CutColumnInfo = std::pair<int, int>; // <start_idx, row_num>
