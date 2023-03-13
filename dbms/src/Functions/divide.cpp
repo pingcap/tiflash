@@ -62,9 +62,6 @@ struct TiDBDivideFloatingImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-<<<<<<< HEAD
-        return static_cast<Result>(a) / b;
-=======
         /// ref https://github.com/pingcap/tiflash/issues/6462
         /// For division of Decimal/Decimal or Int/Decimal or Decimal/Int, we should round the result to make compatible with TiDB.
         /// basically refer to https://stackoverflow.com/a/71634489
@@ -93,7 +90,6 @@ struct TiDBDivideFloatingImpl<A, B, false>
         }
         else
             return static_cast<Result>(x) / d;
->>>>>>> c6d55aff39 (fix(expr): round decimal divide result when return type is Int512 (#7035))
     }
     template <typename Result = ResultType>
     static Result apply(A a, B b, UInt8 & res_null)
