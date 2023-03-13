@@ -17,6 +17,7 @@ At present, TiFlash does not support the operation of spilling to disk. All comp
 
 ## Detailed Design
 In this design, we support 3 operators spilling to disk.
+
 ### Hash Join
 The hash join spilling algorithm is complex. We dispatch the build and probe data to n partitions by the join key, and the build and probe data in the same partition is the same unit. This way we can divide a large join into n smaller joins that have nothing to do with each other.
 - #### Build Stage
@@ -27,12 +28,14 @@ The hash join spilling algorithm is complex. We dispatch the build and probe dat
   Read the partition build and probe data spilled to disk and join them again. Note that some partitions in restore join operation may be spilled to disk again due to the memory usage exceeds limit.
 - #### Overview
   ![join_spill_overview](./images/2023-03-13-tiflash-supports-spill-to-disk-hash_join_with_spill.png)
-### Hash Aggregation
+
+### HashAggregation
 Each thread does operation of local aggregation with its own input data. If the memory exceeds the limit, each partition in the Hash table will be converted into an independent block and spilled to disk.
 - If there is no data spilled to disk, merging the local aggregation based on the original algorithm.
 - If some data is spilled to disk, doing final aggregation of the memory data and the spilled data
 - #### Overview
   ![agg_spill_overview](./images/2023-03-13-tiflash-supports-spill-to-disk-agg_with_spill.png)
+
 ### Sort/TopN
 - #### PartialSortingBlockInputStream
   Not accumulating the memory, so we don't consider temporarily support spill operations
@@ -43,6 +46,7 @@ Each thread does operation of local aggregation with its own input data. If the 
     4. Perform merge sort between the blocks in memory and the restore blocks that spilled to disk.
 - #### Overview
   ![agg_spill_overview](./images/2023-03-13-tiflash-supports-spill-to-disk-sort_with_spill.png)
+
 ## Impacts & Risks
 - For all operators, when the memory usage exceeds the limit, data will be spilled and restored, so the performance will be lower than that without spilling to disk.
 - For hash join, even if spilling to disk does not occur after the memory limit is configured, the performance will be slightly lower than that without memory limit configured because data needs to be partitioned.
