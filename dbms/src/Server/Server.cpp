@@ -962,6 +962,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
     }
+    if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V5.identifier)
+    {
+        LOG_WARNING(log, "'storage.format_version' must be set to 5 when S3 is enabled!");
+        throw Exception("'storage.format_version' must be set to 5 when S3 is enabled!");
+    }
 
     LOG_INFO(log, "Using api_version={}", storage_config.api_version);
 
@@ -1253,6 +1258,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
+        // disagg compute node without auto scaler will start proxy, which needs UniPS
+        || (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() && !global_context->getSharedContextDisagg()->use_autoscaler)
         || global_context->getSharedContextDisagg()->notDisaggregatedMode())
     {
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
