@@ -19,7 +19,6 @@
 #include <Common/SipHash.h>
 #include <DataStreams/MarkInCompressedFile.h>
 #include <Interpreters/AggregationCommon.h>
-#include "Common/TiFlashMetrics.h"
 
 #include <memory>
 
@@ -59,8 +58,6 @@ public:
     MappedPtr getOrSet(const Key & key, LoadFunc && load)
     {
         auto result = Base::getOrSet(key, load);
-        GET_METRIC(tiflash_mark_cache_size, type_change_count).Increment();
-        GET_METRIC(tiflash_mark_cache_size, type_current_size).Set(Base::weight());
         if (result.second)
             ProfileEvents::increment(ProfileEvents::MarkCacheMisses);
         else

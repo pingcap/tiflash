@@ -7456,19 +7456,19 @@
           "spaceLength": 10,
           "targets": [
             {
-              "expr": "max(tiflash_system_profile_event_MarkCacheMisses{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "legendFormat": "mark cache misses",
-              "interval": "",
               "exemplar": true,
+              "expr": "max(tiflash_system_profile_event_MarkCacheMisses{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "interval": "",
+              "legendFormat": "mark cache misses",
               "queryType": "randomWalk",
               "refId": "A"
             },
             {
-              "expr": "max(tiflash_system_profile_event_MarkCacheHits{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "legendFormat": "mark cache hits",
-              "interval": "",
               "exemplar": true,
+              "expr": "max(tiflash_system_profile_event_MarkCacheHits{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "hide": false,
+              "interval": "",
+              "legendFormat": "mark cache hits",
               "refId": "B"
             }
           ],
@@ -7490,20 +7490,22 @@
           },
           "yaxes": [
             {
-              "format": "short",
+              "format": "percentunit",
               "label": null,
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": true,
+              "$$hashKey": "object:259"
             },
             {
-              "format": "short",
+              "format": "percent",
               "label": null,
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false,
+              "$$hashKey": "object:260"
             }
           ],
           "yaxis": {
@@ -7519,7 +7521,52 @@
           "stack": false,
           "steppedLine": false,
           "timeFrom": null,
-          "timeShift": null
+          "timeShift": null,
+          "transformations": [
+            {
+              "id": "calculateField",
+              "options": {
+                "mode": "binary",
+                "reduce": {
+                  "reducer": "sum"
+                },
+                "binary": {
+                  "left": "mark cache misses",
+                  "operator": "+",
+                  "right": "mark cache hits",
+                  "reducer": "sum"
+                },
+                "alias": "mark cache count total"
+              }
+            },
+            {
+              "id": "calculateField",
+              "options": {
+                "mode": "binary",
+                "reduce": {
+                  "reducer": "sum"
+                },
+                "binary": {
+                  "left": "mark cache hits",
+                  "operator": "/",
+                  "right": "mark cache count total",
+                  "reducer": "sum"
+                },
+                "alias": "mark cache effectiveness"
+              }
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "Time",
+                    "mark cache effectiveness"
+                  ]
+                }
+              }
+            }
+          ]
         }
       ],
       "repeat": null,
