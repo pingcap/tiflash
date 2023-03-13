@@ -78,7 +78,6 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
         columns_with_type_and_name = context.mockStorage()->getColumns(table_id);
 
     columns_with_type_and_name = getUsedColumns(used_columns, columns_with_type_and_name);
-
     return cutStreams<SourceType>(context, columns_with_type_and_name, max_streams, log);
 }
 
