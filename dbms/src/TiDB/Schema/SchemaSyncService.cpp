@@ -32,6 +32,9 @@ namespace ErrorCodes
 extern const int DEADLOCK_AVOIDED;
 } // namespace ErrorCodes
 
+// TODO: make this interval configurable
+constexpr size_t interval_seconds = 60;
+
 SchemaSyncService::SchemaSyncService(DB::Context & context_)
     : context(context_)
     , background_pool(context_.getBackgroundPool())
@@ -45,7 +48,8 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
 
             return false;
         },
-        false);
+        false,
+        interval_seconds * 1000);
 }
 
 void SchemaSyncService::addKeyspaceGCTasks()
@@ -67,7 +71,6 @@ void SchemaSyncService::addKeyspaceGCTasks()
                     bool done_anything = false;
                     try
                     {
-                        LOG_DEBUG(ks_log, "auto sync schema", ks);
                         /// Do sync schema first, then gc.
                         /// They must be performed synchronously,
                         /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
@@ -97,7 +100,8 @@ void SchemaSyncService::addKeyspaceGCTasks()
                     }
                     return false;
                 },
-                false);
+                false,
+                interval_seconds * 1000);
 
             ks_handle_map.emplace(ks, task_handle);
         }

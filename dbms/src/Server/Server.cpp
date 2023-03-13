@@ -902,7 +902,7 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count / 2);
     GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 2);
 
-    IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count);
+    IOThreadPool::instance->setMaxThreads(max_io_thread_count);
     IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
     IOThreadPool::instance->setQueueSize(max_io_thread_count * 2);
 }
@@ -1589,6 +1589,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
             LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
 
+            // FIXME: this is just a workaround
             BgStoreInitHolder bg_init_stores;
             bg_init_stores.start(
                 *global_context,
