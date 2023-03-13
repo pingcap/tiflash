@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Config.h>
@@ -32,8 +33,6 @@
 namespace DB
 {
 class UniversalWriteBatch;
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;
@@ -133,6 +132,8 @@ public:
     UniversalPageId getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
 
     DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
+
+    std::optional<DB::PS::V3::CheckpointLocation> getCheckpointLocation(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
 
     void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client) const;
 

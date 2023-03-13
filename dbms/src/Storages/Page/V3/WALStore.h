@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Checksum.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
@@ -28,8 +29,6 @@
 
 namespace DB
 {
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class PSDiskDelegator;

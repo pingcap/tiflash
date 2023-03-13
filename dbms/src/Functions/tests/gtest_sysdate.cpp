@@ -14,6 +14,7 @@
 
 #include <Common/MyTime.h>
 #include <Functions/FunctionFactory.h>
+#include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -31,7 +32,7 @@ protected:
 
     void setTimezoneByOffset(Int64 offset)
     {
-        auto & timezone_info = context.getTimezoneInfo();
+        auto & timezone_info = context->getTimezoneInfo();
         timezone_info.is_name_based = false;
         timezone_info.timezone_offset = offset * 3600;
         timezone_info.timezone = &DateLUT::instance("UTC");
@@ -41,7 +42,7 @@ protected:
 
     void setTimezoneByName(String name)
     {
-        auto & timezone_info = context.getTimezoneInfo();
+        auto & timezone_info = context->getTimezoneInfo();
         timezone_info.is_name_based = true;
         timezone_info.timezone_offset = 0;
         timezone_info.timezone = &DateLUT::instance(name);
@@ -95,7 +96,7 @@ TEST_F(Sysdate, sysdate_unit_Test)
     UInt64 with_fsp_packed = with_fsp_col.column.get()->get64(0);
     MyDateTime with_fsp_date_time(with_fsp_packed);
 
-    auto date_time = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), fsp);
+    auto date_time = MyDateTime::getSystemDateTimeByTimezone(context->getTimezoneInfo(), fsp);
 
     auto with_fsp_second_diff = (date_time.yearDay() - with_fsp_date_time.yearDay()) * seconds_in_one_day + (date_time.hour - with_fsp_date_time.hour) * 60 * 60 + (date_time.minute - with_fsp_date_time.minute) * 60 + (date_time.second - with_fsp_date_time.second);
     auto with_out_fsp_second_diff = (date_time.yearDay() - without_fsp_date_time.yearDay()) * seconds_in_one_day + (date_time.hour - without_fsp_date_time.hour) * 60 * 60 + (date_time.minute - without_fsp_date_time.minute) * 60 + (date_time.second - without_fsp_date_time.second);
@@ -140,8 +141,8 @@ TEST_F(Sysdate, timezone_unit_Test)
     int fsp = 3;
     setTimezoneByOffset(0);
     // base timezone is UTC +0:00
-    auto with_fsp_date_time = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), fsp);
-    auto without_fsp_date_time = MyDateTime::getSystemDateTimeByTimezone(context.getTimezoneInfo(), 0);
+    auto with_fsp_date_time = MyDateTime::getSystemDateTimeByTimezone(context->getTimezoneInfo(), fsp);
+    auto without_fsp_date_time = MyDateTime::getSystemDateTimeByTimezone(context->getTimezoneInfo(), 0);
     auto data_column = createColumn<String>(std::vector<String>{"test"});
     auto fsp_column = createConstColumn<Int64>(1, fsp);
     ColumnNumbers with_fsp_arguments = {0};

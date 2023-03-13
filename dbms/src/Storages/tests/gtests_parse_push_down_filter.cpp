@@ -51,28 +51,28 @@ public:
 
 protected:
     LoggerPtr log = Logger::get();
-    Context ctx = DB::tests::TiFlashTestEnv::getContext();
-    TimezoneInfo default_timezone_info = DB::tests::TiFlashTestEnv::getContext().getTimezoneInfo();
+    ContextPtr ctx = DB::tests::TiFlashTestEnv::getContext();
+    TimezoneInfo default_timezone_info = DB::tests::TiFlashTestEnv::getContext()->getTimezoneInfo();
     DM::PushDownFilterPtr generatePushDownFilter(String table_info_json, const String & query, TimezoneInfo & timezone_info);
 };
 
 
 DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(const String table_info_json, const String & query, TimezoneInfo & timezone_info)
 {
-    const TiDB::TableInfo table_info(table_info_json);
+    const TiDB::TableInfo table_info(table_info_json, NullspaceID);
     QueryTasks query_tasks;
     std::tie(query_tasks, std::ignore) = compileQuery(
-        ctx,
+        *ctx,
         query,
         [&](const String &, const String &) {
             return table_info;
         },
         getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
-    DAGContext dag_context(dag_request, {}, "", false, log);
-    ctx.setDAGContext(&dag_context);
+    DAGContext dag_context(dag_request, {}, NullspaceID, "", false, log);
+    ctx->setDAGContext(&dag_context);
     // Don't care about regions information in this test
-    DAGQuerySource dag(ctx);
+    DAGQuerySource dag(*ctx);
     auto query_block = *dag.getRootQueryBlock();
     google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
     // Push down all filters
@@ -136,7 +136,7 @@ DM::PushDownFilterPtr ParsePushDownFilterTest::generatePushDownFilter(const Stri
         }
 
         // build filter expression actions
-        std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(columns_to_read_name_and_type, ctx);
+        std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::make_unique<DAGExpressionAnalyzer>(columns_to_read_name_and_type, *ctx);
         auto [before_where, filter_column_name, _] = ::DB::buildPushDownFilter(dag_query->pushed_down_filters, *analyzer);
 
         return std::make_shared<DM::PushDownFilter>(rs_operator, before_where, filter_columns, filter_column_name);
@@ -643,7 +643,7 @@ try
     {
         // Greater between TimeStamp col and Datetime literal, use local timezone
         auto ctx = TiFlashTestEnv::getContext();
-        auto & timezone_info = ctx.getTimezoneInfo();
+        auto & timezone_info = ctx->getTimezoneInfo();
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
         // converted_time: 1849559496301477888
 
@@ -669,7 +669,7 @@ try
     {
         // Greater between TimeStamp col and Datetime literal, use Chicago timezone
         auto ctx = TiFlashTestEnv::getContext();
-        auto & timezone_info = ctx.getTimezoneInfo();
+        auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneName("America/Chicago");
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
         // converted_time: 1849560389654675456
@@ -696,7 +696,7 @@ try
     {
         // Greater between TimeStamp col and Datetime literal, use Chicago timezone
         auto ctx = TiFlashTestEnv::getContext();
-        auto & timezone_info = ctx.getTimezoneInfo();
+        auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneOffset(28800);
         convertTimeZoneByOffset(origin_time_stamp, converted_time, false, timezone_info.timezone_offset);
         // converted_time: 1849559496301477888

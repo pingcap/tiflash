@@ -18,13 +18,14 @@
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
+#include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
-#include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -91,8 +92,6 @@ class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class KeyManager;
 using KeyManagerPtr = std::shared_ptr<KeyManager>;
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 struct TiFlashRaftConfig;
 class DAGContext;
 class IORateLimiter;
@@ -113,11 +112,6 @@ class DeltaIndexManager;
 class GlobalStoragePool;
 class SharedBlockSchemas;
 using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
-namespace Remote
-{
-class IDataStore;
-using IDataStorePtr = std::shared_ptr<IDataStore>;
-} // namespace Remote
 } // namespace DM
 
 /// (database name, table name)
@@ -168,8 +162,6 @@ private:
     UInt64 session_close_cycle = 0;
     bool session_is_used = false;
 
-    bool use_l0_opt = true;
-
     enum TestMode
     {
         non_test,
@@ -194,8 +186,8 @@ private:
 
 public:
     /// Create initial Context with ContextShared and etc.
-    static Context createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
-    static Context createGlobal();
+    static std::unique_ptr<Context> createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
+    static std::unique_ptr<Context> createGlobal();
 
     ~Context();
 
@@ -398,9 +390,6 @@ public:
       */
     void dropCaches() const;
 
-    void setUseL0Opt(bool use_l0_opt);
-    bool useL0Opt() const;
-
     BackgroundProcessingPool & initializeBackgroundPool(UInt16 pool_size);
     BackgroundProcessingPool & getBackgroundPool();
     BackgroundProcessingPool & initializeBlockableBackgroundPool(UInt16 pool_size);
@@ -438,24 +427,16 @@ public:
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 
-    void initializeRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled);
-    DM::Remote::IDataStorePtr getRemoteDataStore() const;
-
     void initializeWriteNodePageStorageIfNeed(const PathPool & path_pool);
     UniversalPageStoragePtr getWriteNodePageStorage() const;
 
-    void initializeReadNodePageCacheIfNeed(const PathPool & path_pool, const String & cache_dir, size_t cache_capacity);
-    DM::Remote::RNLocalPageCachePtr getReadNodePageCache() const;
+    SharedContextDisaggPtr getSharedContextDisagg() const;
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
 
     /// Nullptr if the query log is not ready for this moment.
     QueryLog * getQueryLog();
-
-    /// Prevents DROP TABLE if its size is greater than max_size (50GB by default, max_size=0 turn off this check)
-    void setMaxTableSizeToDrop(size_t max_size);
-    void checkTableCanBeDropped(const String & database, const String & table, size_t table_size);
 
     /// Get the server uptime in seconds.
     time_t getUptimeSeconds() const;
@@ -518,32 +499,8 @@ public:
     MockMPPServerInfo mockMPPServerInfo() const;
     void setMockMPPServerInfo(MockMPPServerInfo & info);
 
-    void setDisaggregatedMode(DisaggregatedMode mode)
-    {
-        disaggregated_mode = mode;
-    }
-    bool isDisaggregatedComputeMode() const
-    {
-        return disaggregated_mode == DisaggregatedMode::Compute;
-    }
-    bool isDisaggregatedStorageMode() const
-    {
-        // there is no difference
-        return disaggregated_mode == DisaggregatedMode::Storage || disaggregated_mode == DisaggregatedMode::None;
-    }
-
     const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
     void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
-
-    // todo: remove after AutoScaler is stable.
-    void setUseAutoScaler(bool use)
-    {
-        use_autoscaler = use;
-    }
-    bool useAutoScaler() const
-    {
-        return use_autoscaler;
-    }
 
 private:
     /** Check if the current client has access to the specified database.
@@ -562,8 +519,6 @@ private:
     void checkIsConfigLoaded() const;
 
     bool is_config_loaded = false; /// Is configuration loaded from toml file.
-    DisaggregatedMode disaggregated_mode = DisaggregatedMode::None;
-    bool use_autoscaler = true; /// todo: remove this after AutoScaler is stable. Only meaningful in DisaggregatedComputeMode.
 };
 
 

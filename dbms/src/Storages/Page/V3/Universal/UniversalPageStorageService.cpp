@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/BackgroundProcessingPool.h>
@@ -57,7 +58,9 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider(), s3_client, bucket);
     service->uni_page_storage->restore();
 
-    if (s3factory.isEnabled())
+    // Starts the checkpoint upload timer
+    // for disagg tiflash write node
+    if (s3factory.isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         // TODO: make this interval reloadable
         auto interval_s = context.getSettingsRef().remote_checkpoint_interval_seconds;
@@ -130,7 +133,7 @@ bool UniversalPageStorageService::uploadCheckpoint()
         LOG_INFO(log, "Skip checkpoint because store meta is not initialized");
         return false;
     }
-    auto remote_store = global_context.getRemoteDataStore();
+    auto remote_store = global_context.getSharedContextDisagg()->remote_data_store;
     if (remote_store == nullptr)
     {
         LOG_INFO(log, "Skip checkpoint because remote data store is not initialized");

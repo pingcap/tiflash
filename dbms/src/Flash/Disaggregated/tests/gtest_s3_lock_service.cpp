@@ -18,7 +18,7 @@
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/MockOwnerManager.h>
 #include <TiDB/OwnerManager.h>
@@ -43,7 +43,7 @@ public:
     void SetUp() override
     try
     {
-        db_context = std::make_unique<Context>(DB::tests::TiFlashTestEnv::getContext());
+        db_context = DB::tests::TiFlashTestEnv::getContext();
         log = Logger::get();
 
         auto & client_factory = DB::S3::ClientFactory::instance();

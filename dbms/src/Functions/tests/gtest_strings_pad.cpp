@@ -17,7 +17,6 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsString.h>
-#include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -41,7 +40,7 @@ class StringPad : public DB::tests::FunctionTest
 
 TEST_F(StringPad, string_pad_string_unit_Test)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -76,7 +75,7 @@ TEST_F(StringPad, string_pad_string_unit_Test)
     ColumnNumbers cns{0, 1, 2};
 
     // test lpad
-    auto bp = factory.tryGet("lpadUTF8", context);
+    auto bp = factory.tryGet("lpadUTF8", *context);
     ASSERT_TRUE(bp != nullptr);
 
     bp->build(ctns)->execute(testBlock, cns, 3);
@@ -94,7 +93,7 @@ TEST_F(StringPad, string_pad_string_unit_Test)
     }
 
     // test rpad
-    bp = factory.tryGet("rpadUTF8", context);
+    bp = factory.tryGet("rpadUTF8", *context);
     ASSERT_TRUE(bp != nullptr);
 
     bp->build(ctns)->execute(testBlock, cns, 3);
@@ -113,7 +112,7 @@ TEST_F(StringPad, string_pad_string_unit_Test)
 
 TEST_F(StringPad, string_pad_const_string_unit_Test)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -145,7 +144,7 @@ TEST_F(StringPad, string_pad_const_string_unit_Test)
     ColumnNumbers cns{0, 1, 2};
 
     // test lpad
-    auto bp = factory.tryGet("lpadUTF8", context);
+    auto bp = factory.tryGet("lpadUTF8", *context);
     ASSERT_TRUE(bp != nullptr);
 
     bp->build(ctns)->execute(testBlock, cns, 3);
@@ -159,7 +158,7 @@ TEST_F(StringPad, string_pad_const_string_unit_Test)
     EXPECT_STREQ("abcabhello", s.c_str());
 
     // test rpad
-    bp = factory.tryGet("rpadUTF8", context);
+    bp = factory.tryGet("rpadUTF8", *context);
     ASSERT_TRUE(bp != nullptr);
 
     bp->build(ctns)->execute(testBlock, cns, 3);
@@ -174,7 +173,7 @@ TEST_F(StringPad, string_pad_const_string_unit_Test)
 
 TEST_F(StringPad, string_pad_empty_padding_unit_Test)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -209,7 +208,7 @@ TEST_F(StringPad, string_pad_empty_padding_unit_Test)
     ColumnNumbers cns{0, 1, 2};
 
     // test lpad
-    auto bp = factory.tryGet("lpadUTF8", context);
+    auto bp = factory.tryGet("lpadUTF8", *context);
     ASSERT_TRUE(bp != nullptr);
 
     bp->build(ctns)->execute(testBlock, cns, 3);
@@ -235,7 +234,7 @@ TEST_F(StringPad, string_pad_empty_padding_unit_Test)
     }
 
     // test rpad
-    bp = factory.tryGet("rpadUTF8", context);
+    bp = factory.tryGet("rpadUTF8", *context);
     ASSERT_TRUE(bp != nullptr);
 
     bp->build(ctns)->execute(testBlock, cns, 3);
@@ -262,7 +261,7 @@ TEST_F(StringPad, string_pad_empty_padding_unit_Test)
 
 TEST_F(StringPad, string_pad_utf8_padding_unit_Test)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -298,7 +297,7 @@ TEST_F(StringPad, string_pad_utf8_padding_unit_Test)
     ColumnNumbers cns{0, 1, 2};
 
     // test lpad
-    auto bp = factory.tryGet("lpadUTF8", context);
+    auto bp = factory.tryGet("lpadUTF8", *context);
     ASSERT_TRUE(bp != nullptr);
 
     bp->build(ctns)->execute(testBlock, cns, 3);
@@ -317,7 +316,7 @@ TEST_F(StringPad, string_pad_utf8_padding_unit_Test)
     }
 
     // test rpad
-    bp = factory.tryGet("rpadUTF8", context);
+    bp = factory.tryGet("rpadUTF8", *context);
     ASSERT_TRUE(bp != nullptr);
 
     bp->build(ctns)->execute(testBlock, cns, 3);
@@ -335,7 +334,7 @@ TEST_F(StringPad, string_pad_utf8_padding_unit_Test)
 
 TEST_F(StringPad, string_pad_const_utf8_padding_unit_Test)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -369,7 +368,7 @@ TEST_F(StringPad, string_pad_const_utf8_padding_unit_Test)
     ColumnNumbers cns{0, 1, 2};
 
     // test lpad
-    auto bp = factory.tryGet("lpadUTF8", context);
+    auto bp = factory.tryGet("lpadUTF8", *context);
     ASSERT_TRUE(bp != nullptr);
 
     bp->build(ctns)->execute(testBlock, cns, 3);
@@ -384,7 +383,7 @@ TEST_F(StringPad, string_pad_const_utf8_padding_unit_Test)
     EXPECT_EQ("上你好,", s);
 
     // test rpad
-    bp = factory.tryGet("rpadUTF8", context);
+    bp = factory.tryGet("rpadUTF8", *context);
     ASSERT_TRUE(bp != nullptr);
 
     bp->build(ctns)->execute(testBlock, cns, 3);
@@ -398,7 +397,7 @@ TEST_F(StringPad, string_pad_const_utf8_padding_unit_Test)
 
 TEST_F(StringPad, string_pad_empty_utf8_padding_unit_Test)
 {
-    const Context context = TiFlashTestEnv::getContext();
+    const auto context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -434,7 +433,7 @@ TEST_F(StringPad, string_pad_empty_utf8_padding_unit_Test)
     ColumnNumbers cns{0, 1, 2};
 
     // test lpad
-    auto bp = factory.tryGet("lpadUTF8", context);
+    auto bp = factory.tryGet("lpadUTF8", *context);
     ASSERT_TRUE(bp != nullptr);
 
     bp->build(ctns)->execute(testBlock, cns, 3);
@@ -460,7 +459,7 @@ TEST_F(StringPad, string_pad_empty_utf8_padding_unit_Test)
     }
 
     // test rpad
-    bp = factory.tryGet("rpadUTF8", context);
+    bp = factory.tryGet("rpadUTF8", *context);
     ASSERT_TRUE(bp != nullptr);
 
     bp->build(ctns)->execute(testBlock, cns, 3);

@@ -16,6 +16,9 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Disaggregated/RNPageReceiverContext.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/completion_queue.h>
@@ -55,13 +58,13 @@ namespace DB
 {
 namespace
 {
-struct FetchPagesStreamReader : public PagePacketReader
+struct GRPCFetchPagesResponseReader : public FetchPagesResponseReader
 {
     std::shared_ptr<pingcap::kv::RpcCall<disaggregated::FetchDisaggPagesRequest>> call;
     grpc::ClientContext client_context;
     std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> reader;
 
-    explicit FetchPagesStreamReader(const FetchPagesRequest & req)
+    explicit GRPCFetchPagesResponseReader(const FetchPagesRequest & req)
     {
         call = std::make_shared<pingcap::kv::RpcCall<disaggregated::FetchDisaggPagesRequest>>(req.req);
     }
@@ -99,9 +102,42 @@ FetchPagesRequest::FetchPagesRequest(DM::RNRemoteSegmentReadTaskPtr seg_task_)
     *req->mutable_snapshot_id() = seg_task->snapshot_id.toMeta();
     req->set_table_id(seg_task->table_id);
     req->set_segment_id(seg_task->segment_id);
-    for (auto page_id : seg_task->cacheMissPageIds())
+
     {
-        req->add_page_ids(page_id);
+        std::vector<DM::Remote::PageOID> cf_tiny_oids;
+        cf_tiny_oids.reserve(seg_task->delta_tinycf_page_ids.size());
+        for (const auto & page_id : seg_task->delta_tinycf_page_ids)
+        {
+            auto page_oid = DM::Remote::PageOID{
+                .store_id = seg_task->store_id,
+                .table_id = seg_task->table_id,
+                .page_id = page_id,
+            };
+            cf_tiny_oids.emplace_back(page_oid);
+        }
+
+        // Note: We must occupySpace segment by segment, because we need to read
+        // at least the complete data of one segment in order to drive everything forward.
+        // Currently we call occupySpace for each FetchPagesRequest, which is fine,
+        // because we send one request each seg_task. If we want to split
+        // FetchPagesRequest into multiples in future, then we need to change
+        // the moment of calling `occupySpace`.
+        auto page_cache = seg_task->dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
+        auto occupy_result = page_cache->occupySpace(cf_tiny_oids, seg_task->delta_tinycf_page_sizes);
+        for (auto page_id : occupy_result.pages_not_in_cache)
+            req->add_page_ids(page_id.page_id);
+
+        auto cftiny_total = seg_task->delta_tinycf_page_ids.size();
+        auto cftiny_fetch = occupy_result.pages_not_in_cache.size();
+        LOG_INFO(
+            Logger::get(),
+            "read task local cache hit rate: {}, pages_not_in_cache={}",
+            cftiny_total == 0 ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * cftiny_fetch / cftiny_total),
+            occupy_result.pages_not_in_cache);
+        GET_METRIC(tiflash_disaggregated_details, type_cftiny_read).Increment(cftiny_total);
+        GET_METRIC(tiflash_disaggregated_details, type_cftiny_fetch).Increment(cftiny_fetch);
+
+        seg_task->initColumnFileDataProvider(occupy_result.pages_guard);
     }
 }
 
@@ -111,13 +147,13 @@ const String & FetchPagesRequest::address() const
     return seg_task->address;
 }
 
-GRPCPagesReceiverContext::Request GRPCPagesReceiverContext::popRequest() const
+FetchPagesRequest GRPCPagesReceiverContext::popRequest() const
 {
     auto seg_task = remote_read_tasks->nextFetchTask();
-    return Request(std::move(seg_task));
+    return FetchPagesRequest(std::move(seg_task));
 }
 
-void GRPCPagesReceiverContext::finishTaskEstablish(const Request & req, bool meet_error)
+void GRPCPagesReceiverContext::finishTaskEstablish(const FetchPagesRequest & req, bool meet_error)
 {
     remote_read_tasks->updateTaskState(req.seg_task, DM::SegmentReadTaskState::Receiving, meet_error);
 }
@@ -127,19 +163,14 @@ void GRPCPagesReceiverContext::finishTaskReceive(const DM::RNRemoteSegmentReadTa
     remote_read_tasks->updateTaskState(seg_task, DM::SegmentReadTaskState::DataReady, false);
 }
 
-void GRPCPagesReceiverContext::finishAllReceivingTasks(const String & err_msg)
-{
-    remote_read_tasks->allDataReceive(err_msg);
-}
-
 void GRPCPagesReceiverContext::cancelDisaggTaskOnTiFlashStorageNode(LoggerPtr /*log*/)
 {
     // TODO cancel
 }
 
-ExchangePagePacketReaderPtr GRPCPagesReceiverContext::makeReader(const Request & request) const
+FetchPagesResponseReaderPtr GRPCPagesReceiverContext::doRequest(const FetchPagesRequest & request) const
 {
-    auto reader = std::make_shared<FetchPagesStreamReader>(request);
+    auto reader = std::make_shared<GRPCFetchPagesResponseReader>(request);
     reader->reader = cluster->rpc_client->sendStreamRequest(
         request.address(),
         &reader->client_context,

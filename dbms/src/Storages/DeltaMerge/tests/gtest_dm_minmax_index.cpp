@@ -15,6 +15,7 @@
 #include <Common/Logger.h>
 #include <Core/BlockGen.h>
 #include <DataTypes/DataTypeEnum.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -29,6 +30,7 @@
 #include <ctime>
 #include <ext/scope_guard.h>
 #include <memory>
+
 namespace DB
 {
 namespace DM
@@ -48,7 +50,7 @@ protected:
 
     void SetUp() override
     {
-        context = std::make_unique<Context>(DMTestEnv::getContext());
+        context = DMTestEnv::getContext();
         if (!context->getMinMaxIndexCache())
         {
             context->setMinMaxIndexCache(5368709120);
@@ -63,7 +65,7 @@ protected:
 private:
 protected:
     // a ptr to context, we can reload context with different settings if need.
-    std::unique_ptr<Context> context;
+    ContextPtr context;
 };
 
 Attr attr(String type)

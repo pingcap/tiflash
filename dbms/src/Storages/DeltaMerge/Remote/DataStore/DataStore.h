@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/S3/S3Filename.h>
 
@@ -22,9 +23,6 @@
 
 namespace DB::DM::Remote
 {
-
-class IDataStore;
-using IDataStorePtr = std::shared_ptr<IDataStore>;
 
 class IPreparedDMFileToken : boost::noncopyable
 {
@@ -47,8 +45,6 @@ protected:
     {}
 };
 
-using IPreparedDMFileTokenPtr = std::shared_ptr<IPreparedDMFileToken>;
-
 class IDataStore : boost::noncopyable
 {
 public:
@@ -58,7 +54,7 @@ public:
      * Blocks until a local DMFile is successfully put in the remote data store.
      * Should be used by a write node.
      */
-    virtual void putDMFile(DMFilePtr local_dm_file, const S3::DMFileOID & oid) = 0;
+    virtual void putDMFile(DMFilePtr local_dm_file, const S3::DMFileOID & oid, bool remove_local) = 0;
 
     virtual void copyDMFileMetaToLocalPath(const S3::DMFileOID & remote_oid, const String & local_path) = 0;
 

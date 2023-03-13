@@ -19,7 +19,8 @@
 #include <DataStreams/EmptyBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
-#include <DataTypes/DataTypeFactory.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -52,7 +53,6 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
-#include <numeric>
 
 namespace ProfileEvents
 {
@@ -188,7 +188,7 @@ StableValueSpacePtr createNewStable( //
     auto stable = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
-    if (auto data_store = context.db_context.getRemoteDataStore(); !data_store)
+    if (auto data_store = context.db_context.getSharedContextDisagg()->remote_data_store; !data_store)
     {
         wbs.data.putExternal(dtfile_id, 0);
     }
@@ -196,7 +196,7 @@ StableValueSpacePtr createNewStable( //
     {
         auto store_id = context.db_context.getTMTContext().getKVStore()->getStoreID();
         Remote::DMFileOID oid{.store_id = store_id, .table_id = context.physical_table_id, .file_id = dtfile_id};
-        data_store->putDMFile(dtfile, oid);
+        data_store->putDMFile(dtfile, oid, /*remove_local*/ true);
         PS::V3::CheckpointLocation loc{
             .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
             .offset_in_file = 0,

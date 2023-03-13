@@ -44,13 +44,11 @@ protected:
         dag_context_ptr->is_mpp_task = true;
         dag_context_ptr->is_root_mpp_task = false;
         dag_context_ptr->result_field_types = makeFields();
-        context.setDAGContext(dag_context_ptr.get());
     }
 
 public:
     TestMPPExchangeWriter()
-        : context(TiFlashTestEnv::getContext())
-        , part_col_ids{0}
+        : part_col_ids{0}
         , part_col_collators{
               TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY)}
     {}
@@ -109,7 +107,6 @@ public:
     }
 
 
-    Context context;
     std::vector<Int64> part_col_ids;
     TiDB::TiDBCollators part_col_collators;
 

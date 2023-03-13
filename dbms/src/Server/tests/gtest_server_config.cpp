@@ -23,6 +23,7 @@
 #endif
 
 #include <Common/Config/ConfigProcessor.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/Quota.h>
 #include <Poco/Logger.h>
 #include <Server/StorageConfigParser.h>

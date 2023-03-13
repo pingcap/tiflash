@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <aws/s3/model/GetObjectRequest.h>
@@ -87,8 +89,27 @@ void S3RandomAccessFile::initialize()
     read_result = outcome.GetResultWithOwnership();
 }
 
+inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname)
+{
+    try
+    {
+        auto * file_cache = FileCache::instance();
+        return file_cache != nullptr ? file_cache->getRandomAccessFile(S3::S3FilenameView::fromKey(remote_fname)) : nullptr;
+    }
+    catch (...)
+    {
+        tryLogCurrentException("tryOpenCachedFile", remote_fname);
+        return nullptr;
+    }
+}
+
 RandomAccessFilePtr S3RandomAccessFile::create(const String & remote_fname)
 {
+    auto file = tryOpenCachedFile(remote_fname);
+    if (file != nullptr)
+    {
+        return file;
+    }
     auto & ins = S3::ClientFactory::instance();
     return std::make_shared<S3RandomAccessFile>(ins.sharedClient(), ins.bucket(), remote_fname);
 }

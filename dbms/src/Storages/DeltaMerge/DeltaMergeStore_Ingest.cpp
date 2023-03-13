@@ -14,6 +14,8 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -625,7 +627,7 @@ void DeltaMergeStore::ingestFiles(
     WriteBatches ingest_wbs(*storage_pool, dm_context->getWriteLimiter());
     if (!files.empty())
     {
-        auto remote_data_store = dm_context->db_context.getRemoteDataStore();
+        auto remote_data_store = dm_context->db_context.getSharedContextDisagg()->remote_data_store;
         for (const auto & file : files)
         {
             if (!remote_data_store)
@@ -636,7 +638,7 @@ void DeltaMergeStore::ingestFiles(
             {
                 auto store_id = dm_context->db_context.getTMTContext().getKVStore()->getStoreID();
                 Remote::DMFileOID oid{.store_id = store_id, .table_id = dm_context->physical_table_id, .file_id = file->fileId()};
-                remote_data_store->putDMFile(file, oid);
+                remote_data_store->putDMFile(file, oid, /*remove_local*/ true);
                 PS::V3::CheckpointLocation loc{
                     .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
                     .offset_in_file = 0,
