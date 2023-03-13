@@ -616,9 +616,10 @@ try
 {
     /// prepare data
     size_t unique_rows = 3000;
-    DB::MockColumnInfoVec table_column_infos{{"key_8", TiDB::TP::TypeTiny}, {"key_16", TiDB::TP::TypeShort}, {"key_32", TiDB::TP::TypeLong}, {"key_64", TiDB::TP::TypeLongLong}, {"key_string_1", TiDB::TP::TypeString}, {"key_string_2", TiDB::TP::TypeString}, {"value", TiDB::TP::TypeLong}};
+    DB::MockColumnInfoVec table_column_infos{{"key_8", TiDB::TP::TypeTiny, false}, {"key_16", TiDB::TP::TypeShort, false}, {"key_32", TiDB::TP::TypeLong, false},
+                                             {"key_64", TiDB::TP::TypeLongLong, false}, {"key_string_1", TiDB::TP::TypeString, false}, {"key_string_2", TiDB::TP::TypeString, false}, {"value", TiDB::TP::TypeLong, false}};
     ColumnsWithTypeAndName table_column_data;
-    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(table_column_infos, true))
+    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(table_column_infos))
     {
         ColumnGeneratorOpts opts{unique_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
         table_column_data.push_back(ColumnGenerator::instance().generate(opts));
