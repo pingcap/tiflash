@@ -1403,7 +1403,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Load remaining databases
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
-    // BgStoreInitHolder bg_init_stores; // FIXME
+    BgStoreInitHolder bg_init_stores;
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         /// Then, sync schemas with TiDB, and initialize schema sync service.
@@ -1432,13 +1432,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_DEBUG(log, "Sync schemas done.");
         }
 
-#if 0
         bg_init_stores.start(
             *global_context,
             log,
             storage_config.lazily_init_store,
             storage_config.s3_config.isS3Enabled());
-#endif
 
         // After schema synced, set current database.
         global_context->setCurrentDatabase(default_database);
@@ -1519,7 +1517,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // If S3 enabled, wait for all DeltaMergeStores' initialization
     // before this instance can accept requests.
     // Else it just do nothing.
-    // bg_init_stores.waitUntilFinish(); FIXME: not join now.
+    bg_init_stores.waitUntilFinish();
 
     /// Then, startup grpc server to serve raft and/or flash services.
     FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
@@ -1595,14 +1593,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // proxy update store-id before status set `RaftProxyStatus::Running`
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
             LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
-
-            // FIXME: this is just a workaround
-            BgStoreInitHolder bg_init_stores;
-            bg_init_stores.start(
-                *global_context,
-                log,
-                storage_config.lazily_init_store,
-                storage_config.s3_config.isS3Enabled());
 
             size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
             auto & kvstore_ptr = tmt_context.getKVStore();

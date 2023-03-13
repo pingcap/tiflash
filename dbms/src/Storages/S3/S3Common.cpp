@@ -439,6 +439,7 @@ void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & b
     }
 
 #if 0
+    // Adding rule by AWS SDK is failed, don't know why
     // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
     LOG_INFO(log, "The lifecycle rule with filter \"{}\" has not been added, n_rules={}", TaggingObjectIsDeleted, old_rules.size());
     static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");

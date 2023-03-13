@@ -210,6 +210,7 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
     if (finalize_capacity && S3::ClientFactory::instance().isEnabled())
     {
         // When S3 is enabled, use a large fake stat to avoid disk limitation by PD.
+        // EiB is not supported by TiUP now. https://github.com/pingcap/tiup/issues/2139
         total_stat.capacity_size = 1024UL * 1024UL * 1024UL * 1024UL * 1024UL; // 1PB
         total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
     }
