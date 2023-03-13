@@ -85,8 +85,6 @@ public:
 
     void finishTaskReceive(const DM::RNRemoteSegmentReadTaskPtr & seg_task);
 
-    void finishAllReceivingTasks(const String & err_msg);
-
 private:
     // The remote segment task pool
     DM::RNRemoteReadTaskPtr remote_read_tasks;

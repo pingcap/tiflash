@@ -131,6 +131,9 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
         table_id,
         segment_range);
 
+    // Note: At this moment, we still cannot read from `delta_snap->mem_table_snap` and `delta_snap->persisted_files_snap`,
+    // because they are constructed using ColumnFileDataProviderNop.
+
     auto delta_index_cache = dm_context.db_context.getSharedContextDisagg()->rn_delta_index_cache;
     if (delta_index_cache)
     {
@@ -184,7 +187,7 @@ Serializer::serializeTo(const ColumnFileSetSnapshotPtr & snap)
         }
         else if (auto * cf_tiny = file->tryToTinyFile(); cf_tiny)
         {
-            ret.Add(serializeTo(*cf_tiny));
+            ret.Add(serializeTo(*cf_tiny, snap->getDataProvider()));
         }
         else if (auto * cf_delete_range = file->tryToDeleteRange(); cf_delete_range)
         {
@@ -317,11 +320,13 @@ ColumnFileInMemoryPtr Serializer::deserializeCFInMemory(const RemotePb::ColumnFi
     return std::make_shared<ColumnFileInMemory>(schema, cache);
 }
 
-RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileTiny & cf_tiny)
+RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileTiny & cf_tiny, IColumnFileDataProviderPtr data_provider)
 {
     RemotePb::ColumnFileRemote ret;
     auto * remote_tiny = ret.mutable_tiny();
     remote_tiny->set_page_id(cf_tiny.data_page_id);
+    // Note: We cannot use cf_tiny.data_page_size, because it is only available after restored.
+    remote_tiny->set_page_size(data_provider->getTinyDataSize(cf_tiny.data_page_id));
     {
         auto wb = WriteBufferFromString(*remote_tiny->mutable_schema());
         serializeSchema(wb, cf_tiny.schema->getSchema()); // defined in ColumnFilePersisted.h
@@ -342,7 +347,10 @@ ColumnFileTinyPtr Serializer::deserializeCFTiny(const RemotePb::ColumnFileTiny &
 
     // We do not try to reuse the CFSchema from `SharedBlockSchemas`, because the ColumnFile will be freed immediately after the request.
     auto schema = std::make_shared<ColumnFileSchema>(*block_schema);
-    return std::make_shared<ColumnFileTiny>(schema, proto.rows(), proto.bytes(), proto.page_id());
+    auto cf = std::make_shared<ColumnFileTiny>(schema, proto.rows(), proto.bytes(), proto.page_id());
+    cf->data_page_size = proto.page_size();
+
+    return cf;
 }
 
 RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileDeleteRange & cf_delete_range)

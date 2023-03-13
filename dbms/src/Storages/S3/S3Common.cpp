@@ -386,6 +386,7 @@ void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & b
     Aws::Vector<Aws::S3::Model::LifecycleRule> old_rules;
     {
         Aws::S3::Model::GetBucketLifecycleConfigurationRequest req;
+        req.SetBucket(bucket);
         auto outcome = client.GetBucketLifecycleConfiguration(req);
         if (!outcome.IsSuccess())
         {

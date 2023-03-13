@@ -53,7 +53,15 @@ RNPagePreparer::RNPagePreparer(
         for (size_t index = 0; index < threads_num; ++index)
         {
             auto task = std::make_shared<std::packaged_task<void()>>([this, index] {
-                persistLoop(index);
+                try
+                {
+                    prepareLoop(index);
+                }
+                catch (...)
+                {
+                    auto ex = getCurrentExceptionMessage(true);
+                    LOG_ERROR(Logger::get(), "PagePrepareThread#{} read loop meet exception and exited, ex={}", index, ex);
+                }
             });
             persist_threads.emplace_back(task->get_future());
 
@@ -82,9 +90,9 @@ RNPagePreparer::~RNPagePreparer() noexcept
     }
 }
 
-void RNPagePreparer::persistLoop(size_t idx)
+void RNPagePreparer::prepareLoop(size_t idx)
 {
-    LoggerPtr log = exc_log->getChild(fmt::format("persist{}", idx));
+    LoggerPtr log = exc_log->getChild(fmt::format("PagePrepareThread#{}", idx));
 
 
     bool meet_error = false;
