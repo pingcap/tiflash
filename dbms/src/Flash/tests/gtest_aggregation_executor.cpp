@@ -676,7 +676,6 @@ try
             auto reference = executeStreams(request);
             if (current_collator->isCI())
             {
-                sd.clear();
                 /// for ci collation, need to sort and compare the result manually
                 for (const auto & result_col : reference)
                 {

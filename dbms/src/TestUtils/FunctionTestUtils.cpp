@@ -127,6 +127,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
                 auto a_string = actual_field.get<String>();
                 if (collator->compare(e_string.data(), e_string.size(), a_string.data(), a_string.size()) == 0)
                     continue;
+                /// if not equal, fallback to the original compare so we can reuse the code to get error message
             }
             ASSERT_EQUAL_WITH_TEXT(expected_field, actual_field, fmt::format("Value at index {} mismatch", i), expected_field.toString(), actual_field.toString());
         }
