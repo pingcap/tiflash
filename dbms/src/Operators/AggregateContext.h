@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/Operator.h>
 
@@ -79,6 +80,8 @@ private:
     size_t max_threads{};
 
     const LoggerPtr log;
+
+    std::optional<Stopwatch> build_watch;
 };
 
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;
