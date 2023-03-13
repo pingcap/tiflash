@@ -153,11 +153,9 @@ public:
     PageReceiverResult nextResult(std::unique_ptr<CHBlockChunkCodec> & decoder_ptr);
 
 private:
-    using Request = typename RPCContext::Request;
-
     void setUpConnection();
     void readLoop();
-    std::tuple<bool, String> taskReadLoop(const Request & req);
+    std::tuple<bool, String> taskReadLoop(const FetchPagesRequest & req);
 
     bool setEndState(PageReceiverState new_state);
     String getStatusString();

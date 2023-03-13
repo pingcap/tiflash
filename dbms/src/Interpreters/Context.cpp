@@ -41,6 +41,7 @@
 #include <Interpreters/Quota.h>
 #include <Interpreters/RuntimeComponentsFactory.h>
 #include <Interpreters/Settings.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/SharedQueries.h>
 #include <Interpreters/SystemLog.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -56,7 +57,6 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-#include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
@@ -156,7 +156,6 @@ struct ContextShared
     BackgroundProcessingPoolPtr ps_compact_background_pool; /// The thread pool for the background work performed by the ps v2.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
-    size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
     SharedQueriesPtr shared_queries; /// The cache of shared queries.
@@ -167,14 +166,11 @@ struct ContextShared
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
 
-    /// The following members are only available in read-write disaggregated mode
-    ///
     /// The PS instance available on Write Node.
     UniversalPageStorageServicePtr ps_write;
-    /// The PS instance available on Read Node.
-    UniversalPageStorageServicePtr ps_rn_page_cache;
-    /// The page cache in Read Node. It uses ps_rn_page_cache as storage to cache page data to local disk based on the LRU mechanism.
-    DB::DM::Remote::RNLocalPageCachePtr rn_page_cache;
+
+    /// Everything related with Disaggregation.
+    SharedContextDisaggPtr ctx_disagg;
 
     TiFlashSecurityConfigPtr security_config;
 
@@ -312,18 +308,19 @@ private:
 Context::Context() = default;
 
 
-Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
+std::unique_ptr<Context> Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
 {
-    Context res;
-    res.runtime_components_factory = runtime_components_factory;
-    res.shared = std::make_shared<ContextShared>(runtime_components_factory);
-    res.quota = std::make_shared<QuotaForIntervals>();
-    res.timezone_info.init();
-    res.disaggregated_mode = DisaggregatedMode::None;
+    std::unique_ptr<Context> res(new Context());
+    res->setGlobalContext(*res);
+    res->runtime_components_factory = runtime_components_factory;
+    res->shared = std::make_shared<ContextShared>(runtime_components_factory);
+    res->shared->ctx_disagg = SharedContextDisagg::create(*res);
+    res->quota = std::make_shared<QuotaForIntervals>();
+    res->timezone_info.init();
     return res;
 }
 
-Context Context::createGlobal()
+std::unique_ptr<Context> Context::createGlobal()
 {
     return createGlobal(std::make_unique<RuntimeComponentsFactory>());
 }
@@ -1753,52 +1750,10 @@ UniversalPageStoragePtr Context::getWriteNodePageStorage() const
     }
 }
 
-void Context::initializeReadNodePageCacheIfNeed(const PathPool & path_pool, const String & cache_dir, size_t cache_capacity)
+SharedContextDisaggPtr Context::getSharedContextDisagg() const
 {
-    auto lock = getLock();
-    if (shared->rn_page_cache)
-    {
-        LOG_WARNING(shared->log, "RN Page Cache has already been initialized.");
-        return;
-    }
-
-    try
-    {
-        PSDiskDelegatorPtr delegator;
-        if (!cache_dir.empty())
-        {
-            delegator = path_pool.getPSDiskDelegatorFixedDirectory(cache_dir);
-            LOG_INFO(shared->log, "Initialize Read Node page cache in cache directory. path={} capacity={}", cache_dir, cache_capacity);
-        }
-        else
-        {
-            delegator = path_pool.getPSDiskDelegatorGlobalMulti(PathPool::read_node_cache_path_prefix);
-            LOG_INFO(shared->log, "Initialize Read Node page cache in data directory. capacity={}", cache_capacity);
-        }
-
-        PageStorageConfig config;
-        shared->ps_rn_page_cache = UniversalPageStorageService::create( //
-            *this,
-            "read_cache",
-            delegator,
-            config);
-        shared->rn_page_cache = DM::Remote::RNLocalPageCache::create({
-            .underlying_storage = shared->ps_rn_page_cache->getUniversalPageStorage(),
-            .max_size_bytes = cache_capacity,
-        });
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        throw;
-    }
-}
-
-DM::Remote::RNLocalPageCachePtr Context::getReadNodePageCache() const
-{
-    auto lock = getLock();
-    RUNTIME_CHECK(shared->rn_page_cache != nullptr);
-    return shared->rn_page_cache;
+    RUNTIME_CHECK(shared->ctx_disagg != nullptr); // We always initialize the shared context in createGlobal()
+    return shared->ctx_disagg;
 }
 
 UInt16 Context::getTCPPort() const
@@ -1845,58 +1800,6 @@ QueryLog * Context::getQueryLog()
     }
 
     return system_logs->query_log.get();
-}
-
-
-void Context::setMaxTableSizeToDrop(size_t max_size)
-{
-    // Is initialized at server startup
-    shared->max_table_size_to_drop = max_size;
-}
-
-void Context::checkTableCanBeDropped(const String & database, const String & table, size_t table_size)
-{
-    size_t max_table_size_to_drop = shared->max_table_size_to_drop;
-
-    if (!max_table_size_to_drop || table_size <= max_table_size_to_drop)
-        return;
-
-    Poco::File force_file(getFlagsPath() + "force_drop_table");
-    bool force_file_exists = force_file.exists();
-
-    if (force_file_exists)
-    {
-        try
-        {
-            force_file.remove();
-            return;
-        }
-        catch (...)
-        {
-            /// User should recreate force file on each drop, it shouldn't be protected
-            tryLogCurrentException("Drop table check", "Can't remove force file to enable table drop");
-        }
-    }
-
-    String table_size_str = formatReadableSizeWithDecimalSuffix(table_size);
-    String max_table_size_to_drop_str = formatReadableSizeWithDecimalSuffix(max_table_size_to_drop);
-
-    std::string exception_msg = fmt::format("Table {0}.{1} was not dropped.\n"
-                                            "Reason:\n"
-                                            "1. Table size({2}) is greater than max_table_size_to_drop ({3})\n"
-                                            "2. File '{4}' intended to force DROP {5}\n",
-                                            "How to fix this:\n"
-                                            "1. Either increase (or set to zero) max_table_size_to_drop in server config and restart ClickHouse\n"
-                                            "2. Either create forcing file {4} and make sure that ClickHouse has write permission for it.\n"
-                                            "Example:\nsudo touch '{4}' && sudo chmod 666 '{4}'",
-                                            backQuoteIfNeed(database),
-                                            backQuoteIfNeed(table),
-                                            table_size_str,
-                                            max_table_size_to_drop_str,
-                                            force_file.path(),
-                                            (force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist"));
-
-    throw Exception(exception_msg, ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT);
 }
 
 
@@ -1978,16 +1881,6 @@ String Context::getFormatSchemaPath() const
 void Context::setFormatSchemaPath(const String & path)
 {
     shared->format_schema_path = path;
-}
-
-void Context::setUseL0Opt(bool use_l0)
-{
-    use_l0_opt = use_l0;
-}
-
-bool Context::useL0Opt() const
-{
-    return use_l0_opt;
 }
 
 SharedQueriesPtr Context::getSharedQueries()

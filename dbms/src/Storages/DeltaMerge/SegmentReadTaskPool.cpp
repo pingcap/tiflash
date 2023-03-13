@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 

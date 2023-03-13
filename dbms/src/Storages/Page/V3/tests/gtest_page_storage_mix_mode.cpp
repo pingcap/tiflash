@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Interpreters/Context.h>
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
@@ -19,8 +20,8 @@
 #include <Storages/Page/WriteBatchWrapperImpl.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 #include <fmt/ranges.h>

@@ -17,6 +17,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/S3/S3Filename.h>
+#include <common/types.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
 
@@ -346,6 +347,25 @@ S3Filename S3Filename::newCheckpointData(StoreID store_id, UInt64 upload_seq, UI
         .store_id = store_id,
         .data_subpath = fmt::format(details::fmt_subpath_checkpoint_data, fmt::arg("seq", upload_seq), fmt::arg("index", file_idx)),
     };
+}
+
+String S3Filename::newCheckpointDataNameTemplate(StoreID store_id, UInt64 lock_seq)
+{
+    return fmt::format(
+        details::fmt_lock_file,
+        fmt::arg("store_id", store_id),
+        fmt::arg("subpath", details::fmt_subpath_checkpoint_data), // available placeholder `seq`, `index`
+        fmt::arg("lock_store", store_id),
+        fmt::arg("lock_seq", lock_seq));
+}
+
+String S3Filename::newCheckpointManifestNameTemplate(StoreID store_id)
+{
+    return fmt::format(
+        details::fmt_manifest,
+        fmt::arg("store_id", store_id),
+        fmt::arg("subpath", details::fmt_subpath_manifest) // available placeholder `seq`
+    );
 }
 
 S3Filename S3Filename::newCheckpointManifest(StoreID store_id, UInt64 upload_seq)

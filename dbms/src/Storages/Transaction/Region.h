@@ -193,6 +193,7 @@ public:
     raft_serverpb::MergeState getMergeState() const;
 
     TableID getMappedTableID() const;
+    KeyspaceID getKeyspaceID() const;
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
     void finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term);
 
@@ -231,6 +232,7 @@ private:
     LoggerPtr log;
 
     const TableID mapped_table_id;
+    const KeyspaceID keyspace_id;
 
     std::atomic<UInt64> snapshot_event_flag{1};
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};

@@ -19,7 +19,7 @@
 #include <Debug/MockExecutor/WindowBinder.h>
 #include <Debug/MockStorage.h>
 #include <Debug/dbgQueryCompiler.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTFunction.h>
 #include <Storages/Transaction/Collator.h>
 #include <tipb/executor.pb.h>
@@ -129,7 +129,8 @@ public:
     /// @param other_conds other conditional expressions
     /// @param other_eq_conds_from_in equality expressions within in subquery whose join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
     /// @param fine_grained_shuffle_stream_count decide the generated tipb executor's find_grained_shuffle_stream_count
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds, MockAstVec right_conds, MockAstVec other_conds, MockAstVec other_eq_conds_from_in, uint64_t fine_grained_shuffle_stream_count = 0);
+    /// @param is_null_aware_semi_join indicates whether to use null-aware semi join and join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds, MockAstVec right_conds, MockAstVec other_conds, MockAstVec other_eq_conds_from_in, uint64_t fine_grained_shuffle_stream_count = 0, bool is_null_aware_semi_join = false);
     DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, uint64_t fine_grained_shuffle_stream_count = 0)
     {
         return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count);
@@ -169,10 +170,10 @@ private:
 class MockDAGRequestContext
 {
 public:
-    explicit MockDAGRequestContext(Context context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
+    explicit MockDAGRequestContext(ContextPtr context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
         : index(0)
         , context(context_)
-        , collation(-abs(collation_))
+        , collation(convertToTiDBCollation(collation_))
     {
     }
 
@@ -230,7 +231,7 @@ public:
     // but we need it to contruct the TaskMeta.
     // In TiFlash, we use task_id to identify an Mpp Task.
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
-    Context context;
+    ContextPtr context;
     Int32 collation;
 };
 

@@ -19,12 +19,12 @@ namespace DB
 {
 namespace tests
 {
-TEST(RedactLog_test, Basic)
+TEST(RedactLogTest, Basic)
 {
     const char * test_key = "\x01\x0a\xff";
     const size_t key_sz = strlen(test_key);
 
-    const DB::HandleID test_handle = 10009;
+    const /*DB::HandleID*/ Int64 test_handle = 10009;
 
     Redact::setRedactLog(false);
     EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "010AFF");

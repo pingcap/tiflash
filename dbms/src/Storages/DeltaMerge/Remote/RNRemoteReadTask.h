@@ -252,8 +252,6 @@ public:
     const String address;
 
 private:
-    Remote::RNLocalPageCachePtr page_cache;
-
     // The snapshot of reading ids acquired from write node
     std::vector<UInt64> delta_page_ids;
     std::vector<UInt64> stable_files;

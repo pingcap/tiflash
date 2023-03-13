@@ -17,6 +17,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Databases/IDatabase.h>
 #include <Debug/MockTiDB.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/IAST.h>
@@ -97,7 +98,7 @@ public:
         auto schema_syncer = flash_ctx.getSchemaSyncer();
         try
         {
-            schema_syncer->syncSchemas(global_ctx);
+            schema_syncer->syncSchemas(global_ctx, NullspaceID);
         }
         catch (Exception & e)
         {
@@ -124,7 +125,7 @@ public:
     {
         auto & flash_ctx = global_ctx.getTMTContext();
         auto & flash_storages = flash_ctx.getStorages();
-        auto tbl = flash_storages.get(table_id);
+        auto tbl = flash_storages.get(NullspaceID, table_id);
         RUNTIME_CHECK_MSG(tbl, "Can not find table in TiFlash instance! table_id={}", table_id);
         return tbl;
     }
@@ -136,7 +137,7 @@ public:
         auto & flash_ctx = global_ctx.getTMTContext();
         auto & flash_storages = flash_ctx.getStorages();
         auto mock_tbl = MockTiDB::instance().getTableByName(db_name, tbl_name);
-        auto tbl = flash_storages.get(mock_tbl->id());
+        auto tbl = flash_storages.get(NullspaceID, mock_tbl->id());
         RUNTIME_CHECK_MSG(tbl, "Can not find table in TiFlash instance! db_name={}, tbl_name={}", db_name, tbl_name);
         return tbl;
     }
@@ -168,7 +169,7 @@ public:
 private:
     static void recreateMetadataPath()
     {
-        String path = TiFlashTestEnv::getContext().getPath();
+        String path = TiFlashTestEnv::getContext()->getPath();
         auto p = path + "/metadata/";
         TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
         p = path + "/data/";

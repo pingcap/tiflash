@@ -210,8 +210,7 @@ int CLIService<Func, Args>::main(const std::vector<std::string> &)
         proxy_runner.join();
     });
 
-    global_context = std::make_unique<Context>(Context::createGlobal());
-    global_context->setGlobalContext(*global_context);
+    global_context = Context::createGlobal();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
 
     /// Init File Provider

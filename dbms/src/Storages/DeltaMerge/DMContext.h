@@ -89,7 +89,7 @@ struct DMContext : private boost::noncopyable
 
     String tracing_id;
 
-    ScanContextPtr scan_context;
+    const ScanContextPtr scan_context;
 
 public:
     DMContext(const Context & db_context_,
@@ -129,8 +129,9 @@ public:
     {
     }
 
-    WriteLimiterPtr getWriteLimiter() const { return db_context.getWriteLimiter(); }
-    ReadLimiterPtr getReadLimiter() const { return db_context.getReadLimiter(); }
+    WriteLimiterPtr getWriteLimiter() const;
+    ReadLimiterPtr getReadLimiter() const;
+
     DM::DMConfigurationOpt createChecksumConfig() const
     {
         return DMChecksumConfig::fromDBContext(db_context);

@@ -175,6 +175,8 @@ StoragePathPool::StoragePathPool(StoragePathPool && rhs) noexcept
     , shutdown_called(rhs.shutdown_called.load())
     , global_capacity(std::move(rhs.global_capacity))
     , file_provider(std::move(rhs.file_provider))
+    , s3_stable_path(std::move(rhs.s3_stable_path))
+    , s3_file_ids(std::move(rhs.s3_file_ids))
     , log(std::move(rhs.log))
 {}
 
@@ -191,6 +193,8 @@ StoragePathPool & StoragePathPool::operator=(StoragePathPool && rhs)
         shutdown_called = rhs.shutdown_called.load();
         global_capacity.swap(rhs.global_capacity);
         file_provider.swap(rhs.file_provider);
+        s3_stable_path.swap(rhs.s3_stable_path);
+        s3_file_ids.swap(rhs.s3_file_ids);
         log.swap(rhs.log);
     }
     return *this;
@@ -516,6 +520,27 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
     pool.global_capacity->addUsedSize(path, file_size);
 }
 
+bool StableDiskDelegator::updateDTFileSize(UInt64 file_id, size_t file_size)
+{
+    std::lock_guard lock{pool.mutex};
+    auto iter = pool.dt_file_path_map.find(file_id);
+    if (iter == pool.dt_file_path_map.end())
+    {
+        return false;
+    }
+    auto index = iter->second;
+    auto it = pool.main_path_infos[index].file_size_map.find(file_id);
+    if (it == pool.main_path_infos[index].file_size_map.end())
+    {
+        return false;
+    }
+    const auto origin_file_size = it->second;
+    it->second = file_size;
+    // update global used size
+    pool.global_capacity->addUsedSize(pool.main_path_infos[index].path, file_size - origin_file_size);
+    return true;
+}
+
 void StableDiskDelegator::removeDTFile(UInt64 file_id)
 {
     std::lock_guard lock{pool.mutex};
@@ -529,6 +554,25 @@ void StableDiskDelegator::removeDTFile(UInt64 file_id)
     pool.global_capacity->freeUsedSize(pool.main_path_infos[index].path, file_size);
 }
 
+void StableDiskDelegator::addS3DTFiles(const String & s3_stable_path_, std::set<UInt64> && file_ids_)
+{
+    RUNTIME_CHECK(!s3_stable_path_.empty(), s3_stable_path_);
+    RUNTIME_CHECK(pool.s3_stable_path.empty() && pool.s3_file_ids.empty(), pool.s3_stable_path); // Can only `addS3DTFiles` one time.
+    pool.s3_stable_path = s3_stable_path_;
+    pool.s3_file_ids = std::move(file_ids_);
+}
+
+String StableDiskDelegator::getS3DTFile(UInt64 file_id)
+{
+    auto iter = pool.s3_file_ids.find(file_id);
+    RUNTIME_CHECK_MSG(iter != pool.s3_file_ids.end(), "file_id={} is not a DMFile in S3", file_id);
+    return pool.s3_stable_path;
+}
+
+void StableDiskDelegator::addS3DTFileSize(UInt64 /*file_id*/, size_t /*size*/)
+{
+    // TODO: support S3.
+}
 //==========================================================================================
 // Delta data
 //==========================================================================================

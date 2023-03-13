@@ -17,7 +17,6 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
-#include <Interpreters/Context.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -38,7 +37,6 @@ protected:
 
 public:
     TestChunkDecodeAndSquash()
-        : context(TiFlashTestEnv::getContext())
     {}
 
     static Block squashBlocks(std::vector<Block> & blocks)
@@ -165,7 +163,6 @@ public:
         Block decoded_block = squashBlocks(decoded_blocks);
         ASSERT_BLOCK_EQ(reference_block, decoded_block);
     }
-    Context context;
 };
 
 TEST_F(TestChunkDecodeAndSquash, testDecodeAndSquash)

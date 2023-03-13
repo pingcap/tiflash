@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #include <Common/setThreadName.h>
+#include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/Management/ManualCompact.h>
 #include <Flash/ServiceUtils.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -31,18 +33,19 @@ namespace Management
 ManualCompactManager::ManualCompactManager(const Context & global_context_, const Settings & settings_)
     : global_context(global_context_.getGlobalContext())
     , settings(settings_)
-    , log(&Poco::Logger::get("ManualCompactManager"))
+    , log(Logger::get("ManualCompactManager"))
 {
-    worker_pool = std::make_unique<ThreadPool>(static_cast<size_t>(settings.manual_compact_pool_size), [] { setThreadName("m-compact-pool"); });
+    worker_pool = std::make_unique<legacy::ThreadPool>(static_cast<size_t>(settings.manual_compact_pool_size), [] { setThreadName("m-compact-pool"); });
 }
 
 grpc::Status ManualCompactManager::handleRequest(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
 {
+    auto ks_tbl_id = KeyspaceTableID{RequestUtils::deriveKeyspaceID(*request), request->logical_table_id()};
     {
         std::lock_guard lock(mutex);
 
         // Check whether there are duplicated executions.
-        if (unsync_active_logical_table_ids.count(request->logical_table_id()))
+        if (unsync_active_logical_table_ids.count(ks_tbl_id))
         {
             response->mutable_error()->mutable_err_compact_in_progress();
             response->set_has_remaining(false);
@@ -57,12 +60,12 @@ grpc::Status ManualCompactManager::handleRequest(const ::kvrpcpb::CompactRequest
             return grpc::Status::OK;
         }
 
-        unsync_active_logical_table_ids.insert(request->logical_table_id());
+        unsync_active_logical_table_ids.insert(ks_tbl_id);
         unsync_running_or_pending_tasks++;
     }
     SCOPE_EXIT({
         std::lock_guard lock(mutex);
-        unsync_active_logical_table_ids.erase(request->logical_table_id());
+        unsync_active_logical_table_ids.erase(ks_tbl_id);
         unsync_running_or_pending_tasks--;
     });
 
@@ -100,7 +103,8 @@ grpc::Status ManualCompactManager::doWorkWithCatch(const ::kvrpcpb::CompactReque
 grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
 {
     const auto & tmt_context = global_context.getTMTContext();
-    auto storage = tmt_context.getStorages().get(request->physical_table_id());
+    const auto keyspace_id = RequestUtils::deriveKeyspaceID(*request);
+    auto storage = tmt_context.getStorages().get(keyspace_id, request->physical_table_id());
     if (storage == nullptr)
     {
         response->mutable_error()->mutable_err_physical_table_not_exist();
@@ -162,7 +166,8 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
 
     Stopwatch timer;
 
-    LOG_INFO(log, "Manual compaction begin for table {}, start_key = {}", request->physical_table_id(), start_key.toDebugString());
+    auto ks_log = log->getChild(fmt::format("keyspace={}", keyspace_id));
+    LOG_INFO(ks_log, "Manual compaction begin for table {}, start_key = {}", request->physical_table_id(), start_key.toDebugString());
 
     // Repeatedly merge multiple segments as much as possible.
     while (true)
@@ -196,11 +201,19 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
 
     if (unlikely(has_remaining && (compacted_start_key == std::nullopt || compacted_end_key == std::nullopt || compacted_segments == 0)))
     {
-        LOG_ERROR(log, "Assert failed: has_remaining && (compacted_start_key == std::nullopt || compacted_end_key == std::nullopt || compacted_segments == 0)");
+        LOG_ERROR(ks_log, "Assert failed: has_remaining && (compacted_start_key == std::nullopt || compacted_end_key == std::nullopt || compacted_segments == 0)");
         throw Exception("Assert failed", ErrorCodes::LOGICAL_ERROR);
     }
 
-    LOG_INFO(log, "Manual compaction finished for table {}, compacted_start_key = {}, compacted_end_key = {}, has_remaining = {}, compacted_segments = {}, elapsed_ms = {}", request->physical_table_id(), compacted_start_key ? compacted_start_key->toDebugString() : "(null)", compacted_end_key ? compacted_end_key->toDebugString() : "(null)", has_remaining, compacted_segments, timer.elapsedMilliseconds());
+    LOG_INFO(
+        ks_log,
+        "Manual compaction finished for table {}, compacted_start_key = {}, compacted_end_key = {}, has_remaining = {}, compacted_segments = {}, elapsed_ms = {}",
+        request->physical_table_id(),
+        compacted_start_key ? compacted_start_key->toDebugString() : "(null)",
+        compacted_end_key ? compacted_end_key->toDebugString() : "(null)",
+        has_remaining,
+        compacted_segments,
+        timer.elapsedMilliseconds());
 
     response->clear_error();
     response->set_has_remaining(has_remaining);

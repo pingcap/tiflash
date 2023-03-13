@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
+#include <Encryption/PosixRandomAccessFile.h>
+#include <Flash/Disaggregated/MockS3LockClient.h>
+#include <Flash/Disaggregated/S3LockClient.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadBufferFromRandomAccessFile.h>
 #include <IO/WriteBufferFromWritableFile.h>
 #include <IO/copyData.h>
 #include <Storages/Page/V3/BlobStore.h>
@@ -22,11 +28,14 @@
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3WritableFile.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <aws/s3/model/DeleteBucketRequest.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -35,21 +44,25 @@ namespace PS::universal::tests
 class UniPageStorageRemoteReadTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
+    UniPageStorageRemoteReadTest()
+        : log(Logger::get())
+    {}
+
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
         auto path = getTemporaryPath();
         remote_dir = path;
         createIfNotExist(path);
-        file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
+        file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         s3_client = S3::ClientFactory::instance().sharedClient();
         bucket = S3::ClientFactory::instance().bucket();
+
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
+
         page_storage = UniversalPageStorage::create("write", delegator, config, file_provider, s3_client, bucket);
         page_storage->restore();
-
-        log = Logger::get("UniPageStorageRemoteReadTest");
-        ASSERT_TRUE(createBucketIfNotExist());
     }
 
     void reload()
@@ -80,35 +93,13 @@ public:
     }
 
 protected:
-    bool createBucketIfNotExist()
-    {
-        Aws::S3::Model::CreateBucketRequest request;
-        request.SetBucket(bucket);
-        auto outcome = s3_client->CreateBucket(request);
-        if (outcome.IsSuccess())
-        {
-            LOG_DEBUG(log, "Created bucket {}", bucket);
-        }
-        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
-        {
-            LOG_DEBUG(log, "Bucket {} already exist", bucket);
-        }
-        else
-        {
-            const auto & err = outcome.GetError();
-            LOG_ERROR(log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
-        }
-        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
-    }
-
     void deleteBucket()
     {
-        Aws::S3::Model::DeleteBucketRequest request;
-        request.SetBucket(bucket);
-        s3_client->DeleteBucket(request);
+        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client, bucket);
     }
 
 protected:
+    StoreID test_store_id = 1234;
     String remote_dir;
     FileProviderPtr file_provider;
     PSDiskDelegatorPtr delegator;
@@ -146,8 +137,9 @@ try
     uploadFile(remote_dir, "data_1");
     uploadFile(remote_dir, "manifest_foo");
 
+    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
-        .file_path = remote_dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     PS::V3::CheckpointProto::StringsInternMap im;
@@ -157,8 +149,9 @@ try
         ASSERT_EQ(1, r.size());
 
         UniversalWriteBatch wb;
+        wb.disableRemoteLock();
         wb.putPage(r[0].page_id, 0, "local data");
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info->data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -205,8 +198,9 @@ try
     uploadFile(remote_dir, "data_1");
     uploadFile(remote_dir, "manifest_foo");
 
+    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
-        .file_path = remote_dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     PS::V3::CheckpointProto::StringsInternMap im;
@@ -216,7 +210,8 @@ try
         ASSERT_EQ(1, r.size());
 
         UniversalWriteBatch wb;
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info->data_location, std::move(r[0].entry.field_offsets));
+        wb.disableRemoteLock();
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -272,8 +267,9 @@ try
     uploadFile(remote_dir, "data_1");
     uploadFile(remote_dir, "manifest_foo");
 
+    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
-        .file_path = remote_dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     PS::V3::CheckpointProto::StringsInternMap im;
@@ -283,8 +279,9 @@ try
         ASSERT_EQ(2, r.size());
 
         UniversalWriteBatch wb;
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info->data_location, std::move(r[0].entry.field_offsets));
-        wb.putRemotePage(r[1].page_id, 0, r[1].entry.checkpoint_info->data_location, std::move(r[1].entry.field_offsets));
+        wb.disableRemoteLock();
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[1].page_id, 0, r[1].entry.checkpoint_info.data_location, std::move(r[1].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -320,6 +317,7 @@ try
     auto edits = PS::V3::universal::PageEntriesEdit{};
     {
         UniversalWriteBatch wb;
+        wb.disableRemoteLock();
         wb.putPage("page_foo", 0, "The flower carriage rocked", {4, 10, 12});
         auto blob_store_edits = blob_store.write(std::move(wb), nullptr);
 
@@ -344,8 +342,9 @@ try
     uploadFile(remote_dir, "data_1");
     uploadFile(remote_dir, "manifest_foo");
 
+    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
-        .file_path = remote_dir + "/manifest_foo",
+        .plain_file = manifest_file,
     });
     manifest_reader->readPrefix();
     PS::V3::CheckpointProto::StringsInternMap im;
@@ -355,7 +354,8 @@ try
         ASSERT_EQ(1, r.size());
 
         UniversalWriteBatch wb;
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info->data_location, std::move(r[0].entry.field_offsets));
+        wb.disableRemoteLock();
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -374,6 +374,39 @@ try
         ASSERT_EQ("The ", String(fields0_buf.begin(), fields0_buf.size()));
         auto fields3_buf = page.getFieldData(2);
         ASSERT_EQ("riage rocked", String(fields3_buf.begin(), fields3_buf.size()));
+    }
+}
+CATCH
+
+TEST_F(UniPageStorageRemoteReadTest, WriteReadExternal)
+try
+{
+    UniversalPageId page_id{"aaabbb"};
+    {
+        UniversalWriteBatch wb;
+        wb.disableRemoteLock();
+        PS::V3::CheckpointLocation data_location{
+            .data_file_id = std::make_shared<String>("nahida opened her eyes"),
+            .offset_in_file = 0,
+            .size_in_file = 0,
+        };
+        wb.putRemoteExternal(page_id, data_location);
+        page_storage->write(std::move(wb));
+    }
+
+    {
+        auto location = page_storage->getCheckpointLocation(page_id);
+        ASSERT_TRUE(location.has_value());
+        ASSERT_EQ(*(location->data_file_id), "nahida opened her eyes");
+    }
+
+    // restart and do another read
+    reload();
+
+    {
+        auto location = page_storage->getCheckpointLocation(page_id);
+        ASSERT_TRUE(location.has_value());
+        ASSERT_EQ(*(location->data_file_id), "nahida opened her eyes");
     }
 }
 CATCH

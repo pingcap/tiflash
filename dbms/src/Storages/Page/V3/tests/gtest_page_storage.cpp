@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include <Common/SyncPoint/Ctl.h>
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Encryption/RateLimiter.h>
+#include <Interpreters/Context.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage.h>
@@ -32,9 +32,9 @@
 #include <Storages/Page/V3/tests/gtest_page_storage.h>
 #include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/MockReadLimiter.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
 
@@ -1801,7 +1801,7 @@ CATCH
 TEST_F(PageStorageTest, ReloadConfig)
 try
 {
-    auto & global_context = DB::tests::TiFlashTestEnv::getContext().getGlobalContext();
+    auto & global_context = DB::tests::TiFlashTestEnv::getContext()->getGlobalContext();
     auto & settings = global_context.getSettingsRef();
     auto old_dt_page_gc_threshold = settings.dt_page_gc_threshold;
 

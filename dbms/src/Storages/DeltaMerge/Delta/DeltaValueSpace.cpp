@@ -16,6 +16,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
@@ -343,7 +344,13 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         /// Update delta tree
         if (new_delta_index)
+        {
             delta_index = new_delta_index;
+
+            // Indicate that the index with old epoch should not be used anymore.
+            // This is useful in disaggregated mode which will invalidate the delta index cache in RN.
+            delta_index_epoch += 1;
+        }
 
         LOG_DEBUG(log, "Flush end, flush_tasks={} flush_rows={} flush_deletes={} delta={}", flush_task->getTaskNum(), flush_task->getFlushRows(), flush_task->getFlushDeletes(), info());
     }
