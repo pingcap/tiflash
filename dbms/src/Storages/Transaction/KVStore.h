@@ -78,7 +78,7 @@ class RegionPersister;
 class KVStore final : private boost::noncopyable
 {
 public:
-    KVStore(Context & context);
+    explicit KVStore(Context & context);
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
 
     RegionPtr getRegion(RegionID region_id) const;
@@ -108,7 +108,7 @@ public:
         UInt64 index,
         UInt64 term,
         TMTContext & tmt);
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt) const;
 
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
     bool tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);

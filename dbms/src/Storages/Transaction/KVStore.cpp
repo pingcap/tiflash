@@ -57,6 +57,9 @@ KVStore::KVStore(Context & context)
 
 void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
 {
+    if (!region_persister)
+        return;
+
     auto task_lock = genTaskLock();
     auto manage_lock = genRegionWriteLock(task_lock);
 
@@ -175,6 +178,7 @@ void KVStore::tryPersist(RegionID region_id)
     if (region)
     {
         LOG_INFO(log, "Try to persist {}", region->toString(false));
+        RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
         region_persister->persist(*region);
         LOG_INFO(log, "After persisted {}, cache {} bytes", region->toString(false), region->dataSize());
     }
@@ -191,6 +195,7 @@ void KVStore::gcRegionPersistedCache(Seconds gc_persist_period)
     if (now < (last_gc_time.load() + gc_persist_period))
         return;
     last_gc_time = now;
+    RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
     region_persister->gc();
 }
 
@@ -212,6 +217,7 @@ void KVStore::removeRegion(RegionID region_id, bool remove_data, RegionTable & r
         }
     }
 
+    RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
     region_persister->drop(region_id, region_lock);
     LOG_INFO(log, "Persisted [region {}] deleted", region_id);
 
@@ -281,7 +287,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
         tmt);
 }
 
-EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
+EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt) const
 {
     auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
 
@@ -330,6 +336,7 @@ void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes)
 void KVStore::persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller)
 {
     LOG_INFO(log, "Start to persist {}, cache size: {} bytes for `{}`", region.toString(true), region.dataSize(), caller);
+    RUNTIME_CHECK_MSG(region_persister, "try access to region_persister without initialization, stack={}", StackTrace().toString());
     region_persister->persist(region, region_task_lock);
     LOG_DEBUG(log, "Persist {} done", region.toString(false));
 }
@@ -873,6 +880,11 @@ KVStore::~KVStore()
 
 FileUsageStatistics KVStore::getFileUsageStatistics() const
 {
+    if (!region_persister)
+    {
+        return {};
+    }
+
     return region_persister->getFileUsageStatistics();
 }
 
