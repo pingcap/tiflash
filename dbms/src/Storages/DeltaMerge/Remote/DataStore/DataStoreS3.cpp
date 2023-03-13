@@ -146,12 +146,12 @@ IPreparedDMFileTokenPtr DataStoreS3::prepareDMFile(const S3::DMFileOID & oid)
     return std::make_shared<S3PreparedDMFileToken>(file_provider, oid);
 }
 
-DMFilePtr S3PreparedDMFileToken::restore(DMFile::ReadMetaMode read_mode)
+DMFilePtr S3PreparedDMFileToken::restore(DMFile::ReadMetaMode read_mode, UInt64 page_id)
 {
     return DMFile::restore(
         file_provider,
         oid.file_id,
-        oid.file_id,
+        page_id == 0 ? oid.file_id : page_id,
         S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKeyWithPrefix(),
         read_mode);
 }

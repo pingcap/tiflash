@@ -119,6 +119,8 @@ public:
 
     static ColumnFilePersistedPtr deserializeMetadata(const DMContext & context, ReadBuffer & buf, ColumnFileSchemaPtr & last_schema);
 
+    static std::tuple<ColumnFilePersistedPtr, BlockPtr> createFromCheckpoint(const DMContext & context, ReadBuffer & buf, UniversalPageStoragePtr temp_ps, const BlockPtr & last_schema, TableID ns_id, WriteBatches & wbs);
+
     bool mayBeFlushedFrom(ColumnFile * from_file) const override
     {
         // The current ColumnFileTiny may come from a ColumnFileInMemory (which contains data in memory)

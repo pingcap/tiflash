@@ -46,6 +46,13 @@ public:
 
     static StableValueSpacePtr restore(DMContext & context, PageIdU64 id);
 
+    static StableValueSpacePtr createFromCheckpoint( //
+        DMContext & context,
+        UniversalPageStoragePtr temp_ps,
+        TableID ns_id,
+        PageIdU64 stable_id,
+        WriteBatches & wbs);
+
     /**
      * Resets the logger by using the one from the segment.
      * Segment_log is not available when constructing, because usually
@@ -145,6 +152,8 @@ public:
         UInt64 valid_rows;
         UInt64 valid_bytes;
 
+        DMFiles dm_files;
+
         bool is_common_handle;
         size_t rowkey_column_size;
 
@@ -182,7 +191,7 @@ public:
          * DTFiles are not fully included in the segment range will be also included in the result.
          * Note: Out-of-range DTFiles may be produced by logical split.
          */
-        const DMFiles & getDMFiles() const { return stable->getDMFiles(); }
+        const DMFiles & getDMFiles() const { return dm_files; }
 
         /**
          * Return the total number of packs of the underlying DTFiles.
@@ -239,7 +248,7 @@ public:
         LoggerPtr log;
     };
 
-    SnapshotPtr createSnapshot();
+    SnapshotPtr createSnapshot(const Context & db_context, TableID table_id);
 
     void drop(const FileProviderPtr & file_provider);
 

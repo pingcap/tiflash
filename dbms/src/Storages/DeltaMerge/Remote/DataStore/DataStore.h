@@ -31,8 +31,9 @@ public:
 
     /**
      * Restores into a DMFile object. This token will be kept valid when DMFile is valid.
+     * When page_id is 0, will use its file_id as page_id.
      */
-    virtual DMFilePtr restore(DMFile::ReadMetaMode read_mode) = 0;
+    virtual DMFilePtr restore(DMFile::ReadMetaMode read_mode, UInt64 page_id = 0) = 0;
 
 protected:
     // These should be the required information for any kind of DataStore.

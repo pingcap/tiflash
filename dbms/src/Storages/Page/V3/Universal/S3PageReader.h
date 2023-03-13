@@ -38,10 +38,7 @@ using UniversalPageIdAndEntries = std::vector<UniversalPageIdAndEntry>;
 class S3PageReader : private Allocator<false>
 {
 public:
-    explicit S3PageReader(std::shared_ptr<Aws::S3::S3Client> s3_client_, const String & bucket_)
-        : s3_client(s3_client_)
-        , bucket(bucket_)
-    {}
+    explicit S3PageReader();
 
     Page read(const UniversalPageIdAndEntry & page_id_and_entry);
 

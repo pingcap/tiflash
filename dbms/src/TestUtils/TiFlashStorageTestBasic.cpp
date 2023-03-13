@@ -17,7 +17,6 @@
 
 namespace DB::base
 {
-
 void TiFlashStorageTestBasic::reload()
 {
     reload({});

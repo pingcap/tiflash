@@ -1231,6 +1231,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Global PageStorage run mode is {}", magic_enum::enum_name(global_context->getPageStorageRunMode()));
     }
 
+    global_context->getSharedContextDisagg()->initFastAddPeerContext();
+
     if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
         || global_context->getSharedContextDisagg()->notDisaggregatedMode())
     {

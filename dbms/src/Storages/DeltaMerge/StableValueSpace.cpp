@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
@@ -26,6 +27,7 @@
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -108,8 +110,8 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
     for (size_t i = 0; i < size; ++i)
     {
         readIntBinary(page_id, buf);
-
         auto file_id = context.storage_pool->dataReader()->getNormalPageId(page_id);
+
         if (restore_from_s3)
         {
             auto wn_ps = context.db_context.getWriteNodePageStorage();
@@ -129,6 +131,67 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
             RUNTIME_CHECK_MSG(res, "update dt file size failed, path={}", dmfile->path());
             stable->files.push_back(dmfile);
         }
+    }
+
+    stable->valid_rows = valid_rows;
+    stable->valid_bytes = valid_bytes;
+
+    return stable;
+}
+
+StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
+    DMContext & context,
+    UniversalPageStoragePtr temp_ps,
+    TableID ns_id,
+    PageIdU64 stable_id,
+    WriteBatches & wbs)
+{
+    auto stable = std::make_shared<StableValueSpace>(stable_id);
+
+    auto stable_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Meta, ns_id), stable_id);
+    auto page = temp_ps->read(stable_page_id);
+    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+
+    // read stable meta info
+    UInt64 version, valid_rows, valid_bytes, size;
+    {
+        readIntBinary(version, buf);
+        if (version != StableFormat::V1)
+            throw Exception("Unexpected version: " + DB::toString(version));
+
+        readIntBinary(valid_rows, buf);
+        readIntBinary(valid_bytes, buf);
+        readIntBinary(size, buf);
+    }
+
+    for (size_t i = 0; i < size; ++i)
+    {
+        UInt64 page_id;
+        readIntBinary(page_id, buf);
+        auto remote_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id), page_id);
+        auto remote_file_id = temp_ps->getNormalPageId(remote_page_id);
+        auto file_id = UniversalPageIdFormat::getU64ID(remote_file_id);
+        auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
+        const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
+        S3::DMFileOID file_oid{
+            .store_id = lock_key_view.store_id,
+            .table_id = ns_id,
+            .file_id = file_id};
+        RUNTIME_CHECK(lock_key_view.asDataFile().toFullKey() == S3::S3Filename::fromDMFileOID(file_oid).toFullKey());
+        auto data_key = S3::S3Filename::fromDMFileOID(file_oid).toFullKey();
+        auto delegator = context.path_pool->getStableDiskDelegator();
+        auto new_local_page_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        PS::V3::CheckpointLocation loc{
+            .data_file_id = std::make_shared<String>(data_key),
+            .offset_in_file = 0,
+            .size_in_file = 0,
+        };
+        wbs.data.putRemoteExternal(new_local_page_id, loc);
+
+        auto parent_path = S3::S3Filename::fromTableID(lock_key_view.store_id, ns_id).toFullKeyWithPrefix();
+        auto new_dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, new_local_page_id, parent_path, DMFile::ReadMetaMode::all());
+        wbs.writeLogAndData();
+        stable->files.push_back(new_dmfile);
     }
 
     stable->valid_rows = valid_rows;
@@ -330,7 +393,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
 using Snapshot = StableValueSpace::Snapshot;
 using SnapshotPtr = std::shared_ptr<Snapshot>;
 
-SnapshotPtr StableValueSpace::createSnapshot()
+SnapshotPtr StableValueSpace::createSnapshot(const Context & db_context, TableID table_id)
 {
     auto snap = std::make_shared<Snapshot>(this->shared_from_this());
     snap->id = id;
@@ -341,6 +404,28 @@ SnapshotPtr StableValueSpace::createSnapshot()
     {
         auto column_cache = std::make_shared<ColumnCache>();
         snap->column_caches.emplace_back(column_cache);
+    }
+    for (const auto & dmfile : files)
+    {
+        auto remote_data_store = db_context.getSharedContextDisagg()->remote_data_store;
+        if (remote_data_store)
+        {
+            auto wn_ps = db_context.getWriteNodePageStorage();
+            auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, table_id), dmfile->pageId());
+            auto dmfile_loc = wn_ps->getCheckpointLocation(full_page_id);
+            RUNTIME_CHECK(dmfile_loc.has_value());
+            auto lock_key_view = S3::S3FilenameView::fromKey(*(dmfile_loc->data_file_id));
+            auto dtfile_key = lock_key_view.asDataFile();
+            auto file_oid = dtfile_key.getDMFileOID();
+            RUNTIME_CHECK(file_oid.table_id == table_id);
+            auto prepared = remote_data_store->prepareDMFile(file_oid);
+            auto new_dmfile = prepared->restore(DMFile::ReadMetaMode::all(), dmfile->pageId());
+            snap->dm_files.push_back(new_dmfile);
+        }
+        else
+        {
+            snap->dm_files.push_back(dmfile);
+        }
     }
 
     return snap;
@@ -371,9 +456,9 @@ StableValueSpace::Snapshot::getInputStream(
     LOG_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
     SkippableBlockInputStreams streams;
     std::vector<size_t> rows;
-    streams.reserve(stable->files.size());
-    rows.reserve(stable->files.size());
-    for (size_t i = 0; i < stable->files.size(); i++)
+    streams.reserve(dm_files.size());
+    rows.reserve(dm_files.size());
+    for (size_t i = 0; i < dm_files.size(); i++)
     {
         DMFileBlockInputStreamBuilder builder(context.db_context);
         builder
@@ -383,8 +468,8 @@ StableValueSpace::Snapshot::getInputStream(
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size)
             .setReadPacks(read_packs.size() > i ? read_packs[i] : nullptr);
-        streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
-        rows.push_back(stable->files[i]->getRows());
+        streams.push_back(builder.build(dm_files[i], read_columns, rowkey_ranges, context.scan_context));
+        rows.push_back(dm_files[i]->getRows());
     }
     if (need_row_id)
     {

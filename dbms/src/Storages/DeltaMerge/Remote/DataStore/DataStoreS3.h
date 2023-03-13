@@ -72,7 +72,7 @@ public:
 
     ~S3PreparedDMFileToken() override = default;
 
-    DMFilePtr restore(DMFile::ReadMetaMode read_mode) override;
+    DMFilePtr restore(DMFile::ReadMetaMode read_mode, UInt64 page_id) override;
 };
 
 } // namespace DB::DM::Remote

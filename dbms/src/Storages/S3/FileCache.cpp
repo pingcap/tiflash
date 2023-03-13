@@ -47,7 +47,6 @@ extern const int S3_ERROR;
 
 namespace DB
 {
-
 using FileType = FileSegment::FileType;
 
 FileCache::FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)

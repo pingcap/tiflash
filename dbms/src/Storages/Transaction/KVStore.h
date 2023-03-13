@@ -73,6 +73,8 @@ class ReadIndexStressTest;
 struct FileUsageStatistics;
 class PathPool;
 class RegionPersister;
+struct CheckpointInfo;
+using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
@@ -117,6 +119,8 @@ public:
      * Only used in tests. In production we will call preHandleSnapshotToFiles + applyPreHandledSnapshot.
      */
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+
+    void handleIngestCheckpoint(CheckpointInfoPtr checkpoint_info, TMTContext & tmt);
 
     std::vector<DM::ExternalDTFileInfo> preHandleSnapshotToFiles(
         RegionPtr new_region,

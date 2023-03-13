@@ -31,7 +31,6 @@
 
 namespace DB::DM::Remote
 {
-
 /**
  * WNDisaggSnapshotManager holds all snapshots for disaggregated read tasks
  * in the write node. It's a single instance for each TiFlash node.

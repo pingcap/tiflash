@@ -17,7 +17,6 @@
 
 namespace DB::DM
 {
-
 WriteLimiterPtr DMContext::getWriteLimiter() const
 {
     return db_context.getWriteLimiter();

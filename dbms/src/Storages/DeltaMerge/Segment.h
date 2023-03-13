@@ -142,6 +142,35 @@ public:
 
     static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageIdU64 segment_id);
 
+    struct SegmentMetaInfo
+    {
+        SegmentFormat::Version version;
+        UInt64 epoch;
+        RowKeyRange range;
+        PageIdU64 segment_id;
+        PageIdU64 next_segment_id;
+        PageIdU64 delta_id;
+        PageIdU64 stable_id;
+    };
+
+    using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
+    static SegmentMetaInfos readAllSegmentsMetaInfoInRange( //
+        NamespaceId ns_id,
+        const RowKeyRange & target_range,
+        UniversalPageStoragePtr temp_ps);
+
+    // Create a list of temp segments from checkpoint.
+    // The data of these temp segments will be included in `wbs`.
+    static Segments createTargetSegmentsFromCheckpoint( //
+        const LoggerPtr & parent_log,
+        DMContext & context,
+        UInt64 remote_store_id,
+        NamespaceId ns_id,
+        const SegmentMetaInfos & meta_infos,
+        const RowKeyRange & range,
+        UniversalPageStoragePtr temp_ps,
+        WriteBatches & wbs);
+
     void serialize(WriteBatchWrapper & wb);
 
     /// Attach a new ColumnFile into the Segment. The ColumnFile will be added to MemFileSet and flushed to disk later.
@@ -436,6 +465,8 @@ public:
      *         to the PageStorage's data.
      */
     [[nodiscard]] SegmentPtr replaceData(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, SegmentSnapshotPtr segment_snap_opt = nullptr) const;
+
+    [[nodiscard]] SegmentPtr dangerouslyReplaceDataFromCheckpoint(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, WriteBatches & wbs, const ColumnFilePersisteds & column_file_persisteds) const;
 
     [[nodiscard]] SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
 

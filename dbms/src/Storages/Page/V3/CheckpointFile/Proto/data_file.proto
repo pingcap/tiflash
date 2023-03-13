@@ -54,6 +54,7 @@ message DataFileSuffix {
 }
 
 message EntryEditRecord {
+    // Note page_id are not valid utf-8 string. Don't use string type.
     bytes page_id = 1;
     uint64 version_sequence = 2;
     uint64 version_epoch = 3;

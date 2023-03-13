@@ -49,6 +49,7 @@ namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
 extern const char exception_before_dmfile_remove_from_disk[];
+extern const char force_use_dmfile_format_v3[];
 } // namespace FailPoints
 
 namespace DM
@@ -110,6 +111,11 @@ String DMFile::ngcPath() const
 
 DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration, DMFileFormat::Version version)
 {
+    fiu_do_on(FailPoints::force_use_dmfile_format_v3, {
+        // some unit test we need mock upload DMFile to S3, which only support DMFileFormat::V3
+        version = DMFileFormat::V3;
+        LOG_WARNING(Logger::get(), "!!!force use DMFileFormat::V3!!!");
+    });
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(new DMFile(file_id,
                                     file_id,
@@ -596,6 +602,30 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
 
     if (read_meta_mode.needPackStat())
         readPackStat(file_provider, footer.meta_pack_info);
+}
+
+void DMFile::finalizeForRemote(const FileProviderPtr & file_provider)
+{
+    if (unlikely(status != Status::WRITING))
+        throw Exception("Expected WRITING status, now " + statusString(status));
+    Poco::File old_file(path());
+    setStatus(Status::READABLE);
+    auto new_path = path();
+
+    Poco::File file(new_path);
+    if (file.exists())
+    {
+        LOG_WARNING(log, "Existing dmfile, removing: {}", new_path);
+        const String deleted_path = getPathByStatus(parent_path, file_id, Status::DROPPED);
+        // no need to delete the encryption info associated with the dmfile path here.
+        // because this dmfile path is still a valid path and no obsolete encryption info will be left.
+        file.renameTo(deleted_path);
+        file.remove(true);
+        LOG_WARNING(log, "Existing dmfile, removed: {}", deleted_path);
+    }
+    old_file.renameTo(new_path);
+    auto s = readMetaV2(file_provider);
+    parseMetaV2(std::string_view(s.data(), s.size()));
 }
 
 void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter)
