@@ -61,7 +61,7 @@ public:
 
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
 
-        page_storage = UniversalPageStorage::create("write", delegator, config, file_provider, s3_client);
+        page_storage = UniversalPageStorage::create("write", delegator, config, file_provider);
         page_storage->restore();
     }
 
@@ -74,7 +74,7 @@ public:
     {
         auto path = getTemporaryPath();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        auto storage = UniversalPageStorage::create("test.t", delegator, config_, file_provider, s3_client);
+        auto storage = UniversalPageStorage::create("test.t", delegator, config_, file_provider);
         storage->restore();
         return storage;
     }
