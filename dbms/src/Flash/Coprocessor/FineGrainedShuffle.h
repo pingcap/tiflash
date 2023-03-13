@@ -21,6 +21,8 @@ namespace DB
 {
 static constexpr std::string_view enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
 
+static constexpr size_t maxFineGrainedStreamCount = 1024;
+
 inline bool enableFineGrainedShuffle(uint64_t stream_count)
 {
     return stream_count > 0;
