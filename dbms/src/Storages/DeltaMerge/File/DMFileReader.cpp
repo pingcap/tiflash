@@ -31,7 +31,6 @@
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
 
-#include <iterator>
 
 namespace CurrentMetrics
 {

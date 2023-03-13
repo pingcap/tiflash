@@ -2499,7 +2499,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(BitmapFilterPtr && bitma
                                                         UInt64 max_version,
                                                         size_t expected_block_size)
 {
-    // set `is_fast_scan` to true to try to enable clean read
+    // set `is_fast_scan` to true to try to enable clean read to avoid read <handle,del_mark,version> columns
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
     constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
@@ -2540,7 +2540,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
                                                           UInt64 max_version,
                                                           size_t expected_block_size)
 {
-    // set `is_fast_scan` to true to try to enable clean read
+    // set `is_fast_scan` to true to try to enable clean read to avoid read <handle,del_mark,version> columns
     auto enable_handle_clean_read = !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID);
     constexpr auto is_fast_scan = true;
     auto enable_del_clean_read = !hasColumn(columns_to_read, TAG_COLUMN_ID);
