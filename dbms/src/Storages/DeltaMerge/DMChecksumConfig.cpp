@@ -14,9 +14,11 @@
 
 #include <Common/TiFlashException.h>
 #include <IO/ChecksumBuffer.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/FormatVersion.h>
+
 namespace DB::DM
 {
 DMChecksumConfig::DMChecksumConfig(std::istream & input)
@@ -125,7 +127,10 @@ std::optional<DMChecksumConfig> DMChecksumConfig::fromDBContext(const Context & 
     return STORAGE_FORMAT_CURRENT.dm_file >= DMFileFormat::V2
         ? std::make_optional<DM::DMChecksumConfig>(DMChecksumConfig{context})
         : std::nullopt;
-};
+}
+
+DMChecksumConfig::DMChecksumConfig(const Context & context)
+    : DMChecksumConfig({}, context.getSettingsRef().dt_checksum_frame_size.get(), context.getSettingsRef().dt_checksum_algorithm.get()){};
 
 
 } // namespace DB::DM

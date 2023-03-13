@@ -459,6 +459,7 @@ public:
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
     void placeDeltaIndex(DMContext & dm_context);
+    void placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap);
 
     /// Compact the delta layer, merging fragment column files into bigger column files.
     /// It does not merge the delta into stable layer.

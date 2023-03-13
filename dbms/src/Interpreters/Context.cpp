@@ -41,6 +41,7 @@
 #include <Interpreters/Quota.h>
 #include <Interpreters/RuntimeComponentsFactory.h>
 #include <Interpreters/Settings.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/SharedQueries.h>
 #include <Interpreters/SystemLog.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -155,7 +156,6 @@ struct ContextShared
     BackgroundProcessingPoolPtr ps_compact_background_pool; /// The thread pool for the background work performed by the ps v2.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
-    size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
     SharedQueriesPtr shared_queries; /// The cache of shared queries.
@@ -168,6 +168,9 @@ struct ContextShared
 
     /// The PS instance available on Write Node.
     UniversalPageStorageServicePtr ps_write;
+
+    /// Everything related with Disaggregation.
+    SharedContextDisaggPtr ctx_disagg;
 
     TiFlashSecurityConfigPtr security_config;
 
@@ -305,18 +308,19 @@ private:
 Context::Context() = default;
 
 
-Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
+std::unique_ptr<Context> Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
 {
-    Context res;
-    res.runtime_components_factory = runtime_components_factory;
-    res.shared = std::make_shared<ContextShared>(runtime_components_factory);
-    res.quota = std::make_shared<QuotaForIntervals>();
-    res.timezone_info.init();
-    res.disaggregated_mode = DisaggregatedMode::None;
+    std::unique_ptr<Context> res(new Context());
+    res->setGlobalContext(*res);
+    res->runtime_components_factory = runtime_components_factory;
+    res->shared = std::make_shared<ContextShared>(runtime_components_factory);
+    res->shared->ctx_disagg = SharedContextDisagg::create(*res);
+    res->quota = std::make_shared<QuotaForIntervals>();
+    res->timezone_info.init();
     return res;
 }
 
-Context Context::createGlobal()
+std::unique_ptr<Context> Context::createGlobal()
 {
     return createGlobal(std::make_unique<RuntimeComponentsFactory>());
 }
@@ -1450,7 +1454,9 @@ void Context::initializePathCapacityMetric( //
     const Strings & main_data_paths,
     const std::vector<size_t> & main_capacity_quota, //
     const Strings & latest_data_paths,
-    const std::vector<size_t> & latest_capacity_quota)
+    const std::vector<size_t> & latest_capacity_quota,
+    const String & remote_cache_data_path,
+    size_t remote_cache_capacity)
 {
     auto lock = getLock();
     if (shared->path_capacity_ptr)
@@ -1460,7 +1466,9 @@ void Context::initializePathCapacityMetric( //
         main_data_paths,
         main_capacity_quota,
         latest_data_paths,
-        latest_capacity_quota);
+        latest_capacity_quota,
+        remote_cache_data_path,
+        remote_cache_capacity);
 }
 
 PathCapacityMetricsPtr Context::getPathCapacity() const
@@ -1690,6 +1698,11 @@ DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
     return shared->global_storage_pool;
 }
 
+/**
+ * This PageStorage is initialized in two cases:
+ * 1. Not in disaggregated mode.
+ * 2. In disaggregated write mode.
+ */
 void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)
 {
     auto lock = getLock();
@@ -1732,8 +1745,15 @@ UniversalPageStoragePtr Context::getWriteNodePageStorage() const
     }
     else
     {
+        LOG_WARNING(shared->log, "Calling getWriteNodePageStorage() without initialization, stack={}", StackTrace().toString());
         return nullptr;
     }
+}
+
+SharedContextDisaggPtr Context::getSharedContextDisagg() const
+{
+    RUNTIME_CHECK(shared->ctx_disagg != nullptr); // We always initialize the shared context in createGlobal()
+    return shared->ctx_disagg;
 }
 
 UInt16 Context::getTCPPort() const
@@ -1780,58 +1800,6 @@ QueryLog * Context::getQueryLog()
     }
 
     return system_logs->query_log.get();
-}
-
-
-void Context::setMaxTableSizeToDrop(size_t max_size)
-{
-    // Is initialized at server startup
-    shared->max_table_size_to_drop = max_size;
-}
-
-void Context::checkTableCanBeDropped(const String & database, const String & table, size_t table_size)
-{
-    size_t max_table_size_to_drop = shared->max_table_size_to_drop;
-
-    if (!max_table_size_to_drop || table_size <= max_table_size_to_drop)
-        return;
-
-    Poco::File force_file(getFlagsPath() + "force_drop_table");
-    bool force_file_exists = force_file.exists();
-
-    if (force_file_exists)
-    {
-        try
-        {
-            force_file.remove();
-            return;
-        }
-        catch (...)
-        {
-            /// User should recreate force file on each drop, it shouldn't be protected
-            tryLogCurrentException("Drop table check", "Can't remove force file to enable table drop");
-        }
-    }
-
-    String table_size_str = formatReadableSizeWithDecimalSuffix(table_size);
-    String max_table_size_to_drop_str = formatReadableSizeWithDecimalSuffix(max_table_size_to_drop);
-
-    std::string exception_msg = fmt::format("Table {0}.{1} was not dropped.\n"
-                                            "Reason:\n"
-                                            "1. Table size({2}) is greater than max_table_size_to_drop ({3})\n"
-                                            "2. File '{4}' intended to force DROP {5}\n",
-                                            "How to fix this:\n"
-                                            "1. Either increase (or set to zero) max_table_size_to_drop in server config and restart ClickHouse\n"
-                                            "2. Either create forcing file {4} and make sure that ClickHouse has write permission for it.\n"
-                                            "Example:\nsudo touch '{4}' && sudo chmod 666 '{4}'",
-                                            backQuoteIfNeed(database),
-                                            backQuoteIfNeed(table),
-                                            table_size_str,
-                                            max_table_size_to_drop_str,
-                                            force_file.path(),
-                                            (force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist"));
-
-    throw Exception(exception_msg, ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT);
 }
 
 
@@ -1913,16 +1881,6 @@ String Context::getFormatSchemaPath() const
 void Context::setFormatSchemaPath(const String & path)
 {
     shared->format_schema_path = path;
-}
-
-void Context::setUseL0Opt(bool use_l0)
-{
-    use_l0_opt = use_l0;
-}
-
-bool Context::useL0Opt() const
-{
-    return use_l0_opt;
 }
 
 SharedQueriesPtr Context::getSharedQueries()

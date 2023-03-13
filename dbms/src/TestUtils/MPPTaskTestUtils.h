@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Debug/MockComputeServerManager.h>
+#include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
 namespace DB::tests

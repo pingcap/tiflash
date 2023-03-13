@@ -16,7 +16,6 @@
 #include <Functions/minus.h>
 #include <Functions/multiply.h>
 #include <Functions/plus.h>
-#include <Interpreters/Context.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
@@ -56,21 +55,21 @@ TEST(DataTypeDecimal_test, A)
     const ScaleType scale_sum
         = typeid_cast<const DataTypeDecimal64 *>(lhs.get())->getScale() + (typeid_cast<const DataTypeDecimal64 *>(rhs.get()))->getScale();
 
-    Context context = TiFlashTestEnv::getContext();
+    auto context = TiFlashTestEnv::getContext();
     DataTypes args{lhs, rhs};
 
     // Decimal(10, 4) + Decimal(10, 6)
-    FunctionPtr func = FunctionPlus::create(context);
+    FunctionPtr func = FunctionPlus::create(*context);
     DataTypePtr return_type = func->getReturnTypeImpl(args);
     ASSERT_DecimalDataTypeScaleEq(return_type, scale_max);
 
     // Decimal(10, 4) - Decimal(10, 6)
-    func = FunctionMinus::create(context);
+    func = FunctionMinus::create(*context);
     return_type = func->getReturnTypeImpl(args);
     ASSERT_DecimalDataTypeScaleEq(return_type, scale_max);
 
     // Decimal(10, 4) * Decimal(10, 6)
-    func = FunctionMultiply::create(context);
+    func = FunctionMultiply::create(*context);
     return_type = func->getReturnTypeImpl(args);
     ASSERT_DecimalDataTypeScaleEq(return_type, scale_sum);
 }

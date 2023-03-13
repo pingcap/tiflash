@@ -13,7 +13,9 @@
 // limitations under the License.
 
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
+#include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <string_view>
 #if !__clang__
 #pragma GCC diagnostic push
@@ -66,6 +68,10 @@ static String getNormalizedPath(const String & s)
 template <typename T>
 void readConfig(const std::shared_ptr<cpptoml::table> & table, const String & name, T & value)
 {
+#ifndef NDEBUG
+    if (!table->contains_qualified(name))
+        return;
+#endif
     if (auto p = table->get_qualified_as<typename std::remove_reference<decltype(value)>::type>(name); p)
     {
         value = *p;
@@ -203,12 +209,18 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, const Logge
         LOG_WARNING(log, "The configuration \"bg_task_io_rate_limit\" is deprecated. Check [storage.io_rate_limit] section for new style.");
     }
 
-    if (auto version = table->get_qualified_as<UInt64>("format_version"); version)
+    readConfig(table, "format_version", format_version);
+
+    if (auto version = table->get_qualified_as<UInt64>("api_version"); version)
     {
-        format_version = *version;
+        api_version = *version;
     }
 
     auto get_bool_config_or_default = [&](const String & name, bool default_value) {
+#ifndef NDEBUG
+        if (!table->contains_qualified(name))
+            return default_value;
+#endif
         if (auto value = table->get_qualified_as<Int32>(name); value)
         {
             return (*value != 0);
@@ -392,6 +404,11 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
         storage_config.s3_config.parse(config.getString("storage.s3"), log);
     }
 
+    if (config.has("storage.remote.cache"))
+    {
+        storage_config.remote_cache_config.parse(config.getString("storage.remote.cache"), log);
+    }
+
     return std::make_tuple(global_capacity_quota, storage_config);
 }
 
@@ -535,8 +552,8 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     RUNTIME_CHECK(connection_timeout_ms > 0);
     readConfig(table, "request_timeout_ms", request_timeout_ms);
     RUNTIME_CHECK(request_timeout_ms > 0);
-    readConfig(table, "cache_dir", cache_dir);
-    readConfig(table, "cache_capacity", cache_capacity);
+    readConfig(table, "root", root);
+    RUNTIME_CHECK(!root.empty());
 
     auto read_s3_auth_info_from_env = [&]() {
         access_key_id = Poco::Environment::get(S3_ACCESS_KEY_ID, /*default*/ "");
@@ -558,15 +575,12 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     LOG_INFO(
         log,
         "endpoint={} bucket={} max_connections={} connection_timeout_ms={} "
-        "request_timeout_ms={} cache_dir={} cache_capacity={} "
-        "access_key_id_size={}  secret_access_key_size={}",
+        "request_timeout_ms={} access_key_id_size={}  secret_access_key_size={}",
         endpoint,
         bucket,
         max_connections,
         connection_timeout_ms,
         request_timeout_ms,
-        cache_dir,
-        cache_capacity,
         access_key_id.size(),
         secret_access_key.size());
 }
@@ -576,9 +590,63 @@ bool StorageS3Config::isS3Enabled() const
     return !bucket.empty();
 }
 
-bool StorageS3Config::isFileCacheEnabled() const
+void StorageRemoteCacheConfig::parse(const String & content, const LoggerPtr & log)
 {
-    return !cache_dir.empty() && cache_capacity != 0;
+    std::istringstream ss(content);
+    cpptoml::parser p(ss);
+    auto table = p.parse();
+
+    readConfig(table, "dir", dir);
+    readConfig(table, "capacity", capacity);
+    readConfig(table, "dtfile_level", dtfile_level);
+    RUNTIME_CHECK(dtfile_level <= 100);
+    readConfig(table, "dtfile_cache_min_age_seconds", dtfile_cache_min_age_seconds);
+    readConfig(table, "delta_rate", delta_rate);
+    RUNTIME_CHECK(std::isgreaterequal(delta_rate, 0.1) && std::islessequal(delta_rate, 1.0), delta_rate);
+    LOG_INFO(log, "StorageRemoteCacheConfig: dir={}, capacity={}, dtfile_level={}, dtfile_cache_min_age_seconds={}, delta_rate={}", dir, capacity, dtfile_level, dtfile_cache_min_age_seconds, delta_rate);
+}
+
+bool StorageRemoteCacheConfig::isCacheEnabled() const
+{
+    return !dir.empty() && capacity > 0;
+}
+
+void StorageRemoteCacheConfig::initCacheDir() const
+{
+    if (isCacheEnabled())
+    {
+        std::filesystem::create_directories(getDTFileCacheDir());
+        std::filesystem::create_directories(getPageCacheDir());
+    }
+}
+
+String StorageRemoteCacheConfig::getDTFileCacheDir() const
+{
+    if (dir.empty())
+        return "";
+
+    std::filesystem::path cache_root(dir);
+    // {dir}/dtfile
+    return cache_root /= "dtfile";
+}
+String StorageRemoteCacheConfig::getPageCacheDir() const
+{
+    if (dir.empty())
+        return "";
+
+    std::filesystem::path cache_root(dir);
+    // {dir}/page
+    return cache_root /= "page";
+}
+
+UInt64 StorageRemoteCacheConfig::getDTFileCapacity() const
+{
+    return capacity - getPageCapacity();
+}
+
+UInt64 StorageRemoteCacheConfig::getPageCapacity() const
+{
+    return capacity * delta_rate;
 }
 
 } // namespace DB

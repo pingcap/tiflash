@@ -67,6 +67,15 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
+
+    SourceOps readSourceOps(
+        PipelineExecutorStatus & exec_status_,
+        const Names & column_names,
+        const SelectQueryInfo & query_info,
+        const Context & context,
+        size_t max_block_size,
+        unsigned num_streams) override;
+
     DM::Remote::DisaggPhysicalTableReadSnapshotPtr
     writeNodeBuildRemoteReadSnapshot(
         const Names & column_names,

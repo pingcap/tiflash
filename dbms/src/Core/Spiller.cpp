@@ -12,16 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Core/SpillHandler.h>
 #include <Core/Spiller.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/SpilledFilesInputStream.h>
 #include <DataStreams/copyData.h>
+#include <Encryption/FileProvider.h>
 #include <Poco/Path.h>
 
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_spill_to_disk_failpoint[];
+extern const char random_restore_from_disk_failpoint[];
+} // namespace FailPoints
+
 SpilledFile::SpilledFile(const String & file_name_, const FileProviderPtr & file_provider_)
     : Poco::File(file_name_)
     , details(0, 0, 0)
@@ -125,13 +133,12 @@ void Spiller::spillBlocksUsingBlockInputStream(IBlockInputStream & block_in, UIn
 {
     auto spill_handler = createSpillHandler(partition_id);
     block_in.readPrefix();
-    Blocks spill_blocks;
     while (true)
     {
-        spill_blocks = readDataForSpill(block_in, config.max_cached_data_bytes_in_spiller, is_cancelled);
+        auto spill_blocks = readDataForSpill(block_in, config.max_cached_data_bytes_in_spiller, is_cancelled);
         if (spill_blocks.empty())
             break;
-        spill_handler.spillBlocks(spill_blocks);
+        spill_handler.spillBlocks(std::move(spill_blocks));
     }
     if (is_cancelled())
         return;
@@ -175,12 +182,13 @@ SpillHandler Spiller::createSpillHandler(UInt64 partition_id)
     return SpillHandler(this, partition_id);
 }
 
-void Spiller::spillBlocks(const Blocks & blocks, UInt64 partition_id)
+void Spiller::spillBlocks(Blocks && blocks, UInt64 partition_id)
 {
     if (blocks.empty())
         return;
     auto spiller_handler = createSpillHandler(partition_id);
-    spiller_handler.spillBlocks(blocks);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_spill_to_disk_failpoint);
+    spiller_handler.spillBlocks(std::move(blocks));
     spiller_handler.finish();
 }
 
@@ -190,6 +198,7 @@ BlockInputStreams Spiller::restoreBlocks(UInt64 partition_id, UInt64 max_stream_
     RUNTIME_CHECK_MSG(isSpillFinished(), "{}: restore before the spiller is finished.", config.spill_id);
     std::lock_guard partition_lock(spilled_files[partition_id]->spilled_files_mutex);
     RUNTIME_CHECK_MSG(spilled_files[partition_id]->mutable_spilled_files.empty(), "{}: the mutable spilled files must be empty when restore.", config.spill_id);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_restore_from_disk_failpoint);
     auto & partition_spilled_files = spilled_files[partition_id]->immutable_spilled_files;
 
     if (max_stream_size == 0)

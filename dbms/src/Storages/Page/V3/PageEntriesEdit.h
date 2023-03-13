@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/nocopyable.h>
-#include <Storages/Page/Page.h>
 #include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -190,11 +189,12 @@ public:
         records.emplace_back(record);
     }
 
-    void putExternal(const PageId & page_id)
+    void putExternal(const PageId & page_id, const PageEntryV3 & entry = {})
     {
         EditRecord record{};
         record.type = EditRecordType::PUT_EXTERNAL;
         record.page_id = page_id;
+        record.entry = entry;
         records.emplace_back(record);
     }
 
@@ -235,12 +235,13 @@ public:
         records.emplace_back(record);
     }
 
-    void varExternal(const PageId & page_id, const PageVersion & create_ver, Int64 being_ref_count)
+    void varExternal(const PageId & page_id, const PageVersion & create_ver, const PageEntryV3 & entry, Int64 being_ref_count)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_EXTERNAL;
         record.page_id = page_id;
         record.version = create_ver;
+        record.entry = entry;
         record.being_ref_count = being_ref_count;
         records.emplace_back(record);
     }

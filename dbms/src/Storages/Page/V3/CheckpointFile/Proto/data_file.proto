@@ -31,7 +31,7 @@ message DataFilePrefix {
 
     // The first Checkpoint Manifest File ID that contains this data file.
     // The referred manifest file has identical `local_sequence` and `writer_info` apparently.
-    string manifest_file_id = 12;
+    bytes manifest_file_id = 12;
 
     // When data file is too large, one data file will be separated into multiples.
     // This records which one it is.
@@ -54,7 +54,7 @@ message DataFileSuffix {
 }
 
 message EntryEditRecord {
-    string page_id = 1;
+    bytes page_id = 1;
     uint64 version_sequence = 2;
     uint64 version_epoch = 3;
 

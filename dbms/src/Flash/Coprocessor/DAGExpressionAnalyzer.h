@@ -157,10 +157,17 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const JoinKeyTypes & join_key_types,
         Names & key_names,
+        Names & original_key_names,
         bool left,
         bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
+
+    String appendNullAwareSemiJoinEqColumn(
+        ExpressionActionsChain & chain,
+        const Names & probe_key_names,
+        const Names & build_key_names,
+        const TiDB::TiDBCollators & collators);
 
     void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step) const;
 
@@ -283,7 +290,10 @@ private:
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
         const ColumnInfos & table_scan_columns);
 
-    std::pair<bool, Names> buildJoinKey(
+    /// @ret: if some new expression actions are added.
+    /// @key_names: column names of keys.
+    /// @original_key_names: original column names of keys.(only used for null-aware semi join)
+    std::tuple<bool, Names, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const JoinKeyTypes & join_key_types,

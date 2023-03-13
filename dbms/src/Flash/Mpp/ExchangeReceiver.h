@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
-#include <Interpreters/Context.h>
 
 #include <future>
 #include <mutex>

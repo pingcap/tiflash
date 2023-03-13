@@ -29,9 +29,9 @@ class TestDayOfWeekYear : public DB::tests::FunctionTest
 TEST_F(TestDayOfWeekYear, TestDayOfWeek)
 try
 {
-    DAGContext * dag_context = context.getDAGContext();
-    UInt64 ori_flags = dag_context->getFlags();
-    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    auto & dag_context = getDAGContext();
+    UInt64 ori_flags = dag_context.getFlags();
+    dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     /// ColumnVector(nullable)
     const String func_name = "tidbDayOfWeek";
     static auto const nullable_datetime_type_ptr = makeNullable(std::make_shared<DataTypeMyDateTime>(6));
@@ -108,16 +108,16 @@ try
     input_col = ColumnWithTypeAndName(data_col_ptr, date_type_ptr, "input");
     output_col = createColumn<Nullable<UInt16>>({5, 1, 2, 3, 4, 5, 6, 7});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
-    dag_context->setFlags(ori_flags);
+    dag_context.setFlags(ori_flags);
 }
 CATCH
 
 TEST_F(TestDayOfWeekYear, TestDayOfYear)
 try
 {
-    DAGContext * dag_context = context.getDAGContext();
-    UInt64 ori_flags = dag_context->getFlags();
-    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    auto & dag_context = getDAGContext();
+    UInt64 ori_flags = dag_context.getFlags();
+    dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     /// ColumnVector(nullable)
     const String func_name = "tidbDayOfYear";
     static auto const nullable_datetime_type_ptr = makeNullable(std::make_shared<DataTypeMyDateTime>(6));
@@ -203,7 +203,7 @@ try
     input_col = ColumnWithTypeAndName(data_col_ptr, date_type_ptr, "input");
     output_col = createColumn<Nullable<UInt16>>({2, 72, 73, 74, 75, 76, 77, 78, 365, 366, 365});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
-    dag_context->setFlags(ori_flags);
+    dag_context.setFlags(ori_flags);
 }
 CATCH
 
