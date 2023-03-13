@@ -1215,21 +1215,35 @@ template <typename Method, typename Table>
 void NO_INLINE Aggregator::convertToBlocksImplFinal(
     Method & method,
     Table & data,
-    std::vector<std::vector<IColumn *>> key_columns_vec,
+    std::vector<std::vector<IColumn *>> && key_columns_vec,
     std::vector<MutableColumns> & final_aggregate_columns_vec,
     Arena * arena) const
 {
     assert(!key_columns_vec.empty());
     auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns_vec[0], key_sizes);
+    for (size_t i = 1; i < key_columns_vec.size(); i++)
+    {
+        auto new_key_sizes = method.shuffleKeyColumns(key_columns_vec[i], key_sizes);
+        assert(shuffled_key_sizes == new_key_sizes);
+    }
     const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
-    AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
-    agg_keys_helper.initAggKeys(data.size(), key_columns_vec[0]);
+    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<Method>>> agg_keys_helpers;
+    size_t block_row_count = params.max_block_size;
+    size_t total_row_count = data.size();
+    for (size_t i = 0; i < key_columns_vec.size(); i++)
+    {
+        if (i == key_columns_vec.size() - 1 && total_row_count % block_row_count != 0)
+            /// update block_row_count for the last block
+            block_row_count = total_row_count % block_row_count;
+        agg_keys_helpers.push_back(std::make_unique<AggregatorMethodInitKeyColumnHelper<Method>>(method));
+        agg_keys_helpers.back()->initAggKeys(block_row_count, key_columns_vec[i]);
+    }
 
     size_t data_index = 0;
     data.forEachValue([&](const auto & key, auto & mapped) {
         size_t key_columns_vec_index = data_index / params.max_block_size;
-        agg_keys_helper.insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
+        agg_keys_helpers[key_columns_vec_index]->insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
         insertAggregatesIntoColumns(mapped, final_aggregate_columns_vec[key_columns_vec_index], arena);
         data_index++;
     });
@@ -1263,19 +1277,33 @@ template <typename Method, typename Table>
 void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
     Method & method,
     Table & data,
-    std::vector<std::vector<IColumn *>> key_columns_vec,
+    std::vector<std::vector<IColumn *>> && key_columns_vec,
     std::vector<AggregateColumnsData> & aggregate_columns_vec) const
 {
     auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns_vec[0], key_sizes);
+    for (size_t i = 1; i < key_columns_vec.size(); i++)
+    {
+        auto new_key_sizes = method.shuffleKeyColumns(key_columns_vec[i], key_sizes);
+        assert(shuffled_key_sizes == new_key_sizes);
+    }
     const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
-    AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
-    agg_keys_helper.initAggKeys(data.size(), key_columns_vec[0]);
+    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<Method>>> agg_keys_helpers;
+    size_t block_row_count = params.max_block_size;
+    size_t total_row_count = data.size();
+    for (size_t i = 0; i < key_columns_vec.size(); i++)
+    {
+        if (i == key_columns_vec.size() - 1 && total_row_count % block_row_count != 0)
+            /// update block_row_count for the last block
+            block_row_count = total_row_count % block_row_count;
+        agg_keys_helpers.push_back(std::make_unique<AggregatorMethodInitKeyColumnHelper<Method>>(method));
+        agg_keys_helpers.back()->initAggKeys(block_row_count, key_columns_vec[i]);
+    }
 
     size_t data_index = 0;
     data.forEachValue([&](const auto & key, auto & mapped) {
         size_t key_columns_vec_index = data_index / params.max_block_size;
-        agg_keys_helper.insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
+        agg_keys_helpers[key_columns_vec_index]->insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
 
         /// reserved, so push_back does not throw exceptions
         for (size_t i = 0; i < params.aggregates_size; ++i)
