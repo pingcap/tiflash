@@ -602,11 +602,18 @@ S3GCManagerService::~S3GCManagerService()
 
 void S3GCManagerService::shutdown()
 {
-    manager->shutdown();
+    if (manager)
+    {
+        // set the shutdown flag
+        manager->shutdown();
+    }
+
     if (timer)
     {
+        // Remove the task handler. It will block until the task break
         global_ctx.getBackgroundPool().removeTask(timer);
         timer = nullptr;
+        // then we can reset the manager
         manager = nullptr;
     }
 }

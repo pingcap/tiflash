@@ -66,7 +66,7 @@ void SchemaSyncService::addKeyspaceGCTasks()
             auto ks_log = log->getChild(fmt::format("keyspace={}", ks));
             LOG_INFO(ks_log, "add sync schema task");
             auto task_handle = background_pool.addTask(
-                [&, this, ks, ks_log] {
+                [&, this, ks, ks_log]() noexcept {
                     String stage;
                     bool done_anything = false;
                     try
@@ -137,6 +137,7 @@ SchemaSyncService::~SchemaSyncService()
         auto task_handle = iter.second;
         background_pool.removeTask(task_handle);
     }
+    LOG_INFO(log, "SchemaSyncService stopped");
 }
 
 bool SchemaSyncService::syncSchemas(KeyspaceID keyspace_id)
