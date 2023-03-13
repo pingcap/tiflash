@@ -20,7 +20,6 @@
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/SpilledRestoreMergingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
-#include <Interpreters/ExternalAggregator.h>
 
 namespace DB
 {
@@ -111,7 +110,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 */
 
             aggregator.finishSpill();
-            if (!aggregator.getExternalAggregator()->hasRestoreData())
+            if (!aggregator.hasRestoreData())
             {
                 impl = std::make_unique<NullBlockInputStream>(aggregator.getHeader(final));
             }

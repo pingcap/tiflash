@@ -1072,7 +1072,8 @@ public:
     void spill(AggregatedDataVariants & data_variants);
     void finishSpill();
     bool hasSpilledData() const;
-    const ExternalAggregatorPtr & getExternalAggregator() const { return external_aggregator; }
+    bool hasRestoreData() const;
+    BlocksList restoreBucketBlocks();
 
     void useTwoLevelHashTable() { use_two_level_hash_table = true; }
     void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);

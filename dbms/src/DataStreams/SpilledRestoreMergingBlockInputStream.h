@@ -16,7 +16,6 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
-#include <Interpreters/ExternalAggregator.h>
 
 namespace DB
 {
@@ -43,7 +42,7 @@ protected:
             if (out_block)
                 return out_block;
 
-            auto bucket_block_to_merge = aggregator.getExternalAggregator()->restoreBucketBlocks();
+            auto bucket_block_to_merge = aggregator.restoreBucketBlocks();
             if (bucket_block_to_merge.empty())
                 return {};
             cur_block_list = aggregator.vstackBlocks(bucket_block_to_merge, is_final);

@@ -45,8 +45,8 @@ public:
     void setCancellationHook(Aggregator::CancellationHook cancellation_hook);
 
 private:
-    void sortBaseSpill(std::function<Block(size_t)> && get_bucket_block, std::funtion<void(const Block &)> update_max_sizes);
-    void partitionBaseSpill(std::function<Block(size_t)> && get_bucket_block, std::funtion<void(const Block &)> update_max_sizes);
+    void sortBaseSpill(std::function<Block(size_t)> && get_bucket_block, std::function<void(const Block &)> update_max_sizes);
+    void partitionBaseSpill(std::function<Block(size_t)> && get_bucket_block, std::function<void(const Block &)> update_max_sizes);
 
     void prepareForRestore();
 

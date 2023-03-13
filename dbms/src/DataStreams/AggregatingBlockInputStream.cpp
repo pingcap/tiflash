@@ -16,7 +16,6 @@
 #include <DataStreams/MergingAndConvertingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/SpilledRestoreMergingBlockInputStream.h>
-#include <Interpreters/ExternalAggregator.h>
 
 namespace DB
 {
@@ -68,7 +67,7 @@ Block AggregatingBlockInputStream::readImpl()
                     aggregator.spill(*data_variants);
             }
             aggregator.finishSpill();
-            if (!aggregator.getExternalAggregator()->hasRestoreData())
+            if (!aggregator.hasRestoreData())
             {
                 impl = std::make_unique<NullBlockInputStream>(aggregator.getHeader(final));
             }

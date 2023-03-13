@@ -36,7 +36,7 @@ void ExternalAggregator::setCancellationHook(Aggregator::CancellationHook cancel
     is_cancelled = cancellation_hook;
 }
 
-void ExternalAggregator::sortBaseSpill(std::function<Block(size_t)> && get_bucket_block, std::funtion<void(const Block &)> update_max_sizes)
+void ExternalAggregator::sortBaseSpill(std::function<Block(size_t)> && get_bucket_block, std::function<void(const Block &)> update_max_sizes)
 {
     /// For sort base spilling, we write all the blocks of the bucket to the same partition and guarantee the order of the buckets.
     /// And then restore all blocks from the same partition for multi-bucket and use sort base merging.
@@ -54,7 +54,7 @@ void ExternalAggregator::sortBaseSpill(std::function<Block(size_t)> && get_bucke
     spiller->spillBlocks(std::move(blocks), 0);
 }
 
-void ExternalAggregator::partitionBaseSpill(std::function<Block(size_t)> && get_bucket_block, std::funtion<void(const Block &)> update_max_sizes)
+void ExternalAggregator::partitionBaseSpill(std::function<Block(size_t)> && get_bucket_block, std::function<void(const Block &)> update_max_sizes)
 {
     /// For partition base spilling, blocks of different buckets are written to different partitions.
     /// And then the blocks in multi-buckets are recovered in parallel.
@@ -95,9 +95,9 @@ void ExternalAggregator::spill(std::function<Block(size_t)> && get_bucket_block)
     };
 
     if (is_local_agg)
-        sortBaseSpill(get_bucket_block, std::move(update_max_sizes));
+        sortBaseSpill(std::move(get_bucket_block), std::move(update_max_sizes));
     else
-        partitionBaseSpill(get_bucket_block, std::move(update_max_sizes));
+        partitionBaseSpill(std::move(get_bucket_block), std::move(update_max_sizes));
 
     LOG_TRACE(log, "Max size of temporary bucket blocks: {} rows, {:.3f} MiB.", max_temporary_block_size_rows, (max_temporary_block_size_bytes / 1048576.0));
 }

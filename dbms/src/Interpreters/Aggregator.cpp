@@ -827,10 +827,21 @@ bool Aggregator::hasSpilledData() const
     return external_aggregator != nullptr && external_aggregator->hasSpilledData();
 }
 
+bool Aggregator::hasRestoreData() const
+{
+    return external_aggregator != nullptr && external_aggregator->hasRestoreData();
+}
+
 void Aggregator::finishSpill()
 {
     assert(external_aggregator != nullptr);
     external_aggregator->finishSpill();
+}
+
+BlocksList Aggregator::restoreBucketBlocks()
+{
+    assert(external_aggregator != nullptr);
+    return external_aggregator->restoreBucketBlocks();
 }
 
 void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size)
