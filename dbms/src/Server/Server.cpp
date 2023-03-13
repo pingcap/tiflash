@@ -517,26 +517,38 @@ private:
     const LoggerPtr & log;
 };
 
-std::unique_ptr<std::thread> initStores(Context & global_context, const LoggerPtr & log, bool lazily_init_store, EngineStoreServerWrap * tiflash_instance_wrap)
+struct BgStoreInitHolder
 {
-    // If `tiflash_instance_wrap` is not nullptr, S3 is enabled.
-    // We must wait for tiflash-proxy's initializtion finished before initialzing DeltaMergeStores,
-    // because we need store_id to scan dmfiles from S3.
-    RUNTIME_CHECK_MSG(lazily_init_store || tiflash_instance_wrap == nullptr, "When S3 enabled, lazily_init_store must be true.");
-    auto wait_proxy = [](EngineStoreServerWrap * tiflash_instance_wrap) {
-        while (tiflash_instance_wrap->proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        }
-        auto status = tiflash_instance_wrap->proxy_helper->getProxyStatus();
-        RUNTIME_CHECK_MSG(status == RaftProxyStatus::Running, "RaftProxyStatus::{}", magic_enum::enum_name(status));
-    };
+    bool need_join = false;
+    std::unique_ptr<std::thread> init_thread;
 
-    auto do_init_stores = [&global_context, &log, tiflash_instance_wrap, wait_proxy]() {
-        if (tiflash_instance_wrap != nullptr)
+    void start(Context & global_context, const LoggerPtr & log, bool lazily_init_store, bool is_s3_enabled);
+
+    void waitUntilFinish() const
+    {
+        if (need_join)
         {
-            wait_proxy(tiflash_instance_wrap);
+            init_thread->join();
         }
+        // else the job is done by not lazily init
+        // or has been detach
+    }
+
+    // Exception safe for joining the init_thread
+    ~BgStoreInitHolder()
+    {
+        waitUntilFinish();
+    }
+};
+
+void BgStoreInitHolder::start(Context & global_context, const LoggerPtr & log, bool lazily_init_store, bool is_s3_enabled)
+{
+    RUNTIME_CHECK_MSG(
+        lazily_init_store || !is_s3_enabled,
+        "When S3 enabled, lazily_init_store must be true. lazily_init_store={} s3_enabled={}",
+        lazily_init_store,
+        is_s3_enabled);
+    auto do_init_stores = [&global_context, &log] {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
         int init_cnt = 0;
         int err_cnt = 0;
@@ -566,17 +578,26 @@ std::unique_ptr<std::thread> initStores(Context & global_context, const LoggerPt
             err_cnt,
             DataTypeFactory::instance().getFullNameCacheSize());
     };
-    if (lazily_init_store)
+
+    if (!lazily_init_store)
     {
-        LOG_INFO(log, "Lazily init store.");
-        // apply the inited in another thread to shorten the start time of TiFlash
-        return std::make_unique<std::thread>(do_init_stores);
+        LOG_INFO(log, "Not lazily init store.");
+        need_join = false;
+        do_init_stores();
+    }
+
+    LOG_INFO(log, "Lazily init store.");
+    // apply the inited in another thread to shorten the start time of TiFlash
+    if (is_s3_enabled)
+    {
+        init_thread = std::make_unique<std::thread>(do_init_stores);
+        need_join = true;
     }
     else
     {
-        LOG_INFO(log, "Not lazily init store.");
-        do_init_stores();
-        return nullptr;
+        init_thread = std::make_unique<std::thread>(do_init_stores);
+        init_thread->detach();
+        need_join = false;
     }
 }
 
@@ -1375,7 +1396,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Load remaining databases
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
-    std::unique_ptr<std::thread> init_stores_thread;
+    // BgStoreInitHolder bg_init_stores; // FIXME
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         /// Then, sync schemas with TiDB, and initialize schema sync service.
@@ -1404,7 +1425,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_DEBUG(log, "Sync schemas done.");
         }
 
-        init_stores_thread = initStores(*global_context, log, storage_config.lazily_init_store, storage_config.s3_config.isS3Enabled() ? &tiflash_instance_wrap : nullptr);
+#if 0
+        bg_init_stores.start(
+            *global_context,
+            log,
+            storage_config.lazily_init_store,
+            storage_config.s3_config.isS3Enabled());
+#endif
 
         // After schema synced, set current database.
         global_context->setCurrentDatabase(default_database);
@@ -1482,19 +1509,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
     }
 
-    if (init_stores_thread != nullptr)
-    {
-        if (storage_config.s3_config.isS3Enabled())
-        {
-            // If S3 enabled, wait for all DeltaMergeStores' initialization
-            // before this instance can accept requests.
-            init_stores_thread->join();
-        }
-        else
-        {
-            init_stores_thread->detach();
-        }
-    }
+    // If S3 enabled, wait for all DeltaMergeStores' initialization
+    // before this instance can accept requests.
+    // Else it just do nothing.
+    // bg_init_stores.waitUntilFinish(); FIXME: not join now.
+
     /// Then, startup grpc server to serve raft and/or flash services.
     FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
 
@@ -1561,6 +1580,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             tiflash_instance_wrap.tmt = &tmt_context;
             LOG_INFO(log, "Let tiflash proxy start all services");
+            // Set tiflash instance status to running, then wait for proxy enter running status
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -1568,6 +1588,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // proxy update store-id before status set `RaftProxyStatus::Running`
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
             LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+
+            BgStoreInitHolder bg_init_stores;
+            bg_init_stores.start(
+                *global_context,
+                log,
+                storage_config.lazily_init_store,
+                storage_config.s3_config.isS3Enabled());
+
             size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
             auto & kvstore_ptr = tmt_context.getKVStore();
             kvstore_ptr->initReadIndexWorkers(
