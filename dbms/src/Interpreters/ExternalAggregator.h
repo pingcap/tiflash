@@ -16,8 +16,8 @@
 
 #include <Core/Block.h>
 #include <Core/Spiller.h>
-#include <Interpreters/Aggregator.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Interpreters/Aggregator.h>
 
 #include <memory>
 #include <random>
@@ -28,8 +28,8 @@ class ExternalAggregator
 {
 public:
     ExternalAggregator(
-        const Aggregator::Params & params, 
-        const Block & header_, 
+        const Aggregator::Params & params,
+        const Block & header_,
         const AggregatedDataVariants::Type & type,
         const String & req_id);
 
@@ -57,7 +57,7 @@ private:
     bool is_local_agg;
     Block header;
     size_t bucket_num;
-    
+
     LoggerPtr log;
 
     /// for spill
@@ -79,7 +79,7 @@ private:
         void next();
 
         bool empty() const;
-    
+
     private:
         BlockInputStreamPtr stream;
         std::optional<Block> output;

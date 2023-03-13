@@ -17,8 +17,8 @@
 namespace DB
 {
 ExternalAggregator::ExternalAggregator(
-    const Aggregator::Params & params, 
-    const Block & header_, 
+    const Aggregator::Params & params,
+    const Block & header_,
     const AggregatedDataVariants::Type & type,
     const String & req_id)
     : is_local_agg(params.is_local_agg)
@@ -38,52 +38,52 @@ void ExternalAggregator::setCancellationHook(Aggregator::CancellationHook cancel
 
 void ExternalAggregator::sortBaseSpill(std::function<Block(size_t)> && get_bucket_block, std::funtion<void(const Block &)> update_max_sizes)
 {
-        /// For sort base spilling, we write all the blocks of the bucket to the same partition and guarantee the order of the buckets.
-        /// And then restore all blocks from the same partition for multi-bucket and use sort base merging.
-        assert(partition_num == 1);
+    /// For sort base spilling, we write all the blocks of the bucket to the same partition and guarantee the order of the buckets.
+    /// And then restore all blocks from the same partition for multi-bucket and use sort base merging.
+    assert(partition_num == 1);
 
-        Blocks blocks;
-        for (size_t bucket = 0; bucket < bucket_num; ++bucket)
-        {
-            /// memory in hash table is released after `convertOneBucketToBlock`,
-            /// so the peak memory usage is not increased although we save all
-            /// the blocks before the actual spill
-            blocks.push_back(get_bucket_block(bucket));
-            update_max_sizes(blocks.back());
-        }
-        spiller->spillBlocks(std::move(blocks), 0);
+    Blocks blocks;
+    for (size_t bucket = 0; bucket < bucket_num; ++bucket)
+    {
+        /// memory in hash table is released after `convertOneBucketToBlock`,
+        /// so the peak memory usage is not increased although we save all
+        /// the blocks before the actual spill
+        blocks.push_back(get_bucket_block(bucket));
+        update_max_sizes(blocks.back());
+    }
+    spiller->spillBlocks(std::move(blocks), 0);
 }
 
 void ExternalAggregator::partitionBaseSpill(std::function<Block(size_t)> && get_bucket_block, std::funtion<void(const Block &)> update_max_sizes)
 {
-        /// For partition base spilling, blocks of different buckets are written to different partitions.
-        /// And then the blocks in multi-buckets are recovered in parallel.
-        assert(partition_num == bucket_num);
+    /// For partition base spilling, blocks of different buckets are written to different partitions.
+    /// And then the blocks in multi-buckets are recovered in parallel.
+    assert(partition_num == bucket_num);
 
-        // To avoid multiple threads spilling the same partition at the same time.
-        // This will allow the spiller's `append` to take effect as far as possible.
-        std::uniform_int_distribution<> dist(0, bucket_num - 1);
-        size_t bucket_index = dist(gen);
-        auto next_bucket_index = [&]() {
-            auto tmp = bucket_index++;
-            if (bucket_index == bucket_num)
-                bucket_index = 0;
-            return tmp;
-        };
-        for (size_t i = 0; i < bucket_num; ++i)
-        {
-            auto bucket = next_bucket_index();
-            /// memory in hash table is released after `convertOneBucketToBlock`, so the peak memory usage is not increased here.
-            auto bucket_block = get_bucket_block(bucket);
-            update_max_sizes(bucket_block);
-            spiller->spillBlocks({std::move(bucket_block)}, bucket);
-        }
+    // To avoid multiple threads spilling the same partition at the same time.
+    // This will allow the spiller's `append` to take effect as far as possible.
+    std::uniform_int_distribution<> dist(0, bucket_num - 1);
+    size_t bucket_index = dist(gen);
+    auto next_bucket_index = [&]() {
+        auto tmp = bucket_index++;
+        if (bucket_index == bucket_num)
+            bucket_index = 0;
+        return tmp;
+    };
+    for (size_t i = 0; i < bucket_num; ++i)
+    {
+        auto bucket = next_bucket_index();
+        /// memory in hash table is released after `convertOneBucketToBlock`, so the peak memory usage is not increased here.
+        auto bucket_block = get_bucket_block(bucket);
+        update_max_sizes(bucket_block);
+        spiller->spillBlocks({std::move(bucket_block)}, bucket);
+    }
 }
 
 void ExternalAggregator::spill(std::function<Block(size_t)> && get_bucket_block)
 {
     size_t max_temporary_block_size_rows = 0;
-    size_t max_temporary_block_size_bytes = 0;s
+    size_t max_temporary_block_size_bytes = 0;
     auto update_max_sizes = [&](const Block & block) {
         size_t block_size_rows = block.rows();
         size_t block_size_bytes = block.bytes();
@@ -188,7 +188,7 @@ BlocksList ExternalAggregator::partitionBaseRestore()
         auto local_bucket_num = current_bucket_num.fetch_add(1);
         if (local_bucket_num >= bucket_num)
             return {};
-    
+
         BlocksList ret;
         auto & cur_input = restored_inputs[local_bucket_num];
         while (!cur_input.empty())
@@ -207,9 +207,16 @@ BlocksList ExternalAggregator::partitionBaseRestore()
     }
 }
 
-ExternalAggregator::Input::Input(const BlockInputStreamPtr & stream_): stream(stream_) { stream->readPrefix(); }
+ExternalAggregator::Input::Input(const BlockInputStreamPtr & stream_)
+    : stream(stream_)
+{
+    stream->readPrefix();
+}
 
-bool ExternalAggregator::Input::hasOutput() const { return output.has_value(); }
+bool ExternalAggregator::Input::hasOutput() const
+{
+    return output.has_value();
+}
 Block ExternalAggregator::Input::moveOutput()
 {
     assert(hasOutput());
@@ -244,5 +251,8 @@ void ExternalAggregator::Input::next()
     }
 }
 
-bool ExternalAggregator::Input::empty() const { return is_exhausted; }
+bool ExternalAggregator::Input::empty() const
+{
+    return is_exhausted;
+}
 } // namespace DB
