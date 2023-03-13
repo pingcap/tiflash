@@ -27,7 +27,7 @@ ALWAYS_INLINE static inline
 #endif
 uint64_t avx2_byte_count(const char * src, size_t size, char target)
 {
-    uint64_t zero_bytes_cnt = 0;
+    uint64_t tar_byte_cnt = 0;
     const auto check_block32 = _mm256_set1_epi8(target);
 
     if (uint8_t right_offset = OFFSET_FROM_ALIGNED(size_t(src), BLOCK32_SIZE); right_offset != 0)
@@ -49,7 +49,7 @@ uint64_t avx2_byte_count(const char * src, size_t size, char target)
         }
 
         mask >>= right_offset;
-        zero_bytes_cnt += std::popcount(mask);
+        tar_byte_cnt += std::popcount(mask);
         size -= left_remain;
         src += BLOCK32_SIZE;
     }
@@ -61,7 +61,7 @@ uint64_t avx2_byte_count(const char * src, size_t size, char target)
     for (; size >= BLOCK32_SIZE;)
     {
         auto mask = get_block32_cmp_eq_mask(src, check_block32);
-        zero_bytes_cnt += std::popcount(mask);
+        tar_byte_cnt += std::popcount(mask);
         size -= BLOCK32_SIZE, src += BLOCK32_SIZE;
     }
 
@@ -71,10 +71,10 @@ uint64_t avx2_byte_count(const char * src, size_t size, char target)
         uint32_t left_remain = BLOCK32_SIZE - size;
         mask <<= left_remain;
         mask >>= left_remain;
-        zero_bytes_cnt += std::popcount(mask);
+        tar_byte_cnt += std::popcount(mask);
     }
 
-    return zero_bytes_cnt;
+    return tar_byte_cnt;
 }
 
 } // namespace mem_utils::details

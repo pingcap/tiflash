@@ -83,6 +83,11 @@ public:
         throw Exception("S3WritableFile not support pwrite", ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    off_t seek(off_t /*offset*/, int /*whence*/) const override
+    {
+        throw Exception("S3WritableFile not support seek", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     int getFd() const override
     {
         return -1;

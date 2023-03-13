@@ -405,19 +405,6 @@ void IProfilingBlockInputStream::setProcessListElement(ProcessListElement * elem
 }
 
 
-Block IProfilingBlockInputStream::getTotals()
-{
-    if (totals)
-        return totals;
-
-    Block res;
-    forEachProfilingChild([&](IProfilingBlockInputStream & child) {
-        res = child.getTotals();
-        return static_cast<bool>(res);
-    });
-    return res;
-}
-
 Block IProfilingBlockInputStream::getExtremes()
 {
     if (extremes)

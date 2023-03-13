@@ -42,7 +42,7 @@ static void executeCreateQuery(const String & query,
                                Context & context,
                                const String & database,
                                const String & file_name,
-                               ThreadPool * pool,
+                               legacy::ThreadPool * pool,
                                bool has_force_restore_data_flag)
 {
     ParserCreateQuery parser;
@@ -67,7 +67,7 @@ static void loadDatabase(
     Context & context,
     const String & database,
     const String & database_metadata_file,
-    ThreadPool * thread_pool,
+    legacy::ThreadPool * thread_pool,
     bool force_restore_data)
 {
     /// There may exist .sql file with database creation statement.
@@ -103,7 +103,7 @@ void loadMetadata(Context & context)
     bool has_force_restore_data_flag = force_restore_data_flag_file.exists();
 
     /// For parallel tables loading.
-    ThreadPool thread_pool(SettingMaxThreads().getAutoValue());
+    legacy::ThreadPool thread_pool(SettingMaxThreads().getAutoValue());
     Poco::Logger * log = &Poco::Logger::get("loadMetadata");
 
     /// Loop over databases sql files. This ensure filename ends with ".sql".

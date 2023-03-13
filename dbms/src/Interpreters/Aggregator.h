@@ -930,14 +930,6 @@ private:
 };
 using MergingBucketsPtr = std::shared_ptr<MergingBuckets>;
 
-/** How are "total" values calculated with WITH TOTALS?
-  * (For more details, see TotalsHavingBlockInputStream.)
-  *
-  * The data is aggregated as usual, but the states of the aggregate functions are not finalized.
-  * Later, the aggregate function states for all rows (passed through HAVING) are merged into one - this will be TOTALS.
-  *
-  */
-
 /** Aggregates the source of the blocks.
   */
 class Aggregator

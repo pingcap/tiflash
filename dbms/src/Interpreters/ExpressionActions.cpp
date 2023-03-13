@@ -386,14 +386,6 @@ void ExpressionAction::execute(Block & block) const
 }
 
 
-void ExpressionAction::executeOnTotals(Block & block) const
-{
-    if (type != JOIN)
-        execute(block);
-    else
-        join->joinTotals(block);
-}
-
 String ExpressionAction::toString() const
 {
     std::stringstream ss;
@@ -511,38 +503,6 @@ void ExpressionActions::execute(Block & block) const
 {
     for (const auto & action : actions)
         action.execute(block);
-}
-
-void ExpressionActions::executeOnTotals(Block & block) const
-{
-    /// If there is `totals` in the subquery for JOIN, but we do not have totals, then take the block with the default values instead of `totals`.
-    if (!block)
-    {
-        bool has_totals_in_join = false;
-        for (const auto & action : actions)
-        {
-            if (action.join && action.join->hasTotals())
-            {
-                has_totals_in_join = true;
-                break;
-            }
-        }
-
-        if (has_totals_in_join)
-        {
-            for (const auto & name_and_type : input_columns)
-            {
-                auto column = name_and_type.type->createColumn();
-                column->insertDefault();
-                block.insert(ColumnWithTypeAndName(std::move(column), name_and_type.type, name_and_type.name));
-            }
-        }
-        else
-            return; /// There's nothing to JOIN.
-    }
-
-    for (const auto & action : actions)
-        action.executeOnTotals(block);
 }
 
 std::string ExpressionActions::getSmallestColumn(const NamesAndTypesList & columns)

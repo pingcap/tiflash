@@ -12,26 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <memory>
-#include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Parsers/IParserBase.h>
+#include <Parsers/ASTSelectQuery.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
-#include <Parsers/ParserSetQuery.h>
+#include <Parsers/IParserBase.h>
+#include <Parsers/ParserPartition.h>
 #include <Parsers/ParserSampleRatio.h>
 #include <Parsers/ParserSelectQuery.h>
+#include <Parsers/ParserSetQuery.h>
 #include <Parsers/ParserTablesInSelectQuery.h>
-#include <Parsers/ParserPartition.h>
+
+#include <memory>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int SYNTAX_ERROR;
+extern const int SYNTAX_ERROR;
 }
 
 
@@ -60,7 +60,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     ParserNotEmptyExpressionList exp_list(false);
     ParserNotEmptyExpressionList exp_list_for_with_clause(false, true); /// Set prefer_alias_to_column_name for each alias.
-    ParserNotEmptyExpressionList exp_list_for_select_clause(true);    /// Allows aliases without AS keyword.
+    ParserNotEmptyExpressionList exp_list_for_select_clause(true); /// Allows aliases without AS keyword.
     ParserExpressionWithOptionalAlias exp_elem(false);
     ParserOrderByExpressionList order_list;
 
@@ -139,7 +139,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (!s_totals.ignore(pos, expected))
             return false;
 
-        select_query->group_by_with_totals = true;
+        throw Exception("WITH TOTALS is no longer supported");
     }
 
     /// HAVING expr
@@ -239,4 +239,4 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     return true;
 }
 
-}
+} // namespace DB

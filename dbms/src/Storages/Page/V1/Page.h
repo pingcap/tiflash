@@ -25,8 +25,7 @@ using PageIdSet = PS::V2::PageIdSet;
 struct Page
 {
     PageId page_id;
-    ByteBuffer data;
-
+    std::string_view data;
     MemHolder mem_holder;
 };
 using Pages = std::vector<Page>;

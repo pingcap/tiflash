@@ -14,17 +14,21 @@
 
 #pragma once
 
-#include <Encryption/FileProvider.h>
-#include <Encryption/WritableFile.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
+#include <Encryption/EncryptionPath.h>
+#include <Encryption/FileProvider_fwd.h>
+#include <IO/WriteBufferFromWritableFile.h>
 
 namespace DB
 {
-class WriteBufferFromFileProvider : public WriteBufferFromFileDescriptor
-{
-protected:
-    void nextImpl() override;
 
+class WriteLimiter;
+using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
+
+/**
+ * Note: This class maybe removed in the future, use WriteBufferFromWritableFile instead if possible
+ */
+class WriteBufferFromFileProvider : public WriteBufferFromWritableFile
+{
 public:
     WriteBufferFromFileProvider(
         const FileProviderPtr & file_provider_,
@@ -37,17 +41,6 @@ public:
         mode_t mode = 0666,
         char * existing_memory = nullptr,
         size_t alignment = 0);
-
-    ~WriteBufferFromFileProvider() override;
-
-    void close() override;
-
-    std::string getFileName() const override { return file->getFileName(); }
-
-    int getFD() const override { return file->getFd(); }
-
-private:
-    WritableFilePtr file;
 };
 
 } // namespace DB

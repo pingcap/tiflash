@@ -151,7 +151,7 @@ private:
 
     bool has_vertical_output_suffix = false; /// Is \G present at the end of the query string?
 
-    Context context = Context::createGlobal();
+    std::unique_ptr<Context> context = Context::createGlobal();
 
     /// Buffer that reads from stdin in batch mode.
     ReadBufferFromFileDescriptor std_in{STDIN_FILENO};
@@ -202,12 +202,12 @@ private:
     struct ConnectionParameters
     {
         String host;
-        UInt16 port;
+        UInt16 port = DBMS_DEFAULT_PORT;
         String default_database;
         String user;
         String password;
-        Protocol::Secure security;
-        Protocol::Compression compression;
+        Protocol::Secure security = Protocol::Secure::Disable;
+        Protocol::Compression compression = Protocol::Compression::Disable;
         ConnectionTimeouts timeouts;
 
         ConnectionParameters() = default;
@@ -242,7 +242,7 @@ private:
     ConnectionParameters connection_parameters;
 
 
-    void initialize(Poco::Util::Application & self)
+    void initialize(Poco::Util::Application & self) override
     {
         Poco::Util::Application::initialize(self);
 
@@ -261,18 +261,18 @@ private:
             config().add(loaded_config.configuration);
         }
 
-        context.setApplicationType(Context::ApplicationType::CLIENT);
+        context->setApplicationType(Context::ApplicationType::CLIENT);
 
         /// settings and limits could be specified in config file, but passed settings has higher priority
-#define EXTRACT_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION)              \
-    if (config().has(#NAME) && !context.getSettingsRef().NAME.changed) \
-        context.setSetting(#NAME, config().getString(#NAME));
+#define EXTRACT_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION)               \
+    if (config().has(#NAME) && !context->getSettingsRef().NAME.changed) \
+        context->setSetting(#NAME, config().getString(#NAME));
         APPLY_FOR_SETTINGS(EXTRACT_SETTING)
 #undef EXTRACT_SETTING
     }
 
 
-    int main(const std::vector<std::string> & /*args*/)
+    int main(const std::vector<std::string> & /*args*/) override
     {
         try
         {
@@ -367,10 +367,10 @@ private:
         else
             format = config().getString("format", is_interactive ? "PrettyCompact" : "TabSeparated");
 
-        format_max_block_size = config().getInt("format_max_block_size", context.getSettingsRef().max_block_size);
+        format_max_block_size = config().getInt("format_max_block_size", context->getSettingsRef().max_block_size);
 
         insert_format = "Values";
-        insert_format_max_block_size = config().getInt("insert_format_max_block_size", context.getSettingsRef().max_insert_block_size);
+        insert_format_max_block_size = config().getInt("insert_format_max_block_size", context->getSettingsRef().max_insert_block_size);
 
         if (!is_interactive)
         {
@@ -383,7 +383,7 @@ private:
 
         /// Initialize DateLUT here to avoid counting time spent here as query execution time.
         DateLUT::instance();
-        if (!context.getSettingsRef().use_client_time_zone)
+        if (!context->getSettingsRef().use_client_time_zone)
         {
             const auto & time_zone = connection->getServerTimezone();
             if (!time_zone.empty())
@@ -568,7 +568,7 @@ private:
         while (char * line_read = readline(query.empty() ? prompt().c_str() : ":-] "))
         {
             String line = line_read;
-            free(line_read);
+            free(line_read); // NOLINT
 
             size_t ws = line.size();
             while (ws > 0 && isWhitespaceASCII(line[ws - 1]))
@@ -691,7 +691,7 @@ private:
                     return true;
                 }
 
-                ASTInsertQuery * insert = typeid_cast<ASTInsertQuery *>(&*ast);
+                auto * insert = typeid_cast<ASTInsertQuery *>(&*ast);
 
                 if (insert && insert->data)
                 {
@@ -773,10 +773,10 @@ private:
         written_progress_chars = 0;
         written_first_block = false;
 
-        const ASTSetQuery * set_query = typeid_cast<const ASTSetQuery *>(&*parsed_query);
-        const ASTUseQuery * use_query = typeid_cast<const ASTUseQuery *>(&*parsed_query);
+        const auto * set_query = typeid_cast<const ASTSetQuery *>(&*parsed_query);
+        const auto * use_query = typeid_cast<const ASTUseQuery *>(&*parsed_query);
         /// INSERT query for which data transfer is needed (not an INSERT SELECT) is processed separately.
-        const ASTInsertQuery * insert = typeid_cast<const ASTInsertQuery *>(&*parsed_query);
+        const auto * insert = typeid_cast<const ASTInsertQuery *>(&*parsed_query);
 
         connection->forceConnected();
 
@@ -796,7 +796,7 @@ private:
                     if (change.name == "profile")
                         current_profile = change.value.safeGet<String>();
                     else
-                        context.setSetting(change.name, change.value);
+                        context->setSetting(change.name, change.value);
                 }
             }
 
@@ -839,7 +839,7 @@ private:
 
         std::vector<ExternalTableData> data;
         for (auto & table : external_tables)
-            data.emplace_back(table.getData(context));
+            data.emplace_back(table.getData(*context));
 
         connection->sendExternalTablesData(data);
     }
@@ -848,7 +848,7 @@ private:
     /// Process the query that doesn't require transfering data blocks to the server.
     void processOrdinaryQuery()
     {
-        connection->sendQuery(query, query_id, QueryProcessingStage::Complete, &context.getSettingsRef(), nullptr, true);
+        connection->sendQuery(query, query_id, QueryProcessingStage::Complete, &context->getSettingsRef(), nullptr, true);
         sendExternalTables();
         receiveResult();
     }
@@ -866,7 +866,7 @@ private:
         if (!parsed_insert_query.data && (is_interactive || (stdin_is_not_tty && std_in.eof())))
             throw Exception("No data to insert", ErrorCodes::NO_DATA_TO_INSERT);
 
-        connection->sendQuery(query_without_data, query_id, QueryProcessingStage::Complete, &context.getSettingsRef(), nullptr, true);
+        connection->sendQuery(query_without_data, query_id, QueryProcessingStage::Complete, &context->getSettingsRef(), nullptr, true);
         sendExternalTables();
 
         /// Receive description of table structure.
@@ -919,7 +919,7 @@ private:
     void sendData(Block & sample)
     {
         /// If INSERT data must be sent.
-        const ASTInsertQuery * parsed_insert_query = typeid_cast<const ASTInsertQuery *>(&*parsed_query);
+        const auto * parsed_insert_query = typeid_cast<const ASTInsertQuery *>(&*parsed_query);
         if (!parsed_insert_query)
             return;
 
@@ -944,11 +944,11 @@ private:
         String current_format = insert_format;
 
         /// Data format can be specified in the INSERT query.
-        if (ASTInsertQuery * insert = typeid_cast<ASTInsertQuery *>(&*parsed_query))
+        if (auto * insert = typeid_cast<ASTInsertQuery *>(&*parsed_query))
             if (!insert->format.empty())
                 current_format = insert->format;
 
-        BlockInputStreamPtr block_input = context.getInputFormat(
+        BlockInputStreamPtr block_input = context->getInputFormat(
             current_format,
             buf,
             sample,
@@ -1048,10 +1048,6 @@ private:
             onProfileInfo(packet.profile_info);
             return true;
 
-        case Protocol::Server::Totals:
-            onTotals(packet.block);
-            return true;
-
         case Protocol::Server::Extremes:
             onExtremes(packet.block);
             return true;
@@ -1103,7 +1099,7 @@ private:
             String pager = config().getString("pager", "");
             if (!pager.empty())
             {
-                signal(SIGPIPE, SIG_IGN);
+                signal(SIGPIPE, SIG_IGN); // NOLINT
                 pager_cmd = ShellCommand::execute(pager, true);
                 out_buf = &pager_cmd->in;
             }
@@ -1115,7 +1111,7 @@ private:
             String current_format = format;
 
             /// The query can specify output format or output file.
-            if (ASTQueryWithOutput * query_with_output = dynamic_cast<ASTQueryWithOutput *>(&*parsed_query))
+            if (auto * query_with_output = dynamic_cast<ASTQueryWithOutput *>(&*parsed_query))
             {
                 if (query_with_output->out_file != nullptr)
                 {
@@ -1140,7 +1136,7 @@ private:
             if (has_vertical_output_suffix)
                 current_format = "Vertical";
 
-            block_out_stream = context.getOutputFormat(current_format, *out_buf, block);
+            block_out_stream = context->getOutputFormat(current_format, *out_buf, block);
             block_out_stream->writePrefix();
         }
     }
@@ -1168,12 +1164,6 @@ private:
         block_out_stream->flush();
     }
 
-
-    void onTotals(Block & block)
-    {
-        initBlockOutputStream(block);
-        block_out_stream->setTotals(block);
-    }
 
     void onExtremes(Block & block)
     {
@@ -1499,7 +1489,7 @@ public:
         /// Extract settings and limits from the options.
 #define EXTRACT_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION) \
     if (options.count(#NAME))                             \
-        context.setSetting(#NAME, options[#NAME].as<std::string>());
+        context->setSetting(#NAME, options[#NAME].as<std::string>());
         APPLY_FOR_SETTINGS(EXTRACT_SETTING)
 #undef EXTRACT_SETTING
 

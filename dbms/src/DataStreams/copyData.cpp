@@ -52,7 +52,6 @@ void copyDataImpl(IBlockInputStream & from, IBlockOutputStream & to, TCancelCall
         if (input->getProfileInfo().hasAppliedLimit())
             to.setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
 
-        to.setTotals(input->getTotals());
         to.setExtremes(input->getExtremes());
     }
 

@@ -33,7 +33,6 @@ extern const int UNKNOWN_BLOCK_INFO_FIELD;
 /// Write values in binary form. NOTE: You could use protobuf, but it would be overkill for this case.
 void BlockInfo::write(WriteBuffer & out) const
 {
-    assert(is_overflows == false);
     /// Set of pairs `FIELD_NUM`, value in binary form. Then 0.
 #define WRITE_FIELD(TYPE, NAME, DEFAULT, FIELD_NUM) \
     writeVarUInt(FIELD_NUM, out);                   \
@@ -70,8 +69,6 @@ void BlockInfo::read(ReadBuffer & in)
             throw Exception("Unknown BlockInfo field number: " + toString(field_num), ErrorCodes::UNKNOWN_BLOCK_INFO_FIELD);
         }
     }
-    if unlikely (is_overflows)
-        throw Exception("is_overflows is no longer supported" + toString(field_num), ErrorCodes::UNKNOWN_BLOCK_INFO_FIELD);
 }
 
 } // namespace DB

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
+#include <common/defines.h>
 
 namespace DB::PS::V3
 {
@@ -33,6 +34,8 @@ struct CheckpointLocation
     uint64_t offset_in_file = 0;
     uint64_t size_in_file = 0;
 
+    CheckpointLocation copyWithNewDataFileId(std::shared_ptr<const std::string> new_file_id);
+
     CheckpointProto::EntryDataLocation toProto() const;
 
     /**
@@ -44,15 +47,26 @@ struct CheckpointLocation
         CheckpointProto::StringsInternMap & strings_map);
 };
 
-struct CheckpointInfo
+// A more memory compact struct compared to std::optional<CheckpointInfo>
+struct OptionalCheckpointInfo
 {
     CheckpointLocation data_location;
+
+    /**
+     * Whether this object contains valid value or not
+     *
+     * Share the padding with following bits in this struct
+     */
+    bool is_valid = false;
 
     /**
      * Whether the PageEntry's local BlobData has been reclaimed.
      * If the data is reclaimed, you can only read out its data from the checkpoint.
      */
     bool is_local_data_reclaimed = false;
+
+public:
+    ALWAYS_INLINE bool has_value() const { return is_valid; } // NOLINT(readability-identifier-naming)
 };
 
 } // namespace DB::PS::V3

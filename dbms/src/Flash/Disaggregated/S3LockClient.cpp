@@ -15,7 +15,6 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Flash/Disaggregated/S3LockClient.h>
-#include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
 #include <TiDB/OwnerInfo.h>

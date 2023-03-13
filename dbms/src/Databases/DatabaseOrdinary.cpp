@@ -19,6 +19,7 @@
 #include <Databases/DatabaseMemory.h>
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabasesCommon.h>
+#include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
@@ -82,7 +83,7 @@ DatabaseOrdinary::DatabaseOrdinary(String name_, const String & metadata_path_, 
 }
 
 
-void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag)
+void DatabaseOrdinary::loadTables(Context & context, legacy::ThreadPool * thread_pool, bool has_force_restore_data_flag)
 {
     using FileNames = std::vector<std::string>;
     FileNames file_names = DatabaseLoading::listSQLFilenames(metadata_path, log);

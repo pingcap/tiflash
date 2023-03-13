@@ -89,6 +89,14 @@ public:
     grpc::Status tryAddLock(grpc::ServerContext * /*context*/, const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response) override;
     grpc::Status tryMarkDelete(grpc::ServerContext * /*context*/, const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response) override;
 
+    // The TiFlash read node call this RPC to build the disaggregated task
+    // on the TiFlash write node.
+    // It returns the serialized remote segments info to the compute node.
+    grpc::Status EstablishDisaggTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggTaskRequest * request, disaggregated::EstablishDisaggTaskResponse * response) override;
+    // The TiFlash read node call this RPC to fetch the delta-layer data
+    // from the TiFlash write node.
+    grpc::Status FetchDisaggPages(grpc::ServerContext * grpc_context, const disaggregated::FetchDisaggPagesRequest * request, grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer) override;
+
     void setMockStorage(MockStorage * mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
     Context * getContext() { return context; }
@@ -112,7 +120,7 @@ protected:
     MockMPPServerInfo mpp_test_info{};
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
-    std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
+    std::unique_ptr<legacy::ThreadPool> cop_pool, batch_cop_pool;
 };
 
 class AsyncFlashService final : public tikvpb::Tikv::WithAsyncMethod_EstablishMPPConnection<FlashService>

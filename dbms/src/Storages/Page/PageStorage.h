@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Core/Types.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <Storages/Page/Config.h>
 #include <Storages/Page/ExternalPageCallbacks.h>
 #include <Storages/Page/FileUsage.h>
@@ -45,8 +46,6 @@ class WriteBatch;
 class WriteBatchWrapper;
 class UniversalWriteBatch;
 
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;

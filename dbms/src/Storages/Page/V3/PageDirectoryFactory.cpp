@@ -203,7 +203,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
             break;
         case EditRecordType::PUT_EXTERNAL:
         {
-            auto holder = version_list->createNewExternal(restored_version);
+            auto holder = version_list->createNewExternal(restored_version, r.entry);
             if (holder)
             {
                 *holder = r.page_id;
@@ -213,6 +213,9 @@ void PageDirectoryFactory<Trait>::applyRecord(
         }
         case EditRecordType::PUT:
             version_list->createNewEntry(restored_version, r.entry);
+            break;
+        case EditRecordType::UPDATE_DATA_FROM_REMOTE:
+            version_list->updateLocalCacheForRemotePage(restored_version, r.entry);
             break;
         case EditRecordType::DEL:
         case EditRecordType::VAR_DELETE: // nothing different from `DEL`
