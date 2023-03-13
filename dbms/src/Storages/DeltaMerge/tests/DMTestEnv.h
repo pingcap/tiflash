@@ -441,7 +441,8 @@ public:
         const String & colname,
         const String & value,
         bool is_common_handle,
-        size_t rowkey_column_size)
+        size_t rowkey_column_size,
+        ColumnID column_id = 100)
     {
         Block block;
         const size_t num_rows = 1;
@@ -474,7 +475,8 @@ public:
         // string column
         block.insert(DB::tests::createColumn<String>(
             Strings{value},
-            colname));
+            colname,
+            /*column_id*/ column_id));
         return block;
     }
 

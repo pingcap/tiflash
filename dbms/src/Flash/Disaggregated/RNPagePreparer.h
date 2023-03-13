@@ -47,7 +47,7 @@ public:
     ~RNPagePreparer() noexcept;
 
 private:
-    void persistLoop(size_t idx);
+    void prepareLoop(size_t idx);
 
     bool consumeOneResult(const LoggerPtr & log);
 

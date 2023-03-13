@@ -136,7 +136,7 @@ private:
     /// Get blocks that you can merge. This allows you to merge them in parallel in separate threads.
     BlocksToMerge getNextBlocksToMerge();
 
-    std::unique_ptr<ThreadPool> reading_pool;
+    std::unique_ptr<legacy::ThreadPool> reading_pool;
 
     /// For a parallel merge.
 

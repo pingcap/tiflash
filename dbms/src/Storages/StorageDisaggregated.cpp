@@ -19,6 +19,7 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <kvproto/kvrpcpb.pb.h>
 
 namespace DB
 {
@@ -55,7 +56,8 @@ BlockInputStreams StorageDisaggregated::read(
 
     auto remote_table_ranges = buildRemoteTableRanges();
 
-    auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
+    // only send to tiflash node with label {"engine": "tiflash"}
+    auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, pingcap::kv::labelFilterNoTiFlashWriteNode);
     RUNTIME_CHECK(!batch_cop_tasks.empty());
 
     std::vector<RequestAndRegionIDs> dispatch_reqs;
@@ -97,7 +99,9 @@ std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildR
     return remote_table_ranges;
 }
 
-std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatchCopTasks(const std::vector<RemoteTableRange> & remote_table_ranges)
+std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatchCopTasks(
+    const std::vector<RemoteTableRange> & remote_table_ranges,
+    const pingcap::kv::LabelFilter & label_filter)
 {
     std::vector<Int64> physical_table_ids;
     physical_table_ids.reserve(remote_table_ranges.size());
@@ -112,7 +116,6 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-    pingcap::kv::LabelFilter label_filter = S3::ClientFactory::instance().isEnabled() ? pingcap::kv::labelFilterOnlyTiFlashWriteNode : pingcap::kv::labelFilterNoTiFlashWriteNode;
     auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(
         bo,
         cluster,
@@ -132,6 +135,10 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
 {
     auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
     ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
+    // TODO(iosmanthus): support S3 remote read in keyspace mode.
+    auto keyspace_id = context.getDAGContext()->getKeyspaceID();
+    dispatch_req_meta->set_keyspace_id(keyspace_id);
+    dispatch_req_meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
     dispatch_req_meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
     dispatch_req_meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
     dispatch_req_meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);

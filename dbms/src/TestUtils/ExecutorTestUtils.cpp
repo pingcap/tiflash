@@ -132,7 +132,6 @@ void ExecutorTest::executeInterpreterWithDeltaMerge(const String & expected_stri
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->toString()));
 }
 
-
 namespace
 {
 String testInfoMsg(const std::shared_ptr<tipb::DAGRequest> & request, bool enable_planner, bool enable_pipeline, size_t concurrency, size_t block_size)
@@ -161,6 +160,7 @@ String testInfoMsg(const std::shared_ptr<tipb::DAGRequest> & request, bool enabl
         ExecutorSerializer().serialize(request.get()));
 }
 } // namespace
+
 void ExecutorTest::executeExecutor(
     const std::shared_ptr<tipb::DAGRequest> & request,
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
@@ -214,12 +214,14 @@ void ExecutorTest::checkBlockSorted(
 
 void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
 {
-    executeExecutor(request, [&](const ColumnsWithTypeAndName & res) {
-        return columnsEqual(expect_columns, res, /*_restrict=*/false) << "\n  expect_block: \n"
-                                                                      << getColumnsContent(expect_columns)
-                                                                      << "\n actual_block: \n"
-                                                                      << getColumnsContent(res);
-    });
+    executeExecutor(
+        request,
+        [&](const ColumnsWithTypeAndName & res) {
+            return columnsEqual(expect_columns, res, /*_restrict=*/false) << "\n  expect_block: \n"
+                                                                          << getColumnsContent(expect_columns)
+                                                                          << "\n actual_block: \n"
+                                                                          << getColumnsContent(res);
+        });
 }
 
 void ExecutorTest::executeAndAssertSortedBlocks(const std::shared_ptr<tipb::DAGRequest> & request, const SortInfos & sort_infos)

@@ -47,6 +47,7 @@
 #include <kvproto/disaggregated.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Cluster.h>
+#include <pingcap/kv/RegionCache.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
@@ -95,7 +96,9 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
         try
         {
             auto remote_table_ranges = buildRemoteTableRanges();
-            auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
+            // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
+            auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
+            auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
             RUNTIME_CHECK(!batch_cop_tasks.empty());
 
             // Fetch the remote segment read tasks from write nodes

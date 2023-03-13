@@ -14,8 +14,6 @@
 
 #pragma once
 
-#include <Storages/Transaction/Types.h>
-
 #include <atomic>
 #include <ostream>
 
@@ -29,7 +27,7 @@ class Redact
 public:
     static void setRedactLog(bool v);
 
-    static std::string handleToDebugString(DB::HandleID handle);
+    static std::string handleToDebugString(int64_t handle);
     static std::string keyToDebugString(const char * key, size_t size);
 
     static std::string keyToHexString(const char * key, size_t size);

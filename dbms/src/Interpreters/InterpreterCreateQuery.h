@@ -16,9 +16,8 @@
 
 #include <Interpreters/IInterpreter.h>
 #include <Storages/ColumnsDescription.h>
+#include <common/ThreadPool.h>
 
-
-class ThreadPool;
 
 namespace DB
 {
@@ -43,7 +42,7 @@ public:
     static ASTPtr formatColumns(const NamesAndTypesList & columns);
     static ASTPtr formatColumns(const ColumnsDescription & columns);
 
-    void setDatabaseLoadingThreadpool(ThreadPool & thread_pool_)
+    void setDatabaseLoadingThreadpool(legacy::ThreadPool & thread_pool_)
     {
         thread_pool = &thread_pool_;
     }
@@ -74,7 +73,7 @@ private:
     Context & context;
 
     /// Using while loading database.
-    ThreadPool * thread_pool = nullptr;
+    legacy::ThreadPool * thread_pool = nullptr;
 
     /// Skip safety threshold when loading tables.
     bool has_force_restore_data_flag = false;

@@ -97,7 +97,12 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("table_name", value<std::string>()->default_value(""), "") //
         ("table_id", value<int64_t>()->default_value(-1), "") //
         ("is_fast_scan", value<bool>()->default_value(false), "default is false, means normal mode. When we in fast mode, we should set verification as false") //
-        ("enable_read_thread", value<bool>()->default_value(true), "");
+        ("enable_read_thread", value<bool>()->default_value(true), "") //
+        //
+        ("s3_bucket", value<std::string>()->default_value(""), "") //
+        ("s3_endpoint", value<std::string>()->default_value(""), "") //
+        ("s3_access_key_id", value<std::string>()->default_value(""), "") //
+        ("s3_secret_access_key", value<std::string>()->default_value(""), "");
 
     boost::program_options::variables_map vm;
     boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
@@ -158,20 +163,10 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     testing_type = vm["testing_type"].as<std::string>();
     log_write_request = vm["log_write_request"].as<bool>();
-    switch (vm["ps_run_mode"].as<uint64_t>())
-    {
-    case static_cast<uint64_t>(PageStorageRunMode::ONLY_V2):
-        ps_run_mode = PageStorageRunMode::ONLY_V2;
-        break;
-    case static_cast<uint64_t>(PageStorageRunMode::ONLY_V3):
-        ps_run_mode = PageStorageRunMode::ONLY_V3;
-        break;
-    case static_cast<uint64_t>(PageStorageRunMode::MIX_MODE):
-        ps_run_mode = PageStorageRunMode::MIX_MODE;
-        break;
-    default:
-        return {false, fmt::format("unknown ps_run_mode {}.", vm["ps_run_mode"].as<uint64_t>())};
-    }
+
+    auto opt_ps_run_mode = magic_enum::enum_cast<PageStorageRunMode>(vm["ps_run_mode"].as<uint64_t>());
+    RUNTIME_CHECK_MSG(opt_ps_run_mode.has_value(), "Invalid ps_run_mode={}", vm["ps_run_mode"].as<uint64_t>());
+    ps_run_mode = *opt_ps_run_mode;
 
     bg_thread_count = vm["bg_thread_count"].as<uint64_t>();
 
@@ -185,6 +180,11 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     }
 
     enable_read_thread = vm["enable_read_thread"].as<bool>();
+
+    s3_bucket = vm["s3_bucket"].as<String>();
+    s3_endpoint = vm["s3_endpoint"].as<String>();
+    s3_access_key_id = vm["s3_access_key_id"].as<String>();
+    s3_secret_access_key = vm["s3_secret_access_key"].as<String>();
 
     return {true, toString()};
 }

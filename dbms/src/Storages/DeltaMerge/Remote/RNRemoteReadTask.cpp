@@ -23,12 +23,14 @@
 #include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
+#include <Storages/DeltaMerge/Remote/RNDataProvider.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteSegmentThreadInputStream.h>
@@ -54,8 +56,6 @@ RNRemoteReadTask::RNRemoteReadTask(std::vector<RNRemoteTableReadTaskPtr> && task
     : num_segments(0)
     , log(Logger::get())
 {
-    size_t total_num_cftiny = 0;
-    size_t total_num_cftiny_to_fetch = 0;
     for (const auto & table_task : tasks_)
     {
         if (!table_task)
@@ -72,27 +72,10 @@ RNRemoteReadTask::RNRemoteReadTask(std::vector<RNRemoteTableReadTaskPtr> && task
             // blocks on write node's mem-table, then we
             // can simply skip the fetch page pharse and
             // push it into ready queue
-            total_num_cftiny += task->totalCFTinys();
-            total_num_cftiny_to_fetch += task->cacheMissPageIds().size();
-
-            if (auto iter = ready_segment_tasks.find(task->state); iter != ready_segment_tasks.end())
-            {
-                iter->second.push_back(task);
-            }
-            else
-            {
-                ready_segment_tasks.emplace(task->state, std::list<RNRemoteSegmentReadTaskPtr>{task});
-            }
+            ready_segment_tasks[task->state].push_back(task);
         }
     }
     curr_store = tasks.begin();
-
-    LOG_INFO(
-        log,
-        "read task local cache hit rate: {}",
-        total_num_cftiny == 0 ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * total_num_cftiny_to_fetch / total_num_cftiny));
-    GET_METRIC(tiflash_disaggregated_details, type_cftiny_read).Increment(total_num_cftiny);
-    GET_METRIC(tiflash_disaggregated_details, type_cftiny_fetch).Increment(total_num_cftiny_to_fetch);
 }
 
 RNRemoteReadTask::~RNRemoteReadTask()
@@ -173,12 +156,6 @@ void RNRemoteReadTask::allDataReceive(const String & end_err_msg)
         // set up the error message
         if (err_msg.empty() && !end_err_msg.empty())
             err_msg = end_err_msg;
-
-        if (auto state_iter = ready_segment_tasks.find(SegmentReadTaskState::DataReady);
-            state_iter == ready_segment_tasks.end())
-        {
-            ready_segment_tasks.emplace(SegmentReadTaskState::DataReady, std::list<RNRemoteSegmentReadTaskPtr>{});
-        }
 
         for (auto iter = ready_segment_tasks.begin(); iter != ready_segment_tasks.end(); /* empty */)
         {
@@ -390,9 +367,6 @@ RNRemoteSegmentReadTask::RNRemoteSegmentReadTask(
     , table_id(table_id_)
     , segment_id(segment_id_)
     , address(std::move(address_))
-    , total_num_cftiny(0)
-    , num_msg_to_consume(0)
-    , num_msg_consumed(0)
     , log(std::move(log_))
 {
 }
@@ -426,64 +400,6 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         address,
         log);
 
-    task->page_cache = db_context.getSharedContextDisagg()->rn_cache;
-    task->segment = std::make_shared<Segment>(
-        log,
-        /*epoch*/ 0,
-        segment_range,
-        proto.segment_id(),
-        /*next_segment_id*/ 0,
-        nullptr,
-        nullptr);
-    task->read_ranges = std::move(read_ranges);
-
-    task->segment_snap = Remote::Serializer::deserializeSegmentSnapshotFrom(
-        db_context,
-        store_id,
-        table_id,
-        proto);
-
-    {
-        size_t total_persisted_size = 0;
-        auto persisted_cfs = task->segment_snap->delta->getPersistedFileSetSnapshot();
-        std::vector<Remote::PageOID> all_persisted_ids;
-        all_persisted_ids.reserve(persisted_cfs->getColumnFileCount());
-        std::vector<size_t> page_sizes;
-        page_sizes.reserve(persisted_cfs->getColumnFileCount());
-        for (const auto & cfs : persisted_cfs->getColumnFiles())
-        {
-            if (auto * tiny = cfs->tryToTinyFile(); tiny)
-            {
-                auto page_oid = Remote::PageOID{
-                    .store_id = store_id,
-                    .table_id = table_id,
-                    .page_id = tiny->getDataPageId(),
-                };
-                all_persisted_ids.emplace_back(page_oid);
-                page_sizes.emplace_back(tiny->getBytes());
-                task->total_num_cftiny += 1;
-                total_persisted_size += tiny->getBytes();
-            }
-        }
-
-        // FIXME: this could block for a long time, refine it later
-        auto occupy_space_res = task->page_cache->occupySpace(all_persisted_ids, page_sizes);
-        task->page_ids_cache_miss.reserve(occupy_space_res.pages_not_in_cache.size());
-        for (const auto & oid : occupy_space_res.pages_not_in_cache)
-        {
-            task->page_ids_cache_miss.emplace_back(oid.page_id);
-        }
-        task->local_cache_guard = occupy_space_res.pages_guard;
-        LOG_INFO(log,
-                 "mem-table cfs: {}, persisted cfs: {} (size={}), local cache hit rate: {}, cache_miss_oids: {}, all_oids: {}",
-                 task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
-                 task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount(),
-                 total_persisted_size,
-                 (all_persisted_ids.empty() ? "N/A" : fmt::format("{:.2f}%", 100.0 - 100.0 * task->page_ids_cache_miss.size() / all_persisted_ids.size())),
-                 task->cacheMissPageIds(),
-                 all_persisted_ids);
-    }
-
     task->dm_context = std::make_shared<DMContext>(
         db_context,
         /* path_pool */ nullptr,
@@ -496,7 +412,65 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         /* scan_context */ std::make_shared<ScanContext>() // Currently we don't access its content
     );
 
+    task->segment = std::make_shared<Segment>(
+        log,
+        /*epoch*/ 0,
+        segment_range,
+        proto.segment_id(),
+        /*next_segment_id*/ 0,
+        nullptr,
+        nullptr);
+    task->read_ranges = std::move(read_ranges);
+
+    task->segment_snap = Remote::Serializer::deserializeSegmentSnapshotFrom(
+        *(task->dm_context),
+        store_id,
+        table_id,
+        proto);
+
+    // Note: At this moment, we still cannot read from `task->segment_snap`,
+    // because they are constructed using ColumnFileDataProviderNop.
+
+    {
+        auto persisted_cfs = task->segment_snap->delta->getPersistedFileSetSnapshot();
+        std::vector<UInt64> persisted_ids;
+        std::vector<size_t> persisted_sizes;
+        persisted_ids.reserve(persisted_cfs->getColumnFileCount());
+        persisted_sizes.reserve(persisted_cfs->getColumnFileCount());
+        for (const auto & cfs : persisted_cfs->getColumnFiles())
+        {
+            if (auto * tiny = cfs->tryToTinyFile(); tiny)
+            {
+                persisted_ids.emplace_back(tiny->getDataPageId());
+                persisted_sizes.emplace_back(tiny->getDataPageSize());
+            }
+        }
+
+        task->delta_tinycf_page_ids = persisted_ids;
+        task->delta_tinycf_page_sizes = persisted_sizes;
+
+        LOG_INFO(log,
+                 "Build RemoteSegmentReadTask, store_id={} table_id={} memtable_cfs={} persisted_cfs={}",
+                 task->store_id,
+                 task->table_id,
+                 task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
+                 task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount());
+    }
+
     return task;
+}
+
+void RNRemoteSegmentReadTask::initColumnFileDataProvider(Remote::RNLocalPageCacheGuardPtr pages_guard)
+{
+    auto & data_provider = segment_snap->delta->getPersistedFileSetSnapshot()->data_provider;
+    RUNTIME_CHECK(std::dynamic_pointer_cast<DM::ColumnFileDataProviderNop>(data_provider));
+
+    auto page_cache = dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
+    data_provider = std::make_shared<Remote::ColumnFileDataProviderRNLocalPageCache>(
+        page_cache,
+        pages_guard,
+        store_id,
+        table_id);
 }
 
 void RNRemoteSegmentReadTask::receivePage(RemotePb::RemotePage && remote_page)
@@ -516,6 +490,7 @@ void RNRemoteSegmentReadTask::receivePage(RemotePb::RemotePage && remote_page)
     {
         field_sizes.emplace_back(field_sz);
     }
+    auto & page_cache = dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
     page_cache->write(oid, std::move(read_buffer), buf_size, std::move(field_sizes));
     LOG_DEBUG(log, "receive page, oid={}", oid);
 }

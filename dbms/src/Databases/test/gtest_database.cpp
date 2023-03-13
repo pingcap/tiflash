@@ -515,7 +515,7 @@ try
 
     {
         // If we loadTable for db2, new table meta should be removed.
-        ThreadPool thread_pool(2);
+        legacy::ThreadPool thread_pool(2);
         db2->loadTables(*ctx, &thread_pool, true);
 
         Poco::File new_meta_file(db2->getTableMetadataPath(tbl_name));
@@ -854,14 +854,14 @@ try
 
     for (const auto & [expect_name, json_str] : cases)
     {
-        TiDB::DBInfoPtr db_info = std::make_shared<TiDB::DBInfo>(json_str);
+        TiDB::DBInfoPtr db_info = std::make_shared<TiDB::DBInfo>(json_str, NullspaceID);
         ASSERT_NE(db_info, nullptr);
         ASSERT_EQ(db_info->name, expect_name);
 
         const auto seri = db_info->serialize();
 
         {
-            auto deseri = std::make_shared<TiDB::DBInfo>(seri);
+            auto deseri = std::make_shared<TiDB::DBInfo>(seri, NullspaceID);
             ASSERT_NE(deseri, nullptr);
             ASSERT_EQ(deseri->name, expect_name);
         }

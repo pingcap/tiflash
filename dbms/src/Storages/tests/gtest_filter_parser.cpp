@@ -72,7 +72,7 @@ TimezoneInfo FilterParserTest::default_timezone_info;
 
 DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_json, const String & query, TimezoneInfo & timezone_info = default_timezone_info)
 {
-    const TiDB::TableInfo table_info(table_info_json);
+    const TiDB::TableInfo table_info(table_info_json, NullspaceID);
 
     QueryTasks query_tasks;
     std::tie(query_tasks, std::ignore) = compileQuery(
@@ -83,7 +83,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
         },
         getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
-    DAGContext dag_context(dag_request, {}, "", false, log);
+    DAGContext dag_context(dag_request, {}, NullspaceID, "", false, log);
     ctx->setDAGContext(&dag_context);
     // Don't care about regions information in this test
     DAGQuerySource dag(*ctx);

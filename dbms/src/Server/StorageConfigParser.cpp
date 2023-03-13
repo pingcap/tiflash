@@ -68,6 +68,10 @@ static String getNormalizedPath(const String & s)
 template <typename T>
 void readConfig(const std::shared_ptr<cpptoml::table> & table, const String & name, T & value)
 {
+#ifndef NDEBUG
+    if (!table->contains_qualified(name))
+        return;
+#endif
     if (auto p = table->get_qualified_as<typename std::remove_reference<decltype(value)>::type>(name); p)
     {
         value = *p;
@@ -205,12 +209,18 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, const Logge
         LOG_WARNING(log, "The configuration \"bg_task_io_rate_limit\" is deprecated. Check [storage.io_rate_limit] section for new style.");
     }
 
-    if (auto version = table->get_qualified_as<UInt64>("format_version"); version)
+    readConfig(table, "format_version", format_version);
+
+    if (auto version = table->get_qualified_as<UInt64>("api_version"); version)
     {
-        format_version = *version;
+        api_version = *version;
     }
 
     auto get_bool_config_or_default = [&](const String & name, bool default_value) {
+#ifndef NDEBUG
+        if (!table->contains_qualified(name))
+            return default_value;
+#endif
         if (auto value = table->get_qualified_as<Int32>(name); value)
         {
             return (*value != 0);
@@ -542,6 +552,8 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     RUNTIME_CHECK(connection_timeout_ms > 0);
     readConfig(table, "request_timeout_ms", request_timeout_ms);
     RUNTIME_CHECK(request_timeout_ms > 0);
+    readConfig(table, "root", root);
+    RUNTIME_CHECK(!root.empty());
 
     auto read_s3_auth_info_from_env = [&]() {
         access_key_id = Poco::Environment::get(S3_ACCESS_KEY_ID, /*default*/ "");

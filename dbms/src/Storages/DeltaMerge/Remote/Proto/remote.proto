@@ -71,12 +71,15 @@ message ColumnFileInMemory {
 
 message ColumnFileTiny {
     uint64 page_id = 1;
-    // serialized schema
-    bytes schema = 2;
+    uint64 page_size = 2;
 
-    uint64 rows = 3;
-    uint64 bytes = 4;
+    // serialized schema
+    bytes schema = 5;
+
+    uint64 rows = 6;
+    uint64 bytes = 7;
 }
+
 message ColumnFileBig {
     uint64 page_id = 1;
     uint64 file_id = 2;
@@ -85,6 +88,7 @@ message ColumnFileBig {
     uint64 valid_rows = 10;
     uint64 valid_bytes = 11;
 }
+
 message ColumnFileDeleteRange {
     bytes key_range = 1;
 }

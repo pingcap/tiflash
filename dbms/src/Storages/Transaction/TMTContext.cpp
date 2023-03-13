@@ -101,6 +101,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
 
         S3::S3GCConfig gc_config;
         gc_config.interval_seconds = context.getSettingsRef().remote_gc_interval_seconds; // TODO: make it reloadable
+        gc_config.method = S3::ClientFactory::instance().gc_method;
         s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, cluster->pd_client, s3gc_owner, s3lock_client, gc_config);
     }
 }
