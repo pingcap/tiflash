@@ -614,8 +614,9 @@ CATCH
 TEST_F(AggExecutorTestRunner, SplitAggOutputWithSpecialGroupKey)
 try
 {
-    size_t unique_rows = 5000;
-    DB::MockColumnInfoVec table_column_infos{{"key_8", TiDB::TP::TypeTiny}, {"key_16", TiDB::TP::TypeShort}, {"key_32", TiDB::TP::TypeLong}, {"key_64", TiDB::TP::TypeLongLong}, {"key_string_1", TiDB::TP::TypeString}, {"key_string_2", TiDB::TP::TypeString}, {"value", TiDB::TP::TypeString}};
+    /// prepare data
+    size_t unique_rows = 3000;
+    DB::MockColumnInfoVec table_column_infos{{"key_8", TiDB::TP::TypeTiny}, {"key_16", TiDB::TP::TypeShort}, {"key_32", TiDB::TP::TypeLong}, {"key_64", TiDB::TP::TypeLongLong}, {"key_string_1", TiDB::TP::TypeString}, {"key_string_2", TiDB::TP::TypeString}, {"value", TiDB::TP::TypeLong}};
     ColumnsWithTypeAndName table_column_data;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(table_column_infos, true))
     {
@@ -624,7 +625,7 @@ try
     }
     for (auto & table_column : table_column_data)
     {
-        table_column.column->assumeMutable()->insertRangeFrom(*table_column.column, 0, unique_rows);
+        table_column.column->assumeMutable()->insertRangeFrom(*table_column.column, 0, unique_rows / 2);
     }
     ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({unique_rows * 2, "UInt64", RANDOM});
     IColumn::Permutation perm;
@@ -636,219 +637,93 @@ try
 
     context.addMockTable("test_db", "agg_table_with_special_key", table_column_infos, table_column_data);
 
-    std::vector<size_t> max_block_sizes{1, 10, DEFAULT_BLOCK_SIZE};
-    std::vector<size_t> concurrences{1, 10};
+    std::vector<size_t> max_block_sizes{1, 8, DEFAULT_BLOCK_SIZE};
+    std::vector<size_t> concurrences{1, 8};
     // 0: use one level
     // 1: use two level
     std::vector<UInt64> two_level_thresholds{0, 1};
-    //std::vector<Int64> collators{TiDB::ITiDBCollator::UTF8MB4_BIN, TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI};
-    std::vector<Int64> collators{TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI};
+    std::vector<Int64> collators{TiDB::ITiDBCollator::UTF8MB4_BIN, TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI};
+    std::vector<std::vector<String>> group_by_keys{
+        /// fast path with one int and one string
+        {"key_64", "key_string_1"},
+        /// fast path with two string
+        {"key_string_1", "key_string_2"},
+        /// fast path with one string
+        {"key_string_1"},
+        /// keys need to be shuffled
+        {"key_8", "key_16", "key_32", "key_64"},
+    };
     for (auto collator_id : collators)
     {
-        context.setCollation(collator_id);
-        const auto * current_collator = TiDB::ITiDBCollator::getCollator(collator_id);
-        ASSERT_TRUE(current_collator != nullptr);
-        SortDescription sd;
-        /// case 1, group by int and string
-        auto request = context
-                           .scan("test_db", "agg_table_with_special_key")
-                           .aggregation({Max(col("value"))}, {col("key_64"), col("key_string_1")})
-                           .build(context);
-        /// use one level, no block split, no spill as the reference
-        context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
-        context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
-        context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
-        auto reference = executeStreams(request);
-        if (current_collator->isCI())
+        for (const auto & keys : group_by_keys)
         {
-            sd.clear();
-            /// for ci collation, need to sort and compare the result manually
-            for (const auto & result_col : reference)
+            context.setCollation(collator_id);
+            const auto * current_collator = TiDB::ITiDBCollator::getCollator(collator_id);
+            ASSERT_TRUE(current_collator != nullptr);
+            SortDescription sd;
+            bool has_string_key = false;
+            MockAstVec key_vec;
+            for (const auto & key : keys)
+                key_vec.push_back(col(key));
+            auto request = context
+                               .scan("test_db", "agg_table_with_special_key")
+                               .aggregation({Max(col("value"))}, key_vec)
+                               .build(context);
+            /// use one level, no block split, no spill as the reference
+            context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+            context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
+            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
+            auto reference = executeStreams(request);
+            if (current_collator->isCI())
             {
-                if (!removeNullable(result_col.type)->isString())
+                sd.clear();
+                /// for ci collation, need to sort and compare the result manually
+                for (const auto & result_col : reference)
                 {
-                    sd.push_back(SortColumnDescription(result_col.name, 1, 1, nullptr));
-                }
-                else
-                {
-                    sd.push_back(SortColumnDescription(result_col.name, 1, 1, current_collator));
-                }
-            }
-            Block tmp_block(reference);
-            sortBlock(tmp_block, sd);
-            reference = tmp_block.getColumnsWithTypeAndName();
-        }
-        for (auto two_level_threshold : two_level_thresholds)
-        {
-            for (auto block_size : max_block_sizes)
-            {
-                for (auto concurrency : concurrences)
-                {
-                    context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
-                    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
-                    auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
-                    for (auto & block : blocks)
+                    if (!removeNullable(result_col.type)->isString())
                     {
-                        block.checkNumberOfRows();
-                        ASSERT(block.rows() <= block_size);
-                    }
-                    if (current_collator->isCI())
-                    {
-                        auto merged_block = vstackBlocks(std::move(blocks));
-                        sortBlock(merged_block, sd);
-                        auto merged_columns = merged_block.getColumnsWithTypeAndName();
-                        for (size_t col_index = 0; col_index < reference.size(); col_index++)
-                            ASSERT_TRUE(columnEqual(reference[col_index].column, merged_columns[col_index].column, sd[col_index].collator));
+                        sd.push_back(SortColumnDescription(result_col.name, 1, 1, nullptr));
                     }
                     else
                     {
-                        ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
+                        sd.push_back(SortColumnDescription(result_col.name, 1, 1, current_collator));
+                        has_string_key = true;
                     }
                 }
+                /// don't run ci test if there is no string key
+                if (!has_string_key)
+                    continue;
+                Block tmp_block(reference);
+                sortBlock(tmp_block, sd);
+                reference = tmp_block.getColumnsWithTypeAndName();
             }
-        }
-        /// case 2, group by string and string
-        request = context
-                      .scan("test_db", "agg_table_with_special_key")
-                      .aggregation({Max(col("value"))}, {col("key_string_1"), col("key_string_2")})
-                      .build(context);
-        /// use one level, no block split, no spill as the reference
-        context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
-        context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
-        context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
-        reference = executeStreams(request);
-        if (current_collator->isCI())
-        {
-            sd.clear();
-            /// for ci collation, need to sort and compare the result manually
-            for (const auto & result_col : reference)
+            for (auto two_level_threshold : two_level_thresholds)
             {
-                if (!removeNullable(result_col.type)->isString())
+                for (auto block_size : max_block_sizes)
                 {
-                    sd.push_back(SortColumnDescription(result_col.name, 1, 1, nullptr));
-                }
-                else
-                {
-                    sd.push_back(SortColumnDescription(result_col.name, 1, 1, current_collator));
-                }
-            }
-            Block tmp_block(reference);
-            sortBlock(tmp_block, sd);
-            reference = tmp_block.getColumnsWithTypeAndName();
-        }
-        for (auto two_level_threshold : two_level_thresholds)
-        {
-            for (auto block_size : max_block_sizes)
-            {
-                for (auto concurrency : concurrences)
-                {
-                    context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
-                    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
-                    auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
-                    for (auto & block : blocks)
+                    for (auto concurrency : concurrences)
                     {
-                        ASSERT(block.rows() <= block_size);
+                        context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
+                        context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+                        auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
+                        for (auto & block : blocks)
+                        {
+                            block.checkNumberOfRows();
+                            ASSERT(block.rows() <= block_size);
+                        }
+                        if (current_collator->isCI())
+                        {
+                            auto merged_block = vstackBlocks(std::move(blocks));
+                            sortBlock(merged_block, sd);
+                            auto merged_columns = merged_block.getColumnsWithTypeAndName();
+                            for (size_t col_index = 0; col_index < reference.size(); col_index++)
+                                ASSERT_TRUE(columnEqual(reference[col_index].column, merged_columns[col_index].column, sd[col_index].collator));
+                        }
+                        else
+                        {
+                            ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
+                        }
                     }
-                    if (current_collator->isCI())
-                    {
-                        auto merged_block = vstackBlocks(std::move(blocks));
-                        sortBlock(merged_block, sd);
-                        auto merged_columns = merged_block.getColumnsWithTypeAndName();
-                        for (size_t col_index = 0; col_index < reference.size(); col_index++)
-                            ASSERT_TRUE(columnEqual(reference[col_index].column, merged_columns[col_index].column, sd[col_index].collator));
-                    }
-                    else
-                    {
-                        ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
-                    }
-                }
-            }
-        }
-
-        /// case 3, group by string
-        request = context
-                      .scan("test_db", "agg_table_with_special_key")
-                      .aggregation({Max(col("value"))}, {col("key_string_1")})
-                      .build(context);
-        /// use one level, no block split, no spill as the reference
-        context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
-        context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
-        context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
-        reference = executeStreams(request);
-        if (current_collator->isCI())
-        {
-            sd.clear();
-            /// for ci collation, need to sort and compare the result manually
-            for (const auto & result_col : reference)
-            {
-                if (!removeNullable(result_col.type)->isString())
-                {
-                    sd.push_back(SortColumnDescription(result_col.name, 1, 1, nullptr));
-                }
-                else
-                {
-                    sd.push_back(SortColumnDescription(result_col.name, 1, 1, current_collator));
-                }
-            }
-            Block tmp_block(reference);
-            sortBlock(tmp_block, sd);
-            reference = tmp_block.getColumnsWithTypeAndName();
-        }
-        for (auto two_level_threshold : two_level_thresholds)
-        {
-            for (auto block_size : max_block_sizes)
-            {
-                for (auto concurrency : concurrences)
-                {
-                    context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
-                    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
-                    auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
-                    for (auto & block : blocks)
-                    {
-                        ASSERT(block.rows() <= block_size);
-                    }
-                    if (current_collator->isCI())
-                    {
-                        auto merged_block = vstackBlocks(std::move(blocks));
-                        sortBlock(merged_block, sd);
-                        auto merged_columns = merged_block.getColumnsWithTypeAndName();
-                        for (size_t col_index = 0; col_index < reference.size(); col_index++)
-                            ASSERT_TRUE(columnEqual(reference[col_index].column, merged_columns[col_index].column, sd[col_index].collator));
-                    }
-                    else
-                    {
-                        ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
-                    }
-                }
-            }
-        }
-
-        /// case 4, group by fixed keys which will trigger column shuffle
-        if (collator_id != collators[0])
-            continue;
-        request = context
-                      .scan("test_db", "agg_table_with_special_key")
-                      .aggregation({Max(col("value"))}, {col("key_8"), col("key_16"), col("key_32"), col("key_64")})
-                      .build(context);
-        /// use one level, no block split, no spill as the reference
-        context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
-        context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
-        context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
-        reference = executeStreams(request);
-        for (auto two_level_threshold : two_level_thresholds)
-        {
-            for (auto block_size : max_block_sizes)
-            {
-                for (auto concurrency : concurrences)
-                {
-                    context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(two_level_threshold)));
-                    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
-                    auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
-                    for (auto & block : blocks)
-                    {
-                        ASSERT(block.rows() <= block_size);
-                    }
-                    ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
                 }
             }
         }
