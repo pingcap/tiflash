@@ -430,7 +430,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     if (is_local_agg)
     {
         auto extra_info = enable_fine_grained_shuffle ? String(enableFineGrainedShuffleExtraInfo) : "";
-        /// Go straight forward without merging phase for local agg. 
+        /// Go straight forward without merging phase for local agg.
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<AggregatingBlockInputStream>(
                 stream,

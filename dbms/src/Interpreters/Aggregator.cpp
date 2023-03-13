@@ -22,7 +22,7 @@
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/Aggregator.h>
-#include <Interpreters/SpilledRestoreMergingBuckets.h>
+#include <Interpreters/ExternalAggregator.h>
 
 #include <array>
 #include <cassert>
@@ -266,23 +266,7 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
     method_chosen = chooseAggregationMethod();
     RUNTIME_CHECK_MSG(method_chosen != AggregatedDataVariants::Type::EMPTY, "Invalid aggregation method");
     if (AggregatedDataVariants::isConvertibleToTwoLevel(method_chosen))
-    {
-        // for local agg, use sort base spiller.
-        // for non local agg, use partition base spiller.
-        spiller = params.is_local_agg
-            ? std::make_unique<Spiller>(
-                params.spill_config, 
-                /*is_input_sorted=*/true, 
-                /*partition_num=*/1, 
-                getHeader(false), 
-                log)
-            : std::make_unique<Spiller>(
-                params.spill_config,
-                /*is_input_sorted=*/false, 
-                /*partition_num=*/AggregatedDataVariants::getBucketNumberForTwoLevelHashTable(method_chosen), 
-                getHeader(false), 
-                log);
-    }
+        external_aggregator = std::make_shared<ExternalAggregator>(params, getHeader(false), method_chosen, log->identifier());
 }
 
 
@@ -838,35 +822,15 @@ bool Aggregator::executeOnBlock(
     return true;
 }
 
+bool Aggregator::hasSpilledData() const
+{
+    return external_aggregator != nullptr && external_aggregator->hasSpilledData();
+}
 
 void Aggregator::finishSpill()
 {
-    assert(spiller != nullptr);
-    spiller->finishSpill();
-}
-
-SpilledRestoreMergingBucketsPtr Aggregator::restoreSpilledData(bool final, size_t max_threads)
-{
-    assert(spiller != nullptr);
-    std::vector<BlockInputStreams> ret;
-    if (params.is_local_agg)
-    {
-        assert(0 == spiller->getPartitionNum());
-        if (spiller->hasSpilledData(0))
-            ret.push_back(spiller->restoreBlocks(0));
-    }
-    else
-    {
-        for (UInt64 partition_id = 0; partition_id < spiller->getPartitionNum(); ++partition_id)
-        {
-            if (spiller->hasSpilledData(partition_id))
-                ret.push_back(spiller->restoreBlocks(partition_id, /*max_stream_size=*/1));
-        }
-    }
-    if (ret.empty())
-        return nullptr;
-    size_t restore_concurrency = params.is_local_agg ? 1 : std::max(std::min(max_threads, ret.size()), 1);
-    return std::make_shared<SpilledRestoreMergingBuckets>(std::move(ret), params, final, restore_concurrency, log->identifier());
+    assert(external_aggregator != nullptr);
+    external_aggregator->finishSpill();
 }
 
 void Aggregator::initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size)
@@ -945,68 +909,12 @@ void Aggregator::spillImpl(
     AggregatedDataVariants & data_variants,
     Method & method)
 {
-    RUNTIME_ASSERT(spiller != nullptr, "spiller must not be nullptr in Aggregator when spilling");
-    size_t max_temporary_block_size_rows = 0;
-    size_t max_temporary_block_size_bytes = 0;
-
-    auto update_max_sizes = [&](const Block & block) {
-        size_t block_size_rows = block.rows();
-        size_t block_size_bytes = block.bytes();
-
-        if (block_size_rows > max_temporary_block_size_rows)
-            max_temporary_block_size_rows = block_size_rows;
-        if (block_size_bytes > max_temporary_block_size_bytes)
-            max_temporary_block_size_bytes = block_size_bytes;
-    };
-
-    if (params.is_local_agg)
-    {
-        /// For local agg, we write all the blocks of the bucket to the same partition and guarantee the order of the buckets.
-        /// And then restore all blocks from the same partition for multi-bucket and use sort base merging.
-        assert(spiller->getPartitionNum() == 1);
-
-        Blocks blocks;
-        for (size_t bucket = 0; bucket < Method::Data::NUM_BUCKETS; ++bucket)
-        {
-            /// memory in hash table is released after `convertOneBucketToBlock`,
-            /// so the peak memory usage is not increased although we save all
-            /// the blocks before the actual spill
-            blocks.push_back(convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket));
-            update_max_sizes(blocks.back());
-        }
-        spiller->spillBlocks(std::move(blocks), 0);
-    }
-    else
-    {
-        /// For non local agg, blocks of different buckets are written to different partitions.
-        /// And then the blocks in multi-buckets are recovered in parallel.
-        assert(spiller->getPartitionNum() == Method::Data::NUM_BUCKETS);
-
-        // To avoid multiple threads spilling the same partition at the same time.
-        // This will allow the spiller's `append` to take effect as far as possible.
-        std::uniform_int_distribution<> dist(0, Method::Data::NUM_BUCKETS - 1);
-        size_t bucket_index = dist(gen);
-        auto next_bucket_index = [&]() {
-            auto tmp = bucket_index++;
-            if (bucket_index == Method::Data::NUM_BUCKETS)
-                bucket_index = 0;
-            return tmp;
-        };
-        for (size_t i = 0; i < Method::Data::NUM_BUCKETS; ++i)
-        {
-            auto bucket = next_bucket_index();
-            /// memory in hash table is released after `convertOneBucketToBlock`, so the peak memory usage is not increased here.
-            auto bucket_block = convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket);
-            update_max_sizes(bucket_block);
-            spiller->spillBlocks({std::move(bucket_block)}, bucket);
-        }
-    }
+    RUNTIME_ASSERT(external_aggregator != nullptr, "external_aggregator must not be nullptr in Aggregator when spilling");
+    external_aggregator->spill([&](size_t bucket) { return convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket); });
 
     /// Pass ownership of the aggregate functions states:
     /// `data_variants` will not destroy them in the destructor, they are now owned by ColumnAggregateFunction objects.
     data_variants.aggregator = nullptr;
-
-    LOG_TRACE(log, "Max size of temporary bucket blocks: {} rows, {:.3f} MiB.", max_temporary_block_size_rows, (max_temporary_block_size_bytes / 1048576.0));
 }
 
 
@@ -2202,6 +2110,8 @@ void Aggregator::destroyAllAggregateStates(AggregatedDataVariants & result)
 void Aggregator::setCancellationHook(CancellationHook cancellation_hook)
 {
     is_cancelled = cancellation_hook;
+    if (external_aggregator)
+        external_aggregator->setCancellationHook(cancellation_hook);
 }
 
 MergingBuckets::MergingBuckets(const Aggregator & aggregator_, const ManyAggregatedDataVariants & data_, bool final_, size_t concurrency_)

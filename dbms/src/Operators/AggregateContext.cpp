@@ -16,7 +16,7 @@
 
 namespace DB
 {
-void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_threads_)
+void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook)
 {
     RUNTIME_CHECK(!inited_build && !inited_convergent);
     max_threads = max_threads_;
@@ -31,6 +31,7 @@ void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_t
     }
 
     aggregator = std::make_unique<Aggregator>(params, log->identifier());
+    aggregator->setCancellationHook(std::move(hook));
     aggregator->initThresholdByAggregatedDataVariantsSize(many_data.size());
     inited_build = true;
     LOG_TRACE(log, "Aggregate Context inited");

@@ -38,7 +38,6 @@
 
 #include <functional>
 #include <memory>
-#include <random>
 
 namespace DB
 {
@@ -930,8 +929,8 @@ private:
 };
 using MergingBucketsPtr = std::shared_ptr<MergingBuckets>;
 
-class SpilledRestoreMergingBuckets;
-using SpilledRestoreMergingBucketsPtr = std::shared_ptr<SpilledRestoreMergingBuckets>;
+class ExternalAggregator;
+using ExternalAggregatorPtr = std::shared_ptr<ExternalAggregator>;
 
 /** Aggregates the source of the blocks.
   */
@@ -1072,8 +1071,9 @@ public:
     /// For external aggregation.
     void spill(AggregatedDataVariants & data_variants);
     void finishSpill();
-    SpilledRestoreMergingBucketsPtr restoreSpilledData(bool final, size_t max_threads);
-    bool hasSpilledData() const { return spiller != nullptr && spiller->hasSpilledData(); }
+    bool hasSpilledData() const;
+    const ExternalAggregatorPtr & getExternalAggregator() const { return external_aggregator; }
+
     void useTwoLevelHashTable() { use_two_level_hash_table = true; }
     void initThresholdByAggregatedDataVariantsSize(size_t aggregated_data_variants_size);
 
@@ -1083,8 +1083,6 @@ public:
 protected:
     friend struct AggregatedDataVariants;
     friend class MergingBuckets;
-
-    std::mt19937 gen{std::random_device{}()};
 
     Params params;
 
@@ -1140,7 +1138,7 @@ protected:
     size_t max_bytes_before_external_group_by = 0;
 
     /// For external aggregation.
-    std::unique_ptr<Spiller> spiller;
+    ExternalAggregatorPtr external_aggregator;
 
     /** Select the aggregation method based on the number and types of keys. */
     AggregatedDataVariants::Type chooseAggregationMethod();

@@ -20,6 +20,7 @@
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/SpilledRestoreMergingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <Interpreters/ExternalAggregator.h>
 
 namespace DB
 {
@@ -110,27 +111,23 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 */
 
             aggregator.finishSpill();
-            auto merging_buckets = aggregator.restoreSpilledData(final, max_threads);
-            if (!merging_buckets)
+            if (!aggregator.getExternalAggregator()->hasRestoreData())
             {
                 impl = std::make_unique<NullBlockInputStream>(aggregator.getHeader(final));
             }
             else
             {
-                size_t restore_merge_stream_num = std::min(max_threads, merging_buckets->getConcurrency());
-                RUNTIME_CHECK(restore_merge_stream_num > 0);
+                size_t restore_merge_stream_num = std::max(max_threads, 1);
                 if (restore_merge_stream_num > 1)
                 {
                     BlockInputStreams merging_streams;
                     for (size_t i = 0; i < restore_merge_stream_num; ++i)
-                    {
-                        merging_streams.push_back(std::make_shared<SpilledRestoreMergingBlockInputStream>(merging_buckets, log->identifier()));
-                    }
+                        merging_streams.push_back(std::make_shared<SpilledRestoreMergingBlockInputStream>(aggregator, final, log->identifier()));
                     impl = std::make_unique<UnionBlockInputStream<>>(merging_streams, BlockInputStreams{}, max_threads, log->identifier());
                 }
                 else
                 {
-                    impl = std::make_unique<SpilledRestoreMergingBlockInputStream>(merging_buckets, log->identifier());
+                    impl = std::make_unique<SpilledRestoreMergingBlockInputStream>(aggregator, final, log->identifier());
                 }
             }
         }

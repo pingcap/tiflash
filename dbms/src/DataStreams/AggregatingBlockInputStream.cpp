@@ -16,6 +16,7 @@
 #include <DataStreams/MergingAndConvertingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/SpilledRestoreMergingBlockInputStream.h>
+#include <Interpreters/ExternalAggregator.h>
 
 namespace DB
 {
@@ -67,15 +68,13 @@ Block AggregatingBlockInputStream::readImpl()
                     aggregator.spill(*data_variants);
             }
             aggregator.finishSpill();
-            auto merging_buckets = aggregator.restoreSpilledData(final, 1);
-            if (!merging_buckets)
+            if (!aggregator.getExternalAggregator()->hasRestoreData())
             {
                 impl = std::make_unique<NullBlockInputStream>(aggregator.getHeader(final));
             }
             else
             {
-                RUNTIME_CHECK(1 == merging_buckets->getConcurrency());
-                impl = std::make_unique<SpilledRestoreMergingBlockInputStream>(merging_buckets, log->identifier());
+                impl = std::make_unique<SpilledRestoreMergingBlockInputStream>(aggregator, final, log->identifier());
             }
         }
     }

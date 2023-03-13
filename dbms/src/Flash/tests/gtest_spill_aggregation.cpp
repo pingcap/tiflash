@@ -140,19 +140,20 @@ try
             .build(context);
     };
 
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
     /// disable spill
-    context.context.setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
+    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
     auto ref_columns = executeStreams(gen_request(1), 1);
     /// enable spill
-    context.context.setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(total_data_size / 200)));
-    context.context.setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
-    context.context.setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
+    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(total_data_size / 200)));
+    context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
+    context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
     for (size_t exchange_concurrency : exchange_receiver_concurrency)
     {
         ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(gen_request(exchange_concurrency), exchange_concurrency, true));
     }
 }
 CATCH
+
 } // namespace tests
 } // namespace DB

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Interpreters/Context.h>
 #include <Operators/AggregateSinkOp.h>
@@ -57,6 +58,9 @@ void PhysicalAggregationBuild::buildPipelineExec(PipelineExecGroupBuilder & grou
         /*is_local_agg=*/false,
         spill_config);
 
-    aggregate_context->initBuild(params, concurrency);
+    Aggregator::CancellationHook hook = [&]() {
+        return group_builder.exec_status.isCancelled();
+    };
+    aggregate_context->initBuild(params, concurrency, std::move(hook));
 }
 } // namespace DB

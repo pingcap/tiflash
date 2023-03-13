@@ -16,22 +16,23 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
-#include <Interpreters/SpilledRestoreMergingBuckets.h>
+#include <Interpreters/ExternalAggregator.h>
 
 namespace DB
 {
 class SpilledRestoreMergingBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    SpilledRestoreMergingBlockInputStream(const SpilledRestoreMergingBucketsPtr & merging_buckets_, const String & req_id)
-        : merging_buckets(merging_buckets_)
+    SpilledRestoreMergingBlockInputStream(Aggregator & aggregator_, bool is_final_, const String & req_id)
+        : aggregator(aggregator_)
+        , is_final(is_final_)
         , log(Logger::get(req_id))
     {
     }
 
     String getName() const override { return "SpilledRestoreMerging"; }
 
-    Block getHeader() const override { return merging_buckets->getHeader(); }
+    Block getHeader() const override { return aggregator.getHeader(is_final); }
 
 protected:
     Block readImpl() override
@@ -42,16 +43,18 @@ protected:
             if (out_block)
                 return out_block;
 
-            auto bucket_data_to_merge = merging_buckets->restoreBucketDataToMerge([&]() { return isCancelled(); });
-            if (bucket_data_to_merge.empty())
+            auto bucket_block_to_merge = aggregator.getExternalAggregator()->restoreBucketBlocks();
+            if (bucket_block_to_merge.empty())
                 return {};
-            cur_block_list = merging_buckets->mergeBucketData(std::move(bucket_data_to_merge));
+            cur_block_list = aggregator.vstackBlocks(bucket_block_to_merge, is_final);
         }
     }
 
 private:
-    SpilledRestoreMergingBucketsPtr merging_buckets;
-    BlocksList cur_block_list;
+    Aggregator & aggregator;
+    bool is_final;
     const LoggerPtr log;
+
+    BlocksList cur_block_list;
 };
 } // namespace DB
