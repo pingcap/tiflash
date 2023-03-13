@@ -213,9 +213,7 @@ void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColum
         ret.tp = column.type;
 
         if (!column.nullable)
-        {
             ret.setNotNullFlag();
-        }
         // TODO: find a way to assign decimal field's flen.
         if (ret.tp == TiDB::TP::TypeNewDecimal)
             ret.flen = 65;
