@@ -616,8 +616,7 @@ try
 {
     /// prepare data
     size_t unique_rows = 3000;
-    DB::MockColumnInfoVec table_column_infos{{"key_8", TiDB::TP::TypeTiny, false}, {"key_16", TiDB::TP::TypeShort, false}, {"key_32", TiDB::TP::TypeLong, false},
-                                             {"key_64", TiDB::TP::TypeLongLong, false}, {"key_string_1", TiDB::TP::TypeString, false}, {"key_string_2", TiDB::TP::TypeString, false}, {"value", TiDB::TP::TypeLong, false}};
+    DB::MockColumnInfoVec table_column_infos{{"key_8", TiDB::TP::TypeTiny, false}, {"key_16", TiDB::TP::TypeShort, false}, {"key_32", TiDB::TP::TypeLong, false}, {"key_64", TiDB::TP::TypeLongLong, false}, {"key_string_1", TiDB::TP::TypeString, false}, {"key_string_2", TiDB::TP::TypeString, false}, {"value", TiDB::TP::TypeLong, false}};
     ColumnsWithTypeAndName table_column_data;
     for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(table_column_infos))
     {
@@ -628,7 +627,7 @@ try
     {
         table_column.column->assumeMutable()->insertRangeFrom(*table_column.column, 0, unique_rows / 2);
     }
-    ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({unique_rows * 2, "UInt64", RANDOM});
+    ColumnWithTypeAndName shuffle_column = ColumnGenerator::instance().generate({unique_rows + unique_rows / 2, "UInt64", RANDOM});
     IColumn::Permutation perm;
     shuffle_column.column->getPermutation(false, 0, -1, perm);
     for (auto & column : table_column_data)
