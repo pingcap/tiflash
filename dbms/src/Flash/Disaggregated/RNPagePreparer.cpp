@@ -17,7 +17,6 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/RNPagePreparer.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
-#include <IO/IOThreadPool.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <common/logger_useful.h>
@@ -65,7 +64,7 @@ RNPagePreparer::RNPagePreparer(
             });
             persist_threads.emplace_back(task->get_future());
 
-            IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+            RNPagePreparerThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
         }
     }
     catch (...)
@@ -200,6 +199,20 @@ bool RNPagePreparer::consumeOneResult(const LoggerPtr & log)
     total_pages += decode_detail.pages;
 
     return true;
+}
+
+std::unique_ptr<ThreadPool> RNPagePreparerThreadPool::instance;
+
+void RNPagePreparerThreadPool::initialize(size_t max_threads, size_t max_free_threads, size_t queue_size)
+{
+    RUNTIME_CHECK_MSG(!instance, "RNPagePreparerThreadPool is initialized twice");
+    instance = std::make_unique<ThreadPool>(max_threads, max_free_threads, queue_size, false /*shutdown_on_exception*/);
+}
+
+ThreadPool & RNPagePreparerThreadPool::get()
+{
+    RUNTIME_CHECK_MSG(instance, "RNPagePreparerThreadPool is not initialized");
+    return *instance;
 }
 
 } // namespace DB

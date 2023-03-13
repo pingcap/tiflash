@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
+#include <Common/UniThreadPool.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
 
@@ -72,6 +73,22 @@ private:
 
     Stopwatch watch;
     LoggerPtr exc_log;
+};
+
+/*
+ * ThreadPool used for the RNPagePreparer.
+ */
+class RNPagePreparerThreadPool
+{
+    friend void adjustThreadPoolSize(const Settings & settings, size_t logical_cores);
+
+    static std::unique_ptr<ThreadPool> instance;
+
+public:
+    static void initialize(size_t max_threads, size_t max_free_threads, size_t queue_size);
+    static ThreadPool & get();
+
+    static void shutdown() noexcept { instance.reset(); }
 };
 
 } // namespace DB

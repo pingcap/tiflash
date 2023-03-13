@@ -42,6 +42,7 @@
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/RateLimiter.h>
 #include <Flash/DiagnosticsService.h>
+#include <Flash/Disaggregated/RNPagePreparer.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
@@ -830,7 +831,7 @@ private:
 
 // By default init global thread pool by hardware_concurrency
 // Later we will adjust it by `adjustThreadPoolSize`
-void initThreadPool()
+void initThreadPool(Poco::Util::LayeredConfiguration & config)
 {
     size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
     GlobalThreadPool::initialize(
@@ -841,6 +842,15 @@ void initThreadPool()
         /*max_threads*/ default_num_threads,
         /*max_free_threads*/ default_num_threads / 2,
         /*queue_size*/ default_num_threads * 2);
+
+    auto disaggregated_mode = getDisaggregatedMode(config);
+    if (disaggregated_mode == DisaggregatedMode::Compute)
+    {
+        RNPagePreparerThreadPool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+    }
 }
 
 void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
@@ -856,6 +866,13 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count);
     IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
     IOThreadPool::instance->setQueueSize(max_io_thread_count * 2);
+
+    if (RNPagePreparerThreadPool::instance != nullptr)
+    {
+        RNPagePreparerThreadPool::instance->setMaxThreads(max_io_thread_count);
+        RNPagePreparerThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        RNPagePreparerThreadPool::instance->setQueueSize(max_io_thread_count * 2);
+    }
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
@@ -893,7 +910,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     // Later we may create thread pool from GlobalThreadPool
     // init it before other components
-    initThreadPool();
+    initThreadPool(config());
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
