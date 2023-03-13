@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <common/avx2_byte_count.h>
 #include <common/defines.h>
 #include <common/mem_utils_opt.h>
 #include <common/memcpy.h>
@@ -237,9 +238,9 @@ void TestMemByteCount(size_t size)
     char * start = oa.data();
     for (auto * pos = start; pos < start + 32; ++pos)
     {
-        ASSERT_EQ(mem_utils::avx2_byte_count(pos, size, target), size);
+        ASSERT_EQ(mem_utils::details::avx2_byte_count(pos, size, target), size);
         std::memset(pos, target - 1, size);
-        ASSERT_EQ(mem_utils::avx2_byte_count(pos, size, target), 0);
+        ASSERT_EQ(mem_utils::details::avx2_byte_count(pos, size, target), 0);
         std::memset(pos, target, size);
     }
 }
