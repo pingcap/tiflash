@@ -1388,18 +1388,10 @@ Segment::prepareSplitLogical( //
     {
         auto ori_page_id = dmfile->pageId();
         auto file_id = dmfile->fileId();
-        String file_parent_path;
-        if (dm_context.db_context.getSharedContextDisagg()->remote_data_store)
+        auto file_parent_path = dmfile->parentPath();
+        if (!dm_context.db_context.getSharedContextDisagg()->remote_data_store)
         {
-            auto wn_ps = dm_context.db_context.getWriteNodePageStorage();
-            auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, dm_context.storage_pool->getNamespaceId()), ori_page_id);
-            auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
-            const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
-            file_parent_path = S3::S3Filename::fromTableID(lock_key_view.store_id, dm_context.storage_pool->getNamespaceId()).toFullKeyWithPrefix();
-        }
-        else
-        {
-            file_parent_path = delegate.getDTFilePath(file_id);
+            RUNTIME_CHECK(file_parent_path == delegate.getDTFilePath(file_id));
         }
 
         auto my_dmfile_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);

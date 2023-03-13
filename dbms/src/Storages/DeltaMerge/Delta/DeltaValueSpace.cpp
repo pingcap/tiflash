@@ -131,18 +131,11 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
             // to the file id.
             wbs.data.putRefPage(new_page_id, f->getDataPageId());
             auto file_id = f->getFile()->fileId();
-            String file_parent_path;
-            if (context.db_context.getSharedContextDisagg()->remote_data_store)
+            auto old_dmfile = f->getFile();
+            auto file_parent_path = old_dmfile->parentPath();
+            if (!context.db_context.getSharedContextDisagg()->remote_data_store)
             {
-                auto wn_ps = context.db_context.getWriteNodePageStorage();
-                auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, context.storage_pool->getNamespaceId()), f->getDataPageId());
-                auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
-                const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
-                file_parent_path = S3::S3Filename::fromTableID(lock_key_view.store_id, context.storage_pool->getNamespaceId()).toFullKeyWithPrefix();
-            }
-            else
-            {
-                file_parent_path = delegator.getDTFilePath(file_id);
+                RUNTIME_CHECK(file_parent_path == delegator.getDTFilePath(file_id));
             }
             auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* page_id= */ new_page_id, file_parent_path, DMFile::ReadMetaMode::all());
 
