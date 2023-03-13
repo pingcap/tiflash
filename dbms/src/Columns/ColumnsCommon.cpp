@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnsCommon.h>
 #include <Columns/IColumn.h>
+#include <common/avx2_byte_count.h>
 #include <common/memcpy.h>
 
 #include <bit>

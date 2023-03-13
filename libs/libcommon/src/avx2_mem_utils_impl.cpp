@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <common/avx2_byte_count.h>
 #include <common/mem_utils_opt.h>
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT

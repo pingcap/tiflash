@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Ltd.
+// Copyright 2022 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/TargetSpecific.h>
 #include <Common/assert_cast.h>
 #include <Core/DecimalComparison.h>
 #include <Core/callOnTypeIndex.h>
@@ -40,6 +41,7 @@
 #include <Functions/StringUtil.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
+#include <common/mem_utils.h>
 #include <fmt/core.h>
 
 #include <limits>
@@ -53,7 +55,7 @@ namespace DB
   *
   * You can compare the following types:
   * - numbers;
-  * - strings and fixed strings;
+  * - strings;
   * - dates;
   * - datetimes;
   *   within each group, but not from different groups;
@@ -69,21 +71,18 @@ namespace ErrorCodes
 extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
-template <typename A, typename B, typename Op>
-struct NumComparisonImpl
-{
-    /// If you don't specify NO_INLINE, the compiler will inline this function, but we don't need this as this function contains tight loop inside.
-    static void NO_INLINE vectorVector(const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
+    (typename A, typename B, typename Op),
+    (A, B, Op),
+    void,
+    vectorVectorImpl,
+    (a, b, c),
+    (const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c),
     {
-        /** GCC 4.8.2 vectorizes a loop only if it is written in this form.
-          * In this case, if you loop through the array index (the code will look simpler),
-          *  the loop will not be vectorized.
-          */
-
         size_t size = a.size();
-        const A * __restrict a_pos = &a[0];
-        const B * __restrict b_pos = &b[0];
-        UInt8 * __restrict c_pos = &c[0];
+        const A * __restrict a_pos = a.data();
+        const B * __restrict b_pos = b.data();
+        UInt8 * __restrict c_pos = c.data();
         const A * a_end = a_pos + size;
 
         while (a_pos < a_end)
@@ -93,13 +92,19 @@ struct NumComparisonImpl
             ++b_pos;
             ++c_pos;
         }
-    }
+    })
 
-    static void NO_INLINE vectorConstant(const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c)
+TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
+    (typename A, typename B, typename Op),
+    (A, B, Op),
+    void,
+    vectorConstantImpl,
+    (a, b, c),
+    (const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c),
     {
         size_t size = a.size();
-        const A * __restrict a_pos = &a[0];
-        UInt8 * __restrict c_pos = &c[0];
+        const A * __restrict a_pos = a.data();
+        UInt8 * __restrict c_pos = c.data();
         const A * a_end = a_pos + size;
 
         while (a_pos < a_end)
@@ -108,9 +113,25 @@ struct NumComparisonImpl
             ++a_pos;
             ++c_pos;
         }
+    })
+
+template <typename A, typename B, typename Op>
+struct NumComparisonImpl
+{
+    using ContainerA = PaddedPODArray<A>;
+    using ContainerB = PaddedPODArray<B>;
+
+    static void NO_INLINE vectorVector(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c)
+    {
+        vectorVectorImpl<A, B, Op>(a, b, c);
     }
 
-    static void constantVector(A a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    static void NO_INLINE vectorConstant(const ContainerA & a, B b, PaddedPODArray<UInt8> & c)
+    {
+        vectorConstantImpl<A, B, Op>(a, b, c);
+    }
+
+    static void constantVector(A a, const ContainerB & b, PaddedPODArray<UInt8> & c)
     {
         NumComparisonImpl<B, A, typename Op::SymmetricOp>::vectorConstant(b, a, c);
     }
@@ -120,31 +141,6 @@ struct NumComparisonImpl
         c = Op::apply(a, b);
     }
 };
-
-
-inline int memcmp16(const void * a, const void * b)
-{
-    /// Assuming little endian.
-
-    UInt64 a_hi = __builtin_bswap64(unalignedLoad<UInt64>(a));
-    UInt64 b_hi = __builtin_bswap64(unalignedLoad<UInt64>(b));
-
-    if (a_hi < b_hi)
-        return -1;
-    if (a_hi > b_hi)
-        return 1;
-
-    UInt64 a_lo = __builtin_bswap64(unalignedLoad<UInt64>(reinterpret_cast<const char *>(a) + 8));
-    UInt64 b_lo = __builtin_bswap64(unalignedLoad<UInt64>(reinterpret_cast<const char *>(b) + 8));
-
-    if (a_lo < b_lo)
-        return -1;
-    if (a_lo > b_lo)
-        return 1;
-
-    return 0;
-}
-
 
 inline time_t dateToDateTime(UInt32 date_data)
 {
@@ -309,15 +305,21 @@ struct StringComparisonWithCollatorImpl
         }
 
         size_t size = a_offsets.size();
+        if (size == 0)
+            return;
 
-        for (size_t i = 0; i < size; ++i)
         {
-            size_t a_size = StringUtil::sizeAt(a_offsets, i) - 1;
-            size_t b_size = StringUtil::sizeAt(b_offsets, i) - 1;
-            size_t a_offset = StringUtil::offsetAt(a_offsets, i);
-            size_t b_offset = StringUtil::offsetAt(b_offsets, i);
+            size_t a_size = a_offsets[0] - 1;
+            size_t b_size = b_offsets[0] - 1;
 
-            c[i] = Op::apply(collator->compare(reinterpret_cast<const char *>(&a_data[a_offset]), a_size, reinterpret_cast<const char *>(&b_data[b_offset]), b_size), 0);
+            c[0] = Op::apply(collator->compare(a_data.raw_data(), a_size, b_data.raw_data(), b_size), 0);
+        }
+        for (size_t i = 1; i < size; ++i)
+        {
+            size_t a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+            size_t b_size = b_offsets[i] - b_offsets[i - 1] - 1;
+
+            c[i] = Op::apply(collator->compare(a_data.raw_data() + a_offsets[i - 1], a_size, b_data.raw_data() + b_offsets[i - 1], b_size), 0);
         }
     }
 
@@ -336,12 +338,20 @@ struct StringComparisonWithCollatorImpl
         }
 
         size_t size = a_offsets.size();
+        if (size == 0)
+            return;
+
         ColumnString::Offset b_size = b.size();
         const char * b_data = reinterpret_cast<const char *>(b.data());
-        for (size_t i = 0; i < size; ++i)
+
         {
-            /// Trailing zero byte of the smaller string is included in the comparison.
-            c[i] = Op::apply(collator->compare(reinterpret_cast<const char *>(&a_data[StringUtil::offsetAt(a_offsets, i)]), StringUtil::sizeAt(a_offsets, i) - 1, b_data, b_size), 0);
+            size_t a_size = a_offsets[0] - 1;
+            c[0] = Op::apply(collator->compare(a_data.raw_data(), a_size, b_data, b_size), 0);
+        }
+        for (size_t i = 1; i < size; ++i)
+        {
+            size_t a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+            c[i] = Op::apply(collator->compare(a_data.raw_data() + a_offsets[i - 1], a_size, b_data, b_size), 0);
         }
     }
 
@@ -361,10 +371,10 @@ struct StringComparisonWithCollatorImpl
         const TiDB::TiDBCollatorPtr & collator,
         ResultType & c)
     {
-        size_t a_n = a.size();
-        size_t b_n = b.size();
+        size_t a_size = a.size();
+        size_t b_size = b.size();
 
-        int res = collator->compareFastPath(reinterpret_cast<const char *>(a.data()), a_n, reinterpret_cast<const char *>(b.data()), b_n);
+        int res = collator->compareFastPath(reinterpret_cast<const char *>(a.data()), a_size, reinterpret_cast<const char *>(b.data()), b_size);
         c = Op::apply(res, 0);
     }
 };
@@ -380,17 +390,25 @@ struct StringComparisonImpl
         PaddedPODArray<ResultType> & c)
     {
         size_t size = a_offsets.size();
+        if (size == 0)
+            return;
 
-        for (size_t i = 0; i < size; ++i)
+        /// Trailing zero byte of the smaller string is included in the comparison.
         {
-            /// Trailing zero byte of the smaller string is included in the comparison.
-            size_t a_size = StringUtil::sizeAt(a_offsets, i);
-            size_t b_size = StringUtil::sizeAt(b_offsets, i);
-            size_t a_offset = StringUtil::offsetAt(a_offsets, i);
-            size_t b_offset = StringUtil::offsetAt(b_offsets, i);
-            int res = memcmp(&a_data[a_offset], &b_data[b_offset], std::min(a_size, b_size));
+            size_t a_size = a_offsets[0];
+            size_t b_size = b_offsets[0];
+
             /// if partial compare result is 0, it means the common part of the two strings are exactly the same, then need to
             /// further compare the string length, otherwise we can get the compare result from partial compare result.
+            int res = mem_utils::CompareStrView(a_data.raw_data(), b_data.raw_data(), std::min(a_size, b_size));
+            c[0] = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
+        }
+        for (size_t i = 1; i < size; ++i)
+        {
+            size_t a_size = a_offsets[i] - a_offsets[i - 1];
+            size_t b_size = b_offsets[i] - b_offsets[i - 1];
+
+            int res = mem_utils::CompareStrView(a_data.raw_data() + a_offsets[i - 1], b_data.raw_data() + b_offsets[i - 1], std::min(a_size, b_size));
             c[i] = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
         }
     }
@@ -398,25 +416,31 @@ struct StringComparisonImpl
     static void NO_INLINE stringVectorConstant(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
-        const std::string & b,
+        const std::string_view & b,
         PaddedPODArray<ResultType> & c)
     {
         size_t size = a_offsets.size();
-        ColumnString::Offset b_size = b.size() + 1;
-        const UInt8 * b_data = reinterpret_cast<const UInt8 *>(b.data());
-        for (size_t i = 0; i < size; ++i)
-        {
-            /// Trailing zero byte of the smaller string is included in the comparison.
-            size_t a_size = StringUtil::sizeAt(a_offsets, i);
-            size_t a_offset = StringUtil::offsetAt(a_offsets, i);
+        if (size == 0)
+            return;
 
-            int res = memcmp(&a_data[a_offset], b_data, std::min(a_size, b_size));
+        ColumnString::Offset b_size = b.size() + 1;
+
+        /// Trailing zero byte of the smaller string is included in the comparison.
+        {
+            size_t a_size = a_offsets[0];
+            int res = mem_utils::CompareStrView(a_data.raw_data(), b.data(), std::min(a_size, b_size));
+            c[0] = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
+        }
+        for (size_t i = 1; i < size; ++i)
+        {
+            size_t a_size = a_offsets[i] - a_offsets[i - 1];
+            int res = mem_utils::CompareStrView(a_data.raw_data() + a_offsets[i - 1], b.data(), std::min(a_size, b_size));
             c[i] = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
         }
     }
 
     static void constantStringVector(
-        const std::string & a,
+        const std::string_view & a,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
         PaddedPODArray<ResultType> & c)
@@ -425,15 +449,12 @@ struct StringComparisonImpl
     }
 
     static void constantConstant(
-        const std::string & a,
-        const std::string & b,
+        const std::string_view & a,
+        const std::string_view & b,
         ResultType & c)
     {
-        size_t a_n = a.size();
-        size_t b_n = b.size();
-
-        int res = memcmp(a.data(), b.data(), std::min(a_n, b_n));
-        c = res == 0 ? Op::apply(a_n, b_n) : Op::apply(res, 0);
+        int res = mem_utils::CompareStrView(a.data(), b.data());
+        c = Op::apply(res, 0);
     }
 };
 
@@ -450,25 +471,67 @@ struct StringEqualsImpl
         PaddedPODArray<UInt8> & c)
     {
         size_t size = a_offsets.size();
-        for (size_t i = 0; i < size; ++i)
-            c[i] = positive == ((i == 0) ? (a_offsets[0] == b_offsets[0] && !memcmp(&a_data[0], &b_data[0], a_offsets[0] - 1)) : (a_offsets[i] - a_offsets[i - 1] == b_offsets[i] - b_offsets[i - 1] && !memcmp(&a_data[a_offsets[i - 1]], &b_data[b_offsets[i - 1]], a_offsets[i] - a_offsets[i - 1] - 1)));
+        if (size == 0)
+            return;
+
+        {
+            size_t a_size = a_offsets[0] - 1;
+            size_t b_size = b_offsets[0] - 1;
+            c[0] = positive == (a_size == b_size && mem_utils::IsStrViewEqual(a_data.raw_data(), b_data.raw_data(), a_size));
+        }
+        for (size_t i = 1; i < size; ++i)
+        {
+            size_t a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+            size_t b_size = b_offsets[i] - b_offsets[i - 1] - 1;
+            c[i] = positive == (a_size == b_size && mem_utils::IsStrViewEqual(a_data.raw_data() + a_offsets[i - 1], b_data.raw_data() + b_offsets[i - 1], a_size));
+        }
     }
 
     static void NO_INLINE stringVectorConstant(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
-        const std::string & b,
+        const std::string_view & b,
         PaddedPODArray<UInt8> & c)
     {
         size_t size = a_offsets.size();
-        ColumnString::Offset b_n = b.size();
-        const UInt8 * b_data = reinterpret_cast<const UInt8 *>(b.data());
-        for (size_t i = 0; i < size; ++i)
-            c[i] = positive == ((i == 0) ? (a_offsets[0] == b_n + 1 && !memcmp(&a_data[0], b_data, b_n)) : (a_offsets[i] - a_offsets[i - 1] == b_n + 1 && !memcmp(&a_data[a_offsets[i - 1]], b_data, b_n)));
+        if (size == 0)
+            return;
+
+        ColumnString::Offset b_size = b.size();
+
+        if (b_size == 0)
+        {
+            /*
+             * Add the fast path of string comparison if the string constant is empty
+             * and b_size is 0. If a_size is also 0, both of string a and b are empty
+             * string. There is no need to call mem_utils::IsStrViewEqual() for string comparison.
+             */
+            {
+                size_t a_size = a_offsets[0] - 1;
+                c[0] = positive == (a_size == 0);
+            }
+            for (size_t i = 1; i < size; ++i)
+            {
+                auto a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+                c[i] = positive == (a_size == 0);
+            }
+        }
+        else
+        {
+            {
+                size_t a_size = a_offsets[0] - 1;
+                c[0] = positive == (a_size == b_size && mem_utils::IsStrViewEqual(a_data.raw_data(), b.data(), a_size));
+            }
+            for (size_t i = 1; i < size; ++i)
+            {
+                size_t a_size = a_offsets[i] - a_offsets[i - 1] - 1;
+                c[i] = positive == (a_size == b_size && mem_utils::IsStrViewEqual(a_data.raw_data() + a_offsets[i - 1], b.data(), a_size));
+            }
+        }
     }
 
     static void constantStringVector(
-        const std::string & a,
+        const std::string_view & a,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
         PaddedPODArray<UInt8> & c)
@@ -477,8 +540,8 @@ struct StringEqualsImpl
     }
 
     static void constantConstant(
-        const std::string & a,
-        const std::string & b,
+        const std::string_view & a,
+        const std::string_view & b,
         UInt8 & c)
     {
         c = positive == (a == b);
@@ -570,7 +633,7 @@ private:
     template <typename T0, typename T1>
     bool executeNumRightType(Block & block, size_t result, const ColumnVector<T0> * col_left, const IColumn * col_right_untyped) const
     {
-        if (const ColumnVector<T1> * col_right = checkAndGetColumn<ColumnVector<T1>>(col_right_untyped))
+        if (const auto * col_right = checkAndGetColumn<ColumnVector<T1>>(col_right_untyped))
         {
             auto col_res = ColumnUInt8::create();
 
@@ -599,7 +662,7 @@ private:
     template <typename T0, typename T1>
     bool executeNumConstRightType(Block & block, size_t result, const ColumnConst * col_left, const IColumn * col_right_untyped) const
     {
-        if (const ColumnVector<T1> * col_right = checkAndGetColumn<ColumnVector<T1>>(col_right_untyped))
+        if (const auto * col_right = checkAndGetColumn<ColumnVector<T1>>(col_right_untyped))
         {
             auto col_res = ColumnUInt8::create();
 
@@ -625,7 +688,7 @@ private:
     template <typename T0>
     bool executeNumLeftType(Block & block, size_t result, const IColumn * col_left_untyped, const IColumn * col_right_untyped) const
     {
-        if (const ColumnVector<T0> * col_left = checkAndGetColumn<ColumnVector<T0>>(col_left_untyped))
+        if (const auto * col_left = checkAndGetColumn<ColumnVector<T0>>(col_left_untyped))
         {
             if (executeNumRightType<T0, UInt8>(block, result, col_left, col_right_untyped)
                 || executeNumRightType<T0, UInt16>(block, result, col_left, col_right_untyped)
@@ -865,7 +928,7 @@ private:
                 throw Exception(fmt::format("String is too long for Date: {}", string_value));
 
             ColumnPtr parsed_const_date_holder = DataTypeDate().createColumnConst(block.rows(), UInt64(date));
-            const ColumnConst * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
+            const auto * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
             executeNumLeftType<DataTypeDate::FieldType>(block, result, left_is_num ? col_left_untyped : parsed_const_date, left_is_num ? parsed_const_date : col_right_untyped);
         }
         else if (is_my_date || is_my_datetime)
@@ -873,7 +936,7 @@ private:
             Field parsed_time = parseMyDateTime(string_value.toString());
             const DataTypePtr & time_type = left_is_num ? left_type : right_type;
             ColumnPtr parsed_const_date_holder = time_type->createColumnConst(block.rows(), parsed_time);
-            const ColumnConst * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
+            const auto * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
             executeNumLeftType<DataTypeMyTimeBase::FieldType>(block, result, left_is_num ? col_left_untyped : parsed_const_date, left_is_num ? parsed_const_date : col_right_untyped);
         }
         else if (is_date_time)
@@ -885,7 +948,7 @@ private:
                 throw Exception(fmt::format("String is too long for DateTime: {}", string_value));
 
             ColumnPtr parsed_const_date_time_holder = DataTypeDateTime().createColumnConst(block.rows(), UInt64(date_time));
-            const ColumnConst * parsed_const_date_time = static_cast<const ColumnConst *>(parsed_const_date_time_holder.get());
+            const auto * parsed_const_date_time = static_cast<const ColumnConst *>(parsed_const_date_time_holder.get());
             executeNumLeftType<DataTypeDateTime::FieldType>(block, result, left_is_num ? col_left_untyped : parsed_const_date_time, left_is_num ? parsed_const_date_time : col_right_untyped);
         }
 
@@ -905,7 +968,7 @@ private:
         const IDataType * type_untyped,
         const bool left_is_num) const
     {
-        const auto type = static_cast<const EnumType *>(type_untyped);
+        const auto * const type = static_cast<const EnumType *>(type_untyped);
 
         const Field x = nearestFieldType(type->getValue(column_string->getValue<String>()));
         const auto enum_col = type->createColumnConst(block.rows(), x);
