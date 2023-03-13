@@ -89,8 +89,6 @@ protected:
     }
 };
 
-<<<<<<< HEAD
-=======
 template <typename TYPE>
 void doTiDBDivideDecimalRoundInternalTest()
 {
@@ -227,7 +225,6 @@ try
 }
 CATCH
 
->>>>>>> c6d55aff39 (fix(expr): round decimal divide result when return type is Int512 (#7035))
 TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDecimal)
 try
 {
