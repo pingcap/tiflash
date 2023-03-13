@@ -52,7 +52,7 @@ FastAddPeerContext::FastAddPeerContext(uint64_t thread_count)
 
 TempUniversalPageStoragePtr FastAddPeerContext::getTempUniversalPageStorage(UInt64 store_id, UInt64 upload_seq)
 {
-    std::unique_lock lock(mu);
+    std::unique_lock lock(ps_cache_mu);
     auto iter = temp_ps_cache.find(store_id);
     if (iter != temp_ps_cache.end() && iter->second.first >= upload_seq)
     {
@@ -63,13 +63,43 @@ TempUniversalPageStoragePtr FastAddPeerContext::getTempUniversalPageStorage(UInt
 
 void FastAddPeerContext::updateTempUniversalPageStorage(UInt64 store_id, UInt64 upload_seq, TempUniversalPageStoragePtr temp_ps)
 {
-    std::unique_lock lock(mu);
+    std::unique_lock lock(ps_cache_mu);
     auto iter = temp_ps_cache.find(store_id);
     if (iter != temp_ps_cache.end() && iter->second.first >= upload_seq)
         return;
 
     temp_ps_cache.erase(store_id);
     temp_ps_cache.emplace(store_id, std::make_pair(upload_seq, temp_ps));
+}
+
+void FastAddPeerContext::insertSegmentEndKeyInfoToCache(NamespaceId table_id, const DM::RowKeyValue & key, UInt64 segment_id)
+{
+    std::unique_lock lock(range_cache_mu);
+    auto & end_key_to_id_map = segment_range_cache[table_id];
+    end_key_to_id_map.erase(key);
+    end_key_to_id_map.emplace(key, segment_id);
+}
+
+UInt64 FastAddPeerContext::getSegmentIdContainingKey(NamespaceId table_id, const DM::RowKeyValue & key)
+{
+    std::unique_lock lock(range_cache_mu);
+    auto iter = segment_range_cache.find(table_id);
+    if (iter != segment_range_cache.end())
+    {
+        auto & end_key_to_id_map = iter->second;
+        auto key_iter = end_key_to_id_map.lower_bound(key);
+        if (key_iter != end_key_to_id_map.end())
+        {
+            return key_iter->second;
+        }
+    }
+    return 0;
+}
+
+void FastAddPeerContext::invalidateCache(NamespaceId table_id)
+{
+    std::unique_lock lock(range_cache_mu);
+    segment_range_cache.erase(table_id);
 }
 
 FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str)
@@ -90,6 +120,16 @@ TempUniversalPageStoragePtr createTempPageStorage(Context & context, const Strin
     const auto dir_prefix = fmt::format("local_{}", dir_seq);
     auto temp_ps_wrapper = std::make_shared<TempUniversalPageStorage>();
     auto delegator = context.getPathPool().getPSDiskDelegatorGlobalMulti(dir_prefix);
+    for (const auto & path : delegator->listPaths())
+    {
+        temp_ps_wrapper->paths.push_back(path);
+        auto file = Poco::File(path);
+        if (file.exists())
+        {
+            LOG_WARNING(Logger::get("createTempPageStorage"), "Path {} already exists, removing it", path);
+            file.remove(true);
+        }
+    }
     auto local_ps = UniversalPageStorage::create( //
         dir_prefix,
         delegator,
@@ -97,10 +137,6 @@ TempUniversalPageStoragePtr createTempPageStorage(Context & context, const Strin
         file_provider);
     local_ps->restore();
     temp_ps_wrapper->temp_ps = local_ps;
-    for (const auto & path : delegator->listPaths())
-    {
-        temp_ps_wrapper->paths.push_back(path);
-    }
     auto * log = &Poco::Logger::get("FastAddPeer");
     LOG_DEBUG(log, "Begin to create temp ps from {}", manifest_key);
 

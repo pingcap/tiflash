@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/CheckpointInfo.h>
+#include <Storages/Transaction/FastAddPeer.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -1009,7 +1010,17 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     }
     LOG_INFO(log, "Ingest checkpoint from store {}", checkpoint_info->remote_store_id);
 
-    auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(physical_table_id, range, checkpoint_info->temp_ps);
+    auto fap_context = dm_context->db_context.getSharedContextDisagg()->fap_context;
+    auto first_segment_id = fap_context->getSegmentIdContainingKey(physical_table_id, range.getStart().toRowKeyValue());
+    auto [cache_valid, segment_meta_infos] = Segment::readAllSegmentsMetaInfoInRange(physical_table_id, first_segment_id, range, checkpoint_info->temp_ps);
+    if (!cache_valid)
+    {
+        fap_context->invalidateCache(physical_table_id);
+    }
+    for (const auto & info : segment_meta_infos)
+    {
+        fap_context->insertSegmentEndKeyInfoToCache(physical_table_id, info.range.getEnd().toRowKeyValue(), info.segment_id);
+    }
     LOG_INFO(log, "Ingest checkpoint segments num {}", segment_meta_infos.size());
     WriteBatches wbs{*dm_context->storage_pool};
     auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //

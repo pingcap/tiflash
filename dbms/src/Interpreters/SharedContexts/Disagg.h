@@ -29,7 +29,7 @@
 
 namespace DB
 {
-struct FastAddPeerContext;
+class FastAddPeerContext;
 using FastAddPeerContextPtr = std::shared_ptr<FastAddPeerContext>;
 
 /**

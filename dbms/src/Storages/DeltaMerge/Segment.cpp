@@ -331,13 +331,37 @@ SegmentPtr Segment::restoreSegment( //
     return segment;
 }
 
-Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
+std::pair<bool, Segment::SegmentMetaInfos> Segment::readAllSegmentsMetaInfoInRange( //
     NamespaceId ns_id,
+    UInt64 first_segment_id,
     const RowKeyRange & target_range,
     UniversalPageStoragePtr temp_ps)
 {
     PageIdU64 current_segment_id = 1; // DELTA_MERGE_FIRST_SEGMENT_ID
     SegmentMetaInfos segment_infos;
+    bool hint_success = false;
+    if (first_segment_id != 0)
+    {
+        try
+        {
+            auto target_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Meta, ns_id), first_segment_id);
+            auto page = temp_ps->read(target_id);
+            Segment::SegmentMetaInfo segment_info;
+            segment_info.segment_id = first_segment_id;
+            ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+            readSegmentMetaInfo(buf, segment_info);
+            if (segment_info.range.check(target_range.getStart()))
+            {
+                segment_infos.push_back(segment_info);
+                current_segment_id = segment_info.next_segment_id;
+                hint_success = true;
+            }
+        }
+        catch (...)
+        {
+            LOG_WARNING(Logger::get(), "Failed to read meta info for segment {}, read from the first segment id;", first_segment_id);
+        }
+    }
     while (current_segment_id != 0)
     {
         Segment::SegmentMetaInfo segment_info;
@@ -356,7 +380,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             break;
         }
     }
-    return segment_infos;
+    return std::make_pair(hint_success, std::move(segment_infos));
 }
 
 Segments Segment::createTargetSegmentsFromCheckpoint( //

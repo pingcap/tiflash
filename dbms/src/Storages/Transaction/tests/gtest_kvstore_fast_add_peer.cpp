@@ -37,7 +37,7 @@ using raft_serverpb::RegionLocalState;
 namespace DB
 {
 FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str);
-TempUniversalPageStoragePtr createTempPageStorage(Context & context, const String & manifest_key, UInt64 dir_seq);
+TempUniversalPageStoragePtr reuseOrCreateTempPageStorage(Context & context, const String & manifest_key);
 
 namespace tests
 {
@@ -59,6 +59,7 @@ public:
         }
         orig_mode = global_context.getPageStorageRunMode();
         global_context.setPageStorageRunMode(PageStorageRunMode::UNI_PS);
+        global_context.getSharedContextDisagg()->initFastAddPeerContext();
         RegionKVStoreTest::SetUp();
     }
 
@@ -108,7 +109,6 @@ protected:
             wi.set_store_id(store_id);
         }
 
-        UInt64 upload_sequence = 1000;
         auto remote_store = global_context.getSharedContextDisagg()->remote_data_store;
         assert(remote_store != nullptr);
         UniversalPageStorage::DumpCheckpointOptions opts{
@@ -129,6 +129,9 @@ protected:
         };
         page_storage->dumpIncrementalCheckpoint(opts);
     }
+
+protected:
+    UInt64 upload_sequence = 1000;
 
 private:
     ContextPtr context;
@@ -227,7 +230,7 @@ try
     const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, bucket, store_id);
     ASSERT_TRUE(!manifests.empty());
     const auto & latest_manifest_key = manifests.latestManifestKey();
-    auto temp_ps_wrapper = createTempPageStorage(global_context, latest_manifest_key, /*dir_seq*/ 10000);
+    auto temp_ps_wrapper = reuseOrCreateTempPageStorage(global_context, latest_manifest_key);
 
     RaftApplyState apply_state;
     {
@@ -245,6 +248,11 @@ try
 
     ASSERT_TRUE(apply_state == region->getApply());
     ASSERT_TRUE(region_state == region->getState());
+
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    ASSERT_TRUE(fap_context->getTempUniversalPageStorage(store_id, upload_sequence) != nullptr);
+    ASSERT_TRUE(fap_context->getTempUniversalPageStorage(store_id, upload_sequence - 1) != nullptr);
+    ASSERT_TRUE(fap_context->getTempUniversalPageStorage(store_id, upload_sequence + 1) == nullptr);
 }
 CATCH
 } // namespace tests

@@ -26,7 +26,6 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathPool.h>
-#include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/CheckpointInfo.h>
 #include <Storages/Transaction/FastAddPeer.h>
@@ -90,6 +89,7 @@ public:
             meta_store.set_id(store_id);
             kvstore->setStore(meta_store);
         }
+        global_context.getSharedContextDisagg()->initFastAddPeerContext();
     }
 
     void TearDown() override
@@ -329,7 +329,7 @@ try
     {
         ASSERT_GT(store->getSegmentsStats().size(), 1);
     }
-    //    store->mergeDeltaAll(*db_context);
+    store->mergeDeltaAll(*db_context);
 
     dumpCheckpoint();
 
