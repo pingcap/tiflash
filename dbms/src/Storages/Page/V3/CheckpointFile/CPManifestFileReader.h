@@ -15,7 +15,7 @@
 #pragma once
 
 #include <IO/CompressedReadBuffer.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadBufferFromRandomAccessFile.h>
 #include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/CheckpointFile/fwd.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -30,7 +30,7 @@ class CPManifestFileReader : private boost::noncopyable
 public:
     struct Options
     {
-        const std::string & file_path;
+        RandomAccessFilePtr plain_file;
     };
 
     static CPManifestFileReaderPtr create(Options options)
@@ -39,7 +39,7 @@ public:
     }
 
     explicit CPManifestFileReader(Options options)
-        : file_reader(std::make_unique<ReadBufferFromFile>(options.file_path))
+        : file_reader(std::make_unique<ReadBufferFromRandomAccessFile>(options.plain_file))
         , compressed_reader(std::make_unique<CompressedReadBuffer<true>>(*file_reader))
     {}
 
@@ -62,7 +62,7 @@ private:
     };
 
     // compressed<plain_file>
-    const std::unique_ptr<ReadBufferFromFile> file_reader;
+    const std::unique_ptr<ReadBufferFromRandomAccessFile> file_reader;
     const ReadBufferPtr compressed_reader;
 
     ReadStage read_stage = ReadStage::ReadingPrefix;

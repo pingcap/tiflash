@@ -362,7 +362,7 @@ void cleanupTables(IDatabase & database, const String & db_name, const Tables & 
     }
 }
 
-void startupTables(IDatabase & database, const String & db_name, Tables & tables, ThreadPool * thread_pool, Poco::Logger * log)
+void startupTables(IDatabase & database, const String & db_name, Tables & tables, legacy::ThreadPool * thread_pool, Poco::Logger * log)
 {
     LOG_INFO(log, "Starting up {} tables.", tables.size());
 

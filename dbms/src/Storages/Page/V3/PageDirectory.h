@@ -171,7 +171,7 @@ public:
 
     bool createNewRef(const PageVersion & ver, const PageId & ori_page_id);
 
-    std::shared_ptr<PageId> createNewExternal(const PageVersion & ver);
+    std::shared_ptr<PageId> createNewExternal(const PageVersion & ver, const PageEntryV3 & entry);
 
     void createDelete(const PageVersion & ver);
 
@@ -347,7 +347,10 @@ public:
 
     std::optional<PageId> getLowerBound(const PageId & start, const DB::PageStorageSnapshotPtr & snap_);
 
-    void apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
+    // Apply the edit into PageDirectory.
+    // If there are CheckpointInfo along with the applied edit, this function will
+    // returns the applied data file ids.
+    std::unordered_set<String> apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
 
     // return ignored entries, and the corresponding space in BlobFile should be reclaimed
     PageEntries updateLocalCacheForRemotePages(PageEntriesEdit && edit, const DB::PageStorageSnapshotPtr & snap_, const WriteLimiterPtr & write_limiter = nullptr);

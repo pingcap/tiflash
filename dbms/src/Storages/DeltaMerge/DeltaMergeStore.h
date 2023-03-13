@@ -17,7 +17,7 @@
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Operators/Operator.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/BackgroundProcessingPool.h>
@@ -34,6 +34,7 @@
 
 namespace DB
 {
+
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 
@@ -358,11 +359,7 @@ public:
         const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
-    bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)
-    {
-        auto dm_context = newDMContext(context, context.getSettingsRef());
-        return flushCache(dm_context, range, try_until_succeed);
-    }
+    bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true);
 
     bool flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed = true);
 
@@ -441,8 +438,14 @@ public:
     StoreStats getStoreStats();
     SegmentsStats getSegmentsStats();
 
-    bool isCommonHandle() const { return is_common_handle; }
-    size_t getRowKeyColumnSize() const { return rowkey_column_size; }
+    bool isCommonHandle() const
+    {
+        return is_common_handle;
+    }
+    size_t getRowKeyColumnSize() const
+    {
+        return rowkey_column_size;
+    }
 
 public:
     /// Methods mainly used by region split.
@@ -611,6 +614,8 @@ private:
     bool handleBackgroundTask(bool heavy);
 
     void restoreStableFiles();
+    void restoreStableFilesFromS3();
+    void restoreStableFilesFromLocal();
 
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
                                           const RowKeyRanges & sorted_ranges,

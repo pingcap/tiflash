@@ -128,7 +128,7 @@ class DAGContext
 {
 public:
     // for non-mpp(cop/batchCop)
-    DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
+    DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
 
     // for mpp
     DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
@@ -272,6 +272,7 @@ public:
 
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
     String getRootExecutorId();
 
     const tipb::DAGRequest * dag_request;
@@ -362,6 +363,9 @@ private:
     // In disaggregated tiflash mode, table_scan in tiflash_compute node will be converted ExchangeReceiver.
     // Record here so we can add to receiver_set and cancel/close it.
     std::optional<std::pair<String, ExchangeReceiverPtr>> disaggregated_compute_exchange_receiver;
+
+    // The keyspace that the DAG request from
+    const KeyspaceID keyspace_id = NullspaceID;
 };
 
 } // namespace DB

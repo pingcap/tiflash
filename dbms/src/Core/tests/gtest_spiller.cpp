@@ -207,7 +207,7 @@ try
         auto blocks = generateBlocks(3);
         for (const auto & block : blocks)
             ref += block.rows();
-        spiller.spillBlocks(blocks, 0);
+        spiller.spillBlocks(std::move(blocks), 0);
     }
     spiller.finishSpill();
     GTEST_ASSERT_EQ(ref, spiller.spilledRows(0));
@@ -227,7 +227,7 @@ try
         {
             auto blocks = generateBlocks(3);
             all_blocks[partition_id].insert(all_blocks[partition_id].end(), blocks.begin(), blocks.end());
-            spiller.spillBlocks(blocks, partition_id);
+            spiller.spillBlocks(std::move(blocks), partition_id);
         }
     }
     spiller.finishSpill();
@@ -294,7 +294,8 @@ try
     Blocks blocks = generateBlocks(50);
     for (auto & spiller : spillers)
     {
-        spiller->spillBlocks(blocks, 0);
+        auto blocks_to_spill = blocks;
+        spiller->spillBlocks(std::move(blocks_to_spill), 0);
         spiller->finishSpill();
         verifyRestoreBlocks(*spiller, 0, 0, 0, blocks);
         if (!spiller->releaseSpilledFileOnRestore())
@@ -322,7 +323,7 @@ try
         {
             auto blocks = generateSortedBlocks(3);
             all_blocks[partition_id].insert(all_blocks[partition_id].end(), blocks.begin(), blocks.end());
-            spiller.spillBlocks(blocks, partition_id);
+            spiller.spillBlocks(std::move(blocks), partition_id);
         }
     }
     spiller.finishSpill();
@@ -384,11 +385,12 @@ try
         Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
         Blocks all_blocks;
         auto blocks = generateBlocks(20);
-        spiller.spillBlocks(blocks, 0);
-        spiller.spillBlocks(blocks, 0);
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        auto blocks_copy = blocks;
+        spiller.spillBlocks(std::move(blocks), 0);
+        spiller.spillBlocks(std::move(blocks_copy), 0);
         spiller.finishSpill();
-        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
-        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
         verifyRestoreBlocks(spiller, 0, 20, 1, all_blocks, false);
     }
     /// append_dummy_read = true
@@ -397,11 +399,12 @@ try
         Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
         Blocks all_blocks;
         auto blocks = generateBlocks(20);
-        spiller.spillBlocks(blocks, 0);
-        spiller.spillBlocks(blocks, 0);
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        auto blocks_copy = blocks;
+        spiller.spillBlocks(std::move(blocks), 0);
+        spiller.spillBlocks(std::move(blocks_copy), 0);
         spiller.finishSpill();
-        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
-        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
         verifyRestoreBlocks(spiller, 0, 20, 20, all_blocks, true);
     }
 }
@@ -418,11 +421,12 @@ try
         Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
         Blocks all_blocks;
         auto blocks = generateBlocks(50);
-        spiller.spillBlocks(blocks, 0);
-        spiller.spillBlocks(blocks, 0);
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
+        auto blocks_copy = blocks;
+        spiller.spillBlocks(std::move(blocks), 0);
+        spiller.spillBlocks(std::move(blocks_copy), 0);
         spiller.finishSpill();
-        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
-        all_blocks.insert(all_blocks.end(), blocks.begin(), blocks.end());
         verifyRestoreBlocks(spiller, 0, 2, 1, all_blocks);
     }
     /// case 2, one spill write to multiple files
@@ -430,30 +434,32 @@ try
         spiller_config_for_append_write.max_spilled_rows_per_file = 1;
         Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
         auto all_blocks = generateBlocks(20);
-        spiller.spillBlocks(all_blocks, 0);
+        auto reference = all_blocks;
+        spiller.spillBlocks(std::move(all_blocks), 0);
         spiller.finishSpill();
-        verifyRestoreBlocks(spiller, 0, 0, 20, all_blocks);
+        verifyRestoreBlocks(spiller, 0, 0, 20, reference);
     }
     /// case 3, spill empty blocks to existing spilled file
     {
         spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
         Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
         Blocks all_blocks = generateBlocks(20);
-        spiller.spillBlocks(all_blocks, 0);
+        auto reference = all_blocks;
+        spiller.spillBlocks(std::move(all_blocks), 0);
         Blocks empty_blocks;
-        spiller.spillBlocks(empty_blocks, 0);
+        spiller.spillBlocks(std::move(empty_blocks), 0);
         BlocksList empty_blocks_list;
         BlocksListBlockInputStream block_input_stream(std::move(empty_blocks_list));
         spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
         spiller.finishSpill();
-        verifyRestoreBlocks(spiller, 0, 2, 1, all_blocks);
+        verifyRestoreBlocks(spiller, 0, 2, 1, reference);
     }
     /// case 4, spill empty blocks to new spilled file
     {
         spiller_config_for_append_write.max_spilled_rows_per_file = 1000000000;
         Spiller spiller(spiller_config_for_append_write, false, 1, spiller_test_header, logger);
         Blocks empty_blocks;
-        spiller.spillBlocks(empty_blocks, 0);
+        spiller.spillBlocks(std::move(empty_blocks), 0);
         BlocksList empty_blocks_list;
         BlocksListBlockInputStream block_input_stream(std::move(empty_blocks_list));
         spiller.spillBlocksUsingBlockInputStream(block_input_stream, 0, []() { return false; });
@@ -497,7 +503,8 @@ try
         data.push_back(ColumnWithTypeAndName(std::move(column), type_and_name.type, type_and_name.name));
     }
     ret.emplace_back(data);
-    spiller.spillBlocks(ret, 0);
+    auto reference = ret;
+    spiller.spillBlocks(std::move(ret), 0);
     spiller.finishSpill();
     auto block_streams = spiller.restoreBlocks(0, 2);
     GTEST_ASSERT_EQ(block_streams.size(), 1);
@@ -507,10 +514,10 @@ try
         for (Block block = block_stream->read(); block; block = block_stream->read())
             restored_blocks.push_back(block);
     }
-    GTEST_ASSERT_EQ(ret.size(), restored_blocks.size());
-    for (size_t i = 0; i < ret.size(); ++i)
+    GTEST_ASSERT_EQ(reference.size(), restored_blocks.size());
+    for (size_t i = 0; i < reference.size(); ++i)
     {
-        blockEqual(materializeBlock(ret[i]), restored_blocks[i]);
+        blockEqual(materializeBlock(reference[i]), restored_blocks[i]);
     }
 }
 CATCH
@@ -552,9 +559,10 @@ try
         data.push_back(column);
     }
     ret.emplace_back(data);
-    spiller.spillBlocks(ret, 0);
+    auto reference = ret;
+    spiller.spillBlocks(std::move(ret), 0);
     spiller.finishSpill();
-    verifyRestoreBlocks(spiller, 0, 2, 1, ret);
+    verifyRestoreBlocks(spiller, 0, 2, 1, reference);
 }
 CATCH
 
@@ -588,9 +596,10 @@ try
         data.push_back(column);
     }
     ret.emplace_back(data);
-    spiller.spillBlocks(ret, 0);
+    auto reference = ret;
+    spiller.spillBlocks(std::move(ret), 0);
     spiller.finishSpill();
-    verifyRestoreBlocks(spiller, 0, 2, 1, ret);
+    verifyRestoreBlocks(spiller, 0, 2, 1, reference);
 }
 CATCH
 
@@ -622,9 +631,10 @@ try
         data.push_back(column);
     }
     ret.emplace_back(data);
-    spiller.spillBlocks(ret, 0);
+    auto reference = ret;
+    spiller.spillBlocks(std::move(ret), 0);
     spiller.finishSpill();
-    verifyRestoreBlocks(spiller, 0, 2, 1, ret);
+    verifyRestoreBlocks(spiller, 0, 2, 1, reference);
 }
 CATCH
 
@@ -652,9 +662,10 @@ try
         data.push_back(column);
     }
     ret.emplace_back(data);
-    spiller.spillBlocks(ret, 0);
+    auto reference = ret;
+    spiller.spillBlocks(std::move(ret), 0);
     spiller.finishSpill();
-    verifyRestoreBlocks(spiller, 0, 2, 1, ret);
+    verifyRestoreBlocks(spiller, 0, 2, 1, reference);
 }
 CATCH
 

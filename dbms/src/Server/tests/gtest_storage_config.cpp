@@ -741,6 +741,7 @@ dir = ["123"]
 [storage.s3]
 access_key_id = "11111111"
 secret_access_key = "22222222"
+root = "root123"
         )",
         R"(
 [storage]
@@ -751,6 +752,7 @@ endpoint = "127.0.0.1:8080"
 bucket = "s3_bucket"
 access_key_id = "33333333"
 secret_access_key = "44444444"
+root = "root123"
         )",
     };
 
@@ -774,6 +776,7 @@ secret_access_key = "44444444"
         const auto & s3_config = storage.s3_config;
         ASSERT_EQ(s3_config.access_key_id, env_access_key_id);
         ASSERT_EQ(s3_config.secret_access_key, env_secret_access_key);
+        ASSERT_EQ(s3_config.root, "root123");
         if (i == 0)
         {
             ASSERT_TRUE(s3_config.endpoint.empty());

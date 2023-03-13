@@ -29,10 +29,15 @@ namespace DB
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
+class FileSegment;
+using FileSegmentPtr = std::shared_ptr<FileSegment>;
+
 class PosixRandomAccessFile : public RandomAccessFile
 {
 public:
-    PosixRandomAccessFile(const std::string & file_name_, int flags, const ReadLimiterPtr & read_limiter_ = nullptr);
+    static RandomAccessFilePtr create(const String & file_name_);
+
+    PosixRandomAccessFile(const std::string & file_name_, int flags, const ReadLimiterPtr & read_limiter_ = nullptr, const FileSegmentPtr & file_seg_ = nullptr);
 
     ~PosixRandomAccessFile() override;
 
@@ -55,6 +60,7 @@ private:
     std::string file_name;
     int fd;
     ReadLimiterPtr read_limiter;
+    FileSegmentPtr file_seg;
 };
 
 } // namespace DB

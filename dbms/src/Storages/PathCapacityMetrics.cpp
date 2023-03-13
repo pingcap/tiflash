@@ -18,6 +18,7 @@
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <common/logger_useful.h>
 #include <sys/statvfs.h>
@@ -46,7 +47,9 @@ PathCapacityMetrics::PathCapacityMetrics(
     const Strings & main_paths_,
     const std::vector<size_t> & main_capacity_quota_,
     const Strings & latest_paths_,
-    const std::vector<size_t> & latest_capacity_quota_)
+    const std::vector<size_t> & latest_capacity_quota_,
+    String remote_cache_path,
+    size_t remote_cache_capacity)
     : capacity_quota(capacity_quota_)
     , log(Logger::get())
 {
@@ -77,6 +80,10 @@ PathCapacityMetrics::PathCapacityMetrics(
         {
             all_paths[latest_paths_[i]] = safeGetQuota(latest_capacity_quota_, i);
         }
+    }
+    if (!remote_cache_path.empty())
+    {
+        all_paths[remote_cache_path] = remote_cache_capacity;
     }
 
     for (auto && [path, quota] : all_paths)
@@ -137,7 +144,7 @@ std::map<FSID, DiskCapacity> PathCapacityMetrics::getDiskStats()
     return disk_stats_map;
 }
 
-FsStats PathCapacityMetrics::getFsStats()
+FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
 {
     // Now we assume the size of `path_infos` will not change, don't acquire heavy lock on `path_infos`.
     FsStats total_stat{};
@@ -199,6 +206,13 @@ FsStats PathCapacityMetrics::getFsStats()
     CurrentMetrics::set(CurrentMetrics::StoreSizeCapacity, total_stat.capacity_size);
     CurrentMetrics::set(CurrentMetrics::StoreSizeAvailable, total_stat.avail_size);
     CurrentMetrics::set(CurrentMetrics::StoreSizeUsed, total_stat.used_size);
+
+    if (finalize_capacity && S3::ClientFactory::instance().isEnabled())
+    {
+        // When S3 is enabled, use a large fake stat to avoid disk limitation by PD.
+        total_stat.capacity_size = 1024UL * 1024UL * 1024UL * 1024UL * 1024UL * 1024UL; // 1024PB
+        total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
+    }
 
     return total_stat;
 }

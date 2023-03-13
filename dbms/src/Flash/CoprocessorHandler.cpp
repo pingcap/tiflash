@@ -18,8 +18,11 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
+#include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Flash/ServiceUtils.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
@@ -74,7 +77,7 @@ grpc::Status CoprocessorHandler::execute()
 
     try
     {
-        RUNTIME_CHECK_MSG(!cop_context.db_context.isDisaggregatedComputeMode(), "cannot run cop or batchCop request on tiflash_compute node");
+        RUNTIME_CHECK_MSG(!cop_context.db_context.getSharedContextDisagg()->isDisaggregatedComputeMode(), "cannot run cop or batchCop request on tiflash_compute node");
 
         switch (cop_request->tp())
         {
@@ -109,6 +112,7 @@ grpc::Status CoprocessorHandler::execute()
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),
+                RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 /*is_batch_cop=*/false,
                 Logger::get("CoprocessorHandler"));

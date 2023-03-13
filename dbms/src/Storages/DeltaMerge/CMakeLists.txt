@@ -31,7 +31,7 @@ add_headers_and_sources(delta_merge ./Remote)
 add_headers_and_sources(delta_merge ./Remote/DataStore)
 
 add_library(delta_merge ${delta_merge_headers} ${delta_merge_sources})
-target_link_libraries(delta_merge PRIVATE dbms dtpb page RemoteTaskProto)
+target_link_libraries(delta_merge PRIVATE dbms page)
 
 add_subdirectory(workload)
 
