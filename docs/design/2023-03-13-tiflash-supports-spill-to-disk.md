@@ -32,7 +32,7 @@ The hash join spilling algorithm is complex. We dispatch the build and probe dat
 ### Hash Aggregation
 Each thread does operation of local aggregation with its own input data. If the memory exceeds the limit, each partition in the Hash table will be converted into an independent block and spilled to disk.
 - If there is no data spilled to disk, merging the local aggregation based on the original algorithm.
-- If some data is spilled to disk, doing final aggregation of the memory data and the spilled data
+- If some data is spilled to disk, spill all the in memory data to spill at the end, and doing memory efficient merge aggregation based on the spilled data
 - #### Overview
   ![agg_spill_overview](./images/2023-03-13-tiflash-supports-spill-to-disk-agg_with_spill.png)
 
@@ -49,5 +49,5 @@ Each thread does operation of local aggregation with its own input data. If the 
 
 ## Impacts & Risks
 - For all operators, when the memory usage exceeds the limit, data will be spilled and restored, so the performance will be lower than that without spilling to disk.
-- For hash join, even if spilling to disk does not occur after the memory limit is configured, the performance will be slightly lower than that without memory limit configured because data needs to be partitioned.
-- At present, the operation of spilling to disk is limited to three rounds at most. If the third round is exceeded, the memory limit will be lifted by default. In this case, OOM may occur.
+- For hash join, even if spilling to disk does not occur after the memory limit is configured, the performance will be slightly lower than that without memory limit configured because the build side data always need to be partitioned.
+- For hash join, the operation of spilling to disk is limited to three rounds at most. If the third round hash join still exceeds the memory limit, the memory limit will be ignored, and there is a risk of memory quota exceeded.
