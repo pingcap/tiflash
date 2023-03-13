@@ -68,13 +68,9 @@ Block AggregatingBlockInputStream::readImpl()
             }
             aggregator.finishSpill();
             if (!aggregator.hasRestoreData())
-            {
                 impl = std::make_unique<NullBlockInputStream>(aggregator.getHeader(final));
-            }
             else
-            {
                 impl = std::make_unique<SpilledRestoreMergingBlockInputStream>(aggregator, final, log->identifier());
-            }
         }
     }
 
