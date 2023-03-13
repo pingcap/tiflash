@@ -38,10 +38,7 @@ using UniversalPageIdAndEntries = std::vector<UniversalPageIdAndEntry>;
 class S3PageReader : private Allocator<false>
 {
 public:
-    explicit S3PageReader(std::shared_ptr<Aws::S3::S3Client> s3_client_, const String & bucket_)
-        : s3_client(s3_client_)
-        , bucket(bucket_)
-    {}
+    S3PageReader() = default;
 
     Page read(const UniversalPageIdAndEntry & page_id_and_entry);
 
@@ -51,10 +48,6 @@ public:
     // return two page_maps, the first contains the whole page for given page id which is used to update local cache,
     // the second just contains read fields data.
     std::pair<UniversalPageMap, UniversalPageMap> read(const FieldReadInfos & to_read);
-
-private:
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
 };
 
 using S3PageReaderPtr = std::unique_ptr<S3PageReader>;

@@ -1592,23 +1592,28 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             // proxy update store-id before status set `RaftProxyStatus::Running`
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
-            LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
-
-            size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
-            // compute node do not need to handle read index
             if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
-                runner_cnt = 0;
-            if (runner_cnt > 0)
             {
-                auto & kvstore_ptr = tmt_context.getKVStore();
-                kvstore_ptr->initReadIndexWorkers(
-                    [&]() {
-                        // get from tmt context
-                        return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
-                    },
-                    /*running thread count*/ runner_cnt);
-                tmt_context.getKVStore()->asyncRunReadIndexWorkers();
-                WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
+                // compute node do not need to handle read index
+                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+            }
+            else
+            {
+                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+
+                size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
+                if (runner_cnt > 0)
+                {
+                    auto & kvstore_ptr = tmt_context.getKVStore();
+                    kvstore_ptr->initReadIndexWorkers(
+                        [&]() {
+                            // get from tmt context
+                            return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
+                        },
+                        /*running thread count*/ runner_cnt);
+                    tmt_context.getKVStore()->asyncRunReadIndexWorkers();
+                    WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
+                }
             }
         }
         SCOPE_EXIT({

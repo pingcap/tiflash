@@ -759,8 +759,7 @@ public:
             "test.t",
             delegator,
             PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0},
-            s3_client,
-            bucket);
+            s3_client);
         log = Logger::get("UniversalPageStorageServiceCheckpointTest");
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
     }

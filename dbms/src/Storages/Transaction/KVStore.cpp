@@ -246,7 +246,7 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(
     UInt64 region_id,
     UInt64 index,
     UInt64 term,
-    TMTContext & tmt)
+    TMTContext & tmt) const
 {
     std::vector<BaseBuffView> keys;
     std::vector<BaseBuffView> vals;

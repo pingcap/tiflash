@@ -36,8 +36,7 @@ UniversalPageStoragePtr UniversalPageStorage::create(
     PSDiskDelegatorPtr delegator,
     const PageStorageConfig & config,
     const FileProviderPtr & file_provider,
-    std::shared_ptr<Aws::S3::S3Client> s3_client,
-    const String & bucket)
+    std::shared_ptr<Aws::S3::S3Client> s3_client)
 {
     UniversalPageStoragePtr storage = std::make_shared<UniversalPageStorage>(name, delegator, config, file_provider);
     storage->blob_store = std::make_unique<PS::V3::universal::BlobStoreType>(
@@ -47,7 +46,7 @@ UniversalPageStoragePtr UniversalPageStorage::create(
         PS::V3::BlobConfig::from(config));
     if (s3_client != nullptr)
     {
-        storage->remote_reader = std::make_unique<PS::V3::S3PageReader>(s3_client, bucket);
+        storage->remote_reader = std::make_unique<PS::V3::S3PageReader>();
         storage->remote_locks_local_mgr = std::make_unique<PS::V3::S3LockLocalManager>();
     }
     return storage;

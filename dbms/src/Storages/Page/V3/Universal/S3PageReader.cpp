@@ -15,6 +15,7 @@
 #include <IO/ReadBufferFromFile.h>
 #include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 
 namespace DB::PS::V3
@@ -24,7 +25,8 @@ Page S3PageReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
     const auto & page_entry = page_id_and_entry.second;
     RUNTIME_CHECK(page_entry.checkpoint_info.has_value());
     auto location = page_entry.checkpoint_info.data_location;
-    S3::S3RandomAccessFile file(s3_client, bucket, *location.data_file_id);
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+    S3::S3RandomAccessFile file(s3_client, s3_client->bucket(), *location.data_file_id);
     file.seek(location.offset_in_file, SEEK_SET);
     auto buf_size = location.size_in_file;
     char * data_buf = static_cast<char *>(alloc(buf_size));

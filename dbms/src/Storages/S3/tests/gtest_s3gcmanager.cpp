@@ -373,22 +373,26 @@ try
         {
             // not managed by lock_store_id
             auto df = S3Filename::newCheckpointData(store_id, 300, 1);
+            keys.emplace_back(df.toFullKey());
             auto lock_key = df.toView().getLockKey(store_id, safe_sequence + 1);
             keys.emplace_back(lock_key);
 
             // not managed by the latest manifest yet
             df = S3Filename::newCheckpointData(store_id, 300, 1);
+            keys.emplace_back(df.toFullKey());
             lock_key = df.toView().getLockKey(lock_store_id, safe_sequence + 1);
             keys.emplace_back(lock_key);
 
             // still valid in latest manifest
             df = S3Filename::newCheckpointData(store_id, 300, 1);
+            keys.emplace_back(df.toFullKey());
             lock_key = df.toView().getLockKey(lock_store_id, safe_sequence - 1);
             valid_lock_files.emplace(lock_key);
             keys.emplace_back(lock_key);
 
             // not valid in latest manfiest, should be delete
             df = S3Filename::newCheckpointData(store_id, 300, 2);
+            keys.emplace_back(df.toFullKey());
             lock_key = df.toView().getLockKey(lock_store_id, safe_sequence - 1);
             expected_deleted_lock_key = lock_key;
             expected_created_delmark = df.toView().getDelMarkKey();
