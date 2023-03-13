@@ -46,7 +46,7 @@ struct TiDBDivideFloatingImpl<A, B, false>
     using ResultType = typename NumberTraits::ResultOfFloatingPointDivision<A, B>::Type;
 
     template <typename Result = ResultType>
-    static Result apply(A a, B b)
+    static Result apply(A x, B d)
     {
         /// ref https://github.com/pingcap/tiflash/issues/6462
         /// For division of Decimal/Decimal or Int/Decimal or Decimal/Int, we should round the result to make compatible with TiDB.
