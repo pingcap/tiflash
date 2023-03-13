@@ -70,7 +70,7 @@ public:
         auto mock_gc_owner = OwnerManager::createMockOwner("owner_0");
         auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_s3_client);
         auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
-        gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_s3_client, mock_gc_owner, mock_lock_client, config);
+        gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_gc_owner, mock_lock_client, config);
 
         ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client, mock_s3_client->bucket());
 
