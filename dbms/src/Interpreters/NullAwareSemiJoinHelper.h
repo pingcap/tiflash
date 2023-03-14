@@ -130,7 +130,9 @@ public:
         const BlocksList & right_blocks,
         Join::NullRowsColumns & null_rows,
         size_t max_block_size,
-        const JoinOtherConditions & other_conditions);
+        const JoinOtherConditions & other_conditions,
+        std::atomic<UInt64> & null_rows_time,
+        std::atomic<UInt64> & all_blocks_time);
 
     void joinResult(std::list<Result *> & res_list);
 
@@ -152,6 +154,9 @@ private:
     size_t max_block_size;
 
     const JoinOtherConditions & other_conditions;
+
+    std::atomic<UInt64> & null_rows_time;
+    std::atomic<UInt64> & all_blocks_time;
 };
 
 } // namespace DB

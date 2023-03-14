@@ -362,6 +362,9 @@ private:
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arenas pools;
 
+    mutable std::atomic<UInt64> null_rows_time{0};
+    mutable std::atomic<UInt64> all_blocks_time{0};
+
 private:
     Type type = Type::EMPTY;
 

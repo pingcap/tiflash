@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnConst.h>
 #include <Common/typeid_cast.h>
+#include <Common/Stopwatch.h>
 #include <Interpreters/NullAwareSemiJoinHelper.h>
 
 namespace DB
@@ -168,7 +169,9 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     const BlocksList & right_blocks_,
     Join::NullRowsColumns & null_rows_,
     size_t max_block_size_,
-    const JoinOtherConditions & other_conditions_)
+    const JoinOtherConditions & other_conditions_,
+    std::atomic<UInt64> & null_rows_time_,
+    std::atomic<UInt64> & all_blocks_time_)
     : block(block_)
     , left_columns(left_columns_)
     , right_columns(right_columns_)
@@ -176,6 +179,8 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     , null_rows(null_rows_)
     , max_block_size(max_block_size_)
     , other_conditions(other_conditions_)
+    , null_rows_time(null_rows_time_)
+    , all_blocks_time(all_blocks_time_)
 {
     static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftAnti
                   || KIND == NullAware_LeftSemi);
@@ -210,12 +215,17 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NASemiJoin
     if (res_list.empty())
         return;
 
+    Stopwatch watch;
     runStep<NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS>(res_list, next_step_res_list);
+    null_rows_time.fetch_add(watch.elapsed());
+
     res_list.swap(next_step_res_list);
     if (res_list.empty())
         return;
 
+    watch.restart();
     runStepAllBlocks(res_list);
+    all_blocks_time.fetch_add(watch.elapsed());
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
