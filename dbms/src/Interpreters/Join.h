@@ -26,6 +26,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <absl/base/optimization.h>
 
 #include <shared_mutex>
 
@@ -271,6 +272,12 @@ public:
     // only use for left semi joins.
     const String match_helper_name;
 
+    struct alignas(ABSL_CACHELINE_SIZE) RowsNotInsertToMap
+    {
+        RowRefList head;
+        size_t size = 0;
+    };
+
 private:
     friend class NonJoinedBlockInputStream;
 
@@ -328,10 +335,11 @@ private:
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions
     /// For null-aware semi join family, including rows with NULL join keys.
-    std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
+    std::vector<RowsNotInsertToMap> rows_not_inserted_to_map;
 
     /// The RowRefList in `rows_not_inserted_to_map` that removes the empty RowRefList.
     PaddedPODArray<RowRefList *> rows_with_null_keys;
+    size_t rows_with_null_keys_size = 0;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arenas pools;
