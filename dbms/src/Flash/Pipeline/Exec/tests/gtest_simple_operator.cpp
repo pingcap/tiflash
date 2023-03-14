@@ -65,7 +65,7 @@ public:
         PipelineExecGroupBuilder group_builder;
         PhysicalPlanVisitor::visitPostOrder(plan_tree, [&](const PhysicalPlanNodePtr & plan) {
             assert(plan);
-            plan->buildPipelineExecGroup(exec_status, group_builder, context.context, /*concurrency=*/1);
+            plan->buildPipelineExecGroup(exec_status, group_builder, *context.context, /*concurrency=*/1);
         });
         auto result = group_builder.build();
         assert(result.size() == 1);

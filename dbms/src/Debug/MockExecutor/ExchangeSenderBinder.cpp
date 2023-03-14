@@ -96,8 +96,17 @@ ExecutorBinderPtr compileExchangeSender(
                 break;
             }
         }
+        auto schema_string = [&]() {
+            FmtBuffer buffer;
+            buffer.joinStr(
+                input->output_schema.cbegin(),
+                input->output_schema.cend(),
+                [](const auto & item, FmtBuffer & buf) { buf.append(item.first); },
+                ", ");
+            return buffer.toString();
+        };
         if (schema_index == input->output_schema.size())
-            throw Exception("Unknown partition key: " + partition_key->getColumnName());
+            throw Exception(fmt::format("Unknown partition key: {}, schema is [{}]", partition_key->getColumnName(), schema_string()));
     }
     ExecutorBinderPtr exchange_sender = std::make_shared<mock::ExchangeSenderBinder>(
         executor_index,

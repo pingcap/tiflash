@@ -190,7 +190,7 @@ Events Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context
     if (isFineGrainedMode())
     {
         auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
-        assert(!fine_grained_exec_group.empty());
+        RUNTIME_CHECK(!fine_grained_exec_group.empty());
         for (auto & pipeline_exec : fine_grained_exec_group)
             self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), std::move(pipeline_exec)));
         LOG_DEBUG(log, "Execute in fine grained model and generate {} fine grained pipeline event", self_events.size());
