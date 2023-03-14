@@ -211,10 +211,7 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, const Logge
 
     readConfig(table, "format_version", format_version);
 
-    if (auto version = table->get_qualified_as<UInt64>("api_version"); version)
-    {
-        api_version = *version;
-    }
+    readConfig(table, "api_version", api_version);
 
     auto get_bool_config_or_default = [&](const String & name, bool default_value) {
 #ifndef NDEBUG

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/Page/V3/Universal/RaftDataReader.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 
 namespace DB
 {
@@ -38,6 +39,16 @@ void RaftDataReader::traverse(const UniversalPageId & start, const UniversalPage
         const auto page_id_and_entry = uni_ps.page_directory->getByID(page_id, snapshot);
         acceptor(page_id, uni_ps.blob_store->read(page_id_and_entry));
     }
+}
+
+void RaftDataReader::traverseRaftLogForRegion(UInt64 region_id, const std::function<void(const UniversalPageId & page_id, DB::Page page)> & acceptor)
+{
+    auto start = UniversalPageIdFormat::toFullRaftLogPrefix(region_id);
+    auto end = UniversalPageIdFormat::toFullRaftLogPrefix(region_id + 1);
+    traverse(start, end, [&](const UniversalPageId & page_id, const DB::Page & page) {
+        if (page_id.hasPrefix(start))
+            acceptor(page_id, page);
+    });
 }
 
 std::optional<UniversalPageId> RaftDataReader::getLowerBound(const UniversalPageId & page_id)

@@ -59,6 +59,7 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
+#include <Server/BgStorageInit.h>
 #include <Server/CertificateReloader.h>
 #include <Server/HTTPHandlerFactory.h>
 #include <Server/MetricsPrometheus.h>
@@ -517,68 +518,6 @@ private:
     const LoggerPtr & log;
 };
 
-std::unique_ptr<std::thread> initStores(Context & global_context, const LoggerPtr & log, bool lazily_init_store, EngineStoreServerWrap * tiflash_instance_wrap)
-{
-    // If `tiflash_instance_wrap` is not nullptr, S3 is enabled.
-    // We must wait for tiflash-proxy's initializtion finished before initialzing DeltaMergeStores,
-    // because we need store_id to scan dmfiles from S3.
-    RUNTIME_CHECK_MSG(lazily_init_store || tiflash_instance_wrap == nullptr, "When S3 enabled, lazily_init_store must be true.");
-    auto wait_proxy = [](EngineStoreServerWrap * tiflash_instance_wrap) {
-        while (tiflash_instance_wrap->proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        }
-        auto status = tiflash_instance_wrap->proxy_helper->getProxyStatus();
-        RUNTIME_CHECK_MSG(status == RaftProxyStatus::Running, "RaftProxyStatus::{}", magic_enum::enum_name(status));
-    };
-
-    auto do_init_stores = [&global_context, &log, tiflash_instance_wrap, wait_proxy]() {
-        if (tiflash_instance_wrap != nullptr)
-        {
-            wait_proxy(tiflash_instance_wrap);
-        }
-        auto storages = global_context.getTMTContext().getStorages().getAllStorage();
-        int init_cnt = 0;
-        int err_cnt = 0;
-        for (auto & [table_id, storage] : storages)
-        {
-            // This will skip the init of storages that do not contain any data. TiFlash now sync the schema and
-            // create all tables regardless the table have define TiFlash replica or not, so there may be lots
-            // of empty tables in TiFlash.
-            // Note that we still need to init stores that contains data (defined by the stable dir of this storage
-            // is exist), or the data used size reported to PD is not correct.
-            try
-            {
-                init_cnt += storage->initStoreIfDataDirExist() ? 1 : 0;
-                LOG_INFO(log, "Storage inited done [table_id={}]", table_id);
-            }
-            catch (...)
-            {
-                err_cnt++;
-                tryLogCurrentException(log, fmt::format("Storage inited fail, [table_id={}]", table_id));
-            }
-        }
-        LOG_INFO(
-            log,
-            "Storage inited finish. [total_count={}] [init_count={}] [error_count={}] [datatype_fullname_count={}]",
-            storages.size(),
-            init_cnt,
-            err_cnt,
-            DataTypeFactory::instance().getFullNameCacheSize());
-    };
-    if (lazily_init_store)
-    {
-        LOG_INFO(log, "Lazily init store.");
-        // apply the inited in another thread to shorten the start time of TiFlash
-        return std::make_unique<std::thread>(do_init_stores);
-    }
-    else
-    {
-        LOG_INFO(log, "Not lazily init store.");
-        do_init_stores();
-        return nullptr;
-    }
-}
 
 class Server::TcpHttpServersHolder
 {
@@ -881,7 +820,7 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count / 2);
     GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 2);
 
-    IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count);
+    IOThreadPool::instance->setMaxThreads(max_io_thread_count);
     IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
     IOThreadPool::instance->setQueueSize(max_io_thread_count * 2);
 }
@@ -1231,8 +1170,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Global PageStorage run mode is {}", magic_enum::enum_name(global_context->getPageStorageRunMode()));
     }
 
-    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
-        || global_context->getSharedContextDisagg()->notDisaggregatedMode())
+    // Only when this node is disagg compute node and autoscaler is enabled, we don't need the WriteNodePageStorage instance
+    // Disagg compute node without autoscaler still need this instance for proxy's data
+    if (!(global_context->getSharedContextDisagg()->isDisaggregatedComputeMode()
+          && global_context->getSharedContextDisagg()->use_autoscaler))
     {
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
     }
@@ -1240,6 +1181,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
     {
         global_context->getSharedContextDisagg()->initWriteNodeSnapManager();
+        global_context->getSharedContextDisagg()->initFastAddPeerContext();
     }
 
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
@@ -1260,7 +1202,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     else
     {
-        LOG_INFO(log, fmt::format("Detected memory capacity {} bytes, you have config `max_memory_usage_for_all_queries` to {}, finally limit to {} bytes.", server_info.memory_info.capacity, settings.max_memory_usage_for_all_queries.toString(), settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity)));
+        LOG_INFO(log,
+                 "Detected memory capacity {} bytes, you have config `max_memory_usage_for_all_queries` to {}, finally limit to {} bytes.",
+                 server_info.memory_info.capacity,
+                 settings.max_memory_usage_for_all_queries.toString(),
+                 settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity));
     }
 
     /// Initialize main config reloader.
@@ -1375,7 +1321,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Load remaining databases
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
-    std::unique_ptr<std::thread> init_stores_thread;
+    BgStorageInitHolder bg_init_stores;
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         /// Then, sync schemas with TiDB, and initialize schema sync service.
@@ -1404,13 +1350,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_DEBUG(log, "Sync schemas done.");
         }
 
-        init_stores_thread = initStores(*global_context, log, storage_config.lazily_init_store, storage_config.s3_config.isS3Enabled() ? &tiflash_instance_wrap : nullptr);
+        bg_init_stores.start(
+            *global_context,
+            log,
+            storage_config.lazily_init_store,
+            storage_config.s3_config.isS3Enabled());
 
-        // After schema synced, set current database.
-        global_context->setCurrentDatabase(default_database);
-
+        // init schema sync service with tidb
         global_context->initializeSchemaSyncService();
     }
+    // set default database for ch-client
+    global_context->setCurrentDatabase(default_database);
+
     CPUAffinityManager::initCPUAffinityManager(config());
     LOG_INFO(log, "CPUAffinity: {}", CPUAffinityManager::getInstance().toString());
     SCOPE_EXIT({
@@ -1482,19 +1433,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
     }
 
-    if (init_stores_thread != nullptr)
-    {
-        if (storage_config.s3_config.isS3Enabled())
-        {
-            // If S3 enabled, wait for all DeltaMergeStores' initialization
-            // before this instance can accept requests.
-            init_stores_thread->join();
-        }
-        else
-        {
-            init_stores_thread->detach();
-        }
-    }
+    // If S3 enabled, wait for all DeltaMergeStores' initialization
+    // before this instance can accept requests.
+    // Else it just do nothing.
+    bg_init_stores.waitUntilFinish();
+
     /// Then, startup grpc server to serve raft and/or flash services.
     FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
 
@@ -1561,23 +1504,36 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             tiflash_instance_wrap.tmt = &tmt_context;
             LOG_INFO(log, "Let tiflash proxy start all services");
+            // Set tiflash instance status to running, then wait for proxy enter running status
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
             // proxy update store-id before status set `RaftProxyStatus::Running`
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
-            LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
-            size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
-            auto & kvstore_ptr = tmt_context.getKVStore();
-            kvstore_ptr->initReadIndexWorkers(
-                [&]() {
-                    // get from tmt context
-                    return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
-                },
-                /*running thread count*/ runner_cnt);
-            tmt_context.getKVStore()->asyncRunReadIndexWorkers();
-            WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
+            if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+            {
+                // compute node do not need to handle read index
+                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+            }
+            else
+            {
+                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+
+                size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
+                if (runner_cnt > 0)
+                {
+                    auto & kvstore_ptr = tmt_context.getKVStore();
+                    kvstore_ptr->initReadIndexWorkers(
+                        [&]() {
+                            // get from tmt context
+                            return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
+                        },
+                        /*running thread count*/ runner_cnt);
+                    tmt_context.getKVStore()->asyncRunReadIndexWorkers();
+                    WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
+                }
+            }
         }
         SCOPE_EXIT({
             if (!proxy_conf.is_proxy_runnable)

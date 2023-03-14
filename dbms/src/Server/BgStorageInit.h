@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Settings.h>
-#include <TestUtils/TiFlashStorageTestBasic.h>
+#pragma once
 
-namespace DB::base
-{
-void TiFlashStorageTestBasic::reload()
-{
-    reload({});
-}
+#include <Common/Logger.h>
+#include <Interpreters/Context_fwd.h>
 
-} // namespace DB::base
+#include <memory>
+
+namespace DB
+{
+struct BgStorageInitHolder
+{
+    bool need_join = false;
+    std::unique_ptr<std::thread> init_thread;
+
+    void start(Context & global_context, const LoggerPtr & log, bool lazily_init_store, bool is_s3_enabled);
+
+    // wait until finish if need
+    void waitUntilFinish();
+
+    // Exception safe for joining the init_thread
+    ~BgStorageInitHolder()
+    {
+        waitUntilFinish();
+    }
+};
+
+} // namespace DB
