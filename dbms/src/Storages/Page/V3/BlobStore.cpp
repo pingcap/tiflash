@@ -272,7 +272,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             }
             case WriteBatchWriteType::PUT:
             case WriteBatchWriteType::UPSERT:
-                throw Exception(fmt::format("write batch have a invalid total size [write_type={}]", static_cast<Int32>(write.type)),
+                throw Exception(fmt::format("write batch have a invalid total size == 0 while this kind of entry exist, write_type={}", static_cast<Int32>(write.type)),
                                 ErrorCodes::LOGICAL_ERROR);
             }
         }
@@ -579,20 +579,49 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         }
     }
 
-    // Read with `FieldReadInfos`, buf_size must not be 0.
-    if (buf_size == 0)
+    PageMap page_map;
+    if (unlikely(buf_size == 0))
     {
-        throw Exception("Reading with fields but entry size is 0.", ErrorCodes::LOGICAL_ERROR);
+        // We should never persist an empty column inside a block. If the buf size is 0
+        // then this read with `FieldReadInfos` could be completely eliminated in the upper
+        // layer. Log a warning to check if it happens.
+        {
+            FmtBuffer buf;
+            buf.joinStr(
+                to_read.begin(),
+                to_read.end(),
+                [](const FieldReadInfo & info, FmtBuffer & fb) {
+                    fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, toDebugString(info.entry));
+                },
+                ",");
+#ifndef NDEBUG
+            // throw an exception under debug mode so we should change the upper layer logic
+            throw Exception(fmt::format("Reading with fields but entry size is 0, read_info=[{}]", buf.toString()), ErrorCodes::LOGICAL_ERROR);
+#endif
+            // Log a warning under production release
+            LOG_WARNING(log, "Reading with fields but entry size is 0, read_info=[{}]", buf.toString());
+        }
+
+        // Allocating buffer with size == 0 could lead to unexpected behavior, skip the allocating and return
+        for (const auto & [page_id, entry, fields] : to_read)
+        {
+            UNUSED(entry, fields);
+            Page page(page_id);
+            page.data = ByteBuffer(nullptr, nullptr);
+            page_map.emplace(page_id.low, std::move(page));
+        }
+        return page_map;
     }
 
-    char * data_buf = static_cast<char *>(alloc(buf_size));
-    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
+
+    // Allocate one for holding all pages data
+    char * shared_data_buf = static_cast<char *>(alloc(buf_size));
+    MemHolder shared_mem_holder = createMemHolder(shared_data_buf, [&, buf_size](char * p) {
         free(p, buf_size);
     });
 
     std::set<FieldOffsetInsidePage> fields_offset_in_page;
-    char * pos = data_buf;
-    PageMap page_map;
+    char * pos = shared_data_buf;
     for (const auto & [page_id_v3, entry, fields] : to_read)
     {
         size_t read_size_this_entry = 0;
@@ -636,7 +665,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
 
         Page page(page_id_v3);
         page.data = ByteBuffer(pos, write_offset);
-        page.mem_holder = mem_holder;
+        page.mem_holder = shared_mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
         fields_offset_in_page.clear();
         page_map.emplace(page_id_v3.low, std::move(page));
@@ -644,11 +673,22 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         pos = write_offset;
     }
 
-    if (unlikely(pos != data_buf + buf_size))
-        throw Exception(fmt::format("[end_position={}] not match the [current_position={}]",
-                                    data_buf + buf_size,
-                                    pos),
+    if (unlikely(pos != shared_data_buf + buf_size))
+    {
+        FmtBuffer buf;
+        buf.joinStr(
+            to_read.begin(),
+            to_read.end(),
+            [](const FieldReadInfo & info, FmtBuffer & fb) {
+                fb.fmtAppend("{{page_id: {}, fields: {}, entry: {}}}", info.page_id, info.fields, toDebugString(info.entry));
+            },
+            ",");
+        throw Exception(fmt::format("unexpected read size, end_pos={} current_pos={} read_info=[{}]",
+                                    shared_data_buf + buf_size,
+                                    pos,
+                                    buf.toString()),
                         ErrorCodes::LOGICAL_ERROR);
+    }
     return page_map;
 }
 
@@ -734,10 +774,21 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
     }
 
     if (unlikely(pos != data_buf + buf_size))
-        throw Exception(fmt::format("[end_position={}] not match the [current_position={}]",
+    {
+        FmtBuffer buf;
+        buf.joinStr(
+            entries.begin(),
+            entries.end(),
+            [](const PageIDAndEntryV3 & id_entry, FmtBuffer & fb) {
+                fb.fmtAppend("{{page_id: {}, entry: {}}}", id_entry.first, toDebugString(id_entry.second));
+            },
+            ",");
+        throw Exception(fmt::format("unexpected read size, end_pos={} current_pos={} read_info=[{}]",
                                     data_buf + buf_size,
-                                    pos),
+                                    pos,
+                                    buf.toString()),
                         ErrorCodes::LOGICAL_ERROR);
+    }
 
     return page_map;
 }

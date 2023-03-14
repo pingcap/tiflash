@@ -82,13 +82,21 @@ using PageIDAndEntriesV3 = std::vector<PageIDAndEntryV3>;
 
 inline String toDebugString(const PageEntryV3 & entry)
 {
-    return fmt::format("PageEntryV3{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets_size: {}}}",
+    FmtBuffer fmt_buf;
+    fmt_buf.joinStr(
+        entry.field_offsets.begin(),
+        entry.field_offsets.end(),
+        [](const auto & offset_checksum, FmtBuffer & fb) {
+            fb.fmtAppend("{}", offset_checksum.first);
+        },
+        ",");
+    return fmt::format("PageEntryV3{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets: [{}]}}",
                        entry.file_id,
                        entry.offset,
                        entry.size,
                        entry.checksum,
                        entry.tag,
-                       entry.field_offsets.size());
+                       fmt_buf.toString());
 }
 
 } // namespace PS::V3

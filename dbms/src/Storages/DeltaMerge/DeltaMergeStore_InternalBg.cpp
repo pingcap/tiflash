@@ -595,7 +595,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     auto new_segment = segmentMerge(*dm_context, segments_to_merge, SegmentMergeReason::BackgroundGCThread);
     if (new_segment)
     {
-        checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
+        checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC);
     }
 
     return new_segment;
@@ -718,7 +718,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
     }
 
     segment_snap = {};
-    checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
+    checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC);
 
     return new_segment;
 }
