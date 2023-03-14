@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 namespace DB
 {
@@ -109,20 +110,25 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
         readIntBinary(page_id, buf);
 
         auto file_id = context.storage_pool->dataReader()->getNormalPageId(page_id);
-        auto path_delegate = context.path_pool->getStableDiskDelegator();
-        auto file_parent_path = restore_from_s3 ? path_delegate.getS3DTFile(file_id) : path_delegate.getDTFilePath(file_id);
-
-        auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
         if (restore_from_s3)
         {
-            path_delegate.addS3DTFileSize(file_id, dmfile->getBytesOnDisk());
+            auto wn_ps = context.db_context.getWriteNodePageStorage();
+            auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, context.storage_pool->getNamespaceId()), page_id);
+            auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
+            const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
+            auto file_parent_path = S3::S3Filename::fromTableID(lock_key_view.store_id, context.storage_pool->getNamespaceId()).toFullKeyWithPrefix();
+            auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
+            stable->files.push_back(dmfile);
         }
         else
         {
+            auto path_delegate = context.path_pool->getStableDiskDelegator();
+            auto file_parent_path = path_delegate.getDTFilePath(file_id);
+            auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
             auto res = path_delegate.updateDTFileSize(file_id, dmfile->getBytesOnDisk());
             RUNTIME_CHECK_MSG(res, "update dt file size failed, path={}", dmfile->path());
+            stable->files.push_back(dmfile);
         }
-        stable->files.push_back(dmfile);
     }
 
     stable->valid_rows = valid_rows;

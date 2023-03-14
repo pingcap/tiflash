@@ -107,7 +107,7 @@ static constexpr UInt64 DEFAULT_DISAGG_TASK_TIMEOUT_SEC = 3600;
 
 #define PLATFORM_NOT_SUPPORTED "The only supported platforms are x86_64 and AArch64 (work in progress)"
 
-#define DEFAULT_MARK_CACHE_SIZE (5ULL * 1024 * 1024 * 1024)
+#define DEFAULT_MARK_CACHE_SIZE (1ULL * 1024 * 1024 * 1024)
 
 #define DEFAULT_METRICS_PORT 8234
 

@@ -41,6 +41,7 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/Transaction/KVStore.h>
@@ -1387,7 +1388,11 @@ Segment::prepareSplitLogical( //
     {
         auto ori_page_id = dmfile->pageId();
         auto file_id = dmfile->fileId();
-        auto file_parent_path = delegate.getDTFilePath(file_id);
+        auto file_parent_path = dmfile->parentPath();
+        if (!dm_context.db_context.getSharedContextDisagg()->remote_data_store)
+        {
+            RUNTIME_CHECK(file_parent_path == delegate.getDTFilePath(file_id));
+        }
 
         auto my_dmfile_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
         auto other_dmfile_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
