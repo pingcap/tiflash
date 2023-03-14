@@ -101,7 +101,8 @@ public:
          const String & right_filter_column = "",
          const JoinOtherConditions & conditions = {},
          size_t max_block_size = 0,
-         const String & match_helper_name = "");
+         const String & match_helper_name = "",
+         bool is_test = true);
 
     /** Call `setBuildConcurrencyAndInitPool`, `initMapImpl` and `setSampleBlock`.
       * You must call this method before subsequent calls to insertFromBlock.
@@ -310,12 +311,6 @@ private:
 
     const JoinOtherConditions other_conditions;
 
-    /// For null-aware semi join with no other condition.
-    /// Indicate if the right table is empty.
-    std::atomic<bool> right_table_is_empty{true};
-    /// Indicate if the right table has a all-key-null row.
-    std::atomic<bool> right_has_all_key_null_row{false};
-
     ASTTableJoin::Strictness original_strictness;
     size_t max_block_size;
     /** Blocks of "right" table.
@@ -337,13 +332,20 @@ private:
     /// For null-aware semi join family, including rows with NULL join keys.
     std::vector<RowsNotInsertToMap> rows_not_inserted_to_map;
 
+    /// For null-aware semi join
     /// The RowRefList in `rows_not_inserted_to_map` that removes the empty RowRefList.
     PaddedPODArray<RowRefList *> rows_with_null_keys;
-    size_t rows_with_null_keys_size = 0;
+    /// Whether to directly check all blocks for row with null key.
+    bool null_key_check_all_blocks_directly = false;
+
+    /// For null-aware semi join with no other condition.
+    /// Indicate if the right table is empty.
+    std::atomic<bool> right_table_is_empty{true};
+    /// Indicate if the right table has a all-key-null row.
+    std::atomic<bool> right_has_all_key_null_row{false};
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arenas pools;
-
 
 private:
     Type type = Type::EMPTY;
@@ -356,6 +358,8 @@ private:
     Block sample_block_with_columns_to_add;
     /// Block with key columns in the same order they appear in the right-side table.
     Block sample_block_with_keys;
+
+    bool is_test;
 
     const LoggerPtr log;
 

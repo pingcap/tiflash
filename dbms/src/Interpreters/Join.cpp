@@ -137,7 +137,8 @@ Join::Join(
     const String & right_filter_column_,
     const JoinOtherConditions & other_conditions,
     size_t max_block_size_,
-    const String & match_helper_name)
+    const String & match_helper_name,
+    bool is_test_)
     : match_helper_name(match_helper_name)
     , kind(kind_)
     , strictness(strictness_)
@@ -153,6 +154,7 @@ Join::Join(
     , other_conditions(other_conditions)
     , original_strictness(strictness)
     , max_block_size(max_block_size_)
+    , is_test(is_test_)
     , log(Logger::get(req_id))
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
@@ -438,8 +440,7 @@ size_t Join::getTotalRowCount() const
 
     if (type == Type::CROSS)
     {
-        for (const auto & block : blocks)
-            res += block.rows();
+        res = total_input_build_rows;
     }
     else
     {
@@ -2036,6 +2037,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const ConstNullMapPtr & filter_map,
     const ConstNullMapPtr & all_key_null_map,
     const TiDB::TiDBCollators & collators,
+    bool null_key_check_all_blocks_directly,
     bool right_has_all_key_null_row,
     bool right_table_is_empty)
 {
@@ -2094,10 +2096,12 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                         continue;
                     }
                 }
-                /// Check null rows first to speed up getting the NULL result if possible.
                 /// In the worse case, all rows in the right table will be checked.
                 /// E.g. (1,null) in ((2,1),(2,3),(2,null),(3,null)) => false.
-                res.emplace_back(i, NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS, nullptr);
+                if (null_key_check_all_blocks_directly)
+                    res.emplace_back(i, NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS, nullptr);
+                else
+                    res.emplace_back(i, NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS, nullptr);
                 res_list.push_back(&res.back());
                 continue;
             }
@@ -2281,6 +2285,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const ConstNullMapPtr & filter_map,
     const ConstNullMapPtr & all_key_null_map,
     const TiDB::TiDBCollators & collators,
+    bool null_key_check_all_blocks_directly,
     bool right_has_all_key_null_row,
     bool right_table_is_empty)
 {
@@ -2299,6 +2304,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
         filter_map,                                                                                 \
         all_key_null_map,                                                                           \
         collators,                                                                                  \
+        null_key_check_all_blocks_directly,                                                         \
         right_has_all_key_null_row,                                                                 \
         right_table_is_empty);
 
@@ -2392,6 +2398,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             filter_map,                                                                                                                                 \
             all_key_null_map,                                                                                                                           \
             collators,                                                                                                                                  \
+            null_key_check_all_blocks_directly,                                                                                                         \
             right_has_all_key_null_row.load(std::memory_order_relaxed),                                                                                 \
             right_table_is_empty.load(std::memory_order_relaxed));                                                                                      \
         break;
@@ -2455,14 +2462,36 @@ void Join::workAfterBuildFinish()
     if (isNullAwareSemiFamily(kind))
     {
         rows_with_null_keys.reserve(rows_not_inserted_to_map.size());
+        size_t null_rows_size = 0;
         for (const auto & i : rows_not_inserted_to_map)
         {
             if (i.size > 0)
             {
                 rows_with_null_keys.emplace_back(i.head.next);
-                rows_with_null_keys_size += i.size;
+                null_rows_size += i.size;
             }
         }
+        /// Considering the rows with null key in left table, in the worse case, it may need to check all rows in right table.
+        /// Null rows is used for speeding up the check process. If the result of null-aware equal expression is NULL, the
+        /// check process can be finished.
+        /// However, if null rows accounts for a large proportion of the right table and the null-aware equal column is always
+        /// false, the check process will be very slow.
+        /// In this case, directly checking all blocks is a better choice because checking all blocks does not copy columns.
+        /// It reuses the columns from the right table and execute the expressions.
+        /// Test results show that the time consumed by checking null rows is several times than that of checking all blocks,
+        /// and it increases as the number of rows in the right table increases.
+        /// For example, the number of rows is 1k, time consumed by checking null rows is 4x than that of checking all blocks.
+        /// 2k => 6x. 10k => 10x.
+        /// In my test, time consumed by checking null rows when number of rows is 1k is roughly equal to that by checking all
+        /// blocks when number of rows is 10k.
+        /// So when null_rows_size accounts for more than 10% of total rows, it's better to directly check all blocks.
+        if (unlikely(is_test))
+            null_key_check_all_blocks_directly = false;
+        else
+            null_key_check_all_blocks_directly = null_rows_size > total_input_build_rows * 0.1;
+        /// TODO: There is another bad situation, for rows with non-null key in left table, it may check null rows if it can not
+        ///       be found in hash table. Maybe we can materialize the null rows and use the method like checking all blocks for
+        ///       null rows to reduce the wasteful copy overhead.
     }
 }
 
