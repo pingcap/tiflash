@@ -220,14 +220,14 @@ struct AggregationMethodOneKeyStringNoCache
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
-    ALWAYS_INLINE static inline void insertKeyIntoColumns(const StringRef &, std::vector<IColumn *> &, size_t)
+    ALWAYS_INLINE static inline void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, size_t)
     {
-        // insert empty because such column will be discarded.
+        /// still need to insert data to key because spill may will use this
+        static_cast<ColumnString *>(key_columns[0])->insertData(key.data, key.size);
     }
     // resize offsets for column string
-    ALWAYS_INLINE static inline void initAggKeys(size_t rows, IColumn * key_column)
+    ALWAYS_INLINE static inline void initAggKeys(size_t, IColumn *)
     {
-        static_cast<ColumnString *>(key_column)->getOffsets().resize_fill(rows, 0);
     }
 };
 
@@ -291,17 +291,15 @@ struct AggregationMethodFastPathTwoKeysNoCache
 
     // Only update offsets but DO NOT insert string data.
     // Because of https://github.com/pingcap/tiflash/blob/84c2650bc4320919b954babeceb5aeaadb845770/dbms/src/Columns/IColumn.h#L160-L173, such column will be discarded.
-    ALWAYS_INLINE static inline const char * insertAggKeyIntoColumnString(const char * pos, IColumn *)
+    ALWAYS_INLINE static inline const char * insertAggKeyIntoColumnString(const char * pos, IColumn * key_column)
     {
         const size_t string_size = *reinterpret_cast<const size_t *>(pos);
         pos += sizeof(string_size);
+        static_cast<ColumnString *>(key_column)->insertData(pos, string_size);
         return pos + string_size;
     }
-    // resize offsets for column string
-    ALWAYS_INLINE static inline void initAggKeyString(size_t rows, IColumn * key_column)
+    ALWAYS_INLINE static inline void initAggKeyString(size_t, IColumn *)
     {
-        auto * column = static_cast<ColumnString *>(key_column);
-        column->getOffsets().resize_fill(rows, 0);
     }
 
     template <>
