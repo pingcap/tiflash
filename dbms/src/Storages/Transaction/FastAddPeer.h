@@ -32,7 +32,7 @@ struct TableIdentifier
         return key_space_id == other.key_space_id && store_id == other.store_id && table_id == other.table_id;
     }
 };
-}
+} // namespace DB
 
 namespace std
 {
@@ -48,7 +48,7 @@ struct hash<DB::TableIdentifier>
         return seed;
     }
 };
-}
+} // namespace std
 
 namespace DB
 {

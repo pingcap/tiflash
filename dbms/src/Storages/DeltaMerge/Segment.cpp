@@ -350,10 +350,11 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     auto first_segment_id = fap_context->getSegmentIdContainingKey(identifier, target_range.getStart().toRowKeyValue());
     if (first_segment_id != 0)
     {
-        try
+        bool hit = false;
+        auto target_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Meta, ns_id), first_segment_id);
+        auto page = temp_ps->read(target_id, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+        if (page.isValid())
         {
-            auto target_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Meta, ns_id), first_segment_id);
-            auto page = temp_ps->read(target_id);
             Segment::SegmentMetaInfo segment_info;
             segment_info.segment_id = first_segment_id;
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -362,18 +363,16 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             {
                 segment_infos.push_back(segment_info);
                 current_segment_id = segment_info.next_segment_id;
-            }
-            else
-            {
-                fap_context->invalidateCache(identifier);
+                hit = true;
             }
         }
-        catch (...)
+        if (!hit)
         {
-            LOG_WARNING(Logger::get(), "Failed to read meta info for segment {}, read from the first segment id;", first_segment_id);
+            fap_context->invalidateCache(identifier);
         }
     }
     std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
+    LOG_DEBUG(Logger::get(), "Read segment meta info from segment {}", current_segment_id);
     while (current_segment_id != 0)
     {
         Segment::SegmentMetaInfo segment_info;
