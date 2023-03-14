@@ -2151,6 +2151,11 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
     if (!select_query->join())
         return false;
 
+    /// after https://github.com/pingcap/tiflash/pull/6650, join from TiFlash client
+    /// is no longer supported because the "waiting build finish" step has been moved
+    /// from Join::joinBlock() to HashJoinProbeInputStream::readImpl, so before support
+    /// HashJoinProbeInputStream in `ExpressionAnalyzer::appendJoin`, join is disabled.
+    throw Exception("Join is not supported");
     initChain(chain, source_columns);
     ExpressionActionsChain::Step & step = chain.steps.back();
 
