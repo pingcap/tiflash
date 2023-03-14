@@ -154,9 +154,10 @@ public:
     };
 
     using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
-    static std::pair<bool, SegmentMetaInfos> readAllSegmentsMetaInfoInRange( //
+    static SegmentMetaInfos readAllSegmentsMetaInfoInRange( //
+        DMContext & context,
+        UInt64 remote_store_id,
         NamespaceId ns_id,
-        UInt64 first_segment_id,
         const RowKeyRange & target_range,
         UniversalPageStoragePtr temp_ps);
 

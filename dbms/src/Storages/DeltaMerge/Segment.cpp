@@ -45,6 +45,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Filename.h>
+#include <Storages/Transaction/FastAddPeer.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
@@ -331,15 +332,22 @@ SegmentPtr Segment::restoreSegment( //
     return segment;
 }
 
-std::pair<bool, Segment::SegmentMetaInfos> Segment::readAllSegmentsMetaInfoInRange( //
+Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
+    DMContext & context,
+    UInt64 remote_store_id,
     NamespaceId ns_id,
-    UInt64 first_segment_id,
     const RowKeyRange & target_range,
     UniversalPageStoragePtr temp_ps)
 {
     PageIdU64 current_segment_id = 1; // DELTA_MERGE_FIRST_SEGMENT_ID
     SegmentMetaInfos segment_infos;
-    bool hint_success = false;
+    auto fap_context = context.db_context.getSharedContextDisagg()->fap_context;
+    TableIdentifier identifier{
+        .key_space_id = 0,
+        .store_id = remote_store_id,
+        .table_id = ns_id,
+    };
+    auto first_segment_id = fap_context->getSegmentIdContainingKey(identifier, target_range.getStart().toRowKeyValue());
     if (first_segment_id != 0)
     {
         try
@@ -354,7 +362,10 @@ std::pair<bool, Segment::SegmentMetaInfos> Segment::readAllSegmentsMetaInfoInRan
             {
                 segment_infos.push_back(segment_info);
                 current_segment_id = segment_info.next_segment_id;
-                hint_success = true;
+            }
+            else
+            {
+                fap_context->invalidateCache(identifier);
             }
         }
         catch (...)
@@ -362,6 +373,7 @@ std::pair<bool, Segment::SegmentMetaInfos> Segment::readAllSegmentsMetaInfoInRan
             LOG_WARNING(Logger::get(), "Failed to read meta info for segment {}, read from the first segment id;", first_segment_id);
         }
     }
+    std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
     while (current_segment_id != 0)
     {
         Segment::SegmentMetaInfo segment_info;
@@ -370,6 +382,7 @@ std::pair<bool, Segment::SegmentMetaInfos> Segment::readAllSegmentsMetaInfoInRan
         segment_info.segment_id = current_segment_id;
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
         readSegmentMetaInfo(buf, segment_info);
+        end_key_and_segment_ids.emplace_back(segment_info.range.getEnd().toRowKeyValue(), segment_info.segment_id);
         current_segment_id = segment_info.next_segment_id;
         if (!(segment_info.range.shrink(target_range).none()))
         {
@@ -380,7 +393,8 @@ std::pair<bool, Segment::SegmentMetaInfos> Segment::readAllSegmentsMetaInfoInRan
             break;
         }
     }
-    return std::make_pair(hint_success, std::move(segment_infos));
+    fap_context->insertSegmentEndKeyInfoToCache(identifier, end_key_and_segment_ids);
+    return segment_infos;
 }
 
 Segments Segment::createTargetSegmentsFromCheckpoint( //

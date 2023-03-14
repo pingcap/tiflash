@@ -1010,17 +1010,7 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     }
     LOG_INFO(log, "Ingest checkpoint from store {}", checkpoint_info->remote_store_id);
 
-    auto fap_context = dm_context->db_context.getSharedContextDisagg()->fap_context;
-    auto first_segment_id = fap_context->getSegmentIdContainingKey(physical_table_id, range.getStart().toRowKeyValue());
-    auto [cache_valid, segment_meta_infos] = Segment::readAllSegmentsMetaInfoInRange(physical_table_id, first_segment_id, range, checkpoint_info->temp_ps);
-    if (!cache_valid)
-    {
-        fap_context->invalidateCache(physical_table_id);
-    }
-    for (const auto & info : segment_meta_infos)
-    {
-        fap_context->insertSegmentEndKeyInfoToCache(physical_table_id, info.range.getEnd().toRowKeyValue(), info.segment_id);
-    }
+    auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, checkpoint_info->remote_store_id, physical_table_id, range, checkpoint_info->temp_ps);
     LOG_INFO(log, "Ingest checkpoint segments num {}", segment_meta_infos.size());
     WriteBatches wbs{*dm_context->storage_pool};
     auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //

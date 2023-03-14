@@ -17,6 +17,39 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
+#include <boost/container_hash/hash_fwd.hpp>
+
+namespace DB
+{
+struct TableIdentifier
+{
+    UInt64 key_space_id;
+    UInt64 store_id;
+    DB::NamespaceId table_id;
+
+    bool operator==(const TableIdentifier & other) const
+    {
+        return key_space_id == other.key_space_id && store_id == other.store_id && table_id == other.table_id;
+    }
+};
+}
+
+namespace std
+{
+template <>
+struct hash<DB::TableIdentifier>
+{
+    size_t operator()(const DB::TableIdentifier & k) const
+    {
+        size_t seed = 0;
+        boost::hash_combine(seed, boost::hash_value(k.key_space_id));
+        boost::hash_combine(seed, boost::hash_value(k.store_id));
+        boost::hash_combine(seed, boost::hash_value(k.table_id));
+        return seed;
+    }
+};
+}
+
 namespace DB
 {
 class UniversalPageStorage;
@@ -49,14 +82,14 @@ public:
 
     void updateTempUniversalPageStorage(UInt64 store_id, UInt64 upload_seq, TempUniversalPageStoragePtr temp_ps);
 
-    void insertSegmentEndKeyInfoToCache(NamespaceId table_id, const DM::RowKeyValue & key, UInt64 segment_id);
+    void insertSegmentEndKeyInfoToCache(TableIdentifier table_identifier, const std::vector<std::pair<DM::RowKeyValue, UInt64>> & end_key_and_segment_ids);
 
     // return the cached id of the segment which contains the target key
     // return 0 means no cache info for the key
-    UInt64 getSegmentIdContainingKey(NamespaceId table_id, const DM::RowKeyValue & key);
+    UInt64 getSegmentIdContainingKey(TableIdentifier table_identifier, const DM::RowKeyValue & key);
 
     // TODO: invalidate cache at segment level
-    void invalidateCache(NamespaceId table_id);
+    void invalidateCache(TableIdentifier table_identifier);
 
 public:
     std::shared_ptr<AsyncTasks> tasks_trace;
@@ -79,8 +112,8 @@ private:
     };
 
     // Store the mapping from end key to segment id for each table
-    // TableId -> (Segment Range End -> Segment ID)
-    std::unordered_map<NamespaceId, std::map<DM::RowKeyValue, UInt64, KeyComparator>> segment_range_cache;
+    // TableIdentifier -> (Segment Range End -> Segment ID)
+    std::unordered_map<TableIdentifier, std::map<DM::RowKeyValue, UInt64, KeyComparator>> segment_range_cache;
 };
 
 TempUniversalPageStoragePtr createTempPageStorage(Context & context, const String & manifest_key, UInt64 dir_seq);

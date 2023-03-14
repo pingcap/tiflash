@@ -71,17 +71,20 @@ void FastAddPeerContext::updateTempUniversalPageStorage(UInt64 store_id, UInt64 
     temp_ps_cache[store_id] = std::make_pair(upload_seq, temp_ps);
 }
 
-void FastAddPeerContext::insertSegmentEndKeyInfoToCache(NamespaceId table_id, const DM::RowKeyValue & key, UInt64 segment_id)
+void FastAddPeerContext::insertSegmentEndKeyInfoToCache(TableIdentifier table_identifier, const std::vector<std::pair<DM::RowKeyValue, UInt64>> & end_key_and_segment_ids)
 {
     std::unique_lock lock(range_cache_mu);
-    auto & end_key_to_id_map = segment_range_cache[table_id];
-    end_key_to_id_map[key] = segment_id;
+    auto & end_key_to_id_map = segment_range_cache[table_identifier];
+    for (const auto & [end_key, segment_id] : end_key_and_segment_ids)
+    {
+        end_key_to_id_map[end_key] = segment_id;
+    }
 }
 
-UInt64 FastAddPeerContext::getSegmentIdContainingKey(NamespaceId table_id, const DM::RowKeyValue & key)
+UInt64 FastAddPeerContext::getSegmentIdContainingKey(TableIdentifier table_identifier, const DM::RowKeyValue & key)
 {
     std::unique_lock lock(range_cache_mu);
-    auto iter = segment_range_cache.find(table_id);
+    auto iter = segment_range_cache.find(table_identifier);
     if (iter != segment_range_cache.end())
     {
         auto & end_key_to_id_map = iter->second;
@@ -94,10 +97,10 @@ UInt64 FastAddPeerContext::getSegmentIdContainingKey(NamespaceId table_id, const
     return 0;
 }
 
-void FastAddPeerContext::invalidateCache(NamespaceId table_id)
+void FastAddPeerContext::invalidateCache(TableIdentifier table_identifier)
 {
     std::unique_lock lock(range_cache_mu);
-    segment_range_cache.erase(table_id);
+    segment_range_cache.erase(table_identifier);
 }
 
 FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str)
