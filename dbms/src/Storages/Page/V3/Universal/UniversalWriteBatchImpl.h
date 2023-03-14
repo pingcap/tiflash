@@ -58,6 +58,11 @@ public:
         putPage(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag, read_buffer, size, data_sizes);
     }
 
+    void putRemotePage(PageIdU64 page_id, UInt64 tag, const PS::V3::CheckpointLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums)
+    {
+        putRemotePage(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag, data_location, std::move(offset_and_checksums));
+    }
+
     void putExternal(PageIdU64 page_id, UInt64 tag)
     {
         putExternal(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag);

@@ -26,6 +26,14 @@ using IDataStorePtr = std::shared_ptr<IDataStore>;
 
 namespace DB
 {
+struct CheckpointUploadFunctor
+{
+    const StoreID store_id;
+    const UInt64 sequence;
+    const DM::Remote::IDataStorePtr remote_store;
+
+    bool operator()(const PS::V3::LocalCheckpointFiles & checkpoint) const;
+};
 
 // This is wrapper class for UniversalPageStorage.
 // It mainly manages background tasks like gc for UniversalPageStorage.
@@ -54,9 +62,7 @@ public:
         Context & context,
         const String & name,
         PSDiskDelegatorPtr delegator,
-        const PageStorageConfig & config,
-        std::shared_ptr<Aws::S3::S3Client> s3_client,
-        String bucket);
+        const PageStorageConfig & config);
 
 private:
     explicit UniversalPageStorageService(Context & global_context_);

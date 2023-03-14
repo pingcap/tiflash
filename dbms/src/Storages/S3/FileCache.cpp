@@ -47,15 +47,15 @@ extern const int S3_ERROR;
 
 namespace DB
 {
-
 using FileType = FileSegment::FileType;
 
-FileCache::FileCache(const String & cache_dir_, UInt64 cache_capacity_, UInt64 cache_level_, UInt64 cache_min_age_seconds_)
-    : cache_dir(cache_dir_)
-    , cache_capacity(cache_capacity_)
-    , cache_level(cache_level_)
+FileCache::FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
+    : capacity_metrics(capacity_metrics_)
+    , cache_dir(config_.getDTFileCacheDir())
+    , cache_capacity(config_.getDTFileCapacity())
+    , cache_level(config_.dtfile_level)
     , cache_used(0)
-    , cache_min_age_seconds(cache_min_age_seconds_)
+    , cache_min_age_seconds(config_.dtfile_cache_min_age_seconds)
     , log(Logger::get("FileCache"))
 {
     prepareDir(cache_dir);
@@ -128,12 +128,19 @@ void FileCache::removeDiskFile(const String & local_fname)
 {
     try
     {
+        auto fsize = std::filesystem::file_size(local_fname);
         for (std::filesystem::path p(local_fname); p.is_absolute() && std::filesystem::exists(p); p = p.parent_path())
         {
             auto s = p.string();
             if (s != cache_dir && (s == local_fname || std::filesystem::is_empty(p)))
             {
                 std::filesystem::remove(p); // If p is a directory, remove success only when it is empty.
+                // Temporary files are not reported size to metrics until they are renamed.
+                // So we don't need to free its size here.
+                if (s == local_fname && !isTemporaryFilename(local_fname))
+                {
+                    capacity_metrics->freeUsedSize(local_fname, fsize);
+                }
             }
             else
             {
@@ -406,6 +413,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
     }
     std::filesystem::rename(temp_fname, local_fname);
     auto fsize = std::filesystem::file_size(local_fname);
+    capacity_metrics->addUsedSize(local_fname, fsize);
     RUNTIME_CHECK_MSG(fsize == static_cast<UInt64>(content_length), "local_fname={}, file_size={}, content_length={}", local_fname, fsize, content_length);
     file_seg->setStatus(FileSegment::Status::Complete);
     LOG_DEBUG(log, "Download s3_key={} to local={} size={} cost={}ms", s3_key, local_fname, content_length, sw.elapsedMilliseconds());

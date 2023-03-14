@@ -180,6 +180,10 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                     // Call `ingestFiles` to delete data for range and ingest external DTFiles.
                     dm_storage->ingestFiles(new_key_range, new_region_wrap.external_files, /*clear_data_in_range=*/true, context.getSettingsRef());
                 }
+                else if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
+                {
+                    dm_storage->ingestSegmentsFromCheckpointInfo(new_key_range, new_region_wrap.checkpoint_info, context.getSettingsRef());
+                }
                 else
                 {
                     // Call `deleteRange` to delete data for range
@@ -476,6 +480,11 @@ void KVStore::handleApplySnapshot(
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
     auto external_files = preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
     applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(external_files)}, tmt);
+}
+
+void KVStore::handleIngestCheckpoint(CheckpointInfoPtr checkpoint_info, TMTContext & tmt)
+{
+    applyPreHandledSnapshot(RegionPtrWithCheckpointInfo{checkpoint_info}, tmt);
 }
 
 EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
