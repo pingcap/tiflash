@@ -405,14 +405,16 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
     const auto & local_fname = file_seg->getLocalFileName();
     prepareParentDir(local_fname);
     auto temp_fname = toTemporaryFilename(local_fname);
-    if (content_length > 0)
     {
         Aws::OFStream ostr(temp_fname, std::ios_base::out | std::ios_base::binary);
         RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} failed: {}", temp_fname, strerror(errno));
-        ostr << result.GetBody().rdbuf();
-        // If content_length == 0, ostr.good() is false. Does not know the reason.
-        RUNTIME_CHECK_MSG(ostr.good(), "Write {} content_length {} failed: {}", temp_fname, content_length, strerror(errno));
-        ostr.flush();
+        if (content_length > 0)
+        {
+            ostr << result.GetBody().rdbuf();
+            // If content_length == 0, ostr.good() is false. Does not know the reason.
+            RUNTIME_CHECK_MSG(ostr.good(), "Write {} content_length {} failed: {}", temp_fname, content_length, strerror(errno));
+            ostr.flush();
+        }
     }
     std::filesystem::rename(temp_fname, local_fname);
     auto fsize = std::filesystem::file_size(local_fname);
