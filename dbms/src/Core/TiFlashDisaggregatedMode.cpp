@@ -45,7 +45,7 @@ DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & 
 bool useAutoScaler(const Poco::Util::LayeredConfiguration & config)
 {
     static const std::string autoscaler_config_key = "flash.use_autoscaler";
-    bool use_autoscaler = false;
+    bool use_autoscaler = true;
     if (config.has(autoscaler_config_key))
         use_autoscaler = config.getBool(autoscaler_config_key);
     return use_autoscaler;
