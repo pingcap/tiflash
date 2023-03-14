@@ -275,6 +275,11 @@ struct ContextShared
             tmt_context->shutdown();
         }
 
+        if (schema_sync_service)
+        {
+            schema_sync_service = nullptr;
+        }
+
         /** At this point, some tables may have threads that block our mutex.
           * To complete them correctly, we will copy the current list of tables,
           *  and ask them all to finish their work.

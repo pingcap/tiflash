@@ -34,18 +34,18 @@ Page S3PageReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
     const auto & remote_name = *location.data_file_id;
     auto remote_name_view = S3::S3FilenameView::fromKey(remote_name);
     RandomAccessFilePtr remote_file;
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     if (remote_name_view.isLockFile())
     {
-        remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, bucket, remote_name_view.asDataFile().toFullKey());
+        remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, s3_client->bucket(), remote_name_view.asDataFile().toFullKey());
     }
     else
     {
-        remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, bucket, *location.data_file_id);
+        remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, s3_client->bucket(), *location.data_file_id);
     }
     ReadBufferFromRandomAccessFile buf(remote_file);
 
     buf.seek(location.offset_in_file, SEEK_SET);
-
     auto buf_size = location.size_in_file;
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
