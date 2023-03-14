@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Config.h>
@@ -22,15 +23,16 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/Universal/S3LockLocalManager.h>
+#include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <common/defines.h>
 
 namespace DB
 {
 class UniversalWriteBatch;
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class PSDiskDelegator;
@@ -41,10 +43,24 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
+namespace S3
+{
+class IS3LockClient;
+using S3LockClientPtr = std::shared_ptr<IS3LockClient>;
+} // namespace S3
+
+namespace PS::V3
+{
+class S3LockLocalManager;
+using S3LockLocalManagerPtr = std::unique_ptr<S3LockLocalManager>;
+} // namespace PS::V3
+
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 using UniversalPageMap = std::map<UniversalPageId, Page>;
+using UniversalPageIdAndEntry = std::pair<UniversalPageId, PS::V3::PageEntryV3>;
+using UniversalPageIdAndEntries = std::vector<UniversalPageIdAndEntry>;
 
 class UniversalPageStorage final
 {
@@ -57,7 +73,9 @@ public:
         const String & name,
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config,
-        const FileProviderPtr & file_provider);
+        const FileProviderPtr & file_provider,
+        std::shared_ptr<Aws::S3::S3Client> s3_client = nullptr,
+        const String & bucket = "");
 
     UniversalPageStorage(
         String name,
@@ -72,7 +90,7 @@ public:
     {
     }
 
-    ~UniversalPageStorage() = default;
+    ~UniversalPageStorage();
 
     void restore();
 
@@ -107,16 +125,24 @@ public:
 
     UniversalPageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
 
-    void traverse(const String & prefix, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot) const;
+    void traverse(const String & prefix, const std::function<void(const UniversalPageId & page_id, const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) const;
+
+    void traverseEntries(const String & prefix, const std::function<void(UniversalPageId page_id, DB::PageEntry entry)> & acceptor, SnapshotPtr snapshot = {}) const;
 
     UniversalPageId getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
 
-    DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot);
+    DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
+
+    std::optional<DB::PS::V3::CheckpointLocation> getCheckpointLocation(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
+
+    void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client) const;
+
+    PS::V3::S3LockLocalManager::ExtraLockInfo allocateNewUploadLocksInfo() const;
 
     struct DumpCheckpointOptions
     {
         /**
-         * The data file id and path. Available placeholders: {sequence}, {sub_file_index}.
+         * The data file id and path. Available placeholders: {seq}, {index}.
          * We accept "/" in the file name.
          *
          * File path is where the data file is put in the local FS. It should be a valid FS path.
@@ -126,7 +152,7 @@ public:
         const std::string & data_file_path_pattern;
 
         /**
-         * The manifest file id and path. Available placeholders: {sequence}.
+         * The manifest file id and path. Available placeholders: {seq}.
          * We accept "/" in the file name.
          *
          * File path is where the manifest file is put in the local FS. It should be a valid FS path.
@@ -139,20 +165,31 @@ public:
          * The writer info field in the dumped files.
          */
         const PS::V3::CheckpointProto::WriterInfo & writer_info;
+
+        /**
+         * The list of lock files that will be always appended to the checkpoint file.
+         *
+         * Note: In addition to the specified lock files, the checkpoint file will also contain
+         * lock files from `writeEditsAndApplyCheckpointInfo`.
+         */
+        const std::unordered_set<String> & must_locked_files = {};
+
+        /**
+         * A callback to persist the checkpoint to remote data store.
+         *
+         * If the checkpoint persist failed, it must throw an exception or return false
+         * to prevent the incremental data lost between checkpoints.
+         */
+        const std::function<bool(const PS::V3::LocalCheckpointFiles &)> persist_checkpoint;
+
+        /**
+         * Override the value of `seq` placeholder in the data files and manifest file.
+         * By default it is std::nullopt, use the snapshot->sequence as `seq` value.
+         */
+        std::optional<UInt64> override_sequence = std::nullopt;
     };
 
-    struct DumpCheckpointResult
-    {
-        struct FileInfo
-        {
-            const String id;
-            const String path;
-        };
-        std::vector<FileInfo> new_data_files;
-        std::vector<FileInfo> new_manifest_files;
-    };
-
-    DumpCheckpointResult dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+    void dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
 
     PageIdU64 getMaxIdAfterRestart() const;
 
@@ -169,6 +206,10 @@ public:
     void registerUniversalExternalPagesCallbacks(const UniversalExternalPageCallbacks & callbacks);
     void unregisterUniversalExternalPagesCallbacks(const String & prefix);
 
+private:
+    void tryUpdateLocalCacheForRemotePages(UniversalWriteBatch & wb, SnapshotPtr snapshot) const;
+
+public:
     friend class PageReaderImplUniversal;
 
     // private: // TODO: make these private
@@ -181,6 +222,9 @@ public:
 
     using BlobStorePtr = std::unique_ptr<PS::V3::universal::BlobStoreType>;
     BlobStorePtr blob_store;
+
+    PS::V3::S3PageReaderPtr remote_reader;
+    PS::V3::S3LockLocalManagerPtr remote_locks_local_mgr;
 
     PS::V3::universal::ExternalPageCallbacksManager manager;
 

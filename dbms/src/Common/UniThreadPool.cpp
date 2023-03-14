@@ -14,8 +14,9 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
-#include <Common/ThreadPool.h>
+#include <Common/UniThreadPool.h>
 #include <Common/setThreadName.h>
+#include <IO/IOThreadPool.h>
 #include <Poco/Util/Application.h>
 #include <Poco/Util/LayeredConfiguration.h>
 
@@ -365,4 +366,12 @@ GlobalThreadPool & GlobalThreadPool::instance()
 
     return *the_instance;
 }
+
+GlobalThreadPool::~GlobalThreadPool() noexcept
+{
+    // We must make sure IOThread is released before GlobalThreadPool runs
+    // `finalize`. Or the threads in GlobalThreadPool never ends.
+    IOThreadPool::shutdown();
+}
+
 } // namespace DB

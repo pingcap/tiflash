@@ -21,6 +21,7 @@
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/copyData.h>
 #include <IO/ConcatReadBuffer.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Parsers/ASTFunction.h>

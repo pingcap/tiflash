@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/DNSCache.h>
 #include <Flash/Disaggregated/S3LockClient.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3GCManager.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
-#include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Etcd/Client.h>
 #include <TiDB/OwnerInfo.h>
@@ -74,14 +73,14 @@ static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_)
-    , kvstore(context_.isDisaggregatedComputeMode() && context_.useAutoScaler() ? nullptr : std::make_shared<KVStore>(context))
+    , kvstore(context_.getSharedContextDisagg()->isDisaggregatedComputeMode() && context_.getSharedContextDisagg()->use_autoscaler ? nullptr : std::make_shared<KVStore>(context))
     , region_table(context)
     , background_service(nullptr)
     , gc_manager(context)
     , cluster(raft_config.pd_addrs.empty() ? std::make_shared<pingcap::kv::Cluster>()
                                            : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config))
     , ignore_databases(raft_config.ignore_databases)
-    , schema_syncer(createSchemaSyncer(!raft_config.pd_addrs.empty(), raft_config.for_unit_test, cluster, context_.isDisaggregatedComputeMode()))
+    , schema_syncer(createSchemaSyncer(!raft_config.pd_addrs.empty(), raft_config.for_unit_test, cluster, context_.getSharedContextDisagg()->isDisaggregatedComputeMode()))
     , mpp_task_manager(std::make_shared<MPPTaskManager>(
           std::make_unique<MinTSOScheduler>(
               context.getSettingsRef().task_scheduler_thread_soft_limit,
@@ -93,7 +92,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {
-    if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled() && !context.isDisaggregatedComputeMode())
+    if (!raft_config.pd_addrs.empty() && S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
         s3gc_owner = OwnerManager::createS3GCOwner(context, /*id*/ raft_config.flash_server_addr, etcd_client);
@@ -101,7 +100,8 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
         s3lock_client = std::make_shared<S3::S3LockClient>(cluster.get(), s3gc_owner);
 
         S3::S3GCConfig gc_config;
-        gc_config.temp_path = context.getTemporaryPath() + "/s3_temp"; // TODO: unify the suffix for it?
+        gc_config.interval_seconds = context.getSettingsRef().remote_gc_interval_seconds; // TODO: make it reloadable
+        gc_config.method = S3::ClientFactory::instance().gc_method;
         s3gc_manager = std::make_unique<S3::S3GCManagerService>(context, cluster->pd_client, s3gc_owner, s3lock_client, gc_config);
     }
 }
@@ -122,7 +122,7 @@ void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, con
 void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
 {
     // For tiflash_compute mode, kvstore should be nullptr, no need to restore region_table.
-    if (context.isDisaggregatedComputeMode() && context.useAutoScaler())
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
         return;
 
     kvstore->restore(path_pool, proxy_helper);
@@ -262,7 +262,7 @@ const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const
 
 void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    if (context.isDisaggregatedComputeMode() && context.useAutoScaler())
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
         return;
 
     static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";

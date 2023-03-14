@@ -108,7 +108,7 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
     initDAGRequest(dag_request);
-    root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, mock_context.context);
+    root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, *mock_context.context);
     root.reset();
     executor_index = 0;
 
@@ -145,8 +145,8 @@ void columnPrune(mock::ExecutorBinderPtr executor)
 QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties)
 {
     columnPrune(root);
-    mock_context.context.setMPPTest();
-    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
+    mock_context.context->setMPPTest();
+    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, *mock_context.context);
     root.reset();
     executor_index = 0;
     return query_tasks;
@@ -158,8 +158,8 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     DAGProperties properties;
     properties.is_mpp_query = true;
     properties.mpp_partition_num = 1;
-    mock_context.context.setMPPTest();
-    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
+    mock_context.context->setMPPTest();
+    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, *mock_context.context);
     root.reset();
     executor_index = 0;
     return query_tasks;
@@ -268,10 +268,15 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNameVec col_names)
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchange_type)
+DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchange_type, MockColumnNameVec part_keys, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
-    root = mock::compileExchangeSender(root, getExecutorIndex(), exchange_type);
+    auto partition_key_list = std::make_shared<ASTExpressionList>();
+    for (const auto & part_key : part_keys)
+    {
+        partition_key_list->children.push_back(col(part_key));
+    }
+    root = mock::compileExchangeSender(root, getExecutorIndex(), exchange_type, partition_key_list, fine_grained_shuffle_stream_count);
     return *this;
 }
 
@@ -283,11 +288,12 @@ DAGRequestBuilder & DAGRequestBuilder::join(
     MockAstVec right_conds,
     MockAstVec other_conds,
     MockAstVec other_eq_conds_from_in,
-    uint64_t fine_grained_shuffle_stream_count)
+    uint64_t fine_grained_shuffle_stream_count,
+    bool is_null_aware_semi_join)
 {
     assert(root);
     assert(right.root);
-    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count);
+    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_col_exprs, left_conds, right_conds, other_conds, other_eq_conds_from_in, fine_grained_shuffle_stream_count, is_null_aware_semi_join);
     return *this;
 }
 
@@ -438,7 +444,7 @@ void MockDAGRequestContext::addMockDeltaMergeData(const String & db, const Strin
     for (const auto & column : columns)
         RUNTIME_ASSERT(!column.name.empty(), "mock column must have column name");
 
-    mock_storage->addTableDataForDeltaMerge(context, db + "." + table, columns);
+    mock_storage->addTableDataForDeltaMerge(*context, db + "." + table, columns);
 }
 
 void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns)

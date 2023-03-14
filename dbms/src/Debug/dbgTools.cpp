@@ -549,7 +549,7 @@ Int64 concurrentRangeOperate(
 
     {
         TMTContext & tmt = context.getTMTContext();
-        for (auto && [_, r] : tmt.getRegionTable().getRegionsByTable(table_info.id))
+        for (auto && [_, r] : tmt.getRegionTable().getRegionsByTable(NullspaceID, table_info.id))
         {
             std::ignore = _;
             if (r == nullptr)

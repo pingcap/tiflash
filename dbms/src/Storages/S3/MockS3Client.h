@@ -38,14 +38,21 @@ public:
     Model::UploadPartOutcome UploadPart(const Model::UploadPartRequest & request) const override;
     Model::CompleteMultipartUploadOutcome CompleteMultipartUpload(const Model::CompleteMultipartUploadRequest & request) const override;
     Model::CreateBucketOutcome CreateBucket(const Model::CreateBucketRequest & request) const override;
+    Model::DeleteBucketOutcome DeleteBucket(const Model::DeleteBucketRequest & request) const override;
     Model::DeleteObjectOutcome DeleteObject(const Model::DeleteObjectRequest & request) const override;
     Model::HeadObjectOutcome HeadObject(const Model::HeadObjectRequest & request) const override;
+    Model::CopyObjectOutcome CopyObject(const Model::CopyObjectRequest & request) const override;
+    Model::GetObjectTaggingOutcome GetObjectTagging(const Model::GetObjectTaggingRequest & request) const override;
 
 private:
+    // Object key -> Object data
     using BucketStorage = std::map<String, String>;
+    // Object key -> Object tagging
+    using BucketStorageTagging = std::map<String, String>;
     using UploadParts = std::map<UInt64, String>;
     mutable std::mutex mtx;
     mutable std::unordered_map<String, BucketStorage> storage;
+    mutable std::unordered_map<String, BucketStorageTagging> storage_tagging;
     mutable std::unordered_map<String, UploadParts> upload_parts;
 };
 } // namespace DB::S3::tests

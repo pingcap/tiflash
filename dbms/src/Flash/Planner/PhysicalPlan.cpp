@@ -51,7 +51,7 @@ bool pushDownSelection(Context & context, const PhysicalPlanNodePtr & plan, cons
         auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
         return physical_table_scan->setFilterConditions(executor_id, selection);
     }
-    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest()))
+    if (unlikely(plan->tp() == PlanType::MockTableScan && context.isExecutorTest() && !context.getSettingsRef().enable_pipeline))
     {
         auto physical_mock_table_scan = std::static_pointer_cast<PhysicalMockTableScan>(plan);
         if (context.mockStorage()->useDeltaMerge() && context.mockStorage()->tableExistsForDeltaMerge(physical_mock_table_scan->getLogicalTableID()))
@@ -153,14 +153,13 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
         if (unlikely(context.isExecutorTest() || context.isInterpreterTest()))
         {
-            size_t fine_grained_stream_count = executor->has_fine_grained_shuffle_stream_count() ? executor->fine_grained_shuffle_stream_count() : 0;
-            pushBack(PhysicalMockExchangeReceiver::build(context, executor_id, log, executor->exchange_receiver(), fine_grained_stream_count));
+            pushBack(PhysicalMockExchangeReceiver::build(context, executor_id, log, executor->exchange_receiver(), FineGrainedShuffle(executor)));
         }
         else
         {
             // for MPP test, we can use real exchangeReceiver to run an query across different compute nodes
             // or use one compute node to simulate MPP process.
-            pushBack(PhysicalExchangeReceiver::build(context, executor_id, log));
+            pushBack(PhysicalExchangeReceiver::build(context, executor_id, log, FineGrainedShuffle(executor)));
         }
         break;
     }

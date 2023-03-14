@@ -41,7 +41,9 @@ public:
                         const Strings & main_paths_,
                         const std::vector<size_t> & main_capacity_quota_, //
                         const Strings & latest_paths_,
-                        const std::vector<size_t> & latest_capacity_quota_);
+                        const std::vector<size_t> & latest_capacity_quota_,
+                        String remote_cache_path = "",
+                        size_t remote_cache_capacity = 0);
 
     virtual ~PathCapacityMetrics() = default;
 
@@ -49,7 +51,7 @@ public:
 
     void freeUsedSize(std::string_view file_path, size_t used_bytes);
 
-    FsStats getFsStats();
+    FsStats getFsStats(bool finalize_capacity = true);
 
     virtual std::map<FSID, DiskCapacity> getDiskStats();
 

@@ -14,23 +14,28 @@
 
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
+#include <Interpreters/Context.h>
 #include <Operators/AggregateSinkOp.h>
 #include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
-void PhysicalAggregationBuild::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
+void PhysicalAggregationBuild::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t /*concurrency*/)
 {
     if (!before_agg_actions->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), before_agg_actions));
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_agg_actions));
         });
     }
 
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<AggregateSinkOp>(group_builder.exec_status, build_index++, aggregate_context, log->identifier()));
+        builder.setSinkOp(std::make_unique<AggregateSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
     });
 
     Block before_agg_header = group_builder.getCurrentHeader();

@@ -111,6 +111,8 @@ public:
 
     const OwnerManagerPtr & getS3GCOwnerManager() const;
 
+    S3::S3LockClientPtr getS3LockClient() const { return s3lock_client; }
+
     MPPTaskManagerPtr getMPPTaskManager();
 
     void shutdown();

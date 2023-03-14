@@ -71,7 +71,7 @@ public:
                        const WriteLimiterPtr & write_limiter = nullptr,
                        const ReadLimiterPtr & read_limiter = nullptr);
 
-    PageEntriesEdit write(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit write(typename Trait::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     void remove(const PageEntries & del_entries);
 

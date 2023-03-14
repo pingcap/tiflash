@@ -50,6 +50,7 @@ PhysicalPlanNodePtr PhysicalProjection::build(
     auto physical_projection = std::make_shared<PhysicalProjection>(
         executor_id,
         schema,
+        child->getFineGrainedShuffle(),
         log->identifier(),
         child,
         "projection",
@@ -82,6 +83,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
     auto physical_projection = std::make_shared<PhysicalProjection>(
         child->execId(),
         schema,
+        child->getFineGrainedShuffle(),
         log->identifier(),
         child,
         "final projection",
@@ -127,6 +129,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
     auto physical_projection = std::make_shared<PhysicalProjection>(
         child->execId(),
         schema,
+        child->getFineGrainedShuffle(),
         log->identifier(),
         child,
         "final projection",
@@ -143,12 +146,16 @@ void PhysicalProjection::buildBlockInputStreamImpl(DAGPipeline & pipeline, Conte
     executeExpression(pipeline, project_actions, log, extra_info);
 }
 
-void PhysicalProjection::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalProjection::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
     if (project_actions && !project_actions->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), project_actions));
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), project_actions));
         });
     }
 }

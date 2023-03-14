@@ -15,8 +15,11 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Interpreters/Context.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <kvproto/kvrpcpb.pb.h>
 
 namespace DB
 {
@@ -38,14 +41,23 @@ StorageDisaggregated::StorageDisaggregated(
 BlockInputStreams StorageDisaggregated::read(
     const Names &,
     const SelectQueryInfo &,
-    const Context &,
+    const Context & db_context,
     QueryProcessingStage::Enum &,
     size_t,
     unsigned num_streams)
 {
+    /// S3 config is enabled on the TiFlash compute node, let's read
+    /// data from S3.
+    bool remote_data_read = S3::ClientFactory::instance().isEnabled();
+    if (remote_data_read)
+        return readFromWriteNode(db_context, num_streams);
+
+    /// Fetch all data from write node through MPP exchange sender/receiver
+
     auto remote_table_ranges = buildRemoteTableRanges();
 
-    auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
+    // only send to tiflash node with label {"engine": "tiflash"}
+    auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, pingcap::kv::labelFilterNoTiFlashWriteNode);
     RUNTIME_CHECK(!batch_cop_tasks.empty());
 
     std::vector<RequestAndRegionIDs> dispatch_reqs;
@@ -55,7 +67,10 @@ BlockInputStreams StorageDisaggregated::read(
 
     DAGPipeline pipeline;
     buildReceiverStreams(dispatch_reqs, num_streams, pipeline);
-    filterConditions(pipeline);
+
+    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
+    assert(exchange_receiver->getOutputSchema().size() == source_columns.size());
+    filterConditions(std::move(source_columns), pipeline);
 
     return pipeline.streams;
 }
@@ -84,7 +99,9 @@ std::vector<StorageDisaggregated::RemoteTableRange> StorageDisaggregated::buildR
     return remote_table_ranges;
 }
 
-std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatchCopTasks(const std::vector<RemoteTableRange> & remote_table_ranges)
+std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatchCopTasks(
+    const std::vector<RemoteTableRange> & remote_table_ranges,
+    const pingcap::kv::LabelFilter & label_filter)
 {
     std::vector<Int64> physical_table_ids;
     physical_table_ids.reserve(remote_table_ranges.size());
@@ -107,6 +124,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
         physical_table_ids,
         ranges_for_each_physical_table,
         store_type,
+        label_filter,
         &Poco::Logger::get("pingcap/coprocessor"));
     LOG_DEBUG(log, "batch cop tasks(nums: {}) build finish for tiflash_storage node", batch_cop_tasks.size());
     return batch_cop_tasks;
@@ -117,6 +135,10 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
 {
     auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
     ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
+    // TODO(iosmanthus): support S3 remote read in keyspace mode.
+    auto keyspace_id = context.getDAGContext()->getKeyspaceID();
+    dispatch_req_meta->set_keyspace_id(keyspace_id);
+    dispatch_req_meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
     dispatch_req_meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
     dispatch_req_meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
     dispatch_req_meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
@@ -232,7 +254,7 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
             context.getTMTContext().getMPPTaskManager(),
             context.getSettingsRef().enable_local_tunnel,
             context.getSettingsRef().enable_async_grpc_client),
-        receiver.encoded_task_meta_size(),
+        /*source_num=*/receiver.encoded_task_meta_size(),
         num_streams,
         log->identifier(),
         executor_id,
@@ -265,13 +287,8 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
     });
 }
 
-void StorageDisaggregated::filterConditions(DAGPipeline & pipeline)
+void StorageDisaggregated::filterConditions(NamesAndTypes && source_columns, DAGPipeline & pipeline)
 {
-    NamesAndTypes source_columns = genNamesAndTypesForExchangeReceiver(table_scan);
-    const auto & receiver_dag_schema = exchange_receiver->getOutputSchema();
-    assert(receiver_dag_schema.size() == source_columns.size());
-    UNUSED(receiver_dag_schema);
-
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     if (filter_conditions.hasValue())

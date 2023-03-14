@@ -217,8 +217,18 @@ namespace DB
     M(tiflash_disaggregated_object_lock_request_duration_seconds, "Bucketed histogram of S3 object lock/delete request duration", Histogram,        \
         F(type_lock, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                  \
         F(type_delete, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}))                                                                              \
+    M(tiflash_disaggregated_read_tasks_count, "Total number of storage engine disaggregated read tasks", Counter)                                   \
+    M(tiflash_disaggregated_breakdown_duration_seconds, "", Histogram,                                                                              \
+        F(type_establish, {{"type", "establish"}}, ExpBuckets{0.001, 2, 20}),                                                                       \
+        F(type_build_task, {{"type", "build_task"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_fetch_page, {{"type", "fetch_page"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_pop_ready_tasks, {{"type", "pop_ready_tasks"}}, ExpBuckets{0.001, 2, 20}),                                                           \
+        F(type_build_stream, {{"type", "build_stream"}}, ExpBuckets{0.001, 2, 20}))                                                                 \
+    M(tiflash_disaggregated_details, "", Counter,                                                                                                   \
+        F(type_cftiny_read, {{"type", "cftiny_read"}}),                                                                                             \
+        F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                                           \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                             \
-        Histogram, /* these command usually cost servel seconds, increase the start bucket to 50ms */                                               \
+        Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                              \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                                      \
         F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets{0.05, 2, 10}),                                                \
         F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                  \
@@ -299,6 +309,7 @@ namespace DB
         F(type_hit_count, {{"type", "hit_count"}}))                                                                                                 \
     M(tiflash_storage_s3_request_seconds, "S3 request duration in seconds", Histogram,                                                              \
         F(type_put_object, {{"type", "put_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_copy_object, {{"type", "copy_object"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
         F(type_get_object, {{"type", "get_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_create_multi_part_upload, {{"type", "create_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                         \
         F(type_upload_part, {{"type", "upload_part"}}, ExpBuckets{0.001, 2, 20}),                                                                   \

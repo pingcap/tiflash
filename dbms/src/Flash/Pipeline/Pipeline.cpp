@@ -18,6 +18,7 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
+#include <Flash/Pipeline/Schedule/Events/FineGrainedPipelineEvent.h>
 #include <Flash/Pipeline/Schedule/Events/PlainPipelineEvent.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
@@ -31,6 +32,68 @@ namespace
 FmtBuffer & addPrefix(FmtBuffer & buffer, size_t level)
 {
     return buffer.append(String(level, ' '));
+}
+
+void mapEvents(const Events & inputs, const Events & outputs)
+{
+    assert(!inputs.empty());
+    assert(!outputs.empty());
+    if (inputs.size() == outputs.size())
+    {
+        /**
+         * 1. for fine grained inputs and fine grained outputs
+         *     ```
+         *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
+         *     ```
+         * 2. for non fine grained inputs and non fine grained outputs
+         *     ```
+         *     PlainPipelineEvent◄────PlainPipelineEvent
+         *     ```
+         * 3. for non fine grained inputs and fine grained outputs
+         *     This is not possible, if fine-grained is enabled in outputs, then inputs must also be enabled.
+         *     Checked in `doToEvents`.
+         * 4. for fine grained inputs and non fine grained outputs
+         *     ```
+         *     PlainPipelineEvent◄────FineGrainedPipelineEvent
+         *     ```
+         */
+        size_t partition_num = inputs.size();
+        for (size_t index = 0; index < partition_num; ++index)
+            outputs[index]->addInput(inputs[index]);
+    }
+    else
+    {
+        /**
+         * 1. for fine grained inputs and fine grained outputs
+         *     If the number of partitions does not match, it is safer to use full mapping.
+         *     ```
+         *     FineGrainedPipelineEvent◄──┐ ┌──FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄──┼─┼──FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄──┤ └──FineGrainedPipelineEvent
+         *     FineGrainedPipelineEvent◄──┘
+         *     ```
+         * 2. for non fine grained inputs and non fine grained outputs
+         *     This is not possible, the size of inputs and outputs must be the same and 1.
+         * 3. for non fine grained inputs and fine grained outputs
+         *     This is not possible, if fine-grained is enabled in outputs, then inputs must also be enabled.
+         *     Checked in `doToEvents`.
+         * 4. for fine grained inputs and non fine grained outputs
+         *     ```
+         *                          ┌──FineGrainedPipelineEvent
+         *     PlainPipelineEvent◄──┼──FineGrainedPipelineEvent
+         *                          ├──FineGrainedPipelineEvent
+         *                          └──FineGrainedPipelineEvent
+         *     ```
+         */
+        for (const auto & output : outputs)
+        {
+            for (const auto & input : inputs)
+                output->addInput(input);
+        }
+    }
 }
 } // namespace
 
@@ -76,50 +139,82 @@ void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
 void Pipeline::addGetResultSink(ResultHandler && result_handler)
 {
     assert(!plan_nodes.empty());
-    auto get_result_sink = PhysicalGetResultSink::build(std::move(result_handler), plan_nodes.back());
+    auto get_result_sink = PhysicalGetResultSink::build(std::move(result_handler), log, plan_nodes.back());
     addPlanNode(get_result_sink);
 }
 
 PipelineExecGroup Pipeline::buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency)
 {
     assert(!plan_nodes.empty());
-    PipelineExecGroupBuilder builder{exec_status};
+    PipelineExecGroupBuilder builder;
     for (const auto & plan_node : plan_nodes)
-        plan_node->buildPipelineExec(builder, context, concurrency);
+        plan_node->buildPipelineExecGroup(exec_status, builder, context, concurrency);
     return builder.build();
+}
+
+/**
+ * There are two execution modes in pipeline.
+ * 1. non fine grained mode
+ *     A pipeline generates an event(PlainPipelineEvent).
+ *     This means that all the operators in the pipeline are finished before the next pipeline is triggered.
+ * 2. fine grained mode
+ *     A pipeline will generate n Events(FineGrainedPipelineEvent), one for each data partition.
+ *     There is a fine-grained mapping of Events between Pipelines, e.g. only Events from the same data partition will have dependencies on each other.
+ *     This means that once some data partition of the previous pipeline has finished, the operators of the next pipeline's corresponding data partition can be started without having to wait for the entire pipeline to finish.
+ * 
+ *        ┌──non fine grained mode──┐                          ┌──fine grained mode──┐
+ *                                            ┌──FineGrainedPipelineEvent◄───FineGrainedPipelineEvent
+ * PlainPipelineEvent◄───PlainPipelineEvent◄──┼──FineGrainedPipelineEvent◄───FineGrainedPipelineEvent
+ *                                            └──FineGrainedPipelineEvent◄───FineGrainedPipelineEvent
+ */
+bool Pipeline::isFineGrainedMode() const
+{
+    assert(!plan_nodes.empty());
+    // The source plan node determines whether the execution mode is fine grained or non-fine grained.
+    return plan_nodes.front()->getFineGrainedShuffle().enable();
 }
 
 Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
 {
     Events all_events;
-    toEvent(status, context, concurrency, all_events);
+    doToEvents(status, context, concurrency, all_events);
     assert(!all_events.empty());
     return all_events;
 }
 
-EventPtr Pipeline::toEvent(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events)
+Events Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
 {
-    // TODO support fine grained shuffle
-    //     - a fine grained partition maps to an event
-    //     - the event flow will be
-    //     ```
-    //     disable fine grained partition pipeline   enable fine grained partition pipeline   enable fine grained partition pipeline
-    //                                       ┌───────────────FineGrainedPipelineEvent<────────────────FineGrainedPipelineEvent
-    //            PlainPipelineEvent<────────┼───────────────FineGrainedPipelineEvent<────────────────FineGrainedPipelineEvent
-    //                                       ├───────────────FineGrainedPipelineEvent<────────────────FineGrainedPipelineEvent
-    //                                       └───────────────FineGrainedPipelineEvent<────────────────FineGrainedPipelineEvent
-    //     ```
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
+    Events self_events;
+    assert(!plan_nodes.empty());
+    if (isFineGrainedMode())
+    {
+        auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
+        RUNTIME_CHECK(!fine_grained_exec_group.empty());
+        for (auto & pipeline_exec : fine_grained_exec_group)
+            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), std::move(pipeline_exec)));
+        LOG_DEBUG(log, "Execute in fine grained model and generate {} fine grained pipeline event", self_events.size());
+    }
+    else
+    {
+        self_events.push_back(std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency));
+        LOG_DEBUG(log, "Execute in non fine grained model and generate one plain pipeline event");
+    }
+    return self_events;
+}
 
-    auto plain_pipeline_event = std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency);
+Events Pipeline::doToEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events)
+{
+    auto self_events = toSelfEvents(status, context, concurrency);
     for (const auto & child : children)
     {
-        auto input = child->toEvent(status, context, concurrency, all_events);
-        assert(input);
-        plain_pipeline_event->addInput(input);
+        // If the current pipeline is fine grained model, the child must also be.
+        RUNTIME_CHECK(!isFineGrainedMode() || child->isFineGrainedMode());
+        auto inputs = child->doToEvents(status, context, concurrency, all_events);
+        mapEvents(inputs, self_events);
     }
-    all_events.push_back(plain_pipeline_event);
-    return plain_pipeline_event;
+    all_events.insert(all_events.end(), self_events.cbegin(), self_events.cend());
+    return self_events;
 }
 
 bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
@@ -128,26 +223,25 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
     traverseExecutors(
         &dag_request,
         [&](const tipb::Executor & executor) {
-            // TODO support fine grained shuffle.
-            if (FineGrainedShuffle(&executor).enable())
-            {
-                is_supported = false;
-                return false;
-            }
             switch (executor.tp())
             {
+            case tipb::ExecType::TypeTableScan:
+                if (executor.tbl_scan().keep_order())
+                {
+                    is_supported = false;
+                    return false;
+                }
             case tipb::ExecType::TypeProjection:
             case tipb::ExecType::TypeSelection:
             case tipb::ExecType::TypeLimit:
             case tipb::ExecType::TypeTopN:
-            case tipb::ExecType::TypeAggregation:
-            case tipb::ExecType::TypeTableScan:
             case tipb::ExecType::TypeExchangeSender:
             case tipb::ExecType::TypeExchangeReceiver:
             case tipb::ExecType::TypeExpand:
                 return true;
             case tipb::ExecType::TypeWindow:
             case tipb::ExecType::TypeSort:
+            case tipb::ExecType::TypeAggregation:
                 // TODO support non fine grained shuffle.
                 if (FineGrainedShuffle(&executor).enable())
                     return true;

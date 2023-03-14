@@ -22,6 +22,7 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalTableScan.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 
 namespace DB
 {
@@ -31,7 +32,7 @@ PhysicalTableScan::PhysicalTableScan(
     const String & req_id,
     const TiDBTableScan & tidb_table_scan_,
     const Block & sample_block_)
-    : PhysicalLeaf(executor_id_, PlanType::TableScan, schema_, req_id)
+    : PhysicalLeaf(executor_id_, PlanType::TableScan, schema_, FineGrainedShuffle{}, req_id)
     , tidb_table_scan(tidb_table_scan_)
     , sample_block(sample_block_)
 {}
@@ -55,7 +56,7 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
 {
     assert(pipeline.streams.empty());
 
-    if (context.isDisaggregatedComputeMode())
+    if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(context, tidb_table_scan, filter_conditions, max_streams);
         disaggregated_tiflash_interpreter.execute(pipeline);

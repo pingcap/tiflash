@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
@@ -36,12 +37,17 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
         },
         false);
 
-    auto & global_settings = tmt.getContext().getSettingsRef();
-    storage_gc_handle = background_pool.addTask(
-        [this] { return tmt.getGCManager().work(); },
-        false,
-        /*interval_ms=*/global_settings.dt_bg_gc_check_interval * 1000);
-    LOG_INFO(log, "Start background storage gc worker with interval {} seconds.", global_settings.dt_bg_gc_check_interval);
+    auto & global_context = tmt.getContext();
+    if (!global_context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+    {
+        // compute node does not contain long-live tables and segments
+        auto & global_settings = global_context.getSettingsRef();
+        storage_gc_handle = background_pool.addTask(
+            [this] { return tmt.getGCManager().work(); },
+            false,
+            /*interval_ms=*/global_settings.dt_bg_gc_check_interval * 1000);
+        LOG_INFO(log, "Start background storage gc worker with interval {} seconds.", global_settings.dt_bg_gc_check_interval);
+    }
 }
 
 void BackgroundService::shutdown()

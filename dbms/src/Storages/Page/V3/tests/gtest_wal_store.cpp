@@ -26,8 +26,8 @@
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
 #include <future>
@@ -146,7 +146,8 @@ TEST(WALSeriTest, RefExternalAndEntry)
     PageVersion ver3_0(/*seq=*/3, /*epoch*/ 0);
     {
         PageEntriesEdit edit;
-        edit.varExternal(buildV3Id(TEST_NAMESPACE_ID, 1), ver1_0, 2);
+
+        edit.varExternal(buildV3Id(TEST_NAMESPACE_ID, 1), ver1_0, PageEntryV3{}, 2);
         edit.varDel(buildV3Id(TEST_NAMESPACE_ID, 1), ver2_0);
         edit.varRef(buildV3Id(TEST_NAMESPACE_ID, 2), ver3_0, buildV3Id(TEST_NAMESPACE_ID, 1));
 
@@ -390,8 +391,7 @@ TEST(WALStoreReaderTest, FindCheckpointFile)
 
 TEST_P(WALStoreTest, Empty)
 {
-    auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    auto provider = ctx.getFileProvider();
+    auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto path = getTemporaryPath();
     size_t num_callback_called = 0;
     auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
@@ -413,8 +413,7 @@ TEST_P(WALStoreTest, Empty)
 TEST_P(WALStoreTest, ReadWriteRestore)
 try
 {
-    auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    auto provider = ctx.getFileProvider();
+    auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto path = getTemporaryPath();
 
     // Stage 1. empty
@@ -536,8 +535,7 @@ CATCH
 TEST_P(WALStoreTest, ReadWriteRestore2)
 try
 {
-    auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    auto provider = ctx.getFileProvider();
+    auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto path = getTemporaryPath();
 
     auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
@@ -731,8 +729,7 @@ CATCH
 
 TEST_P(WALStoreTest, GetFileSnapshot)
 {
-    auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    auto provider = ctx.getFileProvider();
+    auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto path = getTemporaryPath();
 
     auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
@@ -791,6 +788,51 @@ TEST_P(WALStoreTest, GetFileSnapshot)
     }
 }
 
+TEST_P(WALStoreTest, WriteReadWithDifferentFormat)
+{
+    auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
+    auto path = getTemporaryPath();
+
+    {
+        auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
+        ASSERT_NE(wal, nullptr);
+
+        PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        {
+            universal::PageEntriesEdit edit;
+            edit.put(UniversalPageId("aaa"), entry_p1_2);
+            edit.put(UniversalPageId("bbb"), entry_p1_2);
+            edit.put(UniversalPageId("ccc"), entry_p1_2);
+            wal->apply(universal::Serializer::serializeInCompressedFormTo(edit));
+        }
+        {
+            universal::PageEntriesEdit edit;
+            edit.put(UniversalPageId("aaa"), entry_p1_2);
+            edit.put(UniversalPageId("bbb"), entry_p1_2);
+            edit.put(UniversalPageId("ccc"), entry_p1_2);
+            wal->apply(universal::Serializer::serializeTo(edit));
+        }
+    }
+
+    {
+        size_t num_pages_read = 0;
+        auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
+        while (reader->remained())
+        {
+            auto record = reader->next();
+            if (!record)
+            {
+                reader->throwIfError();
+                break;
+            }
+            auto edit = universal::Serializer::deserializeFrom(record.value());
+            num_pages_read += edit.size();
+        }
+        EXPECT_EQ(num_pages_read, 6);
+    }
+}
 
 INSTANTIATE_TEST_CASE_P(
     Disks,

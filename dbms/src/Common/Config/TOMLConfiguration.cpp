@@ -42,6 +42,12 @@ bool TOMLConfiguration::getRaw(const std::string & key, std::string & value) con
 {
     try
     {
+#ifndef NDEBUG
+        // Avoid the exception thrown in `get_qualified` to make debugging hard.
+        // It takes more time to check, just throw and catch to handle the non exist key in release mode.
+        if (!root->contains_qualified(key))
+            return false;
+#endif
         auto node = root->get_qualified(key);
         if (auto str_node = std::dynamic_pointer_cast<cpptoml::value<std::string>>(node))
         {

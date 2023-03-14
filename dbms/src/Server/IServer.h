@@ -15,10 +15,9 @@
 #pragma once
 
 #include <Common/TiFlashSecurity.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
-
 
 namespace DB
 {

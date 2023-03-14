@@ -46,10 +46,10 @@ PhysicalPlanNodePtr PhysicalWindowSort::build(
     auto physical_window_sort = std::make_shared<PhysicalWindowSort>(
         executor_id,
         child->getSchema(),
+        fine_grained_shuffle,
         log->identifier(),
         child,
-        order_descr,
-        fine_grained_shuffle);
+        order_descr);
     return physical_window_sort;
 }
 

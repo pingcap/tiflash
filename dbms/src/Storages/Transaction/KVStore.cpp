@@ -136,8 +136,9 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
 bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed)
 {
     fiu_do_on(FailPoints::force_fail_in_flush_region_data, { return false; });
+    auto keyspace_id = region.getKeyspaceID();
     auto table_id = region.getMappedTableID();
-    auto storage = tmt.getStorages().get(table_id);
+    auto storage = tmt.getStorages().get(keyspace_id, table_id);
     if (unlikely(storage == nullptr))
     {
         LOG_WARNING(log,
@@ -460,10 +461,12 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     }
 
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
-    if (cmd_type == raft_cmdpb::AdminCmdType::PrepareFlashback || cmd_type == raft_cmdpb::AdminCmdType::FinishFlashback)
+    if (cmd_type == raft_cmdpb::AdminCmdType::PrepareFlashback
+        || cmd_type == raft_cmdpb::AdminCmdType::FinishFlashback
+        || cmd_type == raft_cmdpb::AdminCmdType::BatchSwitchWitness)
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
-        persistRegion(curr_region, region_task_lock, "admin cmd flashback");
+        persistRegion(curr_region, region_task_lock, fmt::format("admin cmd useless {}", cmd_type).c_str());
         return EngineStoreApplyRes::Persist;
     }
     return EngineStoreApplyRes::None;
@@ -489,6 +492,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
     case raft_cmdpb::AdminCmdType::ComputeHash:
     case raft_cmdpb::AdminCmdType::PrepareFlashback:
     case raft_cmdpb::AdminCmdType::FinishFlashback:
+    case raft_cmdpb::AdminCmdType::BatchSwitchWitness:
         return handleUselessAdminRaftCmd(type, curr_region_id, index, term, tmt);
     default:
         break;
@@ -833,6 +837,17 @@ StoreID KVStore::getStoreID(std::memory_order memory_order) const
     return getStore().store_id.load(memory_order);
 }
 
+KVStore::StoreMeta::Base KVStore::StoreMeta::getMeta() const
+{
+    std::lock_guard lock(mu);
+    return base;
+}
+
+metapb::Store KVStore::getStoreMeta() const
+{
+    return getStore().getMeta();
+}
+
 KVStore::StoreMeta & KVStore::getStore()
 {
     return this->store;
@@ -845,6 +860,7 @@ const KVStore::StoreMeta & KVStore::getStore() const
 
 void KVStore::StoreMeta::update(Base && base_)
 {
+    std::lock_guard lock(mu);
     base = std::move(base_);
     store_id = base.id();
 }

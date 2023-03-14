@@ -16,6 +16,7 @@
 
 #include <Encryption/FileProvider.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB::DM::Remote
 {
@@ -33,7 +34,7 @@ public:
      * Blocks until a local DMFile is successfully put in the remote data store.
      * Should be used by a write node.
      */
-    void putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid) override;
+    void putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, bool remove_local) override;
 
     void copyDMFileMetaToLocalPath(const S3::DMFileOID & remote_oid, const String & local_dir) override;
 
@@ -47,6 +48,8 @@ public:
      * Should be used by a read node.
      */
     IPreparedDMFileTokenPtr prepareDMFile(const S3::DMFileOID & oid) override;
+
+    bool putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) override;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

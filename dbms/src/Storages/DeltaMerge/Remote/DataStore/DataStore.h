@@ -15,12 +15,15 @@
 #pragma once
 
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
+#include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/S3/S3Filename.h>
 
 #include <boost/core/noncopyable.hpp>
 
 namespace DB::DM::Remote
 {
+
 class IPreparedDMFileToken : boost::noncopyable
 {
 public:
@@ -42,8 +45,6 @@ protected:
     {}
 };
 
-using IPreparedDMFileTokenPtr = std::shared_ptr<IPreparedDMFileToken>;
-
 class IDataStore : boost::noncopyable
 {
 public:
@@ -53,7 +54,7 @@ public:
      * Blocks until a local DMFile is successfully put in the remote data store.
      * Should be used by a write node.
      */
-    virtual void putDMFile(DMFilePtr local_dm_file, const S3::DMFileOID & oid) = 0;
+    virtual void putDMFile(DMFilePtr local_dm_file, const S3::DMFileOID & oid, bool remove_local) = 0;
 
     virtual void copyDMFileMetaToLocalPath(const S3::DMFileOID & remote_oid, const String & local_path) = 0;
 
@@ -67,8 +68,17 @@ public:
      * Should be used by a read node.
      */
     virtual IPreparedDMFileTokenPtr prepareDMFile(const S3::DMFileOID & oid) = 0;
+
+    /**
+     * Blocks until all checkpoint files are successfully put in the remote data store.
+     * Returns true if all files are successfully uploaded.
+     * Should be used by a write node.
+     *
+     * Note that this function ensure CheckpointManifest is the last file to be seen in the
+     * remote data source for a given `upload_seq`.
+     */
+    virtual bool putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) = 0;
 };
 
-using IDataStorePtr = std::shared_ptr<IDataStore>;
 
 } // namespace DB::DM::Remote

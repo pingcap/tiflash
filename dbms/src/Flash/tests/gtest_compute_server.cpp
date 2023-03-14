@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Interpreters/Context.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 
 namespace DB
@@ -123,7 +124,7 @@ try
         {{"s1", TiDB::TP::TypeLong}},
         expected_cols);
 
-    context.context.setSetting("max_block_size", Field(static_cast<UInt64>(100)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(100)));
 
     WRAP_FOR_SERVER_TEST_BEGIN
     // For PassThrough and Broadcast, use only one server for testing, as multiple servers will double the result size.
@@ -197,14 +198,18 @@ exchange_sender_4 | type:PassThrough, {<0, Long>}
 exchange_sender_4 | type:PassThrough, {<0, Long>}
  project_3 | {<0, Long>}
   exchange_receiver_2 | type:Hash, {<0, Long>})"};
-        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
-            context
-                .scan("test_db", "big_table")
-                .exchangeSender(tipb::ExchangeType::Hash)
-                .exchangeReceiver("recv", {{"s1", TiDB::TP::TypeLong}})
-                .project({"s1"}),
-            expected_strings,
-            expected_cols);
+        std::vector<uint64_t> fine_grained_shuffle_stream_count{8, 0};
+        for (uint64_t stream_count : fine_grained_shuffle_stream_count)
+        {
+            ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+                context
+                    .scan("test_db", "big_table")
+                    .exchangeSender(tipb::ExchangeType::Hash, {"test_db.big_table.s1"}, stream_count)
+                    .exchangeReceiver("recv", {{"s1", TiDB::TP::TypeLong}}, stream_count)
+                    .project({"s1"}),
+                expected_strings,
+                expected_cols);
+        }
     }
     WRAP_FOR_SERVER_TEST_END
 }

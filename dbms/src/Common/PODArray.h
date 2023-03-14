@@ -116,7 +116,14 @@ protected:
 
     void alloc_for_num_elements(size_t num_elements)
     {
-        alloc(roundUpToPowerOfTwoOrZero(minimum_memory_for_elements(num_elements)));
+        //alloc_for_num_elements is only used when initialized PODArray based on size or two iterators.
+        //If the users just want to do PODArray initialize, and never will push_back other elements,
+        //use roundUpToPowerOfTwoOrZero here just waste memory usage.
+        //If the users want to do PODArray initialize first, and also will push_back other elements later,
+        //in push_back or emplace_back will do the reserveForNextSize to alloc extra memory.
+        //Thus, we don't need do roundUpToPowerOfTwoOrZero here, and it can cut down extra memory usage,
+        //and will not have bad affact on performance.
+        alloc(minimum_memory_for_elements(num_elements));
     }
 
     template <typename... TAllocatorParams>
