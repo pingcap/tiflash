@@ -45,7 +45,7 @@ struct SharedContextDisagg : private boost::noncopyable
 
     DisaggregatedMode disaggregated_mode = DisaggregatedMode::None;
 
-    bool use_autoscaler = true; // TODO: remove this after AutoScaler is stable. Only meaningful in DisaggregatedComputeMode.
+    bool use_autoscaler = false; // TODO: remove this after AutoScaler is stable. Only meaningful in DisaggregatedComputeMode.
 
     /// For both read node (downloading) and write node (uploading).
     DM::Remote::IDataStorePtr remote_data_store;
