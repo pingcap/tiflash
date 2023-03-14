@@ -766,4 +766,4 @@ try
 }
 CATCH
 
-} // namespace DB::DM::tests
+} // namespace DB::tests
