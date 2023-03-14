@@ -949,7 +949,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // If the user does not explicitly set format_version in the config file but
             // enables S3, then we set up a proper format version to support S3.
             setStorageFormat(5);
-            LOG_INFO(log, "Using format_version={} (inferr by S3 is enabled).", STORAGE_FORMAT_V5.identifier);
+            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_V5.identifier);
         }
         else
         {
