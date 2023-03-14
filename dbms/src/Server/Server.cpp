@@ -1083,11 +1083,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         S3::ClientFactory::instance().init(storage_config.s3_config);
     }
-    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled())
-    {
-        config.initCacheDir();
-        FileCache::initialize(config.getDTFileCacheDir(), config.getDTFileCapacity(), config.dtfile_level, config.dtfile_cache_min_age_seconds);
-    }
+
     global_context->getSharedContextDisagg()->initRemoteDataStore(global_context->getFileProvider(), storage_config.s3_config.isS3Enabled());
 
     global_context->initializePathCapacityMetric( //
@@ -1105,6 +1101,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.kvstore_data_path, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
+    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled())
+    {
+        config.initCacheDir();
+        FileCache::initialize(global_context->getPathCapacity(), config);
+    }
 
     /// Determining PageStorage run mode based on current files on disk and storage config.
     /// Do it as early as possible after loading storage config.

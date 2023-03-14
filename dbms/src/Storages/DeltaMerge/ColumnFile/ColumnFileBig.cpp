@@ -13,12 +13,14 @@
 // limitations under the License.
 
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 
 namespace DB
@@ -86,7 +88,19 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(const DMContext & cont
     readIntBinary(valid_bytes, buf);
 
     auto file_id = context.storage_pool->dataReader()->getNormalPageId(file_page_id);
-    auto file_parent_path = context.path_pool->getStableDiskDelegator().getDTFilePath(file_id);
+    String file_parent_path;
+    if (context.db_context.getSharedContextDisagg()->remote_data_store)
+    {
+        auto wn_ps = context.db_context.getWriteNodePageStorage();
+        auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, context.storage_pool->getNamespaceId()), file_page_id);
+        auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
+        const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
+        file_parent_path = S3::S3Filename::fromTableID(lock_key_view.store_id, context.storage_pool->getNamespaceId()).toFullKeyWithPrefix();
+    }
+    else
+    {
+        file_parent_path = context.path_pool->getStableDiskDelegator().getDTFilePath(file_id);
+    }
 
     auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_page_id, file_parent_path, DMFile::ReadMetaMode::all());
 
