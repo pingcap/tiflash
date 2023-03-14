@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Interpreters/Context.h>
 #include <Operators/AggregateSinkOp.h>
-#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
@@ -26,12 +26,7 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
-    if (!before_agg_actions->getActions().empty())
-    {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_agg_actions));
-        });
-    }
+    executeExpression(exec_status, group_builder, before_agg_actions, log);
 
     size_t build_index = 0;
     group_builder.transform([&](auto & builder) {

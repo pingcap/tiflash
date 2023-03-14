@@ -22,7 +22,6 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalWindowSort.h>
 #include <Interpreters/Context.h>
-#include <Operators/ExpressionTransformOp.h>
 #include <Operators/LocalSortTransformOp.h>
 
 namespace DB
@@ -60,12 +59,16 @@ void PhysicalWindowSort::buildBlockInputStreamImpl(DAGPipeline & pipeline, Conte
     orderStreams(pipeline, max_streams, order_descr, 0, fine_grained_shuffle.enable(), context, log);
 }
 
-void PhysicalWindowSort::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
+void PhysicalWindowSort::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t /*concurrency*/)
 {
     // TODO support non fine grained shuffle.
     assert(fine_grained_shuffle.enable());
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<LocalSortTransformOp>(group_builder.exec_status, log->identifier(), order_descr, 0, context.getSettingsRef().max_block_size));
+        builder.appendTransformOp(std::make_unique<LocalSortTransformOp>(exec_status, log->identifier(), order_descr, 0, context.getSettingsRef().max_block_size));
     });
 }
 

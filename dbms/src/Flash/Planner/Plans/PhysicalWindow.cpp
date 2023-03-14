@@ -23,7 +23,6 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalWindow.h>
 #include <Interpreters/Context.h>
-#include <Operators/ExpressionTransformOp.h>
 #include <Operators/WindowTransformOp.h>
 
 namespace DB
@@ -90,21 +89,24 @@ void PhysicalWindow::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
     executeExpression(pipeline, window_description.after_window, log, "expr after window");
 }
 
-void PhysicalWindow::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalWindow::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
     // TODO support non fine grained shuffle.
     assert(fine_grained_shuffle.enable());
-    if (window_description.before_window && !window_description.before_window->getActions().empty())
-    {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), window_description.before_window));
-        });
-    }
+
+    executeExpression(exec_status, group_builder, window_description.before_window, log);
     window_description.fillArgColumnNumbers();
+
     /// Window function can be multiple threaded when fine grained shuffle is enabled.
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<WindowTransformOp>(group_builder.exec_status, log->identifier(), window_description));
+        builder.appendTransformOp(std::make_unique<WindowTransformOp>(exec_status, log->identifier(), window_description));
     });
+
+    executeExpression(exec_status, group_builder, window_description.after_window, log);
 }
 
 void PhysicalWindow::finalize(const Names & parent_require)

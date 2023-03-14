@@ -456,8 +456,8 @@ try
     auto gen_request = [&](size_t exchange_concurrency) {
         return context
             .receive(fmt::format("exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency)
-            .sort({{"partition", false}, {"order", false}}, true)
-            .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
+            .sort({{"partition", false}, {"order", false}}, true, exchange_concurrency)
+            .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame(), exchange_concurrency)
             .build(context);
     };
 

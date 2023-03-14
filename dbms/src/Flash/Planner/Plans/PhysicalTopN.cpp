@@ -22,7 +22,6 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
-#include <Operators/ExpressionTransformOp.h>
 #include <Operators/LocalSortTransformOp.h>
 
 namespace DB
@@ -75,12 +74,8 @@ void PhysicalTopN::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
-    if (!before_sort_actions->getActions().empty())
-    {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_sort_actions));
-        });
-    }
+    executeExpression(exec_status, group_builder, before_sort_actions, log);
+
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<LocalSortTransformOp>(exec_status, log->identifier(), order_descr, limit, context.getSettingsRef().max_block_size));
     });

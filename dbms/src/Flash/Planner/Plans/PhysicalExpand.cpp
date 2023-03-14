@@ -19,13 +19,12 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalExpand.h>
 #include <Interpreters/Context.h>
-#include <Operators/ExpressionTransformOp.h>
-#include <Operators/FilterTransformOp.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -88,9 +87,7 @@ void PhysicalExpand::buildPipelineExecGroup(
     Context & /*context*/,
     size_t /*concurrency*/)
 {
-    group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expand_actions));
-    });
+    executeExpression(exec_status, group_builder, expand_actions, log);
 }
 
 void PhysicalExpand::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
