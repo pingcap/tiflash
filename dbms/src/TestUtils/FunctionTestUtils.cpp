@@ -99,6 +99,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 ::testing::AssertionResult columnEqual(
     const ColumnPtr & expected,
     const ColumnPtr & actual,
+    const ICollator * collator,
     bool is_floating_point)
 {
     ASSERT_EQUAL(expected->getName(), actual->getName(), "Column name mismatch");
@@ -121,6 +122,14 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 
         if (!is_floating_point)
         {
+            if (collator != nullptr && !expected_field.isNull() && !actual_field.isNull())
+            {
+                auto e_string = expected_field.get<String>();
+                auto a_string = actual_field.get<String>();
+                if (collator->compare(e_string.data(), e_string.size(), a_string.data(), a_string.size()) == 0)
+                    continue;
+                /// if not equal, fallback to the original compare so we can reuse the code to get error message
+            }
             ASSERT_EQUAL_WITH_TEXT(expected_field, actual_field, fmt::format("Value at index {} mismatch", i), expected_field.toString(), actual_field.toString());
         }
         else
@@ -141,12 +150,13 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 
 ::testing::AssertionResult columnEqual(
     const ColumnWithTypeAndName & expected,
-    const ColumnWithTypeAndName & actual)
+    const ColumnWithTypeAndName & actual,
+    const ICollator * collator)
 {
     if (auto ret = dataTypeEqual(expected.type, actual.type); !ret)
         return ret;
 
-    return columnEqual(expected.column, actual.column, expected.type->isFloatingPoint());
+    return columnEqual(expected.column, actual.column, collator, expected.type->isFloatingPoint());
 }
 
 ::testing::AssertionResult blockEqual(

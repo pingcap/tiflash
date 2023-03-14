@@ -1169,7 +1169,7 @@ protected:
     void convertToBlocksImplFinal(
         Method & method,
         Table & data,
-        std::vector<std::vector<IColumn *>> key_columns_vec,
+        std::vector<std::vector<IColumn *>> && key_columns_vec,
         std::vector<MutableColumns> & final_aggregate_columns_vec,
         Arena * arena) const;
 
@@ -1184,7 +1184,7 @@ protected:
     void convertToBlocksImplNotFinal(
         Method & method,
         Table & data,
-        std::vector<std::vector<IColumn *>> key_columns_vec,
+        std::vector<std::vector<IColumn *>> && key_columns_vec,
         std::vector<AggregateColumnsData> & aggregate_columns_vec) const;
 
     template <typename Filler>
