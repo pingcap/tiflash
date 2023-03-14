@@ -21,7 +21,6 @@ namespace DB
 {
 namespace tests
 {
-
 class SpillAggregationTestRunner : public DB::tests::ExecutorTest
 {
 public:
@@ -94,6 +93,12 @@ try
         ASSERT_EQ(block.rows() <= small_max_block_size, true);
     }
     ASSERT_COLUMNS_EQ_UR(ref_columns, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName());
+}
+CATCH
+
+TEST_F(SpillAggregationTestRunner, AggWithSpeicalGroupKey)
+try
+{
 }
 CATCH
 } // namespace tests
