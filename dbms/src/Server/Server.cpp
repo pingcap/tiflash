@@ -932,14 +932,30 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // "0" by default, means no quota, the actual disk capacity is used.
     size_t global_capacity_quota = 0;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
-    if (storage_config.format_version)
+    if (storage_config.format_version != 0)
     {
+        if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V5.identifier)
+        {
+            LOG_WARNING(log, "'storage.format_version' must be set to 5 when S3 is enabled!");
+            throw Exception("'storage.format_version' must be set to 5 when S3 is enabled!");
+        }
         setStorageFormat(storage_config.format_version);
         LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
     }
     else
     {
-        LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
+        if (storage_config.s3_config.isS3Enabled())
+        {
+            // If the user does not explicitly set format_version in the config file but
+            // enables S3, then we set up a proper format version to support S3.
+            setStorageFormat(5);
+            LOG_INFO(log, "Using format_version={} (inferr by S3 is enabled).", STORAGE_FORMAT_V5.identifier);
+        }
+        else
+        {
+            // Use the default settings
+            LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
+        }
     }
 
     LOG_INFO(log, "Using api_version={}", storage_config.api_version);
