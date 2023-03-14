@@ -16,6 +16,7 @@
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
+#include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
@@ -166,6 +167,8 @@ void ExecutorTest::executeExecutor(
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
 {
     WRAP_FOR_TEST_BEGIN
+    if (enable_pipeline && !Pipeline::isSupported(*request))
+        continue;
     std::vector<size_t> concurrencies{1, 2, 10};
     for (auto concurrency : concurrencies)
     {
@@ -186,6 +189,8 @@ void ExecutorTest::checkBlockSorted(
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &, const ColumnsWithTypeAndName &)> assert_func)
 {
     WRAP_FOR_TEST_BEGIN
+    if (enable_pipeline && !Pipeline::isSupported(*request))
+        continue;
     std::vector<size_t> concurrencies{2, 5, 10};
     for (auto concurrency : concurrencies)
     {
