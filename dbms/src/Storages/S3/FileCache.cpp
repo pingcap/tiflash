@@ -392,7 +392,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
     }
     auto & result = outcome.GetResult();
     auto content_length = result.GetContentLength();
-    RUNTIME_CHECK_MSG(content_length > 0, "s3_key={}, content_length={}", s3_key, content_length);
+    RUNTIME_CHECK_MSG(content_length >= 0, "s3_key={}, content_length={}", s3_key, content_length);
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, content_length);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
     if (!finalizeReservedSize(file_seg->getFileType(), file_seg->getSize(), content_length))
