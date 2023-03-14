@@ -68,16 +68,14 @@ void FastAddPeerContext::updateTempUniversalPageStorage(UInt64 store_id, UInt64 
     if (iter != temp_ps_cache.end() && iter->second.first >= upload_seq)
         return;
 
-    temp_ps_cache.erase(store_id);
-    temp_ps_cache.emplace(store_id, std::make_pair(upload_seq, temp_ps));
+    temp_ps_cache[store_id] = std::make_pair(upload_seq, temp_ps);
 }
 
 void FastAddPeerContext::insertSegmentEndKeyInfoToCache(NamespaceId table_id, const DM::RowKeyValue & key, UInt64 segment_id)
 {
     std::unique_lock lock(range_cache_mu);
     auto & end_key_to_id_map = segment_range_cache[table_id];
-    end_key_to_id_map.erase(key);
-    end_key_to_id_map.emplace(key, segment_id);
+    end_key_to_id_map[key] = segment_id;
 }
 
 UInt64 FastAddPeerContext::getSegmentIdContainingKey(NamespaceId table_id, const DM::RowKeyValue & key)

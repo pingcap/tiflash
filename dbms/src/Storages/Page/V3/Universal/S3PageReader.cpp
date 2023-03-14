@@ -21,11 +21,6 @@
 
 namespace DB::PS::V3
 {
-S3PageReader::S3PageReader()
-    : s3_client(S3::ClientFactory::instance().sharedClient())
-    , bucket(S3::ClientFactory::instance().bucket())
-{}
-
 Page S3PageReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
 {
     const auto & page_entry = page_id_and_entry.second;
@@ -35,14 +30,19 @@ Page S3PageReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
     auto remote_name_view = S3::S3FilenameView::fromKey(remote_name);
     RandomAccessFilePtr remote_file;
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+#ifdef DBMS_PUBLIC_GTEST
     if (remote_name_view.isLockFile())
     {
+#endif
         remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, s3_client->bucket(), remote_name_view.asDataFile().toFullKey());
+#ifdef DBMS_PUBLIC_GTEST
     }
     else
     {
+        // Just used in unit test which want to just focus on read write logic
         remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, s3_client->bucket(), *location.data_file_id);
     }
+#endif
     ReadBufferFromRandomAccessFile buf(remote_file);
 
     buf.seek(location.offset_in_file, SEEK_SET);
