@@ -339,7 +339,7 @@ void ExpressionAction::execute(Block & block) const
     {
         ProbeProcessInfo probe_process_info(0);
         probe_process_info.block = block;
-        join->joinBlock(probe_process_info);
+        join->joinBlock(probe_process_info, 0);
         break;
     }
 

@@ -29,7 +29,6 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
     , step_end(false)
     , result(NASemiJoinResultType::NULL_VALUE)
     , null_rows_pos(0)
-    , null_rows_it(nullptr)
     , map_it(map_it_)
 {
     static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftAnti
@@ -38,7 +37,7 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <typename Mapped, NASemiJoinStep STEP>
-void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const PaddedPODArray<Join::RowRefList *> & null_rows, size_t & current_offset, size_t max_pace)
+void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, Join::NullRowsColumns & null_rows, size_t & current_offset, size_t max_pace)
 {
     static_assert(STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
 
@@ -63,25 +62,9 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added
     }
     else if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS)
     {
-        for (size_t i = 0; i < max_pace; ++i)
-        {
-            if (null_rows_it == nullptr)
-            {
-                if (null_rows_pos >= null_rows.size())
-                {
-                    step_end = true;
-                    break;
-                }
-                ++null_rows_pos;
-                null_rows_it = null_rows[null_rows_pos - 1];
-            }
-
-            for (size_t j = 0; j < right_columns; ++j)
-                added_columns[j + left_columns]->insertFrom(*null_rows_it->block->getByPosition(j).column.get(), null_rows_it->row_num);
-            ++current_offset;
-
-            null_rows_it = null_rows_it->next;
-        }
+        size_t prev_pos = null_rows_pos;
+        step_end = null_rows.fillColumns(added_columns, left_columns, right_columns, null_rows_pos, max_pace);
+        current_offset += null_rows_pos - prev_pos;
     }
 }
 
@@ -183,7 +166,7 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     size_t left_columns_,
     size_t right_columns_,
     const BlocksList & right_blocks_,
-    const PaddedPODArray<Join::RowRefList *> & null_rows_,
+    Join::NullRowsColumns & null_rows_,
     size_t max_block_size_,
     const JoinOtherConditions & other_conditions_)
     : block(block_)

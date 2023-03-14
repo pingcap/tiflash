@@ -2022,13 +2022,73 @@ void Join::checkTypes(const Block & block) const
     checkTypesOfKeys(block, sample_block_with_keys);
 }
 
+Join::NullRowsColumns::NullRowsColumns(const std::vector<Join::RowsNotInsertToMap> & null_list_)
+    : null_list(null_list_)
+    , null_list_pos(0)
+    , null_list_it(nullptr)
+    , materialized_rows(0)
+{}
+
+bool Join::NullRowsColumns::fillColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, size_t & pos, size_t max_pace)
+{
+    RUNTIME_ASSERT(added_columns.size() >= left_columns + right_columns);
+
+    if (unlikely(materialized_columns.empty()))
+    {
+        RUNTIME_ASSERT(right_columns > 0);
+        materialized_columns.resize(right_columns);
+        for (size_t j = 0; j < right_columns; ++j)
+            materialized_columns[j] = added_columns[j + left_columns]->cloneEmpty();
+    }
+
+    if (unlikely(max_pace == 0))
+        return false;
+
+    bool end = false;
+    while (materialized_rows < pos + max_pace)
+    {
+        while (null_list_it == nullptr)
+        {
+            if (null_list_pos >= null_list.size())
+            {
+                end = true;
+                break;
+            }
+            ++null_list_pos;
+            null_list_it = null_list[null_list_pos - 1].head.next;
+        }
+        if (end)
+            break;
+
+        for (size_t j = 0; j < right_columns; ++j)
+            materialized_columns[j]->insertFrom(*null_list_it->block->getByPosition(j).column.get(), null_list_it->row_num);
+
+        ++materialized_rows;
+        null_list_it = null_list_it->next;
+    }
+
+    if (materialized_rows <= pos)
+    {
+        /// No more rows should be filled.
+        return true;
+    }
+    size_t pace = std::min(materialized_rows - pos, max_pace);
+
+    for (size_t j = 0; j < right_columns; ++j)
+        added_columns[j + left_columns]->insertRangeFrom(*materialized_columns[j].get(), pos, pace);
+
+    pos += pace;
+
+    return end;
+}
+
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map, bool has_filter_map>
 void NO_INLINE joinBlockImplNullAwareInternal(
     const Map & map,
     Block & block,
     size_t left_columns,
     const BlocksList & right_blocks,
-    const PaddedPODArray<Join::RowRefList *> & null_rows,
+    Join::NullRowsColumns & null_rows,
     size_t max_block_size,
     const JoinOtherConditions & other_conditions,
     const ColumnRawPtrs & key_columns,
@@ -2276,7 +2336,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     Block & block,
     size_t left_columns,
     const BlocksList & right_blocks,
-    const PaddedPODArray<Join::RowRefList *> & null_rows,
+    Join::NullRowsColumns & null_rows,
     size_t max_block_size,
     const JoinOtherConditions & other_conditions,
     const ColumnRawPtrs & key_columns,
@@ -2333,7 +2393,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
+void Join::joinBlockImplNullAware(Block & block, const Maps & maps, size_t stream_index) const
 {
     size_t keys_size = key_names_left.size();
     ColumnRawPtrs key_columns(keys_size);
@@ -2389,7 +2449,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             block,                                                                                                                                      \
             existing_columns,                                                                                                                           \
             blocks,                                                                                                                                     \
-            rows_with_null_keys,                                                                                                                        \
+            null_rows[stream_index],                                                                                                                    \
             max_block_size,                                                                                                                             \
             other_conditions,                                                                                                                           \
             key_columns,                                                                                                                                \
@@ -2461,16 +2521,13 @@ void Join::workAfterBuildFinish()
 {
     if (isNullAwareSemiFamily(kind))
     {
-        rows_with_null_keys.reserve(rows_not_inserted_to_map.size());
+        null_rows.reserve(probe_concurrency);
+        for (size_t i = 0; i < probe_concurrency; ++i)
+            null_rows.emplace_back(rows_not_inserted_to_map);
+
         size_t null_rows_size = 0;
         for (const auto & i : rows_not_inserted_to_map)
-        {
-            if (i.size > 0)
-            {
-                rows_with_null_keys.emplace_back(i.head.next);
-                null_rows_size += i.size;
-            }
-        }
+            null_rows_size += i.size;
         /// Considering the rows with null key in left table, in the worse case, it may need to check all rows in right table.
         /// Null rows is used for speeding up the check process. If the result of null-aware equal expression is NULL, the
         /// check process can be finished.
@@ -2515,11 +2572,12 @@ void Join::waitUntilAllBuildFinished() const
         throw Exception(error_message);
 }
 
-Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
+Block Join::joinBlock(ProbeProcessInfo & probe_process_info, size_t stream_index) const
 {
     waitUntilAllBuildFinished();
 
     std::shared_lock lock(rwlock);
+    assert(stream_index < getProbeConcurrency());
 
     probe_process_info.updateStartRow();
 
@@ -2577,17 +2635,17 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
     else if (kind == Cross_LeftAnti && strictness == Any)
         joinBlockImplCross<Cross_LeftSemi, Any>(block);
     else if (kind == NullAware_Anti && strictness == All)
-        joinBlockImplNullAware<NullAware_Anti, All>(block, maps_all);
+        joinBlockImplNullAware<NullAware_Anti, All>(block, maps_all, stream_index);
     else if (kind == NullAware_Anti && strictness == Any)
-        joinBlockImplNullAware<NullAware_Anti, Any>(block, maps_any);
+        joinBlockImplNullAware<NullAware_Anti, Any>(block, maps_any, stream_index);
     else if (kind == NullAware_LeftSemi && strictness == All)
-        joinBlockImplNullAware<NullAware_LeftSemi, All>(block, maps_all);
+        joinBlockImplNullAware<NullAware_LeftSemi, All>(block, maps_all, stream_index);
     else if (kind == NullAware_LeftSemi && strictness == Any)
-        joinBlockImplNullAware<NullAware_LeftSemi, Any>(block, maps_any);
+        joinBlockImplNullAware<NullAware_LeftSemi, Any>(block, maps_any, stream_index);
     else if (kind == NullAware_LeftAnti && strictness == All)
-        joinBlockImplNullAware<NullAware_LeftAnti, All>(block, maps_all);
+        joinBlockImplNullAware<NullAware_LeftAnti, All>(block, maps_all, stream_index);
     else if (kind == NullAware_LeftAnti && strictness == Any)
-        joinBlockImplNullAware<NullAware_LeftAnti, Any>(block, maps_any);
+        joinBlockImplNullAware<NullAware_LeftAnti, Any>(block, maps_any, stream_index);
     else
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 
@@ -2619,9 +2677,9 @@ bool Join::needReturnNonJoinedData() const
     return getFullness(kind);
 }
 
-BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const
+BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size_) const
 {
-    return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
+    return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size_);
 }
 
 void ProbeProcessInfo::resetBlock(Block && block_)

@@ -114,7 +114,7 @@ public:
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
       */
-    Block joinBlock(ProbeProcessInfo & probe_process_info) const;
+    Block joinBlock(ProbeProcessInfo & probe_process_info, size_t stream_index) const;
 
     void checkTypes(const Block & block) const;
 
@@ -279,6 +279,23 @@ public:
         size_t size = 0;
     };
 
+    /// NullRowsColumns will materialize null list to speed up the process of copying columns.
+    class alignas(ABSL_CACHELINE_SIZE) NullRowsColumns
+    {
+    public:
+        explicit NullRowsColumns(const std::vector<Join::RowsNotInsertToMap> & null_list);
+
+        /// Return if there are other rows in null_list after this calling;
+        bool fillColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, size_t & pos, size_t max_pace);
+
+    private:
+        const std::vector<Join::RowsNotInsertToMap> & null_list;
+        size_t null_list_pos;
+        Join::RowRefList * null_list_it;
+        size_t materialized_rows;
+        MutableColumns materialized_columns;
+    };
+
 private:
     friend class NonJoinedBlockInputStream;
 
@@ -332,9 +349,7 @@ private:
     /// For null-aware semi join family, including rows with NULL join keys.
     std::vector<RowsNotInsertToMap> rows_not_inserted_to_map;
 
-    /// For null-aware semi join
-    /// The RowRefList in `rows_not_inserted_to_map` that removes the empty RowRefList.
-    PaddedPODArray<RowRefList *> rows_with_null_keys;
+    mutable std::vector<NullRowsColumns> null_rows;
     /// Whether to directly check all blocks for row with null key.
     bool null_key_check_all_blocks_directly = false;
 
@@ -415,7 +430,7 @@ private:
     void workAfterBuildFinish();
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    void joinBlockImplNullAware(Block & block, const Maps & maps) const;
+    void joinBlockImplNullAware(Block & block, const Maps & maps, size_t stream_index) const;
 };
 
 using JoinPtr = std::shared_ptr<Join>;
