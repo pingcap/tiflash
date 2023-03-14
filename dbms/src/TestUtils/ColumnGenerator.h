@@ -47,7 +47,8 @@ private:
     std::mt19937_64 rand_gen;
     std::uniform_int_distribution<Int64> int_rand_gen = std::uniform_int_distribution<Int64>(0, 128);
     std::uniform_real_distribution<double> real_rand_gen;
-    const std::string charset{"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()、｜【】[]{}「」；：:;'‘,<《.>》。？·～`~"};
+    /// todo support multibyte characters
+    const std::string charset{"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()|[]{}:;',<.>`~"};
 
     String randomString();
     int randomTimeOffset();
@@ -61,7 +62,9 @@ private:
     DataTypePtr createDecimalType();
 
     void genBool(MutableColumnPtr & col);
+    template <typename IntegerType>
     void genInt(MutableColumnPtr & col);
+    template <typename IntegerType>
     void genUInt(MutableColumnPtr & col);
     void genFloat(MutableColumnPtr & col);
     void genString(MutableColumnPtr & col);

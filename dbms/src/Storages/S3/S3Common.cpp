@@ -32,11 +32,13 @@
 #include <aws/s3/model/LifecycleConfiguration.h>
 #include <aws/s3/model/LifecycleExpiration.h>
 #include <aws/s3/model/LifecycleRule.h>
+#include <aws/s3/model/LifecycleRuleAndOperator.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/ListObjectsV2Result.h>
 #include <aws/s3/model/PutBucketLifecycleConfigurationRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
+#include <aws/s3/model/TaggingDirective.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/predicate.hpp>
@@ -70,7 +72,8 @@ Poco::Message::Priority convertLogLevel(Aws::Utils::Logging::LogLevel log_level)
     case Aws::Utils::Logging::LogLevel::Warn:
         return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Info:
-        return Poco::Message::PRIO_INFORMATION;
+        // treat aws info logging as debug level
+        return Poco::Message::PRIO_DEBUG;
     case Aws::Utils::Logging::LogLevel::Debug:
         return Poco::Message::PRIO_DEBUG;
     case Aws::Utils::Logging::LogLevel::Trace:
@@ -367,7 +370,9 @@ void rewriteObjectWithTagging(const Aws::S3::S3Client & client, const String & b
     Stopwatch sw;
     Aws::S3::Model::CopyObjectRequest req;
     // rewrite the object with `key`, adding tagging to the new object
-    req.WithBucket(bucket).WithCopySource(key).WithKey(key).WithTagging(tagging);
+    req.WithBucket(bucket).WithCopySource(bucket + "/" + key).WithKey(key) //
+        .WithTagging(tagging)
+        .WithTaggingDirective(Aws::S3::Model::TaggingDirective::REPLACE);
     ProfileEvents::increment(ProfileEvents::S3CopyObject);
     auto outcome = client.CopyObject(req);
     if (!outcome.IsSuccess())
@@ -386,23 +391,36 @@ void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & b
     Aws::Vector<Aws::S3::Model::LifecycleRule> old_rules;
     {
         Aws::S3::Model::GetBucketLifecycleConfigurationRequest req;
+        req.SetBucket(bucket);
         auto outcome = client.GetBucketLifecycleConfiguration(req);
         if (!outcome.IsSuccess())
         {
             throw fromS3Error(outcome.GetError(), "GetBucketLifecycle fail");
         }
 
-        auto res = outcome.GetResult();
+        auto res = outcome.GetResultWithOwnership();
         old_rules = res.GetRules();
         static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
         for (const auto & rule : old_rules)
         {
             const auto & filt = rule.GetFilter();
-            const auto & tag = filt.GetTag();
+            if (!filt.AndHasBeenSet())
+            {
+                continue;
+            }
+            const auto & and_op = filt.GetAnd();
+            const auto & tags = and_op.GetTags();
+            if (tags.size() != 1 || !and_op.PrefixHasBeenSet() || !and_op.GetPrefix().empty())
+            {
+                continue;
+            }
+
+            const auto & tag = tags[0];
             if (rule.GetStatus() == Aws::S3::Model::ExpirationStatus::Enabled
                 && tag.GetKey() == "tiflash_deleted" && tag.GetValue() == "true")
             {
                 lifecycle_rule_has_been_set = true;
+                break;
             }
         }
     }
@@ -410,23 +428,39 @@ void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & b
     static LoggerPtr log = Logger::get();
     if (lifecycle_rule_has_been_set)
     {
-        LOG_INFO(log, "The lifecycle rule has been set, n_rules={} tag={}", old_rules.size(), TaggingObjectIsDeleted);
+        LOG_INFO(log, "The lifecycle rule has been set, n_rules={} filter={}", old_rules.size(), TaggingObjectIsDeleted);
+        return;
+    }
+    else
+    {
+        UNUSED(expire_days);
+        LOG_WARNING(log, "The lifecycle rule with filter \"{}\" has not been set, please check the bucket lifecycle configuration", TaggingObjectIsDeleted);
         return;
     }
 
+#if 0
+    // Adding rule by AWS SDK is failed, don't know why
+    // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
+    LOG_INFO(log, "The lifecycle rule with filter \"{}\" has not been added, n_rules={}", TaggingObjectIsDeleted, old_rules.size());
     static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
+    std::vector<Aws::S3::Model::Tag> filter_tags{Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true")};
     Aws::S3::Model::LifecycleRuleFilter filter;
-    filter.SetTag(Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true"));
+    filter.WithAnd(Aws::S3::Model::LifecycleRuleAndOperator()
+                       .WithPrefix("")
+                       .WithTags(filter_tags));
 
     Aws::S3::Model::LifecycleRule rule;
     rule.WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)
         .WithFilter(filter)
-        .WithExpiration(Aws::S3::Model::LifecycleExpiration().WithDays(expire_days));
+        .WithExpiration(Aws::S3::Model::LifecycleExpiration()
+                            .WithExpiredObjectDeleteMarker(false)
+                            .WithDays(expire_days))
+        .WithID("tiflashgc");
 
+    old_rules.emplace_back(rule); // existing rules + new rule
     Aws::S3::Model::BucketLifecycleConfiguration lifecycle_config;
     lifecycle_config
-        .WithRules(old_rules) // existing rules
-        .AddRules(rule);
+        .WithRules(old_rules);
 
     Aws::S3::Model::PutBucketLifecycleConfigurationRequest request;
     request.WithBucket(bucket)
@@ -438,6 +472,7 @@ void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & b
         throw fromS3Error(outcome.GetError(), "PutBucketLifecycle fail");
     }
     LOG_INFO(log, "The lifecycle rule has been added, new_n_rules={} tag={}", old_rules.size() + 1, TaggingObjectIsDeleted);
+#endif
 }
 
 void listPrefix(

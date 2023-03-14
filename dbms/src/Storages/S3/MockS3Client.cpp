@@ -91,13 +91,27 @@ Model::PutObjectOutcome MockS3Client::PutObject(const Model::PutObjectRequest & 
 Model::CopyObjectOutcome MockS3Client::CopyObject(const Model::CopyObjectRequest & request) const
 {
     std::lock_guard lock(mtx);
-    auto itr = storage.find(request.GetBucket());
-    if (itr == storage.end())
+    auto first_pos = request.GetCopySource().find_first_of('/');
+    RUNTIME_CHECK(first_pos != String::npos, request.GetCopySource());
+    auto src_bucket = request.GetCopySource().substr(0, first_pos);
+    auto src_key = request.GetCopySource().substr(first_pos + 1, request.GetCopySource().size());
+
+    auto src_itr = storage.find(src_bucket);
+    if (src_itr == storage.end())
     {
         return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuckBucket");
     }
-    auto bucket_storage = itr->second;
-    bucket_storage[request.GetKey()] = bucket_storage[request.GetCopySource()];
+
+    auto dst_itr = storage.find(request.GetBucket());
+    if (dst_itr == storage.end())
+    {
+        return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuckBucket");
+    }
+
+    auto src_bucket_storage = src_itr->second;
+    auto dst_bucket_storage = dst_itr->second;
+    RUNTIME_CHECK(src_bucket_storage.contains(src_key), src_bucket, src_key);
+    dst_bucket_storage[request.GetKey()] = src_bucket_storage[src_key];
     storage_tagging[request.GetBucket()][request.GetKey()] = request.GetTagging();
     return Model::CopyObjectResult{};
 }

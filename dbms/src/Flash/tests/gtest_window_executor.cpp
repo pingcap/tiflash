@@ -19,8 +19,6 @@ namespace DB::tests
 {
 class WindowExecutorTestRunner : public DB::tests::ExecutorTest
 {
-    static const size_t max_concurrency_level = 10;
-
 public:
     void initializeContext() override
     {

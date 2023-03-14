@@ -30,7 +30,6 @@
 
 namespace DB
 {
-
 using SyncPagePacketWriter = grpc::ServerWriter<disaggregated::PagesPacket>;
 
 class WNFetchPagesStreamWriter;
