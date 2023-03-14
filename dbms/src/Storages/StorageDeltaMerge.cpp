@@ -789,7 +789,7 @@ DM::PushDownFilterPtr StorageDeltaMerge::parsePushDownFilter(const SelectQueryIn
             {
                 if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
                     need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
-                else if (col.id != -1 && col.tp == TiDB::TypeDatetime)
+                else if (col.id != -1 && col.tp == TiDB::TypeTime)
                     need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
                 else
                     need_cast_column.push_back(ExtraCastAfterTSMode::None);
