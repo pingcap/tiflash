@@ -102,6 +102,12 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return it->second;
     }
 
+    void removeCurrentVersion(KeyspaceID keyspace_id) override
+    {
+        std::lock_guard lock(schema_mutex);
+        cur_versions.erase(keyspace_id);
+    }
+
     bool syncSchemas(Context & context, KeyspaceID keyspace_id) override
     {
         std::lock_guard lock(schema_mutex);
@@ -110,14 +116,27 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         auto getter = createSchemaGetter(keyspace_id);
 
         Int64 version = getter.getVersion();
-        if (version <= cur_version)
+        if (version == -1 && cur_version == version)
+        {
+            // Tables and databases are already tombstoned and waiting for GC.
+            return false;
+        }
+
+        if (version >= 0 && version <= cur_version)
         {
             return false;
         }
         Stopwatch watch;
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
-        LOG_INFO(ks_log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
+        if (version >= 0)
+        {
+            LOG_INFO(ks_log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
+        }
+        else
+        {
+            LOG_INFO(ks_log, "Start to sync schemas. schema version key not exists, keyspace should be deleted", keyspace_id);
+        }
 
         // Show whether the schema mutex is held for a long time or not.
         GET_METRIC(tiflash_schema_applying).Set(1.0);
@@ -171,6 +190,12 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     // - if error happens, return (-1)
     Int64 tryLoadSchemaDiffs(Getter & getter, Int64 cur_version, Int64 latest_version, Context & context, const LoggerPtr & ks_log)
     {
+        // If the schema version it not exists, we should check all schemas.
+        if (latest_version < 0)
+        {
+            return -1;
+        }
+
         if (isTooOldSchema(cur_version, latest_version))
         {
             return -1;
@@ -270,7 +295,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Int64 loadAllSchema(Getter & getter, Int64 version, Context & context)
     {
-        if (!getter.checkSchemaDiffExists(version))
+        if (version >= 0 && !getter.checkSchemaDiffExists(version))
         {
             --version;
         }

@@ -122,6 +122,8 @@ void SchemaSyncService::removeKeyspaceGCTasks()
         LOG_INFO(ks_log, "remove sync schema task");
         background_pool.removeTask(ks_handle_iter->second);
         ks_handle_iter = ks_handle_map.erase(ks_handle_iter);
+        // remove schema version for this keyspace
+        removeCurrentVersion(ks);
     }
 }
 
@@ -138,6 +140,12 @@ SchemaSyncService::~SchemaSyncService()
 bool SchemaSyncService::syncSchemas(KeyspaceID keyspace_id)
 {
     return context.getTMTContext().getSchemaSyncer()->syncSchemas(context, keyspace_id);
+}
+
+
+void SchemaSyncService::removeCurrentVersion(KeyspaceID keyspace_id)
+{
+    context.getTMTContext().getSchemaSyncer()->removeCurrentVersion(keyspace_id);
 }
 
 template <typename DatabaseOrTablePtr>

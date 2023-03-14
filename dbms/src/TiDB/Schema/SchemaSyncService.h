@@ -45,6 +45,7 @@ public:
 
 private:
     bool syncSchemas(KeyspaceID keyspace_id);
+    void removeCurrentVersion(KeyspaceID keyspace_id);
 
     struct GCContext
     {
