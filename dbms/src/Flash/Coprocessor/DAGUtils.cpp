@@ -22,7 +22,6 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -987,65 +986,6 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     return fmt_buf.toString();
 }
 
-tipb::Expr rewriteTimeStampLiteral(const tipb::Expr & expr, const TimezoneInfo & timezone_info, const NamesAndTypes & table_scan_columns, bool is_child)
-{
-    tipb::Expr ret_expr = expr;
-    // is_child means the expr is a child of a scalar function
-    // to avoid rewrite a dependent literal like `where '2019-01-01 00:00:00'`
-    if (is_child && isLiteralExpr(expr) && (expr.field_type().tp() == TiDB::TypeTimestamp || expr.field_type().tp() == TiDB::TypeDatetime))
-    {
-        // for example:
-        //      when timezone is +08:00
-        //      2019-01-01 00:00:00 +08:00 -> 2019-01-01 00:00:00 +00:00
-        static const auto & time_zone_utc = DateLUT::instance("UTC");
-        UInt64 from_time = decodeDAGUInt64(expr.val());
-        UInt64 result_time = from_time;
-        if (timezone_info.is_name_based)
-            convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
-        else if (timezone_info.timezone_offset != 0)
-            convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
-        WriteBufferFromOwnString ss;
-        encodeDAGUInt64(result_time, ss);
-        ret_expr.set_val(ss.releaseStr());
-    }
-    else if (isScalarFunctionExpr(expr))
-    {
-        if (expr.sig() == tipb::ScalarFuncSig::LogicalAnd || expr.sig() == tipb::ScalarFuncSig::LogicalOr)
-        {
-            ret_expr.clear_children();
-            ret_expr.mutable_children()->Reserve(expr.children().size());
-            for (const auto & child : expr.children())
-            {
-                ret_expr.mutable_children()->Add(rewriteTimeStampLiteral(child, timezone_info, table_scan_columns));
-            }
-            return ret_expr;
-        }
-        // If the column is timestamp type, and not handle column
-        // we should rewrite the literal to UTC time
-        bool is_timestamp_column = false;
-        for (const auto & child : expr.children())
-        {
-            if (isColumnExpr(child))
-            {
-                is_timestamp_column = (child.field_type().tp() == TiDB::TypeTimestamp);
-                is_timestamp_column &= getColumnNameForColumnExpr(child, table_scan_columns) != EXTRA_HANDLE_COLUMN_NAME;
-                break;
-            }
-        }
-        if (is_timestamp_column)
-        {
-            ret_expr.clear_children();
-            ret_expr.mutable_children()->Reserve(expr.children().size());
-            for (const auto & child : expr.children())
-            {
-                ret_expr.mutable_children()->Add(rewriteTimeStampLiteral(child, timezone_info, table_scan_columns, true));
-            }
-        }
-    }
-    // ignore other type of expr
-    return ret_expr;
-}
-
 const String & getTypeName(const tipb::Expr & expr)
 {
     return tipb::ExprType_Name(expr.tp());
@@ -1199,6 +1139,24 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
         throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
     }
     return input_col[column_index].name;
+}
+
+void getColumnNamesFromExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col, std::unordered_set<String> & col_name_set)
+{
+    if (expr.children_size() == 0)
+    {
+        if (isColumnExpr(expr))
+        {
+            col_name_set.insert(getColumnNameForColumnExpr(expr, input_col));
+        }
+    }
+    else
+    {
+        for (const auto & child : expr.children())
+        {
+            getColumnNamesFromExpr(child, input_col, col_name_set);
+        }
+    }
 }
 
 NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)

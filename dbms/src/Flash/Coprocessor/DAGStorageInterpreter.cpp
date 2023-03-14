@@ -178,31 +178,31 @@ bool hasRegionToRead(const DAGContext & dag_context, const TiDBTableScan & table
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-std::optional<ExpressionActionsPtr> addExtraCastsAfterTs(
+// <has_cast, extra_cast, project_for_remote_read>
+std::pair<bool, ExpressionActionsPtr> addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
-    const DB::ColumnInfos & table_scan_columns)
+    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+    const TiDBTableScan & table_scan)
 {
     bool has_need_cast_column = false;
-    for (const auto & col : table_scan_columns)
-    {
-        has_need_cast_column |= (col.id != -1 && (col.tp == TiDB::TypeTimestamp || col.tp == TiDB::TypeTime));
-    }
+    for (auto b : need_cast_column)
+        has_need_cast_column |= (b != ExtraCastAfterTSMode::None);
     if (!has_need_cast_column)
-        return std::nullopt;
+        return {false, nullptr};
 
     ExpressionActionsChain chain;
     // execute timezone cast or duration cast if needed for local table scan
-    if (analyzer.appendExtraCastsAfterTS(chain, table_scan_columns))
+    if (analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan))
     {
         ExpressionActionsPtr extra_cast = chain.getLastActions();
         assert(extra_cast);
         chain.finalize();
         chain.clear();
-        return extra_cast;
+        return {true, extra_cast};
     }
     else
     {
-        return std::nullopt;
+        return {false, nullptr};
     }
 }
 
@@ -386,7 +386,7 @@ void DAGStorageInterpreter::prepare()
     assert(storages_with_structure_lock.find(logical_table_id) != storages_with_structure_lock.end());
     storage_for_logical_table = storages_with_structure_lock[logical_table_id].storage;
 
-    std::tie(required_columns, source_columns) = getColumnsForTableScan();
+    std::tie(required_columns, source_columns, is_need_add_cast_column) = getColumnsForTableScan();
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
@@ -396,8 +396,8 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     DAGPipeline & pipeline)
 {
     // execute timezone cast or duration cast if needed for local table scan
-    auto extra_cast = ::DB::addExtraCastsAfterTs(*analyzer, table_scan.getColumns());
-    if (extra_cast.has_value())
+    auto [has_cast, extra_cast] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
+    if (has_cast)
     {
         assert(remote_read_streams_start_index <= pipeline.streams.size());
         size_t i = 0;
@@ -405,7 +405,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
         while (i < remote_read_streams_start_index)
         {
             auto & stream = pipeline.streams[i++];
-            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast.value(), log->identifier());
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
             stream->setExtraInfo("cast after local tableScan");
         }
     }
@@ -979,10 +979,14 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
     return storages_with_lock;
 }
 
-std::pair<Names, NamesAndTypes> DAGStorageInterpreter::getColumnsForTableScan()
+std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageInterpreter::getColumnsForTableScan()
 {
     Names required_columns_tmp;
+    required_columns_tmp.reserve(table_scan.getColumnSize());
     NamesAndTypes source_columns_tmp;
+    source_columns_tmp.reserve(table_scan.getColumnSize());
+    std::vector<ExtraCastAfterTSMode> need_cast_column;
+    need_cast_column.reserve(table_scan.getColumnSize());
     String handle_column_name = MutableSupport::tidb_pk_column_name;
     if (auto pk_handle_col = storage_for_logical_table->getTableInfo().getPKHandleColumn())
         handle_column_name = pk_handle_col->get().name;
@@ -1022,7 +1026,29 @@ std::pair<Names, NamesAndTypes> DAGStorageInterpreter::getColumnsForTableScan()
         required_columns_tmp.emplace_back(std::move(name));
     }
 
-    return {required_columns_tmp, source_columns_tmp};
+    std::unordered_set<String> col_name_set;
+    for (const auto & expr : table_scan.getPushedDownFilters())
+    {
+        getColumnNamesFromExpr(expr, source_columns_tmp, col_name_set);
+    }
+    for (const auto & col : table_scan.getColumns())
+    {
+        if (col_name_set.contains(col.name))
+        {
+            need_cast_column.push_back(ExtraCastAfterTSMode::None);
+        }
+        else
+        {
+            if (col.id != -1 && col.tp == TiDB::TypeTimestamp)
+                need_cast_column.push_back(ExtraCastAfterTSMode::AppendTimeZoneCast);
+            else if (col.id != -1 && col.tp == TiDB::TypeTime)
+                need_cast_column.push_back(ExtraCastAfterTSMode::AppendDurationCast);
+            else
+                need_cast_column.push_back(ExtraCastAfterTSMode::None);
+        }
+    }
+
+    return {required_columns_tmp, source_columns_tmp, need_cast_column};
 }
 
 // Build remote requests from `region_retry_from_local_region` and `table_regions_info.remote_regions`

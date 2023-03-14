@@ -17,6 +17,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
+#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <Interpreters/Context.h>
@@ -1840,7 +1841,7 @@ bool Segment::compactDelta(DMContext & dm_context)
     return delta->compact(dm_context);
 }
 
-void Segment::placeDeltaIndex(DMContext & dm_context)
+void Segment::placeDeltaIndex(DMContext & dm_context) const
 {
     // Update delta-index with persisted packs. TODO: can use a read snapshot here?
     auto segment_snap = createSnapshot(dm_context, /*for_update=*/true, CurrentMetrics::DT_SnapshotOfPlaceIndex);
@@ -1849,7 +1850,7 @@ void Segment::placeDeltaIndex(DMContext & dm_context)
     placeDeltaIndex(dm_context, segment_snap);
 }
 
-void Segment::placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap)
+void Segment::placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
 {
     getReadInfo(dm_context,
                 /*read_columns=*/{getExtraHandleColumnDefine(is_common_handle)},
@@ -2571,6 +2572,13 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(BitmapFilterPtr && bit
         filter_column_delta_stream,
         segment_snap->stable->getDMFilesRows(),
         dm_context.tracing_id);
+
+    // construct extra cast stream if needed
+    if (filter->extra_cast)
+    {
+        filter_column_stream = std::make_shared<ExpressionBlockInputStream>(filter_column_stream, filter->extra_cast, dm_context.tracing_id);
+        filter_column_stream->setExtraInfo("cast after tableScan");
+    }
 
     // construct filter stream
     filter_column_stream = std::make_shared<FilterBlockInputStream>(filter_column_stream, filter->before_where, filter->filter_column_name, dm_context.tracing_id);

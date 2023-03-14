@@ -82,7 +82,7 @@ private:
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
-    std::pair<Names, NamesAndTypes> getColumnsForTableScan();
+    std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan();
 
     std::vector<RemoteRequest> buildRemoteRequests(const DM::ScanContextPtr & scan_context);
 
@@ -106,6 +106,7 @@ private:
     void executeImpl(DAGPipeline & pipeline);
 
 private:
+    std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
     /// it shouldn't be hash map because duplicated region id may occur if merge regions to retry of dag.
     RegionRetryList region_retry_from_local_region;
 

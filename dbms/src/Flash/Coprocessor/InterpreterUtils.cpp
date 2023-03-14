@@ -240,23 +240,4 @@ void executeGeneratedColumnPlaceholder(
     }
 }
 
-google::protobuf::RepeatedPtrField<tipb::Expr> rewiteExprsWithTimezone(
-    const TimezoneInfo & timezone_info,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
-    const NamesAndTypes & table_scan_columns)
-{
-    if (timezone_info.is_utc_timezone)
-        return std::move(conditions);
-    if (conditions.empty())
-        return {};
-
-    google::protobuf::RepeatedPtrField<tipb::Expr> rewrote_conditions;
-    rewrote_conditions.Reserve(conditions.size());
-    for (const auto & condition : conditions)
-    {
-        rewrote_conditions.Add(DB::rewriteTimeStampLiteral(condition, timezone_info, table_scan_columns));
-    }
-    return rewrote_conditions;
-}
-
 } // namespace DB

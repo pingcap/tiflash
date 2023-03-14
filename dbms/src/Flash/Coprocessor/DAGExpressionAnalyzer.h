@@ -148,7 +148,8 @@ public:
     // Int64 to duration.
     bool appendExtraCastsAfterTS(
         ExpressionActionsChain & chain,
-        const DB::ColumnInfos & table_scan_columns);
+        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+        const TiDBTableScan & table_scan);
 
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(
@@ -202,6 +203,11 @@ public:
     void appendCastAfterAgg(
         const ExpressionActionsPtr & actions,
         const tipb::Aggregation & agg);
+
+    std::pair<bool, std::vector<String>> buildExtraCastsAfterTS(
+        const ExpressionActionsPtr & actions,
+        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+        const ColumnInfos & table_scan_columns);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -283,10 +289,6 @@ private:
         const ExpressionActionsPtr & actions,
         const String & expr_name,
         bool force_uint8);
-
-    bool buildExtraCastsAfterTS(
-        const ExpressionActionsPtr & actions,
-        const ColumnInfos & table_scan_columns);
 
     /// @ret: if some new expression actions are added.
     /// @key_names: column names of keys.

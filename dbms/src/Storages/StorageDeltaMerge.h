@@ -164,7 +164,7 @@ public:
         return getAndMaybeInitStore();
     }
 
-    DM::DeltaMergeStorePtr getStoreIfInited();
+    DM::DeltaMergeStorePtr getStoreIfInited() const;
 
     bool isCommonHandle() const override { return is_common_handle; }
 
