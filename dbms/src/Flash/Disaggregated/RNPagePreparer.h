@@ -18,7 +18,6 @@
 #include <Common/Stopwatch.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
-#include <IO/IOThreadPool.h>
 
 #include <future>
 

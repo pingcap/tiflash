@@ -42,7 +42,6 @@
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/RateLimiter.h>
 #include <Flash/DiagnosticsService.h>
-#include <Flash/Disaggregated/RNPagePreparer.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>

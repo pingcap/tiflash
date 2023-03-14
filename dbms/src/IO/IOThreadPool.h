@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/UniThreadPool.h>
-#include <Core/Field.h>
 
 namespace DB
 {
