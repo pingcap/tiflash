@@ -104,8 +104,8 @@ FetchPagesRequest::FetchPagesRequest(DM::RNRemoteSegmentReadTaskPtr seg_task_)
     req->set_segment_id(seg_task->segment_id);
 
     {
-        std::vector<DM::Remote::PageOID> persisted_oids;
-        persisted_oids.reserve(seg_task->delta_tinycf_page_ids.size());
+        std::vector<DM::Remote::PageOID> cf_tiny_oids;
+        cf_tiny_oids.reserve(seg_task->delta_tinycf_page_ids.size());
         for (const auto & page_id : seg_task->delta_tinycf_page_ids)
         {
             auto page_oid = DM::Remote::PageOID{
@@ -113,11 +113,17 @@ FetchPagesRequest::FetchPagesRequest(DM::RNRemoteSegmentReadTaskPtr seg_task_)
                 .table_id = seg_task->table_id,
                 .page_id = page_id,
             };
-            persisted_oids.emplace_back(page_oid);
+            cf_tiny_oids.emplace_back(page_oid);
         }
 
+        // Note: We must occupySpace segment by segment, because we need to read
+        // at least the complete data of one segment in order to drive everything forward.
+        // Currently we call occupySpace for each FetchPagesRequest, which is fine,
+        // because we send one request each seg_task. If we want to split
+        // FetchPagesRequest into multiples in future, then we need to change
+        // the moment of calling `occupySpace`.
         auto page_cache = seg_task->dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
-        auto occupy_result = page_cache->occupySpace(persisted_oids, seg_task->delta_tinycf_page_sizes);
+        auto occupy_result = page_cache->occupySpace(cf_tiny_oids, seg_task->delta_tinycf_page_sizes);
         for (auto page_id : occupy_result.pages_not_in_cache)
             req->add_page_ids(page_id.page_id);
 

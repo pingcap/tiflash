@@ -211,6 +211,8 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, const Logge
 
     readConfig(table, "format_version", format_version);
 
+    readConfig(table, "api_version", api_version);
+
     auto get_bool_config_or_default = [&](const String & name, bool default_value) {
 #ifndef NDEBUG
         if (!table->contains_qualified(name))
@@ -547,6 +549,8 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     RUNTIME_CHECK(connection_timeout_ms > 0);
     readConfig(table, "request_timeout_ms", request_timeout_ms);
     RUNTIME_CHECK(request_timeout_ms > 0);
+    readConfig(table, "root", root);
+    RUNTIME_CHECK(!root.empty());
 
     auto read_s3_auth_info_from_env = [&]() {
         access_key_id = Poco::Environment::get(S3_ACCESS_KEY_ID, /*default*/ "");

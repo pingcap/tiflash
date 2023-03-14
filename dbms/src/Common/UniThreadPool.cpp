@@ -354,6 +354,11 @@ void GlobalThreadPool::initialize(size_t max_threads, size_t max_free_threads, s
     the_instance.reset(new GlobalThreadPool(max_threads, max_free_threads, queue_size, false /*shutdown_on_exception*/));
 }
 
+void GlobalThreadPool::registerFinalizer(std::function<void()> fn)
+{
+    finalize_fns.push_back(fn);
+}
+
 GlobalThreadPool & GlobalThreadPool::instance()
 {
     if (!the_instance)
@@ -368,12 +373,8 @@ GlobalThreadPool & GlobalThreadPool::instance()
 
 GlobalThreadPool::~GlobalThreadPool() noexcept
 {
-    // We must make sure sub thread pools are released before GlobalThreadPool runs
-    // `finalize`. Or the threads in GlobalThreadPool never ends.
-
-    // FIXME: Make this less coupled.
-    GeneralIOThreadPool::shutdown();
-    S3IOThreadPool::shutdown();
+    for (auto & fn : finalize_fns)
+        fn();
 }
 
 } // namespace DB

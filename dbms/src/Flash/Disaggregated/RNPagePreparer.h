@@ -18,7 +18,6 @@
 #include <Common/Stopwatch.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
-#include <IO/IOThreadPool.h>
 
 #include <future>
 
@@ -74,19 +73,5 @@ private:
     Stopwatch watch;
     LoggerPtr exc_log;
 };
-
-namespace details
-{
-
-/*
- * ThreadPool used for the RNPagePreparer.
- */
-struct RNPreparerType
-{
-};
-
-} // namespace details
-
-using RNPagePreparerThreadPool = IOThreadPool<details::RNPreparerType>;
 
 } // namespace DB

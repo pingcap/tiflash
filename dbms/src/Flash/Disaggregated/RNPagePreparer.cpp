@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/RNPagePreparer.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
+#include <IO/IOThreadPools.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <common/logger_useful.h>
@@ -64,7 +65,7 @@ RNPagePreparer::RNPagePreparer(
             });
             persist_threads.emplace_back(task->get_future());
 
-            RNPagePreparerThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+            RNPagePreparerPool::get().scheduleOrThrowOnError([task] { (*task)(); });
         }
     }
     catch (...)

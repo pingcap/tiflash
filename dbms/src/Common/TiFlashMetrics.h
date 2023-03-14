@@ -309,6 +309,7 @@ namespace DB
         F(type_hit_count, {{"type", "hit_count"}}))                                                                                                 \
     M(tiflash_storage_s3_request_seconds, "S3 request duration in seconds", Histogram,                                                              \
         F(type_put_object, {{"type", "put_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_copy_object, {{"type", "copy_object"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
         F(type_get_object, {{"type", "get_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_create_multi_part_upload, {{"type", "create_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                         \
         F(type_upload_part, {{"type", "upload_part"}}, ExpBuckets{0.001, 2, 20}),                                                                   \

@@ -1551,12 +1551,31 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
 
         for (const auto & r : edit.getRecords())
         {
-            auto iter = mvcc_table_directory.lower_bound(r.page_id);
-            assert(iter != mvcc_table_directory.end());
-            auto & version_list = iter->second;
-            if (!version_list->updateLocalCacheForRemotePage(PageVersion(seq, 0), r.entry))
+            auto id_to_resolve = r.page_id;
+            auto sequence_to_resolve = seq;
+            while (true)
             {
-                ignored_entries.push_back(r.entry);
+                auto iter = mvcc_table_directory.lower_bound(id_to_resolve);
+                assert(iter != mvcc_table_directory.end());
+                auto & version_list = iter->second;
+                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = version_list->resolveToPageId(sequence_to_resolve, /*ignore_delete=*/id_to_resolve != r.page_id, nullptr);
+                if (resolve_state == ResolveResult::TO_NORMAL)
+                {
+                    if (!version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry))
+                    {
+                        ignored_entries.push_back(r.entry);
+                    }
+                    break;
+                }
+                else if (resolve_state == ResolveResult::TO_REF)
+                {
+                    id_to_resolve = next_id_to_resolve;
+                    sequence_to_resolve = next_ver_to_resolve.sequence;
+                }
+                else
+                {
+                    RUNTIME_CHECK(false);
+                }
             }
         }
     }

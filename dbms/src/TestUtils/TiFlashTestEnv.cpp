@@ -183,6 +183,7 @@ ContextPtr TiFlashTestEnv::getContext(const DB::Settings & settings, Strings tes
     auto paths = getPathPool(testdata_path);
     context.setPathPool(paths.first, paths.second, Strings{}, context.getPathCapacity(), context.getFileProvider());
     global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
+    global_contexts[0]->tryReleaseWriteNodePageStorageForTest();
     global_contexts[0]->initializeWriteNodePageStorageIfNeed(context.getPathPool());
     context.getSettingsRef() = settings;
     return std::make_shared<Context>(context);

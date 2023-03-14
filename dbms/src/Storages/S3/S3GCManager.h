@@ -64,15 +64,19 @@ struct S3GCConfig
     // The interval of the S3 GC routine runs
     Int64 interval_seconds = 600;
 
-    // The maximun number of manifest files preserve
+    // The maximum number of manifest files preserve
     // for each store
     size_t manifest_preserve_count = 10;
     // Only preserve the manifest that is created
     // recently.
     Int64 manifest_expired_hour = 1;
 
+    S3GCMethod method = S3GCMethod::Lifecycle;
+
+    // Only has meaning when method == ScanThenDelete
     Int64 delmark_expired_hour = 1;
 
+    // The RPC timeout for sending mark delete to S3LockService
     Int64 mark_delete_timeout_seconds = 10;
 };
 
@@ -81,7 +85,6 @@ class S3GCManager
 public:
     explicit S3GCManager(
         pingcap::pd::ClientPtr pd_client_,
-        std::shared_ptr<TiFlashS3Client> client_,
         OwnerManagerPtr gc_owner_manager_,
         S3LockClientPtr lock_client_,
         S3GCConfig config_);
@@ -95,7 +98,7 @@ public:
     // private:
     void runForStore(UInt64 gc_store_id);
 
-    void runForTombstonedStore(UInt64 gc_store_id);
+    void runForTombstoneStore(UInt64 gc_store_id);
 
     void cleanUnusedLocks(
         UInt64 gc_store_id,
@@ -114,24 +117,24 @@ public:
         const Aws::Utils::DateTime & timepoint,
         const Aws::Utils::DateTime & delmark_mtime);
 
+    void lifecycleMarkDataFileDeleted(const String & datafile_key);
     void physicalRemoveDataFile(const String & datafile_key);
 
-    std::vector<UInt64> getAllStoreIds() const;
+    static std::vector<UInt64> getAllStoreIds();
 
-    std::unordered_set<String> getValidLocksFromManifest(const String & manifest_key);
+    std::unordered_set<String> getValidLocksFromManifest(const Strings & manifest_keys);
 
     void removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime * const timepoint); // NOLINT(readability-avoid-const-params-in-decls)
 
 private:
     const pingcap::pd::ClientPtr pd_client;
 
-    const std::shared_ptr<TiFlashS3Client> client;
-
     const OwnerManagerPtr gc_owner_manager;
     const S3LockClientPtr lock_client;
 
     std::atomic<bool> shutdown_called;
 
+    bool lifecycle_has_been_set = false;
     S3GCConfig config;
 
     LoggerPtr log;

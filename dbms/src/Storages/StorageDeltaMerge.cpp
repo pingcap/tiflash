@@ -941,6 +941,18 @@ void StorageDeltaMerge::ingestFiles(
         clear_data_in_range);
 }
 
+void StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(
+    const DM::RowKeyRange & range,
+    CheckpointInfoPtr checkpoint_info,
+    const Settings & settings)
+{
+    return getAndMaybeInitStore()->ingestSegmentsFromCheckpointInfo(
+        global_context,
+        settings,
+        range,
+        checkpoint_info);
+}
+
 UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)
 {
     if (storeInited())
@@ -1633,8 +1645,10 @@ void StorageDeltaMerge::removeFromTMTContext()
 {
     // remove this table from TMTContext
     TMTContext & tmt_context = global_context.getTMTContext();
-    tmt_context.getStorages().remove(tidb_table_info.id);
-    tmt_context.getRegionTable().removeTable(tidb_table_info.id);
+    auto keyspace_id = tidb_table_info.keyspace_id;
+    auto table_id = tidb_table_info.id;
+    tmt_context.getStorages().remove(keyspace_id, table_id);
+    tmt_context.getRegionTable().removeTable(keyspace_id, table_id);
 }
 
 StorageDeltaMerge::~StorageDeltaMerge()

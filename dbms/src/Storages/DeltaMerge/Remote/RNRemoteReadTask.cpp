@@ -18,7 +18,7 @@
 #include <Common/UniThreadPool.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
-#include <IO/IOThreadPool.h>
+#include <IO/IOThreadPools.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
@@ -340,7 +340,7 @@ RNRemoteTableReadTaskPtr RNRemoteTableReadTask::buildFrom(
         });
 
         futures.emplace_back(task->get_future());
-        GeneralIOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+        RNRemoteReadTaskPool::get().scheduleOrThrowOnError([task] { (*task)(); });
     }
 
     for (auto & f : futures)

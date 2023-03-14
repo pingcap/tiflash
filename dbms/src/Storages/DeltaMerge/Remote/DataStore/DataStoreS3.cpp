@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Stopwatch.h>
-#include <IO/IOThreadPool.h>
+#include <IO/IOThreadPools.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/S3/S3Common.h>
@@ -23,7 +23,7 @@
 
 namespace DB::DM::Remote
 {
-void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid)
+void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, bool remove_local)
 {
     Stopwatch sw;
     RUNTIME_CHECK(local_dmfile->fileId() == oid.file_id);
@@ -54,7 +54,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid)
                 S3::uploadFile(*s3_client, bucket, local_fname, remote_fname);
             });
         upload_results.push_back(task->get_future());
-        S3IOThreadPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+        DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
     for (auto & f : upload_results)
     {
@@ -66,15 +66,11 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid)
     auto remote_meta_fname = fmt::format("{}/{}", remote_dir, DMFile::metav2FileName());
     S3::uploadFile(*s3_client, bucket, local_meta_fname, remote_meta_fname);
 
+    if (remove_local)
+    {
+        local_dmfile->switchToRemote(oid);
+    }
     LOG_INFO(log, "Upload DMFile finished, key={}, cost={}ms", remote_dir, sw.elapsedMilliseconds());
-}
-
-void DataStoreS3::copyDMFileMetaToLocalPath(const S3::DMFileOID & remote_oid, const String & local_dir)
-{
-    Stopwatch sw;
-    std::vector<String> target_fnames = {DMFile::metav2FileName(), IDataType::getFileNameForStream(DB::toString(-1), {}) + ".idx"};
-    copyToLocal(remote_oid, target_fnames, local_dir);
-    LOG_DEBUG(log, "copyDMFileMetaToLocalPath finished. Local_dir={} cost={}ms", local_dir, sw.elapsedMilliseconds());
 }
 
 bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq)
@@ -98,7 +94,7 @@ bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_
             S3::uploadEmptyFile(*s3_client, bucket, lock_key);
         });
         upload_results.push_back(task->get_future());
-        S3IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+        DataStoreS3Pool::get().scheduleOrThrowOnError([task] { (*task)(); });
     }
     for (auto & f : upload_results)
     {
@@ -129,7 +125,7 @@ void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vecto
                 Poco::File(tmp_fname).renameTo(local_fname);
             });
         results.push_back(task->get_future());
-        S3IOThreadPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+        DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
     for (auto & f : results)
     {
@@ -137,9 +133,10 @@ void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vecto
     }
 }
 
-IPreparedDMFileTokenPtr DataStoreS3::prepareDMFile(const S3::DMFileOID & oid)
+
+IPreparedDMFileTokenPtr DataStoreS3::prepareDMFile(const S3::DMFileOID & oid, UInt64 page_id)
 {
-    return std::make_shared<S3PreparedDMFileToken>(file_provider, oid);
+    return std::make_shared<S3PreparedDMFileToken>(file_provider, oid, page_id);
 }
 
 DMFilePtr S3PreparedDMFileToken::restore(DMFile::ReadMetaMode read_mode)
@@ -147,7 +144,7 @@ DMFilePtr S3PreparedDMFileToken::restore(DMFile::ReadMetaMode read_mode)
     return DMFile::restore(
         file_provider,
         oid.file_id,
-        oid.file_id,
+        page_id,
         S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKeyWithPrefix(),
         read_mode);
 }
