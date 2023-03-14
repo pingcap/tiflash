@@ -73,14 +73,6 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     LOG_INFO(log, "Upload DMFile finished, key={}, cost={}ms", remote_dir, sw.elapsedMilliseconds());
 }
 
-void DataStoreS3::copyDMFileMetaToLocalPath(const S3::DMFileOID & remote_oid, const String & local_dir)
-{
-    Stopwatch sw;
-    std::vector<String> target_fnames = {DMFile::metav2FileName(), IDataType::getFileNameForStream(DB::toString(-1), {}) + ".idx"};
-    copyToLocal(remote_oid, target_fnames, local_dir);
-    LOG_DEBUG(log, "copyDMFileMetaToLocalPath finished. Local_dir={} cost={}ms", local_dir, sw.elapsedMilliseconds());
-}
-
 bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq)
 {
     auto s3_client = S3::ClientFactory::instance().sharedClient();
@@ -140,18 +132,20 @@ void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vecto
         f.get();
     }
 }
+//page_id == 0 ? oid.file_id : page_id,
 
-IPreparedDMFileTokenPtr DataStoreS3::prepareDMFile(const S3::DMFileOID & oid)
+
+IPreparedDMFileTokenPtr DataStoreS3::prepareDMFile(const S3::DMFileOID & oid, UInt64 page_id)
 {
-    return std::make_shared<S3PreparedDMFileToken>(file_provider, oid);
+    return std::make_shared<S3PreparedDMFileToken>(file_provider, oid, page_id);
 }
 
-DMFilePtr S3PreparedDMFileToken::restore(DMFile::ReadMetaMode read_mode, UInt64 page_id)
+DMFilePtr S3PreparedDMFileToken::restore(DMFile::ReadMetaMode read_mode)
 {
     return DMFile::restore(
         file_provider,
         oid.file_id,
-        page_id == 0 ? oid.file_id : page_id,
+        page_id,
         S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKeyWithPrefix(),
         read_mode);
 }

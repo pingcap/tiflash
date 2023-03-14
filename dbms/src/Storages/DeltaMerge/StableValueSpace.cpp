@@ -122,8 +122,8 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
             auto dtfile_key = lock_key_view.asDataFile();
             auto file_oid = dtfile_key.getDMFileOID();
             RUNTIME_CHECK(file_oid.table_id == context.physical_table_id);
-            auto prepared = remote_data_store->prepareDMFile(file_oid);
-            dmfile = prepared->restore(DMFile::ReadMetaMode::all(), page_id);
+            auto prepared = remote_data_store->prepareDMFile(file_oid, page_id);
+            dmfile = prepared->restore(DMFile::ReadMetaMode::all());
         }
         else
         {

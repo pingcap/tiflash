@@ -101,8 +101,8 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(const DMContext & cont
         const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
         auto dtfile_key = lock_key_view.asDataFile();
         auto file_oid = dtfile_key.getDMFileOID();
-        auto prepared = remote_data_store->prepareDMFile(file_oid);
-        dmfile = prepared->restore(DMFile::ReadMetaMode::all(), file_page_id);
+        auto prepared = remote_data_store->prepareDMFile(file_oid, file_page_id);
+        dmfile = prepared->restore(DMFile::ReadMetaMode::all());
     }
     else
     {
