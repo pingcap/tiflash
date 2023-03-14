@@ -85,7 +85,6 @@ class S3GCManager
 public:
     explicit S3GCManager(
         pingcap::pd::ClientPtr pd_client_,
-        std::shared_ptr<TiFlashS3Client> client_,
         OwnerManagerPtr gc_owner_manager_,
         S3LockClientPtr lock_client_,
         S3GCConfig config_);
@@ -121,7 +120,7 @@ public:
     void lifecycleMarkDataFileDeleted(const String & datafile_key);
     void physicalRemoveDataFile(const String & datafile_key);
 
-    std::vector<UInt64> getAllStoreIds() const;
+    static std::vector<UInt64> getAllStoreIds();
 
     std::unordered_set<String> getValidLocksFromManifest(const Strings & manifest_keys);
 
@@ -129,8 +128,6 @@ public:
 
 private:
     const pingcap::pd::ClientPtr pd_client;
-
-    const std::shared_ptr<TiFlashS3Client> client;
 
     const OwnerManagerPtr gc_owner_manager;
     const S3LockClientPtr lock_client;

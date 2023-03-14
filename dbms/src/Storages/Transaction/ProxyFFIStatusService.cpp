@@ -35,7 +35,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
     {
         auto * log = &Poco::Logger::get("HandleHttpRequestSyncStatus");
-        LOG_DEBUG(log, "handling sync status request, path: {}, api_name: {}", path, api_name);
+        LOG_TRACE(log, "handling sync status request, path: {}, api_name: {}", path, api_name);
 
         // Try to handle sync status request with old schema.
         // Old schema: /{table_id}

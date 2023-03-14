@@ -43,14 +43,12 @@ namespace DB::S3
 
 S3LockService::S3LockService(Context & context_)
     : S3LockService(
-        context_.getGlobalContext().getTMTContext().getS3GCOwnerManager(),
-        S3::ClientFactory::instance().sharedTiFlashClient())
+        context_.getGlobalContext().getTMTContext().getS3GCOwnerManager())
 {
 }
 
-S3LockService::S3LockService(OwnerManagerPtr owner_mgr_, std::shared_ptr<TiFlashS3Client> s3_cli_)
+S3LockService::S3LockService(OwnerManagerPtr owner_mgr_)
     : gc_owner(std::move(owner_mgr_))
-    , s3_client(std::move(s3_cli_))
     , log(Logger::get())
 {
 }
@@ -200,6 +198,7 @@ bool S3LockService::tryAddLockImpl(
         }
     });
 
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     // make sure data file exists
     if (!DB::S3::objectExists(*s3_client, s3_client->bucket(), data_file_key))
     {
@@ -245,9 +244,10 @@ bool S3LockService::tryAddLockImpl(
     return true;
 }
 
-std::optional<String> S3LockService::anyLockExist(const String & lock_prefix) const
+std::optional<String> S3LockService::anyLockExist(const String & lock_prefix)
 {
     std::optional<String> lock_key;
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     DB::S3::listPrefix(
         *s3_client,
         s3_client->bucket(),
@@ -318,6 +318,7 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
     {
         tagging = TaggingObjectIsDeleted;
     }
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), delmark_key, tagging);
     if (!gc_owner->isOwner())
     {

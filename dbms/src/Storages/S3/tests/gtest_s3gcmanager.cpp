@@ -70,7 +70,7 @@ public:
         auto mock_gc_owner = OwnerManager::createMockOwner("owner_0");
         auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_s3_client);
         auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
-        gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_s3_client, mock_gc_owner, mock_lock_client, config);
+        gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_gc_owner, mock_lock_client, config);
 
         ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client, mock_s3_client->bucket());
 
@@ -373,22 +373,26 @@ try
         {
             // not managed by lock_store_id
             auto df = S3Filename::newCheckpointData(store_id, 300, 1);
+            keys.emplace_back(df.toFullKey());
             auto lock_key = df.toView().getLockKey(store_id, safe_sequence + 1);
             keys.emplace_back(lock_key);
 
             // not managed by the latest manifest yet
             df = S3Filename::newCheckpointData(store_id, 300, 1);
+            keys.emplace_back(df.toFullKey());
             lock_key = df.toView().getLockKey(lock_store_id, safe_sequence + 1);
             keys.emplace_back(lock_key);
 
             // still valid in latest manifest
             df = S3Filename::newCheckpointData(store_id, 300, 1);
+            keys.emplace_back(df.toFullKey());
             lock_key = df.toView().getLockKey(lock_store_id, safe_sequence - 1);
             valid_lock_files.emplace(lock_key);
             keys.emplace_back(lock_key);
 
             // not valid in latest manfiest, should be delete
             df = S3Filename::newCheckpointData(store_id, 300, 2);
+            keys.emplace_back(df.toFullKey());
             lock_key = df.toView().getLockKey(lock_store_id, safe_sequence - 1);
             expected_deleted_lock_key = lock_key;
             expected_created_delmark = df.toView().getDelMarkKey();

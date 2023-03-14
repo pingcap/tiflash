@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/BackgroundProcessingPool.h>
@@ -27,19 +28,19 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
     , background_pool(tmt.getContext().getBackgroundPool())
     , log(Logger::get())
 {
-    if (!tmt.isInitialized())
-        throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
-
-    single_thread_task_handle = background_pool.addTask(
-        [this] {
-            tmt.getKVStore()->gcRegionPersistedCache();
-            return false;
-        },
-        false);
+    RUNTIME_CHECK_MSG(tmt.isInitialized(), "TMTContext is not initialized");
 
     auto & global_context = tmt.getContext();
     if (!global_context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
+        // compute node does not contains region
+        single_thread_task_handle = background_pool.addTask(
+            [this] {
+                tmt.getKVStore()->gcRegionPersistedCache();
+                return false;
+            },
+            false);
+
         // compute node does not contain long-live tables and segments
         auto & global_settings = global_context.getSettingsRef();
         storage_gc_handle = background_pool.addTask(
