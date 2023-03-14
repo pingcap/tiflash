@@ -88,7 +88,7 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
 {
     DM::RNRemoteReadTaskPtr remote_read_tasks;
 
-    pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
+    pingcap::kv::Backoffer bo(pingcap::kv::scanMaxBackoff);
     while (true)
     {
         // TODO: We could only retry failed stores.
@@ -114,7 +114,7 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
                 throw;
 
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message()));
-            LOG_INFO(log, "meets region epoch not match, retry to build remote read tasks");
+            LOG_INFO(log, "Meets REGION_EPOCH_NOT_MATCH, retry to build remote read tasks");
         }
     }
 

@@ -319,7 +319,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
         // and ask RN to send requests again with correct region info. When RN updates region info,
         // RN may be sending requests to other WN.
 
-        throw Exception("Rejected disaggregated DAG execute because RN region info does not match", DB::ErrorCodes::REGION_EPOCH_NOT_MATCH);
+        throw Exception("Region information is changed (REGION_EPOCH_NOT_MATCH)", DB::ErrorCodes::REGION_EPOCH_NOT_MATCH);
     }
 
     // A failpoint to test pause before alter lock released
