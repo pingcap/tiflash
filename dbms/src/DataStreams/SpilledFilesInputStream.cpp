@@ -27,28 +27,30 @@ SpilledFilesInputStream::SpilledFilesInputStream(std::vector<SpilledFileInfo> &&
 
 Block SpilledFilesInputStream::readImpl()
 {
-    if (unlikely(current_reading_file_index == -1))
+    if unlikely (!initialized)
     {
-        current_reading_file_index = 0;
-        current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[0]), header, file_provider, max_supported_spill_version);
+        iter = spilled_file_infos.begin();
+        assert(iter != spilled_file_infos.end());
+        current_file_stream = std::make_unique<SpilledFileStream>(std::move(*iter), header, file_provider, max_supported_spill_version);
+        initialized = true;
     }
-    if (unlikely(current_file_stream == nullptr))
+    if unlikely (iter == spilled_file_infos.end())
         return {};
+
+    assert(current_file_stream);
     Block ret = current_file_stream->block_in->read();
     if (ret)
         return ret;
-    for (++current_reading_file_index; current_reading_file_index < static_cast<int64_t>(spilled_file_infos.size()); ++current_reading_file_index)
+    current_file_stream.reset();
+    for (++iter; iter != spilled_file_infos.end(); ++iter)
     {
-        current_file_stream = std::make_unique<SpilledFileStream>(std::move(spilled_file_infos[current_reading_file_index]),
-                                                                  header,
-                                                                  file_provider,
-                                                                  max_supported_spill_version);
+        current_file_stream = std::make_unique<SpilledFileStream>(std::move(*iter), header, file_provider, max_supported_spill_version);
         ret = current_file_stream->block_in->read();
         if (ret)
             return ret;
+        current_file_stream.reset();
     }
-    current_file_stream.reset();
-    return ret;
+    return {};
 }
 
 Block SpilledFilesInputStream::getHeader() const
