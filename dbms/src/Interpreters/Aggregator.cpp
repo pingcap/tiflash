@@ -1211,6 +1211,36 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
     });
 }
 
+namespace
+{
+template <typename Method>
+std::optional<Sizes> shuffleKeyColumnsForKeyColumnsVec(Method & method, std::vector<std::vector<IColumn *>> & key_columns_vec, const Sizes & key_sizes)
+{
+    auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns_vec[0], key_sizes);
+    for (size_t i = 1; i < key_columns_vec.size(); ++i)
+    {
+        auto new_key_sizes = method.shuffleKeyColumns(key_columns_vec[i], key_sizes);
+        assert(shuffled_key_sizes == new_key_sizes);
+    }
+    return shuffled_key_sizes;
+}
+template <typename Method>
+std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<Method>>> initAggKeysForKeyColumnsVec(Method & method, std::vector<std::vector<IColumn *>> & key_columns_vec, size_t max_block_size, size_t total_row_count)
+{
+    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<Method>>> agg_keys_helpers;
+    size_t block_row_count = max_block_size;
+    for (size_t i = 0; i < key_columns_vec.size(); ++i)
+    {
+        if (i == key_columns_vec.size() - 1 && total_row_count % block_row_count != 0)
+            /// update block_row_count for the last block
+            block_row_count = total_row_count % block_row_count;
+        agg_keys_helpers.push_back(std::make_unique<AggregatorMethodInitKeyColumnHelper<Method>>(method));
+        agg_keys_helpers.back()->initAggKeys(block_row_count, key_columns_vec[i]);
+    }
+    return agg_keys_helpers;
+}
+} // namespace
+
 template <typename Method, typename Table>
 void NO_INLINE Aggregator::convertToBlocksImplFinal(
     Method & method,
@@ -1220,32 +1250,17 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     Arena * arena) const
 {
     assert(!key_columns_vec.empty());
-    auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns_vec[0], key_sizes);
-    for (size_t i = 1; i < key_columns_vec.size(); i++)
-    {
-        auto new_key_sizes = method.shuffleKeyColumns(key_columns_vec[i], key_sizes);
-        assert(shuffled_key_sizes == new_key_sizes);
-    }
+    auto shuffled_key_sizes = shuffleKeyColumnsForKeyColumnsVec(method, key_columns_vec, key_sizes);
     const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
-    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<Method>>> agg_keys_helpers;
-    size_t block_row_count = params.max_block_size;
-    size_t total_row_count = data.size();
-    for (size_t i = 0; i < key_columns_vec.size(); i++)
-    {
-        if (i == key_columns_vec.size() - 1 && total_row_count % block_row_count != 0)
-            /// update block_row_count for the last block
-            block_row_count = total_row_count % block_row_count;
-        agg_keys_helpers.push_back(std::make_unique<AggregatorMethodInitKeyColumnHelper<Method>>(method));
-        agg_keys_helpers.back()->initAggKeys(block_row_count, key_columns_vec[i]);
-    }
+    auto agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
 
     size_t data_index = 0;
     data.forEachValue([&](const auto & key, auto & mapped) {
         size_t key_columns_vec_index = data_index / params.max_block_size;
         agg_keys_helpers[key_columns_vec_index]->insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
         insertAggregatesIntoColumns(mapped, final_aggregate_columns_vec[key_columns_vec_index], arena);
-        data_index++;
+        ++data_index;
     });
 }
 
@@ -1280,25 +1295,10 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
     std::vector<std::vector<IColumn *>> && key_columns_vec,
     std::vector<AggregateColumnsData> & aggregate_columns_vec) const
 {
-    auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns_vec[0], key_sizes);
-    for (size_t i = 1; i < key_columns_vec.size(); i++)
-    {
-        auto new_key_sizes = method.shuffleKeyColumns(key_columns_vec[i], key_sizes);
-        assert(shuffled_key_sizes == new_key_sizes);
-    }
+    auto shuffled_key_sizes = shuffleKeyColumnsForKeyColumnsVec(method, key_columns_vec, key_sizes);
     const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
-    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<Method>>> agg_keys_helpers;
-    size_t block_row_count = params.max_block_size;
-    size_t total_row_count = data.size();
-    for (size_t i = 0; i < key_columns_vec.size(); i++)
-    {
-        if (i == key_columns_vec.size() - 1 && total_row_count % block_row_count != 0)
-            /// update block_row_count for the last block
-            block_row_count = total_row_count % block_row_count;
-        agg_keys_helpers.push_back(std::make_unique<AggregatorMethodInitKeyColumnHelper<Method>>(method));
-        agg_keys_helpers.back()->initAggKeys(block_row_count, key_columns_vec[i]);
-    }
+    auto agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
 
     size_t data_index = 0;
     data.forEachValue([&](const auto & key, auto & mapped) {
@@ -1309,7 +1309,7 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
         for (size_t i = 0; i < params.aggregates_size; ++i)
             aggregate_columns_vec[key_columns_vec_index][i]->push_back(mapped + offsets_of_aggregate_states[i]);
 
-        data_index++;
+        ++data_index;
         mapped = nullptr;
     });
 }
