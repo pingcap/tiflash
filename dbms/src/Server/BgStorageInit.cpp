@@ -24,7 +24,6 @@
 
 namespace DB
 {
-
 void BgStorageInitHolder::waitUntilFinish()
 {
     if (need_join)

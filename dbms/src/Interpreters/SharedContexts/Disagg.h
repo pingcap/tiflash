@@ -29,6 +29,8 @@
 
 namespace DB
 {
+class FastAddPeerContext;
+using FastAddPeerContextPtr = std::shared_ptr<FastAddPeerContext>;
 
 /**
  * A shared context containing disaggregated mode related things.
@@ -50,6 +52,8 @@ struct SharedContextDisagg : private boost::noncopyable
 
     /// For both read node (downloading) and write node (uploading).
     DM::Remote::IDataStorePtr remote_data_store;
+
+    FastAddPeerContextPtr fap_context;
 
     /// Only for write node.
     DM::Remote::WNDisaggSnapshotManagerPtr wn_snapshot_manager;
@@ -81,6 +85,8 @@ struct SharedContextDisagg : private boost::noncopyable
     void initWriteNodeSnapManager();
 
     void initRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled);
+
+    void initFastAddPeerContext();
 
     bool isDisaggregatedComputeMode() const
     {

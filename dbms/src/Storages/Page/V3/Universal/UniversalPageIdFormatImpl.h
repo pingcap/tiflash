@@ -90,7 +90,12 @@ public:
         return buff.releaseStr();
     }
 
-    // data is in kv engine, so it is prepend by KV_PREFIX
+    static UniversalPageId toKVStoreKey(UInt64 region_id)
+    {
+        return toFullPageId(toSubPrefix(StorageType::KVStore), region_id);
+    }
+
+    // data is in kv engine, so it is prepended by KV_PREFIX
     // KV_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id APPLY_STATE_SUFFIX
     static UniversalPageId toRaftApplyStateKeyInKVEngine(UInt64 region_id)
     {
@@ -103,7 +108,7 @@ public:
         return buff.releaseStr();
     }
 
-    // data is in kv engine, so it is prepend by KV_PREFIX
+    // data is in kv engine, so it is prepended by KV_PREFIX
     // KV_PREFIX LOCAL_PREFIX REGION_META_PREFIX region_id REGION_STATE_SUFFIX
     static UniversalPageId toRegionLocalStateKeyInKVEngine(UInt64 region_id)
     {

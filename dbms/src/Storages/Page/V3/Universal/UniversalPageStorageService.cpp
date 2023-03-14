@@ -90,18 +90,11 @@ UniversalPageStorageService::createForTest(
     return service;
 }
 
-struct CheckpointUploadFunctor
+bool CheckpointUploadFunctor::operator()(const PS::V3::LocalCheckpointFiles & checkpoint) const
 {
-    const StoreID store_id;
-    const UInt64 sequence;
-    const DM::Remote::IDataStorePtr remote_store;
-
-    bool operator()(const PS::V3::LocalCheckpointFiles & checkpoint) const
-    {
-        // Persist checkpoint to remote_source
-        return remote_store->putCheckpointFiles(checkpoint, store_id, sequence);
-    }
-};
+    // Persist checkpoint to remote_source
+    return remote_store->putCheckpointFiles(checkpoint, store_id, sequence);
+}
 
 bool UniversalPageStorageService::uploadCheckpoint()
 {
@@ -189,6 +182,8 @@ bool UniversalPageStorageService::uploadCheckpointImpl(const metapb::Store & sto
         .override_sequence = upload_info.upload_sequence, // override by upload_sequence
     };
     uni_page_storage->dumpIncrementalCheckpoint(opts);
+
+    LOG_DEBUG(log, "Upload checkpoint with upload sequence {} success", upload_info.upload_sequence);
 
     // the checkpoint is uploaded to remote data store, remove local temp files
     Poco::File(local_dir).remove(true);

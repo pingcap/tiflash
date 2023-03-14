@@ -49,6 +49,7 @@ namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
 extern const char exception_before_dmfile_remove_from_disk[];
+extern const char force_use_dmfile_format_v3[];
 } // namespace FailPoints
 
 namespace DM
@@ -110,6 +111,11 @@ String DMFile::ngcPath() const
 
 DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration, DMFileFormat::Version version)
 {
+    fiu_do_on(FailPoints::force_use_dmfile_format_v3, {
+        // some unit test we need mock upload DMFile to S3, which only support DMFileFormat::V3
+        version = DMFileFormat::V3;
+        LOG_WARNING(Logger::get(), "!!!force use DMFileFormat::V3!!!");
+    });
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(new DMFile(file_id,
                                     file_id,
