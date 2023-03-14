@@ -16,9 +16,9 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
-#include <Common/UniThreadPool.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
+#include <IO/IOThreadPool.h>
 
 #include <future>
 
@@ -75,20 +75,18 @@ private:
     LoggerPtr exc_log;
 };
 
+namespace details
+{
+
 /*
  * ThreadPool used for the RNPagePreparer.
  */
-class RNPagePreparerThreadPool
+struct RNPreparerType
 {
-    friend void adjustThreadPoolSize(const Settings & settings, size_t logical_cores);
-
-    static std::unique_ptr<ThreadPool> instance;
-
-public:
-    static void initialize(size_t max_threads, size_t max_free_threads, size_t queue_size);
-    static ThreadPool & get();
-
-    static void shutdown() noexcept { instance.reset(); }
 };
+
+} // namespace details
+
+using RNPagePreparerThreadPool = IOThreadPool<details::RNPreparerType>;
 
 } // namespace DB

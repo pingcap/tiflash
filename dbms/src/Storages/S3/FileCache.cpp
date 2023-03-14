@@ -297,7 +297,7 @@ bool FileCache::canCache(FileType file_type) const
 {
     return file_type != FileType::Unknow
         && static_cast<UInt64>(file_type) <= cache_level
-        && bg_downloading_count.load(std::memory_order_relaxed) < IOThreadPool::get().getMaxThreads();
+        && bg_downloading_count.load(std::memory_order_relaxed) < S3IOThreadPool::get().getMaxThreads();
 }
 
 FileType FileCache::getFileTypeOfColData(const std::filesystem::path & p)
@@ -440,7 +440,7 @@ void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
 {
     bg_downloading_count.fetch_add(1, std::memory_order_relaxed);
     LOG_DEBUG(log, "downloading count {} => s3_key {} start", bg_downloading_count.load(std::memory_order_relaxed), s3_key);
-    IOThreadPool::get().scheduleOrThrowOnError(
+    S3IOThreadPool::get().scheduleOrThrowOnError(
         [this, s3_key = s3_key, file_seg = file_seg]() mutable {
             download(s3_key, file_seg);
         });

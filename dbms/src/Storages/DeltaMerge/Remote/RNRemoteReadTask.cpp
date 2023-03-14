@@ -340,7 +340,7 @@ RNRemoteTableReadTaskPtr RNRemoteTableReadTask::buildFrom(
         });
 
         futures.emplace_back(task->get_future());
-        IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+        GeneralIOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
     }
 
     for (auto & f : futures)

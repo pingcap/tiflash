@@ -201,18 +201,4 @@ bool RNPagePreparer::consumeOneResult(const LoggerPtr & log)
     return true;
 }
 
-std::unique_ptr<ThreadPool> RNPagePreparerThreadPool::instance;
-
-void RNPagePreparerThreadPool::initialize(size_t max_threads, size_t max_free_threads, size_t queue_size)
-{
-    RUNTIME_CHECK_MSG(!instance, "RNPagePreparerThreadPool is initialized twice");
-    instance = std::make_unique<ThreadPool>(max_threads, max_free_threads, queue_size, false /*shutdown_on_exception*/);
-}
-
-ThreadPool & RNPagePreparerThreadPool::get()
-{
-    RUNTIME_CHECK_MSG(instance, "RNPagePreparerThreadPool is not initialized");
-    return *instance;
-}
-
 } // namespace DB

@@ -150,7 +150,7 @@ protected:
                     writeFile(key, value, size, WriteSettings{});
                 });
             upload_results.push_back(task->get_future());
-            IOThreadPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+            GeneralIOThreadPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
             objects.emplace_back(ObjectInfo{.key = key, .value = value, .size = size});
         }
         for (auto & f : upload_results)

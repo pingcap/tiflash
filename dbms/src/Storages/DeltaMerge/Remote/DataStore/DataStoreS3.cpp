@@ -54,7 +54,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid)
                 S3::uploadFile(*s3_client, bucket, local_fname, remote_fname);
             });
         upload_results.push_back(task->get_future());
-        IOThreadPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+        S3IOThreadPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
     for (auto & f : upload_results)
     {
@@ -98,7 +98,7 @@ bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_
             S3::uploadEmptyFile(*s3_client, bucket, lock_key);
         });
         upload_results.push_back(task->get_future());
-        IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+        S3IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
     }
     for (auto & f : upload_results)
     {
@@ -129,7 +129,7 @@ void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vecto
                 Poco::File(tmp_fname).renameTo(local_fname);
             });
         results.push_back(task->get_future());
-        IOThreadPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+        S3IOThreadPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
     for (auto & f : results)
     {

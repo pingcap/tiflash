@@ -834,11 +834,14 @@ private:
 void initThreadPool(Poco::Util::LayeredConfiguration & config)
 {
     size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
+
+    // Note: Global Thread Pool must be larger than sub thread pools.
     GlobalThreadPool::initialize(
-        /*max_threads*/ default_num_threads,
-        /*max_free_threads*/ default_num_threads / 2,
-        /*queue_size*/ default_num_threads * 2);
-    IOThreadPool::initialize(
+        /*max_threads*/ default_num_threads * 10,
+        /*max_free_threads*/ default_num_threads,
+        /*queue_size*/ default_num_threads * 8);
+
+    GeneralIOThreadPool::initialize(
         /*max_threads*/ default_num_threads,
         /*max_free_threads*/ default_num_threads / 2,
         /*queue_size*/ default_num_threads * 2);
@@ -846,7 +849,15 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
     auto disaggregated_mode = getDisaggregatedMode(config);
     if (disaggregated_mode == DisaggregatedMode::Compute)
     {
-        RNPagePreparerThreadPool::initialize(
+        DB::RNPagePreparerThreadPool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+    }
+
+    if (disaggregated_mode == DisaggregatedMode::Compute || disaggregated_mode == DisaggregatedMode::Storage)
+    {
+        S3IOThreadPool::initialize(
             /*max_threads*/ default_num_threads,
             /*max_free_threads*/ default_num_threads / 2,
             /*queue_size*/ default_num_threads * 2);
@@ -859,15 +870,23 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
     // Currently, `GlobalThreadPool` is only used by `IOThreadPool`, so they have the same number of threads.
 
-    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count);
-    GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count / 2);
-    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 2);
+    // Note: Global Thread Pool must be larger than sub thread pools.
+    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 10);
+    GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count);
+    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 8);
 
-    IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count);
-    IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-    IOThreadPool::instance->setQueueSize(max_io_thread_count * 2);
+    GeneralIOThreadPool::instance->setMaxThreads(max_io_thread_count);
+    GeneralIOThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+    GeneralIOThreadPool::instance->setQueueSize(max_io_thread_count * 2);
 
-    if (RNPagePreparerThreadPool::instance != nullptr)
+    if (S3IOThreadPool::instance)
+    {
+        S3IOThreadPool::instance->setMaxThreads(max_io_thread_count);
+        S3IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        S3IOThreadPool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+
+    if (RNPagePreparerThreadPool::instance)
     {
         RNPagePreparerThreadPool::instance->setMaxThreads(max_io_thread_count);
         RNPagePreparerThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
@@ -1217,11 +1236,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Global PageStorage run mode is {}", magic_enum::enum_name(global_context->getPageStorageRunMode()));
     }
 
-    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
-        || global_context->getSharedContextDisagg()->notDisaggregatedMode())
-    {
-        global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
-    }
+    global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
 
     if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
     {

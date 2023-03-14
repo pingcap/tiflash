@@ -337,7 +337,6 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
     }
 }
 
-
 template class ThreadPoolImpl<std::thread>;
 template class ThreadPoolImpl<ThreadFromGlobalPoolImpl<false>>;
 template class ThreadFromGlobalPoolImpl<true>;
@@ -369,9 +368,12 @@ GlobalThreadPool & GlobalThreadPool::instance()
 
 GlobalThreadPool::~GlobalThreadPool() noexcept
 {
-    // We must make sure IOThread is released before GlobalThreadPool runs
+    // We must make sure sub thread pools are released before GlobalThreadPool runs
     // `finalize`. Or the threads in GlobalThreadPool never ends.
-    IOThreadPool::shutdown();
+
+    // FIXME: Make this less coupled.
+    GeneralIOThreadPool::shutdown();
+    S3IOThreadPool::shutdown();
 }
 
 } // namespace DB

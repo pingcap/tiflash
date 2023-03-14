@@ -15,25 +15,50 @@
 #pragma once
 
 #include <Common/UniThreadPool.h>
+#include <Core/Field.h>
 
 namespace DB
 {
 struct Settings;
 
-/*
- * ThreadPool used for the IO.
- */
+template <typename Type>
 class IOThreadPool
 {
     friend void adjustThreadPoolSize(const Settings & settings, size_t logical_cores);
 
-    static std::unique_ptr<ThreadPool> instance;
+    static inline std::unique_ptr<ThreadPool> instance;
 
 public:
-    static void initialize(size_t max_threads, size_t max_free_threads, size_t queue_size);
-    static ThreadPool & get();
+    static void initialize(size_t max_threads, size_t max_free_threads, size_t queue_size)
+    {
+        RUNTIME_CHECK_MSG(!instance, "IO thread pool is initialized twice");
+        instance = std::make_unique<ThreadPool>(max_threads, max_free_threads, queue_size, false /*shutdown_on_exception*/);
+    }
+
+    static ThreadPool & get()
+    {
+        RUNTIME_CHECK_MSG(instance, "IO thread pool is not initialized");
+        return *instance;
+    }
 
     static void shutdown() noexcept { instance.reset(); }
 };
+
+namespace details
+{
+
+struct General
+{
+};
+
+struct S3
+{
+};
+
+} // namespace details
+
+using GeneralIOThreadPool = IOThreadPool<details::General>;
+
+using S3IOThreadPool = IOThreadPool<details::S3>;
 
 } // namespace DB
