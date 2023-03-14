@@ -167,7 +167,7 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
         dmfiles.emplace_back(std::move(dmfile));
     }
     new_stable->setFiles(dmfiles, segment_range, &dm_context);
-    auto stable_snap = new_stable->createSnapshot(dm_context.db_context, table_id);
+    auto stable_snap = new_stable->createSnapshot();
 
     return std::make_shared<SegmentSnapshot>(
         std::move(delta_snap),

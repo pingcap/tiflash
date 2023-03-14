@@ -660,7 +660,7 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
     SCOPE_EXIT(
         dm_context.scan_context->total_create_snapshot_time_ns += watch.elapsed(););
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
-    auto stable_snap = stable->createSnapshot(dm_context.db_context, dm_context.physical_table_id);
+    auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
     return std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));

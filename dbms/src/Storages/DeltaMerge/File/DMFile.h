@@ -427,7 +427,6 @@ public:
     Status getStatus() const { return status; }
     void setStatus(Status status_) { status = status_; }
 
-    void finalizeForRemote(const FileProviderPtr & file_provider);
     void finalizeForFolderMode(const FileProviderPtr & file_provider, const WriteLimiterPtr & write_limiter);
 
     String subFilePath(const String & file_name) const { return path() + "/" + file_name; }

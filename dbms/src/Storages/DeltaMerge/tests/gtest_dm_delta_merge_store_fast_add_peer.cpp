@@ -35,6 +35,8 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 
+#include "DataStreams/OneBlockInputStream.h"
+
 
 namespace DB
 {
@@ -51,7 +53,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
                                     const String & parent_path);
 namespace tests
 {
-// Simple test suit for DeltaMergeStore.
+// Simple test suit for DeltaMergeStoreTestFastAddPeer.
 class DeltaMergeStoreTestFastAddPeer : public DB::base::TiFlashStorageTestBasic
 {
 public:
@@ -138,6 +140,29 @@ public:
     }
 
 protected:
+    std::pair<RowKeyRange, std::vector<ExternalDTFileInfo>> genDMFile(DMContext & context, const Block & block)
+    {
+        auto input_stream = std::make_shared<OneBlockInputStream>(block);
+        auto [store_path, file_id] = store->preAllocateIngestFile();
+
+        auto dmfile = writeIntoNewDMFile(
+            context,
+            std::make_shared<ColumnDefines>(store->getTableColumns()),
+            input_stream,
+            file_id,
+            store_path);
+
+        store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
+
+        const auto & pk_column = block.getByPosition(0).column;
+        auto min_pk = pk_column->getInt(0);
+        auto max_pk = pk_column->getInt(block.rows() - 1);
+        HandleRange range(min_pk, max_pk + 1);
+        auto handle_range = RowKeyRange::fromHandleRange(range);
+        auto external_file = ExternalDTFileInfo{.id = file_id, .range = handle_range};
+        return {handle_range, {external_file}}; // There are some duplicated info. This is to minimize the change to our test code.
+    }
+
     bool createBucketIfNotExist()
     {
         auto s3_client = S3::ClientFactory::instance().sharedClient();
@@ -263,6 +288,15 @@ try
         store->flushCache(*db_context, RowKeyRange::newAll(false, 1), true);
     }
 
+    // write ColumnFileBig
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write + num_rows_write, num_rows_write + 2 * num_rows_write, false);
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        auto [range, file_ids] = genDMFile(*dm_context, block);
+        store->ingestFiles(dm_context, range, file_ids, false);
+        store->flushCache(*db_context, RowKeyRange::newAll(false, 1), true);
+    }
+
     dumpCheckpoint();
 
     clearData();
@@ -276,7 +310,11 @@ try
     checkpoint_info->temp_ps = checkpoint_info->temp_ps_wrapper->temp_ps;
     store->ingestSegmentsFromCheckpointInfo(*db_context, db_context->getSettingsRef(), RowKeyRange::newAll(false, 1), checkpoint_info);
 
-    verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write / 2 + num_rows_write);
+    verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write / 2 + 2 * num_rows_write);
+
+    reload();
+
+    verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write / 2 + 2 * num_rows_write);
 }
 CATCH
 
