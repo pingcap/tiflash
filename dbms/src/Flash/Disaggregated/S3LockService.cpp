@@ -228,7 +228,7 @@ bool S3LockService::tryAddLockImpl(
     }
     const auto lock_key = key_view.getLockKey(lock_store_id, lock_seq);
     // upload lock file
-    DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), lock_key);
+    DB::S3::uploadEmptyFile(*s3_client, lock_key);
     if (!gc_owner->isOwner())
     {
         // although the owner is changed after lock file is uploaded, but
@@ -250,9 +250,9 @@ std::optional<String> S3LockService::anyLockExist(const String & lock_prefix)
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     DB::S3::listPrefix(
         *s3_client,
-        s3_client->bucket(),
         lock_prefix,
-        [&lock_key](const Aws::S3::Model::ListObjectsV2Result & result) -> S3::PageResult {
+        [&lock_key](const Aws::S3::Model::ListObjectsV2Result & result, const String & root) -> S3::PageResult {
+            UNUSED(root);
             const auto & contents = result.GetContents();
             if (!contents.empty())
             {
@@ -319,7 +319,7 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
         tagging = TaggingObjectIsDeleted;
     }
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-    DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), delmark_key, tagging);
+    DB::S3::uploadEmptyFile(*s3_client, delmark_key, tagging);
     if (!gc_owner->isOwner())
     {
         // owner changed happens when delmark is uploading, can not

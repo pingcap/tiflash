@@ -51,8 +51,7 @@ public:
     static std::shared_ptr<S3WritableFile> create(const String & remote_fname_);
 
     S3WritableFile(
-        std::shared_ptr<Aws::S3::S3Client> client_ptr_,
-        const String & bucket_,
+        std::shared_ptr<TiFlashS3Client> client_ptr_,
         const String & remote_fname_,
         const WriteSettings & write_settings_);
 
@@ -65,7 +64,7 @@ public:
 
     std::string getFileName() const override
     {
-        return fmt::format("{}/{}", bucket, remote_fname);
+        return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
     }
 
     void close() override
@@ -145,13 +144,12 @@ private:
     {
         if (!outcome.IsSuccess())
         {
-            throw S3::fromS3Error(outcome.GetError(), "bucket={} key={}", bucket, remote_fname);
+            throw S3::fromS3Error(outcome.GetError(), "bucket={} key={}", client_ptr->bucket(), remote_fname);
         }
     }
 
-    const String bucket;
     const String remote_fname;
-    const std::shared_ptr<Aws::S3::S3Client> client_ptr;
+    const std::shared_ptr<TiFlashS3Client> client_ptr;
     const WriteSettings write_settings;
 
     std::shared_ptr<Aws::StringStream> temporary_buffer; // Buffer to accumulate data.

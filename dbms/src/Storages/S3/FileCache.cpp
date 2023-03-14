@@ -378,10 +378,9 @@ bool FileCache::finalizeReservedSize(FileType reserve_for, UInt64 reserved_size,
 void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
 {
     Stopwatch sw;
-    auto client = S3::ClientFactory::instance().sharedClient();
-    const auto & bucket = S3::ClientFactory::instance().bucket();
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     Aws::S3::Model::GetObjectRequest req;
-    req.SetBucket(bucket);
+    req.SetBucket(client->bucket());
     req.SetKey(s3_key);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
     auto outcome = client->GetObject(req);

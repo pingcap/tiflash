@@ -24,6 +24,8 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 
+#include "Storages/S3/S3Common.h"
+
 namespace ProfileEvents
 {
 extern const Event S3WriteBytes;
@@ -56,12 +58,10 @@ struct S3WritableFile::PutObjectTask
 };
 
 S3WritableFile::S3WritableFile(
-    std::shared_ptr<Aws::S3::S3Client> client_ptr_,
-    const String & bucket_,
+    std::shared_ptr<TiFlashS3Client> client_ptr_,
     const String & remote_fname_,
     const WriteSettings & write_settings_)
-    : bucket(bucket_)
-    , remote_fname(remote_fname_)
+    : remote_fname(remote_fname_)
     , client_ptr(std::move(client_ptr_))
     , write_settings(write_settings_)
     , log(Logger::get("S3WritableFile"))
@@ -76,7 +76,7 @@ ssize_t S3WritableFile::write(char * buf, size_t size)
     temporary_buffer->write(buf, size);
     if (!temporary_buffer->good())
     {
-        LOG_ERROR(log, "write size={} failed: bucket={} key={}", size, bucket, remote_fname);
+        LOG_ERROR(log, "write size={} failed: bucket={} key={}", size, client_ptr->bucket(), remote_fname);
         return -1;
     }
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, size);
@@ -127,7 +127,7 @@ void S3WritableFile::finalize()
     if (write_settings.check_objects_after_upload)
     {
         // TODO(jinhe): check checksums.
-        auto resp = S3::headObject(*client_ptr, bucket, remote_fname);
+        auto resp = S3::headObject(*client_ptr, remote_fname);
         checkS3Outcome(resp);
     }
 }
@@ -139,7 +139,7 @@ void S3WritableFile::createMultipartUpload()
         GET_METRIC(tiflash_storage_s3_request_seconds, type_create_multi_part_upload).Observe(sw.elapsedSeconds());
     });
     Aws::S3::Model::CreateMultipartUploadRequest req;
-    req.SetBucket(bucket);
+    req.SetBucket(client_ptr->bucket());
     req.SetKey(remote_fname);
     req.SetContentType("binary/octet-stream");
     ProfileEvents::increment(ProfileEvents::S3CreateMultipartUpload);
@@ -153,7 +153,7 @@ void S3WritableFile::writePart()
     auto size = temporary_buffer->tellp();
     if (size < 0)
     {
-        throw Exception(ErrorCodes::CORRUPTED_DATA, "Buffer is in bad state. bucket={}, key={}", bucket, remote_fname);
+        throw Exception(ErrorCodes::CORRUPTED_DATA, "Buffer is in bad state. bucket={}, key={}", client_ptr->bucket(), remote_fname);
     }
     if (size == 0)
     {
@@ -172,7 +172,7 @@ void S3WritableFile::fillUploadRequest(Aws::S3::Model::UploadPartRequest & req)
     // Increase part number.
     ++part_number;
     // Setup request.
-    req.SetBucket(bucket);
+    req.SetBucket(client_ptr->bucket());
     req.SetKey(remote_fname);
     req.SetPartNumber(static_cast<int>(part_number));
     req.SetUploadId(multipart_upload_id);
@@ -195,10 +195,10 @@ void S3WritableFile::processUploadRequest(UploadPartTask & task)
 
 void S3WritableFile::completeMultipartUpload()
 {
-    RUNTIME_CHECK_MSG(!part_tags.empty(), "Failed to complete multipart upload. No parts have uploaded. bucket={}, key={}", bucket, remote_fname);
+    RUNTIME_CHECK_MSG(!part_tags.empty(), "Failed to complete multipart upload. No parts have uploaded. bucket={}, key={}", client_ptr->bucket(), remote_fname);
 
     Aws::S3::Model::CompleteMultipartUploadRequest req;
-    req.SetBucket(bucket);
+    req.SetBucket(client_ptr->bucket());
     req.SetKey(remote_fname);
     req.SetUploadId(multipart_upload_id);
     Aws::S3::Model::CompletedMultipartUpload multipart_upload;
@@ -220,17 +220,17 @@ void S3WritableFile::completeMultipartUpload()
         auto outcome = client_ptr->CompleteMultipartUpload(req);
         if (outcome.IsSuccess())
         {
-            LOG_DEBUG(log, "Multipart upload has completed. bucket={} key={} upload_id={} parts={}", bucket, remote_fname, multipart_upload_id, part_tags.size());
+            LOG_DEBUG(log, "Multipart upload has completed. bucket={} key={} upload_id={} parts={}", client_ptr->bucket(), remote_fname, multipart_upload_id, part_tags.size());
             break;
         }
         if (i + 1 < max_retry)
         {
             const auto & e = outcome.GetError();
-            LOG_INFO(log, "Multipart upload failed and need retry: bucket={} key={} upload_id={} parts={} error={} message={}", bucket, remote_fname, multipart_upload_id, part_tags.size(), magic_enum::enum_name(e.GetErrorType()), e.GetMessage());
+            LOG_INFO(log, "Multipart upload failed and need retry: bucket={} key={} upload_id={} parts={} error={} message={}", client_ptr->bucket(), remote_fname, multipart_upload_id, part_tags.size(), magic_enum::enum_name(e.GetErrorType()), e.GetMessage());
         }
         else
         {
-            throw fromS3Error(outcome.GetError(), "bucket={} key={} upload_id={} parts={}", bucket, remote_fname, multipart_upload_id, part_tags.size());
+            throw fromS3Error(outcome.GetError(), "bucket={} key={} upload_id={} parts={}", client_ptr->bucket(), remote_fname, multipart_upload_id, part_tags.size());
         }
     }
 }
@@ -240,7 +240,7 @@ void S3WritableFile::makeSinglepartUpload()
     auto size = temporary_buffer->tellp();
     if (size < 0)
     {
-        throw Exception(ErrorCodes::CORRUPTED_DATA, "Buffer is in bad state. bucket={}, key={}", bucket, remote_fname);
+        throw Exception(ErrorCodes::CORRUPTED_DATA, "Buffer is in bad state. bucket={}, key={}", client_ptr->bucket(), remote_fname);
     }
     PutObjectTask task;
     fillPutRequest(task.req);
@@ -249,7 +249,7 @@ void S3WritableFile::makeSinglepartUpload()
 
 void S3WritableFile::fillPutRequest(Aws::S3::Model::PutObjectRequest & req)
 {
-    req.SetBucket(bucket);
+    req.SetBucket(client_ptr->bucket());
     req.SetKey(remote_fname);
     req.SetContentLength(temporary_buffer->tellp());
     req.SetBody(temporary_buffer);
@@ -269,17 +269,17 @@ void S3WritableFile::processPutRequest(const PutObjectTask & task)
         auto outcome = client_ptr->PutObject(task.req);
         if (outcome.IsSuccess())
         {
-            LOG_DEBUG(log, "Single part upload has completed. bucket={}, key={}, size={}", bucket, remote_fname, task.req.GetContentLength());
+            LOG_DEBUG(log, "Single part upload has completed. bucket={}, key={}, size={}", client_ptr->bucket(), remote_fname, task.req.GetContentLength());
             break;
         }
         if (i + 1 < max_retry)
         {
             const auto & e = outcome.GetError();
-            LOG_INFO(log, "Single part upload failed: bucket={} key={} error={} message={}", bucket, remote_fname, magic_enum::enum_name(e.GetErrorType()), e.GetMessage());
+            LOG_INFO(log, "Single part upload failed: bucket={} key={} error={} message={}", client_ptr->bucket(), remote_fname, magic_enum::enum_name(e.GetErrorType()), e.GetMessage());
         }
         else
         {
-            throw fromS3Error(outcome.GetError(), "bucket={} key={}", bucket, remote_fname);
+            throw fromS3Error(outcome.GetError(), "bucket={} key={}", client_ptr->bucket(), remote_fname);
         }
     }
 }
@@ -287,8 +287,7 @@ void S3WritableFile::processPutRequest(const PutObjectTask & task)
 std::shared_ptr<S3WritableFile> S3WritableFile::create(const String & remote_fname_)
 {
     return std::make_shared<S3WritableFile>(
-        S3::ClientFactory::instance().sharedClient(),
-        S3::ClientFactory::instance().bucket(),
+        S3::ClientFactory::instance().sharedTiFlashClient(),
         remote_fname_,
         WriteSettings{});
 }

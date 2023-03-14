@@ -24,6 +24,7 @@
 #include <Server/RaftConfigParser.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
@@ -238,19 +239,19 @@ FileProviderPtr TiFlashTestEnv::getMockFileProvider()
     return std::make_shared<FileProvider>(std::make_shared<MockKeyManager>(encryption_enabled), encryption_enabled);
 }
 
-bool TiFlashTestEnv::createBucketIfNotExist(Aws::S3::S3Client & s3_client, const String & bucket)
+bool TiFlashTestEnv::createBucketIfNotExist(::DB::S3::TiFlashS3Client & s3_client)
 {
     auto log = Logger::get();
     Aws::S3::Model::CreateBucketRequest request;
-    request.SetBucket(bucket);
+    request.SetBucket(s3_client.bucket());
     auto outcome = s3_client.CreateBucket(request);
     if (outcome.IsSuccess())
     {
-        LOG_DEBUG(log, "Created bucket {}", bucket);
+        LOG_DEBUG(log, "Created bucket {}", s3_client.bucket());
     }
     else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
     {
-        LOG_DEBUG(log, "Bucket {} already exist", bucket);
+        LOG_DEBUG(log, "Bucket {} already exist", s3_client.bucket());
     }
     else
     {
@@ -260,10 +261,10 @@ bool TiFlashTestEnv::createBucketIfNotExist(Aws::S3::S3Client & s3_client, const
     return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
 }
 
-void TiFlashTestEnv::deleteBucket(Aws::S3::S3Client & s3_client, const String & bucket)
+void TiFlashTestEnv::deleteBucket(::DB::S3::TiFlashS3Client & s3_client)
 {
     Aws::S3::Model::DeleteBucketRequest request;
-    request.SetBucket(bucket);
+    request.SetBucket(s3_client.bucket());
     s3_client.DeleteBucket(request);
 }
 

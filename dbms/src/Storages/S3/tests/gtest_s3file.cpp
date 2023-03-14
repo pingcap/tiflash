@@ -67,10 +67,9 @@ public:
         buf_unit.resize(256);
         std::iota(buf_unit.begin(), buf_unit.end(), 0);
 
-        s3_client = S3::ClientFactory::instance().sharedClient();
-        bucket = S3::ClientFactory::instance().bucket();
+        s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         data_store = std::make_shared<DM::Remote::DataStoreS3>(dbContext().getFileProvider());
-        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     }
 
     void reload()
@@ -83,7 +82,7 @@ public:
 protected:
     void writeFile(const String & key, size_t size, const WriteSettings & write_setting)
     {
-        S3WritableFile file(s3_client, bucket, key, write_setting);
+        S3WritableFile file(s3_client, key, write_setting);
         size_t write_size = 0;
         while (write_size < size)
         {
@@ -99,7 +98,7 @@ protected:
 
     void verifyFile(const String & key, size_t size)
     {
-        S3RandomAccessFile file(s3_client, bucket, key);
+        S3RandomAccessFile file(s3_client, key);
         std::vector<char> tmp_buf;
         size_t read_size = 0;
         while (read_size < size)
@@ -152,7 +151,7 @@ protected:
             S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKey(),
             oid.file_id,
             DMFile::Status::READABLE);
-        return S3::listPrefixWithSize(*s3_client, bucket, dmfile_dir + "/");
+        return S3::listPrefixWithSize(*s3_client, dmfile_dir + "/");
     }
 
     DMFilePtr restoreDMFile(const DMFileOID & oid)
@@ -162,8 +161,7 @@ protected:
 
     LoggerPtr log;
     std::vector<char> buf_unit;
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
+    std::shared_ptr<TiFlashS3Client> s3_client;
     S3WritableFile::UploadInfo last_upload_info;
     Remote::IDataStorePtr data_store;
 };
@@ -209,7 +207,7 @@ try
     WriteSettings write_setting;
     const String key = "/a/b/c/seek";
     writeFile(key, size, write_setting);
-    S3RandomAccessFile file(s3_client, bucket, key);
+    S3RandomAccessFile file(s3_client, key);
     {
         std::vector<char> tmp_buf(256);
         auto n = file.read(tmp_buf.data(), tmp_buf.size());
@@ -430,15 +428,14 @@ try
     data_store->putCheckpointFiles(checkpoint, store_id, sequence);
 
     // ensure CheckpointDataFile, theirs lock file and CheckpointManifest are uploaded
-    auto s3client = S3::ClientFactory::instance().sharedClient();
-    auto s3bucket = S3::ClientFactory::instance().bucket();
+    auto s3client = S3::ClientFactory::instance().sharedTiFlashClient();
     auto cp_data0 = S3::S3Filename::newCheckpointData(store_id, sequence, 0);
-    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, cp_data0.toFullKey()));
-    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, cp_data0.toView().getLockKey(store_id, sequence)));
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data0.toFullKey()));
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data0.toView().getLockKey(store_id, sequence)));
     auto cp_data1 = S3::S3Filename::newCheckpointData(store_id, sequence, 1);
-    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, cp_data1.toFullKey()));
-    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, cp_data1.toView().getLockKey(store_id, sequence)));
-    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey()));
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data1.toFullKey()));
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data1.toView().getLockKey(store_id, sequence)));
+    ASSERT_TRUE(S3::objectExists(*s3client, S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey()));
 }
 CATCH
 

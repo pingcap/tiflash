@@ -647,22 +647,20 @@ std::vector<String> DMFile::listLocal(const String & parent_path)
 std::vector<String> DMFile::listS3(const String & parent_path)
 {
     std::vector<String> filenames;
-    auto client = S3::ClientFactory::instance().sharedClient();
-    const auto & bucket = S3::ClientFactory::instance().bucket();
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     auto list_prefix = parent_path + "/";
     S3::listPrefix(
         *client,
-        bucket,
         list_prefix,
         /*delimiter*/ "/",
-        [&filenames, &list_prefix](const Aws::S3::Model::ListObjectsV2Result & result) {
+        [&filenames, &list_prefix](const Aws::S3::Model::ListObjectsV2Result & result, const String & root) {
             const Aws::Vector<Aws::S3::Model::CommonPrefix> & prefixes = result.GetCommonPrefixes();
             filenames.reserve(filenames.size() + prefixes.size());
             for (const auto & prefix : prefixes)
             {
-                RUNTIME_CHECK(prefix.GetPrefix().size() > list_prefix.size(), prefix.GetPrefix(), list_prefix);
-                auto short_name_size = prefix.GetPrefix().size() - list_prefix.size() - 1; // `1` for the delimiter in last.
-                filenames.push_back(prefix.GetPrefix().substr(list_prefix.size(), short_name_size)); // Cut prefix and last delimiter.
+                RUNTIME_CHECK(prefix.GetPrefix().size() > root.size() + list_prefix.size(), prefix.GetPrefix(), root.size(), list_prefix);
+                auto short_name_size = prefix.GetPrefix().size() - root.size() - list_prefix.size() - 1; // `1` for the delimiter in last.
+                filenames.push_back(prefix.GetPrefix().substr(root.size() + list_prefix.size(), short_name_size)); // Cut prefix and last delimiter.
             }
             return S3::PageResult{.num_keys = prefixes.size(), .more = true};
         });

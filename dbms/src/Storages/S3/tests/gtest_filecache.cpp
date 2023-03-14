@@ -55,9 +55,8 @@ public:
         tmp_dir = DB::tests::TiFlashTestEnv::getTemporaryPath("FileCacheTest");
         log = Logger::get("FileCacheTest");
         std::filesystem::remove_all(std::filesystem::path(tmp_dir));
-        s3_client = ::DB::S3::ClientFactory::instance().sharedClient();
-        bucket = ::DB::S3::ClientFactory::instance().bucket();
-        ASSERT_TRUE(createBucketIfNotExist());
+        s3_client = ::DB::S3::ClientFactory::instance().sharedTiFlashClient();
+        ASSERT_TRUE(DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
         std::random_device dev;
         rng = std::mt19937{dev()};
         next_id = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -65,10 +64,9 @@ public:
     }
 
 protected:
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
+    std::shared_ptr<TiFlashS3Client> s3_client;
     std::mt19937 rng;
-    UInt64 next_id;
+    UInt64 next_id = 0;
 
     inline static const std::vector<String> basenames = {
         "%2D1.dat",
@@ -88,31 +86,11 @@ protected:
         "meta",
     };
 
-    bool createBucketIfNotExist()
-    {
-        Aws::S3::Model::CreateBucketRequest request;
-        request.SetBucket(bucket);
-        Aws::S3::Model::CreateBucketOutcome outcome = s3_client->CreateBucket(request);
-        if (outcome.IsSuccess())
-        {
-            LOG_DEBUG(log, "Created bucket {}", bucket);
-        }
-        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
-        {
-            LOG_DEBUG(log, "Bucket {} already exist", bucket);
-        }
-        else
-        {
-            const auto & err = outcome.GetError();
-            LOG_ERROR(log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
-        }
-        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
-    }
 
     void writeFile(const String & key, char value, size_t size, const WriteSettings & write_setting)
     {
         Stopwatch sw;
-        S3WritableFile file(s3_client, bucket, key, write_setting);
+        S3WritableFile file(s3_client, key, write_setting);
         size_t write_size = 0;
         constexpr size_t buf_size = 1024 * 1024 * 10;
         String buf_unit(buf_size, value);

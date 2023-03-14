@@ -26,7 +26,7 @@ class MockS3Client final : public S3::TiFlashS3Client
 {
 public:
     explicit MockS3Client(const String & bucket = "")
-        : TiFlashS3Client(bucket)
+        : TiFlashS3Client(bucket, "/")
     {}
 
     ~MockS3Client() override = default;
