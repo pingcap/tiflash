@@ -225,16 +225,16 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
         [&](const tipb::Executor & executor) {
             switch (executor.tp())
             {
-            case tipb::ExecType::TypeProjection:
-            case tipb::ExecType::TypeSelection:
-            case tipb::ExecType::TypeLimit:
-            case tipb::ExecType::TypeTopN:
             case tipb::ExecType::TypeTableScan:
                 if (executor.tbl_scan().keep_order())
                 {
                     is_supported = false;
                     return false;
                 }
+            case tipb::ExecType::TypeProjection:
+            case tipb::ExecType::TypeSelection:
+            case tipb::ExecType::TypeLimit:
+            case tipb::ExecType::TypeTopN:
             case tipb::ExecType::TypeExchangeSender:
             case tipb::ExecType::TypeExchangeReceiver:
             case tipb::ExecType::TypeExpand:
