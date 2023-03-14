@@ -33,6 +33,9 @@ public:
     {
         RUNTIME_CHECK_MSG(!instance, "IO thread pool is initialized twice");
         instance = std::make_unique<ThreadPool>(max_threads, max_free_threads, queue_size, false /*shutdown_on_exception*/);
+        GlobalThreadPool::instance().registerFinalizer([] {
+            instance.reset();
+        });
     }
 
     static ThreadPool & get()
@@ -43,22 +46,5 @@ public:
 
     static void shutdown() noexcept { instance.reset(); }
 };
-
-namespace details
-{
-
-struct General
-{
-};
-
-struct S3
-{
-};
-
-} // namespace details
-
-using GeneralIOThreadPool = IOThreadPool<details::General>;
-
-using S3IOThreadPool = IOThreadPool<details::S3>;
 
 } // namespace DB

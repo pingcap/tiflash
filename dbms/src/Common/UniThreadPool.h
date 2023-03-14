@@ -161,9 +161,14 @@ class GlobalThreadPool : public FreeThreadPool
         : FreeThreadPool(max_threads_, max_free_threads_, queue_size_, shutdown_on_exception_)
     {}
 
+    std::vector<std::function<void()>> finalize_fns;
+
 public:
     static void initialize(size_t max_threads = 10000, size_t max_free_threads = 1000, size_t queue_size = 10000);
     static GlobalThreadPool & instance();
+
+    void registerFinalizer(std::function<void()>);
+
     ~GlobalThreadPool() noexcept;
 };
 

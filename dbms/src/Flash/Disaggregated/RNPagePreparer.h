@@ -75,18 +75,4 @@ private:
     LoggerPtr exc_log;
 };
 
-namespace details
-{
-
-/*
- * ThreadPool used for the RNPagePreparer.
- */
-struct RNPreparerType
-{
-};
-
-} // namespace details
-
-using RNPagePreparerThreadPool = IOThreadPool<details::RNPreparerType>;
-
 } // namespace DB

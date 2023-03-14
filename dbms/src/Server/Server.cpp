@@ -48,7 +48,7 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
-#include <IO/IOThreadPool.h>
+#include <IO/IOThreadPools.h>
 #include <IO/ReadHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
@@ -865,19 +865,18 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
 
     // Note: Global Thread Pool must be larger than sub thread pools.
     GlobalThreadPool::initialize(
-        /*max_threads*/ default_num_threads * 10,
+        /*max_threads*/ default_num_threads * 20,
         /*max_free_threads*/ default_num_threads,
         /*queue_size*/ default_num_threads * 8);
-
-    GeneralIOThreadPool::initialize(
-        /*max_threads*/ default_num_threads,
-        /*max_free_threads*/ default_num_threads / 2,
-        /*queue_size*/ default_num_threads * 2);
 
     auto disaggregated_mode = getDisaggregatedMode(config);
     if (disaggregated_mode == DisaggregatedMode::Compute)
     {
-        DB::RNPagePreparerThreadPool::initialize(
+        RNPagePreparerPool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+        RNRemoteReadTaskPool::initialize(
             /*max_threads*/ default_num_threads,
             /*max_free_threads*/ default_num_threads / 2,
             /*queue_size*/ default_num_threads * 2);
@@ -885,7 +884,11 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
 
     if (disaggregated_mode == DisaggregatedMode::Compute || disaggregated_mode == DisaggregatedMode::Storage)
     {
-        S3IOThreadPool::initialize(
+        DataStoreS3Pool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+        S3FileCachePool::initialize(
             /*max_threads*/ default_num_threads,
             /*max_free_threads*/ default_num_threads / 2,
             /*queue_size*/ default_num_threads * 2);
@@ -896,29 +899,35 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 {
     // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
     size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
-    // Currently, `GlobalThreadPool` is only used by `IOThreadPool`, so they have the same number of threads.
 
     // Note: Global Thread Pool must be larger than sub thread pools.
-    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 10);
+    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 20);
     GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count);
     GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 8);
 
-    GeneralIOThreadPool::instance->setMaxThreads(max_io_thread_count);
-    GeneralIOThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-    GeneralIOThreadPool::instance->setQueueSize(max_io_thread_count * 2);
-
-    if (S3IOThreadPool::instance)
+    if (RNPagePreparerPool::instance)
     {
-        S3IOThreadPool::instance->setMaxThreads(max_io_thread_count);
-        S3IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-        S3IOThreadPool::instance->setQueueSize(max_io_thread_count * 2);
+        RNPagePreparerPool::instance->setMaxThreads(max_io_thread_count);
+        RNPagePreparerPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        RNPagePreparerPool::instance->setQueueSize(max_io_thread_count * 2);
     }
-
-    if (RNPagePreparerThreadPool::instance)
+    if (RNRemoteReadTaskPool::instance)
     {
-        RNPagePreparerThreadPool::instance->setMaxThreads(max_io_thread_count);
-        RNPagePreparerThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-        RNPagePreparerThreadPool::instance->setQueueSize(max_io_thread_count * 2);
+        RNRemoteReadTaskPool::instance->setMaxThreads(max_io_thread_count);
+        RNRemoteReadTaskPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        RNRemoteReadTaskPool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+    if (DataStoreS3Pool::instance)
+    {
+        DataStoreS3Pool::instance->setMaxThreads(max_io_thread_count);
+        DataStoreS3Pool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        DataStoreS3Pool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+    if (S3FileCachePool::instance)
+    {
+        S3FileCachePool::instance->setMaxThreads(max_io_thread_count);
+        S3FileCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        S3FileCachePool::instance->setQueueSize(max_io_thread_count * 2);
     }
 }
 

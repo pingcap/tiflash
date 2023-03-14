@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Stopwatch.h>
-#include <IO/IOThreadPool.h>
+#include <IO/IOThreadPools.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/S3/S3Common.h>
@@ -54,7 +54,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
                 S3::uploadFile(*s3_client, bucket, local_fname, remote_fname);
             });
         upload_results.push_back(task->get_future());
-        S3IOThreadPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+        DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
     for (auto & f : upload_results)
     {
@@ -102,7 +102,7 @@ bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_
             S3::uploadEmptyFile(*s3_client, bucket, lock_key);
         });
         upload_results.push_back(task->get_future());
-        S3IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+        DataStoreS3Pool::get().scheduleOrThrowOnError([task] { (*task)(); });
     }
     for (auto & f : upload_results)
     {
@@ -133,7 +133,7 @@ void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vecto
                 Poco::File(tmp_fname).renameTo(local_fname);
             });
         results.push_back(task->get_future());
-        S3IOThreadPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+        DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
     for (auto & f : results)
     {
