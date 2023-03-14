@@ -5,7 +5,9 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
+#include <Functions/divide.cpp>
 #include <string>
 #include <unordered_map>
 #include <vector>
