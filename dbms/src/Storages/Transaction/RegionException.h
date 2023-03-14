@@ -36,12 +36,12 @@ public:
     {
         switch (s)
         {
-            case RegionReadStatus::OK:
-                return "OK";
-            case RegionReadStatus::NOT_FOUND:
-                return "NOT_FOUND";
-            case RegionReadStatus::EPOCH_NOT_MATCH:
-                return "EPOCH_NOT_MATCH";
+        case RegionReadStatus::OK:
+            return "OK";
+        case RegionReadStatus::NOT_FOUND:
+            return "NOT_FOUND";
+        case RegionReadStatus::EPOCH_NOT_MATCH:
+            return "EPOCH_NOT_MATCH";
         }
         return "Unknown";
     };
@@ -50,7 +50,11 @@ public:
 
 public:
     RegionException(UnavailableRegions && unavailable_region_, RegionReadStatus status_)
-        : Exception(RegionReadStatusString(status_)), unavailable_region(std::move(unavailable_region_)), status(status_)
+        : Exception(fmt::format(
+            "Region error ({})",
+            RegionReadStatusString(status_)))
+        , unavailable_region(std::move(unavailable_region_))
+        , status(status_)
     {}
 
     /// Region could be found with correct epoch, but unavailable (e.g. its lease in proxy has not been built with leader).

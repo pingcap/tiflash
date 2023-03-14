@@ -31,11 +31,6 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-extern const int REGION_EPOCH_NOT_MATCH;
-} // namespace ErrorCodes
-
 WNEstablishDisaggTaskHandler::WNEstablishDisaggTaskHandler(ContextPtr context_, const DM::DisaggTaskId & task_id)
     : context(std::move(context_))
     , log(Logger::get(task_id))
@@ -61,7 +56,9 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
     context->setSetting("read_tso", start_ts);
 
     if (request->timeout_s() < 0)
+    {
         throw TiFlashException(Errors::Coprocessor::BadRequest, "invalid timeout={}", request->timeout_s());
+    }
     else if (request->timeout_s() > 0)
     {
         context->setSetting("disagg_task_snapshot_timeout", request->timeout_s());

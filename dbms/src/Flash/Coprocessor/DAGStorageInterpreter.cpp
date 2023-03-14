@@ -54,10 +54,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int REGION_EPOCH_NOT_MATCH;
-} // namespace ErrorCodes
 
 namespace FailPoints
 {
@@ -319,7 +315,13 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
         // and ask RN to send requests again with correct region info. When RN updates region info,
         // RN may be sending requests to other WN.
 
-        throw Exception("Region information is changed (REGION_EPOCH_NOT_MATCH)", DB::ErrorCodes::REGION_EPOCH_NOT_MATCH);
+        RegionException::UnavailableRegions region_ids;
+        for (const auto & info : context.getDAGContext()->retry_regions)
+            region_ids.insert(info.region_id);
+
+        throw RegionException(
+            std::move(region_ids),
+            RegionException::RegionReadStatus::EPOCH_NOT_MATCH);
     }
 
     // A failpoint to test pause before alter lock released

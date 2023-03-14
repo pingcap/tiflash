@@ -39,6 +39,8 @@
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/S3/S3Common.h>
+#include <Storages/Transaction/LockException.h>
+#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/support/status_code_enum.h>
@@ -51,6 +53,7 @@ namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
 extern const int UNKNOWN_EXCEPTION;
+extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 } // namespace ErrorCodes
 
 #define CATCH_FLASHSERVICE_EXCEPTION                                                                                                        \
@@ -624,11 +627,10 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
     });
 
     grpc::Status ret_status = grpc::Status::OK;
-    auto record_error = [&](grpc::StatusCode err_code, int flash_err_code, const String & err_msg) {
+    auto record_error = [&](int flash_err_code, const String & err_msg) {
         auto * err = response->mutable_error();
         err->set_code(flash_err_code);
         err->set_msg(err_msg);
-        ret_status = grpc::Status(err_code, err_msg);
     };
 
     try
@@ -636,42 +638,61 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
         handler->prepare(request);
         handler->execute(response);
     }
+    catch (const RegionException & e)
+    {
+        for (const auto & region_id : e.unavailable_region)
+        {
+            auto * retry_region = response->add_retry_regions();
+            retry_region->set_id(region_id);
+            // Note: retry_region's version and epoch is not set, because we miss these information
+            // from the exception.
+        }
+        record_error(
+            ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR,
+            fmt::format("Retryable error: {}", e.message()));
+    }
+    catch (const LockException & e)
+    {
+        auto * retry_region = response->add_retry_regions();
+        retry_region->set_id(e.region_id);
+        // Note: retry_region's version and epoch is not set, because we miss these information
+        // from the exception.
+
+        // TODO: We may need to send this error back to TiDB? Otherwise TiDB
+        // may not resolve lock in time.
+        record_error(
+            ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR,
+            fmt::format("Retryable error: {}", e.message()));
+    }
     catch (Exception & e)
     {
-        LOG_ERROR(logger, "EstablishDisaggTask meet Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
-        record_error(grpc::StatusCode::INTERNAL, e.code(), e.message());
+        LOG_ERROR(logger, "EstablishDisaggTask meet exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        record_error(e.code(), e.message());
     }
     catch (const pingcap::Exception & e)
     {
         LOG_ERROR(logger, "EstablishDisaggTask meet KV Client Exception: {}", e.message());
-        record_error(grpc::StatusCode::INTERNAL, ErrorCodes::UNKNOWN_EXCEPTION, e.message());
+        record_error(e.code(), e.message());
     }
     catch (std::exception & e)
     {
         LOG_ERROR(logger, "EstablishDisaggTask meet std::exception: {}", e.what());
-        record_error(grpc::StatusCode::INTERNAL, ErrorCodes::UNKNOWN_EXCEPTION, e.what());
+        record_error(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
     }
     catch (...)
     {
         LOG_ERROR(logger, "EstablishDisaggTask meet unknown exception");
-        record_error(grpc::StatusCode::INTERNAL, ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
+        record_error(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
     }
 
-    // When there is a region retry, exceptions will be thrown, so we placed here as a "finally".
-    if (auto * dag_ctx = db_context->getDAGContext(); dag_ctx)
-    {
-        // There may be region errors. Add information about which region to retry.
-        for (const auto & region : dag_ctx->retry_regions)
-        {
-            auto * retry_region = response->add_retry_regions();
-            retry_region->set_id(region.region_id);
-            retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
-            retry_region->mutable_region_epoch()->set_version(region.region_version);
-        }
-    }
+    LOG_DEBUG(
+        logger,
+        "Handle EstablishDisaggTask request done, resp_err={}",
+        response->has_error() ? response->error().ShortDebugString() : "(null)");
 
-    LOG_DEBUG(logger, "Handle EstablishDisaggTask request done, resp_err={}", response->error().ShortDebugString());
-    return ret_status;
+    // The response is send back to TiFlash. Always assign gRPC::Status::OK, so that TiFlash response
+    // handlers can deal with the embedded error correctly.
+    return grpc::Status::OK;
 }
 
 grpc::Status FlashService::FetchDisaggPages(
@@ -732,7 +753,7 @@ grpc::Status FlashService::FetchDisaggPages(
     }
     catch (const Exception & e)
     {
-        LOG_ERROR(logger, "FetchDisaggPages meet Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        LOG_ERROR(logger, "FetchDisaggPages meet exception: {}\n{}", e.message(), e.getStackTrace().toString());
         return record_error(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
     }
     catch (const pingcap::Exception & e)

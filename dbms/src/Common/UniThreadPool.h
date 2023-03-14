@@ -187,7 +187,7 @@ public:
         /// NOTE:
         /// - If this will throw an exception, the destructor won't be called
         /// - this pointer cannot be passed in the lambda, since after detach() it will not be valid
-        GlobalThreadPool::instance().scheduleOrThrowOnError(
+        GlobalThreadPool::instance().scheduleOrThrow(
             [state = state,
              func = std::forward<Function>(func),
              args = std::make_tuple(std::forward<Args>(args)...)]() mutable /// mutable is needed to destroy capture
