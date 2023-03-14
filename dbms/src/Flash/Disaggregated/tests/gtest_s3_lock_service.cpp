@@ -15,6 +15,7 @@
 #include <Common/Logger.h>
 #include <Common/typeid_cast.h>
 #include <Flash/Disaggregated/S3LockService.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
@@ -65,7 +66,7 @@ public:
         for (size_t i = 1; i <= 5; ++i)
         {
             auto data_filename = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
-            DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), data_filename.toFullKey());
+            DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), fmt::format("{}/{}", data_filename.toFullKey(), DM::DMFile::metav2FileName()));
             ++dm_file_id;
         }
     }

@@ -31,6 +31,8 @@
 
 namespace DB
 {
+struct CheckpointInfo;
+using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 namespace DM
 {
 struct RowKeyRange;
@@ -110,6 +112,11 @@ public:
         const DM::RowKeyRange & range,
         const std::vector<DM::ExternalDTFileInfo> & external_files,
         bool clear_data_in_range,
+        const Settings & settings);
+
+    void ingestSegmentsFromCheckpointInfo(
+        const DM::RowKeyRange & range,
+        CheckpointInfoPtr checkpoint_info,
         const Settings & settings);
 
     UInt64 onSyncGc(Int64, const DM::GCOptions &) override;

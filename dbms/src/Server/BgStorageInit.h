@@ -21,7 +21,6 @@
 
 namespace DB
 {
-
 struct BgStorageInitHolder
 {
     bool need_join = false;

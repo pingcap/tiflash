@@ -36,8 +36,6 @@ public:
      */
     void putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, bool remove_local) override;
 
-    void copyDMFileMetaToLocalPath(const S3::DMFileOID & remote_oid, const String & local_dir) override;
-
     /**
      * Blocks until a DMFile in the remote data store is successfully prepared in a local cache.
      * If the DMFile exists in the local cache, it will not be prepared again.
@@ -47,7 +45,7 @@ public:
      *
      * Should be used by a read node.
      */
-    IPreparedDMFileTokenPtr prepareDMFile(const S3::DMFileOID & oid) override;
+    IPreparedDMFileTokenPtr prepareDMFile(const S3::DMFileOID & oid, UInt64 page_id) override;
 
     bool putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) override;
 
@@ -66,8 +64,8 @@ public:
 class S3PreparedDMFileToken : public IPreparedDMFileToken
 {
 public:
-    S3PreparedDMFileToken(const FileProviderPtr & file_provider_, const S3::DMFileOID & oid_)
-        : IPreparedDMFileToken::IPreparedDMFileToken(file_provider_, oid_)
+    S3PreparedDMFileToken(const FileProviderPtr & file_provider_, const S3::DMFileOID & oid_, UInt64 page_id)
+        : IPreparedDMFileToken::IPreparedDMFileToken(file_provider_, oid_, page_id)
     {}
 
     ~S3PreparedDMFileToken() override = default;

@@ -429,6 +429,7 @@ public:
 
     void initializeWriteNodePageStorageIfNeed(const PathPool & path_pool);
     UniversalPageStoragePtr getWriteNodePageStorage() const;
+    void tryReleaseWriteNodePageStorageForTest();
 
     SharedContextDisaggPtr getSharedContextDisagg() const;
 

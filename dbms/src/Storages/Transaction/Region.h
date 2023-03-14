@@ -203,6 +203,8 @@ public:
     std::pair<size_t, size_t> getApproxMemCacheInfo() const;
     void cleanApproxMemCacheInfo() const;
 
+    RegionMeta & mutMeta() { return meta; }
+
 private:
     Region() = delete;
     friend class RegionRaftCommandDelegate;

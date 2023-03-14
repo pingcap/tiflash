@@ -1181,6 +1181,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
     {
         global_context->getSharedContextDisagg()->initWriteNodeSnapManager();
+        global_context->getSharedContextDisagg()->initFastAddPeerContext();
     }
 
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
