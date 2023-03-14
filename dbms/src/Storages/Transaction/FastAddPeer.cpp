@@ -265,7 +265,7 @@ std::optional<CheckpointInfoPtr> tryGetCheckpointInfo(Context & context, const S
 std::vector<StoreID> getAllStoreIDsFromPD(TMTContext & tmt_context)
 {
     auto pd_client = tmt_context.getPDClient();
-    auto stores_from_pd = pd_client->getAllStores(true);
+    auto stores_from_pd = pd_client->getAllStores(/*exclude_tombstone*/ true);
     std::vector<StoreID> store_ids;
     store_ids.reserve(stores_from_pd.size());
     for (const auto & s : stores_from_pd)
