@@ -438,8 +438,14 @@ public:
     StoreStats getStoreStats();
     SegmentsStats getSegmentsStats();
 
-    bool isCommonHandle() const { return is_common_handle; }
-    size_t getRowKeyColumnSize() const { return rowkey_column_size; }
+    bool isCommonHandle() const
+    {
+        return is_common_handle;
+    }
+    size_t getRowKeyColumnSize() const
+    {
+        return rowkey_column_size;
+    }
 
 public:
     /// Methods mainly used by region split.
@@ -608,6 +614,7 @@ private:
     bool handleBackgroundTask(bool heavy);
 
     void restoreStableFiles();
+    void restoreStableFilesFromLocal();
 
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
                                           const RowKeyRanges & sorted_ranges,

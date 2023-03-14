@@ -96,8 +96,8 @@ public:
         InternalRegions regions;
     };
 
-    using TableMap = std::unordered_map<TableID, Table>;
-    using RegionInfoMap = std::unordered_map<RegionID, TableID>;
+    using TableMap = std::unordered_map<KeyspaceTableID, Table, boost::hash<KeyspaceTableID>>;
+    using RegionInfoMap = std::unordered_map<RegionID, KeyspaceTableID>;
 
     // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
     // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts into safe_ts_map in check_leader RPC.
@@ -161,8 +161,8 @@ public:
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
     RegionDataReadInfoList tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist);
 
-    void handleInternalRegionsByTable(TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
-    std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(TableID table_id) const;
+    void handleInternalRegionsByTable(KeyspaceID keyspace_id, TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
+    std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(KeyspaceID keyspace_id, TableID table_id) const;
 
     /// Write the data of the given region into the table with the given table ID, fill the data list for outer to remove.
     /// Will trigger schema sync on read error for only once,
@@ -202,12 +202,12 @@ private:
     friend class MockTiDB;
     friend class StorageDeltaMerge;
 
-    Table & getOrCreateTable(TableID table_id);
-    void removeTable(TableID table_id);
+    Table & getOrCreateTable(KeyspaceID keyspace_id, TableID table_id);
+    void removeTable(KeyspaceID keyspace_id, TableID table_id);
     InternalRegion & getOrInsertRegion(const Region & region);
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
     InternalRegion & insertRegion(Table & table, const Region & region);
-    InternalRegion & doGetInternalRegion(TableID table_id, RegionID region_id);
+    InternalRegion & doGetInternalRegion(KeyspaceTableID ks_tb_id, RegionID region_id);
 
     RegionDataReadInfoList flushRegion(const RegionPtrWithBlock & region, bool try_persist) const;
     bool shouldFlush(const InternalRegion & region) const;

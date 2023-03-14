@@ -51,7 +51,7 @@ public:
 
     void freeUsedSize(std::string_view file_path, size_t used_bytes);
 
-    FsStats getFsStats();
+    FsStats getFsStats(bool finalize_capacity = true);
 
     virtual std::map<FSID, DiskCapacity> getDiskStats();
 

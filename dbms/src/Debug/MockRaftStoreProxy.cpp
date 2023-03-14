@@ -660,7 +660,7 @@ TableID MockRaftStoreProxy::bootstrap_table(
     UInt64 table_id = MockTiDB::instance().newTable("d", "t" + toString(random()), columns, tso, "", "dt");
 
     auto schema_syncer = tmt.getSchemaSyncer();
-    schema_syncer->syncSchemas(ctx);
+    schema_syncer->syncSchemas(ctx, NullspaceID);
     this->table_id = table_id;
     return table_id;
 }

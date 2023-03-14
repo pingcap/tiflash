@@ -17,10 +17,12 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 
 #include <ext/scope_guard.h>
@@ -129,7 +131,12 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
             // to the file id.
             wbs.data.putRefPage(new_page_id, f->getDataPageId());
             auto file_id = f->getFile()->fileId();
-            auto file_parent_path = delegator.getDTFilePath(file_id);
+            auto old_dmfile = f->getFile();
+            auto file_parent_path = old_dmfile->parentPath();
+            if (!context.db_context.getSharedContextDisagg()->remote_data_store)
+            {
+                RUNTIME_CHECK(file_parent_path == delegator.getDTFilePath(file_id));
+            }
             auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* page_id= */ new_page_id, file_parent_path, DMFile::ReadMetaMode::all());
 
             auto new_column_file = f->cloneWith(context, new_file, target_range);

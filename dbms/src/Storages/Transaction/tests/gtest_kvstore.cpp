@@ -1203,7 +1203,7 @@ try
     }
     SCOPE_EXIT({
         storage->drop();
-        ctx.getTMTContext().getStorages().remove(table_id);
+        ctx.getTMTContext().getStorages().remove(NullspaceID, table_id);
     });
     // Initially region_19 range is [0, 10000)
     {

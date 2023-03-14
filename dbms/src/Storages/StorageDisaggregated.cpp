@@ -19,6 +19,7 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <kvproto/kvrpcpb.pb.h>
 
 namespace DB
 {
@@ -134,6 +135,10 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
 {
     auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
     ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
+    // TODO(iosmanthus): support S3 remote read in keyspace mode.
+    auto keyspace_id = context.getDAGContext()->getKeyspaceID();
+    dispatch_req_meta->set_keyspace_id(keyspace_id);
+    dispatch_req_meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
     dispatch_req_meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
     dispatch_req_meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
     dispatch_req_meta->set_local_query_id(sender_target_mpp_task_id.query_id.local_query_id);
