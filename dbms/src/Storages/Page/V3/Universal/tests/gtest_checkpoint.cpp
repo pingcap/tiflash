@@ -752,14 +752,14 @@ public:
         auto path = getTemporaryPath();
         auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
-        s3_client = S3::ClientFactory::instance().sharedClient();
-        bucket = S3::ClientFactory::instance().bucket();
         uni_ps_service = UniversalPageStorageService::createForTest(
             global_context,
             "test.t",
             delegator,
             PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0});
         log = Logger::get("UniversalPageStorageServiceCheckpointTest");
+        s3_client = S3::ClientFactory::instance().sharedClient();
+        bucket = S3::ClientFactory::instance().bucket();
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
     }
 
@@ -864,7 +864,6 @@ try
         ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
     } // check the first manifest
 
-#if 0
     // Mock normal writes && FAP ingest remote page
     {
         UniversalWriteBatch batch;
@@ -920,6 +919,20 @@ try
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("20", iter->page_id);
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("21", iter->page_id);
+        ASSERT_EQ("lock/s99/dat_100_1.lock_s2_2", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_EXTERNAL, iter->type);
+        ASSERT_EQ("22", iter->page_id);
+        ASSERT_EQ("lock/s99/t_50/dmf_999.lock_s2_2", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to DMFile
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
         ASSERT_TRUE(iter->entry.checkpoint_info.has_value());
         ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
@@ -935,7 +948,6 @@ try
         ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
         ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
     } // check the first manifest
-#endif
 }
 CATCH
 

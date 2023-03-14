@@ -44,7 +44,6 @@ extern const char force_set_mocked_s3_object_mtime[];
 } // namespace DB::FailPoints
 namespace DB::S3::tests
 {
-
 class S3GCManagerTest : public DB::base::TiFlashStorageTestBasic
 {
 public:

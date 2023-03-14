@@ -475,6 +475,7 @@ private:
     DMFileFormat::Version version;
 
     friend class DMFileWriter;
+    friend class DMFileWriterRemote;
     friend class DMFileReader;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;

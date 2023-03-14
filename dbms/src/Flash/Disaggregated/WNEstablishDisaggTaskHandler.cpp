@@ -30,7 +30,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int REGION_EPOCH_NOT_MATCH;

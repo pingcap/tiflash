@@ -17,6 +17,7 @@
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -39,8 +40,6 @@ extern const Metric S3LockServiceNumLatches;
 
 namespace DB::S3
 {
-
-
 S3LockService::S3LockService(Context & context_)
     : S3LockService(
         context_.getGlobalContext().getTMTContext().getS3GCOwnerManager())
@@ -200,7 +199,8 @@ bool S3LockService::tryAddLockImpl(
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     // make sure data file exists
-    if (!DB::S3::objectExists(*s3_client, s3_client->bucket(), data_file_key))
+    auto object_key = key_view.isDMFile() ? fmt::format("{}/{}", data_file_key, DM::DMFile::metav2FileName()) : data_file_key;
+    if (!DB::S3::objectExists(*s3_client, s3_client->bucket(), object_key))
     {
         auto * e = response->mutable_result()->mutable_conflict();
         e->set_reason(fmt::format("data file not exist, key={}", data_file_key));
