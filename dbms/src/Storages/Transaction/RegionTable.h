@@ -55,6 +55,8 @@ struct RegionPtrWithBlock;
 struct RegionPtrWithSnapshotFiles;
 class RegionScanFilter;
 using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
+struct CheckpointInfo;
+using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 
 using SafeTS = UInt64;
 enum : SafeTS
@@ -296,6 +298,24 @@ struct RegionPtrWithSnapshotFiles
 
     const Base & base;
     const std::vector<DM::ExternalDTFileInfo> external_files;
+};
+
+// A wrap of RegionPtr, with checkpoint info to be ingested
+struct RegionPtrWithCheckpointInfo
+{
+    using Base = RegionPtr;
+
+    RegionPtrWithCheckpointInfo(CheckpointInfoPtr checkpoint_info_);
+
+    /// to be compatible with usage as RegionPtr.
+    Base::element_type * operator->() const { return base.operator->(); }
+    const Base::element_type & operator*() const { return base.operator*(); }
+
+    /// make it could be cast into RegionPtr implicitly.
+    operator const Base &() const { return base; }
+
+    const Base & base;
+    CheckpointInfoPtr checkpoint_info;
 };
 
 } // namespace DB

@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/FastAddPeer.h>
 
 namespace DB
 {
@@ -89,6 +90,11 @@ void SharedContextDisagg::initRemoteDataStore(const FileProviderPtr & file_provi
 
     // Now only S3 data store is supported
     remote_data_store = std::make_shared<DM::Remote::DataStoreS3>(file_provider);
+}
+
+void SharedContextDisagg::initFastAddPeerContext()
+{
+    fap_context = std::make_shared<FastAddPeerContext>();
 }
 
 } // namespace DB
