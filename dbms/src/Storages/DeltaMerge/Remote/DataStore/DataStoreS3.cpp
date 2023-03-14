@@ -132,7 +132,6 @@ void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vecto
         f.get();
     }
 }
-//page_id == 0 ? oid.file_id : page_id,
 
 
 IPreparedDMFileTokenPtr DataStoreS3::prepareDMFile(const S3::DMFileOID & oid, UInt64 page_id)
