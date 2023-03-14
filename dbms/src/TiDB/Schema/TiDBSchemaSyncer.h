@@ -135,7 +135,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         else
         {
-            LOG_INFO(ks_log, "Start to sync schemas. schema version key not exists, keyspace should be deleted", keyspace_id);
+            LOG_INFO(ks_log, "Start to sync schemas. schema version key not exists, keyspace should be deleted");
         }
 
         // Show whether the schema mutex is held for a long time or not.
@@ -159,7 +159,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         cur_versions[keyspace_id] = version_after_load_diff;
         // TODO: (keyspace) attach keyspace id to the metrics.
         GET_METRIC(tiflash_schema_version).Set(cur_version);
-        LOG_INFO(ks_log, "End sync schema, version has been updated to {}{}", keyspace_id, cur_version, cur_version == version ? "" : "(latest diff is empty)");
+        LOG_INFO(ks_log, "End sync schema, version has been updated to {}{}", cur_version, cur_version == version ? "" : "(latest diff is empty)");
         return true;
     }
 
