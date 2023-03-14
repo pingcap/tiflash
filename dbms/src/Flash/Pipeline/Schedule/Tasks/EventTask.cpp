@@ -60,8 +60,7 @@ void EventTask::finalize() noexcept
     }
     catch (...)
     {
-        // ignore exception from finalizeImpl.
-        LOG_WARNING(log, "finalizeImpl throw exception: {}", getCurrentExceptionMessage(true, true));
+        exec_status.onErrorOccurred(std::current_exception());
     }
 }
 
