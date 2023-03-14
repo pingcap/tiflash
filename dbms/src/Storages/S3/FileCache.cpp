@@ -391,7 +391,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
     }
     auto & result = outcome.GetResult();
     auto content_length = result.GetContentLength();
-    RUNTIME_CHECK_MSG(content_length > 0, "s3_key={}, content_length={}", s3_key, content_length);
+    RUNTIME_CHECK(content_length >= 0, s3_key, content_length);
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, content_length);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
     if (!finalizeReservedSize(file_seg->getFileType(), file_seg->getSize(), content_length))
@@ -407,9 +407,13 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
     {
         Aws::OFStream ostr(temp_fname, std::ios_base::out | std::ios_base::binary);
         RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} failed: {}", temp_fname, strerror(errno));
-        ostr << result.GetBody().rdbuf();
-        RUNTIME_CHECK_MSG(ostr.good(), "Write {} failed: {}", temp_fname, strerror(errno));
-        ostr.flush();
+        if (content_length > 0)
+        {
+            ostr << result.GetBody().rdbuf();
+            // If content_length == 0, ostr.good() is false. Does not know the reason.
+            RUNTIME_CHECK_MSG(ostr.good(), "Write {} content_length {} failed: {}", temp_fname, content_length, strerror(errno));
+            ostr.flush();
+        }
     }
     std::filesystem::rename(temp_fname, local_fname);
     auto fsize = std::filesystem::file_size(local_fname);
