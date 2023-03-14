@@ -47,20 +47,12 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     const PageStorageConfig & config)
 {
     auto service = UniversalPageStorageServicePtr(new UniversalPageStorageService(context));
-    auto & s3factory = S3::ClientFactory::instance();
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
-    if (s3factory.isEnabled())
-    {
-        s3_client = s3factory.sharedClient();
-        bucket = s3factory.bucket();
-    }
-    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider(), s3_client, bucket);
+    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider());
     service->uni_page_storage->restore();
 
     // Starts the checkpoint upload timer
     // for disagg tiflash write node
-    if (s3factory.isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         // TODO: make this interval reloadable
         auto interval_s = context.getSettingsRef().remote_checkpoint_interval_seconds;
@@ -89,12 +81,10 @@ UniversalPageStorageService::createForTest(
     Context & context,
     const String & name,
     PSDiskDelegatorPtr delegator,
-    const PageStorageConfig & config,
-    std::shared_ptr<Aws::S3::S3Client> s3_client,
-    String bucket)
+    const PageStorageConfig & config)
 {
     auto service = UniversalPageStorageServicePtr(new UniversalPageStorageService(context));
-    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider(), s3_client, bucket);
+    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider());
     service->uni_page_storage->restore();
     // not register background task under test
     return service;
