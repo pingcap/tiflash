@@ -143,7 +143,7 @@ private:
 
     void runStepAllBlocks(std::list<Result *> & res_list);
 
-    template <NASemiJoinStep STEP>
+    template <NASemiJoinStep STEP, bool CHANGE_RES_LIST>
     void runAndCheckExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<Result *> & res_list, std::list<Result *> & next_res_list);
 
 private:

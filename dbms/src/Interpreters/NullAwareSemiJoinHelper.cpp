@@ -295,7 +295,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NASemiJoinHel
         /// from equal and other condition expressions.
         exec_block = block.cloneWithColumns(std::move(columns));
 
-        runAndCheckExprResult<STEP>(
+        runAndCheckExprResult<STEP, true>(
             exec_block,
             offsets,
             res_list,
@@ -308,19 +308,26 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStepAllBlocks(std::list<NASe
 {
     std::list<NASemiJoinHelper::Result *> next_res_list;
     std::vector<size_t> offsets(1);
-    while (!res_list.empty())
+    for (const auto & right_block : right_blocks)
     {
-        NASemiJoinHelper::Result * res = *res_list.begin();
-        for (const auto & right_block : right_blocks)
+        if (res_list.empty())
+            break;
+
+        size_t num = right_block.rows();
+        if (num == 0)
+            continue;
+
+        offsets[0] = num;
+
+        auto it = res_list.begin();
+        while (it != res_list.end())
         {
+            NASemiJoinHelper::Result * res = *it;
             if (res->getStep() == NASemiJoinStep::DONE)
-                break;
-
-            size_t num = right_block.rows();
-            if (num == 0)
+            {
+                it = res_list.erase(it);
                 continue;
-
-            offsets[0] = num;
+            }
 
             Block exec_block = block.cloneEmpty();
             for (size_t i = 0; i < left_columns; ++i)
@@ -332,26 +339,33 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStepAllBlocks(std::list<NASe
             for (size_t i = 0; i < right_columns; ++i)
                 exec_block.getByPosition(i + left_columns).column = right_block.getByPosition(i).column;
 
-            runAndCheckExprResult<NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS>(
+            runAndCheckExprResult<NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS, false>(
                 exec_block,
                 offsets,
                 res_list,
                 next_res_list);
-        }
-        if (res->getStep() != NASemiJoinStep::DONE)
-        {
-            /// After iterating to the end of right blocks, the result is false.
-            /// E.g. (1,null) in () or (1,null,2) in ((2,null,2),(1,null,3),(null,1,4)).
-            res->template setResult<NASemiJoinResultType::FALSE_VALUE>();
-            res_list.pop_front();
+
+            if (res->getStep() == NASemiJoinStep::DONE)
+                it = res_list.erase(it);
+            else
+                ++it;
         }
     }
+    for (auto & res : res_list)
+    {
+        if (res->getStep() == NASemiJoinStep::DONE)
+            continue;
+        /// After iterating to the end of right blocks, the result is false.
+        /// E.g. (1,null) in () or (1,null,2) in ((2,null,2),(1,null,3),(null,1,4)).
+        res->template setResult<NASemiJoinResultType::FALSE_VALUE>();
+    }
+    res_list.clear();
     /// Should always be empty, just for sanity check.
     RUNTIME_CHECK_MSG(next_res_list.empty(), "next_res_list should be empty");
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
-template <NASemiJoinStep STEP>
+template <NASemiJoinStep STEP, bool CHANGE_RES_LIST>
 void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & exec_block, const std::vector<size_t> & offsets, std::list<NASemiJoinHelper::Result *> & res_list, std::list<NASemiJoinHelper::Result *> & next_res_list)
 {
     /// Attention: other_cond_expr must be executed first then null_aware_eq_cond_expr can be executed.
@@ -405,14 +419,17 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
         {
             (*it)->template checkExprResult<STEP>(eq_null_map, prev_offset, offsets[i]);
 
-            if ((*it)->getStep() == NASemiJoinStep::DONE)
-                it = res_list.erase(it);
-            else if ((*it)->getStep() == STEP)
-                ++it;
-            else
+            if constexpr (CHANGE_RES_LIST)
             {
-                next_res_list.emplace_back(*it);
-                it = res_list.erase(it);
+                if ((*it)->getStep() == NASemiJoinStep::DONE)
+                    it = res_list.erase(it);
+                else if ((*it)->getStep() == STEP)
+                    ++it;
+                else
+                {
+                    next_res_list.emplace_back(*it);
+                    it = res_list.erase(it);
+                }
             }
 
             prev_offset = offsets[i];
@@ -443,14 +460,17 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
         {
             (*it)->template checkExprResult<STEP>(eq_null_map, *other_column_data, other_null_map, prev_offset, offsets[i]);
 
-            if ((*it)->getStep() == NASemiJoinStep::DONE)
-                it = res_list.erase(it);
-            else if ((*it)->getStep() == STEP)
-                ++it;
-            else
+            if constexpr (CHANGE_RES_LIST)
             {
-                next_res_list.emplace_back(*it);
-                it = res_list.erase(it);
+                if ((*it)->getStep() == NASemiJoinStep::DONE)
+                    it = res_list.erase(it);
+                else if ((*it)->getStep() == STEP)
+                    ++it;
+                else
+                {
+                    next_res_list.emplace_back(*it);
+                    it = res_list.erase(it);
+                }
             }
 
             prev_offset = offsets[i];
