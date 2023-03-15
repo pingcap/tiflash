@@ -666,22 +666,22 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
     }
     catch (Exception & e)
     {
-        LOG_ERROR(logger, "EstablishDisaggTask meet exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        LOG_WARNING(logger, "EstablishDisaggTask meet exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
         record_error(e.code(), e.message());
     }
     catch (const pingcap::Exception & e)
     {
-        LOG_ERROR(logger, "EstablishDisaggTask meet KV Client Exception: {}", e.message());
+        LOG_WARNING(logger, "EstablishDisaggTask meet KV Client Exception: {}", e.message());
         record_error(e.code(), e.message());
     }
     catch (std::exception & e)
     {
-        LOG_ERROR(logger, "EstablishDisaggTask meet std::exception: {}", e.what());
+        LOG_WARNING(logger, "EstablishDisaggTask meet std::exception: {}", e.what());
         record_error(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
     }
     catch (...)
     {
-        LOG_ERROR(logger, "EstablishDisaggTask meet unknown exception");
+        LOG_WARNING(logger, "EstablishDisaggTask meet unknown exception");
         record_error(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
     }
 
@@ -748,27 +748,27 @@ grpc::Status FlashService::FetchDisaggPages(
     }
     catch (const TiFlashException & e)
     {
-        LOG_ERROR(logger, "FetchDisaggPages meet TiFlashException: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        LOG_WARNING(logger, "FetchDisaggPages meet TiFlashException: {}\n{}", e.displayText(), e.getStackTrace().toString());
         return record_error(grpc::StatusCode::INTERNAL, e.standardText());
     }
     catch (const Exception & e)
     {
-        LOG_ERROR(logger, "FetchDisaggPages meet exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        LOG_WARNING(logger, "FetchDisaggPages meet exception: {}\n{}", e.message(), e.getStackTrace().toString());
         return record_error(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
     }
     catch (const pingcap::Exception & e)
     {
-        LOG_ERROR(logger, "FetchDisaggPages meet KV Client Exception: {}", e.message());
+        LOG_WARNING(logger, "FetchDisaggPages meet KV Client Exception: {}", e.message());
         return record_error(grpc::StatusCode::INTERNAL, e.message());
     }
     catch (const std::exception & e)
     {
-        LOG_ERROR(logger, "FetchDisaggPages meet std::exception: {}", e.what());
+        LOG_WARNING(logger, "FetchDisaggPages meet std::exception: {}", e.what());
         return record_error(grpc::StatusCode::INTERNAL, e.what());
     }
     catch (...)
     {
-        LOG_ERROR(logger, "FetchDisaggPages meet unknown exception");
+        LOG_WARNING(logger, "FetchDisaggPages meet unknown exception");
         return record_error(grpc::StatusCode::INTERNAL, "other exception");
     }
 }
