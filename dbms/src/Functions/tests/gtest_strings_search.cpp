@@ -16,6 +16,7 @@
 #include <Functions/registerFunctions.h>
 #include <Storages/Transaction/Collator.h>
 #include <TestUtils/FunctionTestUtils.h>
+
 #include "magic_enum.hpp"
 
 namespace DB
@@ -680,8 +681,7 @@ TEST_F(StringMatch, CheckEscape)
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::LATIN1_BIN),
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY),
         TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::ASCII_BIN),
-        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN)
-    };
+        TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN)};
 
     std::vector<std::optional<String>> expr_vec{"", "aaz", "aaz", "AAz", "aAz", "a啊啊啊aa啊Zz", "ü", "á"};
     std::vector<std::optional<String>> pat_vec{"", "AAAAz", "Aaaz", "AAAAZ", "aAaAz", "a啊啊啊AaaA啊Zz", "Ü", "a"};

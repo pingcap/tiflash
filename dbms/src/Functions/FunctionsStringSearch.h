@@ -122,9 +122,12 @@ private:
                 // Do not lower the escape char, however when a char is equal to
                 // an escape char and it's after an escape char, we still lower it
                 // For example: "AA" (escape 'A'), -> "Aa"
-                if (char_to_lower != escape_char || escaped) {
+                if (char_to_lower != escape_char || escaped)
+                {
                     chars[i] = toLowerIfAlphaASCII(char_to_lower);
-                } else {
+                }
+                else
+                {
                     escaped = true;
                     continue;
                 }
