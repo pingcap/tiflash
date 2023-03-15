@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -33,9 +34,8 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
-
-#include "DataStreams/OneBlockInputStream.h"
 
 
 namespace DB
@@ -60,7 +60,8 @@ public:
     void SetUp() override
     {
         FailPointHelper::enableFailPoint(FailPoints::force_use_dmfile_format_v3);
-        ASSERT_TRUE(createBucketIfNotExist());
+        auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
         TiFlashStorageTestBasic::SetUp();
         auto & global_context = TiFlashTestEnv::getGlobalContext();
         if (global_context.getSharedContextDisagg()->remote_data_store == nullptr)
@@ -161,29 +162,6 @@ protected:
         auto handle_range = RowKeyRange::fromHandleRange(range);
         auto external_file = ExternalDTFileInfo{.id = file_id, .range = handle_range};
         return {handle_range, {external_file}}; // There are some duplicated info. This is to minimize the change to our test code.
-    }
-
-    bool createBucketIfNotExist()
-    {
-        auto s3_client = S3::ClientFactory::instance().sharedClient();
-        auto bucket = S3::ClientFactory::instance().bucket();
-        Aws::S3::Model::CreateBucketRequest request;
-        request.SetBucket(bucket);
-        auto outcome = s3_client->CreateBucket(request);
-        if (outcome.IsSuccess())
-        {
-            LOG_DEBUG(Logger::get(), "Created bucket {}", bucket);
-        }
-        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
-        {
-            LOG_DEBUG(Logger::get(), "Bucket {} already exist", bucket);
-        }
-        else
-        {
-            const auto & err = outcome.GetError();
-            LOG_ERROR(Logger::get(), "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
-        }
-        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
     }
 
     void dumpCheckpoint()

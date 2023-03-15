@@ -28,6 +28,7 @@
 #include <Storages/Page/PageUtil.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
+#include <aws/s3/model/CommonPrefix.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -647,24 +648,17 @@ std::vector<String> DMFile::listLocal(const String & parent_path)
 std::vector<String> DMFile::listS3(const String & parent_path)
 {
     std::vector<String> filenames;
-    auto client = S3::ClientFactory::instance().sharedClient();
-    const auto & bucket = S3::ClientFactory::instance().bucket();
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     auto list_prefix = parent_path + "/";
-    S3::listPrefix(
+    S3::listPrefixWithDelimiter(
         *client,
-        bucket,
         list_prefix,
         /*delimiter*/ "/",
-        [&filenames, &list_prefix](const Aws::S3::Model::ListObjectsV2Result & result) {
-            const Aws::Vector<Aws::S3::Model::CommonPrefix> & prefixes = result.GetCommonPrefixes();
-            filenames.reserve(filenames.size() + prefixes.size());
-            for (const auto & prefix : prefixes)
-            {
-                RUNTIME_CHECK(prefix.GetPrefix().size() > list_prefix.size(), prefix.GetPrefix(), list_prefix);
-                auto short_name_size = prefix.GetPrefix().size() - list_prefix.size() - 1; // `1` for the delimiter in last.
-                filenames.push_back(prefix.GetPrefix().substr(list_prefix.size(), short_name_size)); // Cut prefix and last delimiter.
-            }
-            return S3::PageResult{.num_keys = prefixes.size(), .more = true};
+        [&filenames, &list_prefix](const Aws::S3::Model::CommonPrefix & prefix) {
+            RUNTIME_CHECK(prefix.GetPrefix().size() > list_prefix.size(), prefix.GetPrefix(), list_prefix);
+            auto short_name_size = prefix.GetPrefix().size() - list_prefix.size() - 1; // `1` for the delimiter in last.
+            filenames.push_back(prefix.GetPrefix().substr(list_prefix.size(), short_name_size)); // Cut prefix and last delimiter.
+            return S3::PageResult{.num_keys = 1, .more = true};
         });
     return filenames;
 }
