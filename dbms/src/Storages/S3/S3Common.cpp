@@ -291,7 +291,7 @@ bool objectExists(const TiFlashS3Client & client, const String & key, const Stri
     {
         return false;
     }
-    throw fromS3Error(outcome.GetError(), "Failed to check existence of object, bucket={} key={}", client.bucket(), key);
+    throw fromS3Error(outcome.GetError(), "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
 }
 
 void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging)
@@ -308,7 +308,7 @@ void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const S
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
-        throw fromS3Error(result.GetError(), "S3 PutEmptyObject failed, bucket={} key={}", client.bucket(), key);
+        throw fromS3Error(result.GetError(), "S3 PutEmptyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
     }
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
@@ -329,12 +329,12 @@ void uploadFile(const TiFlashS3Client & client, const String & local_fname, cons
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
-        throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} key={}", local_fname, client.bucket(), remote_fname);
+        throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
     }
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
-    LOG_DEBUG(client.log, "uploadFile local_fname={}, remote_fname={}, write_bytes={} cost={:.2f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
+    LOG_DEBUG(client.log, "uploadFile local_fname={}, key={}, write_bytes={} cost={:.2f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
 }
 
 void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname)
@@ -346,7 +346,7 @@ void downloadFile(const TiFlashS3Client & client, const String & local_fname, co
     auto outcome = client.GetObject(req);
     if (!outcome.IsSuccess())
     {
-        throw fromS3Error(outcome.GetError(), "remote_fname={}", remote_fname);
+        throw fromS3Error(outcome.GetError(), "S3 GetObject failed, bucket={} root={} key={}", client.bucket(), client.root(), remote_fname);
     }
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, outcome.GetResult().GetContentLength());
     GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
@@ -371,7 +371,7 @@ void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key
     auto outcome = client.CopyObject(req);
     if (!outcome.IsSuccess())
     {
-        throw fromS3Error(outcome.GetError(), "key={}", key);
+        throw fromS3Error(outcome.GetError(), "S3 CopyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
     }
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_copy_object).Observe(elapsed_seconds);
@@ -470,27 +470,16 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 void listPrefix(
     const TiFlashS3Client & client,
     const String & prefix,
-    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result, const String & root)> pager)
-{
-    // Usually we don't need to set delimiter.
-    // Check the docs here for Delimiter && CommonPrefixes when you really need it.
-    // https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-prefixes.html
-    listPrefix(client, prefix, /*delimiter*/ "", pager);
-}
-
-void listPrefix(
-    const TiFlashS3Client & client,
-    const String & prefix,
-    std::string_view delimiter,
-    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result, const String & root)> pager)
+    std::function<PageResult(const Aws::S3::Model::Object & object)> pager)
 {
     Stopwatch sw;
     Aws::S3::Model::ListObjectsV2Request req;
     req.WithBucket(client.bucket()).WithPrefix(client.root() + prefix);
-    if (!delimiter.empty())
-    {
-        req.SetDelimiter(String(delimiter));
-    }
+
+    // If the `root == '/'`, then the return result will cut it off
+    // else we need to cut the root in the following codes
+    bool need_cut = client.root() != "/";
+    size_t cut_size = client.root().size();
 
     bool done = false;
     size_t num_keys = 0;
@@ -501,13 +490,30 @@ void listPrefix(
         auto outcome = client.ListObjectsV2(req);
         if (!outcome.IsSuccess())
         {
-            throw fromS3Error(outcome.GetError(), "S3 ListObjects failed, bucket={} prefix={} delimiter={}", client.bucket(), prefix, delimiter);
+            throw fromS3Error(outcome.GetError(), "S3 ListObjectV2s failed, bucket={} root={} prefix={}", client.bucket(), client.root(), prefix);
         }
         GET_METRIC(tiflash_storage_s3_request_seconds, type_list_objects).Observe(sw_list.elapsedSeconds());
 
+        PageResult page_res{};
         const auto & result = outcome.GetResult();
-        PageResult page_res = pager(result, client.root());
-        num_keys += page_res.num_keys;
+        auto page_keys = result.GetCommonPrefixes().size();
+        num_keys += page_keys;
+        for (const auto & object : result.GetContents())
+        {
+            if (!need_cut)
+            {
+                page_res = pager(object);
+            }
+            else
+            {
+                // Copy the `Object` to cut off the `root` from key, the cost should be acceptable :(
+                auto object_without_root = object;
+                object_without_root.SetKey(object.GetKey().substr(cut_size, object.GetKey().size()));
+                page_res = pager(object);
+            }
+            if (!page_res.more)
+                break;
+        }
 
         // handle the result size over max size
         done = !result.GetIsTruncated();
@@ -515,23 +521,98 @@ void listPrefix(
         {
             const auto & next_token = result.GetNextContinuationToken();
             req.SetContinuationToken(next_token);
-            LOG_DEBUG(client.log, "listPrefix prefix={}, keys={}, total_keys={}, next_token={}", prefix, page_res.num_keys, num_keys, next_token);
+            LOG_DEBUG(client.log, "listPrefix prefix={}, keys={}, total_keys={}, next_token={}", prefix, page_keys, num_keys, next_token);
         }
     }
     LOG_DEBUG(client.log, "listPrefix prefix={}, total_keys={}, cost={:.2f}s", prefix, num_keys, sw.elapsedSeconds());
 }
 
+// Check the docs here for Delimiter && CommonPrefixes when you really need it.
+// https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-prefixes.html
+void listPrefixWithDelimiter(
+    const TiFlashS3Client & client,
+    const String & prefix,
+    std::string_view delimiter,
+    std::function<PageResult(const Aws::S3::Model::CommonPrefix & common_prefix)> pager)
+{
+    Stopwatch sw;
+    Aws::S3::Model::ListObjectsV2Request req;
+    req.WithBucket(client.bucket()).WithPrefix(client.root() + prefix);
+    if (!delimiter.empty())
+    {
+        req.SetDelimiter(String(delimiter));
+    }
+
+    // If the `root == '/'`, then the return result will cut it off
+    // else we need to cut the root in the following codes
+    bool need_cut = client.root() != "/";
+    size_t cut_size = client.root().size();
+
+    bool done = false;
+    size_t num_keys = 0;
+    while (!done)
+    {
+        Stopwatch sw_list;
+        ProfileEvents::increment(ProfileEvents::S3ListObjects);
+        auto outcome = client.ListObjectsV2(req);
+        if (!outcome.IsSuccess())
+        {
+            throw fromS3Error(outcome.GetError(), "S3 ListObjectV2s failed, bucket={} root={} prefix={} delimiter={}", client.bucket(), client.root(), prefix, delimiter);
+        }
+        GET_METRIC(tiflash_storage_s3_request_seconds, type_list_objects).Observe(sw_list.elapsedSeconds());
+
+        PageResult page_res{};
+        const auto & result = outcome.GetResult();
+        auto page_keys = result.GetCommonPrefixes().size();
+        num_keys += page_keys;
+        for (const auto & prefix : result.GetCommonPrefixes())
+        {
+            if (!need_cut)
+            {
+                page_res = pager(prefix);
+            }
+            else
+            {
+                // Copy the `CommonPrefix` to cut off the `root`, the cost should be acceptable :(
+                auto prefix_without_root = prefix;
+                prefix_without_root.SetPrefix(prefix.GetPrefix().substr(cut_size, prefix.GetPrefix().size()));
+                page_res = pager(prefix_without_root);
+            }
+            if (!page_res.more)
+                break;
+        }
+
+        // handle the result size over max size
+        done = !result.GetIsTruncated();
+        if (!done && page_res.more)
+        {
+            const auto & next_token = result.GetNextContinuationToken();
+            req.SetContinuationToken(next_token);
+            LOG_DEBUG(client.log, "listPrefixWithDelimiter prefix={}, delimiter={}, keys={}, total_keys={}, next_token={}", prefix, delimiter, page_keys, num_keys, next_token);
+        }
+    }
+    LOG_DEBUG(client.log, "listPrefixWithDelimiter prefix={}, delimiter={}, total_keys={}, cost={:.2f}s", prefix, delimiter, num_keys, sw.elapsedSeconds());
+}
+
+std::optional<String> anyKeyExistWithPrefix(const TiFlashS3Client & client, const String & prefix)
+{
+    std::optional<String> key_opt;
+    listPrefix(client, prefix, [&key_opt](const Aws::S3::Model::Object & object) {
+        key_opt = object.GetKey();
+        return PageResult{
+            .num_keys = 1,
+            .more = false, // do not need more result
+        };
+    });
+    return key_opt;
+}
+
 std::unordered_map<String, size_t> listPrefixWithSize(const TiFlashS3Client & client, const String & prefix)
 {
     std::unordered_map<String, size_t> keys_with_size;
-    listPrefix(client, prefix, "", [&](const Aws::S3::Model::ListObjectsV2Result & result, const String & root) {
-        const auto & objects = result.GetContents();
-        keys_with_size.reserve(keys_with_size.size() + objects.size());
-        for (const auto & object : objects)
-        {
-            keys_with_size.emplace(object.GetKey().substr(root.size() + prefix.size()), object.GetSize()); // Cut prefix
-        }
-        return PageResult{.num_keys = objects.size(), .more = true};
+    listPrefix(client, prefix, [&](const Aws::S3::Model::Object & object) {
+        keys_with_size.emplace(object.GetKey().substr(prefix.size()), object.GetSize()); // Cut prefix
+        return PageResult{.num_keys = 1, .more = true};
     });
 
     return keys_with_size;

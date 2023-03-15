@@ -230,39 +230,40 @@ void S3GCManager::cleanUnusedLocks(
 {
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     // All locks (even for different stores) share the same prefix, list the lock files under this prefix
-    listPrefix(*client, scan_prefix, [&](const Aws::S3::Model::ListObjectsV2Result & result, const String & root) {
-        UNUSED(root);
-        const auto & objects = result.GetContents();
-        if (shutdown_called)
-        {
-            LOG_INFO(log, "shutting down, break");
-            // .more=false to break the list
-            return PageResult{.num_keys = objects.size(), .more = false};
-        }
+    S3::listPrefix(
+        *client,
+        scan_prefix,
+        [&](const Aws::S3::Model::Object & object) {
+            if (shutdown_called)
+            {
+                LOG_INFO(log, "shutting down, break");
+                // .more=false to break the list
+                return PageResult{.num_keys = 1, .more = false};
+            }
 
-        for (const auto & object : objects)
-        {
-            const auto & lock_key = object.GetKey();
-            LOG_TRACE(log, "lock_key={}", lock_key);
-            const auto lock_filename_view = S3FilenameView::fromKey(lock_key);
-            RUNTIME_CHECK(lock_filename_view.isLockFile(), lock_key);
-            const auto lock_info = lock_filename_view.getLockInfo();
-            // The lock file is not managed by `gc_store_id`, skip
-            if (lock_info.store_id != gc_store_id)
-                continue;
-            // The lock is not managed by the latest manifest yet, wait for
-            // next GC round
-            if (lock_info.sequence > safe_sequence)
-                continue;
-            // The lock is still valid
-            if (valid_lock_files.count(lock_key) > 0)
-                continue;
+            do
+            {
+                const auto & lock_key = object.GetKey();
+                LOG_TRACE(log, "lock_key={}", lock_key);
+                const auto lock_filename_view = S3FilenameView::fromKey(lock_key);
+                RUNTIME_CHECK(lock_filename_view.isLockFile(), lock_key);
+                const auto lock_info = lock_filename_view.getLockInfo();
+                // The lock file is not managed by `gc_store_id`, skip
+                if (lock_info.store_id != gc_store_id)
+                    break;
+                // The lock is not managed by the latest manifest yet, wait for
+                // next GC round
+                if (lock_info.sequence > safe_sequence)
+                    break;
+                // The lock is still valid
+                if (valid_lock_files.count(lock_key) > 0)
+                    break;
 
-            // The data file is not used by `gc_store_id` anymore, remove the lock file
-            cleanOneLock(lock_key, lock_filename_view, timepoint);
-        }
-        return PageResult{.num_keys = objects.size(), .more = true};
-    });
+                // The data file is not used by `gc_store_id` anymore, remove the lock file
+                cleanOneLock(lock_key, lock_filename_view, timepoint);
+            } while (false);
+            return PageResult{.num_keys = 1, .more = true};
+        });
 }
 
 void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & lock_filename_view, const Aws::Utils::DateTime & timepoint)
@@ -396,28 +397,26 @@ void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils:
     // its correspond StableFile or CheckpointDataFile.
     const auto prefix = S3Filename::fromStoreId(gc_store_id).toDataPrefix();
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
-    listPrefix(*client, prefix, [&](const Aws::S3::Model::ListObjectsV2Result & result, const String & root) {
-        UNUSED(root);
-        const auto & objects = result.GetContents();
+    S3::listPrefix(*client, prefix, [&](const Aws::S3::Model::Object & object) {
         if (shutdown_called)
         {
             LOG_INFO(log, "shutting down, break");
             // .more=false to break the list
-            return PageResult{.num_keys = objects.size(), .more = false};
+            return PageResult{.num_keys = 1, .more = false};
         }
 
-        for (const auto & object : objects)
+        do
         {
             const auto & delmark_key = object.GetKey();
             LOG_TRACE(log, "key={}", object.GetKey());
             const auto filename_view = S3FilenameView::fromKey(delmark_key);
             // Only remove the data file with expired delmark
             if (!filename_view.isDelMark())
-                continue;
+                break;
             auto datafile_key = filename_view.asDataFile().toFullKey();
             removeDataFileIfDelmarkExpired(datafile_key, delmark_key, timepoint, object.GetLastModified());
-        }
-        return PageResult{.num_keys = objects.size(), .more = true};
+        } while (false);
+        return PageResult{.num_keys = 1, .more = true};
     });
 }
 
@@ -439,16 +438,11 @@ void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
         // Rewrite all objects with tagging belong to this DMFile
         // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
         //       sub file for DMFile, try clean them later.
-        S3::listPrefix(*client, datafile_key, [this, &client, &datafile_key](const Aws::S3::Model::ListObjectsV2Result & result, const String & root) {
-            UNUSED(root);
-            const auto & objs = result.GetContents();
-            for (const auto & obj : objs)
-            {
-                const auto & sub_key = obj.GetKey();
-                rewriteObjectWithTagging(*client, sub_key, String(TaggingObjectIsDeleted));
-                LOG_INFO(log, "datafile deleted by lifecycle tagging, key={} sub_key={}", datafile_key, sub_key);
-            }
-            return PageResult{.num_keys = objs.size(), .more = true};
+        S3::listPrefix(*client, datafile_key, [this, &client, &datafile_key](const Aws::S3::Model::Object & object) {
+            const auto & sub_key = object.GetKey();
+            rewriteObjectWithTagging(*client, sub_key, String(TaggingObjectIsDeleted));
+            LOG_INFO(log, "datafile deleted by lifecycle tagging, key={} sub_key={}", datafile_key, sub_key);
+            return PageResult{.num_keys = 1, .more = true};
         });
         LOG_INFO(log, "datafile deleted by lifecycle tagging, all sub keys are deleted, key={}", datafile_key);
     }
@@ -472,16 +466,11 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
         // Remove all objects belong to this DMFile
         // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
         //       sub file for DMFile, try clean them later.
-        S3::listPrefix(*client, datafile_key, [this, &client, &datafile_key](const Aws::S3::Model::ListObjectsV2Result & result, const String & root) {
-            UNUSED(root);
-            const auto & objs = result.GetContents();
-            for (const auto & obj : objs)
-            {
-                const auto & sub_key = obj.GetKey();
-                deleteObject(*client, sub_key);
-                LOG_INFO(log, "datafile deleted, key={} sub_key={}", datafile_key, sub_key);
-            }
-            return PageResult{.num_keys = objs.size(), .more = true};
+        S3::listPrefix(*client, datafile_key, [this, &client, &datafile_key](const Aws::S3::Model::Object & object) {
+            const auto & sub_key = object.GetKey();
+            deleteObject(*client, sub_key);
+            LOG_INFO(log, "datafile deleted, key={} sub_key={}", datafile_key, sub_key);
+            return PageResult{.num_keys = 1, .more = true};
         });
         LOG_INFO(log, "datafile deleted, all sub keys are deleted, key={}", datafile_key);
     }
@@ -494,20 +483,15 @@ std::vector<UInt64> S3GCManager::getAllStoreIds()
     // common prefixes result.
     // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-prefixes.html
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
-    listPrefix(
+    S3::listPrefixWithDelimiter(
         *client,
         /*prefix*/ S3Filename::allStorePrefix(),
         /*delimiter*/ "/",
-        [&all_store_ids](const Aws::S3::Model::ListObjectsV2Result & result, const String & root) {
-            UNUSED(root);
-            const Aws::Vector<Aws::S3::Model::CommonPrefix> & prefixes = result.GetCommonPrefixes();
-            for (const auto & prefix : prefixes)
-            {
-                const auto filename_view = S3FilenameView::fromStoreKeyPrefix(prefix.GetPrefix());
-                RUNTIME_CHECK(filename_view.type == S3FilenameType::StorePrefix, prefix.GetPrefix());
-                all_store_ids.emplace_back(filename_view.store_id);
-            }
-            return PageResult{.num_keys = prefixes.size(), .more = true};
+        [&all_store_ids](const Aws::S3::Model::CommonPrefix & prefix) {
+            const auto filename_view = S3FilenameView::fromStoreKeyPrefix(prefix.GetPrefix());
+            RUNTIME_CHECK(filename_view.type == S3FilenameType::StorePrefix, prefix.GetPrefix());
+            all_store_ids.emplace_back(filename_view.store_id);
+            return PageResult{.num_keys = 1, .more = true};
         });
 
     return all_store_ids;

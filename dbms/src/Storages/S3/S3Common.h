@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <Server/StorageConfigParser.h>
 #include <aws/core/Aws.h>
@@ -24,8 +25,6 @@
 #include <common/types.h>
 
 #include <magic_enum.hpp>
-
-#include "Common/Logger.h"
 
 namespace DB::ErrorCodes
 {
@@ -151,12 +150,14 @@ struct PageResult
 void listPrefix(
     const TiFlashS3Client & client,
     const String & prefix,
-    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result, const String & root)> pager);
-void listPrefix(
+    std::function<PageResult(const Aws::S3::Model::Object & object)> pager);
+void listPrefixWithDelimiter(
     const TiFlashS3Client & client,
     const String & prefix,
     std::string_view delimiter,
-    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result, const String & root)> pager);
+    std::function<PageResult(const Aws::S3::Model::CommonPrefix & common_prefix)> pager);
+
+std::optional<String> anyKeyExistWithPrefix(const TiFlashS3Client & client, const String & prefix);
 
 std::unordered_map<String, size_t> listPrefixWithSize(const TiFlashS3Client & client, const String & prefix);
 

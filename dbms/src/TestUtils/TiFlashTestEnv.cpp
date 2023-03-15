@@ -241,22 +241,21 @@ FileProviderPtr TiFlashTestEnv::getMockFileProvider()
 
 bool TiFlashTestEnv::createBucketIfNotExist(::DB::S3::TiFlashS3Client & s3_client)
 {
-    auto log = Logger::get();
     Aws::S3::Model::CreateBucketRequest request;
     request.SetBucket(s3_client.bucket());
     auto outcome = s3_client.CreateBucket(request);
     if (outcome.IsSuccess())
     {
-        LOG_DEBUG(log, "Created bucket {}", s3_client.bucket());
+        LOG_DEBUG(s3_client.log, "Created bucket {}", s3_client.bucket());
     }
     else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
     {
-        LOG_DEBUG(log, "Bucket {} already exist", s3_client.bucket());
+        LOG_DEBUG(s3_client.log, "Bucket {} already exist", s3_client.bucket());
     }
     else
     {
         const auto & err = outcome.GetError();
-        LOG_ERROR(log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
+        LOG_ERROR(s3_client.log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
     }
     return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
 }
