@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,22 +48,16 @@ try
     uploadEmptyFile(*client, "s999/data/dat_789_0");
     uploadEmptyFile(*client, "s999/data/dat_790_0");
 
+    uploadEmptyFile(*client, "s999/abcd");
+
     Strings prefixes;
     listPrefixWithDelimiter(*client, "s999/", "/", [&](const Aws::S3::Model::CommonPrefix & p) {
         prefixes.emplace_back(p.GetPrefix());
         return PageResult{.num_keys = 1, .more = true};
     });
-    EXPECT_FALSE(true) << fmt::format("{}", prefixes);
-
-    prefixes.clear();
-    listPrefix(*client, "s999/", "/", [&](const Aws::S3::Model::ListObjectsV2Result & result, const String &) {
-        for (const auto & prefix : result.GetCommonPrefixes())
-        {
-            prefixes.emplace_back(prefix.GetPrefix());
-        }
-        return PageResult{.num_keys = result.GetCommonPrefixes().size(), .more = true};
-    });
-    EXPECT_FALSE(true) << fmt::format("{}", prefixes);
+    ASSERT_EQ(prefixes.size(), 2) << fmt::format("{}", prefixes);
+    EXPECT_EQ(prefixes[0], "s999/data/");
+    EXPECT_EQ(prefixes[1], "s999/manifest/");
 }
 CATCH
 

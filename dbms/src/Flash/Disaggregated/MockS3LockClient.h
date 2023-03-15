@@ -58,16 +58,8 @@ public:
         // If there is no lock on the given `data_file_key`, then mark as deleted
         auto view = S3FilenameView::fromKey(data_file_key);
         auto lock_prefix = view.getLockPrefix();
-        bool any_lock_exist = false;
-        listPrefix(
-            *s3_client,
-            lock_prefix,
-            [&any_lock_exist](const Aws::S3::Model::ListObjectsV2Result & result, const String & root) -> S3::PageResult {
-                UNUSED(root);
-                if (!result.GetContents().empty())
-                    any_lock_exist = true;
-                return S3::PageResult{.num_keys = result.GetContents().size(), .more = false};
-            });
+        auto lock_key_opt = S3::anyKeyExistWithPrefix(*s3_client, lock_prefix);
+        bool any_lock_exist = !lock_key_opt.has_value();
         if (any_lock_exist)
         {
             return {false, ""};

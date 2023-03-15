@@ -45,6 +45,8 @@ public:
     Model::GetObjectTaggingOutcome GetObjectTagging(const Model::GetObjectTaggingRequest & request) const override;
 
 private:
+    static String normalizedKey(String ori_key);
+
     // Object key -> Object data
     using BucketStorage = std::map<String, String>;
     // Object key -> Object tagging

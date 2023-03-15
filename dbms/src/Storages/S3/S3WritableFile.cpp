@@ -15,6 +15,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3WritableFile.h>
 #include <aws/s3/model/CompleteMultipartUploadRequest.h>
 #include <aws/s3/model/CreateMultipartUploadRequest.h>
@@ -23,8 +24,6 @@
 
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
-
-#include "Storages/S3/S3Common.h"
 
 namespace ProfileEvents
 {

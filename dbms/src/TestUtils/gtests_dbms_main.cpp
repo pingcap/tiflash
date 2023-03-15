@@ -81,11 +81,7 @@ int main(int argc, char ** argv)
     DB::IOThreadPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
     const auto s3_endpoint = Poco::Environment::get("S3_ENDPOINT", "");
     const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "mockbucket");
-    auto s3_root = Poco::Environment::get("S3_ROOT", "jayson/test/");
-    if (!endsWith(s3_root, "/"))
-    {
-        s3_root += "/";
-    }
+    const auto s3_root = Poco::Environment::get("S3_ROOT", "/");
     const auto access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", "");
     const auto secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", "");
     const auto mock_s3 = Poco::Environment::get("MOCK_S3", "true"); // In unit-tests, use MockS3Client by default.
