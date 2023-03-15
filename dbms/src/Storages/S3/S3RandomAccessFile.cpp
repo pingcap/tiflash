@@ -46,7 +46,7 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
     size_t gcount = istr.gcount();
     if (gcount == 0 && !istr.eof())
     {
-        LOG_ERROR(log, "Cannot read from istream. bucket={} key={}", client_ptr->bucket(), remote_fname);
+        LOG_ERROR(log, "Cannot read from istream. bucket={} root={} key={}", client_ptr->bucket(), client_ptr->root(), remote_fname);
         return -1;
     }
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, gcount);
@@ -79,7 +79,7 @@ void S3RandomAccessFile::initialize()
     auto outcome = client_ptr->GetObject(req);
     if (!outcome.IsSuccess())
     {
-        throw S3::fromS3Error(outcome.GetError(), "bucket={} key={}", client_ptr->bucket(), remote_fname);
+        throw S3::fromS3Error(outcome.GetError(), "S3 GetObject failed, bucket={} root={} key={}", client_ptr->bucket(), client_ptr->root(), remote_fname);
     }
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, outcome.GetResult().GetContentLength());
     GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
