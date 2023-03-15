@@ -811,20 +811,16 @@ void DMFile::initializeIndices()
     }
 }
 
-DMFile::MetaBlockHandle DMFile::writeSLPackStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest)
+DMFile::MetaBlockHandle DMFile::writeSLPackStatToBuffer(WriteBuffer & buffer)
 {
     auto offset = buffer.count();
     const char * data = reinterpret_cast<const char *>(&pack_stats[0]);
     size_t size = pack_stats.size() * sizeof(PackStat);
-    if (digest)
-    {
-        digest->update(data, size);
-    }
     writeString(data, size, buffer);
     return MetaBlockHandle{MetaBlockType::PackStat, offset, buffer.count() - offset};
 }
 
-DMFile::MetaBlockHandle DMFile::writeSLPackPropertyToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest)
+DMFile::MetaBlockHandle DMFile::writeSLPackPropertyToBuffer(WriteBuffer & buffer)
 {
     auto offset = buffer.count();
     for (const auto & pb : pack_properties.property())
@@ -832,55 +828,44 @@ DMFile::MetaBlockHandle DMFile::writeSLPackPropertyToBuffer(WriteBuffer & buffer
         PackProperty tmp{pb};
         const char * data = reinterpret_cast<const char *>(&tmp);
         size_t size = sizeof(PackProperty);
-        if (digest)
-        {
-            digest->update(data, size);
-        }
         writeString(data, size, buffer);
     }
     return MetaBlockHandle{MetaBlockType::PackProperty, offset, buffer.count() - offset};
 }
 
-DMFile::MetaBlockHandle DMFile::writeColumnStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest)
+DMFile::MetaBlockHandle DMFile::writeColumnStatToBuffer(WriteBuffer & buffer)
 {
     auto offset = buffer.count();
     writeIntBinary(column_stats.size(), buffer);
     for (const auto & [id, stat] : column_stats)
     {
-        auto tmp_buffer = WriteBufferFromOwnString{};
-        stat.serializeToBuffer(tmp_buffer);
-        auto serialized = tmp_buffer.releaseStr();
-        if (digest)
-        {
-            digest->update(serialized.data(), serialized.length());
-        }
-        writeString(serialized.data(), serialized.size(), buffer);
+        stat.serializeToBuffer(buffer);
     }
     return MetaBlockHandle{MetaBlockType::ColumnStat, offset, buffer.count() - offset};
 }
 
 void DMFile::finalizeMetaV2(WriteBuffer & buffer)
 {
+    auto tmp_buffer = WriteBufferFromOwnString{};
     auto digest = configuration ? configuration->createUnifiedDigest() : nullptr;
-    auto pack_stats_handle = writeSLPackStatToBuffer(buffer, digest);
-    auto pack_properties_handle = writeSLPackPropertyToBuffer(buffer, digest);
-    auto column_stats_handle = writeColumnStatToBuffer(buffer, digest);
+    auto pack_stats_handle = writeSLPackStatToBuffer(tmp_buffer);
+    auto pack_properties_handle = writeSLPackPropertyToBuffer(tmp_buffer);
+    auto column_stats_handle = writeColumnStatToBuffer(tmp_buffer);
 
-    writePODBinary(pack_stats_handle, buffer);
-    writePODBinary(pack_properties_handle, buffer);
-    writePODBinary(column_stats_handle, buffer);
+    writePODBinary(pack_stats_handle, tmp_buffer);
+    writePODBinary(pack_properties_handle, tmp_buffer);
+    writePODBinary(column_stats_handle, tmp_buffer);
     UInt64 meta_block_handle_count = 3;
-    writeIntBinary(meta_block_handle_count, buffer);
-    writeIntBinary(version, buffer);
+    writeIntBinary(meta_block_handle_count, tmp_buffer);
+    writeIntBinary(version, tmp_buffer);
 
-    if (digest)
+    // Write to file and do checksums.
+    auto s = tmp_buffer.releaseStr();
+    writeString(s.data(), s.size(), buffer);
+    if (configuration)
     {
-        digest->update(reinterpret_cast<const char *>(&pack_stats_handle), sizeof(MetaBlockHandle));
-        digest->update(reinterpret_cast<const char *>(&pack_properties_handle), sizeof(MetaBlockHandle));
-        digest->update(reinterpret_cast<const char *>(&column_stats_handle), sizeof(MetaBlockHandle));
-        digest->update(reinterpret_cast<const char *>(&meta_block_handle_count), sizeof(UInt64));
-        digest->update(reinterpret_cast<const char *>(&version), sizeof(DMFileFormat::Version));
-
+        auto digest = configuration->createUnifiedDigest();
+        digest->update(s.data(), s.size());
         auto checksum_result = digest->raw();
         writeString(checksum_result.data(), checksum_result.size(), buffer);
     }
@@ -935,7 +920,7 @@ void DMFile::parseMetaV2(std::string_view buffer)
         auto hash_size = digest->hashSize();
         ptr = ptr - hash_size;
         digest->update(buffer.data(), buffer.size() - sizeof(MetaFooter) - hash_size);
-        if (unlikely(digest->compareRaw(ptr)))
+        if (unlikely(!digest->compareRaw(ptr)))
         {
             LOG_ERROR(log, "{} checksum invalid", metav2Path());
             throw Exception(ErrorCodes::CORRUPTED_DATA, "{} checksum invalid", metav2Path());
