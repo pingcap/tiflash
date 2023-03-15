@@ -124,14 +124,10 @@ SegmentSnapshotPtr Serializer::deserializeSegmentSnapshotFrom(
     delta_snap->mem_table_snap = deserializeColumnFileSet(
         proto.column_files_memtable(),
         data_store,
-        remote_store_id,
-        table_id,
         segment_range);
     delta_snap->persisted_files_snap = deserializeColumnFileSet(
         proto.column_files_persisted(),
         data_store,
-        remote_store_id,
-        table_id,
         segment_range);
 
     // Note: At this moment, we still cannot read from `delta_snap->mem_table_snap` and `delta_snap->persisted_files_snap`,
@@ -207,8 +203,6 @@ Serializer::serializeTo(const ColumnFileSetSnapshotPtr & snap)
 ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
     const RepeatedPtrField<RemotePb::ColumnFileRemote> & proto,
     const Remote::IDataStorePtr & data_store,
-    StoreID remote_store_id,
-    TableID table_id,
     const RowKeyRange & segment_range)
 {
     auto empty_data_provider = std::make_shared<ColumnFileDataProviderNop>();
@@ -228,7 +222,6 @@ ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
         }
         else if (remote_column_file.has_big())
         {
-            UNUSED(remote_store_id, table_id);
             const auto & big_file = remote_column_file.big();
             ret->column_files.push_back(deserializeCFBig(
                 big_file,
