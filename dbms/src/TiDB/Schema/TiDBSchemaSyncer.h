@@ -139,7 +139,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         else
         {
-            if (version <= cur_verison)
+            if (version <= cur_version)
                 return false;
 
             LOG_INFO(ks_log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
