@@ -627,7 +627,10 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
     });
 
     auto record_error = [&](int flash_err_code, const String & err_msg) {
-        handler->cancel();
+        // Note: We intentinally do not remove the snapshot from the SnapshotManager
+        // when this request is failed. Consider this case:
+        // EstablishDisagg for A: ---------------- Failed --------------------------------------------- Cleanup Snapshot for A
+        // EstablishDisagg for B: - Failed - RN retry EstablishDisagg for A+B -- InsertSnapshot for A+B ----- FetchPages (Boom!)
         auto * err = response->mutable_error();
         err->set_code(flash_err_code);
         err->set_msg(err_msg);

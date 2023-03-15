@@ -40,8 +40,6 @@ public:
 
     void execute(disaggregated::EstablishDisaggTaskResponse * response);
 
-    void cancel();
-
     WNEstablishDisaggTaskHandler(ContextPtr context_, const DM::DisaggTaskId & task_id);
 
 private:

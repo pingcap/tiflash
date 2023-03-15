@@ -70,6 +70,11 @@ public:
         return nullptr;
     }
 
+    bool unregisterSnapshotIfEmpty(const DisaggTaskId & task_id);
+
+    DISALLOW_COPY_AND_MOVE(WNDisaggSnapshotManager);
+
+private:
     bool unregisterSnapshot(const DisaggTaskId & task_id)
     {
         std::unique_lock lock(mtx);
@@ -82,11 +87,6 @@ public:
         return false;
     }
 
-    bool unregisterSnapshotIfEmpty(const DisaggTaskId & task_id);
-
-    DISALLOW_COPY_AND_MOVE(WNDisaggSnapshotManager);
-
-private:
     void clearExpiredSnapshots();
 
 private:

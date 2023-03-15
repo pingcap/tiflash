@@ -107,17 +107,4 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
     }
 }
 
-void WNEstablishDisaggTaskHandler::cancel()
-{
-    const auto * dag_context = context->getDAGContext();
-    if (!dag_context)
-        return;
-
-    if (!dag_context->getDisaggTaskId())
-        return;
-
-    auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
-    snaps->unregisterSnapshot(*dag_context->getDisaggTaskId());
-}
-
 } // namespace DB
