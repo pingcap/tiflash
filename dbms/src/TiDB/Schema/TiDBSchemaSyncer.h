@@ -102,6 +102,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return it->second;
     }
 
+    // After all tables have been physical dropped, remove the `cur_version` of given keyspace
     void removeCurrentVersion(KeyspaceID keyspace_id) override
     {
         std::lock_guard lock(schema_mutex);
