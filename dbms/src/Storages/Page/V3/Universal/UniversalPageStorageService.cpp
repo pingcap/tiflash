@@ -126,7 +126,10 @@ bool UniversalPageStorageService::uploadCheckpoint()
     return uploadCheckpointImpl(store_info, s3lock_client, remote_store);
 }
 
-bool UniversalPageStorageService::uploadCheckpointImpl(const metapb::Store & store_info, const S3::S3LockClientPtr & s3lock_client, const DM::Remote::IDataStorePtr & remote_store)
+bool UniversalPageStorageService::uploadCheckpointImpl(
+    const metapb::Store & store_info,
+    const S3::S3LockClientPtr & s3lock_client,
+    const DM::Remote::IDataStorePtr & remote_store)
 {
     uni_page_storage->initLocksLocalManager(store_info.id(), s3lock_client);
     const auto upload_info = uni_page_storage->allocateNewUploadLocksInfo();
@@ -140,7 +143,10 @@ bool UniversalPageStorageService::uploadCheckpointImpl(const metapb::Store & sto
         auto * ri = wi.mutable_remote_info();
         ri->set_type_name("S3");
         // ri->set_name(); this field is not used currently
+        auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ri->set_root(client->root());
     }
+   
 
     auto local_dir = Poco::Path(global_context.getTemporaryPath() + fmt::format("/checkpoint_upload_{}", upload_info.upload_sequence)).absolute();
     Poco::File(local_dir).createDirectories();
