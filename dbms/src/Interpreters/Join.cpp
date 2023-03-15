@@ -2022,14 +2022,14 @@ void Join::checkTypes(const Block & block) const
     checkTypesOfKeys(block, sample_block_with_keys);
 }
 
-Join::NullRowsColumns::NullRowsColumns(const std::vector<Join::RowsNotInsertToMap> & null_list_)
+Join::MaterializedNullRows::MaterializedNullRows(const std::vector<Join::RowsNotInsertToMap> & null_list_)
     : null_list(null_list_)
     , null_list_pos(0)
     , null_list_it(nullptr)
     , materialized_rows(0)
 {}
 
-bool Join::NullRowsColumns::fillColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, size_t & pos, size_t max_pace)
+bool Join::MaterializedNullRows::fillColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, size_t & pos, size_t max_pace)
 {
     RUNTIME_ASSERT(added_columns.size() >= left_columns + right_columns);
 
@@ -2088,7 +2088,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     Block & block,
     size_t left_columns,
     const BlocksList & right_blocks,
-    Join::NullRowsColumns & null_rows,
+    Join::MaterializedNullRows & null_rows,
     size_t max_block_size,
     const JoinOtherConditions & other_conditions,
     const ColumnRawPtrs & key_columns,
@@ -2340,7 +2340,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     Block & block,
     size_t left_columns,
     const BlocksList & right_blocks,
-    Join::NullRowsColumns & null_rows,
+    Join::MaterializedNullRows & null_rows,
     size_t max_block_size,
     const JoinOtherConditions & other_conditions,
     const ColumnRawPtrs & key_columns,
@@ -2544,24 +2544,22 @@ void Join::workAfterBuildFinish()
         /// Considering the rows with null key in left table, in the worse case, it may need to check all rows in right table.
         /// Null rows is used for speeding up the check process. If the result of null-aware equal expression is NULL, the
         /// check process can be finished.
-        /// However, if null rows accounts for a large proportion of the right table and the null-aware equal column is always
-        /// false, the check process will be very slow.
-        /// In this case, directly checking all blocks is a better choice because checking all blocks does not copy columns.
-        /// It reuses the columns from the right table and execute the expressions.
-        /// Test results show that the time consumed by checking null rows is several times than that of checking all blocks,
-        /// and it increases as the number of rows in the right table increases.
-        /// For example, the number of rows is 1k, time consumed by checking null rows is 4x than that of checking all blocks.
-        /// 2k => 6x. 10k => 10x.
-        /// In my test, time consumed by checking null rows when number of rows is 1k is roughly equal to that by checking all
-        /// blocks when number of rows is 10k.
-        /// So when null_rows_size accounts for more than 10% of total rows, it's better to directly check all blocks.
+        /// However, if checking null rows does not get a NULL result, these null rows will be checked again in the process of
+        /// checking all blocks.
+        /// So there is a tradeoff between returning quickly and avoiding waste.
+        ///
+        /// If all rows have null key, test results at the time of writing show that the time consumed by checking null rows is
+        /// several times than that of checking all blocks, and it increases as the number of rows in the right table increases.
+        /// For example, the number of rows in right table is 2k and 20000k in left table, null rows takes about 1 times as long
+        /// as all blocks. When the number of rows in right table is 5k, 1.4 times. 10k => 1.7 times. 20k => 1.9 times.
+        ///
+        /// Given that many null rows should be a rare case, let's use 2 times to simplify thinking.
+        /// So if null rows occupies 1/3 of all rows, the time consumed by null rows and all blocks are the same.
+        /// I choose 1/3 as the cutoff point. If null rows occupies more than 1/3, we should check all blocks directly.
         if (unlikely(is_test))
             null_key_check_all_blocks_directly = false;
         else
-            null_key_check_all_blocks_directly = null_rows_size > total_input_build_rows * 0.1;
-        /// TODO: There is another bad situation, for rows with non-null key in left table, it may check null rows if it can not
-        ///       be found in hash table. Maybe we can materialize the null rows and use the method like checking all blocks for
-        ///       null rows to reduce the wasteful copy overhead.
+            null_key_check_all_blocks_directly = null_rows_size > total_input_build_rows * 0.33;
     }
 }
 

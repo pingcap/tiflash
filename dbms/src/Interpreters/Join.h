@@ -279,13 +279,13 @@ public:
         size_t size = 0;
     };
 
-    /// NullRowsColumns will materialize null list to speed up the process of copying columns.
-    class alignas(ABSL_CACHELINE_SIZE) NullRowsColumns
+    /// MaterializedNullRows will materialize the needed rows in null list to speed up the process of copying rows.
+    class alignas(ABSL_CACHELINE_SIZE) MaterializedNullRows
     {
     public:
-        explicit NullRowsColumns(const std::vector<Join::RowsNotInsertToMap> & null_list);
+        explicit MaterializedNullRows(const std::vector<Join::RowsNotInsertToMap> & null_list);
 
-        /// Return if there are other rows in null_list after this calling;
+        /// Return if there are other rows in null list after this calling;
         bool fillColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, size_t & pos, size_t max_pace);
 
     private:
@@ -348,8 +348,9 @@ private:
     /// 2. Rows that are filtered by right join conditions
     /// For null-aware semi join family, including rows with NULL join keys.
     std::vector<RowsNotInsertToMap> rows_not_inserted_to_map;
-
-    mutable std::vector<NullRowsColumns> null_rows;
+    /// null_rows is used in probe phase, one MaterializedNullRows per probe thread.
+    /// Set to mutable because `JoinBlock`-family functions are all const.
+    mutable std::vector<MaterializedNullRows> null_rows;
     /// Whether to directly check all blocks for row with null key.
     bool null_key_check_all_blocks_directly = false;
 
