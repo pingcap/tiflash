@@ -90,9 +90,9 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
         response->set_store_id(kvstore->getStoreID());
     }
 
-    auto snapshots = context->getSharedContextDisagg()->wn_snapshot_manager;
+    auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const auto & task_id = *dag_context->getDisaggTaskId();
-    auto snap = snapshots->getSnapshot(task_id);
+    auto snap = snaps->getSnapshot(task_id);
     RUNTIME_CHECK_MSG(snap, "Snapshot was missing, task_id={}", task_id);
 
     {
@@ -105,6 +105,19 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
     {
         response->add_tables(Serializer::serializeTo(table_tasks, task_id).SerializeAsString());
     }
+}
+
+void WNEstablishDisaggTaskHandler::cancel()
+{
+    const auto * dag_context = context->getDAGContext();
+    if (!dag_context)
+        return;
+
+    if (!dag_context->getDisaggTaskId())
+        return;
+
+    auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
+    snaps->unregisterSnapshot(*dag_context->getDisaggTaskId());
 }
 
 } // namespace DB

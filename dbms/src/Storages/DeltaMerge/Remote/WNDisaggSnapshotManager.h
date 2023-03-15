@@ -51,12 +51,11 @@ public:
 
     bool registerSnapshot(const DisaggTaskId & task_id, DisaggReadSnapshotPtr && snap, const Timepoint & expired_at)
     {
-        LOG_DEBUG(log, "Register Disaggregated Snapshot, task_id={}", task_id);
-
         std::unique_lock lock(mtx);
         if (auto iter = snapshots.find(task_id); iter != snapshots.end())
             return false;
 
+        LOG_DEBUG(log, "Register Disaggregated Snapshot, task_id={}", task_id);
         snapshots.emplace(task_id, SnapshotWithExpireTime{.snap = std::move(snap), .expired_at = expired_at});
         return true;
     }
@@ -69,24 +68,23 @@ public:
         return nullptr;
     }
 
-    bool unregisterSnapshotIfEmpty(const DisaggTaskId & task_id);
-
-    DISALLOW_COPY_AND_MOVE(WNDisaggSnapshotManager);
-
-private:
     bool unregisterSnapshot(const DisaggTaskId & task_id)
     {
-        LOG_DEBUG(log, "Unregister Disaggregated Snapshot, task_id={}", task_id);
-
         std::unique_lock lock(mtx);
         if (auto iter = snapshots.find(task_id); iter != snapshots.end())
         {
+            LOG_DEBUG(log, "Unregister Disaggregated Snapshot, task_id={}", task_id);
             snapshots.erase(iter);
             return true;
         }
         return false;
     }
 
+    bool unregisterSnapshotIfEmpty(const DisaggTaskId & task_id);
+
+    DISALLOW_COPY_AND_MOVE(WNDisaggSnapshotManager);
+
+private:
     void clearExpiredSnapshots();
 
 private:

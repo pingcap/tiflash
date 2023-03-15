@@ -823,8 +823,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         auto timeout_s = context.getSettingsRef().disagg_task_snapshot_timeout;
         auto expired_at = Clock::now() + std::chrono::seconds(timeout_s);
         bool register_snapshot_ok = snaps->registerSnapshot(snap_id, std::move(disaggregated_snap), expired_at);
-        RUNTIME_CHECK_MSG(register_snapshot_ok, "disaggregated task has been registered {}", snap_id);
-        LOG_INFO(log, "task snapshot registered, snapshot_id={}", snap_id);
+        RUNTIME_CHECK_MSG(register_snapshot_ok, "Disaggregated task has been registered, snap_id={}", snap_id);
     }
 
     if (has_multiple_partitions)

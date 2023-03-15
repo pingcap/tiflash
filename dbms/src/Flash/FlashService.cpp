@@ -626,8 +626,8 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
         current_memory_tracker = nullptr;
     });
 
-    grpc::Status ret_status = grpc::Status::OK;
     auto record_error = [&](int flash_err_code, const String & err_msg) {
+        handler->cancel();
         auto * err = response->mutable_error();
         err->set_code(flash_err_code);
         err->set_msg(err_msg);
