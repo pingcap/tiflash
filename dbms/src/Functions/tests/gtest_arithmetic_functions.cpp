@@ -153,7 +153,7 @@ try
     {
         // int and decimal
         ASSERT_COLUMN_EQ(
-            createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+            createColumn<Nullable<Decimal64>>(std::make_tuple(19, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
             executeFunction(
                 func_name,
                 createColumn<Int32>({1, 1, 1, 1, 1}),
@@ -172,7 +172,7 @@ try
     {
         // int and decimal
         ASSERT_COLUMN_EQ(
-            createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+            createColumn<Nullable<Decimal64>>(std::make_tuple(19, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
             executeFunction(
                 func_name,
                 createColumn<Int32>({1, 1, 1, 1, 1}),
@@ -191,7 +191,7 @@ try
     {
         // int and decimal
         ASSERT_COLUMN_EQ(
-            createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+            createColumn<Nullable<Decimal64>>(std::make_tuple(19, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
             executeFunction(
                 func_name,
                 createColumn<Int32>({1, 1, 1, 1, 1}),
@@ -210,7 +210,7 @@ try
     {
         // int and decimal
         ASSERT_COLUMN_EQ(
-            createColumn<Nullable<Decimal64>>(std::make_tuple(18, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
+            createColumn<Nullable<Decimal64>>(std::make_tuple(19, 4), {DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(1, 4), DecimalField64(0, 4)}),
             executeFunction(
                 func_name,
                 createColumn<Int32>({1, 1, 1, 1, 1}),
