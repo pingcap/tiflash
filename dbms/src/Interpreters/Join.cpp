@@ -735,7 +735,8 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         other_conditions,
         max_block_size,
         match_helper_name,
-        restore_round + 1);
+        restore_round + 1,
+        is_test);
 }
 
 void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
@@ -2416,9 +2417,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const TiDB::TiDBCollators & collators,
     bool null_key_check_all_blocks_directly,
     bool right_has_all_key_null_row,
-    bool right_table_is_empty,
-    std::atomic<UInt64> & null_rows_time,
-    std::atomic<UInt64> & all_blocks_time)
+    bool right_table_is_empty)
 {
     static_assert(KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftAnti
                   || KIND == ASTTableJoin::Kind::NullAware_LeftSemi);
@@ -2563,9 +2562,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             right_blocks,
             null_rows,
             max_block_size,
-            other_conditions,
-            null_rows_time,
-            all_blocks_time);
+            other_conditions);
 
         helper.joinResult(res_list);
 
@@ -2668,9 +2665,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const TiDB::TiDBCollators & collators,
     bool null_key_check_all_blocks_directly,
     bool right_has_all_key_null_row,
-    bool right_table_is_empty,
-    std::atomic<UInt64> & null_rows_time,
-    std::atomic<UInt64> & all_blocks_time)
+    bool right_table_is_empty)
 {
 #define impl(has_null_map, has_filter_map)                                                          \
     joinBlockImplNullAwareInternal<KIND, STRICTNESS, KeyGetter, Map, has_null_map, has_filter_map>( \
@@ -2689,9 +2684,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
         collators,                                                                                  \
         null_key_check_all_blocks_directly,                                                         \
         right_has_all_key_null_row,                                                                 \
-        right_table_is_empty,                                                                       \
-        null_rows_time,                                                                             \
-        all_blocks_time);
+        right_table_is_empty);
 
     if (null_map)
     {
@@ -2785,9 +2778,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps, size_t strea
             collators,                                                                                                                                  \
             null_key_check_all_blocks_directly,                                                                                                         \
             right_has_all_key_null_row.load(std::memory_order_relaxed),                                                                                 \
-            right_table_is_empty.load(std::memory_order_relaxed),                                                                                       \
-            null_rows_time,                                                                                                                             \
-            all_blocks_time);                                                                                                                           \
+            right_table_is_empty.load(std::memory_order_relaxed));                                                                                      \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -3237,7 +3228,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size)
             {
                 spilled_partition_indexes.pop_front();
             }
-            return {restore_join, non_joined_data_stream, build_stream, probe_stream};
+            return {restore_join, non_joined_data_stream, build_stream, probe_stream, restore_probe_streams.size()};
         }
         if (spilled_partition_indexes.empty())
         {
@@ -3275,7 +3266,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size)
                 restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size);
         }
         auto non_joined_data_stream = get_back_stream(restore_non_joined_data_streams);
-        return {restore_join, non_joined_data_stream, build_stream, probe_stream};
+        return {restore_join, non_joined_data_stream, build_stream, probe_stream, restore_probe_streams.size()};
     }
     catch (...)
     {

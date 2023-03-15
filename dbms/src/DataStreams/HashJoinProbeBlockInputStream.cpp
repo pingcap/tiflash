@@ -175,8 +175,7 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
                     restore_probe_stream = restore_info.probe_stream;
                     non_joined_stream = restore_info.non_joined_stream;
                     current_probe_stream = restore_probe_stream;
-                    if (non_joined_stream != nullptr)
-                        probe_index = dynamic_cast<NonJoinedBlockInputStream *>(non_joined_stream.get())->getNonJoinedIndex();
+                    probe_index = restore_info.probe_index;
                 }
                 status = ProbeStatus::RESTORE_BUILD;
                 return;

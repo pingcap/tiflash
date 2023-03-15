@@ -493,9 +493,6 @@ private:
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arenas pools;
 
-    mutable std::atomic<UInt64> null_rows_time{0};
-    mutable std::atomic<UInt64> all_blocks_time{0};
-
 private:
     Type type = Type::EMPTY;
 
@@ -595,13 +592,16 @@ struct RestoreInfo
     BlockInputStreamPtr non_joined_stream;
     BlockInputStreamPtr build_stream;
     BlockInputStreamPtr probe_stream;
+    size_t probe_index;
 
     RestoreInfo() = default;
-    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr non_joined_data_stream_, BlockInputStreamPtr build_stream_, BlockInputStreamPtr probe_stream_)
+    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr non_joined_data_stream_, BlockInputStreamPtr build_stream_, BlockInputStreamPtr probe_stream_, size_t probe_index_)
         : join(join_)
         , non_joined_stream(non_joined_data_stream_)
         , build_stream(build_stream_)
-        , probe_stream(probe_stream_){};
+        , probe_stream(probe_stream_)
+        , probe_index(probe_index_)
+    {}
 };
 
 struct ProbeProcessInfo

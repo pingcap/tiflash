@@ -44,8 +44,7 @@ public:
     /// For example, When disagg WN responds the page to the disagg RN, all data will be read.
     virtual Page readTinyData(
         PageId,
-        const std::optional<std::vector<size_t>> & fields = std::nullopt) const
-        = 0;
+        const std::optional<std::vector<size_t>> & fields = std::nullopt) const = 0;
 
     /// Get the total data size without reading the data.
     virtual size_t getTinyDataSize(PageId) const = 0;
