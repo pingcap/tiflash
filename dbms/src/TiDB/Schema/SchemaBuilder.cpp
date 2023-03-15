@@ -1382,7 +1382,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
 {
-    LOG_INFO(log, "Droping all schemas.");
+    LOG_INFO(log, "Dropping all schemas.");
 
     auto & tmt_context = context.getTMTContext();
 

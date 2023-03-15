@@ -126,14 +126,18 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_applying).Set(0.0); });
 
         // If the schema version not exists, drop all schemas.
-        if (version == -1)
+        if (version == SchemaGetter::SchemaVersionNotExist)
         {
             // Tables and databases are already tombstoned and waiting for GC.
             if (version == cur_version)
                 return false;
 
             LOG_INFO(ks_log, "Start to drop schemas. schema version key not exists, keyspace should be deleted");
+            GET_METRIC(tiflash_schema_apply_count, type_drop_keyspace).Increment();
 
+            // The key range of the given keyspace is deleted by `UnsafeDestroyRange`, so the return result
+            // of `SchemaGetter::listDBs` is not reliable. Directly mark all databases and tables of this keyspace
+            // as a tombstone and let the SchemaSyncService drop them physically.
             dropAllSchema(getter, context);
             cur_versions[keyspace_id] = version;
         }

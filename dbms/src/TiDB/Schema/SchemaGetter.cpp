@@ -199,7 +199,7 @@ Int64 SchemaGetter::getVersion()
 {
     String ver = TxnStructure::get(snap, schemaVersionKey);
     if (ver.empty())
-        return -1;
+        return SchemaVersionNotExist;
     return std::stoll(ver);
 }
 
