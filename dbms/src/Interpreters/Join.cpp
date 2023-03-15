@@ -2835,7 +2835,7 @@ void Join::workAfterBuildFinish()
         for (const auto & i : rows_not_inserted_to_map)
             null_rows_size += i.size;
         /// Considering the rows with null key in left table, in the worse case, it may need to check all rows in right table.
-        /// Null rows is used for speeding up the check process. If the result of null-aware equal expression is NULL, the
+        /// Null rows are used for speeding up the check process. If the result of null-aware equal expression is NULL, the
         /// check process can be finished.
         /// However, if checking null rows does not get a NULL result, these null rows will be checked again in the process of
         /// checking all blocks.
@@ -2843,12 +2843,12 @@ void Join::workAfterBuildFinish()
         ///
         /// If all rows have null key, test results at the time of writing show that the time consumed by checking null rows is
         /// several times than that of checking all blocks, and it increases as the number of rows in the right table increases.
-        /// For example, the number of rows in right table is 2k and 20000k in left table, null rows takes about 1 times as long
+        /// For example, the number of rows in right table is 2k and 20000k in left table, null rows take about 1 time as long
         /// as all blocks. When the number of rows in right table is 5k, 1.4 times. 10k => 1.7 times. 20k => 1.9 times.
         ///
         /// Given that many null rows should be a rare case, let's use 2 times to simplify thinking.
-        /// So if null rows occupies 1/3 of all rows, the time consumed by null rows and all blocks are the same.
-        /// I choose 1/3 as the cutoff point. If null rows occupies more than 1/3, we should check all blocks directly.
+        /// So if null rows occupy 1/3 of all rows, the time consumed by null rows and all blocks are the same.
+        /// I choose 1/3 as the cutoff point. If null rows occupy more than 1/3, we should check all blocks directly.
         if (unlikely(is_test))
             null_key_check_all_blocks_directly = false;
         else
