@@ -876,7 +876,6 @@ StorageDeltaMerge::writeNodeBuildRemoteReadSnapshot(
     RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
     auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, query_info.req_id, tracing_logger);
-    const auto & scan_context = mvcc_query_info.scan_context;
     auto read_segments = parseSegmentSet(select_query.segment_expression_list);
 
     auto snap = store->writeNodeBuildRemoteReadSnapshot(
@@ -886,7 +885,7 @@ StorageDeltaMerge::writeNodeBuildRemoteReadSnapshot(
         num_streams,
         query_info.req_id,
         read_segments,
-        scan_context);
+        mvcc_query_info.scan_context);
 
     snap->column_defines = std::make_shared<ColumnDefines>(columns_to_read);
 

@@ -17,6 +17,8 @@
 #include <Common/Exception.h>
 #include <Storages/Transaction/Types.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 
@@ -32,25 +34,15 @@ public:
         EPOCH_NOT_MATCH,
     };
 
-    static const char * RegionReadStatusString(RegionReadStatus s)
-    {
-        switch (s)
-        {
-            case RegionReadStatus::OK:
-                return "OK";
-            case RegionReadStatus::NOT_FOUND:
-                return "NOT_FOUND";
-            case RegionReadStatus::EPOCH_NOT_MATCH:
-                return "EPOCH_NOT_MATCH";
-        }
-        return "Unknown";
-    };
-
     using UnavailableRegions = std::unordered_set<RegionID>;
 
 public:
     RegionException(UnavailableRegions && unavailable_region_, RegionReadStatus status_)
-        : Exception(RegionReadStatusString(status_)), unavailable_region(std::move(unavailable_region_)), status(status_)
+        : Exception(fmt::format(
+            "Region error {}",
+            magic_enum::enum_name(status_)))
+        , unavailable_region(std::move(unavailable_region_))
+        , status(status_)
     {}
 
     /// Region could be found with correct epoch, but unavailable (e.g. its lease in proxy has not been built with leader).
