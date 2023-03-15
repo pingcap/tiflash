@@ -305,7 +305,7 @@ struct RegionPtrWithCheckpointInfo
 {
     using Base = RegionPtr;
 
-    RegionPtrWithCheckpointInfo(CheckpointInfoPtr checkpoint_info_);
+    RegionPtrWithCheckpointInfo(const Base & base_, CheckpointInfoPtr checkpoint_info_);
 
     /// to be compatible with usage as RegionPtr.
     Base::element_type * operator->() const { return base.operator->(); }

@@ -28,6 +28,7 @@
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefinesBase.h>
+#include <Storages/Transaction/CheckpointInfo.h>
 
 namespace DB::DM
 {
@@ -156,10 +157,9 @@ public:
     using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
     static SegmentMetaInfos readAllSegmentsMetaInfoInRange( //
         DMContext & context,
-        UInt64 remote_store_id,
         NamespaceId ns_id,
         const RowKeyRange & target_range,
-        UniversalPageStoragePtr temp_ps);
+        const CheckpointInfoPtr & checkpoint_info);
 
     // Create a list of temp segments from checkpoint.
     // The data of these temp segments will be included in `wbs`.

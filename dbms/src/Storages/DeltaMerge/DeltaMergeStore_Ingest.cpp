@@ -1008,9 +1008,9 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
         LOG_WARNING(log, "{}", msg);
         throw Exception(msg);
     }
-    LOG_INFO(log, "Ingest checkpoint from store {}", checkpoint_info->remote_store_id);
+    LOG_INFO(log, "Ingest checkpoint from store {} for region {}", checkpoint_info->remote_store_id, checkpoint_info->region_id);
 
-    auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, checkpoint_info->remote_store_id, physical_table_id, range, checkpoint_info->temp_ps);
+    auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, physical_table_id, range, checkpoint_info);
     LOG_INFO(log, "Ingest checkpoint segments num {}", segment_meta_infos.size());
     WriteBatches wbs{*dm_context->storage_pool};
     auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //
@@ -1031,7 +1031,7 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     wbs.writeLogAndData();
 
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
-    LOG_INFO(log, "Ingest checkpoint from store {} done", checkpoint_info->remote_store_id);
+    LOG_INFO(log, "Ingest checkpoint from store {} for region {} done", checkpoint_info->remote_store_id, checkpoint_info->region_id);
 
     for (auto & segment : restored_segments)
     {

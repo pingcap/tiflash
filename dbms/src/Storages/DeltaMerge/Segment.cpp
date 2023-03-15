@@ -45,7 +45,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/Transaction/FastAddPeer.h>
+#include <Storages/Transaction/FastAddPeerCache.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
@@ -334,65 +334,48 @@ SegmentPtr Segment::restoreSegment( //
 
 Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     DMContext & context,
-    UInt64 remote_store_id,
     NamespaceId ns_id,
     const RowKeyRange & target_range,
-    UniversalPageStoragePtr temp_ps)
+    const CheckpointInfoPtr & checkpoint_info)
 {
-    PageIdU64 current_segment_id = 1; // DELTA_MERGE_FIRST_SEGMENT_ID
-    SegmentMetaInfos segment_infos;
     auto fap_context = context.db_context.getSharedContextDisagg()->fap_context;
     TableIdentifier identifier{
         .key_space_id = 0,
-        .store_id = remote_store_id,
         .table_id = ns_id,
     };
-    auto first_segment_id = fap_context->getSegmentIdContainingKey(identifier, target_range.getStart().toRowKeyValue());
-    if (first_segment_id != 0)
-    {
-        bool hit = false;
-        auto target_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Meta, ns_id), first_segment_id);
-        auto page = temp_ps->read(target_id, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
-        if (page.isValid())
-        {
-            Segment::SegmentMetaInfo segment_info;
-            segment_info.segment_id = first_segment_id;
-            ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-            readSegmentMetaInfo(buf, segment_info);
-            if (segment_info.range.check(target_range.getStart()))
-            {
-                segment_infos.push_back(segment_info);
-                current_segment_id = segment_info.next_segment_id;
-                hit = true;
-            }
-        }
-        if (!hit)
-        {
-            fap_context->invalidateCache(identifier);
-        }
-    }
-    std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
+    auto [segment_end_key_cache, cache_empty] = checkpoint_info->checkpoint_data_holder->getSegmentEndKeyCache(identifier);
+    // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
+    // Otherwise, we just read the segment that cover the range.
+    PageIdU64 current_segment_id = cache_empty ? 1 : segment_end_key_cache->getSegmentIdContainingKey(target_range.getStart().toRowKeyValue());
     LOG_DEBUG(Logger::get(), "Read segment meta info from segment {}", current_segment_id);
+    std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
+    SegmentMetaInfos segment_infos;
     while (current_segment_id != 0)
     {
         Segment::SegmentMetaInfo segment_info;
         auto target_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Meta, ns_id), current_segment_id);
-        auto page = temp_ps->read(target_id);
+        auto page = checkpoint_info->temp_ps->read(target_id);
         segment_info.segment_id = current_segment_id;
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
         readSegmentMetaInfo(buf, segment_info);
-        end_key_and_segment_ids.emplace_back(segment_info.range.getEnd().toRowKeyValue(), segment_info.segment_id);
+        if (cache_empty)
+        {
+            end_key_and_segment_ids.emplace_back(segment_info.range.getEnd().toRowKeyValue(), segment_info.segment_id);
+        }
         current_segment_id = segment_info.next_segment_id;
         if (!(segment_info.range.shrink(target_range).none()))
         {
             segment_infos.emplace_back(segment_info);
         }
-        if (segment_info.range.end.value->compare(*target_range.end.value) >= 0)
+        if (!cache_empty && segment_info.range.end.value->compare(*target_range.end.value) >= 0)
         {
             break;
         }
     }
-    fap_context->insertSegmentEndKeyInfoToCache(identifier, end_key_and_segment_ids);
+    if (cache_empty)
+    {
+        segment_end_key_cache->build(end_key_and_segment_ids);
+    }
     return segment_infos;
 }
 

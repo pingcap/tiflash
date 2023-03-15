@@ -20,6 +20,7 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/FastAddPeer.h>
 #include <Storages/Transaction/FastAddPeerAsyncTasksImpl.h>
+#include <Storages/Transaction/FastAddPeerCache.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/tests/kvstore_helper.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -37,7 +38,6 @@ using raft_serverpb::RegionLocalState;
 namespace DB
 {
 FastAddPeerRes genFastAddPeerRes(FastAddPeerStatus status, std::string && apply_str, std::string && region_str);
-TempUniversalPageStoragePtr reuseOrCreateTempPageStorage(Context & context, const String & manifest_key);
 
 namespace tests
 {
@@ -224,35 +224,35 @@ try
     ASSERT_TRUE(createBucketIfNotExist());
     dumpCheckpoint();
 
-    std::optional<CheckpointInfoPtr> checkpoint_info;
-    auto s3_client = S3::ClientFactory::instance().sharedClient();
-    auto bucket = S3::ClientFactory::instance().bucket();
-    const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, bucket, store_id);
-    ASSERT_TRUE(!manifests.empty());
-    const auto & latest_manifest_key = manifests.latestManifestKey();
-    auto temp_ps_wrapper = reuseOrCreateTempPageStorage(global_context, latest_manifest_key);
-
-    RaftApplyState apply_state;
-    {
-        auto apply_state_key = UniversalPageIdFormat::toRaftApplyStateKeyInKVEngine(region_id);
-        auto page = temp_ps_wrapper->temp_ps->read(apply_state_key);
-        apply_state.ParseFromArray(page.data.begin(), page.data.size());
-    }
-
-    RegionLocalState region_state;
-    {
-        auto local_state_key = UniversalPageIdFormat::toRegionLocalStateKeyInKVEngine(region_id);
-        auto page = temp_ps_wrapper->temp_ps->read(local_state_key);
-        region_state.ParseFromArray(page.data.begin(), page.data.size());
-    }
-
-    ASSERT_TRUE(apply_state == region->getApply());
-    ASSERT_TRUE(region_state == region->getState());
-
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
-    ASSERT_TRUE(fap_context->getTempUniversalPageStorage(store_id, upload_sequence) != nullptr);
-    ASSERT_TRUE(fap_context->getTempUniversalPageStorage(store_id, upload_sequence - 1) != nullptr);
-    ASSERT_TRUE(fap_context->getTempUniversalPageStorage(store_id, upload_sequence + 1) == nullptr);
+    {
+        auto [data_seq, checkpoint_data_holder] = fap_context->getNewerCheckpointData(global_context, store_id, 0);
+        ASSERT_GT(data_seq, 0);
+        ASSERT_TRUE(checkpoint_data_holder != nullptr);
+
+        RaftApplyState apply_state;
+        {
+            auto apply_state_key = UniversalPageIdFormat::toRaftApplyStateKeyInKVEngine(region_id);
+            auto page = checkpoint_data_holder->temp_ps->read(apply_state_key);
+            apply_state.ParseFromArray(page.data.begin(), page.data.size());
+        }
+
+        RegionLocalState region_state;
+        {
+            auto local_state_key = UniversalPageIdFormat::toRegionLocalStateKeyInKVEngine(region_id);
+            auto page = checkpoint_data_holder->temp_ps->read(local_state_key);
+            region_state.ParseFromArray(page.data.begin(), page.data.size());
+        }
+
+        ASSERT_TRUE(apply_state == region->getApply());
+        ASSERT_TRUE(region_state == region->getState());
+    }
+
+    {
+        auto [data_seq, checkpoint_data_holder] = fap_context->getNewerCheckpointData(global_context, store_id, upload_sequence);
+        ASSERT_EQ(data_seq, upload_sequence);
+        ASSERT_TRUE(checkpoint_data_holder == nullptr);
+    }
 }
 CATCH
 } // namespace tests
