@@ -69,6 +69,8 @@ public:
      */
     virtual IPreparedDMFileTokenPtr prepareDMFile(const S3::DMFileOID & oid, UInt64 page_id = 0) = 0;
 
+    virtual IPreparedDMFileTokenPtr prepareDMFileByKey(const String & remote_key) = 0;
+
     /**
      * Blocks until all checkpoint files are successfully put in the remote data store.
      * Returns true if all files are successfully uploaded.

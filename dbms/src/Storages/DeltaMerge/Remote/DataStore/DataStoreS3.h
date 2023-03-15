@@ -47,6 +47,8 @@ public:
      */
     IPreparedDMFileTokenPtr prepareDMFile(const S3::DMFileOID & oid, UInt64 page_id) override;
 
+    IPreparedDMFileTokenPtr prepareDMFileByKey(const String & remote_key) override;
+
     bool putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) override;
 
 #ifndef DBMS_PUBLIC_GTEST
