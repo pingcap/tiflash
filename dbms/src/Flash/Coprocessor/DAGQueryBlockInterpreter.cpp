@@ -283,7 +283,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         build_filter_column_name,
         join_other_conditions,
         max_block_size,
-        match_helper_name);
+        match_helper_name,
+        context.isTest());
 
     recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);
 

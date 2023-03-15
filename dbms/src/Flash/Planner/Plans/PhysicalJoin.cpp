@@ -131,7 +131,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         build_filter_column_name,
         join_other_conditions,
         max_block_size,
-        match_helper_name);
+        match_helper_name,
+        context.isTest());
 
     recordJoinExecuteInfo(dag_context, executor_id, build_plan->execId(), join_ptr);
 
