@@ -33,69 +33,86 @@ FmtBuffer & addPrefix(FmtBuffer & buffer, size_t level)
 {
     return buffer.append(String(level, ' '));
 }
+} // namespace
 
-void mapEvents(const Events & inputs, const Events & outputs)
+PipelineEvents::PipelineEvents(Events && events_, bool is_fine_grained_)
+    : events(std::move(events_))
+    , is_fine_grained(is_fine_grained_)
 {
-    assert(!inputs.empty());
-    assert(!outputs.empty());
-    if (inputs.size() == outputs.size())
+    RUNTIME_CHECK(!events.empty());
+    // For non fine grained mode, the size of events must be 1.
+    RUNTIME_CHECK(is_fine_grained || events.size() == 1);
+}
+
+void PipelineEvents::mapInputs(const PipelineEvents & inputs)
+{
+    /// The self events is output.
+    if (inputs.is_fine_grained && is_fine_grained)
     {
-        /**
-         * 1. for fine grained inputs and fine grained outputs
-         *     ```
-         *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
-         *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
-         *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
-         *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
-         *     ```
-         * 2. for non fine grained inputs and non fine grained outputs
-         *     ```
-         *     PlainPipelineEvent◄────PlainPipelineEvent
-         *     ```
-         * 3. for non fine grained inputs and fine grained outputs
-         *     This is not possible, if fine-grained is enabled in outputs, then inputs must also be enabled.
-         *     Checked in `doToEvents`.
-         * 4. for fine grained inputs and non fine grained outputs
-         *     ```
-         *     PlainPipelineEvent◄────FineGrainedPipelineEvent
-         *     ```
-         */
-        size_t partition_num = inputs.size();
-        for (size_t index = 0; index < partition_num; ++index)
-            outputs[index]->addInput(inputs[index]);
+        if (inputs.events.size() == events.size())
+        {
+            /**
+             * 1. If the number of partitions match, use fine grained mapping here.
+             *     ```
+             *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
+             *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
+             *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
+             *     FineGrainedPipelineEvent◄────FineGrainedPipelineEvent
+             *     ```
+             */
+            size_t partition_num = inputs.events.size();
+            for (size_t index = 0; index < partition_num; ++index)
+                events[index]->addInput(inputs.events[index]);
+        }
+        else
+        {
+            /**
+             * 2. If the number of partitions does not match, it is safer to use full mapping.
+             *     ```
+             *     FineGrainedPipelineEvent◄──┐ ┌──FineGrainedPipelineEvent
+             *     FineGrainedPipelineEvent◄──┼─┼──FineGrainedPipelineEvent
+             *     FineGrainedPipelineEvent◄──┤ └──FineGrainedPipelineEvent
+             *     FineGrainedPipelineEvent◄──┘
+             *     ```
+             */
+            for (const auto & output : events)
+            {
+                for (const auto & input : inputs.events)
+                    output->addInput(input);
+            }
+        }
     }
     else
     {
         /**
-         * 1. for fine grained inputs and fine grained outputs
-         *     If the number of partitions does not match, it is safer to use full mapping.
+         * Use full mapping here.
+         * 1. for non fine grained inputs and non fine grained outputs
+         *     The size of inputs and outputs must be the same and 1.
          *     ```
-         *     FineGrainedPipelineEvent◄──┐ ┌──FineGrainedPipelineEvent
-         *     FineGrainedPipelineEvent◄──┼─┼──FineGrainedPipelineEvent
-         *     FineGrainedPipelineEvent◄──┤ └──FineGrainedPipelineEvent
-         *     FineGrainedPipelineEvent◄──┘
+         *     PlainPipelineEvent◄────PlainPipelineEvent
          *     ```
-         * 2. for non fine grained inputs and non fine grained outputs
-         *     This is not possible, the size of inputs and outputs must be the same and 1.
-         * 3. for non fine grained inputs and fine grained outputs
+         * 2. for non fine grained inputs and fine grained outputs
          *     This is not possible, if fine-grained is enabled in outputs, then inputs must also be enabled.
-         *     Checked in `doToEvents`.
-         * 4. for fine grained inputs and non fine grained outputs
+         * 3. for fine grained inputs and non fine grained outputs
          *     ```
          *                          ┌──FineGrainedPipelineEvent
          *     PlainPipelineEvent◄──┼──FineGrainedPipelineEvent
          *                          ├──FineGrainedPipelineEvent
          *                          └──FineGrainedPipelineEvent
+         * 
+         *     PlainPipelineEvent◄────FineGrainedPipelineEvent
          *     ```
          */
-        for (const auto & output : outputs)
+
+        // If the outputs is fine grained model, the intputs must also be.
+        RUNTIME_CHECK(inputs.is_fine_grained || !is_fine_grained);
+        for (const auto & output : events)
         {
-            for (const auto & input : inputs)
+            for (const auto & input : inputs.events)
                 output->addInput(input);
         }
     }
 }
-} // namespace
 
 void Pipeline::addPlanNode(const PhysicalPlanNodePtr & plan_node)
 {
@@ -182,7 +199,7 @@ Events Pipeline::toEvents(PipelineExecutorStatus & status, Context & context, si
     return all_events;
 }
 
-Events Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
+PipelineEvents Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency)
 {
     auto memory_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     Events self_events;
@@ -190,9 +207,8 @@ Events Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context
     if (isFineGrainedMode())
     {
         auto fine_grained_exec_group = buildExecGroup(status, context, concurrency);
-        RUNTIME_CHECK(!fine_grained_exec_group.empty());
         for (auto & pipeline_exec : fine_grained_exec_group)
-            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), std::move(pipeline_exec)));
+            self_events.push_back(std::make_shared<FineGrainedPipelineEvent>(status, memory_tracker, log->identifier(), std::move(pipeline_exec)));
         LOG_DEBUG(log, "Execute in fine grained model and generate {} fine grained pipeline event", self_events.size());
     }
     else
@@ -200,20 +216,15 @@ Events Pipeline::toSelfEvents(PipelineExecutorStatus & status, Context & context
         self_events.push_back(std::make_shared<PlainPipelineEvent>(status, memory_tracker, log->identifier(), context, shared_from_this(), concurrency));
         LOG_DEBUG(log, "Execute in non fine grained model and generate one plain pipeline event");
     }
-    return self_events;
+    return {std::move(self_events), isFineGrainedMode()};
 }
 
-Events Pipeline::doToEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events)
+PipelineEvents Pipeline::doToEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events)
 {
     auto self_events = toSelfEvents(status, context, concurrency);
     for (const auto & child : children)
-    {
-        // If the current pipeline is fine grained model, the child must also be.
-        RUNTIME_CHECK(!isFineGrainedMode() || child->isFineGrainedMode());
-        auto inputs = child->doToEvents(status, context, concurrency, all_events);
-        mapEvents(inputs, self_events);
-    }
-    all_events.insert(all_events.end(), self_events.cbegin(), self_events.cend());
+        self_events.mapInputs(child->doToEvents(status, context, concurrency, all_events));
+    all_events.insert(all_events.end(), self_events.events.cbegin(), self_events.events.cend());
     return self_events;
 }
 
