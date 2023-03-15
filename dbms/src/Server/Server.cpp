@@ -570,7 +570,7 @@ std::unique_ptr<std::thread> initStores(Context & global_context, const LoggerPt
                 init_stores_function(table_id, storage);
             };
 
-            thread_pool.trySchedule(task);
+            thread_pool.scheduleOrThrowOnError(task); // 太多 thread 会有什么问题么？
         }
 
         thread_pool.wait();

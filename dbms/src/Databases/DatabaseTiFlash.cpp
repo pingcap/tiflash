@@ -46,6 +46,7 @@ extern const int FILE_DOESNT_EXIST;
 extern const int LOGICAL_ERROR;
 extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 extern const int SYNTAX_ERROR;
+extern const int TIDB_TABLE_ALREADY_EXISTS;
 } // namespace ErrorCodes
 
 namespace FailPoints
@@ -133,7 +134,7 @@ void DatabaseTiFlash::loadTables(Context & context, legacy::ThreadPool * thread_
             }
 
             const String & table_file = *it;
-            DatabaseLoading::loadTable(
+            auto [table, table_name] = DatabaseLoading::loadTable(
                 context,
                 *this,
                 metadata_path,
@@ -142,6 +143,35 @@ void DatabaseTiFlash::loadTables(Context & context, legacy::ThreadPool * thread_
                 getEngineName(),
                 table_file,
                 has_force_restore_data_flag);
+
+            if (table) {
+                try
+                {
+                    table->startup();
+                }
+                catch (DB::Exception & e)
+                {
+                    if (e.code() == ErrorCodes::TIDB_TABLE_ALREADY_EXISTS)
+                    {
+                        // While doing IStorage::startup, Exception thorwn with TIDB_TABLE_ALREADY_EXISTS,
+                        // means that we may crashed in the middle of renaming tables. We clean the meta file
+                        // for those storages by `cleanupTables`.
+                        // - If the storage is the outdated one after renaming, remove it is right.
+                        // - If the storage should be the target table, remove it means we "rollback" the
+                        //   rename action. And the table will be renamed by TiDBSchemaSyncer later.
+                        LOG_WARNING(log, "Detected startup failed table {}.{}, removing it from TiFlash", name, table_name);
+                        const String table_meta_path = getTableMetadataPath(table_name);
+                        if (!table_meta_path.empty())
+                        {
+                            Poco::File{table_meta_path}.remove();
+                        }
+                        // detach from this database
+                        detachTable(table_name);
+                    }
+                    else
+                        throw;
+                }
+            }
         }
     };
 
@@ -160,12 +190,6 @@ void DatabaseTiFlash::loadTables(Context & context, legacy::ThreadPool * thread_
         else
             task();
     }
-
-    if (thread_pool)
-        thread_pool->wait();
-
-    // After all tables was basically initialized, startup them.
-    DatabaseLoading::startupTables(*this, name, tables, thread_pool, log);
 }
 
 

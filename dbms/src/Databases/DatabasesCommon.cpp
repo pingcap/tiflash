@@ -282,7 +282,7 @@ std::vector<String> listSQLFilenames(const String & meta_dir, Poco::Logger * log
     return filenames;
 }
 
-void loadTable(Context & context,
+std::tuple<StoragePtr, String> loadTable(Context & context,
                IDatabase & database,
                const String & database_metadata_path,
                const String & database_name,
@@ -307,7 +307,7 @@ void loadTable(Context & context,
     {
         LOG_ERROR(log, "File {} is empty. Removing.", table_metadata_path);
         Poco::File(table_metadata_path).remove();
-        return;
+        return std::make_tuple(nullptr, "");
     }
 
     try
@@ -326,6 +326,7 @@ void loadTable(Context & context,
             std::tie(table_name, table) = createTableFromDefinition(statement, database_name, database_data_path, database_engine, context, has_force_restore_data_flag, "in file " + table_metadata_path);
         }
         database.attachTable(table_name, table);
+        return std::make_tuple(table, table_name);
     }
     catch (const Exception & e)
     {
@@ -337,106 +338,6 @@ void loadTable(Context & context,
             ErrorCodes::CANNOT_CREATE_TABLE_FROM_METADATA);
     }
 }
-
-
-static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
-static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
-static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
-
-void cleanupTables(IDatabase & database, const String & db_name, const Tables & tables, Poco::Logger * log)
-{
-    if (tables.empty())
-        return;
-
-    for (const auto & table : tables)
-    {
-        const String & table_name = table.first;
-        LOG_WARNING(log, "Detected startup failed table {}.{}, removing it from TiFlash", db_name, table_name);
-        const String table_meta_path = database.getTableMetadataPath(table_name);
-        if (!table_meta_path.empty())
-        {
-            Poco::File{table_meta_path}.remove();
-        }
-        // detach from this database
-        database.detachTable(table_name);
-    }
-}
-
-void startupTables(IDatabase & database, const String & db_name, Tables & tables, legacy::ThreadPool * thread_pool, Poco::Logger * log)
-{
-    LOG_INFO(log, "Starting up {} tables.", tables.size());
-
-    AtomicStopwatch watch;
-    std::atomic<size_t> tables_processed{0};
-    size_t total_tables = tables.size();
-
-    std::mutex failed_tables_mutex;
-    Tables tables_failed_to_startup;
-
-    auto task_function = [&](Tables::iterator begin, Tables::iterator end) {
-        for (auto it = begin; it != end; ++it)
-        {
-            if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
-            {
-                LOG_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
-                watch.restart();
-            }
-
-            try
-            {
-                it->second->startup();
-            }
-            catch (DB::Exception & e)
-            {
-                if (e.code() == ErrorCodes::TIDB_TABLE_ALREADY_EXISTS)
-                {
-                    // While doing IStorage::startup, Exception thorwn with TIDB_TABLE_ALREADY_EXISTS,
-                    // means that we may crashed in the middle of renaming tables. We clean the meta file
-                    // for those storages by `cleanupTables`.
-                    // - If the storage is the outdated one after renaming, remove it is right.
-                    // - If the storage should be the target table, remove it means we "rollback" the
-                    //   rename action. And the table will be renamed by TiDBSchemaSyncer later.
-                    std::lock_guard lock(failed_tables_mutex);
-                    tables_failed_to_startup.emplace(it->first, it->second);
-                }
-                else
-                    throw;
-            }
-        }
-    };
-
-    const size_t bunch_size = TABLES_PARALLEL_LOAD_BUNCH_SIZE;
-    size_t num_bunches = (total_tables + bunch_size - 1) / bunch_size;
-
-    auto begin = tables.begin();
-    for (size_t i = 0; i < num_bunches; ++i)
-    {
-        auto end = begin;
-
-        if (i + 1 == num_bunches)
-            end = tables.end();
-        else
-            std::advance(end, bunch_size);
-
-        auto task = [&task_function, begin, end] {
-            task_function(begin, end);
-        };
-
-        if (thread_pool)
-            thread_pool->schedule(task);
-        else
-            task();
-
-        begin = end;
-    }
-
-    if (thread_pool)
-        thread_pool->wait();
-
-    // Cleanup to asure the atomic of renaming
-    cleanupTables(database, db_name, tables_failed_to_startup, log);
-}
-
 } // namespace DatabaseLoading
 
 } // namespace DB
