@@ -92,7 +92,7 @@ public:
     }
 
     template <typename Mapped, NASemiJoinStep STEP>
-    void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, Join::NullRowsColumns & null_rows, size_t & current_offset, size_t max_pace);
+    void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, Join::NullRowsColumns & null_rows, size_t & current_offset, size_t min_pace);
 
     template <NASemiJoinStep STEP>
     void checkExprResult(ConstNullMapPtr eq_null_map, size_t offset_begin, size_t offset_end);
@@ -110,6 +110,7 @@ private:
     bool step_end;
     NASemiJoinResultType result;
 
+    size_t pace;
     /// Position of null rows.
     size_t null_rows_pos;
 
