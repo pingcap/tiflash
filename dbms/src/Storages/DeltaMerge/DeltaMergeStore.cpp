@@ -420,7 +420,7 @@ void DeltaMergeStore::shutdown()
     LOG_TRACE(log, "Shutdown DeltaMerge end");
 }
 
-DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id, const ScanContextPtr & scan_context_)
+DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id, ScanContextPtr scan_context_)
 {
     std::shared_lock lock(read_write_mutex);
 
@@ -997,7 +997,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index,
-                                        const ScanContextPtr & scan_context)
+                                        ScanContextPtr scan_context)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
@@ -1087,7 +1087,7 @@ SourceOps DeltaMergeStore::readSourceOps(
     size_t expected_block_size,
     const SegmentIdSet & read_segments,
     size_t extra_table_id_index,
-    const ScanContextPtr & scan_context)
+    ScanContextPtr scan_context)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
@@ -1153,7 +1153,7 @@ DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
     size_t num_streams,
     const String & tracing_id,
     const SegmentIdSet & read_segments,
-    const ScanContextPtr & scan_context)
+    ScanContextPtr scan_context)
 {
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
     auto log_tracing_id = getLogTracingId(*dm_context);
