@@ -146,7 +146,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
         auto client = S3::ClientFactory::instance().sharedTiFlashClient();
         ri->set_root(client->root());
     }
-   
+
 
     auto local_dir = Poco::Path(global_context.getTemporaryPath() + fmt::format("/checkpoint_upload_{}", upload_info.upload_sequence)).absolute();
     Poco::File(local_dir).createDirectories();
