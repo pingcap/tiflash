@@ -47,7 +47,7 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
-#include <IO/IOThreadPool.h>
+#include <IO/IOThreadPools.h>
 #include <IO/ReadHelpers.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
@@ -797,32 +797,76 @@ private:
 
 // By default init global thread pool by hardware_concurrency
 // Later we will adjust it by `adjustThreadPoolSize`
-void initThreadPool()
+void initThreadPool(Poco::Util::LayeredConfiguration & config)
 {
     size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
+
+    // Note: Global Thread Pool must be larger than sub thread pools.
     GlobalThreadPool::initialize(
-        /*max_threads*/ default_num_threads,
-        /*max_free_threads*/ default_num_threads / 2,
-        /*queue_size*/ default_num_threads * 2);
-    IOThreadPool::initialize(
-        /*max_threads*/ default_num_threads,
-        /*max_free_threads*/ default_num_threads / 2,
-        /*queue_size*/ default_num_threads * 2);
+        /*max_threads*/ default_num_threads * 20,
+        /*max_free_threads*/ default_num_threads,
+        /*queue_size*/ default_num_threads * 8);
+
+    auto disaggregated_mode = getDisaggregatedMode(config);
+    if (disaggregated_mode == DisaggregatedMode::Compute)
+    {
+        RNPagePreparerPool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+        RNRemoteReadTaskPool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+    }
+
+    if (disaggregated_mode == DisaggregatedMode::Compute || disaggregated_mode == DisaggregatedMode::Storage)
+    {
+        DataStoreS3Pool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+        S3FileCachePool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+    }
 }
 
 void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 {
     // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
     size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
-    // Currently, `GlobalThreadPool` is only used by `IOThreadPool`, so they have the same number of threads.
 
-    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count);
-    GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count / 2);
-    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 2);
+    // Note: Global Thread Pool must be larger than sub thread pools.
+    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 20);
+    GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count);
+    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 8);
 
-    IOThreadPool::instance->setMaxThreads(max_io_thread_count);
-    IOThreadPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-    IOThreadPool::instance->setQueueSize(max_io_thread_count * 2);
+    if (RNPagePreparerPool::instance)
+    {
+        RNPagePreparerPool::instance->setMaxThreads(max_io_thread_count);
+        RNPagePreparerPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        RNPagePreparerPool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+    if (RNRemoteReadTaskPool::instance)
+    {
+        RNRemoteReadTaskPool::instance->setMaxThreads(max_io_thread_count);
+        RNRemoteReadTaskPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        RNRemoteReadTaskPool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+    if (DataStoreS3Pool::instance)
+    {
+        DataStoreS3Pool::instance->setMaxThreads(max_io_thread_count);
+        DataStoreS3Pool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        DataStoreS3Pool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+    if (S3FileCachePool::instance)
+    {
+        S3FileCachePool::instance->setMaxThreads(max_io_thread_count);
+        S3FileCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        S3FileCachePool::instance->setQueueSize(max_io_thread_count * 2);
+    }
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
@@ -860,7 +904,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     // Later we may create thread pool from GlobalThreadPool
     // init it before other components
-    initThreadPool();
+    initThreadPool(config());
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
@@ -871,14 +915,30 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // "0" by default, means no quota, the actual disk capacity is used.
     size_t global_capacity_quota = 0;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
-    if (storage_config.format_version)
+    if (storage_config.format_version != 0)
     {
+        if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V5.identifier)
+        {
+            LOG_WARNING(log, "'storage.format_version' must be set to 5 when S3 is enabled!");
+            throw Exception("'storage.format_version' must be set to 5 when S3 is enabled!");
+        }
         setStorageFormat(storage_config.format_version);
         LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
     }
     else
     {
-        LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
+        if (storage_config.s3_config.isS3Enabled())
+        {
+            // If the user does not explicitly set format_version in the config file but
+            // enables S3, then we set up a proper format version to support S3.
+            setStorageFormat(5);
+            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_V5.identifier);
+        }
+        else
+        {
+            // Use the default settings
+            LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
+        }
     }
 
     LOG_INFO(log, "Using api_version={}", storage_config.api_version);

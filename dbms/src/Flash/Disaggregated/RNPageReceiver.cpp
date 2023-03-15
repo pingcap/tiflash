@@ -268,7 +268,7 @@ void RNPageReceiverBase<RPCContext>::readLoop()
     // Keep popping segment fetch pages request to get the task ready
     while (!meet_error)
     {
-        auto req = rpc_context->popRequest();
+        auto req = rpc_context->nextFetchPagesRequest();
         if (!req.isValid())
             break;
         try

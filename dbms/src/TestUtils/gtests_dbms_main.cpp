@@ -14,7 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/UniThreadPool.h>
-#include <IO/IOThreadPool.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Poco/Environment.h>
 #include <Server/StorageConfigParser.h>
@@ -77,8 +77,11 @@ int main(int argc, char ** argv)
         DB::tests::TiFlashTestEnv::getGlobalContext().getSettingsRef().dt_read_thread_count_scale);
     DB::DM::SegmentReadTaskScheduler::instance();
 
-    DB::GlobalThreadPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
-    DB::IOThreadPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
+    DB::GlobalThreadPool::initialize(/*max_threads*/ 100, /*max_free_threds*/ 10, /*queue_size*/ 1000);
+    DB::S3FileCachePool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
+    DB::DataStoreS3Pool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
+    DB::RNRemoteReadTaskPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
+    DB::RNPagePreparerPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
     const auto s3_endpoint = Poco::Environment::get("S3_ENDPOINT", "");
     const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "mockbucket");
     const auto s3_root = Poco::Environment::get("S3_ROOT", "tiflash_ut/");

@@ -62,7 +62,7 @@ struct RpcTypeTraits<disaggregated::EstablishDisaggTaskRequest>
 {
     using RequestType = disaggregated::EstablishDisaggTaskRequest;
     using ResultType = disaggregated::EstablishDisaggTaskResponse;
-    static const char * err_msg() { return "EstablishDisaggregatedTask Failed"; } // NOLINT(readability-identifier-naming)
+    static const char * err_msg() { return "EstablishDisaggTask Failed"; } // NOLINT(readability-identifier-naming)
     static ::grpc::Status doRPCCall(
         grpc::ClientContext * context,
         std::shared_ptr<KvConnClient> client,
@@ -227,7 +227,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
                     LOG_DEBUG(
                         log,
-                        "Build RNRemoteTableReadTask finished, elapsed={}s store={} addr={} segments={} task_id={}",
+                        "Build RNRemoteTableReadTask finished, elapsed={:.3f}s store={} addr={} segments={} task_id={}",
                         watch_table.elapsedSeconds(),
                         resp->store_id(),
                         batch_cop_task.store_addr,

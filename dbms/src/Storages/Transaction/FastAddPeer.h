@@ -103,7 +103,7 @@ private:
 
     std::mutex range_cache_mu;
 
-    struct KeyComparator : public std::binary_function<DM::RowKeyValue, DM::RowKeyValue, bool>
+    struct KeyComparator
     {
         bool operator()(const DM::RowKeyValue & key1, const DM::RowKeyValue & key2) const
         {
