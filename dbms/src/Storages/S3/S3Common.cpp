@@ -265,23 +265,19 @@ bool isNotFoundError(Aws::S3::S3Errors error)
     return error == Aws::S3::S3Errors::RESOURCE_NOT_FOUND || error == Aws::S3::S3Errors::NO_SUCH_KEY;
 }
 
-Aws::S3::Model::HeadObjectOutcome headObject(const TiFlashS3Client & client, const String & key, const String & version_id)
+Aws::S3::Model::HeadObjectOutcome headObject(const TiFlashS3Client & client, const String & key)
 {
     ProfileEvents::increment(ProfileEvents::S3HeadObject);
     Stopwatch sw;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_s3_request_seconds, type_head_object).Observe(sw.elapsedSeconds()); });
     Aws::S3::Model::HeadObjectRequest req;
     client.setBucketAndKeyWithRoot(req, key);
-    if (!version_id.empty())
-    {
-        req.SetVersionId(version_id);
-    }
     return client.HeadObject(req);
 }
 
-bool objectExists(const TiFlashS3Client & client, const String & key, const String & version_id)
+bool objectExists(const TiFlashS3Client & client, const String & key)
 {
-    auto outcome = headObject(client, key, version_id);
+    auto outcome = headObject(client, key);
     if (outcome.IsSuccess())
     {
         return true;
@@ -509,7 +505,7 @@ void listPrefix(
                 // Copy the `Object` to cut off the `root` from key, the cost should be acceptable :(
                 auto object_without_root = object;
                 object_without_root.SetKey(object.GetKey().substr(cut_size, object.GetKey().size()));
-                page_res = pager(object);
+                page_res = pager(object_without_root);
             }
             if (!page_res.more)
                 break;
@@ -649,6 +645,52 @@ void deleteObject(const TiFlashS3Client & client, const String & key)
     const auto & res = o.GetResult();
     UNUSED(res);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_delete_object).Observe(sw.elapsedSeconds());
+}
+
+void rawListPrefix(
+    const Aws::S3::S3Client & client,
+    const String & bucket,
+    const String & prefix,
+    std::string_view delimiter,
+    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager)
+{
+    Stopwatch sw;
+    Aws::S3::Model::ListObjectsV2Request req;
+    req.WithBucket(bucket).WithPrefix(prefix);
+    if (!delimiter.empty())
+    {
+        req.SetDelimiter(String(delimiter));
+    }
+
+    static auto log = Logger::get("S3RawListPrefix");
+
+    bool done = false;
+    size_t num_keys = 0;
+    while (!done)
+    {
+        Stopwatch sw_list;
+        ProfileEvents::increment(ProfileEvents::S3ListObjects);
+        auto outcome = client.ListObjectsV2(req);
+        if (!outcome.IsSuccess())
+        {
+            throw fromS3Error(outcome.GetError(), "S3 ListObjectV2s failed, bucket={} prefix={} delimiter={}", bucket, prefix, delimiter);
+        }
+        GET_METRIC(tiflash_storage_s3_request_seconds, type_list_objects).Observe(sw_list.elapsedSeconds());
+
+        const auto & result = outcome.GetResult();
+        PageResult page_res = pager(result);
+        num_keys += page_res.num_keys;
+
+        // handle the result size over max size
+        done = !result.GetIsTruncated();
+        if (!done && page_res.more)
+        {
+            const auto & next_token = result.GetNextContinuationToken();
+            req.SetContinuationToken(next_token);
+            LOG_DEBUG(log, "rawListPrefix bucket={} prefix={} delimiter={} keys={} total_keys={} next_token={}", bucket, prefix, delimiter, page_res.num_keys, num_keys, next_token);
+        }
+    }
+    LOG_DEBUG(log, "rawListPrefix bucket={} prefix={} delimiter={} total_keys={} cost={:.2f}s", bucket, prefix, delimiter, num_keys, sw.elapsedSeconds());
 }
 
 } // namespace DB::S3

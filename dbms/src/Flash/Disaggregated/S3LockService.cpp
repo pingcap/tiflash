@@ -200,7 +200,7 @@ bool S3LockService::tryAddLockImpl(
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     // make sure data file exists
     auto object_key = key_view.isDMFile() ? fmt::format("{}/{}", data_file_key, DM::DMFile::metav2FileName()) : data_file_key;
-    if (!DB::S3::objectExists(*s3_client, s3_client->bucket(), object_key))
+    if (!DB::S3::objectExists(*s3_client, object_key))
     {
         auto * e = response->mutable_result()->mutable_conflict();
         e->set_reason(fmt::format("data file not exist, key={}", data_file_key));
@@ -210,7 +210,7 @@ bool S3LockService::tryAddLockImpl(
 
     // make sure data file is not mark as deleted
     const auto delmark_key = key_view.getDelMarkKey();
-    if (DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key))
+    if (DB::S3::objectExists(*s3_client, delmark_key))
     {
         auto * e = response->mutable_result()->mutable_conflict();
         e->set_reason(fmt::format("data file is mark deleted, key={} delmark={}", data_file_key, delmark_key));

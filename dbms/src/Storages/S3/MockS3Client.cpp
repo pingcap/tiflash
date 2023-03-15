@@ -134,7 +134,7 @@ Model::GetObjectTaggingOutcome MockS3Client::GetObjectTagging(const Model::GetOb
     }
     auto taggings = storage_tagging[request.GetBucket()][normalizedKey(request.GetKey())];
     auto pos = taggings.find('=');
-    RUNTIME_CHECK(pos != String::npos, pos, taggings.size());
+    RUNTIME_CHECK(pos != String::npos, taggings, pos, taggings.size());
     Aws::S3::Model::Tag tag;
     tag.WithKey(taggings.substr(0, pos))
         .WithValue(taggings.substr(pos + 1, taggings.size()));

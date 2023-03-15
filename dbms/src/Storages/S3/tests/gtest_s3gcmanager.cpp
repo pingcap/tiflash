@@ -270,7 +270,7 @@ try
         S3::uploadEmptyFile(*mock_s3_client, df.toFullKey());
         S3::uploadEmptyFile(*mock_s3_client, delmark_key);
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3599 * 1000);
-        FailPointHelper::enableFailPoint(FailPoints::force_set_mocked_s3_object_mtime, std::map<String, Aws::Utils::DateTime>{{delmark_key, delmark_mtime}});
+        FailPointHelper::enableFailPoint(FailPoints::force_set_mocked_s3_object_mtime, std::map<String, Aws::Utils::DateTime>{{mock_s3_client->root() + delmark_key, delmark_mtime}});
         // mock_s3_client->head_result_mtime = delmark_mtime;
         gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
@@ -285,7 +285,7 @@ try
         S3::uploadEmptyFile(*mock_s3_client, df.toFullKey());
         S3::uploadEmptyFile(*mock_s3_client, delmark_key);
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3601 * 1000);
-        FailPointHelper::enableFailPoint(FailPoints::force_set_mocked_s3_object_mtime, std::map<String, Aws::Utils::DateTime>{{delmark_key, delmark_mtime}});
+        FailPointHelper::enableFailPoint(FailPoints::force_set_mocked_s3_object_mtime, std::map<String, Aws::Utils::DateTime>{{mock_s3_client->root() + delmark_key, delmark_mtime}});
         gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
         // lock datafile and delmark are deleted
@@ -328,10 +328,11 @@ try
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, lock_key));
         ASSERT_TRUE(S3::objectExists(*mock_s3_client, delmark_key));
         ASSERT_TRUE(S3::objectExists(*mock_s3_client, df.toFullKey()));
-        const auto res = static_cast<MockS3Client *>(mock_s3_client.get())->GetObjectTagging( //
-            Aws::S3::Model::GetObjectTaggingRequest() //
-                .WithBucket(mock_s3_client->bucket())
-                .WithKey(df.toFullKey()));
+
+        auto req = Aws::S3::Model::GetObjectTaggingRequest(); //
+        mock_s3_client->setBucketAndKeyWithRoot(req, df.toFullKey());
+        const auto res = mock_s3_client->GetObjectTagging(req);
+
         auto tags = res.GetResult().GetTagSet();
         ASSERT_EQ(tags.size(), 1);
         EXPECT_EQ(tags[0].GetKey(), "tiflash_deleted");

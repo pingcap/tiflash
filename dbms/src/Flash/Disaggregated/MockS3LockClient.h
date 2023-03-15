@@ -59,7 +59,7 @@ public:
         auto view = S3FilenameView::fromKey(data_file_key);
         auto lock_prefix = view.getLockPrefix();
         auto lock_key_opt = S3::anyKeyExistWithPrefix(*s3_client, lock_prefix);
-        bool any_lock_exist = !lock_key_opt.has_value();
+        bool any_lock_exist = lock_key_opt.has_value();
         if (any_lock_exist)
         {
             return {false, ""};

@@ -121,9 +121,9 @@ private:
 
 bool isNotFoundError(Aws::S3::S3Errors error);
 
-Aws::S3::Model::HeadObjectOutcome headObject(const TiFlashS3Client & client, const String & key, const String & version_id = "");
+Aws::S3::Model::HeadObjectOutcome headObject(const TiFlashS3Client & client, const String & key);
 
-bool objectExists(const TiFlashS3Client & client, const String & key, const String & version_id = "");
+bool objectExists(const TiFlashS3Client & client, const String & key);
 
 void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname);
 
@@ -167,5 +167,14 @@ std::pair<bool, Aws::Utils::DateTime> tryGetObjectModifiedTime(
     const String & key);
 
 void deleteObject(const TiFlashS3Client & client, const String & key);
+
+// Unlike `listPrefix` or other methods above, this does not handle
+// the TiFlashS3Client `root`.
+void rawListPrefix(
+    const Aws::S3::S3Client & client,
+    const String & bucket,
+    const String & prefix,
+    std::string_view delimiter,
+    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
 
 } // namespace DB::S3

@@ -50,14 +50,32 @@ try
 
     uploadEmptyFile(*client, "s999/abcd");
 
-    Strings prefixes;
-    listPrefixWithDelimiter(*client, "s999/", "/", [&](const Aws::S3::Model::CommonPrefix & p) {
-        prefixes.emplace_back(p.GetPrefix());
-        return PageResult{.num_keys = 1, .more = true};
-    });
-    ASSERT_EQ(prefixes.size(), 2) << fmt::format("{}", prefixes);
-    EXPECT_EQ(prefixes[0], "s999/data/");
-    EXPECT_EQ(prefixes[1], "s999/manifest/");
+    {
+        Strings prefixes;
+        listPrefixWithDelimiter(*client, "s999/", "/", [&](const Aws::S3::Model::CommonPrefix & p) {
+            prefixes.emplace_back(p.GetPrefix());
+            return PageResult{.num_keys = 1, .more = true};
+        });
+        ASSERT_EQ(prefixes.size(), 2) << fmt::format("{}", prefixes);
+        EXPECT_EQ(prefixes[0], "s999/data/");
+        EXPECT_EQ(prefixes[1], "s999/manifest/");
+    }
+
+    // check the keys with raw `LIST` request
+    {
+        Strings prefixes;
+        rawListPrefix(*client, client->bucket(), client->root() + "s999/", "/", [&](const Aws::S3::Model::ListObjectsV2Result & result) {
+            const auto & ps = result.GetCommonPrefixes();
+            for (const auto & p : ps)
+            {
+                prefixes.emplace_back(p.GetPrefix());
+            }
+            return PageResult{.num_keys = ps.size(), .more = true};
+        });
+        ASSERT_EQ(prefixes.size(), 2) << fmt::format("{}", prefixes);
+        EXPECT_EQ(prefixes[0], client->root() + "s999/data/");
+        EXPECT_EQ(prefixes[1], client->root() + "s999/manifest/");
+    }
 }
 CATCH
 
