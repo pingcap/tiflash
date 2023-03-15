@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "gtest_segment_util.h"
-
 #include <Columns/ColumnsCommon.h>
+#include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 
 #include <boost/algorithm/string.hpp>
 

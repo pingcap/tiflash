@@ -60,8 +60,6 @@
 
 #include <random>
 
-#include "Functions/FunctionBinaryArithmetic.h"
-
 namespace DB
 {
 namespace FailPoints

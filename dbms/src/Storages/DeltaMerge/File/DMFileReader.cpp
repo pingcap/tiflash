@@ -311,7 +311,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
     {
         // Use std::find to find the first 1 in the filter, these rows before the first 1 should be skipped.
         // For example, filter is [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0], each pack has 3 rows
-        // 1. begin points to index 6, it points to index 3, skip = 3 >= 3, so use_packs[0] = false, read_rows = 3, next_pack_id_cp = 1
+        // 1. begin points to index 0, it points to index 3, skip = 3 >= 3, so use_packs[0] = false, read_rows = 3, next_pack_id_cp = 1
         // 2. it != filter.cend(), so use_packs[1] = true, read_rows = 6, next_pack_id_cp = 2
         // 3. begin points to index 6, and it points to index 6, skip = 0 < 3
         // 4. it != filter.cend(), so use_packs[2] = true, read_rows = 9, next_pack_id_cp = 3
