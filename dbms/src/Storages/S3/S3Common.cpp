@@ -271,7 +271,7 @@ Aws::S3::Model::HeadObjectOutcome headObject(const TiFlashS3Client & client, con
     Stopwatch sw;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_s3_request_seconds, type_head_object).Observe(sw.elapsedSeconds()); });
     Aws::S3::Model::HeadObjectRequest req;
-    client.setBucketAndKey(req, key);
+    client.setBucketAndKeyWithRoot(req, key);
     if (!version_id.empty())
     {
         req.SetVersionId(version_id);
@@ -298,7 +298,7 @@ void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const S
 {
     Stopwatch sw;
     Aws::S3::Model::PutObjectRequest req;
-    client.setBucketAndKey(req, key);
+    client.setBucketAndKeyWithRoot(req, key);
     if (!tagging.empty())
         req.SetTagging(tagging);
     req.SetContentType("binary/octet-stream");
@@ -319,7 +319,7 @@ void uploadFile(const TiFlashS3Client & client, const String & local_fname, cons
 {
     Stopwatch sw;
     Aws::S3::Model::PutObjectRequest req;
-    client.setBucketAndKey(req, remote_fname);
+    client.setBucketAndKeyWithRoot(req, remote_fname);
     req.SetContentType("binary/octet-stream");
     auto istr = Aws::MakeShared<Aws::FStream>("PutObjectInputStream", local_fname, std::ios_base::in | std::ios_base::binary);
     RUNTIME_CHECK_MSG(istr->is_open(), "Open {} fail: {}", local_fname, strerror(errno));
@@ -341,7 +341,7 @@ void downloadFile(const TiFlashS3Client & client, const String & local_fname, co
 {
     Stopwatch sw;
     Aws::S3::Model::GetObjectRequest req;
-    client.setBucketAndKey(req, remote_fname);
+    client.setBucketAndKeyWithRoot(req, remote_fname);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
     auto outcome = client.GetObject(req);
     if (!outcome.IsSuccess())
@@ -363,7 +363,7 @@ void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key
     // rewrite the object with `key`, adding tagging to the new object
     // The copy_source format is "${source_bucket}/${source_key}"
     auto copy_source = client.bucket() + "/" + (client.root() == "/" ? "" : client.root()) + key;
-    client.setBucketAndKey(req, key);
+    client.setBucketAndKeyWithRoot(req, key);
     req.WithCopySource(copy_source) //
         .WithTagging(tagging)
         .WithTaggingDirective(Aws::S3::Model::TaggingDirective::REPLACE);
@@ -642,7 +642,7 @@ void deleteObject(const TiFlashS3Client & client, const String & key)
 {
     Stopwatch sw;
     Aws::S3::Model::DeleteObjectRequest req;
-    client.setBucketAndKey(req, key);
+    client.setBucketAndKeyWithRoot(req, key);
     ProfileEvents::increment(ProfileEvents::S3DeleteObject);
     auto o = client.DeleteObject(req);
     RUNTIME_CHECK(o.IsSuccess(), o.GetError().GetMessage());

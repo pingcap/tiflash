@@ -380,7 +380,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
     Stopwatch sw;
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     Aws::S3::Model::GetObjectRequest req;
-    client->setBucketAndKey(req, s3_key);
+    client->setBucketAndKeyWithRoot(req, s3_key);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
     auto outcome = client->GetObject(req);
     if (!outcome.IsSuccess())

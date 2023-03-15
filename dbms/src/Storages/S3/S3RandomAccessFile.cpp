@@ -74,7 +74,7 @@ void S3RandomAccessFile::initialize()
 {
     Stopwatch sw;
     Aws::S3::Model::GetObjectRequest req;
-    client_ptr->setBucketAndKey(req, remote_fname);
+    client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
     auto outcome = client_ptr->GetObject(req);
     if (!outcome.IsSuccess())

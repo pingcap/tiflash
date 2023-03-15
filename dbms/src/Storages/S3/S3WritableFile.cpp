@@ -138,7 +138,7 @@ void S3WritableFile::createMultipartUpload()
         GET_METRIC(tiflash_storage_s3_request_seconds, type_create_multi_part_upload).Observe(sw.elapsedSeconds());
     });
     Aws::S3::Model::CreateMultipartUploadRequest req;
-    client_ptr->setBucketAndKey(req, remote_fname);
+    client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
     req.SetContentType("binary/octet-stream");
     ProfileEvents::increment(ProfileEvents::S3CreateMultipartUpload);
     auto outcome = client_ptr->CreateMultipartUpload(req);
@@ -170,7 +170,7 @@ void S3WritableFile::fillUploadRequest(Aws::S3::Model::UploadPartRequest & req)
     // Increase part number.
     ++part_number;
     // Setup request.
-    client_ptr->setBucketAndKey(req, remote_fname);
+    client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
     req.SetPartNumber(static_cast<int>(part_number));
     req.SetUploadId(multipart_upload_id);
     req.SetContentLength(temporary_buffer->tellp());
@@ -195,7 +195,7 @@ void S3WritableFile::completeMultipartUpload()
     RUNTIME_CHECK_MSG(!part_tags.empty(), "Failed to complete multipart upload. No parts have uploaded. bucket={}, key={}", client_ptr->bucket(), remote_fname);
 
     Aws::S3::Model::CompleteMultipartUploadRequest req;
-    client_ptr->setBucketAndKey(req, remote_fname);
+    client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
     req.SetUploadId(multipart_upload_id);
     Aws::S3::Model::CompletedMultipartUpload multipart_upload;
     for (size_t i = 0; i < part_tags.size(); ++i)
@@ -245,7 +245,7 @@ void S3WritableFile::makeSinglepartUpload()
 
 void S3WritableFile::fillPutRequest(Aws::S3::Model::PutObjectRequest & req)
 {
-    client_ptr->setBucketAndKey(req, remote_fname);
+    client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
     req.SetContentLength(temporary_buffer->tellp());
     req.SetBody(temporary_buffer);
     req.SetContentType("binary/octet-stream");

@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -33,10 +34,8 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
-
-#include "DataStreams/OneBlockInputStream.h"
-#include "TestUtils/TiFlashTestEnv.h"
 
 
 namespace DB

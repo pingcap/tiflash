@@ -68,7 +68,7 @@ public:
     const String & root() const { return key_root; }
 
     template <typename Request>
-    void setBucketAndKey(Request & req, const String & key) const
+    void setBucketAndKeyWithRoot(Request & req, const String & key) const
     {
         req.WithBucket(bucket_name).WithKey(key_root + key);
     }
