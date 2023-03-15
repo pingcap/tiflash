@@ -102,8 +102,8 @@ String DatabaseTiFlash::getDataPath() const
 }
 
 
-static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
-static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
+// static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
+// static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
 static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
 
 void DatabaseTiFlash::loadTables(Context & context, legacy::ThreadPool * thread_pool, bool has_force_restore_data_flag)
@@ -120,18 +120,18 @@ void DatabaseTiFlash::loadTables(Context & context, legacy::ThreadPool * thread_
     const auto total_tables = table_files.size();
     LOG_INFO(log, "Total {} tables in database {}", total_tables, name);
 
-    AtomicStopwatch watch;
-    std::atomic<size_t> tables_processed{0};
+    // AtomicStopwatch watch;
+    // std::atomic<size_t> tables_processed{0};
 
     auto task_function = [&](std::vector<String>::const_iterator begin, std::vector<String>::const_iterator end) {
         for (auto it = begin; it != end; ++it)
         {
-            /// Messages, so that it's not boring to wait for the server to load for a long time.
-            if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
-            {
-                LOG_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
-                watch.restart();
-            }
+            // /// Messages, so that it's not boring to wait for the server to load for a long time.
+            // if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
+            // {
+            //     LOG_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
+            //     watch.restart();
+            // }
 
             const String & table_file = *it;
             auto [table, table_name] = DatabaseLoading::loadTable(
