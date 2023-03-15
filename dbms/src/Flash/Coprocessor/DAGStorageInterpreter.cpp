@@ -54,10 +54,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int REGION_EPOCH_NOT_MATCH;
-} // namespace ErrorCodes
 
 namespace FailPoints
 {
@@ -319,7 +315,13 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
         // and ask RN to send requests again with correct region info. When RN updates region info,
         // RN may be sending requests to other WN.
 
-        throw Exception("Rejected disaggregated DAG execute because RN region info does not match", DB::ErrorCodes::REGION_EPOCH_NOT_MATCH);
+        RegionException::UnavailableRegions region_ids;
+        for (const auto & info : context.getDAGContext()->retry_regions)
+            region_ids.insert(info.region_id);
+
+        throw RegionException(
+            std::move(region_ids),
+            RegionException::RegionReadStatus::EPOCH_NOT_MATCH);
     }
 
     // A failpoint to test pause before alter lock released
@@ -820,9 +822,8 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         const auto & snap_id = *dag_context.getDisaggTaskId();
         auto timeout_s = context.getSettingsRef().disagg_task_snapshot_timeout;
         auto expired_at = Clock::now() + std::chrono::seconds(timeout_s);
-        bool register_snapshot_ok = snaps->registerSnapshot(snap_id, std::move(disaggregated_snap), expired_at);
-        RUNTIME_CHECK_MSG(register_snapshot_ok, "disaggregated task has been registered {}", snap_id);
-        LOG_INFO(log, "task snapshot registered, snapshot_id={}", snap_id);
+        bool register_snapshot_ok = snaps->registerSnapshot(snap_id, disaggregated_snap, expired_at);
+        RUNTIME_CHECK_MSG(register_snapshot_ok, "Disaggregated task has been registered, snap_id={}", snap_id);
     }
 
     if (has_multiple_partitions)
