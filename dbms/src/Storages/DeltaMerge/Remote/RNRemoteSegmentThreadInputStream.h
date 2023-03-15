@@ -44,7 +44,7 @@ public:
     static BlockInputStreams buildInputStreams(
         const Context & db_context,
         const RNRemoteReadTaskPtr & remote_read_tasks,
-        const RNPagePreparerPtr & page_downloader,
+        const RNPagePreparerPtr & page_preparer,
         const DM::ColumnDefinesPtr & columns_to_read,
         UInt64 read_tso,
         size_t num_streams,
@@ -57,7 +57,7 @@ public:
     RNRemoteSegmentThreadInputStream(
         const Context & db_context_,
         RNRemoteReadTaskPtr read_tasks_,
-        RNPagePreparerPtr page_downloader_,
+        RNPagePreparerPtr page_preparer_,
         const ColumnDefines & columns_to_read_,
         const RSOperatorPtr & filter_,
         UInt64 max_version_,
@@ -84,7 +84,7 @@ protected:
 private:
     const Context & db_context;
     RNRemoteReadTaskPtr read_tasks;
-    RNPagePreparerPtr page_downloader;
+    RNPagePreparerPtr page_preparer;
     ColumnDefines columns_to_read;
     RSOperatorPtr filter;
     Block header;
