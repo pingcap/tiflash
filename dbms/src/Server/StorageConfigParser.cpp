@@ -550,7 +550,7 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     readConfig(table, "request_timeout_ms", request_timeout_ms);
     RUNTIME_CHECK(request_timeout_ms > 0);
     readConfig(table, "root", root);
-    RUNTIME_CHECK_MSG(root == "/", "Only support using '/' as the S3 key root now"); // working on in another PR
+    RUNTIME_CHECK(!root.empty());
 
     auto read_s3_auth_info_from_env = [&]() {
         access_key_id = Poco::Environment::get(S3_ACCESS_KEY_ID, /*default*/ "");
