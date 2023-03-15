@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessorUtils.h>
 #include <Debug/dbgQueryCompiler.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
@@ -99,7 +99,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
         const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
         dag_query = std::make_unique<DAGQueryInfo>(
             conditions,
-            pushed_down_filters,
+            google::protobuf::RepeatedPtrField<tipb::Expr>{}, // don't care pushed down filters
             DAGPreparedSets(),
             source_columns,
             timezone_info);

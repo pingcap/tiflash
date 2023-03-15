@@ -17,7 +17,6 @@
 #include <Core/NamesAndTypes.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Coprocessor/InterpreterUtils.h>
 
 #include <unordered_map>
 

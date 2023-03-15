@@ -24,7 +24,6 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
 
 namespace DB
