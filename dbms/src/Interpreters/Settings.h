@@ -238,7 +238,7 @@ struct Settings
     M(SettingCompressionMethod, dt_compression_method, CompressionMethod::LZ4, "The method of data compression when writing.")                                                                                                          \
     M(SettingInt64, dt_compression_level, 1, "The compression level.")                                                                                                                                                                  \
     \
-    M(SettingInt64, remote_checkpoint_interval_seconds, 60, "The interval of uploading checkpoint to the remote store. Unit is second.")                                                                                                \
+    M(SettingInt64, remote_checkpoint_interval_seconds, 30, "The interval of uploading checkpoint to the remote store. Unit is second.")                                                                                                \
     M(SettingInt64, remote_gc_interval_seconds, 3600, "The interval of running GC task on the remote store. Unit is second.")                                                                                                           \
     \
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.")                                                                                             \
