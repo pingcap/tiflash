@@ -103,7 +103,7 @@ public:
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getDataProvider() { return data_provider; }
+    const auto & getDataProvider() const { return data_provider; }
 };
 
 } // namespace DM

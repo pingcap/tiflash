@@ -102,7 +102,6 @@ struct Serializer
     static RemotePb::ColumnFileRemote serializeTo(const ColumnFileBig & cf_big);
     static ColumnFileBigPtr deserializeCFBig(
         const RemotePb::ColumnFileBig & proto,
-        const Remote::DMFileOID & oid,
         const Remote::IDataStorePtr & data_store,
         const RowKeyRange & segment_range);
 };
