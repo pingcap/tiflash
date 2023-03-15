@@ -52,12 +52,16 @@ public:
 
     void setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp);
 
+    tipb::SelectResponse genExecutionSummaryResponse();
+
 private:
     void recordInputBytes(DAGContext & dag_context);
 
-    const LoggerPtr logger;
+    const LoggerPtr log;
 
     DAGContext * dag_context = nullptr;
+
+    ExecutorStatisticsCollector executor_statistics_collector;
 
     // common
     const MPPTaskId id;

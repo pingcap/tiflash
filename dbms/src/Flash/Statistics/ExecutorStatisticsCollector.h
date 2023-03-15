@@ -16,9 +16,12 @@
 
 #include <Common/Exception.h>
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <tipb/executor.pb.h>
+#include <tipb/select.pb.h>
 
 #include <map>
+#include <memory>
 
 namespace DB
 {
@@ -27,6 +30,12 @@ class DAGContext;
 class ExecutorStatisticsCollector
 {
 public:
+    explicit ExecutorStatisticsCollector(const String & req_id,
+                                         bool fill_executor_id_ = false)
+        : log(Logger::get(req_id))
+        , fill_executor_id(fill_executor_id_)
+    {}
+
     void initialize(DAGContext * dag_context_);
 
     void collectRuntimeDetails();
@@ -35,10 +44,24 @@ public:
 
     String resToJson() const;
 
+    void addExecuteSummaries(tipb::SelectResponse & response);
+
+    void fillExecutionSummary(
+        tipb::SelectResponse & response,
+        const String & executor_id,
+        const BaseRuntimeStatistics & statistic,
+        UInt64 join_build_time,
+        const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
+
+    tipb::SelectResponse genExecutionSummaryResponse();
+
 private:
     DAGContext * dag_context = nullptr;
-
     std::map<String, ExecutorStatisticsPtr> res;
+
+    const LoggerPtr log;
+
+    bool fill_executor_id; // for testing list based executors
 
     template <typename T>
     bool doAppend(const String & executor_id, const tipb::Executor * executor)
@@ -58,5 +81,5 @@ private:
         return (doAppend<Ts>(executor_id, executor) || ...);
     }
 };
-using ExecutorStatisticsCollectorPtr = std::shared_ptr<ExecutorStatisticsCollector>;
+using ExecutorStatisticsCollectorPtr = std::unique_ptr<ExecutorStatisticsCollector>;
 } // namespace DB

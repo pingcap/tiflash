@@ -19,7 +19,6 @@
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
@@ -91,7 +90,6 @@ try
 {
     auto start_time = Clock::now();
     DAGContext & dag_context = *context.getDAGContext();
-    dag_context.executorStatisticCollector().initialize(&dag_context);
 
     auto query_executor = queryExecute(context, internal);
     if (!query_executor)
@@ -116,8 +114,9 @@ try
 
         if (dag_context.collect_execution_summaries)
         {
-            ExecutionSummaryCollector summary_collector(dag_context, log->identifier());
-            summary_collector.addExecuteSummaries(*dag_response);
+            ExecutorStatisticsCollector statistics_collector(log->identifier());
+            statistics_collector.initialize(&dag_context);
+            statistics_collector.addExecuteSummaries(*dag_response);
         }
     }
     else
@@ -148,8 +147,9 @@ try
 
         if (dag_context.collect_execution_summaries)
         {
-            ExecutionSummaryCollector summary_collector(dag_context, log->identifier());
-            auto execution_summary_response = summary_collector.genExecutionSummaryResponse();
+            ExecutorStatisticsCollector statistics_collector(log->identifier());
+            statistics_collector.initialize(&dag_context);
+            auto execution_summary_response = statistics_collector.genExecutionSummaryResponse();
             streaming_writer->write(execution_summary_response);
         }
     }

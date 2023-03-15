@@ -63,13 +63,13 @@ public:
 
     virtual void initializeContext();
 
-    void initializeClientInfo();
+    void initializeClientInfo() const;
 
     DAGContext & getDAGContext();
 
-    void enablePlanner(bool is_enable);
+    void enablePlanner(bool is_enable) const;
 
-    void enablePipeline(bool is_enable);
+    void enablePipeline(bool is_enable) const;
 
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 

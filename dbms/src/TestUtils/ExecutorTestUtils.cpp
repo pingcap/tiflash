@@ -16,8 +16,8 @@
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
+#include <Flash/Statistics/ExecutorStatisticsCollector.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorSerializer.h>
@@ -106,7 +106,7 @@ void ExecutorTest::SetUpTestCase()
     register_func(DB::registerWindowFunctions);
 }
 
-void ExecutorTest::initializeClientInfo()
+void ExecutorTest::initializeClientInfo() const
 {
     context.context->setCurrentQueryId("test");
     ClientInfo & client_info = context.context->getClientInfo();
@@ -271,12 +271,12 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
     return vstackBlocks(std::move(actual_blocks)).getColumnsWithTypeAndName();
 }
 
-void ExecutorTest::enablePlanner(bool is_enable)
+void ExecutorTest::enablePlanner(bool is_enable) const
 {
     context.context->setSetting("enable_planner", is_enable ? "true" : "false");
 }
 
-void ExecutorTest::enablePipeline(bool is_enable)
+void ExecutorTest::enablePipeline(bool is_enable) const
 {
     context.context->setSetting("enable_pipeline", is_enable ? "true" : "false");
 }
@@ -320,9 +320,9 @@ void ExecutorTest::testForExecutionSummary(
     DAGContext dag_context(*request, "test_execution_summary", concurrency);
     executeStreams(&dag_context);
     ASSERT_TRUE(dag_context.collect_execution_summaries);
-    dag_context.executorStatisticCollector().initialize(&dag_context);
-    ExecutionSummaryCollector summary_collector(dag_context, "test_execution_summary", true);
-    auto summaries = summary_collector.genExecutionSummaryResponse().execution_summaries();
+    ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
+    statistics_collector.initialize(&dag_context);
+    auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
     ASSERT_EQ(summaries.size(), expect.size()) << "\n"
                                                << testInfoMsg(request, true, false, concurrency, DEFAULT_BLOCK_SIZE);
     for (const auto & summary : summaries)

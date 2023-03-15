@@ -30,7 +30,6 @@
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
-#include <Flash/Statistics/ExecutorStatisticsCollector.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
@@ -63,8 +62,6 @@ struct JoinExecuteInfo
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 class ProcessListEntry;
-
-class ExecutorStatisticsCollector;
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 {
@@ -276,9 +273,6 @@ public:
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
-    String getRootExecutorId();
-
-    ExecutorStatisticsCollector & executorStatisticCollector();
 
     const tipb::DAGRequest * dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
@@ -329,11 +323,10 @@ public:
     /// thus we need to pay attention to scan_context_map usage that time.
     std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
 
-    ExecutorStatisticsCollector executor_statistics_collector;
-
 private:
     void initExecutorIdToJoinIdMap();
     void initOutputInfo();
+    void initListBasedExecutors();
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;

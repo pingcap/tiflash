@@ -18,10 +18,10 @@
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
-#include <Flash/Statistics/ExecutorStatisticsCollector.h>
+#include <Flash/Planner/ExecutorIdGenerator.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Storages/Transaction/TMTContext.h>
-
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
@@ -65,6 +65,7 @@ DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo 
     if (return_executor_id)
         root_executor_id = root_executor.executor_id();
     initOutputInfo();
+    initListBasedExecutors();
 }
 
 // for mpp
@@ -90,6 +91,7 @@ DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMet
     // only mpp task has join executor.
     initExecutorIdToJoinIdMap();
     initOutputInfo();
+    initListBasedExecutors();
 }
 
 DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_)
@@ -115,6 +117,7 @@ DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggTa
     return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
 
     initOutputInfo();
+    initListBasedExecutors();
 }
 
 // for test
@@ -155,6 +158,7 @@ DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, String log_identif
     if (return_executor_id)
         root_executor_id = root_executor.executor_id();
     initOutputInfo();
+    initListBasedExecutors();
 }
 
 void DAGContext::initOutputInfo()
@@ -175,14 +179,19 @@ void DAGContext::initOutputInfo()
     keep_session_timezone_info = encode_type == tipb::EncodeType::TypeChunk || encode_type == tipb::EncodeType::TypeCHBlock;
 }
 
-String DAGContext::getRootExecutorId()
+void DAGContext::initListBasedExecutors()
 {
-    // If return_executor_id is false, we can get the generated executor_id from list_based_executors_order.
-    return return_executor_id
-        ? root_executor_id
-        : (list_based_executors_order.empty()
-               ? ""
-               : list_based_executors_order.back());
+    if (!return_executor_id)
+    {
+        ExecutorIdGenerator id_generator;
+        traverseExecutorsReverse(dag_request, [&](const tipb::Executor & executor) {
+            const auto & executor_id = id_generator.generate(executor);
+            list_based_executors_order.push_back(executor_id);
+            auto * mutable_executor = const_cast<tipb::Executor *>(&executor);
+            mutable_executor->set_executor_id(executor_id);
+            return true;
+        });
+    }
 }
 
 bool DAGContext::allowZeroInDate() const
@@ -366,10 +375,5 @@ bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
 const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_id) const
 {
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
-}
-
-ExecutorStatisticsCollector & DAGContext::executorStatisticCollector()
-{
-    return executor_statistics_collector;
 }
 } // namespace DB

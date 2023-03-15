@@ -21,7 +21,6 @@
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTask.h>
@@ -141,10 +140,7 @@ void MPPTask::finishWrite()
 {
     RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
     if (dag_context->collect_execution_summaries)
-    {
-        ExecutionSummaryCollector summary_collector(*dag_context, log->identifier());
-        tunnel_set->sendExecutionSummary(summary_collector.genExecutionSummaryResponse());
-    }
+        tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
     tunnel_set->finishWrite();
 }
 

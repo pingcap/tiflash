@@ -95,6 +95,33 @@ public:
             }
         }
 
+        if constexpr (ExecutorImpl::has_extra_info)
+        {
+            collectExtraRuntimeDetail();
+        }
+
+        collectJoinBuildTime();
+    }
+
+    static bool isMatch(const tipb::Executor * executor)
+    {
+        return ExecutorImpl::isMatch(executor);
+    }
+
+protected:
+    String executor_id;
+    String type;
+
+    std::vector<String> children;
+
+    DAGContext & dag_context;
+
+    virtual void appendExtraJson(FmtBuffer &) const {}
+
+    virtual void collectExtraRuntimeDetail() {}
+
+    void collectJoinBuildTime()
+    {
         /// for join need to add the build time
         /// In TiFlash, a hash join's build side is finished before probe side starts,
         /// so the join probe side's running time does not include hash table's build time,
@@ -117,28 +144,6 @@ public:
                 }
             }
         }
-
-        if constexpr (ExecutorImpl::has_extra_info)
-        {
-            collectExtraRuntimeDetail();
-        }
     }
-
-    static bool isMatch(const tipb::Executor * executor)
-    {
-        return ExecutorImpl::isMatch(executor);
-    }
-
-protected:
-    String executor_id;
-    String type;
-
-    std::vector<String> children;
-
-    DAGContext & dag_context;
-
-    virtual void appendExtraJson(FmtBuffer &) const {}
-
-    virtual void collectExtraRuntimeDetail() {}
 };
 } // namespace DB

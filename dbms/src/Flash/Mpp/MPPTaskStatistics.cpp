@@ -26,7 +26,8 @@
 namespace DB
 {
 MPPTaskStatistics::MPPTaskStatistics(const MPPTaskId & id_, String address_)
-    : logger(getMPPTaskTracingLog(id_))
+    : log(getMPPTaskTracingLog(id_))
+    , executor_statistics_collector(log->identifier())
     , id(id_)
     , host(std::move(address_))
     , task_init_timestamp(Clock::now())
@@ -75,12 +76,12 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context_)
 
     is_root = dag_context->isRootMPPTask();
     sender_executor_id = root_executor.executor_id();
-    dag_context->executorStatisticCollector().initialize(dag_context);
+    executor_statistics_collector.initialize(dag_context);
 }
 
 void MPPTaskStatistics::collectRuntimeStatistics()
 {
-    const auto & executor_statistics_res = dag_context->executorStatisticCollector().getResult();
+    const auto & executor_statistics_res = executor_statistics_collector.getResult();
     auto it = executor_statistics_res.find(sender_executor_id);
     RUNTIME_CHECK_MSG(it != executor_statistics_res.end(), "Can't find exchange sender statistics after `collectRuntimeStatistics`");
     const auto & return_statistics = it->second->getBaseRuntimeStatistics();
@@ -89,10 +90,16 @@ void MPPTaskStatistics::collectRuntimeStatistics()
     recordInputBytes(*dag_context);
 }
 
+tipb::SelectResponse MPPTaskStatistics::genExecutionSummaryResponse()
+{
+    return executor_statistics_collector.genExecutionSummaryResponse();
+}
+
+
 void MPPTaskStatistics::logTracingJson()
 {
     LOG_INFO(
-        logger,
+        log,
         R"({{"query_tso":{},"task_id":{},"is_root":{},"sender_executor_id":"{}","executors":{},"host":"{}")"
         R"(,"task_init_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{})"
         R"(,"compile_start_timestamp":{},"compile_end_timestamp":{})"
@@ -103,7 +110,7 @@ void MPPTaskStatistics::logTracingJson()
         id.task_id,
         is_root,
         sender_executor_id,
-        dag_context->executorStatisticCollector().resToJson(),
+        executor_statistics_collector.resToJson(),
         host,
         toNanoseconds(task_init_timestamp),
         toNanoseconds(task_start_timestamp),
