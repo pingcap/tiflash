@@ -226,11 +226,8 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
             switch (executor.tp())
             {
             case tipb::ExecType::TypeTableScan:
-                if (executor.tbl_scan().keep_order())
-                {
-                    is_supported = false;
-                    return false;
-                }
+                is_supported = !executor.tbl_scan().keep_order();
+                return is_supported;
             case tipb::ExecType::TypeProjection:
             case tipb::ExecType::TypeSelection:
             case tipb::ExecType::TypeLimit:
@@ -241,10 +238,13 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
                 return true;
             case tipb::ExecType::TypeWindow:
             case tipb::ExecType::TypeSort:
-            case tipb::ExecType::TypeAggregation:
                 // TODO support non fine grained shuffle.
-                if (FineGrainedShuffle(&executor).enable())
-                    return true;
+                is_supported = FineGrainedShuffle(&executor).enable();
+                return is_supported;
+            case tipb::ExecType::TypeAggregation:
+                // TODO support fine grained shuffle.
+                is_supported = !FineGrainedShuffle(&executor).enable();
+                return is_supported;
             default:
                 is_supported = false;
                 return false;
