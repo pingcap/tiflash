@@ -140,7 +140,8 @@ void DatabaseTiFlash::loadTables(Context & context, legacy::ThreadPool * thread_
                 metadata_path,
                 name,
                 data_path,
-                getEngineName(),
+                // getEngineName(),
+                "TiFlash",
                 table_file,
                 has_force_restore_data_flag);
 
