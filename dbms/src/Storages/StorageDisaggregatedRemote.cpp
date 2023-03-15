@@ -62,7 +62,7 @@ struct RpcTypeTraits<disaggregated::EstablishDisaggTaskRequest>
 {
     using RequestType = disaggregated::EstablishDisaggTaskRequest;
     using ResultType = disaggregated::EstablishDisaggTaskResponse;
-    static const char * err_msg() { return "EstablishDisaggregatedTask Failed"; } // NOLINT(readability-identifier-naming)
+    static const char * err_msg() { return "EstablishDisaggTask Failed"; } // NOLINT(readability-identifier-naming)
     static ::grpc::Status doRPCCall(
         grpc::ClientContext * context,
         std::shared_ptr<KvConnClient> client,

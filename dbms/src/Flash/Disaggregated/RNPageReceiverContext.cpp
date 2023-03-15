@@ -147,7 +147,7 @@ const String & FetchPagesRequest::address() const
     return seg_task->address;
 }
 
-FetchPagesRequest GRPCPagesReceiverContext::popRequest() const
+FetchPagesRequest GRPCPagesReceiverContext::nextFetchPagesRequest() const
 {
     auto seg_task = remote_read_tasks->nextFetchTask();
     return FetchPagesRequest(std::move(seg_task));

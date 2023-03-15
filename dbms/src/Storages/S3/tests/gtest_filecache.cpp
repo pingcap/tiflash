@@ -14,7 +14,7 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
-#include <IO/IOThreadPool.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -154,7 +154,7 @@ protected:
                     writeFile(key, value, size, WriteSettings{});
                 });
             upload_results.push_back(task->get_future());
-            IOThreadPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+            S3FileCachePool::get().scheduleOrThrowOnError([task]() { (*task)(); });
             objects.emplace_back(ObjectInfo{.key = key, .value = value, .size = size});
         }
         for (auto & f : upload_results)
