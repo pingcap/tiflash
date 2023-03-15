@@ -349,7 +349,6 @@ private:
     /// For null-aware semi join family, including rows with NULL join keys.
     std::vector<RowsNotInsertToMap> rows_not_inserted_to_map;
 
-    /// For null-aware semi join
     mutable std::vector<NullRowsColumns> null_rows;
     /// Whether to directly check all blocks for row with null key.
     bool null_key_check_all_blocks_directly = false;
