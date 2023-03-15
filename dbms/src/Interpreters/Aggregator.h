@@ -225,10 +225,7 @@ struct AggregationMethodOneKeyStringNoCache
         /// still need to insert data to key because spill may will use this
         static_cast<ColumnString *>(key_columns[0])->insertData(key.data, key.size);
     }
-    // resize offsets for column string
-    ALWAYS_INLINE static inline void initAggKeys(size_t, IColumn *)
-    {
-    }
+    ALWAYS_INLINE static inline void initAggKeys(size_t, IColumn *) {}
 };
 
 /*
@@ -289,18 +286,15 @@ struct AggregationMethodFastPathTwoKeysNoCache
         column->getData().resize_fill(rows, 0);
     }
 
-    // Only update offsets but DO NOT insert string data.
-    // Because of https://github.com/pingcap/tiflash/blob/84c2650bc4320919b954babeceb5aeaadb845770/dbms/src/Columns/IColumn.h#L160-L173, such column will be discarded.
     ALWAYS_INLINE static inline const char * insertAggKeyIntoColumnString(const char * pos, IColumn * key_column)
     {
+        /// still need to insert data to key because spill may will use this
         const size_t string_size = *reinterpret_cast<const size_t *>(pos);
         pos += sizeof(string_size);
         static_cast<ColumnString *>(key_column)->insertData(pos, string_size);
         return pos + string_size;
     }
-    ALWAYS_INLINE static inline void initAggKeyString(size_t, IColumn *)
-    {
-    }
+    ALWAYS_INLINE static inline void initAggKeyString(size_t, IColumn *) {}
 
     template <>
     ALWAYS_INLINE static inline void initAggKeys<ColumnsHashing::KeyDescStringBin>(size_t rows, IColumn * key_column)
