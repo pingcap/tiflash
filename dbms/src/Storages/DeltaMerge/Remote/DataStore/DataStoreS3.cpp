@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <IO/IOThreadPools.h>
 #include <Poco/File.h>
@@ -137,6 +138,14 @@ void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vecto
 IPreparedDMFileTokenPtr DataStoreS3::prepareDMFile(const S3::DMFileOID & oid, UInt64 page_id)
 {
     return std::make_shared<S3PreparedDMFileToken>(file_provider, oid, page_id);
+}
+
+IPreparedDMFileTokenPtr DataStoreS3::prepareDMFileByKey(const String & remote_key)
+{
+    const auto view = S3::S3FilenameView::fromKeyWithPrefix(remote_key);
+    RUNTIME_CHECK(view.isDMFile(), magic_enum::enum_name(view.type), remote_key);
+    auto oid = view.getDMFileOID();
+    return prepareDMFile(oid, 0);
 }
 
 DMFilePtr S3PreparedDMFileToken::restore(DMFile::ReadMetaMode read_mode)
