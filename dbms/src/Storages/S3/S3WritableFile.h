@@ -144,7 +144,7 @@ private:
     {
         if (!outcome.IsSuccess())
         {
-            throw S3::fromS3Error(outcome.GetError(), "bucket={} key={}", client_ptr->bucket(), remote_fname);
+            throw S3::fromS3Error(outcome.GetError(), "bucket={} root={} key={}", client_ptr->bucket(), client_ptr->root(), remote_fname);
         }
     }
 
