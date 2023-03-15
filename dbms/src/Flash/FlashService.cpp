@@ -107,6 +107,8 @@ void FlashService::init(Context & context_)
 
 FlashService::~FlashService() = default;
 
+namespace
+{
 // Use executeInThreadPool to submit job to thread pool which return grpc::Status.
 grpc::Status executeInThreadPool(legacy::ThreadPool & pool, std::function<grpc::Status()> job)
 {
@@ -123,6 +125,26 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
 
     return default_val;
 }
+
+void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr & context, Poco::Logger * log)
+{
+    const static std::vector<std::pair<String, String>> tidb_varname_to_tiflash_var_name = {
+        std::make_pair("tidb_max_tiflash_threads", "max_threads"),
+        std::make_pair("tidb_max_bytes_before_tiflash_external_join", "max_bytes_before_external_join"),
+        std::make_pair("tidb_max_bytes_before_tiflash_external_group_by", "max_bytes_before_external_group_by"),
+        std::make_pair("tidb_max_bytes_before_tiflash_external_sort", "max_bytes_before_external_sort"),
+    };
+    for (const auto & names : tidb_varname_to_tiflash_var_name)
+    {
+        String value_from_tidb = getClientMetaVarWithDefault(grpc_context, names.first, "");
+        if (!value_from_tidb.empty())
+        {
+            context->setSetting(names.second, value_from_tidb);
+            LOG_DEBUG(log, "set context setting {} to {}", names.second, value_from_tidb);
+        }
+    }
+}
+} // namespace
 
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context,
@@ -539,12 +561,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
             tmp_context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
         }
 
-        String max_threads = getClientMetaVarWithDefault(grpc_context, "tidb_max_tiflash_threads", "");
-        if (!max_threads.empty())
-        {
-            tmp_context->setSetting("max_threads", max_threads);
-            LOG_INFO(log, "set context setting max_threads to {}", max_threads);
-        }
+        updateSettingsFromTiDB(grpc_context, tmp_context, log);
 
         tmp_context->setSetting("enable_async_server", is_async ? "true" : "false");
         tmp_context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
