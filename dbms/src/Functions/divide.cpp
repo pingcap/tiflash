@@ -88,7 +88,7 @@ struct TiDBDivideFloatingImpl<A, B, false>
             res_null = 1;
             return static_cast<Result>(0);
         }
-        return static_cast<Result>(a) / b;
+        return apply<Result>(a, b);
     }
 };
 
@@ -115,7 +115,7 @@ struct TiDBDivideFloatingImpl<A, B, true>
             res_null = 1;
             return static_cast<Result>(0);
         }
-        return static_cast<Result>(a) / static_cast<Result>(b);
+        return apply<Result>(a, b);
     }
 };
 
