@@ -25,8 +25,8 @@ using namespace Aws::S3;
 class MockS3Client final : public S3::TiFlashS3Client
 {
 public:
-    explicit MockS3Client(const String & bucket = "")
-        : TiFlashS3Client(bucket, "/")
+    explicit MockS3Client(const String & bucket, const String & root)
+        : TiFlashS3Client(bucket, root)
     {}
 
     ~MockS3Client() override = default;

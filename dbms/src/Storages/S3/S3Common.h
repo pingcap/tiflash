@@ -25,6 +25,8 @@
 
 #include <magic_enum.hpp>
 
+#include "Common/Logger.h"
+
 namespace DB::ErrorCodes
 {
 extern const int S3_ERROR;
@@ -47,7 +49,7 @@ public:
     // Usually one tiflash instance only need access one bucket.
     // Store the bucket name to simpilfy some param passing.
 
-    explicit TiFlashS3Client(const String & bucket_name_, const String & root_);
+    TiFlashS3Client(const String & bucket_name_, const String & root_);
 
     TiFlashS3Client(
         const String & bucket_name_,
@@ -57,15 +59,27 @@ public:
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy signPayloads,
         bool useVirtualAddressing);
 
-    TiFlashS3Client(const String & bucket_name_, std::unique_ptr<Aws::S3::S3Client> && raw_client);
+    TiFlashS3Client(
+        const String & bucket_name_,
+        const String & root_,
+        std::unique_ptr<Aws::S3::S3Client> && raw_client);
 
     const String & bucket() const { return bucket_name; }
 
     const String & root() const { return key_root; }
 
+    template <typename Request>
+    void setBucketAndKey(Request & req, const String & key) const
+    {
+        req.WithBucket(bucket_name).WithKey(key_root + key);
+    }
+
 private:
     const String bucket_name;
-    const String key_root;
+    String key_root;
+
+public:
+    LoggerPtr log;
 };
 
 enum class S3GCMethod
@@ -103,23 +117,12 @@ private:
 
     Aws::SDKOptions aws_options;
     StorageS3Config config;
-    std::shared_ptr<Aws::S3::S3Client> shared_client;
     std::shared_ptr<TiFlashS3Client> shared_tiflash_client;
-};
-
-struct ObjectInfo
-{
-    size_t size = 0;
-    time_t last_modification_time = 0;
 };
 
 bool isNotFoundError(Aws::S3::S3Errors error);
 
 Aws::S3::Model::HeadObjectOutcome headObject(const TiFlashS3Client & client, const String & key, const String & version_id = "");
-
-S3::ObjectInfo getObjectInfo(const TiFlashS3Client & client, const String & key, const String & version_id, bool throw_on_error);
-
-size_t getObjectSize(const TiFlashS3Client & client, const String & key, const String & version_id, bool throw_on_error);
 
 bool objectExists(const TiFlashS3Client & client, const String & key, const String & version_id = "");
 
