@@ -21,7 +21,6 @@ namespace DB
 {
 namespace tests
 {
-
 class SpillSortTestRunner : public DB::tests::ExecutorTest
 {
 public:
@@ -90,7 +89,7 @@ try
     context.addMockTable("spill_sort_test", "collation_table", column_infos, column_data, 8);
 
     MockOrderByItemVec order_by_items{std::make_pair("a", true), std::make_pair("b", true), std::make_pair("c", true), std::make_pair("d", true), std::make_pair("e", true)};
-    std::vector<Int64> collators{TiDB::ITiDBCollator::UTF8MB4_BIN, TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI};
+    std::vector<Int64> collators{TiDB::ITiDBCollator::UTF8MB4_BIN, TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI, TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI};
     for (const auto & collator_id : collators)
     {
         context.setCollation(collator_id);
