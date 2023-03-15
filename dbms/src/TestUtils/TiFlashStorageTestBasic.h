@@ -105,15 +105,18 @@ protected:
         reload();
     }
 
-    void reload(DB::Settings && db_settings = DB::Settings())
+    void reload();
+
+    void reload(const DB::Settings & db_settings)
     {
         Strings test_paths;
         test_paths.push_back(getTemporaryPath());
-        db_context = std::make_unique<Context>(DB::tests::TiFlashTestEnv::getContext(db_settings, test_paths));
+        db_context = DB::tests::TiFlashTestEnv::getContext(db_settings, test_paths);
     }
 
 protected:
-    std::unique_ptr<Context> db_context;
+    ContextPtr db_context;
 };
+
 } // namespace base
 } // namespace DB

@@ -73,9 +73,7 @@ public:
         const String & name,
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config,
-        const FileProviderPtr & file_provider,
-        std::shared_ptr<Aws::S3::S3Client> s3_client = nullptr,
-        const String & bucket = "");
+        const FileProviderPtr & file_provider);
 
     UniversalPageStorage(
         String name,
@@ -132,6 +130,8 @@ public:
     UniversalPageId getNormalPageId(const UniversalPageId & page_id, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true) const;
 
     DB::PageEntry getEntry(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
+
+    std::optional<DB::PS::V3::CheckpointLocation> getCheckpointLocation(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
 
     void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client) const;
 

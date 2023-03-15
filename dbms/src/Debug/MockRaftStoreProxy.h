@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ReadIndexWorker.h>
 #include <kvproto/raft_serverpb.pb.h>
@@ -36,6 +37,9 @@ struct MockProxyRegion : MutexLockWrap
     void updateCommitIndex(uint64_t index);
     void setSate(raft_serverpb::RegionLocalState);
     explicit MockProxyRegion(uint64_t id);
+    UniversalWriteBatch persistMeta();
+    void addPeer(uint64_t store_id, uint64_t peer_id, metapb::PeerRole role);
+
     struct RawWrite
     {
         std::vector<std::string> keys;

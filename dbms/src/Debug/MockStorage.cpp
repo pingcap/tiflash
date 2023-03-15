@@ -150,7 +150,7 @@ std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareFor
     assert(!column_infos.empty());
     Names column_names;
     for (const auto & column_info : column_infos)
-        column_names.push_back(column_info.first);
+        column_names.push_back(column_info.name);
 
     auto scan_context = std::make_shared<DM::ScanContext>();
 
@@ -209,7 +209,11 @@ void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColum
     for (const auto & column : columns)
     {
         TiDB::ColumnInfo ret;
-        std::tie(ret.name, ret.tp) = column;
+        ret.name = column.name;
+        ret.tp = column.type;
+
+        if (!column.nullable)
+            ret.setNotNullFlag();
         // TODO: find a way to assign decimal field's flen.
         if (ret.tp == TiDB::TP::TypeNewDecimal)
             ret.flen = 65;
@@ -465,11 +469,14 @@ ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_colu
     for (const auto & mock_column_info : mock_column_infos)
     {
         TiDB::ColumnInfo column_info;
-        std::tie(column_info.name, column_info.tp) = mock_column_info;
+        column_info.name = mock_column_info.name;
+        column_info.tp = mock_column_info.type;
         column_info.id = col_id++;
         // TODO: find a way to assign decimal field's flen.
         if (column_info.tp == TiDB::TP::TypeNewDecimal)
             column_info.flen = 65;
+        if (!mock_column_info.nullable)
+            column_info.setNotNullFlag();
         ret.push_back(std::move(column_info));
     }
     return ret;

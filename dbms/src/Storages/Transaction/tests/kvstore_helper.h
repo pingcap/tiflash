@@ -16,6 +16,7 @@
 #include <Common/Logger.h>
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
@@ -100,6 +101,7 @@ protected:
     {
         kvstore.reset();
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+        global_ctx.tryReleaseWriteNodePageStorageForTest();
         global_ctx.initializeWriteNodePageStorageIfNeed(*path_pool);
         kvstore = std::make_unique<KVStore>(global_ctx);
         // only recreate kvstore and restore data from disk, don't recreate proxy instance
@@ -123,7 +125,7 @@ protected:
         {
             // Maybe another test has already registed, ignore exception here.
         }
-        String path = TiFlashTestEnv::getContext().getPath();
+        String path = TiFlashTestEnv::getContext()->getPath();
         auto p = path + "/metadata/";
         TiFlashTestEnv::tryCreatePath(p);
         p = path + "/data/";

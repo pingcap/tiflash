@@ -30,15 +30,15 @@ using PageDataPacket = disaggregated::PagesPacket;
 using TrackedPageDataPacketPtr = std::shared_ptr<PageDataPacket>;
 using TrackedPageDataPacketPtrs = std::vector<TrackedPageDataPacketPtr>;
 
-class PagePacketReader
+class FetchPagesResponseReader
 {
 public:
-    virtual ~PagePacketReader() = default;
+    virtual ~FetchPagesResponseReader() = default;
     virtual bool read(TrackedPageDataPacketPtr & packet) = 0;
     virtual grpc::Status finish() = 0;
     virtual void cancel(const String & reason) = 0;
 };
-using ExchangePagePacketReaderPtr = std::shared_ptr<PagePacketReader>;
+using FetchPagesResponseReaderPtr = std::shared_ptr<FetchPagesResponseReader>;
 
 struct FetchPagesRequest
 {
@@ -64,16 +64,14 @@ class GRPCPagesReceiverContext
 {
 public:
     using Status = grpc::Status;
-    using Request = FetchPagesRequest;
-    using Reader = PagePacketReader;
 
     GRPCPagesReceiverContext(
         const DM::RNRemoteReadTaskPtr & remote_read_tasks,
         pingcap::kv::Cluster * cluster_);
 
-    Request popRequest() const;
+    FetchPagesRequest nextFetchPagesRequest() const;
 
-    ExchangePagePacketReaderPtr makeReader(const Request & request) const;
+    FetchPagesResponseReaderPtr doRequest(const FetchPagesRequest & request) const;
 
     static Status getStatusOK()
     {
@@ -83,11 +81,9 @@ public:
     // When error happens, try cancel disagg task on the storage node side.
     void cancelDisaggTaskOnTiFlashStorageNode(LoggerPtr log);
 
-    void finishTaskEstablish(const Request & req, bool meet_error);
+    void finishTaskEstablish(const FetchPagesRequest & req, bool meet_error);
 
     void finishTaskReceive(const DM::RNRemoteSegmentReadTaskPtr & seg_task);
-
-    void finishAllReceivingTasks(const String & err_msg);
 
 private:
     // The remote segment task pool

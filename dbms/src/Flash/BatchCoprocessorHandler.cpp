@@ -17,7 +17,9 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
+#include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/ServiceUtils.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -73,6 +75,7 @@ grpc::Status BatchCoprocessorHandler::execute()
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),
+                RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 /*is_batch_cop=*/true,
                 Logger::get("BatchCoprocessorHandler"));

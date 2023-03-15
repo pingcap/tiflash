@@ -111,6 +111,14 @@ public:
     /// Only called after reboot.
     static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageIdU64 id);
 
+    static DeltaValueSpacePtr createFromCheckpoint( //
+        DMContext & context,
+        UniversalPageStoragePtr temp_ps,
+        const RowKeyRange & segment_range,
+        NamespaceId ns_id,
+        PageIdU64 delta_id,
+        WriteBatches & wbs);
+
     /**
      * Resets the logger by using the one from the segment.
      * Segment_log is not available when constructing, because usually
@@ -301,6 +309,7 @@ class DeltaValueSnapshot
     , private boost::noncopyable
 {
     friend class DeltaValueSpace;
+    friend struct DB::DM::Remote::Serializer;
 
 private:
     bool is_update{false};

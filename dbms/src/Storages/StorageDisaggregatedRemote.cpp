@@ -31,6 +31,7 @@
 #include <Flash/Disaggregated/RNPagePreparer.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
 #include <Flash/Disaggregated/RNPageReceiverContext.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
@@ -46,6 +47,7 @@
 #include <kvproto/disaggregated.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Cluster.h>
+#include <pingcap/kv/RegionCache.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
@@ -60,7 +62,7 @@ struct RpcTypeTraits<disaggregated::EstablishDisaggTaskRequest>
 {
     using RequestType = disaggregated::EstablishDisaggTaskRequest;
     using ResultType = disaggregated::EstablishDisaggTaskResponse;
-    static const char * err_msg() { return "EstablishDisaggregatedTask Failed"; } // NOLINT(readability-identifier-naming)
+    static const char * err_msg() { return "EstablishDisaggTask Failed"; } // NOLINT(readability-identifier-naming)
     static ::grpc::Status doRPCCall(
         grpc::ClientContext * context,
         std::shared_ptr<KvConnClient> client,
@@ -94,7 +96,9 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
         try
         {
             auto remote_table_ranges = buildRemoteTableRanges();
-            auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges);
+            // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
+            auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
+            auto batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
             RUNTIME_CHECK(!batch_cop_tasks.empty());
 
             // Fetch the remote segment read tasks from write nodes
@@ -223,7 +227,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
                     LOG_DEBUG(
                         log,
-                        "Build RNRemoteTableReadTask finished, elapsed={}s store={} addr={} segments={} task_id={}",
+                        "Build RNRemoteTableReadTask finished, elapsed={:.3f}s store={} addr={} segments={} task_id={}",
                         watch_table.elapsedSeconds(),
                         resp->store_id(),
                         batch_cop_task.store_addr,

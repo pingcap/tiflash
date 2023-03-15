@@ -514,6 +514,7 @@ static GlobalRegionMap GLOBAL_REGION_MAP;
 /// Pre-decode region data into block cache and remove committed data from `region`
 RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Context & context)
 {
+    auto keyspace_id = region->getKeyspaceID();
     const auto & tmt = context.getTMTContext();
     {
         Timestamp gc_safe_point = 0;
@@ -556,7 +557,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 
     const auto atomic_decode = [&](bool force_decode) -> bool {
         Stopwatch watch;
-        auto storage = tmt.getStorages().get(table_id);
+        auto storage = tmt.getStorages().get(keyspace_id, table_id);
         if (storage == nullptr || storage->isTombstone())
         {
             if (!force_decode) // Need to update.
@@ -594,7 +595,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
 
     if (!atomic_decode(false))
     {
-        tmt.getSchemaSyncer()->syncSchemas(context);
+        tmt.getSchemaSyncer()->syncSchemas(context, keyspace_id);
 
         if (!atomic_decode(true))
             throw Exception("Pre-decode " + region->toString() + " cache to table " + std::to_string(table_id) + " block failed",

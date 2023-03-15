@@ -237,8 +237,9 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
             PageEntryV3 entry;
             entry.file_id = INVALID_BLOBFILE_ID;
             entry.tag = write.tag;
-            entry.checkpoint_info = CheckpointInfo{
+            entry.checkpoint_info = OptionalCheckpointInfo{
                 .data_location = *write.data_location,
+                .is_valid = true,
                 .is_local_data_reclaimed = true,
             };
             if (!write.offsets.empty())
@@ -259,8 +260,19 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
             break;
         }
         case WriteBatchWriteType::PUT_EXTERNAL:
-            edit.putExternal(wb.getFullPageId(write.page_id));
+        {
+            PageEntryV3 entry;
+            if (write.data_location.has_value())
+            {
+                entry.checkpoint_info = OptionalCheckpointInfo{
+                    .data_location = *write.data_location,
+                    .is_valid = true,
+                    .is_local_data_reclaimed = true,
+                };
+            }
+            edit.putExternal(wb.getFullPageId(write.page_id), entry);
             break;
+        }
         case WriteBatchWriteType::UPSERT:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown write type: {}", magic_enum::enum_name(write.type));
             break;
@@ -292,8 +304,9 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
                 PageEntryV3 entry;
                 entry.file_id = INVALID_BLOBFILE_ID;
                 entry.tag = write.tag;
-                entry.checkpoint_info = CheckpointInfo{
+                entry.checkpoint_info = OptionalCheckpointInfo{
                     .data_location = *write.data_location,
+                    .is_valid = true,
                     .is_local_data_reclaimed = true,
                 };
                 if (!write.offsets.empty())
@@ -315,8 +328,16 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
             }
             case WriteBatchWriteType::PUT_EXTERNAL:
             {
-                // putExternal won't have data.
-                edit.putExternal(wb.getFullPageId(write.page_id));
+                PageEntryV3 entry;
+                if (write.data_location.has_value())
+                {
+                    entry.checkpoint_info = OptionalCheckpointInfo{
+                        .data_location = *write.data_location,
+                        .is_valid = true,
+                        .is_local_data_reclaimed = true,
+                    };
+                }
+                edit.putExternal(wb.getFullPageId(write.page_id), entry);
                 break;
             }
             case WriteBatchWriteType::PUT:
@@ -418,8 +439,9 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
             PageEntryV3 entry;
             entry.file_id = INVALID_BLOBFILE_ID;
             entry.tag = write.tag;
-            entry.checkpoint_info = CheckpointInfo{
+            entry.checkpoint_info = OptionalCheckpointInfo{
                 .data_location = *write.data_location,
+                .is_valid = true,
                 .is_local_data_reclaimed = true,
             };
             if (!write.offsets.empty())
@@ -440,8 +462,19 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
             break;
         }
         case WriteBatchWriteType::PUT_EXTERNAL:
-            edit.putExternal(wb.getFullPageId(write.page_id));
+        {
+            PageEntryV3 entry;
+            if (write.data_location.has_value())
+            {
+                entry.checkpoint_info = OptionalCheckpointInfo{
+                    .data_location = *write.data_location,
+                    .is_valid = true,
+                    .is_local_data_reclaimed = true,
+                };
+            }
+            edit.putExternal(wb.getFullPageId(write.page_id), entry);
             break;
+        }
         case WriteBatchWriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }

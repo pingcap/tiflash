@@ -115,6 +115,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     auto join_other_conditions = tiflash_join.genJoinOtherConditionsAction(context, left_input_header, right_input_header, probe_side_prepare_actions, original_probe_key_names, original_build_key_names);
 
     const Settings & settings = context.getSettingsRef();
+    SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_build", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
+    SpillConfig probe_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_probe", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
     size_t max_block_size = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size = 1; });
 
@@ -126,12 +128,17 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         log->identifier(),
         fine_grained_shuffle.enable(),
         fine_grained_shuffle.stream_count,
+        settings.max_bytes_before_external_join,
+        build_spill_config,
+        probe_spill_config,
+        settings.join_restore_concurrency,
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,
         join_other_conditions,
         max_block_size,
         match_helper_name,
+        0,
         context.isTest());
 
     recordJoinExecuteInfo(dag_context, executor_id, build_plan->execId(), join_ptr);
@@ -157,8 +164,9 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
     /// add join input stream
     String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}, has_non_joined_data = {}", execId(), join_ptr->needReturnNonJoinedData());
+    join_ptr->initProbe(probe_pipeline.firstStream()->getHeader(),
+                        probe_pipeline.streams.size());
     size_t probe_index = 0;
-    join_ptr->setProbeConcurrency(probe_pipeline.streams.size());
     for (auto & stream : probe_pipeline.streams)
     {
         stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_ptr, probe_index++, log->identifier(), settings.max_block_size);
@@ -194,7 +202,8 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
     SubqueryForSet build_query;
     build_query.source = build_pipeline.firstStream();
     build_query.join = join_ptr;
-    join_ptr->init(build_query.source->getHeader(), join_build_concurrency);
+    join_ptr->initBuild(build_query.source->getHeader(),
+                        join_build_concurrency);
     dag_context.addSubquery(execId(), std::move(build_query));
 }
 

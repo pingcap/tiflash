@@ -16,6 +16,7 @@
 #include <Common/Stopwatch.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
+#include <Interpreters/Context.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/Region.h>
@@ -226,12 +227,14 @@ public:
             /*kvstore_paths=*/Strings{},
             path_capacity,
             provider);
+        global_ctx.tryReleaseWriteNodePageStorageForTest();
         global_ctx.initializeWriteNodePageStorageIfNeed(*mocked_path_pool);
     }
 
     void reload()
     {
         auto & global_ctx = DB::tests::TiFlashTestEnv::getGlobalContext();
+        global_ctx.tryReleaseWriteNodePageStorageForTest();
         global_ctx.initializeWriteNodePageStorageIfNeed(*mocked_path_pool);
     }
 

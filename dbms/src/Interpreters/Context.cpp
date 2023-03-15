@@ -156,7 +156,6 @@ struct ContextShared
     BackgroundProcessingPoolPtr ps_compact_background_pool; /// The thread pool for the background work performed by the ps v2.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
-    size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
     SharedQueriesPtr shared_queries; /// The cache of shared queries.
@@ -274,6 +273,11 @@ struct ContextShared
         if (tmt_context)
         {
             tmt_context->shutdown();
+        }
+
+        if (schema_sync_service)
+        {
+            schema_sync_service = nullptr;
         }
 
         /** At this point, some tables may have threads that block our mutex.
@@ -1709,12 +1713,7 @@ void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)
     auto lock = getLock();
     if (shared->storage_run_mode == PageStorageRunMode::UNI_PS)
     {
-        if (shared->ps_write)
-        {
-            // GlobalStoragePool may be initialized many times in some test cases for restore.
-            LOG_WARNING(shared->log, "GlobalUniversalPageStorage(WriteNode) has already been initialized.");
-            shared->ps_write->shutdown();
-        }
+        RUNTIME_CHECK(shared->ps_write == nullptr);
         try
         {
             PageStorageConfig config;
@@ -1751,10 +1750,36 @@ UniversalPageStoragePtr Context::getWriteNodePageStorage() const
     }
 }
 
+// In some unit tests, we may want to reinitialize WriteNodePageStorage multiple times to mock restart.
+// And we need to release old one before creating new one.
+// And we must do it explicitly. Because if we do it implicitly in `initializeWriteNodePageStorageIfNeed`, there is a potential deadlock here.
+// Thread A:
+//   Get lock on SharedContext -> call UniversalPageStorageService::shutdown -> remove background tasks -> try get rwlock on the task
+// Thread B:
+//   Get rwlock on task -> call a method on Context to get some object -> try to get lock on SharedContext
+void Context::tryReleaseWriteNodePageStorageForTest()
+{
+    UniversalPageStorageServicePtr ps_write;
+    {
+        auto lock = getLock();
+        if (shared->ps_write)
+        {
+            LOG_WARNING(shared->log, "Release GlobalUniversalPageStorage(WriteNode).");
+            ps_write = shared->ps_write;
+            shared->ps_write = nullptr;
+        }
+    }
+    if (ps_write)
+    {
+        // call shutdown without lock
+        ps_write->shutdown();
+        ps_write = nullptr;
+    }
+}
+
 SharedContextDisaggPtr Context::getSharedContextDisagg() const
 {
-    auto lock = getLock();
-    RUNTIME_CHECK(shared->ctx_disagg != nullptr);
+    RUNTIME_CHECK(shared->ctx_disagg != nullptr); // We always initialize the shared context in createGlobal()
     return shared->ctx_disagg;
 }
 
@@ -1802,58 +1827,6 @@ QueryLog * Context::getQueryLog()
     }
 
     return system_logs->query_log.get();
-}
-
-
-void Context::setMaxTableSizeToDrop(size_t max_size)
-{
-    // Is initialized at server startup
-    shared->max_table_size_to_drop = max_size;
-}
-
-void Context::checkTableCanBeDropped(const String & database, const String & table, size_t table_size)
-{
-    size_t max_table_size_to_drop = shared->max_table_size_to_drop;
-
-    if (!max_table_size_to_drop || table_size <= max_table_size_to_drop)
-        return;
-
-    Poco::File force_file(getFlagsPath() + "force_drop_table");
-    bool force_file_exists = force_file.exists();
-
-    if (force_file_exists)
-    {
-        try
-        {
-            force_file.remove();
-            return;
-        }
-        catch (...)
-        {
-            /// User should recreate force file on each drop, it shouldn't be protected
-            tryLogCurrentException("Drop table check", "Can't remove force file to enable table drop");
-        }
-    }
-
-    String table_size_str = formatReadableSizeWithDecimalSuffix(table_size);
-    String max_table_size_to_drop_str = formatReadableSizeWithDecimalSuffix(max_table_size_to_drop);
-
-    std::string exception_msg = fmt::format("Table {0}.{1} was not dropped.\n"
-                                            "Reason:\n"
-                                            "1. Table size({2}) is greater than max_table_size_to_drop ({3})\n"
-                                            "2. File '{4}' intended to force DROP {5}\n",
-                                            "How to fix this:\n"
-                                            "1. Either increase (or set to zero) max_table_size_to_drop in server config and restart ClickHouse\n"
-                                            "2. Either create forcing file {4} and make sure that ClickHouse has write permission for it.\n"
-                                            "Example:\nsudo touch '{4}' && sudo chmod 666 '{4}'",
-                                            backQuoteIfNeed(database),
-                                            backQuoteIfNeed(table),
-                                            table_size_str,
-                                            max_table_size_to_drop_str,
-                                            force_file.path(),
-                                            (force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist"));
-
-    throw Exception(exception_msg, ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT);
 }
 
 
@@ -1935,16 +1908,6 @@ String Context::getFormatSchemaPath() const
 void Context::setFormatSchemaPath(const String & path)
 {
     shared->format_schema_path = path;
-}
-
-void Context::setUseL0Opt(bool use_l0)
-{
-    use_l0_opt = use_l0;
-}
-
-bool Context::useL0Opt() const
-{
-    return use_l0_opt;
 }
 
 SharedQueriesPtr Context::getSharedQueries()

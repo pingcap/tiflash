@@ -14,7 +14,9 @@
 
 #pragma once
 
-#include <Interpreters/Context.h>
+#include <Encryption/FileProvider_fwd.h>
+#include <Interpreters/Context_fwd.h>
+#include <Poco/Environment.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Poco/SortedDirectoryIterator.h>
@@ -22,11 +24,17 @@
 #include <TestUtils/TiFlashTestException.h>
 #include <fmt/core.h>
 
-
 namespace Aws::S3
 {
 class S3Client;
 }
+
+namespace DB
+{
+struct Settings;
+class DAGContext;
+class MockStorage;
+} // namespace DB
 
 namespace DB::tests
 {
@@ -81,10 +89,15 @@ public:
         throw Exception("Can not find testdata with name[" + name + "]");
     }
 
-    static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
+    static ContextPtr getContext();
+
+    /// Returns a fresh ContextPtr.
+    static ContextPtr getContext(const DB::Settings & settings, Strings testdata_path = {});
+
+    static FileProviderPtr getDefaultFileProvider();
 
     static void initializeGlobalContext(Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 2);
-    static void addGlobalContext(const DB::Settings & settings_ = DB::Settings(), Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 2);
+    static void addGlobalContext(const DB::Settings & settings, Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 2);
     static Context & getGlobalContext() { return *global_contexts[0]; }
     static Context & getGlobalContext(int idx) { return *global_contexts[idx]; }
     static int globalContextSize() { return global_contexts.size(); }

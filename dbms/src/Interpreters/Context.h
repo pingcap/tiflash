@@ -162,8 +162,6 @@ private:
     UInt64 session_close_cycle = 0;
     bool session_is_used = false;
 
-    bool use_l0_opt = true;
-
     enum TestMode
     {
         non_test,
@@ -392,9 +390,6 @@ public:
       */
     void dropCaches() const;
 
-    void setUseL0Opt(bool use_l0_opt);
-    bool useL0Opt() const;
-
     BackgroundProcessingPool & initializeBackgroundPool(UInt16 pool_size);
     BackgroundProcessingPool & getBackgroundPool();
     BackgroundProcessingPool & initializeBlockableBackgroundPool(UInt16 pool_size);
@@ -434,6 +429,7 @@ public:
 
     void initializeWriteNodePageStorageIfNeed(const PathPool & path_pool);
     UniversalPageStoragePtr getWriteNodePageStorage() const;
+    void tryReleaseWriteNodePageStorageForTest();
 
     SharedContextDisaggPtr getSharedContextDisagg() const;
 
@@ -442,10 +438,6 @@ public:
 
     /// Nullptr if the query log is not ready for this moment.
     QueryLog * getQueryLog();
-
-    /// Prevents DROP TABLE if its size is greater than max_size (50GB by default, max_size=0 turn off this check)
-    void setMaxTableSizeToDrop(size_t max_size);
-    void checkTableCanBeDropped(const String & database, const String & table, size_t table_size);
 
     /// Get the server uptime in seconds.
     time_t getUptimeSeconds() const;

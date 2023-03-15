@@ -12,16 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/S3/MockS3Client.h>
 #include <aws/core/AmazonWebServiceRequest.h>
 #include <aws/core/AmazonWebServiceResult.h>
+#include <aws/core/utils/DateTime.h>
 #include <aws/core/utils/stream/ResponseStream.h>
 #include <aws/core/utils/xml/XmlSerializer.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/S3Errors.h>
 #include <aws/s3/S3ServiceClientModel.h>
 #include <aws/s3/model/CompleteMultipartUploadRequest.h>
+#include <aws/s3/model/CopyObjectRequest.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <aws/s3/model/CreateBucketResult.h>
 #include <aws/s3/model/CreateMultipartUploadRequest.h>
@@ -29,6 +33,7 @@
 #include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/GetObjectResult.h>
+#include <aws/s3/model/GetObjectTaggingRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/HeadObjectResult.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
@@ -37,7 +42,14 @@
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/UploadPartRequest.h>
 #include <common/types.h>
+#include <fiu.h>
 
+#include <mutex>
+
+namespace DB::FailPoints
+{
+extern const char force_set_mocked_s3_object_mtime[];
+} // namespace DB::FailPoints
 namespace DB::S3::tests
 {
 using namespace Aws::S3;
@@ -74,6 +86,53 @@ Model::PutObjectOutcome MockS3Client::PutObject(const Model::PutObjectRequest & 
     auto & bucket_storage = itr->second;
     bucket_storage[request.GetKey()] = String{std::istreambuf_iterator<char>(*request.GetBody()), {}};
     return Model::PutObjectResult{};
+}
+
+Model::CopyObjectOutcome MockS3Client::CopyObject(const Model::CopyObjectRequest & request) const
+{
+    std::lock_guard lock(mtx);
+    auto first_pos = request.GetCopySource().find_first_of('/');
+    RUNTIME_CHECK(first_pos != String::npos, request.GetCopySource());
+    auto src_bucket = request.GetCopySource().substr(0, first_pos);
+    auto src_key = request.GetCopySource().substr(first_pos + 1, request.GetCopySource().size());
+
+    auto src_itr = storage.find(src_bucket);
+    if (src_itr == storage.end())
+    {
+        return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuckBucket");
+    }
+
+    auto dst_itr = storage.find(request.GetBucket());
+    if (dst_itr == storage.end())
+    {
+        return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuckBucket");
+    }
+
+    auto src_bucket_storage = src_itr->second;
+    auto dst_bucket_storage = dst_itr->second;
+    RUNTIME_CHECK(src_bucket_storage.contains(src_key), src_bucket, src_key);
+    dst_bucket_storage[request.GetKey()] = src_bucket_storage[src_key];
+    storage_tagging[request.GetBucket()][request.GetKey()] = request.GetTagging();
+    return Model::CopyObjectResult{};
+}
+
+Model::GetObjectTaggingOutcome MockS3Client::GetObjectTagging(const Model::GetObjectTaggingRequest & request) const
+{
+    std::lock_guard lock(mtx);
+    auto itr = storage_tagging.find(request.GetBucket());
+    if (itr == storage_tagging.end())
+    {
+        return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuckBucket");
+    }
+    auto taggings = storage_tagging[request.GetBucket()][request.GetKey()];
+    auto pos = taggings.find('=');
+    RUNTIME_CHECK(pos != String::npos, pos, taggings.size());
+    Aws::S3::Model::Tag tag;
+    tag.WithKey(taggings.substr(0, pos))
+        .WithValue(taggings.substr(pos + 1, taggings.size()));
+    auto r = Model::GetObjectTaggingResult{};
+    r.AddTagSet(tag);
+    return r;
 }
 
 Model::DeleteObjectOutcome MockS3Client::DeleteObject(const Model::DeleteObjectRequest & request) const
@@ -128,7 +187,20 @@ Model::HeadObjectOutcome MockS3Client::HeadObject(const Model::HeadObjectRequest
     auto itr_obj = bucket_storage.find(request.GetKey());
     if (itr_obj != bucket_storage.end())
     {
-        return Model::HeadObjectResult{};
+        auto r = Model::HeadObjectResult{};
+        auto try_set_mtime = [&] {
+            if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_mocked_s3_object_mtime); v)
+            {
+                auto m = std::any_cast<std::map<String, Aws::Utils::DateTime>>(v.value());
+                if (auto iter_m = m.find(request.GetKey()); iter_m != m.end())
+                {
+                    r.SetLastModified(iter_m->second);
+                }
+            }
+        };
+        UNUSED(try_set_mtime);
+        fiu_do_on(FailPoints::force_set_mocked_s3_object_mtime, { try_set_mtime(); });
+        return r;
     }
     return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuchKey");
 }
@@ -173,6 +245,7 @@ Model::CreateBucketOutcome MockS3Client::CreateBucket(const Model::CreateBucketR
 {
     std::lock_guard lock(mtx);
     [[maybe_unused]] auto & bucket_storage = storage[request.GetBucket()];
+    [[maybe_unused]] auto & bucket_storage_tagging = storage_tagging[request.GetBucket()];
     return Model::CreateBucketResult{};
 }
 
@@ -180,6 +253,7 @@ Model::DeleteBucketOutcome MockS3Client::DeleteBucket(const Model::DeleteBucketR
 {
     std::lock_guard lock(mtx);
     storage.erase(request.GetBucket());
+    storage_tagging.erase(request.GetBucket());
     return Model::DeleteBucketOutcome{};
 }
 

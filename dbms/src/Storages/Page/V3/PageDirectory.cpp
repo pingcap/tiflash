@@ -208,7 +208,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
 // If create success, then return a shared_ptr as a holder for page_id. The holder
 // will be release when this external version is totally removed.
 template <typename Trait>
-std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntries<Trait>::createNewExternal(const PageVersion & ver)
+std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntries<Trait>::createNewExternal(const PageVersion & ver, const PageEntryV3 & entry)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_DELETE)
@@ -218,6 +218,8 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
         create_ver = ver;
         delete_ver = PageVersion(0);
         being_ref_count = 1;
+        RUNTIME_CHECK(entries.empty());
+        entries.emplace(create_ver, EntryOrDelete::newNormalEntry(entry));
         // return the new created holder to caller to set the page_id
         external_holder = std::make_shared<typename Trait::PageId>();
         return external_holder;
@@ -234,6 +236,7 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
                 create_ver = ver;
                 delete_ver = PageVersion(0);
                 being_ref_count = 1;
+                entries.emplace(create_ver, EntryOrDelete::newNormalEntry(entry));
                 // return the new created holder to caller to set the page_id
                 external_holder = std::make_shared<typename Trait::PageId>();
                 return external_holder;
@@ -305,7 +308,7 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
         RUNTIME_CHECK(last_iter != entries.end() && last_iter->second.isEntry());
         auto & ori_entry = last_iter->second.entry;
         RUNTIME_CHECK(ori_entry.checkpoint_info.has_value());
-        if (!ori_entry.checkpoint_info->is_local_data_reclaimed)
+        if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
         {
             return false;
         }
@@ -313,7 +316,7 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
         ori_entry.size = entry.size;
         ori_entry.offset = entry.offset;
         ori_entry.checksum = entry.checksum;
-        ori_entry.checkpoint_info->is_local_data_reclaimed = false;
+        ori_entry.checkpoint_info.is_local_data_reclaimed = false;
         return true;
     }
     throw Exception(fmt::format(
@@ -399,6 +402,7 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
         is_deleted = false;
         create_ver = rec.version;
         being_ref_count = rec.being_ref_count;
+        entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.being_ref_count));
         external_holder = std::make_shared<typename Trait::PageId>(rec.page_id);
         return external_holder;
     }
@@ -458,6 +462,10 @@ VersionedPageEntries<Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, Pag
         bool ok = ignore_delete || (!is_deleted || seq < delete_ver.sequence);
         if (create_ver.sequence <= seq && ok)
         {
+            auto iter = entries.find(create_ver);
+            RUNTIME_CHECK(iter != entries.end());
+            if (entry != nullptr)
+                *entry = iter->second.entry;
             return {ResolveResult::TO_NORMAL, Trait::PageIdTrait::getInvalidID(), PageVersion(0)};
         }
     }
@@ -865,7 +873,9 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
     {
         if (create_ver.sequence > seq)
             return;
-        edit.varExternal(page_id, create_ver, being_ref_count);
+        auto iter = entries.find(create_ver);
+        RUNTIME_CHECK(iter != entries.end());
+        edit.varExternal(page_id, create_ver, iter->second.entry, being_ref_count);
         if (is_deleted && delete_ver.sequence <= seq)
         {
             edit.varDel(page_id, delete_ver);
@@ -1479,7 +1489,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 {
                 case EditRecordType::PUT_EXTERNAL:
                 {
-                    auto holder = version_list->createNewExternal(r.version);
+                    auto holder = version_list->createNewExternal(r.version, r.entry);
                     if (holder)
                     {
                         // put the new created holder into `external_ids`
@@ -1507,9 +1517,9 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 }
 
                 // collect the applied remote data_file_ids
-                if (r.entry.checkpoint_info)
+                if (r.entry.checkpoint_info.has_value())
                 {
-                    applied_data_files.emplace(*r.entry.checkpoint_info->data_location.data_file_id);
+                    applied_data_files.emplace(*r.entry.checkpoint_info.data_location.data_file_id);
                 }
             }
             catch (DB::Exception & e)
@@ -1541,12 +1551,31 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
 
         for (const auto & r : edit.getRecords())
         {
-            auto iter = mvcc_table_directory.lower_bound(r.page_id);
-            assert(iter != mvcc_table_directory.end());
-            auto & version_list = iter->second;
-            if (!version_list->updateLocalCacheForRemotePage(PageVersion(seq, 0), r.entry))
+            auto id_to_resolve = r.page_id;
+            auto sequence_to_resolve = seq;
+            while (true)
             {
-                ignored_entries.push_back(r.entry);
+                auto iter = mvcc_table_directory.lower_bound(id_to_resolve);
+                assert(iter != mvcc_table_directory.end());
+                auto & version_list = iter->second;
+                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = version_list->resolveToPageId(sequence_to_resolve, /*ignore_delete=*/id_to_resolve != r.page_id, nullptr);
+                if (resolve_state == ResolveResult::TO_NORMAL)
+                {
+                    if (!version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry))
+                    {
+                        ignored_entries.push_back(r.entry);
+                    }
+                    break;
+                }
+                else if (resolve_state == ResolveResult::TO_REF)
+                {
+                    id_to_resolve = next_id_to_resolve;
+                    sequence_to_resolve = next_ver_to_resolve.sequence;
+                }
+                else
+                {
+                    RUNTIME_CHECK(false);
+                }
             }
         }
     }

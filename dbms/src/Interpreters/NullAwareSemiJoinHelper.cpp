@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Columns/ColumnConst.h>
-#include <Common/typeid_cast.h>
 #include <Common/Stopwatch.h>
+#include <Common/typeid_cast.h>
 #include <Interpreters/NullAwareSemiJoinHelper.h>
 
 namespace DB

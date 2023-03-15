@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FieldVisitors.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -238,7 +239,7 @@ try
     const auto context = TiFlashTestEnv::getContext();
     auto & factory = FunctionFactory::instance();
 
-    auto builder = factory.tryGet("tidbRoundWithFrac", context);
+    auto builder = factory.tryGet("tidbRoundWithFrac", *context);
     ASSERT_NE(builder, nullptr);
 
     auto function = builder->build({input, frac});

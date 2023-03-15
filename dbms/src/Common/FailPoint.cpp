@@ -96,7 +96,8 @@ namespace DB
     M(exception_in_merged_task_init)                         \
     M(invalid_mpp_version)                                   \
     M(force_fail_in_flush_region_data)                       \
-    M(force_skip_s3_lock_create)
+    M(force_use_dmfile_format_v3)                            \
+    M(force_set_mocked_s3_object_mtime)
 
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
@@ -140,8 +141,9 @@ namespace DB
     M(random_pipeline_model_event_schedule_failpoint)   \
     M(random_pipeline_model_event_finish_failpoint)     \
     M(random_pipeline_model_operator_run_failpoint)     \
-    M(random_pipeline_model_cancel_failpoint)
-
+    M(random_pipeline_model_cancel_failpoint)           \
+    M(random_spill_to_disk_failpoint)                   \
+    M(random_restore_from_disk_failpoint)
 namespace FailPoints
 {
 #define M(NAME) extern const char(NAME)[] = #NAME "";

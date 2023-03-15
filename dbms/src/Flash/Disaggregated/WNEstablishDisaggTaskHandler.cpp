@@ -15,36 +15,36 @@
 #include <Common/Exception.h>
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Disaggregated/DisaggregatedTask.h>
+#include <Flash/Disaggregated/WNEstablishDisaggTaskHandler.h>
 #include <Flash/Executor/QueryExecutorHolder.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
-#include <Storages/DeltaMerge/Remote/DisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
+#include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int REGION_EPOCH_NOT_MATCH;
 } // namespace ErrorCodes
 
-DisaggregatedTask::DisaggregatedTask(ContextPtr context_, const DM::DisaggTaskId & task_id)
+WNEstablishDisaggTaskHandler::WNEstablishDisaggTaskHandler(ContextPtr context_, const DM::DisaggTaskId & task_id)
     : context(std::move(context_))
-    , log(Logger::get(fmt::format("{}", task_id)))
+    , log(Logger::get(task_id))
 {}
 
 // Some preparation
 // - Parse the encoded plan
 // - Build `dag_context`
 // - Set the read_tso, schema_version, timezone
-void DisaggregatedTask::prepare(const disaggregated::EstablishDisaggTaskRequest * request)
+void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggTaskRequest * request)
 {
     const auto & meta = request->meta();
     DM::DisaggTaskId task_id(meta);
@@ -81,7 +81,7 @@ void DisaggregatedTask::prepare(const disaggregated::EstablishDisaggTaskRequest 
     context->setDAGContext(dag_context.get());
 }
 
-void DisaggregatedTask::execute(disaggregated::EstablishDisaggTaskResponse * response)
+void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskResponse * response)
 {
     // run into DAGStorageInterpreter and build the segment snapshots
     query_executor_holder.set(queryExecute(*context));
@@ -92,15 +92,14 @@ void DisaggregatedTask::execute(disaggregated::EstablishDisaggTaskResponse * res
         response->set_store_id(kvstore->getStoreID());
     }
 
-    auto * manager = tmt.getDisaggSnapshotManager();
+    auto snapshots = context->getSharedContextDisagg()->wn_snapshot_manager;
     const auto & task_id = *dag_context->getDisaggTaskId();
-    auto snap = manager->getSnapshot(task_id);
-    if (!snap)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Snapshot was missing, task_id={}", task_id);
+    auto snap = snapshots->getSnapshot(task_id);
+    RUNTIME_CHECK_MSG(snap, "Snapshot was missing, task_id={}", task_id);
 
     {
         auto snapshot_id = task_id.toMeta();
-        response->set_allocated_snapshot_id(&snapshot_id);
+        response->mutable_snapshot_id()->Swap(&snapshot_id);
     }
 
     using DM::Remote::Serializer;

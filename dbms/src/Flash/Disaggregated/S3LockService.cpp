@@ -16,6 +16,8 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/ServiceUtils.h>
+#include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -38,18 +40,14 @@ extern const Metric S3LockServiceNumLatches;
 
 namespace DB::S3
 {
-
-
 S3LockService::S3LockService(Context & context_)
     : S3LockService(
-        context_.getGlobalContext().getTMTContext().getS3GCOwnerManager(),
-        S3::ClientFactory::instance().sharedTiFlashClient())
+        context_.getGlobalContext().getTMTContext().getS3GCOwnerManager())
 {
 }
 
-S3LockService::S3LockService(OwnerManagerPtr owner_mgr_, std::shared_ptr<TiFlashS3Client> s3_cli_)
+S3LockService::S3LockService(OwnerManagerPtr owner_mgr_)
     : gc_owner(std::move(owner_mgr_))
-    , s3_client(std::move(s3_cli_))
     , log(Logger::get())
 {
 }
@@ -199,8 +197,10 @@ bool S3LockService::tryAddLockImpl(
         }
     });
 
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     // make sure data file exists
-    if (!DB::S3::objectExists(*s3_client, s3_client->bucket(), data_file_key))
+    auto object_key = key_view.isDMFile() ? fmt::format("{}/{}", data_file_key, DM::DMFile::metav2FileName()) : data_file_key;
+    if (!DB::S3::objectExists(*s3_client, s3_client->bucket(), object_key))
     {
         auto * e = response->mutable_result()->mutable_conflict();
         e->set_reason(fmt::format("data file not exist, key={}", data_file_key));
@@ -231,9 +231,9 @@ bool S3LockService::tryAddLockImpl(
     DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), lock_key);
     if (!gc_owner->isOwner())
     {
-        // altough the owner is changed after lock file is uploaded, but
+        // although the owner is changed after lock file is uploaded, but
         // it is safe to return owner change and let the client retry.
-        // the obsolete lock file will finally get removed in S3 GC.
+        // the obsolete lock file will finally get removed by S3GCManager.
         response->mutable_result()->mutable_not_owner();
         LOG_INFO(log, "data file lock conflict: owner changed after lock added, key={} lock_key={}", data_file_key, lock_key);
         return false;
@@ -244,9 +244,10 @@ bool S3LockService::tryAddLockImpl(
     return true;
 }
 
-std::optional<String> S3LockService::anyLockExist(const String & lock_prefix) const
+std::optional<String> S3LockService::anyLockExist(const String & lock_prefix)
 {
     std::optional<String> lock_key;
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     DB::S3::listPrefix(
         *s3_client,
         s3_client->bucket(),
@@ -312,7 +313,13 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
     }
     // upload delete mark
     const auto delmark_key = key_view.getDelMarkKey();
-    DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), delmark_key);
+    String tagging;
+    if (S3::ClientFactory::instance().gc_method == S3GCMethod::Lifecycle)
+    {
+        tagging = TaggingObjectIsDeleted;
+    }
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+    DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), delmark_key, tagging);
     if (!gc_owner->isOwner())
     {
         // owner changed happens when delmark is uploading, can not

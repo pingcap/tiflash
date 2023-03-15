@@ -23,9 +23,9 @@
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/Page/WriteBatchImpl.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/MockReadLimiter.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::PS::V3::tests
@@ -68,7 +68,7 @@ protected:
 TEST_F(BlobStoreTest, Restore)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     config.file_limit_size = 2560;
     auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
 
@@ -141,7 +141,7 @@ CATCH
 TEST_F(BlobStoreTest, RestoreWithInvalidBlob)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     config.file_limit_size = 1024;
 
     // Generate blob [1,2,3]
@@ -304,7 +304,7 @@ CATCH
 
 TEST_F(BlobStoreTest, testWriteRead)
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
 
     PageIdU64 page_id = 50;
     size_t buff_nums = 21;
@@ -388,7 +388,7 @@ TEST_F(BlobStoreTest, testWriteRead)
 
 TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
 
     PageIdU64 page_id = 50;
     size_t wb_nums = 5;
@@ -499,7 +499,7 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
 TEST_F(BlobStoreTest, testWriteReadWithFiled)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
 
     PageIdU64 page_id1 = 50;
     PageIdU64 page_id2 = 51;
@@ -566,7 +566,7 @@ CATCH
 
 TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
 
     PageIdU64 page_id = 50;
     size_t buff_size = 20;
@@ -637,7 +637,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
 TEST_F(BlobStoreTest, testWrite)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
 
     PageIdU64 page_id = 50;
@@ -744,7 +744,7 @@ CATCH
 // BlobStore allow (page size > blob_file_limit)
 TEST_F(BlobStoreTest, DISABLED_testWriteOutOfLimitSize)
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     size_t buff_size = 100;
 
     {
@@ -812,7 +812,7 @@ TEST_F(BlobStoreTest, DISABLED_testWriteOutOfLimitSize)
 
 TEST_F(BlobStoreTest, testBlobStoreGcStats)
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     size_t buff_size = 1024;
     size_t buff_nums = 10;
     PageIdU64 page_id = 50;
@@ -908,7 +908,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
 
 TEST_F(BlobStoreTest, testBlobStoreGcStats2)
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     size_t buff_size = 1024;
     size_t buff_nums = 10;
     PageIdU64 page_id = 50;
@@ -967,7 +967,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
 
 TEST_F(BlobStoreTest, GC)
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     PageIdU64 page_id = 50;
     size_t buff_nums = 21;
     size_t buff_size = 123;
@@ -1032,7 +1032,7 @@ TEST_F(BlobStoreTest, GC)
 TEST_F(BlobStoreTest, GCMigirateBigData)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     PageIdU64 fixed_page_id = 50;
     PageIdU64 page_id = fixed_page_id;
     size_t buff_nums = 20;
@@ -1083,7 +1083,7 @@ CATCH
 TEST_F(BlobStoreTest, ReadByFieldReadInfos)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     PageIdU64 fixed_page_id = 50;
     PageIdU64 page_id = fixed_page_id;
     size_t buff_nums = 20;
@@ -1130,7 +1130,7 @@ CATCH
 TEST_F(BlobStoreTest, TestBigBlob)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     PageIdU64 fixed_page_id = 50;
     PageIdU64 page_id = fixed_page_id;
 
@@ -1296,7 +1296,7 @@ CATCH
 TEST_F(BlobStoreTest, TestBigBlobRemove)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     PageIdU64 fixed_page_id = 50;
     PageIdU64 page_id = fixed_page_id;
 
@@ -1328,7 +1328,7 @@ CATCH
 TEST_F(BlobStoreTest, TestBigBlobRegisterPath)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     PageIdU64 fixed_page_id = 50;
     PageIdU64 page_id = fixed_page_id;
 
@@ -1368,7 +1368,7 @@ CATCH
 TEST_F(BlobStoreTest, TestRestartWithSmallerFileLimitSize)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     PageIdU64 page_id = 50;
 
     BlobConfig config_with_small_file_limit_size;
@@ -1438,7 +1438,7 @@ CATCH
 TEST_F(BlobStoreTest, TestBigBlobGC)
 try
 {
-    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
     PageIdU64 page_id1 = 50;
     PageIdU64 page_id2 = 51;
     PageIdU64 page_id3 = 52;

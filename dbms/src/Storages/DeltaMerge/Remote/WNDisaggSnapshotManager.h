@@ -19,6 +19,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
+#include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager_fwd.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -28,19 +29,13 @@
 #include <mutex>
 #include <shared_mutex>
 
-namespace DB
-{
-class Context;
-}
-
 namespace DB::DM::Remote
 {
-class DisaggSnapshotManager;
-using DisaggSnapshotManagerPtr = std::unique_ptr<DisaggSnapshotManager>;
-
-// DisaggSnapshotManager holds all snapshots for disaggregated read tasks
-// in the write node. It's a single instance for each TiFlash node.
-class DisaggSnapshotManager
+/**
+ * WNDisaggSnapshotManager holds all snapshots for disaggregated read tasks
+ * in the write node. It's a single instance for each TiFlash node.
+ */
+class WNDisaggSnapshotManager
 {
 public:
     struct SnapshotWithExpireTime
@@ -50,9 +45,9 @@ public:
     };
 
 public:
-    explicit DisaggSnapshotManager(Context & ctx);
+    explicit WNDisaggSnapshotManager(BackgroundProcessingPool & bg_pool);
 
-    ~DisaggSnapshotManager();
+    ~WNDisaggSnapshotManager();
 
     bool registerSnapshot(const DisaggTaskId & task_id, DisaggReadSnapshotPtr && snap, const Timepoint & expired_at)
     {
@@ -74,6 +69,11 @@ public:
         return nullptr;
     }
 
+    bool unregisterSnapshotIfEmpty(const DisaggTaskId & task_id);
+
+    DISALLOW_COPY_AND_MOVE(WNDisaggSnapshotManager);
+
+private:
     bool unregisterSnapshot(const DisaggTaskId & task_id)
     {
         LOG_DEBUG(log, "Unregister Disaggregated Snapshot, task_id={}", task_id);
@@ -89,13 +89,11 @@ public:
 
     void clearExpiredSnapshots();
 
-    DISALLOW_COPY_AND_MOVE(DisaggSnapshotManager);
-
 private:
     mutable std::shared_mutex mtx;
     std::unordered_map<DisaggTaskId, SnapshotWithExpireTime> snapshots;
 
-    Context & global_ctx;
+    BackgroundProcessingPool & pool;
     BackgroundProcessingPool::TaskHandle handle;
     LoggerPtr log;
 };
