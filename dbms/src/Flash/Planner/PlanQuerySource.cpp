@@ -15,6 +15,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/Planner/Planner.h>
+#include <Interpreters/Context.h>
 #include <Parsers/makeDummyQuery.h>
 
 namespace DB
@@ -44,6 +45,11 @@ std::unique_ptr<IInterpreter> PlanQuerySource::interpreter(Context &, QueryProce
 const tipb::DAGRequest & PlanQuerySource::getDAGRequest() const
 {
     return *getDAGContext().dag_request;
+}
+
+DAGContext & PlanQuerySource::getDAGContext() const
+{
+    return *context.getDAGContext();
 }
 
 } // namespace DB

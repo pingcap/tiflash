@@ -55,7 +55,8 @@ set (TIFLASH_VERSION "${TIFLASH_VERSION_MAJOR}.${TIFLASH_VERSION_MINOR}.${TIFLAS
 # Variables bellow are important, use `COMMAND_ERROR_IS_FATAL ANY`(since cmake 3.19) to confirm that there is output.
 
 execute_process(
-  COMMAND git describe --tags --dirty --always
+  # Do not execute with --dirty, because checking dirty state is extremely slow.
+  COMMAND git describe --tags --always
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   OUTPUT_VARIABLE TIFLASH_RELEASE_VERSION
   OUTPUT_STRIP_TRAILING_WHITESPACE

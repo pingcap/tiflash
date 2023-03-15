@@ -51,6 +51,9 @@ void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
         case WriteBatchWriteType::UPSERT:
             current_version->upsertPage(rec.page_id, rec.entry);
             break;
+        default:
+            throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(rec.type)), ErrorCodes::LOGICAL_ERROR);
+            break;
         }
     }
 }

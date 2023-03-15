@@ -208,7 +208,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
 // If create success, then return a shared_ptr as a holder for page_id. The holder
 // will be release when this external version is totally removed.
 template <typename Trait>
-std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntries<Trait>::createNewExternal(const PageVersion & ver)
+std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntries<Trait>::createNewExternal(const PageVersion & ver, const PageEntryV3 & entry)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_DELETE)
@@ -218,6 +218,8 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
         create_ver = ver;
         delete_ver = PageVersion(0);
         being_ref_count = 1;
+        RUNTIME_CHECK(entries.empty());
+        entries.emplace(create_ver, EntryOrDelete::newNormalEntry(entry));
         // return the new created holder to caller to set the page_id
         external_holder = std::make_shared<typename Trait::PageId>();
         return external_holder;
@@ -234,6 +236,7 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
                 create_ver = ver;
                 delete_ver = PageVersion(0);
                 being_ref_count = 1;
+                entries.emplace(create_ver, EntryOrDelete::newNormalEntry(entry));
                 // return the new created holder to caller to set the page_id
                 external_holder = std::make_shared<typename Trait::PageId>();
                 return external_holder;
@@ -290,6 +293,34 @@ void VersionedPageEntries<Trait>::createDelete(const PageVersion & ver)
 
     throw Exception(fmt::format(
         "try to create delete version with invalid state "
+        "[ver={}] [state={}]",
+        ver,
+        toDebugString()));
+}
+
+template <typename Trait>
+bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry)
+{
+    auto page_lock = acquireLock();
+    if (type == EditRecordType::VAR_ENTRY)
+    {
+        auto last_iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1, 0));
+        RUNTIME_CHECK(last_iter != entries.end() && last_iter->second.isEntry());
+        auto & ori_entry = last_iter->second.entry;
+        RUNTIME_CHECK(ori_entry.checkpoint_info.has_value());
+        if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
+        {
+            return false;
+        }
+        ori_entry.file_id = entry.file_id;
+        ori_entry.size = entry.size;
+        ori_entry.offset = entry.offset;
+        ori_entry.checksum = entry.checksum;
+        ori_entry.checkpoint_info.is_local_data_reclaimed = false;
+        return true;
+    }
+    throw Exception(fmt::format(
+        "try to update remote page with invalid state "
         "[ver={}] [state={}]",
         ver,
         toDebugString()));
@@ -371,6 +402,7 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
         is_deleted = false;
         create_ver = rec.version;
         being_ref_count = rec.being_ref_count;
+        entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.being_ref_count));
         external_holder = std::make_shared<typename Trait::PageId>(rec.page_id);
         return external_holder;
     }
@@ -430,6 +462,10 @@ VersionedPageEntries<Trait>::resolveToPageId(UInt64 seq, bool ignore_delete, Pag
         bool ok = ignore_delete || (!is_deleted || seq < delete_ver.sequence);
         if (create_ver.sequence <= seq && ok)
         {
+            auto iter = entries.find(create_ver);
+            RUNTIME_CHECK(iter != entries.end());
+            if (entry != nullptr)
+                *entry = iter->second.entry;
             return {ResolveResult::TO_NORMAL, Trait::PageIdTrait::getInvalidID(), PageVersion(0)};
         }
     }
@@ -837,7 +873,9 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const PageId & pa
     {
         if (create_ver.sequence > seq)
             return;
-        edit.varExternal(page_id, create_ver, being_ref_count);
+        auto iter = entries.find(create_ver);
+        RUNTIME_CHECK(iter != entries.end());
+        edit.varExternal(page_id, create_ver, iter->second.entry, being_ref_count);
         if (is_deleted && delete_ver.sequence <= seq)
         {
             edit.varDel(page_id, delete_ver);
@@ -1397,7 +1435,7 @@ void PageDirectory<Trait>::applyRefEditRecord(
 }
 
 template <typename Trait>
-void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
+std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     // We need to make sure there is only one apply thread to write wal and then increase `sequence`.
     // Note that, as read threads use current `sequence` as read_seq, we cannot increase `sequence`
@@ -1430,6 +1468,7 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
     watch.restart();
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds()); });
 
+    std::unordered_set<String> applied_data_files;
     {
         std::unique_lock table_lock(table_rw_mutex);
 
@@ -1450,7 +1489,7 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
                 {
                 case EditRecordType::PUT_EXTERNAL:
                 {
-                    auto holder = version_list->createNewExternal(r.version);
+                    auto holder = version_list->createNewExternal(r.version, r.entry);
                     if (holder)
                     {
                         // put the new created holder into `external_ids`
@@ -1473,7 +1512,14 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
                 case EditRecordType::VAR_ENTRY:
                 case EditRecordType::VAR_EXTERNAL:
                 case EditRecordType::VAR_REF:
+                case EditRecordType::UPDATE_DATA_FROM_REMOTE:
                     throw Exception(fmt::format("should not handle edit with invalid type [type={}]", magic_enum::enum_name(r.type)));
+                }
+
+                // collect the applied remote data_file_ids
+                if (r.entry.checkpoint_info.has_value())
+                {
+                    applied_data_files.emplace(*r.entry.checkpoint_info.data_location.data_file_id);
                 }
             }
             catch (DB::Exception & e)
@@ -1486,6 +1532,54 @@ void PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr 
         // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
         sequence.fetch_add(edit_size);
     }
+    return applied_data_files;
+}
+
+template <typename Trait>
+typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCacheForRemotePages(PageEntriesEdit && edit, const DB::PageStorageSnapshotPtr & snap_, const WriteLimiterPtr & write_limiter)
+{
+    std::unique_lock apply_lock(apply_mutex);
+    auto seq = toConcreteSnapshot(snap_)->sequence;
+    for (auto & r : edit.getMutRecords())
+    {
+        r.version = PageVersion(seq, 0);
+    }
+    wal->apply(Trait::Serializer::serializeTo(edit), write_limiter);
+    typename PageDirectory<Trait>::PageEntries ignored_entries;
+    {
+        std::unique_lock table_lock(table_rw_mutex);
+
+        for (const auto & r : edit.getRecords())
+        {
+            auto id_to_resolve = r.page_id;
+            auto sequence_to_resolve = seq;
+            while (true)
+            {
+                auto iter = mvcc_table_directory.lower_bound(id_to_resolve);
+                assert(iter != mvcc_table_directory.end());
+                auto & version_list = iter->second;
+                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = version_list->resolveToPageId(sequence_to_resolve, /*ignore_delete=*/id_to_resolve != r.page_id, nullptr);
+                if (resolve_state == ResolveResult::TO_NORMAL)
+                {
+                    if (!version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry))
+                    {
+                        ignored_entries.push_back(r.entry);
+                    }
+                    break;
+                }
+                else if (resolve_state == ResolveResult::TO_REF)
+                {
+                    id_to_resolve = next_id_to_resolve;
+                    sequence_to_resolve = next_ver_to_resolve.sequence;
+                }
+                else
+                {
+                    RUNTIME_CHECK(false);
+                }
+            }
+        }
+    }
+    return ignored_entries;
 }
 
 template <typename Trait>
@@ -1668,8 +1762,16 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
     auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
     files_snap.num_records = edit_from_disk.size();
     files_snap.read_elapsed_ms = watch.elapsedMilliseconds();
-    bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), write_limiter);
-    return done_any_io;
+    if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
+    {
+        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), write_limiter);
+        return done_any_io;
+    }
+    else if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+    {
+        bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeInCompressedFormTo(edit_from_disk), write_limiter);
+        return done_any_io;
+    }
 }
 
 template <typename Trait>

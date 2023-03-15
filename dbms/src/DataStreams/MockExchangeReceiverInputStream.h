@@ -26,22 +26,26 @@ class MockExchangeReceiverInputStream : public IProfilingBlockInputStream
 {
 public:
     MockExchangeReceiverInputStream(const tipb::ExchangeReceiver & receiver, size_t max_block_size, size_t rows_);
-    MockExchangeReceiverInputStream(ColumnsWithTypeAndName columns, size_t max_block_size);
+    MockExchangeReceiverInputStream(const ColumnsWithTypeAndName & columns, size_t max_block_size);
+    MockExchangeReceiverInputStream(const std::vector<ColumnsWithTypeAndName> & columns_vector, size_t max_block_size);
     Block getHeader() const override
     {
-        return Block(columns).cloneEmpty();
+        return Block(columns_vector[0]).cloneEmpty();
     }
     String getName() const override { return "MockExchangeReceiver"; }
     size_t getSourceNum() const { return source_num; }
-    ColumnsWithTypeAndName columns;
-    size_t output_index;
+    std::vector<ColumnsWithTypeAndName> columns_vector;
+    size_t output_rows = 0;
+    size_t output_index_in_current_columns = 0;
+    size_t output_columns_index = 0;
     size_t max_block_size;
-    size_t rows;
+    size_t rows = 0;
     size_t source_num = 0;
 
 protected:
     Block readImpl() override;
     ColumnPtr makeColumn(ColumnWithTypeAndName elem) const;
+    void initTotalRows();
 };
 
 } // namespace DB

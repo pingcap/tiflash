@@ -20,6 +20,7 @@
 #include <DataStreams/materializeBlock.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/Set.h>
+#include <Interpreters/Settings.h>
 #include <Storages/IStorage.h>
 
 #include <iomanip>

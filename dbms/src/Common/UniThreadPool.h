@@ -161,9 +161,15 @@ class GlobalThreadPool : public FreeThreadPool
         : FreeThreadPool(max_threads_, max_free_threads_, queue_size_, shutdown_on_exception_)
     {}
 
+    std::vector<std::function<void()>> finalize_fns;
+
 public:
     static void initialize(size_t max_threads = 10000, size_t max_free_threads = 1000, size_t queue_size = 10000);
     static GlobalThreadPool & instance();
+
+    void registerFinalizer(std::function<void()>);
+
+    ~GlobalThreadPool() noexcept;
 };
 
 
@@ -186,29 +192,30 @@ public:
         /// NOTE:
         /// - If this will throw an exception, the destructor won't be called
         /// - this pointer cannot be passed in the lambda, since after detach() it will not be valid
-        GlobalThreadPool::instance().scheduleOrThrow([state = state,
-                                                      func = std::forward<Function>(func),
-                                                      args = std::make_tuple(std::forward<Args>(args)...)]() mutable /// mutable is needed to destroy capture
-                                                     {
-                                                         SCOPE_EXIT(
-                                                             state->thread_id = std::thread::id();
-                                                             state->event.set(););
+        GlobalThreadPool::instance().scheduleOrThrow(
+            [state = state,
+             func = std::forward<Function>(func),
+             args = std::make_tuple(std::forward<Args>(args)...)]() mutable /// mutable is needed to destroy capture
+            {
+                SCOPE_EXIT(
+                    state->thread_id = std::thread::id();
+                    state->event.set(););
 
-                                                         state->thread_id = std::this_thread::get_id();
+                state->thread_id = std::this_thread::get_id();
 
-                                                         /// This moves are needed to destroy function and arguments before exit.
-                                                         /// It will guarantee that after ThreadFromGlobalPool::join all captured params are destroyed.
-                                                         auto function = std::move(func);
-                                                         auto arguments = std::move(args);
+                /// This moves are needed to destroy function and arguments before exit.
+                /// It will guarantee that after ThreadFromGlobalPool::join all captured params are destroyed.
+                auto function = std::move(func);
+                auto arguments = std::move(args);
 
-                                                         /// Thread status holds raw pointer on query context, thus it always must be destroyed
-                                                         /// before sending signal that permits to join this thread.
-                                                         // DB::ThreadStatus thread_status;
-                                                         std::apply(function, arguments);
-                                                     },
-                                                     0, // default priority
-                                                     0, // default wait_microseconds
-                                                     propagate_opentelemetry_context);
+                /// Thread status holds raw pointer on query context, thus it always must be destroyed
+                /// before sending signal that permits to join this thread.
+                // DB::ThreadStatus thread_status;
+                std::apply(function, arguments);
+            },
+            0, // default priority
+            0, // default wait_microseconds
+            propagate_opentelemetry_context);
     }
 
     ThreadFromGlobalPoolImpl(ThreadFromGlobalPoolImpl && rhs) noexcept

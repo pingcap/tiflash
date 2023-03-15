@@ -15,10 +15,11 @@
 #include <Common/Logger.h>
 #include <Common/typeid_cast.h>
 #include <Flash/Disaggregated/S3LockService.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/MockOwnerManager.h>
 #include <TiDB/OwnerManager.h>
@@ -43,7 +44,7 @@ public:
     void SetUp() override
     try
     {
-        db_context = std::make_unique<Context>(DB::tests::TiFlashTestEnv::getContext());
+        db_context = DB::tests::TiFlashTestEnv::getContext();
         log = Logger::get();
 
         auto & client_factory = DB::S3::ClientFactory::instance();
@@ -52,41 +53,12 @@ public:
         owner_manager = std::static_pointer_cast<MockOwnerManager>(OwnerManager::createMockOwner("owner_0"));
         owner_manager->campaignOwner();
 
-        if (is_s3_test_enabled)
-        {
-            s3_client = client_factory.sharedTiFlashClient();
-        }
-        else
-        {
-            s3_client = std::make_shared<MockS3Client>();
-        }
-        s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager, s3_client);
-        createBucketIfNotExist();
+        s3_client = client_factory.sharedTiFlashClient();
+        s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager);
+        ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, s3_client->bucket());
         createS3DataFiles();
     }
     CATCH
-
-    bool createBucketIfNotExist()
-    {
-        Aws::S3::Model::CreateBucketRequest request;
-        const auto & bucket = s3_client->bucket();
-        request.SetBucket(bucket);
-        auto outcome = s3_client->CreateBucket(request);
-        if (outcome.IsSuccess())
-        {
-            LOG_DEBUG(log, "Created bucket {}", bucket);
-        }
-        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
-        {
-            LOG_DEBUG(log, "Bucket {} already exist", bucket);
-        }
-        else
-        {
-            const auto & err = outcome.GetError();
-            LOG_ERROR(log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
-        }
-        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
-    }
 
     void createS3DataFiles()
     {
@@ -94,7 +66,7 @@ public:
         for (size_t i = 1; i <= 5; ++i)
         {
             auto data_filename = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
-            DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), data_filename.toFullKey());
+            DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), fmt::format("{}/{}", data_filename.toFullKey(), DM::DMFile::metav2FileName()));
             ++dm_file_id;
         }
     }

@@ -19,7 +19,6 @@
 #include <Common/nocopyable.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
-#include <Storages/Page/Page.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/MapUtils.h>
@@ -172,9 +171,13 @@ public:
 
     bool createNewRef(const PageVersion & ver, const PageId & ori_page_id);
 
-    std::shared_ptr<PageId> createNewExternal(const PageVersion & ver);
+    std::shared_ptr<PageId> createNewExternal(const PageVersion & ver, const PageEntryV3 & entry);
 
     void createDelete(const PageVersion & ver);
+
+    // Update the local cache info for remote page,
+    // Must a hold snap to prevent the page being deleted.
+    bool updateLocalCacheForRemotePage(const PageVersion & ver, const PageEntryV3 & entry);
 
     std::shared_ptr<PageId> fromRestored(const typename PageEntriesEdit::EditRecord & rec);
 
@@ -344,7 +347,13 @@ public:
 
     std::optional<PageId> getLowerBound(const PageId & start, const DB::PageStorageSnapshotPtr & snap_);
 
-    void apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
+    // Apply the edit into PageDirectory.
+    // If there are CheckpointInfo along with the applied edit, this function will
+    // returns the applied data file ids.
+    std::unordered_set<String> apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
+
+    // return ignored entries, and the corresponding space in BlobFile should be reclaimed
+    PageEntries updateLocalCacheForRemotePages(PageEntriesEdit && edit, const DB::PageStorageSnapshotPtr & snap_, const WriteLimiterPtr & write_limiter = nullptr);
 
     std::pair<GcEntriesMap, PageSize>
     getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;

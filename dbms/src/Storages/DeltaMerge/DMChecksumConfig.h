@@ -16,7 +16,7 @@
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
 #include <IO/ChecksumBuffer.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 
 #include <map>
 #include <string>
@@ -96,10 +96,7 @@ private:
     std::map<std::string, std::string> embedded_checksum; ///< special checksums for meta files
     std::map<std::string, std::string> debug_info; ///< debugging information
 
-    explicit DMChecksumConfig(const DB::Context & context)
-        : DMChecksumConfig({}, context.getSettingsRef().dt_checksum_frame_size.get(), context.getSettingsRef().dt_checksum_algorithm.get())
-    {
-    }
+    explicit DMChecksumConfig(const DB::Context & context);
 };
 
 

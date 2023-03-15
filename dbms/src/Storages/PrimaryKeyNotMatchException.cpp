@@ -14,6 +14,7 @@
 
 
 #include <Databases/DatabasesCommon.h>
+#include <Encryption/FileProvider.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -29,26 +30,29 @@
 
 namespace DB
 {
-
 String fixCreateStatementWithPriKeyNotMatchException( //
-    Context & context, const String old_definition, const String & table_metadata_path, const PrimaryKeyNotMatchException & ex,
+    Context & context,
+    const String old_definition,
+    const String & table_metadata_path,
+    const PrimaryKeyNotMatchException & ex,
     Poco::Logger * log)
 {
     LOG_WARNING(
-        log, "Try to fix statement in " + table_metadata_path + ", primary key [" + ex.pri_key + "] -> [" + ex.actual_pri_key + "]");
+        log,
+        "Try to fix statement in " + table_metadata_path + ", primary key [" + ex.pri_key + "] -> [" + ex.actual_pri_key + "]");
     // Try to fix the create statement.
     ParserCreateQuery parser;
     ASTPtr ast
         = parseQuery(parser, old_definition.data(), old_definition.data() + old_definition.size(), "in file " + table_metadata_path, 0);
     ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
     auto args = ast_create_query.storage->engine->arguments;
-    if (args->children.size() >= 1)
+    if (!args->children.empty())
     {
         ASTPtr pk_ast = std::make_shared<ASTExpressionList>();
         pk_ast->children.emplace_back(std::make_shared<ASTIdentifier>(ex.actual_pri_key));
         args->children[0] = pk_ast;
     }
-    const String statement = getTableDefinitionFromCreateQuery(ast);
+    String statement = getTableDefinitionFromCreateQuery(ast);
     const String table_metadata_tmp_path = table_metadata_path + ".tmp";
 
     {
@@ -61,9 +65,8 @@ String fixCreateStatementWithPriKeyNotMatchException( //
         EncryptionPath encryption_path
             = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
         {
-            bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
-            WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info,
-                nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+            bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
+            WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
             if (context.getSettingsRef().fsync_metadata)
@@ -74,8 +77,7 @@ String fixCreateStatementWithPriKeyNotMatchException( //
         try
         {
             /// rename atomically replaces the old file with the new one.
-            context.getFileProvider()->renameFile(table_metadata_tmp_path, encryption_path, table_metadata_path,
-                EncryptionPath(table_metadata_path, ""), !use_target_encrypt_info);
+            context.getFileProvider()->renameFile(table_metadata_tmp_path, encryption_path, table_metadata_path, EncryptionPath(table_metadata_path, ""), !use_target_encrypt_info);
         }
         catch (...)
         {

@@ -91,6 +91,11 @@ ssize_t PosixWritableFile::pwrite(char * buf, size_t size, off_t offset) const
     return ::pwrite(fd, buf, size, offset);
 }
 
+off_t PosixWritableFile::seek(off_t offset, int whence) const
+{
+    return ::lseek(fd, offset, whence);
+}
+
 void PosixWritableFile::doOpenFile(bool truncate_when_exists_, int flags, mode_t mode)
 {
     ProfileEvents::increment(ProfileEvents::FileOpen);

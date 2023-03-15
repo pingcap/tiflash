@@ -457,6 +457,9 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
         case WriteBatchWriteType::UPSERT:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "DeltaVersionEditAcceptor::apply with invalid type {}", magic_enum::enum_name(rec.type));
             break;
+        default:
+            throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(rec.type)), ErrorCodes::LOGICAL_ERROR);
+            break;
         }
     }
 }
@@ -594,6 +597,9 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
             break;
         case WriteBatchWriteType::UPSERT:
             current->upsertPage(rec.page_id, rec.entry);
+            break;
+        default:
+            throw Exception(fmt::format("Unknown write {}", static_cast<Int32>(rec.type)), ErrorCodes::LOGICAL_ERROR);
             break;
         }
     }

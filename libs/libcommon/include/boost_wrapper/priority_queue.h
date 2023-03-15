@@ -16,7 +16,9 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-
+#if defined(__clang__) && __clang_major__ >= 15
+#pragma GCC diagnostic ignored "-Wdeprecated-builtins"
+#endif
 #include <boost/heap/priority_queue.hpp>
 
 #pragma GCC diagnostic pop

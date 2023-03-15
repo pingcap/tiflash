@@ -73,12 +73,14 @@ class ReadIndexStressTest;
 struct FileUsageStatistics;
 class PathPool;
 class RegionPersister;
+struct CheckpointInfo;
+using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
 {
 public:
-    KVStore(Context & context);
+    explicit KVStore(Context & context);
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
 
     RegionPtr getRegion(RegionID region_id) const;
@@ -96,19 +98,20 @@ public:
     static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed = true);
 
     size_t regionSize() const;
-    EngineStoreApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
-                                           raft_cmdpb::AdminResponse && response,
-                                           UInt64 region_id,
-                                           UInt64 index,
-                                           UInt64 term,
-                                           TMTContext & tmt);
+    EngineStoreApplyRes handleAdminRaftCmd(
+        raft_cmdpb::AdminRequest && request,
+        raft_cmdpb::AdminResponse && response,
+        UInt64 region_id,
+        UInt64 index,
+        UInt64 term,
+        TMTContext & tmt);
     EngineStoreApplyRes handleWriteRaftCmd(
         raft_cmdpb::RaftCmdRequest && request,
         UInt64 region_id,
         UInt64 index,
         UInt64 term,
-        TMTContext & tmt);
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+        TMTContext & tmt) const;
+    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt) const;
 
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
     bool tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);
@@ -117,6 +120,8 @@ public:
      * Only used in tests. In production we will call preHandleSnapshotToFiles + applyPreHandledSnapshot.
      */
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+
+    void handleIngestCheckpoint(CheckpointInfoPtr checkpoint_info, TMTContext & tmt);
 
     std::vector<DM::ExternalDTFileInfo> preHandleSnapshotToFiles(
         RegionPtr new_region,
@@ -142,6 +147,8 @@ public:
 
     // May return 0 if uninitialized
     StoreID getStoreID(std::memory_order = std::memory_order_relaxed) const;
+
+    metapb::Store getStoreMeta() const;
 
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const;
 
@@ -184,10 +191,13 @@ private:
     friend class ReadIndexStressTest;
     struct StoreMeta
     {
+        mutable std::mutex mu;
+
         using Base = metapb::Store;
         Base base;
         std::atomic_uint64_t store_id{0};
         void update(Base &&);
+        Base getMeta() const;
         friend class KVStore;
     };
     StoreMeta & getStore();

@@ -14,8 +14,9 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
-#include <Common/ThreadPool.h>
+#include <Common/UniThreadPool.h>
 #include <Common/setThreadName.h>
+#include <IO/IOThreadPool.h>
 #include <Poco/Util/Application.h>
 #include <Poco/Util/LayeredConfiguration.h>
 
@@ -336,7 +337,6 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
     }
 }
 
-
 template class ThreadPoolImpl<std::thread>;
 template class ThreadPoolImpl<ThreadFromGlobalPoolImpl<false>>;
 template class ThreadFromGlobalPoolImpl<true>;
@@ -354,6 +354,11 @@ void GlobalThreadPool::initialize(size_t max_threads, size_t max_free_threads, s
     the_instance.reset(new GlobalThreadPool(max_threads, max_free_threads, queue_size, false /*shutdown_on_exception*/));
 }
 
+void GlobalThreadPool::registerFinalizer(std::function<void()> fn)
+{
+    finalize_fns.push_back(fn);
+}
+
 GlobalThreadPool & GlobalThreadPool::instance()
 {
     if (!the_instance)
@@ -365,4 +370,11 @@ GlobalThreadPool & GlobalThreadPool::instance()
 
     return *the_instance;
 }
+
+GlobalThreadPool::~GlobalThreadPool() noexcept
+{
+    for (auto & fn : finalize_fns)
+        fn();
+}
+
 } // namespace DB

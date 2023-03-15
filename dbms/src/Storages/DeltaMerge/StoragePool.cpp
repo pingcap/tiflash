@@ -178,7 +178,7 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
     , run_mode(global_ctx.getPageStorageRunMode())
     , ns_id(ns_id_)
     , storage_path_pool(storage_path_pool_)
-    , uni_ps(global_ctx.getWriteNodePageStorage())
+    , uni_ps(run_mode == PageStorageRunMode::UNI_PS ? global_ctx.getWriteNodePageStorage() : nullptr)
     , global_context(global_ctx)
     , storage_pool_metrics(CurrentMetrics::StoragePoolV3Only, 0)
 {

@@ -16,6 +16,7 @@
 #include <Common/ProfileEvents.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/RateLimiter.h>
+#include <Storages/S3/FileCache.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -38,9 +39,15 @@ extern const int CANNOT_SEEK_THROUGH_FILE;
 extern const int CANNOT_SELECT;
 } // namespace ErrorCodes
 
-PosixRandomAccessFile::PosixRandomAccessFile(const std::string & file_name_, int flags, const ReadLimiterPtr & read_limiter_)
+RandomAccessFilePtr PosixRandomAccessFile::create(const String & file_name_)
+{
+    return std::make_shared<PosixRandomAccessFile>(file_name_, /*flags*/ -1, /*read_limiter_*/ nullptr);
+}
+
+PosixRandomAccessFile::PosixRandomAccessFile(const std::string & file_name_, int flags, const ReadLimiterPtr & read_limiter_, const FileSegmentPtr & file_seg_)
     : file_name{file_name_}
     , read_limiter(read_limiter_)
+    , file_seg(file_seg_)
 {
     ProfileEvents::increment(ProfileEvents::FileOpen);
 
