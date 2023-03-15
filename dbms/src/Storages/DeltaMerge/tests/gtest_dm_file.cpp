@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Core/ColumnWithTypeAndName.h>
+#include <Encryption/PosixWritableFile.h>
 #include <Interpreters/Context.h>
 #include <Poco/DirectoryIterator.h>
 #include <Storages/DeltaMerge/DMContext.h>
