@@ -933,6 +933,8 @@ std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfter
             tipb::Expr fsp_expr = constructInt64LiteralTiExpr(fsp);
             fsp_col = getActions(fsp_expr, actions);
             casted_name = appendDurationCast(fsp_col, source_columns[i].name, dur_func_name, actions);
+            // We will replace the source_columns[i] with the casted column later
+            // so we need to update the type of the source_column[i]
             source_columns[i].type = actions->getSampleBlock().getByName(casted_name).type;
             has_cast = true;
         }
@@ -956,7 +958,11 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     if (!has_cast)
         return false;
 
-    // rename casted columns to original name
+    // Add a projection to replace the original columns with the casted columns.
+    // For example:
+    // we have a block with columns (a int64, b float, c int64)
+    // after the cast, the block will be (a int64, b float, c int64, casted_c MyDuration)
+    // After this projection, the block will be (a int64, b float, c MyDuration)
     NamesWithAliases project_cols;
     for (size_t i = 0; i < need_cast_column.size(); ++i)
         project_cols.emplace_back(casted_columns[i], source_columns[i].name);
