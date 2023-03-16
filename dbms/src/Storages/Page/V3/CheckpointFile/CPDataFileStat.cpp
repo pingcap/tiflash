@@ -16,6 +16,8 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 
+#include <unordered_set>
+
 namespace DB::PS::V3
 {
 
@@ -60,6 +62,13 @@ void CPDataFilesStatCache::updateTotalSize(const CPDataFilesStatCache::CacheMap 
     }
 }
 
+struct FileInfo
+{
+    String file_id;
+    Int64 total_size;
+    double valid_rate;
+};
+
 std::unordered_set<String> getRemoteFileIdsNeedCompact(
     PS::V3::CPDataFilesStatCache::CacheMap & stats, // will be updated
     const DM::Remote::RemoteGCThreshold & gc_threshold,
@@ -88,9 +97,9 @@ std::unordered_set<String> getRemoteFileIdsNeedCompact(
         }
     }
 
-    FmtBuffer fmt_buf;
-    fmt_buf.append("[");
     std::unordered_set<String> rewrite_files;
+    std::vector<FileInfo> rewrite_files_info;
+    std::vector<FileInfo> remain_files_info;
     for (const auto & [file_id, stat] : stats)
     {
         if (stat.total_size <= 0)
@@ -99,19 +108,33 @@ std::unordered_set<String> getRemoteFileIdsNeedCompact(
         if (valid_rate < gc_threshold.valid_rate
             || stat.total_size < static_cast<Int64>(gc_threshold.min_file_threshold))
         {
-            if (!rewrite_files.empty())
-                fmt_buf.append(", ");
-            fmt_buf.fmtAppend("{{key={} size={} rate={:.2f}}}", file_id, stat.total_size, valid_rate);
-            rewrite_files.emplace(file_id);
+            rewrite_files.insert(file_id);
+            rewrite_files_info.emplace_back(FileInfo{.file_id = file_id, .total_size = stat.total_size, .valid_rate = valid_rate});
+        }
+        else
+        {
+            remain_files_info.emplace_back(FileInfo{.file_id = file_id, .total_size = stat.total_size, .valid_rate = valid_rate});
         }
     }
-    fmt_buf.append("]");
     LOG_IMPL(
         log,
-        (rewrite_files.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION),
-        "CheckpointData pick for compaction {}",
-        fmt_buf.toString());
+        (rewrite_files_info.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION),
+        "CheckpointData pick for compaction={} unchange={}",
+        rewrite_files_info,
+        remain_files_info);
     return rewrite_files;
 }
 
 } // namespace DB::PS::V3
+
+template <>
+struct fmt::formatter<DB::PS::V3::FileInfo>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::FileInfo & value, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return format_to(ctx.out(), "{{key={} size={} rate={:.2f}}}", value.file_id, value.total_size, value.valid_rate);
+    }
+};

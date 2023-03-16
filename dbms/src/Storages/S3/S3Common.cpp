@@ -77,7 +77,8 @@ Poco::Message::Priority convertLogLevel(Aws::Utils::Logging::LogLevel log_level)
         // treat aws info logging as debug level
         return Poco::Message::PRIO_DEBUG;
     case Aws::Utils::Logging::LogLevel::Debug:
-        return Poco::Message::PRIO_DEBUG;
+        // treat aws debug logging as trace level
+        return Poco::Message::PRIO_TRACE;
     case Aws::Utils::Logging::LogLevel::Trace:
         return Poco::Message::PRIO_TRACE;
     default:
