@@ -25,6 +25,8 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
     Context & /*context*/,
     size_t /*concurrency*/)
 {
+    assert(!fine_grained_shuffle.enable());
+
     aggregate_context->initConvergent();
 
     if (unlikely(aggregate_context->useNullSource()))

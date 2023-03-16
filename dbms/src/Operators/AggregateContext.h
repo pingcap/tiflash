@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/Operator.h>
 
@@ -45,7 +46,7 @@ public:
     {
     }
 
-    void initBuild(const Aggregator::Params & params, size_t max_threads_);
+    void initBuild(const Aggregator::Params & params, size_t max_threads_, Aggregator::CancellationHook && hook);
 
     void buildOnBlock(size_t task_index, const Block & block);
 
@@ -79,6 +80,8 @@ private:
     size_t max_threads{};
 
     const LoggerPtr log;
+
+    std::optional<Stopwatch> build_watch;
 };
 
 using AggregateContextPtr = std::shared_ptr<AggregateContext>;

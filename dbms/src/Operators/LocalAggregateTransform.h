@@ -14,38 +14,45 @@
 
 #pragma once
 
-#include <Operators/AggregateContext.h>
+#include <Common/Logger.h>
 #include <Operators/Operator.h>
+#include <Operators/AggregateContext.h>
 
 namespace DB
 {
-class AggregateSinkOp : public SinkOp
+enum class LocalAggStatus
+{
+    build,
+    convert,
+};
+
+class LocalAggregateTransform : public TransformOp
 {
 public:
-    AggregateSinkOp(
+    LocalAggregateTransform(
         PipelineExecutorStatus & exec_status_,
-        size_t index_,
-        AggregateContextPtr agg_context_,
-        const String & req_id)
-        : SinkOp(exec_status_, req_id)
-        , index(index_)
-        , agg_context(agg_context_)
-    {
-    }
+        const String & req_id,
+        const Aggregator::Params & params_,
+        std::unique_ptr<AggregateContext> && agg_context_);
 
     String getName() const override
     {
-        return "AggregateSinkOp";
+        return "LocalAggregateTransform";
     }
 
-    void operateSuffix() override;
+    void operatePrefix() override;
 
 protected:
-    OperatorStatus writeImpl(Block && block) override;
+    OperatorStatus transformImpl(Block & block) override;
+
+    OperatorStatus tryOutputImpl(Block & block) override;
+
+    void transformHeaderImpl(Block & header_) override;
 
 private:
-    size_t index{};
-    uint64_t total_rows{};
-    AggregateContextPtr agg_context;
+    Aggregator::Params params;
+    std::unique_ptr<AggregateContext> agg_context;
+
+    LocalAggStatus status{LocalAggStatus::build};
 };
 } // namespace DB

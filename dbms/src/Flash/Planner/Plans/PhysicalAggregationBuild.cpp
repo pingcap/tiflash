@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Interpreters/Context.h>
-#include <Operators/AggregateSinkOp.h>
+#include <Operators/AggregateBuildSinkOp.h>
 #include <Operators/ExpressionTransformOp.h>
 
 namespace DB
@@ -26,17 +27,14 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    assert(!fine_grained_shuffle.enable());
+
     if (!before_agg_actions->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_agg_actions));
         });
     }
-
-    size_t build_index = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<AggregateSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
-    });
 
     Block before_agg_header = group_builder.getCurrentHeader();
     size_t concurrency = group_builder.concurrency;
@@ -48,18 +46,21 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
         context.getSettingsRef().max_spilled_rows_per_file,
         context.getSettingsRef().max_spilled_bytes_per_file,
         context.getFileProvider());
-
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
         concurrency,
-        concurrency,
+        1,
         aggregation_keys,
         aggregation_collators,
         aggregate_descriptions,
         is_final_agg,
         spill_config);
+    aggregate_context->initBuild(params, concurrency, /*hook=*/[&]() { return exec_status.isCancelled(); });
 
-    aggregate_context->initBuild(params, concurrency);
+    size_t build_index = 0;
+    group_builder.transform([&](auto & builder) {
+        builder.setSinkOp(std::make_unique<AggregateBuildSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
+    });
 }
 } // namespace DB
