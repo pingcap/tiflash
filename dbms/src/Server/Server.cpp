@@ -1332,22 +1332,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     ///   because cache items will be never explicitly removed.
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 2000);
+        size_t n = config().getUInt64("delta_index_cache_count", 2000);
         // In disaggregate compute node, we will not use DeltaIndexManager to cache the delta index.
         // Instead, we use RNDeltaIndexCache.
 
         // TODO: Currently RNDeltaIndexCache caches by number of entities, instead of
         // number of bytes!
 
-        if (delta_index_cache_size > 100000)
-            delta_index_cache_size = 100000; // In case of someone incorrectly uses byte size.
-
-        global_context->getSharedContextDisagg()->initReadNodeDeltaIndexCache(delta_index_cache_size);
+        global_context->getSharedContextDisagg()->initReadNodeDeltaIndexCache(n);
     }
     else
     {
-        size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 0);
-        global_context->setDeltaIndexManager(delta_index_cache_size);
+        size_t n = config().getUInt64("delta_index_cache_size", 0);
+        global_context->setDeltaIndexManager(n);
     }
 
     /// Set path for format schema files

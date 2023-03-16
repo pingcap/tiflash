@@ -368,7 +368,9 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     size_t num_streams,
     DAGPipeline & pipeline)
 {
-    LOG_DEBUG(log, "build streams with {} segment tasks, num_streams={}", remote_read_tasks->numSegments(), num_streams);
+    auto io_concurrency = static_cast<size_t>(static_cast<double>(num_streams) * db_context.getSettingsRef().disagg_read_concurrency_scale);
+    LOG_DEBUG(log, "Build disagg streams with {} segment tasks, num_streams={} io_concurrency={}", remote_read_tasks->numSegments(), num_streams, io_concurrency);
+
     const auto & executor_id = table_scan.getTableScanExecutorID();
     // Build a RNPageReceiver to fetch the pages from all write nodes
     auto * kv_cluster = db_context.getTMTContext().getKVCluster();
@@ -399,9 +401,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
 
-    auto io_concurrency = std::max(50, num_streams * 10);
     auto sub_streams_size = io_concurrency / num_streams;
-
     for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
     {
         // Build N UnionBlockInputStream, each one collects from M underlying RemoteInputStream.
