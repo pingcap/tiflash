@@ -126,6 +126,10 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname)
 // Remove `local_fname` from disk and remove parent directory if parent directory is empty.
 void FileCache::removeDiskFile(const String & local_fname)
 {
+    if (!std::filesystem::exists(local_fname))
+    {
+        return;
+    }
     try
     {
         auto fsize = std::filesystem::file_size(local_fname);
@@ -150,11 +154,11 @@ void FileCache::removeDiskFile(const String & local_fname)
     }
     catch (std::exception & e)
     {
-        LOG_WARNING(log, "Throw exception in removeFile: ", e.what());
+        LOG_WARNING(log, "Throw exception in removeFile {}: {}", local_fname, e.what());
     }
     catch (...)
     {
-        tryLogCurrentException("Throw exception in removeFile");
+        tryLogCurrentException("Throw exception in removeFile {}", local_fname);
     }
 }
 
@@ -172,13 +176,13 @@ void FileCache::remove(const String & s3_key)
     std::ignore = removeImpl(table, s3_key, f);
 }
 
-std::pair<UInt64, std::list<String>::iterator> FileCache::removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f)
+std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f)
 {
     // Except currenly thread and the FileTable,
     // there are other threads hold this FileSegment object.
     if (f.use_count() > 2)
     {
-        return {0, {}};
+        return {-1, {}};
     }
     ProfileEvents::increment(ProfileEvents::FileCacheEvict);
     const auto & local_fname = f->getLocalFileName();
@@ -256,20 +260,20 @@ UInt64 FileCache::tryEvictFrom(FileType evict_for, UInt64 size, FileType evict_f
     for (UInt32 try_evict_count = 0; try_evict_count < max_try_evict_count && itr != end; ++try_evict_count)
     {
         auto s3_key = *itr;
-        auto f = table.get(s3_key);
+        auto f = table.get(s3_key, /*update_lru*/ false);
         if (!check_last_access_time || !f->isRecentlyAccess(std::chrono::seconds(cache_min_age_seconds.load(std::memory_order_relaxed))))
         {
             auto [released_size, next_itr] = removeImpl(table, s3_key, f);
             LOG_DEBUG(log, "tryRemoveFile {} size={}", s3_key, released_size);
-            if (released_size == 0)
+            if (released_size < 0) // not remove
             {
                 ++itr;
             }
-            else
+            else // removed
             {
                 itr = next_itr;
+                total_released_size += released_size;
             }
-            total_released_size += released_size;
         }
         else
         {
