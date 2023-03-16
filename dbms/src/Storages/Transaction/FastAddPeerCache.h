@@ -86,9 +86,9 @@ using SegmentEndKeyCachePtr = std::shared_ptr<SegmentEndKeyCache>;
 class ParsedCheckpointDataHolder
 {
 public:
-    UniversalPageStoragePtr temp_ps;
+    ParsedCheckpointDataHolder(Context & context, const PageStorageConfig & config, UInt64 dir_seq);
 
-    std::vector<String> paths = {};
+    UniversalPageStoragePtr getUniversalPageStorage();
 
     // return pair<ptr_to_cache, need_build_cache>
     std::pair<SegmentEndKeyCachePtr, bool> getSegmentEndKeyCache(const TableIdentifier & identifier);
@@ -102,6 +102,10 @@ public:
     }
 
 private:
+    std::vector<String> paths = {};
+
+    UniversalPageStoragePtr temp_ps;
+
     std::mutex mu; // protect segment_end_key_cache
     using SegmentEndKeyCacheMap = std::unordered_map<TableIdentifier, SegmentEndKeyCachePtr>;
     SegmentEndKeyCacheMap segment_end_key_cache_map;

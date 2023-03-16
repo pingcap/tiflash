@@ -211,14 +211,14 @@ try
         RaftApplyState apply_state;
         {
             auto apply_state_key = UniversalPageIdFormat::toRaftApplyStateKeyInKVEngine(region_id);
-            auto page = checkpoint_data_holder->temp_ps->read(apply_state_key);
+            auto page = checkpoint_data_holder->getUniversalPageStorage()->read(apply_state_key);
             apply_state.ParseFromArray(page.data.begin(), page.data.size());
         }
 
         RegionLocalState region_state;
         {
             auto local_state_key = UniversalPageIdFormat::toRegionLocalStateKeyInKVEngine(region_id);
-            auto page = checkpoint_data_holder->temp_ps->read(local_state_key);
+            auto page = checkpoint_data_holder->getUniversalPageStorage()->read(local_state_key);
             region_state.ParseFromArray(page.data.begin(), page.data.size());
         }
 

@@ -59,6 +59,34 @@ void SegmentEndKeyCache::build(const std::vector<std::pair<DM::RowKeyValue, UInt
     cv.notify_all();
 }
 
+ParsedCheckpointDataHolder::ParsedCheckpointDataHolder(Context & context, const PageStorageConfig & config, UInt64 dir_seq)
+{
+    const auto dir_prefix = fmt::format("local_{}", dir_seq);
+    auto delegator = context.getPathPool().getPSDiskDelegatorGlobalMulti(dir_prefix);
+    for (const auto & path : delegator->listPaths())
+    {
+        paths.push_back(path);
+        auto file = Poco::File(path);
+        if (file.exists())
+        {
+            LOG_WARNING(Logger::get(), "Path {} already exists, removing it", path);
+            file.remove(true);
+        }
+    }
+    auto local_ps = UniversalPageStorage::create( //
+        dir_prefix,
+        delegator,
+        config,
+        context.getFileProvider());
+    local_ps->restore();
+    temp_ps = local_ps;
+}
+
+UniversalPageStoragePtr ParsedCheckpointDataHolder::getUniversalPageStorage()
+{
+    return temp_ps;
+}
+
 std::pair<SegmentEndKeyCachePtr, bool> ParsedCheckpointDataHolder::getSegmentEndKeyCache(const TableIdentifier & identifier)
 {
     std::unique_lock lock(mu);
@@ -72,28 +100,8 @@ std::pair<SegmentEndKeyCachePtr, bool> ParsedCheckpointDataHolder::getSegmentEnd
 
 ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const String & manifest_key, UInt64 dir_seq)
 {
-    auto file_provider = context.getFileProvider();
     PageStorageConfig config;
-    const auto dir_prefix = fmt::format("local_{}", dir_seq);
-    auto data_holder = std::make_shared<ParsedCheckpointDataHolder>();
-    auto delegator = context.getPathPool().getPSDiskDelegatorGlobalMulti(dir_prefix);
-    for (const auto & path : delegator->listPaths())
-    {
-        data_holder->paths.push_back(path);
-        auto file = Poco::File(path);
-        if (file.exists())
-        {
-            LOG_WARNING(Logger::get("createTempPageStorage"), "Path {} already exists, removing it", path);
-            file.remove(true);
-        }
-    }
-    auto local_ps = UniversalPageStorage::create( //
-        dir_prefix,
-        delegator,
-        config,
-        file_provider);
-    local_ps->restore();
-    data_holder->temp_ps = local_ps;
+    auto data_holder = std::make_shared<ParsedCheckpointDataHolder>(context, config, dir_seq);
     auto * log = &Poco::Logger::get("FastAddPeer");
     LOG_DEBUG(log, "Begin to create temp ps from {}", manifest_key);
 
@@ -150,7 +158,7 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
         RUNTIME_CHECK(record.type == PS::V3::EditRecordType::VAR_DELETE);
         wb.delPage(record.page_id);
     }
-    local_ps->write(std::move(wb));
+    data_holder->getUniversalPageStorage()->write(std::move(wb));
     return data_holder;
 }
 } // namespace DB

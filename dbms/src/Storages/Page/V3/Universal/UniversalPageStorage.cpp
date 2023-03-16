@@ -237,7 +237,7 @@ void UniversalPageStorage::traverse(const String & prefix, const std::function<v
     for (const auto & page_id : page_ids)
     {
         const auto page_id_and_entry = page_directory->getByID(page_id, snapshot);
-        auto & checkpoint_info = page_id_and_entry.second.checkpoint_info;
+        const auto & checkpoint_info = page_id_and_entry.second.checkpoint_info;
         if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
         {
             auto page = remote_reader->read(page_id_and_entry);

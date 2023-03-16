@@ -170,7 +170,7 @@ std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLoc
     RegionPtr region;
     {
         auto region_key = UniversalPageIdFormat::toKVStoreKey(region_id);
-        auto page = checkpoint_data_holder->temp_ps->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+        auto page = checkpoint_data_holder->getUniversalPageStorage()->read(region_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
         if (page.isValid())
         {
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -186,7 +186,7 @@ std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLoc
     RaftApplyState apply_state;
     {
         auto apply_state_key = UniversalPageIdFormat::toRaftApplyStateKeyInKVEngine(region_id);
-        auto page = checkpoint_data_holder->temp_ps->read(apply_state_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+        auto page = checkpoint_data_holder->getUniversalPageStorage()->read(apply_state_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
         if (page.isValid())
         {
             apply_state.ParseFromArray(page.data.begin(), page.data.size());
@@ -201,7 +201,7 @@ std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLoc
     RegionLocalState region_state;
     {
         auto local_state_key = UniversalPageIdFormat::toRegionLocalStateKeyInKVEngine(region_id);
-        auto page = checkpoint_data_holder->temp_ps->read(local_state_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
+        auto page = checkpoint_data_holder->getUniversalPageStorage()->read(local_state_key, /*read_limiter*/ nullptr, {}, /*throw_on_not_exist*/ false);
         if (page.isValid())
         {
             region_state.ParseFromArray(page.data.begin(), page.data.size());
@@ -217,7 +217,7 @@ std::optional<std::tuple<CheckpointInfoPtr, RegionPtr, RaftApplyState, RegionLoc
     checkpoint_info->remote_store_id = remote_store_id;
     checkpoint_info->region_id = region_id;
     checkpoint_info->checkpoint_data_holder = checkpoint_data_holder;
-    checkpoint_info->temp_ps = checkpoint_data_holder->temp_ps;
+    checkpoint_info->temp_ps = checkpoint_data_holder->getUniversalPageStorage();
     return std::make_tuple(checkpoint_info, region, apply_state, region_state);
 }
 

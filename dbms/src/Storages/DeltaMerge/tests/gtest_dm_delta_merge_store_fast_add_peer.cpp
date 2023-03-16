@@ -285,7 +285,7 @@ try
     checkpoint_info->remote_store_id = store_id;
     checkpoint_info->region_id = 1000;
     checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(*db_context, manifest_key, /*dir_seq*/ 100);
-    checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->temp_ps;
+    checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     store->ingestSegmentsFromCheckpointInfo(*db_context, db_context->getSettingsRef(), RowKeyRange::newAll(false, 1), checkpoint_info);
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write / 2 + 2 * num_rows_write);
@@ -358,7 +358,7 @@ try
     checkpoint_info->remote_store_id = store_id;
     checkpoint_info->region_id = 1000;
     checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(*db_context, manifest_key, /*dir_seq*/ 100);
-    checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->temp_ps;
+    checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     store->ingestSegmentsFromCheckpointInfo(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write / 2)), checkpoint_info);
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write / 2);
 
