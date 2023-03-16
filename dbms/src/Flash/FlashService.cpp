@@ -128,13 +128,13 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
 
 void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr & context, Poco::Logger * log)
 {
-    const static std::vector<std::pair<String, String>> tidb_varname_to_tiflash_var_name = {
+    const static std::vector<std::pair<String, String>> tidb_varname_to_tiflash_varname = {
         std::make_pair("tidb_max_tiflash_threads", "max_threads"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_join", "max_bytes_before_external_join"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_group_by", "max_bytes_before_external_group_by"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_sort", "max_bytes_before_external_sort"),
     };
-    for (const auto & names : tidb_varname_to_tiflash_var_name)
+    for (const auto & names : tidb_varname_to_tiflash_varname)
     {
         String value_from_tidb = getClientMetaVarWithDefault(grpc_context, names.first, "");
         if (!value_from_tidb.empty())
