@@ -91,7 +91,7 @@ public:
         return ret;
     }
 
-    void dumpCheckpoint(bool upload_success = true)
+    void dumpCheckpoint(bool upload_success = true, std::unordered_set<String> file_ids_to_compact = {})
     {
         page_storage->dumpIncrementalCheckpoint({
             .data_file_id_pattern = "{seq}_{index}.data",
@@ -103,6 +103,7 @@ public:
             .persist_checkpoint = [upload_success](const PS::V3::LocalCheckpointFiles &) {
                 return upload_success;
             },
+            .file_ids_to_compact = file_ids_to_compact,
         });
     }
 
@@ -422,6 +423,54 @@ try
         ASSERT_EQ("5", iter->page_id);
         ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info.data_location));
+    }
+
+    // Write and dump again with compact file ids
+
+    {
+        UniversalWriteBatch batch;
+        batch.putPage("7", tag, "alas, but where had Lord Rukkhadevata gone"); // New
+        page_storage->write(std::move(batch));
+    }
+    dumpCheckpoint(/*upload_success*/ true, /*file_ids_to_compact*/ {"4_0.data"});
+    {
+        ASSERT_TRUE(Poco::File(dir + "5.manifest").exists());
+        ASSERT_TRUE(Poco::File(dir + "5_0.data").exists());
+
+        auto manifest_file = PosixRandomAccessFile::create(dir + "5.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
+        auto im = CheckpointProto::StringsInternMap{};
+        auto prefix = reader->readPrefix();
+        auto edits = reader->readEdits(im);
+        auto records = edits->getRecords();
+
+        ASSERT_EQ(4, records.size());
+
+        auto iter = records.begin();
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        EXPECT_EQ("3", iter->page_id);
+        EXPECT_EQ("5_0.data", *iter->entry.checkpoint_info.data_location.data_file_id); // rewrite
+        EXPECT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        EXPECT_EQ("4", iter->page_id);
+        EXPECT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id); // not rewrite
+        EXPECT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        EXPECT_EQ("5", iter->page_id);
+        EXPECT_EQ("5_0.data", *iter->entry.checkpoint_info.data_location.data_file_id); // rewrite
+        EXPECT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info.data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        EXPECT_EQ("7", iter->page_id);
+        EXPECT_EQ("5_0.data", *iter->entry.checkpoint_info.data_location.data_file_id); // new write
+        EXPECT_EQ("alas, but where had Lord Rukkhadevata gone", readData(iter->entry.checkpoint_info.data_location));
     }
 }
 CATCH
