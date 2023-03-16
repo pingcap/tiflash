@@ -14,7 +14,6 @@
 
 #include <Columns/ColumnsCommon.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
-
 #include <boost_wrapper/string.h>
 
 namespace DB::DM::tests
