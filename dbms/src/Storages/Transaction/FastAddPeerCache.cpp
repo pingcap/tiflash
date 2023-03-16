@@ -36,24 +36,23 @@
 
 namespace DB
 {
-UInt64 SegmentEndKeyCache::getSegmentIdContainingKey(const DM::RowKeyValue & key)
+UInt64 EndToSegmentId::getSegmentIdContainingKey(const DM::RowKeyValue & key)
 {
     std::unique_lock lock(mu);
     if (!is_ready)
         cv.wait(lock, [&] { return is_ready; });
-    auto iter = end_key_to_segment_id.upper_bound(key);
-    RUNTIME_CHECK(iter != end_key_to_segment_id.end(), key.toDebugString(), end_key_to_segment_id.rbegin()->first.toDebugString());
+    auto iter = std::upper_bound(end_to_segment_id.begin(), end_to_segment_id.end(), key, [](const DM::RowKeyValue & key1, const std::pair<DM::RowKeyValue, UInt64> & element2) {
+        return compare(key1.toRowKeyValueRef(), element2.first.toRowKeyValueRef()) < 0;
+    });
+    RUNTIME_CHECK(iter != end_to_segment_id.end(), key.toDebugString(), end_to_segment_id.rbegin()->first.toDebugString());
     return iter->second;
 }
 
-void SegmentEndKeyCache::build(const std::vector<std::pair<DM::RowKeyValue, UInt64>> & end_key_and_segment_ids)
+void EndToSegmentId::build(std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_id)
 {
     {
         std::unique_lock lock(mu);
-        for (const auto & [end_key, segment_id] : end_key_and_segment_ids)
-        {
-            end_key_to_segment_id[end_key] = segment_id;
-        }
+        end_to_segment_id = std::move(end_key_and_segment_id);
         is_ready = true;
     }
     cv.notify_all();
@@ -87,14 +86,14 @@ UniversalPageStoragePtr ParsedCheckpointDataHolder::getUniversalPageStorage()
     return temp_ps;
 }
 
-std::pair<SegmentEndKeyCachePtr, bool> ParsedCheckpointDataHolder::getSegmentEndKeyCache(const TableIdentifier & identifier)
+std::pair<EndToSegmentIdPtr, bool> ParsedCheckpointDataHolder::getEndToSegmentIdCache(const TableIdentifier & identifier)
 {
     std::unique_lock lock(mu);
-    auto iter = segment_end_key_cache_map.find(identifier);
-    if (iter != segment_end_key_cache_map.end())
+    auto iter = end_to_segment_ids.find(identifier);
+    if (iter != end_to_segment_ids.end())
         return std::make_pair(iter->second, false);
-    auto cache = std::make_shared<SegmentEndKeyCache>();
-    segment_end_key_cache_map.emplace(identifier, cache);
+    auto cache = std::make_shared<EndToSegmentId>();
+    end_to_segment_ids.emplace(identifier, cache);
     return std::make_pair(cache, true);
 }
 

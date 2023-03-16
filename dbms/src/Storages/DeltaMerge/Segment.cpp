@@ -347,7 +347,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         .key_space_id = 0,
         .table_id = ns_id,
     };
-    auto [segment_end_key_cache, cache_empty] = checkpoint_info->checkpoint_data_holder->getSegmentEndKeyCache(identifier);
+    auto [segment_end_key_cache, cache_empty] = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(identifier);
     // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
     // Otherwise, we just read the segment that cover the range.
     PageIdU64 current_segment_id = cache_empty ? 1 : segment_end_key_cache->getSegmentIdContainingKey(target_range.getStart().toRowKeyValue());
@@ -378,8 +378,8 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     }
     if (cache_empty)
     {
-        segment_end_key_cache->build(end_key_and_segment_ids);
-        LOG_DEBUG(Logger::get(), "Finish build cache for table {} with {} segments", ns_id, end_key_and_segment_ids.size());
+        LOG_DEBUG(Logger::get(), "Build cache for table {} with {} segments", ns_id, end_key_and_segment_ids.size());
+        segment_end_key_cache->build(std::move(end_key_and_segment_ids));
     }
     return segment_infos;
 }

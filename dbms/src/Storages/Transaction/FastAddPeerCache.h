@@ -55,20 +55,18 @@ using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 struct AsyncTasks;
 
-class SegmentEndKeyCache
+// A mapping from segment end key to segment id,
+// It is constructed by calling `ParsedCheckpointDataHolder::getEndToSegmentIdCache`.
+// The first thread try to get it is responsible to build the cache by calling `EndToSegmentId::build`.
+// Later thread can just call `EndToSegmentId::getSegmentIdContainingKey` to get the desired segment id,
+// this method will block until the cache is ready.
+class EndToSegmentId
 {
 public:
     UInt64 getSegmentIdContainingKey(const DM::RowKeyValue & key);
 
-    void build(const std::vector<std::pair<DM::RowKeyValue, UInt64>> & end_key_and_segment_ids);
-
-    struct KeyComparator
-    {
-        bool operator()(const DM::RowKeyValue & key1, const DM::RowKeyValue & key2) const
-        {
-            return compare(key1.toRowKeyValueRef(), key2.toRowKeyValueRef()) < 0;
-        }
-    };
+    // The caller must ensure `end_key_and_segment_id` is ordered
+    void build(std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_id);
 
 private:
     std::mutex mu;
@@ -79,9 +77,9 @@ private:
 
     // Store the mapping from end key to segment id
     // Segment Range End -> Segment ID
-    std::map<DM::RowKeyValue, UInt64, KeyComparator> end_key_to_segment_id;
+    std::vector<std::pair<DM::RowKeyValue, UInt64>> end_to_segment_id;
 };
-using SegmentEndKeyCachePtr = std::shared_ptr<SegmentEndKeyCache>;
+using EndToSegmentIdPtr = std::shared_ptr<EndToSegmentId>;
 
 class ParsedCheckpointDataHolder
 {
@@ -90,8 +88,9 @@ public:
 
     UniversalPageStoragePtr getUniversalPageStorage();
 
-    // return pair<ptr_to_cache, need_build_cache>
-    std::pair<SegmentEndKeyCachePtr, bool> getSegmentEndKeyCache(const TableIdentifier & identifier);
+    // Return pair<ptr_to_cache, need_build_cache>.
+    // If need_build_cache is true, the thread must call `EndToSegmentId::build` to build the cache for the table
+    std::pair<EndToSegmentIdPtr, bool> getEndToSegmentIdCache(const TableIdentifier & identifier);
 
     ~ParsedCheckpointDataHolder()
     {
@@ -107,8 +106,8 @@ private:
     UniversalPageStoragePtr temp_ps;
 
     std::mutex mu; // protect segment_end_key_cache
-    using SegmentEndKeyCacheMap = std::unordered_map<TableIdentifier, SegmentEndKeyCachePtr>;
-    SegmentEndKeyCacheMap segment_end_key_cache_map;
+    using EndToSegmentIds = std::unordered_map<TableIdentifier, EndToSegmentIdPtr>;
+    EndToSegmentIds end_to_segment_ids;
 };
 using ParsedCheckpointDataHolderPtr = std::shared_ptr<ParsedCheckpointDataHolder>;
 
