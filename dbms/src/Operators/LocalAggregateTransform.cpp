@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/LocalAggregateTransform.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
+#include <Operators/LocalAggregateTransform.h>
 
 namespace DB
 {
@@ -36,7 +36,7 @@ void LocalAggregateTransform::operatePrefix()
 
 OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
 {
-    switch(status)
+    switch (status)
     {
     case LocalAggStatus::build:
         if (unlikely(!block))
@@ -56,7 +56,7 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
 
 OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
 {
-    switch(status)
+    switch (status)
     {
     case LocalAggStatus::build:
         return OperatorStatus::NEED_INPUT;
