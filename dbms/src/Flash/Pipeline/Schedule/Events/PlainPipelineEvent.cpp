@@ -29,4 +29,11 @@ std::vector<TaskPtr> PlainPipelineEvent::scheduleImpl()
         tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
     return tasks;
 }
+
+void PlainPipelineEvent::finishImpl()
+{
+    // Plan nodes in pipeline hold resources like hash table for join, when destruction they will operate memory tracker in MPP task. But MPP task may get destructed once `exec_status.onEventFinish()` is called.
+    // So pipeline needs to be released before `exec_status.onEventFinish()` is called.
+    pipeline.reset();
+}
 } // namespace DB

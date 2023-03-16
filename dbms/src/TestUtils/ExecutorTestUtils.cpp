@@ -213,8 +213,8 @@ void ExecutorTest::checkBlockSorted(
                 ASSERT_TRUE(assert_func(expected_res, res)) << testInfoMsg(request, enable_planner, enable_pipeline, concurrency, block_size);
             }
         };
-        WRAP_FOR_TEST_END
     }
+    WRAP_FOR_TEST_END
 }
 
 void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)

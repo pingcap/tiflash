@@ -40,8 +40,15 @@ using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
 
 class PipelineExecutorStatus;
 
-class SharedQueue;
-using SharedQueuePtr = std::shared_ptr<SharedQueue>;
+struct PipelineEvents
+{
+    Events events;
+    bool is_fine_grained;
+
+    PipelineEvents(Events && events_, bool is_fine_grained_);
+
+    void mapInputs(const PipelineEvents & inputs);
+};
 
 class Pipeline : public std::enable_shared_from_this<Pipeline>
 {
@@ -73,8 +80,8 @@ public:
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
-    Events toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
-    Events doToEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events);
+    PipelineEvents toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
+    PipelineEvents doToEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events);
 
 private:
     const UInt32 id;
