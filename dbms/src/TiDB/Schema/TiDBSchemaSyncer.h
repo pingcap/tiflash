@@ -129,7 +129,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         if (version == SchemaGetter::SchemaVersionNotExist)
         {
             // Tables and databases are already tombstoned and waiting for GC.
-            if (version == cur_version)
+            if (SchemaGetter::SchemaVersionNotExist == cur_version)
                 return false;
 
             LOG_INFO(ks_log, "Start to drop schemas. schema version key not exists, keyspace should be deleted");
@@ -139,7 +139,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             // of `SchemaGetter::listDBs` is not reliable. Directly mark all databases and tables of this keyspace
             // as a tombstone and let the SchemaSyncService drop them physically.
             dropAllSchema(getter, context);
-            cur_versions[keyspace_id] = version;
+            cur_versions[keyspace_id] = SchemaGetter::SchemaVersionNotExist;
         }
         else
         {

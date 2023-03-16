@@ -129,7 +129,7 @@ struct SchemaDiff
 
 struct SchemaGetter
 {
-    static constexpr int SchemaVersionNotExist = -1;
+    static constexpr Int64 SchemaVersionNotExist = -1;
 
     KeyspaceSnapshot snap;
 
