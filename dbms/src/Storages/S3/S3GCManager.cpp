@@ -282,8 +282,6 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     //       datafile is not able to be cleaned.
     //       Need another logic to cover this corner case.
 
-    bool delmark_exists = false;
-    Aws::Utils::DateTime mtime;
     const auto delmark_object_info = S3::tryGetObjectInfo(*client, unlocked_datafile_delmark_key);
     if (!delmark_object_info.exist)
     {
@@ -335,7 +333,7 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
         return;
     }
 
-    assert(delmark_exists); // function should return in previous if-branch
+    assert(delmark_object_info.exist); // function should return in previous if-branch
     switch (config.method)
     {
     case S3GCMethod::Lifecycle:
@@ -345,7 +343,7 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     case S3GCMethod::ScanThenDelete:
     {
         // delmark exist, check whether we need to physical remove the datafile
-        removeDataFileIfDelmarkExpired(unlocked_datafile_key, unlocked_datafile_delmark_key, timepoint, mtime);
+        removeDataFileIfDelmarkExpired(unlocked_datafile_key, unlocked_datafile_delmark_key, timepoint, delmark_object_info.last_modification_time);
         return;
     }
     }

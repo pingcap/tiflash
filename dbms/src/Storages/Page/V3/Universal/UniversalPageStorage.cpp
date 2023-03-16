@@ -440,8 +440,7 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
         .last_sequence = last_checkpoint_sequence,
     });
     // get the remote file ids that need to be compacted
-    auto gc_threshold = UniversalPageStorage::RemoteGCThreshold{.valid_rate = options.remote_gc_threshold, .min_file_threshold=1024};
-    const auto file_ids_to_compact = getRemoteFileIdsNeedCompact(gc_threshold, options.remote_store);
+    const auto file_ids_to_compact = getRemoteFileIdsNeedCompact(options.remote_gc_threshold, options.remote_store);
     bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
     writer->writeSuffix();
     writer.reset();
@@ -483,7 +482,7 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
     last_checkpoint_sequence = snap->sequence;
 }
 
-std::unordered_set<String> UniversalPageStorage::getRemoteFileIdsNeedCompact(const RemoteGCThreshold & gc_threshold, DM::Remote::IDataStorePtr remote_store)
+std::unordered_set<String> UniversalPageStorage::getRemoteFileIdsNeedCompact(const DM::Remote::RemoteGCThreshold & gc_threshold, DM::Remote::IDataStorePtr remote_store)
 {
     // In order to not block local GC updating the cache, get a copy of the cache
     auto stats = remote_data_files_stat_cache.getCopy();
@@ -526,7 +525,7 @@ std::unordered_set<String> UniversalPageStorage::getRemoteFileIdsNeedCompact(con
         }
     }
     fmt_buf.append("]");
-    LOG_INFO(log, "CheckpointData pick for compact {}", fmt_buf.toString());
+    LOG_INFO(log, "CheckpointData pick for compaction {}", fmt_buf.toString());
     return rewrite_files;
 }
 

@@ -18,6 +18,7 @@
 #include <Encryption/FileProvider_fwd.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/Config.h>
 #include <Storages/Page/ExternalPageCallbacks.h>
 #include <Storages/Page/FileUsage.h>
@@ -30,8 +31,6 @@
 #include <Storages/Page/V3/Universal/S3LockLocalManager.h>
 #include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <common/defines.h>
-
-#include "Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h"
 
 namespace DB
 {
