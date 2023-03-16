@@ -67,7 +67,7 @@ class EndToSegmentId
 public:
     [[nodiscard]] std::unique_lock<std::mutex> lock();
 
-    bool isReady(std::unique_lock<std::mutex> & lock);
+    bool isReady(std::unique_lock<std::mutex> & lock) const;
 
     // The caller must ensure `end_key_and_segment_id` is ordered
     void build(std::unique_lock<std::mutex> & lock, std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids);
