@@ -1326,13 +1326,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// This setting is currently a bit tricky:
     /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
     //    controls the number of total bytes keep in the memory.
-    /// - In disaggregated mode, its default value is 0. 0 means cache is disabled, and it
+    /// - In disaggregated mode, its default value is 2000. 0 means cache is disabled, and it
     ///   controls the **number** of trees keep in the memory. <-- Will be fixed.
     ///   We cannot support unlimited delta index cache in disaggregated mode for now,
     ///   because cache items will be never explicitly removed.
-    size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 0);
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
+        size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 2000);
         // In disaggregate compute node, we will not use DeltaIndexManager to cache the delta index.
         // Instead, we use RNDeltaIndexCache.
 
@@ -1346,6 +1346,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     else
     {
+        size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 0);
         global_context->setDeltaIndexManager(delta_index_cache_size);
     }
 
