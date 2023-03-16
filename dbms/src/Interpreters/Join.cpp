@@ -2355,9 +2355,8 @@ void Join::RowsNotInsertToMap::insertRow(Join::RowRefList * elem, Block * stored
     if (need_materialize)
     {
         if (materialized_columns_vec.empty() || size % max_block_size == 0)
-        {
             materialized_columns_vec.emplace_back(stored_block->cloneEmptyColumns());
-        }
+
         auto & last_one = materialized_columns_vec.back();
         size_t columns = stored_block->columns();
         RUNTIME_ASSERT(last_one.size() == columns);
