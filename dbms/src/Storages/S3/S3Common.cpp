@@ -74,8 +74,8 @@ Poco::Message::Priority convertLogLevel(Aws::Utils::Logging::LogLevel log_level)
     case Aws::Utils::Logging::LogLevel::Warn:
         return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Info:
-        // treat aws info logging as debug level
-        return Poco::Message::PRIO_DEBUG;
+        // treat aws info logging as trace level
+        return Poco::Message::PRIO_TRACE;
     case Aws::Utils::Logging::LogLevel::Debug:
         // treat aws debug logging as trace level
         return Poco::Message::PRIO_TRACE;
@@ -493,7 +493,7 @@ void listPrefix(
 
         PageResult page_res{};
         const auto & result = outcome.GetResult();
-        auto page_keys = result.GetCommonPrefixes().size();
+        auto page_keys = result.GetContents().size();
         num_keys += page_keys;
         for (const auto & object : result.GetContents())
         {

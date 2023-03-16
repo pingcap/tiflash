@@ -135,6 +135,6 @@ struct fmt::formatter<DB::PS::V3::FileInfo>
     template <typename FormatContext>
     auto format(const DB::PS::V3::FileInfo & value, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(ctx.out(), "{{key={} size={} rate={:.2f}}}", value.file_id, value.total_size, value.valid_rate);
+        return format_to(ctx.out(), "{{key={} size={} rate={:2.2f}%}}", value.file_id, value.total_size, value.valid_rate * 100);
     }
 };

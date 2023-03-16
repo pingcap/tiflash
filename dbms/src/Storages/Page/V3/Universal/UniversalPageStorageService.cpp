@@ -230,9 +230,14 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
             .log = log,
         },
     };
-    uni_page_storage->dumpIncrementalCheckpoint(opts);
+    const auto write_stats = uni_page_storage->dumpIncrementalCheckpoint(opts);
 
-    LOG_INFO(log, "Upload checkpoint success, upload_sequence={}", upload_info.upload_sequence);
+    LOG_INFO(
+        log,
+        "Upload checkpoint success, upload_sequence={} incremental_bytes={} rewrite_bytes={}",
+        upload_info.upload_sequence,
+        write_stats.incremental_data_bytes,
+        write_stats.rewrite_data_bytes);
 
     // the checkpoint is uploaded to remote data store, remove local temp files
     Poco::File(local_dir).remove(true);

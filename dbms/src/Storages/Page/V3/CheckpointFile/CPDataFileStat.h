@@ -26,6 +26,13 @@
 namespace DB::PS::V3
 {
 
+struct CPDataWriteStats
+{
+    bool has_new_data = false;
+    size_t incremental_data_bytes = 0;
+    size_t rewrite_data_bytes = 0;
+};
+
 using RemoteFileValidSizes = std::unordered_map<String, size_t>;
 
 struct CPDataFileStat

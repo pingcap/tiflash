@@ -195,7 +195,7 @@ public:
         const std::function<std::unordered_set<String>()> compact_getter = nullptr;
     };
 
-    void dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+    PS::V3::CPDataWriteStats dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
 
     PS::V3::CPDataFilesStatCache::CacheMap getRemoteDataFilesStatCache() const
     {

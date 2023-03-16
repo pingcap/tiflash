@@ -399,7 +399,7 @@ bool UniversalPageStorage::canSkipCheckpoint() const
     return snap->sequence == last_checkpoint_sequence;
 }
 
-void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
+PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
 {
     std::scoped_lock lock(checkpoint_mu);
 
@@ -407,7 +407,7 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
     auto snap = page_directory->createSnapshot(/*tracing_id*/ "dumpIncrementalCheckpoint");
 
     if (snap->sequence == last_checkpoint_sequence)
-        return;
+        return {.has_new_data = false};
 
     auto edit_from_mem = page_directory->dumpSnapshotToEdit(snap);
 
@@ -458,7 +458,7 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
         file_ids_to_compact = options.compact_getter();
     }
     // get the remote file ids that need to be compacted
-    bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
+    auto write_stats = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
     writer->writeSuffix();
     writer.reset();
 
@@ -475,13 +475,13 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
         if (!persist_done)
         {
             LOG_ERROR(log, "failed to persist checkpoint");
-            return;
+            return {.has_new_data = false}; // TODO: maybe return has_new_data=true but upload_success=false?
         }
     }
     catch (...)
     {
         tryLogCurrentException(log, "failed to persist checkpoint");
-        return;
+        return {.has_new_data = false}; // TODO: maybe return has_new_data=true but upload_success=false?
     }
 
     SYNC_FOR("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
@@ -489,7 +489,7 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
     // TODO: Currently, even when has_new_data == false,
     //   something will be written to DataFile (i.e., the file prefix).
     //   This can be avoided, as its content is useless.
-    if (has_new_data)
+    if (write_stats.has_new_data)
     {
         // Copy back the checkpoint info to the current PageStorage.
         // New checkpoint infos are attached in `writeEditsAndApplyCheckpointInfo`.
@@ -497,6 +497,7 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
     }
 
     last_checkpoint_sequence = snap->sequence;
+    return write_stats;
 }
 
 } // namespace DB
