@@ -37,8 +37,11 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
         {
             status = LocalAggStatus::convert;
             agg_context->initConvergent();
-            RUNTIME_CHECK(agg_context->getConvergentConcurrency() == 1);
-            block = agg_context->readForConvergent(0);
+            if likely (!agg_context->useNullSource())
+            {
+                RUNTIME_CHECK(agg_context->getConvergentConcurrency() == 1);
+                block = agg_context->readForConvergent(0);
+            }
             return OperatorStatus::HAS_OUTPUT;
         }
         agg_context->buildOnBlock(0, block);
@@ -56,7 +59,8 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
     case LocalAggStatus::build:
         return OperatorStatus::NEED_INPUT;
     case LocalAggStatus::convert:
-        block = agg_context->readForConvergent(0);
+        if likely (!agg_context->useNullSource())
+            block = agg_context->readForConvergent(0);
         return OperatorStatus::HAS_OUTPUT;
     }
 }

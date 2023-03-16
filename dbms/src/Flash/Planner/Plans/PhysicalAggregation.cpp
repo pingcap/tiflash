@@ -169,6 +169,8 @@ void PhysicalAggregation::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    assert(fine_grained_shuffle.enable());
+
     if (!before_agg_actions->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
