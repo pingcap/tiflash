@@ -360,7 +360,6 @@ void cleanupTables(IDatabase & database, const String & db_name, const Tables & 
         // detach from this database
         database.detachTable(table_name);
     }
-    std::cout << " finish cleanup tables " << std::endl;
 }
 
 void startupTables(IDatabase & database, const String & db_name, Tables & tables, legacy::ThreadPool * thread_pool, Poco::Logger * log)
@@ -386,7 +385,6 @@ void startupTables(IDatabase & database, const String & db_name, Tables & tables
             try
             {
                 it->second->startup();
-                LOG_INFO(log, "finish startup table {}.{}", db_name, it->first);
             }
             catch (DB::Exception & e)
             {
@@ -434,7 +432,6 @@ void startupTables(IDatabase & database, const String & db_name, Tables & tables
 
     if (thread_pool)
         thread_pool->wait();
-    LOG_INFO(log,  "wait finish");
 
     // Cleanup to asure the atomic of renaming
     cleanupTables(database, db_name, tables_failed_to_startup, log);

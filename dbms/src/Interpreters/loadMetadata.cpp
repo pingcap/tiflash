@@ -34,15 +34,7 @@
 #include <future>
 #include <iomanip>
 #include <thread>
-#include "Interpreters/SettingsCommon.h"
-#include "Parsers/formatAST.h"
-#include <Databases/DatabaseFactory.h>
 
-
-namespace ErrorCodes
-{
-extern const int UNKNOWN_DATABASE_ENGINE;
-} // namespace ErrorCodes
 
 namespace DB
 {
