@@ -135,7 +135,7 @@ public:
 
     std::optional<DB::PS::V3::CheckpointLocation> getCheckpointLocation(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
 
-    void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client) const;
+    void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client);
 
     PS::V3::S3LockLocalManager::ExtraLockInfo allocateNewUploadLocksInfo() const;
 
@@ -247,7 +247,7 @@ public:
     LoggerPtr log;
 
     std::mutex checkpoint_mu;
-    // TODO: We should restore this from WAL. Otherwise the "last_sequence" in the files is not reliable
+    // We should restore this from remote store after restart
     UInt64 last_checkpoint_sequence = 0;
 };
 

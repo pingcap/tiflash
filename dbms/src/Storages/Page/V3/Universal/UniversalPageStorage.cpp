@@ -373,10 +373,16 @@ void UniversalPageStorage::tryUpdateLocalCacheForRemotePages(UniversalWriteBatch
     }
 }
 
-void UniversalPageStorage::initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client) const
+void UniversalPageStorage::initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client)
 {
     assert(remote_locks_local_mgr != nullptr);
-    remote_locks_local_mgr->initStoreInfo(store_id, lock_client);
+    auto last_mf_prefix_opt = remote_locks_local_mgr->initStoreInfo(store_id, lock_client);
+    if (last_mf_prefix_opt)
+    {
+        // First init, we need to restore the `last_checkpoint_sequence` from last checkpoint
+        std::scoped_lock lock(checkpoint_mu);
+        last_checkpoint_sequence = last_mf_prefix_opt->local_sequence();
+    }
 }
 
 PS::V3::S3LockLocalManager::ExtraLockInfo UniversalPageStorage::allocateNewUploadLocksInfo() const

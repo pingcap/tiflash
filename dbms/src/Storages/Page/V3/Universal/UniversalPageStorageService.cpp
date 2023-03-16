@@ -149,7 +149,11 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     const S3::S3LockClientPtr & s3lock_client,
     const DM::Remote::IDataStorePtr & remote_store)
 {
+    // `initLocksLocalManager` enable writes to remote store.
+    // if it is the first time after restart, it will load the last_upload_sequence
+    // and last_checkpoint_sequence from remote store.
     uni_page_storage->initLocksLocalManager(store_info.id(), s3lock_client);
+
     const auto upload_info = uni_page_storage->allocateNewUploadLocksInfo();
 
     auto wi = PS::V3::CheckpointProto::WriterInfo();

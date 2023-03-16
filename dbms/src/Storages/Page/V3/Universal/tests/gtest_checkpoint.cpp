@@ -796,21 +796,27 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
-        auto path = getTemporaryPath();
-        auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
-        uni_ps_service = UniversalPageStorageService::createForTest(
-            global_context,
-            "test.t",
-            delegator,
-            PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0});
+        uni_ps_service = newService();
         log = Logger::get("UniversalPageStorageServiceCheckpointTest");
         s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     }
 
+    static UniversalPageStorageServicePtr newService()
+    {
+        auto path = getTemporaryPath();
+        auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
+        return UniversalPageStorageService::createForTest(
+            global_context,
+            "test.t",
+            delegator,
+            PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0});
+    }
+
 protected:
-    static std::string readData(const V3::CheckpointLocation & location)
+    static std::string
+    readData(const V3::CheckpointLocation & location)
     {
         RUNTIME_CHECK(location.offset_in_file > 0);
         RUNTIME_CHECK(location.data_file_id != nullptr && !location.data_file_id->empty());
@@ -993,6 +999,14 @@ try
         ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
         ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
     } // check the second manifest
+
+    // mock restart
+    auto new_service = newService();
+    EXPECT_EQ(new_service->uni_page_storage->last_checkpoint_sequence, 0);
+    new_service->uni_page_storage->initLocksLocalManager(store_id, s3lock_client);
+    EXPECT_EQ(new_service->uni_page_storage->last_checkpoint_sequence, 9); // fixme
+    auto upload_info = new_service->uni_page_storage->allocateNewUploadLocksInfo();
+    EXPECT_EQ(upload_info.upload_sequence, 3);
 }
 CATCH
 
