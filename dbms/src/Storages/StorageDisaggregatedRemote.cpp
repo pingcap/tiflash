@@ -332,17 +332,18 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
     const DM::ColumnDefinesPtr & columns_to_read)
 {
     if (!filter_conditions.hasValue())
-        return DM::EMPTY_FILTER;
+        return DM::EMPTY_RS_OPERATOR;
 
     const bool enable_rs_filter = db_context.getSettingsRef().dt_enable_rough_set_filter;
     if (!enable_rs_filter)
     {
         LOG_DEBUG(log, "Rough set filter is disabled.");
-        return DM::EMPTY_FILTER;
+        return DM::EMPTY_RS_OPERATOR;
     }
 
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filter_conditions.conditions,
+        google::protobuf::RepeatedPtrField<tipb::Expr>{}, // Not care now
         DAGPreparedSets{}, // Not care now
         NamesAndTypes{}, // Not care now
         db_context.getTimezoneInfo());
@@ -356,7 +357,7 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
         return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
     auto rs_operator = DM::FilterParser::parseDAGQuery(*dag_query, *columns_to_read, std::move(create_attr_by_column_id), log);
-    if (likely(rs_operator != DM::EMPTY_FILTER))
+    if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
         LOG_DEBUG(log, "Rough set filter: {}", rs_operator->toDebugString());
     return rs_operator;
 }
