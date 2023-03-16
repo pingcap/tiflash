@@ -35,17 +35,17 @@ private:
     class CheckpointCacheElement
     {
     public:
-        ParsedCheckpointDataHolderPtr getParsedCheckpointData();
+        explicit CheckpointCacheElement(const String & manifest_key_, UInt64 dir_seq_)
+            : manifest_key(manifest_key_)
+            , dir_seq(dir_seq_)
+        {}
 
-        void setParsedCheckpointData(ParsedCheckpointDataHolderPtr data_holder);
+        ParsedCheckpointDataHolderPtr getParsedCheckpointData(Context & context);
 
     private:
         std::mutex mu;
-
-        std::condition_variable cv;
-
-        bool is_ready = false;
-
+        String manifest_key;
+        UInt64 dir_seq;
         ParsedCheckpointDataHolderPtr parsed_checkpoint_data;
     };
     using CheckpointCacheElementPtr = std::shared_ptr<CheckpointCacheElement>;

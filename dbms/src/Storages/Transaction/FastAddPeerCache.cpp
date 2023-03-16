@@ -36,11 +36,21 @@
 
 namespace DB
 {
-UInt64 EndToSegmentId::getSegmentIdContainingKey(const DM::RowKeyValue & key)
+[[nodiscard]] std::unique_lock<std::mutex> EndToSegmentId::lock()
 {
-    std::unique_lock lock(mu);
-    if (!is_ready)
-        cv.wait(lock, [&] { return is_ready; });
+    return std::unique_lock(mu);
+}
+
+bool EndToSegmentId::isReady(std::unique_lock<std::mutex> & lock)
+{
+    UNUSED(lock);
+    return is_ready;
+}
+
+UInt64 EndToSegmentId::getSegmentIdContainingKey(std::unique_lock<std::mutex> & lock, const DM::RowKeyValue & key)
+{
+    UNUSED(lock);
+    RUNTIME_CHECK(is_ready);
     auto iter = std::upper_bound(end_to_segment_id.begin(), end_to_segment_id.end(), key, [](const DM::RowKeyValue & key1, const std::pair<DM::RowKeyValue, UInt64> & element2) {
         return compare(key1.toRowKeyValueRef(), element2.first.toRowKeyValueRef()) < 0;
     });
@@ -48,14 +58,11 @@ UInt64 EndToSegmentId::getSegmentIdContainingKey(const DM::RowKeyValue & key)
     return iter->second;
 }
 
-void EndToSegmentId::build(std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_id)
+void EndToSegmentId::build(std::unique_lock<std::mutex> & lock, std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids)
 {
-    {
-        std::unique_lock lock(mu);
-        end_to_segment_id = std::move(end_key_and_segment_id);
-        is_ready = true;
-    }
-    cv.notify_all();
+    UNUSED(lock);
+    end_to_segment_id = std::move(end_key_and_segment_ids);
+    is_ready = true;
 }
 
 ParsedCheckpointDataHolder::ParsedCheckpointDataHolder(Context & context, const PageStorageConfig & config, UInt64 dir_seq)
@@ -86,15 +93,18 @@ UniversalPageStoragePtr ParsedCheckpointDataHolder::getUniversalPageStorage()
     return temp_ps;
 }
 
-std::pair<EndToSegmentIdPtr, bool> ParsedCheckpointDataHolder::getEndToSegmentIdCache(const TableIdentifier & identifier)
+EndToSegmentIdPtr ParsedCheckpointDataHolder::getEndToSegmentIdCache(const TableIdentifier & identifier)
 {
     std::unique_lock lock(mu);
     auto iter = end_to_segment_ids.find(identifier);
     if (iter != end_to_segment_ids.end())
-        return std::make_pair(iter->second, false);
-    auto cache = std::make_shared<EndToSegmentId>();
-    end_to_segment_ids.emplace(identifier, cache);
-    return std::make_pair(cache, true);
+        return iter->second;
+    else
+    {
+        auto cache = std::make_shared<EndToSegmentId>();
+        end_to_segment_ids.emplace(identifier, cache);
+        return cache;
+    }
 }
 
 ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const String & manifest_key, UInt64 dir_seq)

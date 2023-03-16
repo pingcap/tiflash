@@ -51,22 +51,14 @@ FastAddPeerContext::FastAddPeerContext(uint64_t thread_count)
     tasks_trace = std::make_shared<AsyncTasks>(thread_count);
 }
 
-ParsedCheckpointDataHolderPtr FastAddPeerContext::CheckpointCacheElement::getParsedCheckpointData()
+ParsedCheckpointDataHolderPtr FastAddPeerContext::CheckpointCacheElement::getParsedCheckpointData(Context & context)
 {
     std::unique_lock lock(mu);
-    if (!is_ready)
-        cv.wait(lock, [&] { return is_ready; });
-    return parsed_checkpoint_data;
-}
-
-void FastAddPeerContext::CheckpointCacheElement::setParsedCheckpointData(ParsedCheckpointDataHolderPtr data_holder)
-{
+    if (!parsed_checkpoint_data)
     {
-        std::unique_lock lock{mu};
-        parsed_checkpoint_data = std::move(data_holder);
-        is_ready = true;
+        parsed_checkpoint_data = buildParsedCheckpointData(context, manifest_key, dir_seq);
     }
-    cv.notify_all();
+    return parsed_checkpoint_data;
 }
 
 std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerCheckpointData(Context & context, UInt64 store_id, UInt64 required_seq)
@@ -100,7 +92,6 @@ std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerChe
             return std::make_pair(required_seq, nullptr);
         }
         // check whether there is some other thread downloading the current or newer manifest
-        bool need_build_cache = false;
         {
             std::unique_lock lock{cache_mu};
             auto iter = checkpoint_cache_map.find(store_id);
@@ -112,21 +103,14 @@ std::pair<UInt64, ParsedCheckpointDataHolderPtr> FastAddPeerContext::getNewerChe
             else
             {
                 checkpoint_cache_map.erase(store_id);
-                cache_element = std::make_shared<CheckpointCacheElement>();
+                cache_seq = latest_upload_seq;
+                cache_element = std::make_shared<CheckpointCacheElement>(latest_manifest_key, temp_ps_dir_sequence++);
                 checkpoint_cache_map.emplace(store_id, std::make_pair(latest_upload_seq, cache_element));
-                need_build_cache = true;
             }
-        }
-
-        if (need_build_cache)
-        {
-            auto checkpoint_data = buildParsedCheckpointData(context, latest_manifest_key, temp_ps_dir_sequence++);
-            cache_element->setParsedCheckpointData(checkpoint_data);
-            return std::make_pair(latest_upload_seq, checkpoint_data);
         }
     }
 
-    auto checkpoint_data = cache_element->getParsedCheckpointData();
+    auto checkpoint_data = cache_element->getParsedCheckpointData(context);
     return std::make_pair(cache_seq, checkpoint_data);
 }
 

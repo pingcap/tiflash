@@ -347,10 +347,16 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         .key_space_id = 0,
         .table_id = ns_id,
     };
-    auto [segment_end_key_cache, cache_empty] = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(identifier);
     // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
     // Otherwise, we just read the segment that cover the range.
-    PageIdU64 current_segment_id = cache_empty ? 1 : segment_end_key_cache->getSegmentIdContainingKey(target_range.getStart().toRowKeyValue());
+    PageIdU64 current_segment_id = 1;
+    auto end_to_segment_id_cache = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(identifier);
+    auto lock = end_to_segment_id_cache->lock();
+    bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
+    if (is_cache_ready)
+    {
+        current_segment_id = end_to_segment_id_cache->getSegmentIdContainingKey(lock, target_range.getStart().toRowKeyValue());
+    }
     LOG_DEBUG(Logger::get(), "Read segment meta info from segment {}", current_segment_id);
     std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
     SegmentMetaInfos segment_infos;
@@ -362,7 +368,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         segment_info.segment_id = current_segment_id;
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
         readSegmentMetaInfo(buf, segment_info);
-        if (cache_empty)
+        if (!is_cache_ready)
         {
             end_key_and_segment_ids.emplace_back(segment_info.range.getEnd().toRowKeyValue(), segment_info.segment_id);
         }
@@ -371,15 +377,16 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         {
             segment_infos.emplace_back(segment_info);
         }
-        if (!cache_empty && segment_info.range.end.value->compare(*target_range.end.value) >= 0)
+        // if not build cache, stop as early as possible.
+        if (is_cache_ready && segment_info.range.end.value->compare(*target_range.end.value) >= 0)
         {
             break;
         }
     }
-    if (cache_empty)
+    if (!is_cache_ready)
     {
         LOG_DEBUG(Logger::get(), "Build cache for table {} with {} segments", ns_id, end_key_and_segment_ids.size());
-        segment_end_key_cache->build(std::move(end_key_and_segment_ids));
+        end_to_segment_id_cache->build(lock, std::move(end_key_and_segment_ids));
     }
     return segment_infos;
 }

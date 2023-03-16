@@ -56,23 +56,26 @@ using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 struct AsyncTasks;
 
 // A mapping from segment end key to segment id,
-// It is constructed by calling `ParsedCheckpointDataHolder::getEndToSegmentIdCache`.
-// The first thread try to get it is responsible to build the cache by calling `EndToSegmentId::build`.
-// Later thread can just call `EndToSegmentId::getSegmentIdContainingKey` to get the desired segment id,
-// this method will block until the cache is ready.
+// The main usage:
+// auto lock = lock();
+// if (isReady(lock))
+//     return getSegmentIdContainingKey(lock, key);
+// else
+//     build(end_key_and_segment_ids)
 class EndToSegmentId
 {
 public:
-    UInt64 getSegmentIdContainingKey(const DM::RowKeyValue & key);
+    [[nodiscard]] std::unique_lock<std::mutex> lock();
+
+    bool isReady(std::unique_lock<std::mutex> & lock);
 
     // The caller must ensure `end_key_and_segment_id` is ordered
-    void build(std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_id);
+    void build(std::unique_lock<std::mutex> & lock, std::vector<std::pair<DM::RowKeyValue, UInt64>> && end_key_and_segment_ids);
+
+    UInt64 getSegmentIdContainingKey(std::unique_lock<std::mutex> & lock, const DM::RowKeyValue & key);
 
 private:
     std::mutex mu;
-
-    std::condition_variable cv;
-
     bool is_ready = false;
 
     // Store the mapping from end key to segment id
@@ -88,9 +91,7 @@ public:
 
     UniversalPageStoragePtr getUniversalPageStorage();
 
-    // Return pair<ptr_to_cache, need_build_cache>.
-    // If need_build_cache is true, the thread must call `EndToSegmentId::build` to build the cache for the table
-    std::pair<EndToSegmentIdPtr, bool> getEndToSegmentIdCache(const TableIdentifier & identifier);
+    EndToSegmentIdPtr getEndToSegmentIdCache(const TableIdentifier & identifier);
 
     ~ParsedCheckpointDataHolder()
     {
