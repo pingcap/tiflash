@@ -375,6 +375,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     if (cache_empty)
     {
         segment_end_key_cache->build(end_key_and_segment_ids);
+        LOG_DEBUG(Logger::get(), "Finish build cache for table {} with {} segments", ns_id, end_key_and_segment_ids.size());
     }
     return segment_infos;
 }

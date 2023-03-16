@@ -37,18 +37,30 @@ void RaftDataReader::traverse(const UniversalPageId & start, const UniversalPage
     for (const auto & page_id : page_ids)
     {
         const auto page_id_and_entry = uni_ps.page_directory->getByID(page_id, snapshot);
-        acceptor(page_id, uni_ps.blob_store->read(page_id_and_entry));
+        auto & checkpoint_info = page_id_and_entry.second.checkpoint_info;
+        if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
+        {
+            acceptor(page_id_and_entry.first, uni_ps.remote_reader->read(page_id_and_entry));
+        }
+        else
+        {
+            acceptor(page_id_and_entry.first, uni_ps.blob_store->read(page_id_and_entry));
+        }
     }
 }
 
-void RaftDataReader::traverseRaftLogForRegion(UInt64 region_id, const std::function<void(const UniversalPageId & page_id, DB::Page page)> & acceptor)
+void RaftDataReader::traverseRemoteRaftLogForRegion(UInt64 region_id, const std::function<void(const UniversalPageId & page_id, const PS::V3::CheckpointLocation & location)> & acceptor)
 {
     auto start = UniversalPageIdFormat::toFullRaftLogPrefix(region_id);
     auto end = UniversalPageIdFormat::toFullRaftLogPrefix(region_id + 1);
-    traverse(start, end, [&](const UniversalPageId & page_id, const DB::Page & page) {
-        if (page_id.hasPrefix(start))
-            acceptor(page_id, page);
-    });
+    auto snapshot = uni_ps.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
+    const auto page_ids = uni_ps.page_directory->getAllPageIdsInRange(start, end, snapshot);
+    for (const auto & page_id : page_ids)
+    {
+        auto maybe_location = uni_ps.getCheckpointLocation(page_id, snapshot);
+        RUNTIME_CHECK(maybe_location.has_value());
+        acceptor(page_id, *maybe_location);
+    }
 }
 
 std::optional<UniversalPageId> RaftDataReader::getLowerBound(const UniversalPageId & page_id)

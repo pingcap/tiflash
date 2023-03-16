@@ -66,7 +66,7 @@ public:
     {
         bool operator()(const DM::RowKeyValue & key1, const DM::RowKeyValue & key2) const
         {
-            return compare(key1.toRowKeyValueRef(), key2.toRowKeyValueRef());
+            return compare(key1.toRowKeyValueRef(), key2.toRowKeyValueRef()) < 0;
         }
     };
 

@@ -41,8 +41,8 @@ UInt64 SegmentEndKeyCache::getSegmentIdContainingKey(const DM::RowKeyValue & key
     std::unique_lock lock(mu);
     if (!is_ready)
         cv.wait(lock, [&] { return is_ready; });
-    auto iter = end_key_to_segment_id.lower_bound(key);
-    RUNTIME_CHECK(iter != end_key_to_segment_id.end());
+    auto iter = end_key_to_segment_id.upper_bound(key);
+    RUNTIME_CHECK(iter != end_key_to_segment_id.end(), key.toDebugString(), end_key_to_segment_id.rbegin()->first.toDebugString());
     return iter->second;
 }
 
