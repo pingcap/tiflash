@@ -438,8 +438,13 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
         .sequence = snap->sequence,
         .last_sequence = last_checkpoint_sequence,
     });
+    std::unordered_set<String> file_ids_to_compact;
+    if (options.compact_getter != nullptr)
+    {
+        file_ids_to_compact = options.compact_getter();
+    }
     // get the remote file ids that need to be compacted
-    bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, options.file_ids_to_compact);
+    bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
     writer->writeSuffix();
     writer.reset();
 

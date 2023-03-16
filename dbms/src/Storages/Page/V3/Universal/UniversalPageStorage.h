@@ -190,7 +190,7 @@ public:
 
         /**
          */
-        std::unordered_set<String> file_ids_to_compact = {};
+        const std::function<std::unordered_set<String>()> compact_getter = nullptr;
     };
 
     void dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);

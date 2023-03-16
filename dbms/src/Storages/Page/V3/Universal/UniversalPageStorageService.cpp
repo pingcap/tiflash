@@ -126,6 +126,24 @@ bool UniversalPageStorageService::uploadCheckpoint()
     return uploadCheckpointImpl(store_info, s3lock_client, remote_store);
 }
 
+struct FileIdsToCompactGetter
+{
+    UniversalPageStoragePtr uni_page_storage;
+    DM::Remote::RemoteGCThreshold gc_threshold;
+    const DM::Remote::IDataStorePtr & remote_store;
+    LoggerPtr log;
+
+    std::unordered_set<String> operator()() const
+    {
+        // In order to not block local GC updating the cache, get a copy of the cache
+        auto stats = uni_page_storage->getRemoteDataFilesStatCache();
+        auto file_ids_to_compact = PS::V3::getRemoteFileIdsNeedCompact(stats, gc_threshold, remote_store, log);
+        // update cache by the S3 result
+        uni_page_storage->updateRemoteFilesTotalSizes(stats);
+        return file_ids_to_compact;
+    }
+};
+
 bool UniversalPageStorageService::uploadCheckpointImpl(
     const metapb::Store & store_info,
     const S3::S3LockClientPtr & s3lock_client,
@@ -177,12 +195,6 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
         .min_file_threshold = static_cast<size_t>(settings.remote_gc_small_size),
     };
 
-    // In order to not block local GC updating the cache, get a copy of the cache
-    auto stats = uni_page_storage->getRemoteDataFilesStatCache();
-    auto file_ids_to_compact = PS::V3::getRemoteFileIdsNeedCompact(stats, gc_threshold, remote_store, log);
-    // update cache by the S3 result
-    uni_page_storage->updateRemoteFilesTotalSizes(stats);
-
     UniversalPageStorage::DumpCheckpointOptions opts{
         .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
         .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",
@@ -198,7 +210,12 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
             .remote_store = remote_store,
         },
         .override_sequence = upload_info.upload_sequence, // override by upload_sequence
-        .file_ids_to_compact = file_ids_to_compact,
+        .compact_getter = FileIdsToCompactGetter{
+            .uni_page_storage = uni_page_storage,
+            .gc_threshold = gc_threshold,
+            .remote_store = remote_store,
+            .log = log,
+        },
     };
     uni_page_storage->dumpIncrementalCheckpoint(opts);
 

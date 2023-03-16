@@ -624,7 +624,7 @@ ObjectInfo tryGetObjectInfo(
     {
         if (const auto & err = o.GetError(); isNotFoundError(err.GetErrorType()))
         {
-            return ObjectInfo{.exist=false, .size=0,.last_modification_time={}};
+            return ObjectInfo{.exist = false, .size = 0, .last_modification_time = {}};
         }
         throw fromS3Error(o.GetError(), "Failed to check existence of object, bucket={} key={}", client.bucket(), key);
     }
@@ -632,7 +632,7 @@ ObjectInfo tryGetObjectInfo(
     const auto & res = o.GetResult();
     // "DeleteMark" of S3 service, don't know what will lead to this
     RUNTIME_CHECK(!res.GetDeleteMarker(), client.bucket(), key);
-    return ObjectInfo{.exist=true, .size=res.GetContentLength(), .last_modification_time=res.GetLastModified()};
+    return ObjectInfo{.exist = true, .size = res.GetContentLength(), .last_modification_time = res.GetLastModified()};
 }
 
 void deleteObject(const TiFlashS3Client & client, const String & key)
