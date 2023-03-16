@@ -51,6 +51,8 @@ public:
 
     DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
 
+    std::shared_ptr<const TiKVValue> getLockByKey(const TiKVKey & key) const;
+
     void splitInto(const RegionRange & range, RegionData & new_region_data);
     void mergeFrom(const RegionData & ori_region_data);
 

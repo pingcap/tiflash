@@ -57,7 +57,7 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
             {
             case SHORT_VALUE_PREFIX:
             {
-                size_t str_len = readUInt8(data, len);
+                size_t str_len = readVarUInt(data, len);
                 if (len < str_len)
                     throw Exception("content len shorter than short value len", ErrorCodes::LOGICAL_ERROR);
                 // no need short value

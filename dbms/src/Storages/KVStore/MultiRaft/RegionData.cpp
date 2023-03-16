@@ -233,6 +233,28 @@ DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query)
     return nullptr;
 }
 
+std::shared_ptr<const TiKVValue> RegionData::getLockByKey(const TiKVKey & key) const
+{
+    const auto & map = lock_cf.getData();
+    const auto & lock_key = RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())};
+    if (auto lock_it = map.find(lock_key); lock_it != map.end())
+    {
+        const auto & [tikv_key, tikv_val, lock_info_ptr] = lock_it->second;
+        std::ignore = tikv_key;
+        std::ignore = lock_info_ptr;
+        return tikv_val;
+    }
+    else
+    {
+        LOG_WARNING(&Poco::Logger::get(__FUNCTION__),
+                    "Failed to get lock by key {} in region data, map size {}, count {}",
+                    key.toDebugString(),
+                    map.size(),
+                    map.count(lock_key));
+        throw Exception("Failed to get lock");
+    }
+}
+
 void RegionData::splitInto(const RegionRange & range, RegionData & new_region_data)
 {
     size_t size_changed = 0;

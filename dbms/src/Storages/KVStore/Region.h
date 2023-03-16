@@ -211,6 +211,7 @@ public:
     /// get approx rows, bytes info about mem cache.
     std::pair<size_t, size_t> getApproxMemCacheInfo() const;
     void cleanApproxMemCacheInfo() const;
+    std::shared_ptr<const TiKVValue> getLockByKey(const TiKVKey & key) { return data.getLockByKey(key); }
 
     RegionMeta & mutMeta() { return meta; }
 

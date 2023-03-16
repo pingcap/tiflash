@@ -289,7 +289,7 @@ inline TiKVValue encodeLockCfValue(
     if (short_value)
     {
         res.write(SHORT_VALUE_PREFIX);
-        res.write(static_cast<char>(short_value->size()));
+        TiKV::writeVarUInt(short_value->size(), res);
         res.write(short_value->data(), short_value->size());
     }
     if (min_commit_ts)
@@ -414,7 +414,7 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
         {
         case RecordKVFormat::SHORT_VALUE_PREFIX:
         {
-            size_t slen = RecordKVFormat::readUInt8(data, len);
+            size_t slen = RecordKVFormat::readVarUInt(data, len);
             if (slen > len)
                 throw Exception("content len not equal to short value len", ErrorCodes::LOGICAL_ERROR);
             short_value = RecordKVFormat::readRawString<std::string_view>(data, len, slen);
@@ -468,6 +468,7 @@ inline TiKVValue encodeWriteCfValue(
     if (!short_value.empty())
     {
         res.write(SHORT_VALUE_PREFIX);
+        TiKV::writeVarUInt(short_value.size(), res);
         res.write(static_cast<char>(short_value.size()));
         res.write(short_value.data(), short_value.size());
     }
