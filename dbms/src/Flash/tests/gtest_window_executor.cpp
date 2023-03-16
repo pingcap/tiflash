@@ -28,6 +28,15 @@ public:
             {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
             {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
              toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
+        DB::MockColumnInfoVec partition_column_infos{{"partition", TiDB::TP::TypeLongLong}};
+        context.addExchangeReceiver(
+            "test_recv",
+            {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
+            {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+             toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})},
+            1,
+            partition_column_infos);
+
         context.addMockTable(
             {"test_db", "test_table_string"},
             {{"partition", TiDB::TP::TypeString}, {"order", TiDB::TP::TypeString}},
@@ -226,37 +235,52 @@ CATCH
 TEST_F(WindowExecutorTestRunner, multiWindow)
 try
 {
+    auto add_source = [&](bool is_table) {
+        return is_table ? context.scan("test_db", "test_table") : context.receive("test_recv", 1);
+    };
+
     std::vector<ASTPtr> functions = {DenseRank(), Rank()};
     ColumnsWithTypeAndName functions_result = {toNullableVec<Int64>("dense_rank", {1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("rank", {1, 1, 3, 3, 1, 1, 3, 3})};
     auto test_single_window_function = [&](size_t index) {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .sort({{"partition", false}, {"order", false}}, true)
-                           .window(functions[index], {"order", false}, {"partition", false}, MockWindowFrame{})
-                           .build(context);
-        executeAndAssertColumnsEqual(request,
-                                     createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
-                                                    toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
-                                                    functions_result[index]}));
+        std::vector<bool> bools{true, false};
+        for (auto is_table : bools)
+        {
+            auto request = add_source(is_table)
+                               .sort({{"partition", false}, {"order", false}}, true, is_table ? 0 : 1)
+                               .window(functions[index], {"order", false}, {"partition", false}, MockWindowFrame{}, is_table ? 0 : 1)
+                               .build(context);
+            executeAndAssertColumnsEqual(request,
+                                         createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+                                                        toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
+                                                        functions_result[index]}));
+        }
     };
     for (size_t i = 0; i < functions.size(); ++i)
         test_single_window_function(i);
 
-    auto gen_merge_window_request = [&](const std::vector<ASTPtr> & wfs) {
-        return context
-            .scan("test_db", "test_table")
-            .sort({{"partition", false}, {"order", false}}, true)
-            .window(wfs, {{"order", false}}, {{"partition", false}}, MockWindowFrame())
-            .build(context);
-    };
+    auto gen_test_window_request = [&](const std::vector<ASTPtr> & wfs) {
+        std::vector<std::shared_ptr<tipb::DAGRequest>> requests;
+        std::vector<bool> bools{true, false};
 
-    auto gen_split_window_request = [&](const std::vector<ASTPtr> & wfs) {
-        auto req = context
-                       .scan("test_db", "test_table")
-                       .sort({{"partition", false}, {"order", false}}, true);
-        for (const auto & wf : wfs)
-            req.window(wf, {"order", false}, {"partition", false}, MockWindowFrame());
-        return req.build(context);
+        // merge window request
+        for (auto is_table : bools)
+        {
+            requests.push_back(add_source(is_table)
+                                   .sort({{"partition", false}, {"order", false}}, true, is_table ? 0 : 1)
+                                   .window(wfs, {{"order", false}}, {{"partition", false}}, MockWindowFrame(), is_table ? 0 : 1)
+                                   .build(context));
+        }
+
+        // spilt window request
+        for (auto is_table : bools)
+        {
+            auto req = add_source(is_table).sort({{"partition", false}, {"order", false}}, true, is_table ? 0 : 1);
+            for (const auto & wf : wfs)
+                req.window(wf, {"order", false}, {"partition", false}, MockWindowFrame(), is_table ? 0 : 1);
+            requests.push_back(req.build(context));
+        }
+
+        return requests;
     };
 
     std::vector<ASTPtr> wfs;
@@ -274,8 +298,9 @@ try
                 wfs.push_back(functions[k]);
                 wfs_result.push_back(functions_result[k]);
 
-                executeAndAssertColumnsEqual(gen_merge_window_request(wfs), wfs_result);
-                executeAndAssertColumnsEqual(gen_split_window_request(wfs), wfs_result);
+                auto requests = gen_test_window_request(wfs);
+                for (const auto & request : requests)
+                    executeAndAssertColumnsEqual(request, wfs_result);
 
                 wfs.pop_back();
                 wfs_result.pop_back();
