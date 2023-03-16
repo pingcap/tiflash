@@ -765,6 +765,7 @@ std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(Pa
     RUNTIME_CHECK(snapshot != nullptr);
     return {segment, snapshot};
 }
+
 std::vector<Block> SegmentTestBasic::readSegment(PageIdU64 segment_id, bool need_row_id, const RowKeyRanges & ranges)
 {
     auto [segment, snapshot] = getSegmentForRead(segment_id);
