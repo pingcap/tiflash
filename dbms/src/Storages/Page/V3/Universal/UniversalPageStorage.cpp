@@ -391,6 +391,14 @@ PS::V3::S3LockLocalManager::ExtraLockInfo UniversalPageStorage::allocateNewUploa
     return remote_locks_local_mgr->allocateNewUploadLocksInfo();
 }
 
+// a pre-checking to avoid unnecessary consumption of resources
+bool UniversalPageStorage::canSkipCheckpoint() const
+{
+    std::scoped_lock lock(checkpoint_mu);
+    auto snap = page_directory->createSnapshot(/*tracing_id*/ "canSkipCheckpoint");
+    return snap->sequence == last_checkpoint_sequence;
+}
+
 void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
 {
     std::scoped_lock lock(checkpoint_mu);

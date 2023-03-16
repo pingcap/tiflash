@@ -137,6 +137,8 @@ public:
 
     void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client);
 
+    bool canSkipCheckpoint() const;
+
     PS::V3::S3LockLocalManager::ExtraLockInfo allocateNewUploadLocksInfo() const;
 
     struct DumpCheckpointOptions

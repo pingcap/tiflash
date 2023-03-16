@@ -815,8 +815,7 @@ public:
     }
 
 protected:
-    static std::string
-    readData(const V3::CheckpointLocation & location)
+    static std::string readData(const V3::CheckpointLocation & location)
     {
         RUNTIME_CHECK(location.offset_in_file > 0);
         RUNTIME_CHECK(location.data_file_id != nullptr && !location.data_file_id->empty());
@@ -1004,7 +1003,7 @@ try
     auto new_service = newService();
     EXPECT_EQ(new_service->uni_page_storage->last_checkpoint_sequence, 0);
     new_service->uni_page_storage->initLocksLocalManager(store_id, s3lock_client);
-    EXPECT_EQ(new_service->uni_page_storage->last_checkpoint_sequence, 9); // fixme
+    EXPECT_EQ(new_service->uni_page_storage->last_checkpoint_sequence, 9);
     auto upload_info = new_service->uni_page_storage->allocateNewUploadLocksInfo();
     EXPECT_EQ(upload_info.upload_sequence, 3);
 }
