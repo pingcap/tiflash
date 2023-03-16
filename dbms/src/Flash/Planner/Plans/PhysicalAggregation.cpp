@@ -197,7 +197,7 @@ void PhysicalAggregation::buildPipelineExecGroup(
         is_final_agg,
         spill_config);
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<LocalAggregateTransform>(exec_status, log->identifier(), params, std::make_unique<AggregateContext>(log->identifier())));
+        builder.appendTransformOp(std::make_unique<LocalAggregateTransform>(exec_status, log->identifier(), params));
     });
 
     if (!expr_after_agg->getActions().empty())

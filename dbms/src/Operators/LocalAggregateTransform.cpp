@@ -20,17 +20,11 @@ namespace DB
 LocalAggregateTransform::LocalAggregateTransform(
     PipelineExecutorStatus & exec_status_,
     const String & req_id,
-    const Aggregator::Params & params_,
-    std::unique_ptr<AggregateContext> && agg_context_)
+    const Aggregator::Params & params_)
     : TransformOp(exec_status_, req_id)
     , params(params_)
-    , agg_context(std::move(agg_context_))
 {
-    assert(agg_context);
-}
-
-void LocalAggregateTransform::operatePrefix()
-{
+    agg_context = std::make_unique<AggregateContext>(req_id);
     agg_context->initBuild(params, /*concurrency=*/1, /*hook=*/[&]() { return exec_status.isCancelled(); });
 }
 
@@ -41,6 +35,7 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
     case LocalAggStatus::build:
         if (unlikely(!block))
         {
+            status = LocalAggStatus::convert;
             agg_context->initConvergent();
             RUNTIME_CHECK(agg_context->getConvergentConcurrency() == 1);
             block = agg_context->readForConvergent(0);

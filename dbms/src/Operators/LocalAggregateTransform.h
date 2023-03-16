@@ -32,15 +32,12 @@ public:
     LocalAggregateTransform(
         PipelineExecutorStatus & exec_status_,
         const String & req_id,
-        const Aggregator::Params & params_,
-        std::unique_ptr<AggregateContext> && agg_context_);
+        const Aggregator::Params & params_);
 
     String getName() const override
     {
         return "LocalAggregateTransform";
     }
-
-    void operatePrefix() override;
 
 protected:
     OperatorStatus transformImpl(Block & block) override;
