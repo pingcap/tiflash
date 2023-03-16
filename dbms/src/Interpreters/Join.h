@@ -391,13 +391,16 @@ public:
     class alignas(ABSL_CACHELINE_SIZE) MaterializedNullRows
     {
     public:
-        explicit MaterializedNullRows(const std::vector<Join::RowsNotInsertToMap> & null_list);
+        MaterializedNullRows();
+
+        /// Must call before calling `fillColumns`.
+        void setRowList(const std::vector<Join::RowsNotInsertToMap> * null_list);
 
         /// Return if there are other rows in null list after this calling;
         bool fillColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, size_t & pos, size_t max_pace);
 
     private:
-        const std::vector<Join::RowsNotInsertToMap> & null_list;
+        const std::vector<Join::RowsNotInsertToMap> * null_list;
         size_t null_list_pos;
         Join::RowRefList * null_list_it;
         size_t materialized_rows;
@@ -613,7 +616,7 @@ struct ProbeProcessInfo
     size_t end_row;
     bool all_rows_joined_finish;
 
-    ProbeProcessInfo(UInt64 max_block_size_)
+    explicit ProbeProcessInfo(UInt64 max_block_size_)
         : max_block_size(max_block_size_)
         , all_rows_joined_finish(true){};
 

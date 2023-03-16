@@ -775,6 +775,7 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     setProbeConcurrency(probe_concurrency_);
     probe_sample_block = sample_block;
     probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
+    null_rows.resize(probe_concurrency_);
 }
 
 namespace
@@ -2340,16 +2341,24 @@ void Join::checkTypes(const Block & block) const
     checkTypesOfKeys(block, sample_block_with_keys);
 }
 
-Join::MaterializedNullRows::MaterializedNullRows(const std::vector<Join::RowsNotInsertToMap> & null_list_)
-    : null_list(null_list_)
+Join::MaterializedNullRows::MaterializedNullRows()
+    : null_list(nullptr)
     , null_list_pos(0)
     , null_list_it(nullptr)
     , materialized_rows(0)
 {}
 
+void Join::MaterializedNullRows::setRowList(const std::vector<Join::RowsNotInsertToMap> * null_list_)
+{
+    null_list = null_list_;
+}
+
 bool Join::MaterializedNullRows::fillColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, size_t & pos, size_t max_pace)
 {
     RUNTIME_ASSERT(added_columns.size() >= left_columns + right_columns);
+
+    if (unlikely(max_pace == 0))
+        return false;
 
     if (unlikely(materialized_columns.empty()))
     {
@@ -2359,21 +2368,18 @@ bool Join::MaterializedNullRows::fillColumns(MutableColumns & added_columns, siz
             materialized_columns[j] = added_columns[j + left_columns]->cloneEmpty();
     }
 
-    if (unlikely(max_pace == 0))
-        return false;
-
     bool end = false;
     while (materialized_rows < pos + max_pace)
     {
         while (null_list_it == nullptr)
         {
-            if (null_list_pos >= null_list.size())
+            if (null_list_pos >= null_list->size())
             {
                 end = true;
                 break;
             }
             ++null_list_pos;
-            null_list_it = null_list[null_list_pos - 1].head.next;
+            null_list_it = (*null_list)[null_list_pos - 1].head.next;
         }
         if (end)
             break;
@@ -2827,9 +2833,8 @@ void Join::workAfterBuildFinish()
 {
     if (isNullAwareSemiFamily(kind))
     {
-        null_rows.reserve(probe_concurrency);
         for (size_t i = 0; i < probe_concurrency; ++i)
-            null_rows.emplace_back(rows_not_inserted_to_map);
+            null_rows[i].setRowList(&rows_not_inserted_to_map);
 
         size_t null_rows_size = 0;
         for (const auto & i : rows_not_inserted_to_map)
