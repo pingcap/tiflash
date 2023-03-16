@@ -17,6 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Encryption/RandomAccessFile.h>
+#include <Storages/S3/S3Common.h>
 #include <aws/s3/model/GetObjectResult.h>
 #include <common/types.h>
 
@@ -38,8 +39,7 @@ public:
     static RandomAccessFilePtr create(const String & remote_fname);
 
     S3RandomAccessFile(
-        std::shared_ptr<Aws::S3::S3Client> client_ptr_,
-        const String & bucket_,
+        std::shared_ptr<TiFlashS3Client> client_ptr_,
         const String & remote_fname_);
 
     off_t seek(off_t offset, int whence) override;
@@ -48,7 +48,7 @@ public:
 
     std::string getFileName() const override
     {
-        return fmt::format("{}/{}", bucket, remote_fname);
+        return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
     }
 
     ssize_t pread(char * /*buf*/, size_t /*size*/, off_t /*offset*/) const override
@@ -74,8 +74,7 @@ public:
 private:
     void initialize();
 
-    std::shared_ptr<Aws::S3::S3Client> client_ptr;
-    String bucket;
+    std::shared_ptr<TiFlashS3Client> client_ptr;
     String remote_fname;
 
     Aws::S3::Model::GetObjectResult read_result;

@@ -23,27 +23,16 @@ namespace DB::S3
 CheckpointManifestS3Set
 CheckpointManifestS3Set::getFromS3(const S3::TiFlashS3Client & client, StoreID store_id)
 {
-    return CheckpointManifestS3Set::getFromS3(client, client.bucket(), store_id);
-}
-
-CheckpointManifestS3Set
-CheckpointManifestS3Set::getFromS3(const Aws::S3::S3Client & client, const String & bucket, StoreID store_id)
-{
     const auto manifest_prefix = S3::S3Filename::fromStoreId(store_id).toManifestPrefix();
 
     std::vector<CheckpointManifestS3Object> manifests;
 
-    listPrefix(client, bucket, manifest_prefix, [&](const Aws::S3::Model::ListObjectsV2Result & result) {
-        const auto & objects = result.GetContents();
-        manifests.reserve(manifests.size() + objects.size());
-        for (const auto & object : objects)
-        {
-            const auto & mf_key = object.GetKey();
-            // also store the object.GetLastModified() for removing
-            // outdated manifest objects
-            manifests.emplace_back(CheckpointManifestS3Object{mf_key, object.GetLastModified()});
-        }
-        return DB::S3::PageResult{.num_keys = objects.size(), .more = true};
+    S3::listPrefix(client, manifest_prefix, [&](const Aws::S3::Model::Object & object) {
+        const auto & mf_key = object.GetKey();
+        // also store the object.GetLastModified() for removing
+        // outdated manifest objects
+        manifests.emplace_back(CheckpointManifestS3Object{mf_key, object.GetLastModified()});
+        return DB::S3::PageResult{.num_keys = 1, .more = true};
     });
     return CheckpointManifestS3Set::create(manifests);
 }

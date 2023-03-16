@@ -286,13 +286,12 @@ CheckpointInfoPtr selectCheckpointInfo(Context & context, uint64_t region_id, ui
     auto & tmt_context = context.getTMTContext();
     std::vector<UInt64> all_store_ids = getAllStoreIDsFromPD(tmt_context);
     auto current_store_id = tmt_context.getKVStore()->getStoreMeta().id();
-    auto s3_client = S3::ClientFactory::instance().sharedClient();
-    auto bucket = S3::ClientFactory::instance().bucket();
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     for (const auto & store_id : all_store_ids)
     {
         if (store_id == current_store_id)
             continue;
-        const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, bucket, store_id);
+        const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, store_id);
         if (manifests.empty())
         {
             LOG_DEBUG(log, "no manifest on this store, skip store_id={}", store_id);
