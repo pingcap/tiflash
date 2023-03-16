@@ -113,7 +113,10 @@ private:
     size_t pace;
     /// Position of null rows.
     size_t null_rows_pos;
-    size_t null_rows_cnt;
+    /// Position of MutableColumns vector for a certain null rows.
+    size_t columns_vec_pos;
+    /// Index for a certain MutableColumns.
+    size_t columns_index;
 
     /// Mapped data for one cell.
     const void * map_it;

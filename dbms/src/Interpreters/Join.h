@@ -392,7 +392,7 @@ public:
         RowRefList head;
         /// Materialize rows.
         size_t max_block_size;
-        std::vector<MutableColumns> materialized_columns;
+        std::vector<MutableColumns> materialized_columns_vec;
         size_t size = 0;
 
         void insertRow(RowRefList * elem, Block * stored_block, size_t index, bool need_materialize);

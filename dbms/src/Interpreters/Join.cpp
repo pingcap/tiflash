@@ -677,7 +677,7 @@ void Join::setBuildConcurrencyAndInitJoinPartition(size_t build_concurrency_)
     {
         rows_not_inserted_to_map.reserve(getBuildConcurrency());
         for (size_t i = 0; i < getBuildConcurrency(); ++i)
-            rows_not_inserted_to_map[i] = RowsNotInsertToMap(max_block_size);
+            rows_not_inserted_to_map.emplace_back(max_block_size);
     }
 }
 
@@ -946,6 +946,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             {
                 /// for right/full out join or null-aware semi join, need to record the rows not inserted to map
                 auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
+                RUNTIME_ASSERT(rows_not_inserted_to_map != nullptr);
                 rows_not_inserted_to_map->insertRow(elem, stored_block, index, null_need_materialize);
             }
         }
@@ -2353,11 +2354,11 @@ void Join::RowsNotInsertToMap::insertRow(Join::RowRefList * elem, Block * stored
     insertRowToList(&head, elem, stored_block, index);
     if (need_materialize)
     {
-        if (materialized_columns.empty() || size % max_block_size == 0)
+        if (materialized_columns_vec.empty() || size % max_block_size == 0)
         {
-            materialized_columns.emplace_back(stored_block->cloneEmptyColumns());
+            materialized_columns_vec.emplace_back(stored_block->cloneEmptyColumns());
         }
-        auto & last_one = materialized_columns.back();
+        auto & last_one = materialized_columns_vec.back();
         size_t columns = stored_block->columns();
         RUNTIME_ASSERT(last_one.size() == columns);
         for (size_t i = 0; i < columns; ++i)
