@@ -34,7 +34,15 @@
 #include <future>
 #include <iomanip>
 #include <thread>
+#include "Interpreters/SettingsCommon.h"
+#include "Parsers/formatAST.h"
+#include <Databases/DatabaseFactory.h>
 
+
+namespace ErrorCodes
+{
+extern const int UNKNOWN_DATABASE_ENGINE;
+} // namespace ErrorCodes
 
 namespace DB
 {
@@ -60,7 +68,6 @@ static void executeCreateQuery(const String & query,
     interpreter.execute();
 }
 
-
 #define SYSTEM_DATABASE "system"
 
 static void loadDatabase(
@@ -72,7 +79,6 @@ static void loadDatabase(
 {
     /// There may exist .sql file with database creation statement.
     /// Or, if it is absent, then database with default engine is created.
-
     String database_attach_query;
 
     if (Poco::File(database_metadata_file).exists())
@@ -102,8 +108,6 @@ void loadMetadata(Context & context)
     Poco::File force_restore_data_flag_file(context.getFlagsPath() + "force_restore_data");
     bool has_force_restore_data_flag = force_restore_data_flag_file.exists();
 
-    /// For parallel tables loading.
-    legacy::ThreadPool thread_pool(SettingMaxThreads().getAutoValue());
     Poco::Logger * log = &Poco::Logger::get("loadMetadata");
 
     /// Loop over databases sql files. This ensure filename ends with ".sql".
@@ -138,10 +142,45 @@ void loadMetadata(Context & context)
         }
     }
 
-    for (const auto & [db_name, meta_file] : databases)
-        loadDatabase(context, db_name, meta_file, &thread_pool, has_force_restore_data_flag);
+    
+    /// For parallel tables loading.
+    legacy::ThreadPool load_database_thread_pool(SettingMaxThreads().getAutoValue());
 
-    thread_pool.wait();
+    auto load_database = [&](Context & context, const String & database, const String & database_metadata_file,
+                                       legacy::ThreadPool * thread_pool, bool force_restore_data) {
+        /// There may exist .sql file with database creation statement.
+        /// Or, if it is absent, then database with default engine is created.
+        String database_attach_query;
+        std::cout << " database_metadata_file is  " << database_metadata_file << std::endl;
+        if (Poco::File(database_metadata_file).exists())
+        {
+            ReadBufferFromFileProvider in(context.getFileProvider(), database_metadata_file, EncryptionPath(database_metadata_file, ""), 1024);
+            readStringUntilEOF(database_attach_query, in);
+        }
+        else
+        {
+            // Old fashioned way, keep engine as "Ordinary"
+            database_attach_query = "ATTACH DATABASE " + backQuoteIfNeed(database) + " ENGINE=Ordinary";
+        }
+
+        executeCreateQuery(database_attach_query, context, database, database_metadata_file, thread_pool, force_restore_data);
+    };
+
+    std::vector<std::shared_ptr<legacy::ThreadPool>> table_thread_pools;
+    for (const auto & database : databases) {
+        const auto db_name = database.first;
+        const auto meta_file = database.second;
+        std::cout << " meta_file is " << meta_file << std::endl;
+        std::shared_ptr<legacy::ThreadPool> load_tables_thread_pool = std::make_shared<legacy::ThreadPool>(SettingMaxThreads().getAutoValue());
+        auto task = [&load_database, &context, &db_name, &meta_file, &load_tables_thread_pool, has_force_restore_data_flag] {
+            std::cout << " inner meta_file is " << meta_file << std::endl;
+            load_database(context, db_name, meta_file, load_tables_thread_pool.get(), has_force_restore_data_flag);
+        };
+        table_thread_pools.push_back(load_tables_thread_pool);
+        load_database_thread_pool.schedule(task);
+    }
+
+    load_database_thread_pool.wait();
 
     if (has_force_restore_data_flag)
         force_restore_data_flag_file.remove();

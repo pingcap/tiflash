@@ -46,7 +46,6 @@ extern const int FILE_DOESNT_EXIST;
 extern const int LOGICAL_ERROR;
 extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 extern const int SYNTAX_ERROR;
-extern const int TIDB_TABLE_ALREADY_EXISTS;
 } // namespace ErrorCodes
 
 namespace FailPoints
@@ -102,8 +101,8 @@ String DatabaseTiFlash::getDataPath() const
 }
 
 
-// static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
-// static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
+static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
+static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
 static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
 
 void DatabaseTiFlash::loadTables(Context & context, legacy::ThreadPool * thread_pool, bool has_force_restore_data_flag)
@@ -120,59 +119,29 @@ void DatabaseTiFlash::loadTables(Context & context, legacy::ThreadPool * thread_
     const auto total_tables = table_files.size();
     LOG_INFO(log, "Total {} tables in database {}", total_tables, name);
 
-    // AtomicStopwatch watch;
-    // std::atomic<size_t> tables_processed{0};
+    AtomicStopwatch watch;
+    std::atomic<size_t> tables_processed{0};
 
     auto task_function = [&](std::vector<String>::const_iterator begin, std::vector<String>::const_iterator end) {
         for (auto it = begin; it != end; ++it)
         {
-            // /// Messages, so that it's not boring to wait for the server to load for a long time.
-            // if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
-            // {
-            //     LOG_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
-            //     watch.restart();
-            // }
+            /// Messages, so that it's not boring to wait for the server to load for a long time.
+            if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
+            {
+                LOG_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
+                watch.restart();
+            }
 
             const String & table_file = *it;
-            auto [table, table_name] = DatabaseLoading::loadTable(
+            DatabaseLoading::loadTable(
                 context,
                 *this,
                 metadata_path,
                 name,
                 data_path,
-                // getEngineName(),
-                "TiFlash",
+                getEngineName(),
                 table_file,
                 has_force_restore_data_flag);
-
-            if (table) {
-                try
-                {
-                    table->startup();
-                }
-                catch (DB::Exception & e)
-                {
-                    if (e.code() == ErrorCodes::TIDB_TABLE_ALREADY_EXISTS)
-                    {
-                        // While doing IStorage::startup, Exception thorwn with TIDB_TABLE_ALREADY_EXISTS,
-                        // means that we may crashed in the middle of renaming tables. We clean the meta file
-                        // for those storages by `cleanupTables`.
-                        // - If the storage is the outdated one after renaming, remove it is right.
-                        // - If the storage should be the target table, remove it means we "rollback" the
-                        //   rename action. And the table will be renamed by TiDBSchemaSyncer later.
-                        LOG_WARNING(log, "Detected startup failed table {}.{}, removing it from TiFlash", name, table_name);
-                        const String table_meta_path = getTableMetadataPath(table_name);
-                        if (!table_meta_path.empty())
-                        {
-                            Poco::File{table_meta_path}.remove();
-                        }
-                        // detach from this database
-                        detachTable(table_name);
-                    }
-                    else
-                        throw;
-                }
-            }
         }
     };
 
@@ -191,6 +160,12 @@ void DatabaseTiFlash::loadTables(Context & context, legacy::ThreadPool * thread_
         else
             task();
     }
+
+    if (thread_pool)
+        thread_pool->wait();
+
+    // After all tables was basically initialized, startup them.
+    DatabaseLoading::startupTables(*this, name, tables, thread_pool, log);
 }
 
 
