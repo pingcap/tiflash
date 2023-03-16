@@ -25,7 +25,7 @@ LocalAggregateTransform::LocalAggregateTransform(
     , params(params_)
 {
     agg_context = std::make_unique<AggregateContext>(req_id);
-    agg_context->initBuild(params, /*concurrency=*/1, /*hook=*/[&]() { return exec_status.isCancelled(); });
+    agg_context->initBuild(params, 1, /*hook=*/[&]() { return exec_status.isCancelled(); });
 }
 
 OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
