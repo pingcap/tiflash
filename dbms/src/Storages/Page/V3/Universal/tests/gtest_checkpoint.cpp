@@ -93,17 +93,15 @@ public:
 
     void dumpCheckpoint(bool upload_success = true, std::unordered_set<String> file_ids_to_compact = {})
     {
-        page_storage->dumpIncrementalCheckpoint({
+        page_storage->dumpIncrementalCheckpoint(UniversalPageStorage::DumpCheckpointOptions{
             .data_file_id_pattern = "{seq}_{index}.data",
             .data_file_path_pattern = dir + "{seq}_{index}.data",
             .manifest_file_id_pattern = "{seq}.manifest",
             .manifest_file_path_pattern = dir + "{seq}.manifest",
             .writer_info = *writer_info,
             .must_locked_files = {},
-            .persist_checkpoint = [upload_success](const PS::V3::LocalCheckpointFiles &) {
-                return upload_success;
-            },
-            .file_ids_to_compact = file_ids_to_compact,
+            .persist_checkpoint = [upload_success](const PS::V3::LocalCheckpointFiles &) { return upload_success; },
+            .compact_getter = [=] { return file_ids_to_compact; },
         });
     }
 
