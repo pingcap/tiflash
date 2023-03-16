@@ -23,7 +23,7 @@
 #include <common/defines.h>
 #include <gtest/gtest.h>
 
-#include <boost/algorithm/string.hpp>
+#include <boost_wrapper/string.h>
 
 namespace DB::DM::tests
 {
