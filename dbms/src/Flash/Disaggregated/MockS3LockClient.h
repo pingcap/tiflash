@@ -30,13 +30,7 @@ class MockS3LockClient : public IS3LockClient
 {
 public:
     explicit MockS3LockClient(std::shared_ptr<TiFlashS3Client> c)
-        : MockS3LockClient(c, c->bucket())
-    {
-    }
-
-    MockS3LockClient(std::shared_ptr<Aws::S3::S3Client> c, const String & bucket_)
         : s3_client(std::move(c))
-        , bucket(bucket_)
     {
     }
 
@@ -45,16 +39,16 @@ public:
     {
         // If the data file exist and no delmark exist, then create a lock file on `data_file_key`
         auto view = S3FilenameView::fromKey(data_file_key);
-        if (!objectExists(*s3_client, bucket, data_file_key))
+        if (!objectExists(*s3_client, data_file_key))
         {
             return {false, ""};
         }
         auto delmark_key = view.getDelMarkKey();
-        if (objectExists(*s3_client, bucket, delmark_key))
+        if (objectExists(*s3_client, delmark_key))
         {
             return {false, ""};
         }
-        uploadEmptyFile(*s3_client, bucket, view.getLockKey(lock_store_id, lock_seq));
+        uploadEmptyFile(*s3_client, view.getLockKey(lock_store_id, lock_seq));
         return {true, ""};
     }
 
@@ -64,23 +58,18 @@ public:
         // If there is no lock on the given `data_file_key`, then mark as deleted
         auto view = S3FilenameView::fromKey(data_file_key);
         auto lock_prefix = view.getLockPrefix();
-        bool any_lock_exist = false;
-        listPrefix(*s3_client, bucket, lock_prefix, [&any_lock_exist](const Aws::S3::Model::ListObjectsV2Result & result) -> S3::PageResult {
-            if (!result.GetContents().empty())
-                any_lock_exist = true;
-            return S3::PageResult{.num_keys = result.GetContents().size(), .more = false};
-        });
+        auto lock_key_opt = S3::anyKeyExistWithPrefix(*s3_client, lock_prefix);
+        bool any_lock_exist = lock_key_opt.has_value();
         if (any_lock_exist)
         {
             return {false, ""};
         }
-        uploadEmptyFile(*s3_client, bucket, view.getDelMarkKey());
+        uploadEmptyFile(*s3_client, view.getDelMarkKey());
         return {true, ""};
     }
 
 private:
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
+    std::shared_ptr<TiFlashS3Client> s3_client;
 };
 
 } // namespace DB::S3

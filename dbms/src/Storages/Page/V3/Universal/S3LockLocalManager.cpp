@@ -53,7 +53,7 @@ void S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockCl
 
         // we need to restore the last_upload_sequence from S3
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-        const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, s3_client->bucket(), actual_store_id);
+        const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, actual_store_id);
         if (!manifests.empty())
         {
             last_upload_sequence = manifests.latestUploadSequence();
@@ -171,7 +171,7 @@ String S3LockLocalManager::createS3Lock(const String & datafile_key, const S3::S
         // directly create lock through S3 client
         // TODO: handle s3 network error and retry?
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-        S3::uploadEmptyFile(*s3_client, s3_client->bucket(), lockkey);
+        S3::uploadEmptyFile(*s3_client, lockkey);
         LOG_DEBUG(log, "S3 lock created for local datafile, lockkey={}", lockkey);
     }
     else

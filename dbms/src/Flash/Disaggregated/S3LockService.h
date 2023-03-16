@@ -100,8 +100,6 @@ private:
 
     DataFileMutexPtr getDataFileLatch(const String & data_file_key);
 
-    static std::optional<String> anyLockExist(const String & lock_prefix);
-
 private:
     std::unordered_map<String, DataFileMutexPtr> file_latch_map;
     std::mutex file_latch_map_mutex;
