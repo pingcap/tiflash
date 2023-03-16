@@ -168,7 +168,8 @@ public:
         SegmentReadTasks && tasks_,
         AfterSegmentRead after_segment_read_,
         const String & tracing_id,
-        bool enable_read_thread_)
+        bool enable_read_thread_,
+        Int64 num_streams_)
         : pool_id(nextPoolId())
         , table_id(table_id_)
         , dm_context(dm_context_)
@@ -183,6 +184,13 @@ public:
         , unordered_input_stream_ref_count(0)
         , exception_happened(false)
         , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
+        // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
+        // to encounter empty queues frequently, resulting in too much waiting and thread context
+        // switching, so we limit the lower limit to 3, which provides two blocks of buffer space.
+        , block_slot_limit(std::max(num_streams_, 3))
+        // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
+        // situations where the computation may be faster and the storage layer may not be able to keep up.
+        , active_segment_limit(std::max(num_streams_, 2))
     {}
 
     ~SegmentReadTaskPool()
@@ -223,9 +231,10 @@ public:
         const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
         uint64_t expected_merge_count);
 
-    int64_t increaseUnorderedInputStreamRefCount();
-    int64_t decreaseUnorderedInputStreamRefCount();
-    int64_t getFreeBlockSlots() const;
+    Int64 increaseUnorderedInputStreamRefCount();
+    Int64 decreaseUnorderedInputStreamRefCount();
+    Int64 getFreeBlockSlots() const;
+    Int64 getFreeActiveSegments() const;
     bool valid() const;
     void setException(const DB::Exception & e);
 
@@ -240,7 +249,7 @@ public:
     }
 
 private:
-    int64_t getFreeActiveSegmentCountUnlock();
+    Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
     void finishSegment(const SegmentPtr & seg);
     void pushBlock(Block && block);
@@ -255,13 +264,13 @@ private:
     const ReadMode read_mode;
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
-    std::mutex mutex;
+    mutable std::mutex mutex;
     std::unordered_set<uint64_t> active_segment_ids;
     WorkQueue<Block> q;
     BlockStat blk_stat;
     LoggerPtr log;
 
-    std::atomic<int64_t> unordered_input_stream_ref_count;
+    std::atomic<Int64> unordered_input_stream_ref_count;
 
     std::atomic<bool> exception_happened;
     DB::Exception exception;
@@ -274,6 +283,9 @@ private:
     // Since several UnorderedBlockInputStreams can be read by several threads concurrently, we use
     // std::once_flag and std::call_once to prevent duplicated add.
     std::once_flag add_to_scheduler;
+
+    const Int64 block_slot_limit;
+    const Int64 active_segment_limit;
 
     inline static std::atomic<uint64_t> pool_id_gen{1};
     inline static BlockStat global_blk_stat;
