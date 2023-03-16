@@ -245,9 +245,10 @@ try
         std::vector<bool> bools{true, false};
         for (auto is_table : bools)
         {
+            size_t stream_count = is_table ? 0 : 1;
             auto request = add_source(is_table)
-                               .sort({{"partition", false}, {"order", false}}, true, is_table ? 0 : 1)
-                               .window(functions[index], {"order", false}, {"partition", false}, MockWindowFrame{}, is_table ? 0 : 1)
+                               .sort({{"partition", false}, {"order", false}}, true, stream_count)
+                               .window(functions[index], {"order", false}, {"partition", false}, MockWindowFrame{}, stream_count)
                                .build(context);
             executeAndAssertColumnsEqual(request,
                                          createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
@@ -265,18 +266,20 @@ try
         // merge window request
         for (auto is_table : bools)
         {
+            size_t stream_count = is_table ? 0 : 1;
             requests.push_back(add_source(is_table)
-                                   .sort({{"partition", false}, {"order", false}}, true, is_table ? 0 : 1)
-                                   .window(wfs, {{"order", false}}, {{"partition", false}}, MockWindowFrame(), is_table ? 0 : 1)
+                                   .sort({{"partition", false}, {"order", false}}, true, stream_count)
+                                   .window(wfs, {{"order", false}}, {{"partition", false}}, MockWindowFrame(), stream_count)
                                    .build(context));
         }
 
         // spilt window request
         for (auto is_table : bools)
         {
-            auto req = add_source(is_table).sort({{"partition", false}, {"order", false}}, true, is_table ? 0 : 1);
+            size_t stream_count = is_table ? 0 : 1;
+            auto req = add_source(is_table).sort({{"partition", false}, {"order", false}}, true, stream_count);
             for (const auto & wf : wfs)
-                req.window(wf, {"order", false}, {"partition", false}, MockWindowFrame(), is_table ? 0 : 1);
+                req.window(wf, {"order", false}, {"partition", false}, MockWindowFrame(), stream_count);
             requests.push_back(req.build(context));
         }
 
@@ -317,100 +320,102 @@ CATCH
 TEST_F(WindowExecutorTestRunner, multiWindowThenAgg)
 try
 {
-    /*
-    select count(1) from (
-        SELECT 
-            ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order`),
-            ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order` DESC)
-        FROM `test_db`.`test_table`
-    )t1;
-    */
-    auto request = context
-                       .scan("test_db", "test_table")
-                       .sort({{"partition", false}, {"order", false}}, true)
-                       .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
-                       .sort({{"partition", false}, {"order", true}}, true)
-                       .window(RowNumber(), {"order", true}, {"partition", false}, buildDefaultRowsFrame())
-                       .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
-                       .build(context);
-    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
+    auto add_source = [&](bool is_table) {
+        return is_table ? context.scan("test_db", "test_table") : context.receive("test_recv", 1);
+    };
+    std::vector<bool> bools{true, false};
+    for (auto is_table : bools)
+    {
+        size_t stream_count = is_table ? 0 : 1;
 
-    /*
-    select count(1) from (
-        SELECT 
-            ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order`),
-            ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order`)
-        FROM `test_db`.`test_table`
-    )t1;
-    */
-    request = context
-                  .scan("test_db", "test_table")
-                  .sort({{"partition", false}, {"order", false}}, true)
-                  .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
-                  .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
-                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
-                  .build(context);
-    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
+        /*
+        select count(1) from (
+            SELECT 
+                ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order`),
+                ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order` DESC)
+            FROM `test_db`.`test_table`
+        )t1;
+        */
+        auto request = add_source(is_table)
+                           .sort({{"partition", false}, {"order", false}}, true, stream_count)
+                           .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame(), stream_count)
+                           .sort({{"partition", false}, {"order", true}}, true, stream_count)
+                           .window(RowNumber(), {"order", true}, {"partition", false}, buildDefaultRowsFrame(), stream_count)
+                           .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                           .build(context);
+        executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
-    request = context
-                  .scan("test_db", "test_table")
-                  .sort({{"partition", false}, {"order", false}}, true)
-                  .window({RowNumber(), RowNumber()}, {{"order", false}}, {{"partition", false}}, buildDefaultRowsFrame())
-                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
-                  .build(context);
-    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
+        /*
+        select count(1) from (
+            SELECT 
+                ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order`),
+                ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order`)
+            FROM `test_db`.`test_table`
+        )t1;
+        */
+        request = add_source(is_table)
+                      .sort({{"partition", false}, {"order", false}}, true, stream_count)
+                      .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame(), stream_count)
+                      .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame(), stream_count)
+                      .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
-    /*
-    select count(1) from (
-        SELECT 
-            Rank() OVER (PARTITION BY `partition` ORDER BY  `order`),
-            DenseRank() OVER (PARTITION BY `partition` ORDER BY  `order`)
-        FROM `test_db`.`test_table`
-    )t1;
-    */
-    request = context
-                  .scan("test_db", "test_table")
-                  .sort({{"partition", false}, {"order", false}}, true)
-                  .window(Rank(), {"order", false}, {"partition", false}, MockWindowFrame())
-                  .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame())
-                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
-                  .build(context);
-    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
+        request = add_source(is_table)
+                      .sort({{"partition", false}, {"order", false}}, true, stream_count)
+                      .window({RowNumber(), RowNumber()}, {{"order", false}}, {{"partition", false}}, buildDefaultRowsFrame(), stream_count)
+                      .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
-    request = context
-                  .scan("test_db", "test_table")
-                  .sort({{"partition", false}, {"order", false}}, true)
-                  .window({Rank(), DenseRank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame())
-                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
-                  .build(context);
-    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
+        /*
+        select count(1) from (
+            SELECT 
+                Rank() OVER (PARTITION BY `partition` ORDER BY  `order`),
+                DenseRank() OVER (PARTITION BY `partition` ORDER BY  `order`)
+            FROM `test_db`.`test_table`
+        )t1;
+        */
+        request = add_source(is_table)
+                      .sort({{"partition", false}, {"order", false}}, true, stream_count)
+                      .window(Rank(), {"order", false}, {"partition", false}, MockWindowFrame(), stream_count)
+                      .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame(), stream_count)
+                      .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
-    /*
-    select count(1) from (
-        SELECT
-            DenseRank() OVER (PARTITION BY `partition` ORDER BY  `order`),
-            DenseRank() OVER (PARTITION BY `partition` ORDER BY  `order`),
-            Rank() OVER (PARTITION BY `partition` ORDER BY  `order`)
-        FROM `test_db`.`test_table`
-    )t1;
-    */
-    request = context
-                  .scan("test_db", "test_table")
-                  .sort({{"partition", false}, {"order", false}}, true)
-                  .window({DenseRank(), DenseRank(), Rank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame())
-                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
-                  .build(context);
-    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
+        request = add_source(is_table)
+                      .sort({{"partition", false}, {"order", false}}, true, stream_count)
+                      .window({Rank(), DenseRank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame(), stream_count)
+                      .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
 
-    request = context
-                  .scan("test_db", "test_table")
-                  .sort({{"partition", false}, {"order", false}}, true)
-                  .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame())
-                  .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame())
-                  .window(Rank(), {"order", false}, {"partition", false}, MockWindowFrame())
-                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
-                  .build(context);
-    executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
+        /*
+        select count(1) from (
+            SELECT
+                DenseRank() OVER (PARTITION BY `partition` ORDER BY  `order`),
+                DenseRank() OVER (PARTITION BY `partition` ORDER BY  `order`),
+                Rank() OVER (PARTITION BY `partition` ORDER BY  `order`)
+            FROM `test_db`.`test_table`
+        )t1;
+        */
+        request = add_source(is_table)
+                      .sort({{"partition", false}, {"order", false}}, true, stream_count)
+                      .window({DenseRank(), DenseRank(), Rank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame(), stream_count)
+                      .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
+
+        request = add_source(is_table)
+                      .sort({{"partition", false}, {"order", false}}, true, stream_count)
+                      .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame(), stream_count)
+                      .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame(), stream_count)
+                      .window(Rank(), {"order", false}, {"partition", false}, MockWindowFrame(), stream_count)
+                      .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                      .build(context);
+        executeAndAssertColumnsEqual(request, createColumns({toVec<UInt64>({8})}));
+    }
 }
 CATCH
 
