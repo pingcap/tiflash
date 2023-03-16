@@ -172,7 +172,10 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
      * sequence=10 uploaded.
      */
     const auto & settings = global_context.getSettingsRef(); // TODO: make it dynamic reloadable
-    double remote_gc_threshold = settings.remote_gc_threshold;
+    auto gc_threshold = DM::Remote::RemoteGCThreshold{
+        .valid_rate = settings.remote_gc_ratio,
+        .min_file_threshold = static_cast<size_t>(settings.remote_gc_small_size),
+    };
     UniversalPageStorage::DumpCheckpointOptions opts{
         .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
         .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",
@@ -188,7 +191,8 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
             .remote_store = remote_store,
         },
         .override_sequence = upload_info.upload_sequence, // override by upload_sequence
-        .remote_gc_threshold = remote_gc_threshold,
+        .remote_gc_threshold = gc_threshold,
+        .remote_store = remote_store,
     };
     uni_page_storage->dumpIncrementalCheckpoint(opts);
 

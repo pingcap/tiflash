@@ -27,8 +27,8 @@ using RemoteFileValidSizes = std::unordered_map<String, size_t>;
 
 struct CPDataFileStat
 {
-    size_t valid_size = 0;
-    size_t total_size = 0;
+    Int64 valid_size = 0;
+    Int64 total_size = 0;
 };
 
 class CPDataFilesStatCache

@@ -47,6 +47,14 @@ protected:
     {}
 };
 
+struct RemoteGCThreshold
+{
+    // The file with valid rate less than `valid_rate` will be compact
+    double valid_rate;
+    // The file size less than `min_file_threshold` will be compact
+    size_t min_file_threshold;
+};
+
 class IDataStore : boost::noncopyable
 {
 public:
@@ -80,6 +88,8 @@ public:
      * remote data source for a given `upload_seq`.
      */
     virtual bool putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) = 0;
+
+    virtual std::unordered_map<String, Int64> getDataFileSizes(const std::unordered_set<String> & lock_keys) = 0;
 };
 
 

@@ -284,8 +284,8 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
 
     bool delmark_exists = false;
     Aws::Utils::DateTime mtime;
-    std::tie(delmark_exists, mtime) = tryGetObjectModifiedTime(*client, unlocked_datafile_delmark_key);
-    if (!delmark_exists)
+    const auto delmark_object_info = S3::tryGetObjectInfo(*client, unlocked_datafile_delmark_key);
+    if (!delmark_object_info.exist)
     {
         bool ok;
         String err_msg;
