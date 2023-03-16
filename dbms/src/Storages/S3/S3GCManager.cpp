@@ -51,12 +51,10 @@ namespace DB::S3
 
 S3GCManager::S3GCManager(
     pingcap::pd::ClientPtr pd_client_,
-    std::shared_ptr<TiFlashS3Client> client_,
     OwnerManagerPtr gc_owner_manager_,
     S3LockClientPtr lock_client_,
     S3GCConfig config_)
     : pd_client(std::move(pd_client_))
-    , client(std::move(client_))
     , gc_owner_manager(std::move(gc_owner_manager_))
     , lock_client(std::move(lock_client_))
     , shutdown_called(false)
@@ -88,7 +86,8 @@ bool S3GCManager::runOnAllStores()
 
     if (config.method == S3GCMethod::Lifecycle && !lifecycle_has_been_set)
     {
-        ensureLifecycleRuleExist(*client, client->bucket(), /*expire_days*/ 1);
+        auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ensureLifecycleRuleExist(*client, /*expire_days*/ 1);
         lifecycle_has_been_set = true;
     }
 
@@ -135,6 +134,7 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
 {
     // get a timepoint at the begin, only remove objects that expired compare
     // to this timepoint
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     const Aws::Utils::DateTime gc_timepoint = Aws::Utils::DateTime::Now();
     LOG_DEBUG(log, "run gc, gc_store_id={} timepoint={}", gc_store_id, gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
 
@@ -196,6 +196,7 @@ void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
     cleanUnusedLocks(gc_store_id, lock_prefix, std::numeric_limits<UInt64>::max(), valid_lock_files, gc_timepoint);
 
     // clean all manifest objects
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     const auto manifests = CheckpointManifestS3Set::getFromS3(*client, gc_store_id);
     removeOutdatedManifest(manifests, nullptr);
 
@@ -227,39 +228,42 @@ void S3GCManager::cleanUnusedLocks(
     const std::unordered_set<String> & valid_lock_files,
     const Aws::Utils::DateTime & timepoint)
 {
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     // All locks (even for different stores) share the same prefix, list the lock files under this prefix
-    listPrefix(*client, client->bucket(), scan_prefix, [&](const Aws::S3::Model::ListObjectsV2Result & result) {
-        const auto & objects = result.GetContents();
-        if (shutdown_called)
-        {
-            LOG_INFO(log, "shutting down, break");
-            // .more=false to break the list
-            return PageResult{.num_keys = objects.size(), .more = false};
-        }
+    S3::listPrefix(
+        *client,
+        scan_prefix,
+        [&](const Aws::S3::Model::Object & object) {
+            if (shutdown_called)
+            {
+                LOG_INFO(log, "shutting down, break");
+                // .more=false to break the list
+                return PageResult{.num_keys = 1, .more = false};
+            }
 
-        for (const auto & object : objects)
-        {
-            const auto & lock_key = object.GetKey();
-            LOG_TRACE(log, "lock_key={}", lock_key);
-            const auto lock_filename_view = S3FilenameView::fromKey(lock_key);
-            RUNTIME_CHECK(lock_filename_view.isLockFile(), lock_key);
-            const auto lock_info = lock_filename_view.getLockInfo();
-            // The lock file is not managed by `gc_store_id`, skip
-            if (lock_info.store_id != gc_store_id)
-                continue;
-            // The lock is not managed by the latest manifest yet, wait for
-            // next GC round
-            if (lock_info.sequence > safe_sequence)
-                continue;
-            // The lock is still valid
-            if (valid_lock_files.count(lock_key) > 0)
-                continue;
+            do
+            {
+                const auto & lock_key = object.GetKey();
+                LOG_TRACE(log, "lock_key={}", lock_key);
+                const auto lock_filename_view = S3FilenameView::fromKey(lock_key);
+                RUNTIME_CHECK(lock_filename_view.isLockFile(), lock_key);
+                const auto lock_info = lock_filename_view.getLockInfo();
+                // The lock file is not managed by `gc_store_id`, skip
+                if (lock_info.store_id != gc_store_id)
+                    break;
+                // The lock is not managed by the latest manifest yet, wait for
+                // next GC round
+                if (lock_info.sequence > safe_sequence)
+                    break;
+                // The lock is still valid
+                if (valid_lock_files.count(lock_key) > 0)
+                    break;
 
-            // The data file is not used by `gc_store_id` anymore, remove the lock file
-            cleanOneLock(lock_key, lock_filename_view, timepoint);
-        }
-        return PageResult{.num_keys = objects.size(), .more = true};
-    });
+                // The data file is not used by `gc_store_id` anymore, remove the lock file
+                cleanOneLock(lock_key, lock_filename_view, timepoint);
+            } while (false);
+            return PageResult{.num_keys = 1, .more = true};
+        });
 }
 
 void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & lock_filename_view, const Aws::Utils::DateTime & timepoint)
@@ -270,7 +274,8 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     const auto unlocked_datafile_delmark_key = unlocked_datafilename_view.getDelMarkKey();
 
     // delete S3 lock file
-    deleteObject(*client, client->bucket(), lock_key);
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+    deleteObject(*client, lock_key);
 
     // TODO: If `lock_key` is the only lock to datafile and GCManager crashes
     //       after the lock deleted but before delmark uploaded, then the
@@ -279,7 +284,7 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
 
     bool delmark_exists = false;
     Aws::Utils::DateTime mtime;
-    std::tie(delmark_exists, mtime) = tryGetObjectModifiedTime(*client, client->bucket(), unlocked_datafile_delmark_key);
+    std::tie(delmark_exists, mtime) = tryGetObjectModifiedTime(*client, unlocked_datafile_delmark_key);
     if (!delmark_exists)
     {
         bool ok;
@@ -380,7 +385,8 @@ void S3GCManager::removeDataFileIfDelmarkExpired(
     // error when the key is not exist
     physicalRemoveDataFile(datafile_key);
 
-    deleteObject(*client, client->bucket(), delmark_key);
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+    deleteObject(*client, delmark_key);
     LOG_INFO(log, "datafile delmark deleted, key={}", delmark_key);
 }
 
@@ -390,27 +396,27 @@ void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils:
     // the keys by prefix, and if there is an expired delmark, then try to remove
     // its correspond StableFile or CheckpointDataFile.
     const auto prefix = S3Filename::fromStoreId(gc_store_id).toDataPrefix();
-    listPrefix(*client, client->bucket(), prefix, [&](const Aws::S3::Model::ListObjectsV2Result & result) {
-        const auto & objects = result.GetContents();
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+    S3::listPrefix(*client, prefix, [&](const Aws::S3::Model::Object & object) {
         if (shutdown_called)
         {
             LOG_INFO(log, "shutting down, break");
             // .more=false to break the list
-            return PageResult{.num_keys = objects.size(), .more = false};
+            return PageResult{.num_keys = 1, .more = false};
         }
 
-        for (const auto & object : objects)
+        do
         {
             const auto & delmark_key = object.GetKey();
             LOG_TRACE(log, "key={}", object.GetKey());
             const auto filename_view = S3FilenameView::fromKey(delmark_key);
             // Only remove the data file with expired delmark
             if (!filename_view.isDelMark())
-                continue;
+                break;
             auto datafile_key = filename_view.asDataFile().toFullKey();
             removeDataFileIfDelmarkExpired(datafile_key, delmark_key, timepoint, object.GetLastModified());
-        }
-        return PageResult{.num_keys = objects.size(), .more = true};
+        } while (false);
+        return PageResult{.num_keys = 1, .more = true};
     });
 }
 
@@ -419,10 +425,11 @@ void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
     assert(config.method == S3GCMethod::Lifecycle);
 
     auto view = S3FilenameView::fromKey(datafile_key);
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     if (!view.isDMFile())
     {
         // CheckpointDataFile is a single object, add tagging for it and update its mtime
-        rewriteObjectWithTagging(*client, client->bucket(), datafile_key, String(TaggingObjectIsDeleted));
+        rewriteObjectWithTagging(*client, datafile_key, String(TaggingObjectIsDeleted));
         LOG_INFO(log, "datafile deleted by lifecycle tagging, key={}", datafile_key);
     }
     else
@@ -431,15 +438,11 @@ void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
         // Rewrite all objects with tagging belong to this DMFile
         // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
         //       sub file for DMFile, try clean them later.
-        S3::listPrefix(*client, client->bucket(), datafile_key, [this, &datafile_key](const Aws::S3::Model::ListObjectsV2Result & result) {
-            const auto & objs = result.GetContents();
-            for (const auto & obj : objs)
-            {
-                const auto & sub_key = obj.GetKey();
-                rewriteObjectWithTagging(*client, client->bucket(), sub_key, String(TaggingObjectIsDeleted));
-                LOG_INFO(log, "datafile deleted by lifecycle tagging, key={} sub_key={}", datafile_key, sub_key);
-            }
-            return PageResult{.num_keys = objs.size(), .more = true};
+        S3::listPrefix(*client, datafile_key, [this, &client, &datafile_key](const Aws::S3::Model::Object & object) {
+            const auto & sub_key = object.GetKey();
+            rewriteObjectWithTagging(*client, sub_key, String(TaggingObjectIsDeleted));
+            LOG_INFO(log, "datafile deleted by lifecycle tagging, key={} sub_key={}", datafile_key, sub_key);
+            return PageResult{.num_keys = 1, .more = true};
         });
         LOG_INFO(log, "datafile deleted by lifecycle tagging, all sub keys are deleted, key={}", datafile_key);
     }
@@ -450,10 +453,11 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
     assert(config.method == S3GCMethod::ScanThenDelete);
 
     auto view = S3FilenameView::fromKey(datafile_key);
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     if (!view.isDMFile())
     {
         // CheckpointDataFile is a single object, remove it.
-        deleteObject(*client, client->bucket(), datafile_key);
+        deleteObject(*client, datafile_key);
         LOG_INFO(log, "datafile deleted, key={}", datafile_key);
     }
     else
@@ -462,40 +466,32 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
         // Remove all objects belong to this DMFile
         // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
         //       sub file for DMFile, try clean them later.
-        S3::listPrefix(*client, client->bucket(), datafile_key, [this, &datafile_key](const Aws::S3::Model::ListObjectsV2Result & result) {
-            const auto & objs = result.GetContents();
-            for (const auto & obj : objs)
-            {
-                const auto & sub_key = obj.GetKey();
-                deleteObject(*client, client->bucket(), sub_key);
-                LOG_INFO(log, "datafile deleted, key={} sub_key={}", datafile_key, sub_key);
-            }
-            return PageResult{.num_keys = objs.size(), .more = true};
+        S3::listPrefix(*client, datafile_key, [this, &client, &datafile_key](const Aws::S3::Model::Object & object) {
+            const auto & sub_key = object.GetKey();
+            deleteObject(*client, sub_key);
+            LOG_INFO(log, "datafile deleted, key={} sub_key={}", datafile_key, sub_key);
+            return PageResult{.num_keys = 1, .more = true};
         });
         LOG_INFO(log, "datafile deleted, all sub keys are deleted, key={}", datafile_key);
     }
 }
 
-std::vector<UInt64> S3GCManager::getAllStoreIds() const
+std::vector<UInt64> S3GCManager::getAllStoreIds()
 {
     std::vector<UInt64> all_store_ids;
     // The store key are "s${store_id}/", we need setting delimiter "/" to get the
     // common prefixes result.
     // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-prefixes.html
-    listPrefix(
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+    S3::listPrefixWithDelimiter(
         *client,
-        client->bucket(),
         /*prefix*/ S3Filename::allStorePrefix(),
         /*delimiter*/ "/",
-        [&all_store_ids](const Aws::S3::Model::ListObjectsV2Result & result) {
-            const Aws::Vector<Aws::S3::Model::CommonPrefix> & prefixes = result.GetCommonPrefixes();
-            for (const auto & prefix : prefixes)
-            {
-                const auto filename_view = S3FilenameView::fromStoreKeyPrefix(prefix.GetPrefix());
-                RUNTIME_CHECK(filename_view.type == S3FilenameType::StorePrefix, prefix.GetPrefix());
-                all_store_ids.emplace_back(filename_view.store_id);
-            }
-            return PageResult{.num_keys = prefixes.size(), .more = true};
+        [&all_store_ids](const Aws::S3::Model::CommonPrefix & prefix) {
+            const auto filename_view = S3FilenameView::fromStoreKeyPrefix(prefix.GetPrefix());
+            RUNTIME_CHECK(filename_view.type == S3FilenameType::StorePrefix, prefix.GetPrefix());
+            all_store_ids.emplace_back(filename_view.store_id);
+            return PageResult{.num_keys = 1, .more = true};
         });
 
     return all_store_ids;
@@ -536,12 +532,13 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const Strings 
 
 void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifests, const Aws::Utils::DateTime * const timepoint)
 {
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     if (timepoint == nullptr)
     {
         for (const auto & mf : manifests.objects())
         {
             // store is tombstone, remove all manifests
-            deleteObject(*client, client->bucket(), mf.second.key);
+            deleteObject(*client, mf.second.key);
             LOG_INFO(
                 log,
                 "remove outdated manifest because store is tombstone, key={} mtime={}",
@@ -557,7 +554,7 @@ void S3GCManager::removeOutdatedManifest(const CheckpointManifestS3Set & manifes
     for (const auto & mf : outdated_mfs)
     {
         // expired manifest, remove
-        deleteObject(*client, client->bucket(), mf.key);
+        deleteObject(*client, mf.key);
         LOG_INFO(
             log,
             "remove outdated manifest, key={} mtime={}",
@@ -576,8 +573,7 @@ S3GCManagerService::S3GCManagerService(
     const S3GCConfig & config)
     : global_ctx(context.getGlobalContext())
 {
-    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-    manager = std::make_unique<S3GCManager>(std::move(pd_client), std::move(s3_client), std::move(gc_owner_manager_), std::move(lock_client), config);
+    manager = std::make_unique<S3GCManager>(std::move(pd_client), std::move(gc_owner_manager_), std::move(lock_client), config);
 
     timer = global_ctx.getBackgroundPool().addTask(
         [this]() {
@@ -594,11 +590,18 @@ S3GCManagerService::~S3GCManagerService()
 
 void S3GCManagerService::shutdown()
 {
-    manager->shutdown();
+    if (manager)
+    {
+        // set the shutdown flag
+        manager->shutdown();
+    }
+
     if (timer)
     {
+        // Remove the task handler. It will block until the task break
         global_ctx.getBackgroundPool().removeTask(timer);
         timer = nullptr;
+        // then we can reset the manager
         manager = nullptr;
     }
 }

@@ -18,7 +18,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/escapeForFileName.h>
 #include <Encryption/PosixRandomAccessFile.h>
-#include <IO/IOThreadPool.h>
+#include <IO/IOThreadPools.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -47,15 +47,15 @@ extern const int S3_ERROR;
 
 namespace DB
 {
-
 using FileType = FileSegment::FileType;
 
-FileCache::FileCache(const String & cache_dir_, UInt64 cache_capacity_, UInt64 cache_level_, UInt64 cache_min_age_seconds_)
-    : cache_dir(cache_dir_)
-    , cache_capacity(cache_capacity_)
-    , cache_level(cache_level_)
+FileCache::FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
+    : capacity_metrics(capacity_metrics_)
+    , cache_dir(config_.getDTFileCacheDir())
+    , cache_capacity(config_.getDTFileCapacity())
+    , cache_level(config_.dtfile_level)
     , cache_used(0)
-    , cache_min_age_seconds(cache_min_age_seconds_)
+    , cache_min_age_seconds(config_.dtfile_cache_min_age_seconds)
     , log(Logger::get("FileCache"))
 {
     prepareDir(cache_dir);
@@ -128,12 +128,19 @@ void FileCache::removeDiskFile(const String & local_fname)
 {
     try
     {
+        auto fsize = std::filesystem::file_size(local_fname);
         for (std::filesystem::path p(local_fname); p.is_absolute() && std::filesystem::exists(p); p = p.parent_path())
         {
             auto s = p.string();
             if (s != cache_dir && (s == local_fname || std::filesystem::is_empty(p)))
             {
                 std::filesystem::remove(p); // If p is a directory, remove success only when it is empty.
+                // Temporary files are not reported size to metrics until they are renamed.
+                // So we don't need to free its size here.
+                if (s == local_fname && !isTemporaryFilename(local_fname))
+                {
+                    capacity_metrics->freeUsedSize(local_fname, fsize);
+                }
             }
             else
             {
@@ -297,7 +304,7 @@ bool FileCache::canCache(FileType file_type) const
 {
     return file_type != FileType::Unknow
         && static_cast<UInt64>(file_type) <= cache_level
-        && bg_downloading_count.load(std::memory_order_relaxed) < IOThreadPool::get().getMaxThreads();
+        && bg_downloading_count.load(std::memory_order_relaxed) < S3FileCachePool::get().getMaxThreads();
 }
 
 FileType FileCache::getFileTypeOfColData(const std::filesystem::path & p)
@@ -371,11 +378,9 @@ bool FileCache::finalizeReservedSize(FileType reserve_for, UInt64 reserved_size,
 void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
 {
     Stopwatch sw;
-    auto client = S3::ClientFactory::instance().sharedClient();
-    const auto & bucket = S3::ClientFactory::instance().bucket();
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     Aws::S3::Model::GetObjectRequest req;
-    req.SetBucket(bucket);
-    req.SetKey(s3_key);
+    client->setBucketAndKeyWithRoot(req, s3_key);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
     auto outcome = client->GetObject(req);
     if (!outcome.IsSuccess())
@@ -384,7 +389,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
     }
     auto & result = outcome.GetResult();
     auto content_length = result.GetContentLength();
-    RUNTIME_CHECK_MSG(content_length > 0, "s3_key={}, content_length={}", s3_key, content_length);
+    RUNTIME_CHECK(content_length >= 0, s3_key, content_length);
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, content_length);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
     if (!finalizeReservedSize(file_seg->getFileType(), file_seg->getSize(), content_length))
@@ -400,12 +405,17 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
     {
         Aws::OFStream ostr(temp_fname, std::ios_base::out | std::ios_base::binary);
         RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} failed: {}", temp_fname, strerror(errno));
-        ostr << result.GetBody().rdbuf();
-        RUNTIME_CHECK_MSG(ostr.good(), "Write {} failed: {}", temp_fname, strerror(errno));
-        ostr.flush();
+        if (content_length > 0)
+        {
+            ostr << result.GetBody().rdbuf();
+            // If content_length == 0, ostr.good() is false. Does not know the reason.
+            RUNTIME_CHECK_MSG(ostr.good(), "Write {} content_length {} failed: {}", temp_fname, content_length, strerror(errno));
+            ostr.flush();
+        }
     }
     std::filesystem::rename(temp_fname, local_fname);
     auto fsize = std::filesystem::file_size(local_fname);
+    capacity_metrics->addUsedSize(local_fname, fsize);
     RUNTIME_CHECK_MSG(fsize == static_cast<UInt64>(content_length), "local_fname={}, file_size={}, content_length={}", local_fname, fsize, content_length);
     file_seg->setStatus(FileSegment::Status::Complete);
     LOG_DEBUG(log, "Download s3_key={} to local={} size={} cost={}ms", s3_key, local_fname, content_length, sw.elapsedMilliseconds());
@@ -440,7 +450,7 @@ void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
 {
     bg_downloading_count.fetch_add(1, std::memory_order_relaxed);
     LOG_DEBUG(log, "downloading count {} => s3_key {} start", bg_downloading_count.load(std::memory_order_relaxed), s3_key);
-    IOThreadPool::get().scheduleOrThrowOnError(
+    S3FileCachePool::get().scheduleOrThrowOnError(
         [this, s3_key = s3_key, file_seg = file_seg]() mutable {
             download(s3_key, file_seg);
         });

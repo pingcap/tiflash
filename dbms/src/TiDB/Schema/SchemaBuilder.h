@@ -51,6 +51,8 @@ struct SchemaBuilder
 
     void syncAllSchema();
 
+    void dropAllSchema();
+
 private:
     void applyDropSchema(DatabaseID schema_id);
 

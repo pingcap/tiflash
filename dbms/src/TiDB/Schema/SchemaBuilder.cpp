@@ -1379,6 +1379,42 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     LOG_INFO(log, "Loaded all schemas.");
 }
 
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
+{
+    LOG_INFO(log, "Dropping all schemas.");
+
+    auto & tmt_context = context.getTMTContext();
+
+    /// Drop all tables.
+    auto storage_map = tmt_context.getStorages().getAllStorage();
+    for (const auto & storage : storage_map)
+    {
+        auto table_info = storage.second->getTableInfo();
+        if (table_info.keyspace_id != keyspace_id)
+        {
+            continue;
+        }
+        applyDropPhysicalTable(storage.second->getDatabaseName(), table_info.id);
+        LOG_DEBUG(log, "Table {}.{} dropped during drop all schemas", storage.second->getDatabaseName(), name_mapper.debugTableName(table_info));
+    }
+
+    /// Drop all dbs.
+    const auto & dbs = context.getDatabases();
+    for (const auto & db : dbs)
+    {
+        auto db_keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(db.first);
+        if (db_keyspace_id != keyspace_id)
+        {
+            continue;
+        }
+        applyDropSchema(db.first);
+        LOG_DEBUG(log, "DB {} dropped during drop all schemas", db.first);
+    }
+
+    LOG_INFO(log, "Dropped all schemas.");
+}
+
 // product env
 template struct SchemaBuilder<SchemaGetter, SchemaNameMapper>;
 // mock test

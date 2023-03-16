@@ -43,8 +43,6 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
-#include <Storages/S3/S3Filename.h>
-#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
@@ -423,7 +421,7 @@ void DeltaMergeStore::shutdown()
     LOG_TRACE(log, "Shutdown DeltaMerge end");
 }
 
-DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id, const ScanContextPtr & scan_context_)
+DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id, ScanContextPtr scan_context_)
 {
     std::shared_lock lock(read_write_mutex);
 
@@ -1000,7 +998,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index,
-                                        const ScanContextPtr & scan_context)
+                                        ScanContextPtr scan_context)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
@@ -1092,7 +1090,7 @@ SourceOps DeltaMergeStore::readSourceOps(
     size_t expected_block_size,
     const SegmentIdSet & read_segments,
     size_t extra_table_id_index,
-    const ScanContextPtr & scan_context)
+    ScanContextPtr scan_context)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
@@ -1158,7 +1156,7 @@ DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
     size_t num_streams,
     const String & tracing_id,
     const SegmentIdSet & read_segments,
-    const ScanContextPtr & scan_context)
+    ScanContextPtr scan_context)
 {
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
     auto log_tracing_id = getLogTracingId(*dm_context);
@@ -1614,19 +1612,6 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::restoreStableFilesFromS3()
-{
-    auto file_provider = global_context.getFileProvider();
-    auto store_id = global_context.getTMTContext().getKVStore()->getStoreID();
-    auto stable_path = S3::S3Filename::fromTableID(store_id, physical_table_id).toFullKeyWithPrefix();
-
-    auto file_ids = DMFile::listAllInPath(file_provider, stable_path, DMFile::ListOptions{.only_list_can_gc = false});
-    LOG_DEBUG(log, "s3_stable_path {} => file_ids {}", stable_path, file_ids);
-    auto path_delegate = path_pool->getStableDiskDelegator();
-    path_delegate.addS3DTFiles(stable_path, std::move(file_ids));
-    // TODO: remove local dmfile?
-}
-
 void DeltaMergeStore::restoreStableFilesFromLocal()
 {
     DMFile::ListOptions options;
@@ -1650,11 +1635,7 @@ void DeltaMergeStore::restoreStableFiles()
 {
     LOG_DEBUG(log, "Loading dt files");
 
-    if (global_context.getSharedContextDisagg()->remote_data_store)
-    {
-        restoreStableFilesFromS3();
-    }
-    else
+    if (!global_context.getSharedContextDisagg()->remote_data_store)
     {
         restoreStableFilesFromLocal();
     }

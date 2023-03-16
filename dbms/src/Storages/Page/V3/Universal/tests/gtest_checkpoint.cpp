@@ -752,17 +752,14 @@ public:
         auto path = getTemporaryPath();
         auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
-        s3_client = S3::ClientFactory::instance().sharedClient();
-        bucket = S3::ClientFactory::instance().bucket();
         uni_ps_service = UniversalPageStorageService::createForTest(
             global_context,
             "test.t",
             delegator,
-            PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0},
-            s3_client,
-            bucket);
+            PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0});
         log = Logger::get("UniversalPageStorageServiceCheckpointTest");
-        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
+        s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     }
 
 protected:
@@ -793,8 +790,7 @@ protected:
 
 protected:
     UniversalPageStorageServicePtr uni_ps_service;
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
+    std::shared_ptr<S3::TiFlashS3Client> s3_client;
     UInt64 tag = 0;
     UInt64 store_id = 2;
 
@@ -807,7 +803,7 @@ try
     auto page_storage = uni_ps_service->getUniversalPageStorage();
     auto store_info = metapb::Store{};
     store_info.set_id(store_id);
-    auto s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client, bucket);
+    auto s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
     auto remote_store = std::make_shared<DM::Remote::DataStoreS3>(::DB::tests::TiFlashTestEnv::getMockFileProvider());
     // Mock normal writes
     {
@@ -866,7 +862,6 @@ try
         ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
     } // check the first manifest
 
-#if 0
     // Mock normal writes && FAP ingest remote page
     {
         UniversalWriteBatch batch;
@@ -878,8 +873,8 @@ try
     auto ingest_from_dtfile = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = another_store_id, .table_id = 50, .file_id = 999});
     {
         // create object on s3 for locking
-        S3::uploadEmptyFile(*s3_client, bucket, ingest_from_data_file.toFullKey());
-        S3::uploadEmptyFile(*s3_client, bucket, ingest_from_dtfile.toFullKey());
+        S3::uploadEmptyFile(*s3_client, ingest_from_data_file.toFullKey());
+        S3::uploadEmptyFile(*s3_client, ingest_from_dtfile.toFullKey());
 
         UniversalWriteBatch batch;
         PS::V3::CheckpointLocation loc21{
@@ -922,6 +917,20 @@ try
 
         iter++;
         ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("20", iter->page_id);
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        ASSERT_EQ("21", iter->page_id);
+        ASSERT_EQ("lock/s99/dat_100_1.lock_s2_2", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_EXTERNAL, iter->type);
+        ASSERT_EQ("22", iter->page_id);
+        ASSERT_EQ("lock/s99/t_50/dmf_999.lock_s2_2", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to DMFile
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
         ASSERT_EQ("3", iter->page_id);
         ASSERT_TRUE(iter->entry.checkpoint_info.has_value());
         ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
@@ -937,7 +946,6 @@ try
         ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
         ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
     } // check the first manifest
-#endif
 }
 CATCH
 

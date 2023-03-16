@@ -73,9 +73,7 @@ public:
         const String & name,
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config,
-        const FileProviderPtr & file_provider,
-        std::shared_ptr<Aws::S3::S3Client> s3_client = nullptr,
-        const String & bucket = "");
+        const FileProviderPtr & file_provider);
 
     UniversalPageStorage(
         String name,

@@ -55,18 +55,36 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
     switch (type_id)
     {
     case TypeIndex::UInt8:
+        for (size_t i = 0; i < opts.size; ++i)
+            genUInt<UInt8>(col);
+        break;
     case TypeIndex::UInt16:
+        for (size_t i = 0; i < opts.size; ++i)
+            genUInt<UInt16>(col);
+        break;
     case TypeIndex::UInt32:
+        for (size_t i = 0; i < opts.size; ++i)
+            genUInt<UInt32>(col);
+        break;
     case TypeIndex::UInt64:
         for (size_t i = 0; i < opts.size; ++i)
-            genUInt(col);
+            genUInt<UInt64>(col);
         break;
     case TypeIndex::Int8:
+        for (size_t i = 0; i < opts.size; ++i)
+            genInt<Int8>(col);
+        break;
     case TypeIndex::Int16:
+        for (size_t i = 0; i < opts.size; ++i)
+            genInt<Int16>(col);
+        break;
     case TypeIndex::Int32:
+        for (size_t i = 0; i < opts.size; ++i)
+            genInt<Int32>(col);
+        break;
     case TypeIndex::Int64:
         for (size_t i = 0; i < opts.size; ++i)
-            genInt(col);
+            genInt<Int64>(col);
         break;
     case TypeIndex::Float32:
     case TypeIndex::Float64:
@@ -178,9 +196,18 @@ String ColumnGenerator::randomDecimal(uint64_t prec, uint64_t scale)
     return s.substr(0, prec - scale) + "." + s.substr(prec - scale);
 }
 
+template <typename IntegerType>
 void ColumnGenerator::genInt(MutableColumnPtr & col)
 {
-    Field f = static_cast<Int64>(rand_gen());
+    static_assert(std::is_signed_v<IntegerType>);
+    constexpr Int64 min_value = std::numeric_limits<IntegerType>::min();
+    constexpr Int64 max_value = std::numeric_limits<IntegerType>::max();
+    auto init_value = static_cast<Int64>(rand_gen());
+    if (init_value > max_value || init_value < min_value)
+    {
+        init_value = init_value % max_value;
+    }
+    Field f = init_value;
     col->insert(f);
 }
 
@@ -198,9 +225,17 @@ void ColumnGenerator::genEnumValue(MutableColumnPtr & col, DataTypePtr & enum_ty
     col->insert(enum_value);
 }
 
+template <typename IntegerType>
 void ColumnGenerator::genUInt(MutableColumnPtr & col)
 {
-    Field f = static_cast<UInt64>(rand_gen());
+    static_assert(std::is_unsigned_v<IntegerType>);
+    constexpr UInt64 max_value = std::numeric_limits<IntegerType>::max();
+    auto init_value = static_cast<UInt64>(rand_gen());
+    if (init_value > max_value)
+    {
+        init_value = init_value % max_value;
+    }
+    Field f = init_value;
     col->insert(f);
 }
 

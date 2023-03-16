@@ -62,7 +62,7 @@ struct RpcTypeTraits<disaggregated::EstablishDisaggTaskRequest>
 {
     using RequestType = disaggregated::EstablishDisaggTaskRequest;
     using ResultType = disaggregated::EstablishDisaggTaskResponse;
-    static const char * err_msg() { return "EstablishDisaggregatedTask Failed"; } // NOLINT(readability-identifier-naming)
+    static const char * err_msg() { return "EstablishDisaggTask Failed"; } // NOLINT(readability-identifier-naming)
     static ::grpc::Status doRPCCall(
         grpc::ClientContext * context,
         std::shared_ptr<KvConnClient> client,
@@ -79,7 +79,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-extern const int REGION_EPOCH_NOT_MATCH;
+extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 } // namespace ErrorCodes
 
 BlockInputStreams StorageDisaggregated::readFromWriteNode(
@@ -88,7 +88,7 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
 {
     DM::RNRemoteReadTaskPtr remote_read_tasks;
 
-    pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
+    pingcap::kv::Backoffer bo(pingcap::kv::scanMaxBackoff);
     while (true)
     {
         // TODO: We could only retry failed stores.
@@ -108,11 +108,11 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
         }
         catch (DB::Exception & e)
         {
-            if (e.code() != ErrorCodes::REGION_EPOCH_NOT_MATCH)
+            if (e.code() != ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
                 throw;
 
-            bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message()));
-            LOG_INFO(log, "meets region epoch not match, retry to build remote read tasks");
+            bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
+            LOG_INFO(log, "Meets retryable error: {}, retry to build remote read tasks", e.message());
         }
     }
 
@@ -163,33 +163,51 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
                 if (resp->has_error())
                 {
-                    LOG_DEBUG(
-                        log,
-                        "Received EstablishDisaggregated response with error, addr={} err={}",
-                        batch_cop_task.store_addr,
-                        resp->error().msg());
-
-                    if (resp->error().code() == ErrorCodes::REGION_EPOCH_NOT_MATCH)
+                    if (resp->error().code() == ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
                     {
-                        // Refresh region cache and throw an exception for retrying
+                        // Refresh region cache and throw an exception for retrying.
+                        // Note: retry_region's region epoch is not set. We need to recover from the request.
+
+                        std::unordered_set<RegionID> retry_regions;
                         for (const auto & retry_region : resp->retry_regions())
+                            retry_regions.insert(retry_region.id());
+
+                        LOG_INFO(
+                            log,
+                            "Received EstablishDisaggregated response with retryable error: {}, addr={} retry_regions={}",
+                            resp->error().msg(),
+                            batch_cop_task.store_addr,
+                            retry_regions);
+
+                        for (const auto & region : req->regions())
                         {
-                            auto region_id = pingcap::kv::RegionVerID(
-                                retry_region.id(),
-                                retry_region.region_epoch().conf_ver(),
-                                retry_region.region_epoch().version());
-                            cluster->region_cache->dropRegion(region_id);
+                            if (retry_regions.contains(region.region_id()))
+                            {
+                                auto region_ver_id = pingcap::kv::RegionVerID(
+                                    region.region_id(),
+                                    region.region_epoch().conf_ver(),
+                                    region.region_epoch().version());
+                                cluster->region_cache->dropRegion(region_ver_id);
+                            }
                         }
-                        throw Exception(resp->error().msg(), ErrorCodes::REGION_EPOCH_NOT_MATCH);
+                        throw Exception(
+                            resp->error().msg(),
+                            ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
                     }
                     else
                     {
-                        // Meet other errors... May be not retirable?
-                        throw Exception(ErrorCodes::LOGICAL_ERROR,
-                                        "EstablishDisaggregatedTask failed, addr={} error={} code={}",
-                                        batch_cop_task.store_addr,
-                                        resp->error().msg(),
-                                        resp->error().code());
+                        LOG_WARNING(
+                            log,
+                            "Received EstablishDisaggregated response with error, addr={} err={}",
+                            batch_cop_task.store_addr,
+                            resp->error().msg());
+
+                        // Meet other errors... May be not retryable?
+                        throw Exception(
+                            resp->error().code(),
+                            "EstablishDisaggregatedTask failed: {}, addr={}",
+                            resp->error().msg(),
+                            batch_cop_task.store_addr);
                     }
                 }
 
@@ -227,7 +245,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
                     LOG_DEBUG(
                         log,
-                        "Build RNRemoteTableReadTask finished, elapsed={}s store={} addr={} segments={} task_id={}",
+                        "Build RNRemoteTableReadTask finished, elapsed={:.3f}s store={} addr={} segments={} task_id={}",
                         watch_table.elapsedSeconds(),
                         resp->store_id(),
                         batch_cop_task.store_addr,
@@ -362,7 +380,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         log->identifier(),
         executor_id);
 
-    bool do_prepare = true;
+    bool do_prepare = false;
 
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);

@@ -21,6 +21,7 @@
 #include <Operators/Operator.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/BackgroundProcessingPool.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
@@ -38,6 +39,8 @@ namespace DB
 
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
+struct CheckpointInfo;
+using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 
 class StoragePathPool;
 
@@ -299,6 +302,29 @@ public:
         return ingestFiles(dm_context, range, external_files, clear_data_in_range);
     }
 
+    std::vector<SegmentPtr> ingestSegmentsUsingSplit(
+        const DMContextPtr & dm_context,
+        const RowKeyRange & ingest_range,
+        const std::vector<SegmentPtr> & target_segments);
+
+    bool ingestSegmentDataIntoSegmentUsingSplit(
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const SegmentPtr & segment_to_ingest);
+
+    void ingestSegmentsFromCheckpointInfo(const DMContextPtr & dm_context,
+                                          const DM::RowKeyRange & range,
+                                          CheckpointInfoPtr checkpoint_info);
+
+    void ingestSegmentsFromCheckpointInfo(const Context & db_context,
+                                          const DB::Settings & db_settings,
+                                          const DM::RowKeyRange & range,
+                                          CheckpointInfoPtr checkpoint_info)
+    {
+        auto dm_context = newDMContext(db_context, db_settings);
+        return ingestSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
+    }
+
     /// Read all rows without MVCC filtering
     BlockInputStreams readRaw(const Context & db_context,
                               const DB::Settings & db_settings,
@@ -326,7 +352,7 @@ public:
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID,
-                           const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+                           ScanContextPtr scan_context = nullptr);
 
 
     /// Read rows in two modes:
@@ -347,7 +373,7 @@ public:
                             size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                             const SegmentIdSet & read_segments = {},
                             size_t extra_table_id_index = InvalidColumnID,
-                            const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+                            ScanContextPtr scan_context = nullptr);
 
     Remote::DisaggPhysicalTableReadSnapshotPtr
     writeNodeBuildRemoteReadSnapshot(
@@ -357,7 +383,7 @@ public:
         size_t num_streams,
         const String & tracing_id,
         const SegmentIdSet & read_segments = {},
-        const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+        ScanContextPtr scan_context = nullptr);
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
     bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true);
@@ -458,7 +484,7 @@ public:
 private:
 #endif
 
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "", const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "", ScanContextPtr scan_context = nullptr);
 
     static bool pkIsHandle(const ColumnDefine & handle_define)
     {
@@ -575,6 +601,26 @@ private:
         const DMFilePtr & data_file,
         bool clear_all_data_in_segment);
 
+    /**
+     * Discard all data in the segment, and use the specified DMFile as the stable instead.
+     * The specified DMFile is safe to be shared for multiple segments.
+     *
+     * Note 1: This function will not enable GC for the new_stable_file for you, in case of you may want to share the same
+     *         stable file for multiple segments. It is your own duty to enable GC later.
+     *
+     * Note 2: You must ensure the specified new_stable_file has been managed by the storage pool, and has been written
+     *         to the PageStorage's data. Otherwise there will be exceptions.
+     *
+     * Note 3: This API is subjected to be changed in future, as it relies on the knowledge that all current data
+     *         in this segment is useless, which is a pretty tough requirement.
+     * TODO: use `segmentIngestData` to replace this api
+     */
+    SegmentPtr segmentDangerouslyReplaceDataFromCheckpoint(
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const DMFilePtr & data_file,
+        const ColumnFilePersisteds & column_file_persisteds);
+
     // isSegmentValid should be protected by lock on `read_write_mutex`
     bool isSegmentValid(const std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
@@ -615,7 +661,6 @@ private:
     bool handleBackgroundTask(bool heavy);
 
     void restoreStableFiles();
-    void restoreStableFilesFromS3();
     void restoreStableFilesFromLocal();
 
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,

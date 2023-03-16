@@ -249,20 +249,11 @@ public:
     {
         const size_t string_size = *reinterpret_cast<const size_t *>(pos);
         pos += sizeof(string_size);
-
-        if (likely(collator))
-        {
-            // https://github.com/pingcap/tiflash/pull/6135
-            // - Generate empty string column
-            // - Make size of `offsets` as previous way for func `ColumnString::size()`
-            offsets.push_back(0);
-            return pos + string_size;
-        }
+        if (likely(collator != nullptr))
+            insertData(pos, string_size);
         else
-        {
             insertDataWithTerminatingZero(pos, string_size);
-            return pos + string_size;
-        }
+        return pos + string_size;
     }
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override

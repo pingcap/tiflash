@@ -47,20 +47,12 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
     const PageStorageConfig & config)
 {
     auto service = UniversalPageStorageServicePtr(new UniversalPageStorageService(context));
-    auto & s3factory = S3::ClientFactory::instance();
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
-    if (s3factory.isEnabled())
-    {
-        s3_client = s3factory.sharedClient();
-        bucket = s3factory.bucket();
-    }
-    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider(), s3_client, bucket);
+    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider());
     service->uni_page_storage->restore();
 
     // Starts the checkpoint upload timer
     // for disagg tiflash write node
-    if (s3factory.isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         // TODO: make this interval reloadable
         auto interval_s = context.getSettingsRef().remote_checkpoint_interval_seconds;
@@ -89,29 +81,20 @@ UniversalPageStorageService::createForTest(
     Context & context,
     const String & name,
     PSDiskDelegatorPtr delegator,
-    const PageStorageConfig & config,
-    std::shared_ptr<Aws::S3::S3Client> s3_client,
-    String bucket)
+    const PageStorageConfig & config)
 {
     auto service = UniversalPageStorageServicePtr(new UniversalPageStorageService(context));
-    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider(), s3_client, bucket);
+    service->uni_page_storage = UniversalPageStorage::create(name, delegator, config, context.getFileProvider());
     service->uni_page_storage->restore();
     // not register background task under test
     return service;
 }
 
-struct CheckpointUploadFunctor
+bool CheckpointUploadFunctor::operator()(const PS::V3::LocalCheckpointFiles & checkpoint) const
 {
-    const StoreID store_id;
-    const UInt64 sequence;
-    const DM::Remote::IDataStorePtr remote_store;
-
-    bool operator()(const PS::V3::LocalCheckpointFiles & checkpoint) const
-    {
-        // Persist checkpoint to remote_source
-        return remote_store->putCheckpointFiles(checkpoint, store_id, sequence);
-    }
-};
+    // Persist checkpoint to remote_source
+    return remote_store->putCheckpointFiles(checkpoint, store_id, sequence);
+}
 
 bool UniversalPageStorageService::uploadCheckpoint()
 {
@@ -143,7 +126,10 @@ bool UniversalPageStorageService::uploadCheckpoint()
     return uploadCheckpointImpl(store_info, s3lock_client, remote_store);
 }
 
-bool UniversalPageStorageService::uploadCheckpointImpl(const metapb::Store & store_info, const S3::S3LockClientPtr & s3lock_client, const DM::Remote::IDataStorePtr & remote_store)
+bool UniversalPageStorageService::uploadCheckpointImpl(
+    const metapb::Store & store_info,
+    const S3::S3LockClientPtr & s3lock_client,
+    const DM::Remote::IDataStorePtr & remote_store)
 {
     uni_page_storage->initLocksLocalManager(store_info.id(), s3lock_client);
     const auto upload_info = uni_page_storage->allocateNewUploadLocksInfo();
@@ -157,7 +143,10 @@ bool UniversalPageStorageService::uploadCheckpointImpl(const metapb::Store & sto
         auto * ri = wi.mutable_remote_info();
         ri->set_type_name("S3");
         // ri->set_name(); this field is not used currently
+        auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ri->set_root(client->root());
     }
+
 
     auto local_dir = Poco::Path(global_context.getTemporaryPath() + fmt::format("/checkpoint_upload_{}", upload_info.upload_sequence)).absolute();
     Poco::File(local_dir).createDirectories();
@@ -199,6 +188,8 @@ bool UniversalPageStorageService::uploadCheckpointImpl(const metapb::Store & sto
         .override_sequence = upload_info.upload_sequence, // override by upload_sequence
     };
     uni_page_storage->dumpIncrementalCheckpoint(opts);
+
+    LOG_DEBUG(log, "Upload checkpoint with upload sequence {} success", upload_info.upload_sequence);
 
     // the checkpoint is uploaded to remote data store, remove local temp files
     Poco::File(local_dir).remove(true);
