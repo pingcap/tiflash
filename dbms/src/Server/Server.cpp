@@ -1292,7 +1292,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->reloadDeltaTreeConfig(*config);
             if (FileCache::instance() != nullptr)
             {
-                FileCache::instance()->updateConfig(*config);
+                FileCache::instance()->updateConfig(global_context->getSettingsRef());
+            }
+            if (S3::ClientFactory::instance().isEnabled())
+            {
+                DM::DMFile::updateMergeFileConfig(global_context->getSettingsRef());
             }
 
             {

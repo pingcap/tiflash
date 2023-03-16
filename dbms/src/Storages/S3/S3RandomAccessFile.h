@@ -17,9 +17,12 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Encryption/RandomAccessFile.h>
+#include <Storages/DeltaMerge/File/MergedFile.h>
 #include <Storages/S3/S3Common.h>
 #include <aws/s3/model/GetObjectResult.h>
 #include <common/types.h>
+
+#include <ext/scope_guard.h>
 
 namespace Aws::S3
 {
@@ -40,7 +43,8 @@ public:
 
     S3RandomAccessFile(
         std::shared_ptr<TiFlashS3Client> client_ptr_,
-        const String & remote_fname_);
+        const String & remote_fname_,
+        std::optional<std::pair<UInt64, UInt64>> offset_and_size_ = std::nullopt);
 
     off_t seek(off_t offset, int whence) override;
 
@@ -71,11 +75,30 @@ public:
         is_close = true;
     }
 
+    struct ReadFileInfo
+    {
+        UInt64 size = 0; // File size of `remote_fname` or `merged_filename`, mainly used for FileCache.
+        String merged_filename; // If `merged_filename` is not empty, data should read from `merged_filename`.
+        UInt64 read_merged_offset = 0;
+        UInt64 read_merged_size = 0;
+    };
+
+    [[nodiscard]] static auto setReadFileInfo(ReadFileInfo && read_file_info_)
+    {
+        read_file_info = std::move(read_file_info_);
+        return ext::make_scope_guard([]() {
+            read_file_info.reset();
+        });
+    }
+
 private:
     void initialize();
 
+    inline static thread_local std::optional<ReadFileInfo> read_file_info;
+
     std::shared_ptr<TiFlashS3Client> client_ptr;
     String remote_fname;
+    std::optional<std::pair<UInt64, UInt64>> offset_and_size;
 
     Aws::S3::Model::GetObjectResult read_result;
 
