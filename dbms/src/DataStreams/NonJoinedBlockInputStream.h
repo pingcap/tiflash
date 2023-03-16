@@ -30,6 +30,9 @@ public:
 
     Block getHeader() const override { return result_sample_block; };
 
+    size_t getNonJoinedIndex() const { return index; }
+
+
 protected:
     Block readImpl() override;
 

@@ -37,7 +37,7 @@ public:
     HashJoinProbeBlockInputStream(
         const BlockInputStreamPtr & input,
         const JoinPtr & join_,
-        size_t probe_index,
+        size_t non_joined_stream_index,
         const String & req_id,
         UInt64 max_block_size_);
 
@@ -127,7 +127,7 @@ private:
     JoinPtr original_join;
     JoinPtr join;
     const bool need_output_non_joined_data;
-    size_t probe_index;
+    size_t current_non_joined_stream_index;
     BlockInputStreamPtr current_probe_stream;
     UInt64 max_block_size;
     ProbeProcessInfo probe_process_info;

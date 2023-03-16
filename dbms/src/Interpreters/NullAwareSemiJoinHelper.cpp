@@ -38,7 +38,7 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <typename Mapped, NASemiJoinStep STEP>
-void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, Join::MaterializedNullRows & null_rows, size_t & current_offset, size_t min_pace)
+void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<Join::RowsNotInsertToMap> & null_rows, size_t & current_offset, size_t min_pace)
 {
     static_assert(STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
 
@@ -66,9 +66,42 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added
     }
     else if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS)
     {
-        size_t prev_pos = null_rows_pos;
-        step_end = null_rows.fillColumns(added_columns, left_columns, right_columns, null_rows_pos, pace);
-        current_offset += null_rows_pos - prev_pos;
+        size_t count = pace;
+        while (null_rows_pos < null_rows.size())
+        {
+            if (null_rows_cnt >= null_rows[null_rows_pos].size || null_rows[null_rows_pos].size == 0)
+            {
+                ++null_rows_pos;
+                null_rows_cnt = 0;
+                continue;
+            }
+
+            const auto & rows = null_rows[null_rows_pos];
+
+            size_t insert_cnt = std::min(count, rows.size - null_rows_cnt);
+            size_t last_index = insert_cnt / rows.max_block_size;
+            for (size_t i = 0; i < last_index; ++i)
+            {
+                const auto & columns = rows.materialized_columns[i];
+                for (size_t j = 0; j < right_columns; ++j)
+                    added_columns[j + left_columns]->insertRangeFrom(*columns[j].get(), 0, rows.max_block_size);
+            }
+            size_t last_index_cnt = insert_cnt % rows.max_block_size;
+            if (last_index_cnt > 0)
+            {
+                const auto & columns = rows.materialized_columns[last_index];
+                for (size_t j = 0; j < right_columns; ++j)
+                    added_columns[j + left_columns]->insertRangeFrom(*columns[j].get(), 0, last_index_cnt);
+            }
+
+            if (count == insert_cnt)
+                break;
+
+            count -= insert_cnt;
+            ++null_rows_pos;
+            null_rows_cnt = 0;
+        }
+        step_end = null_rows_pos >= null_rows.size();
     }
 
     pace = std::min(MAX_PACE, pace * 2);
@@ -172,7 +205,7 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     size_t left_columns_,
     size_t right_columns_,
     const BlocksList & right_blocks_,
-    Join::MaterializedNullRows & null_rows_,
+    const std::vector<Join::RowsNotInsertToMap> & null_rows_,
     size_t max_block_size_,
     const JoinOtherConditions & other_conditions_)
     : block(block_)

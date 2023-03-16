@@ -21,14 +21,14 @@ namespace DB
 HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const JoinPtr & join_,
-    size_t probe_index,
+    size_t non_joined_stream_index,
     const String & req_id,
     UInt64 max_block_size_)
     : log(Logger::get(req_id))
     , original_join(join_)
     , join(original_join)
     , need_output_non_joined_data(join->needReturnNonJoinedData())
-    , probe_index(probe_index)
+    , current_non_joined_stream_index(non_joined_stream_index)
     , max_block_size(max_block_size_)
     , probe_process_info(max_block_size_)
 {
@@ -38,7 +38,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
     if (need_output_non_joined_data)
-        non_joined_stream = join->createStreamWithNonJoinedRows(input->getHeader(), probe_index, join->getProbeConcurrency(), max_block_size);
+        non_joined_stream = join->createStreamWithNonJoinedRows(input->getHeader(), current_non_joined_stream_index, join->getProbeConcurrency(), max_block_size);
 }
 
 Block HashJoinProbeBlockInputStream::getHeader() const
@@ -48,7 +48,7 @@ Block HashJoinProbeBlockInputStream::getHeader() const
     ProbeProcessInfo header_probe_process_info(0);
     header_probe_process_info.resetBlock(std::move(res));
     /// use original_join here so we don't need add lock
-    return original_join->joinBlock(header_probe_process_info, probe_index);
+    return original_join->joinBlock(header_probe_process_info);
 }
 
 void HashJoinProbeBlockInputStream::cancel(bool kill)
@@ -142,7 +142,7 @@ void HashJoinProbeBlockInputStream::onCurrentReadNonJoinedDataDone()
     }
     else
     {
-        join->finishOneNonJoin(probe_index);
+        join->finishOneNonJoin(current_non_joined_stream_index);
         status = ProbeStatus::GET_RESTORE_JOIN;
     }
 }
@@ -175,7 +175,8 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
                     restore_probe_stream = restore_info.probe_stream;
                     non_joined_stream = restore_info.non_joined_stream;
                     current_probe_stream = restore_probe_stream;
-                    probe_index = restore_info.probe_index;
+                    if (non_joined_stream != nullptr)
+                        current_non_joined_stream_index = dynamic_cast<NonJoinedBlockInputStream *>(non_joined_stream.get())->getNonJoinedIndex();
                 }
                 status = ProbeStatus::RESTORE_BUILD;
                 return;
@@ -257,7 +258,7 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
                         probe_process_info.resetBlock(std::move(block), partition_index);
                     }
                 }
-                auto ret = join->joinBlock(probe_process_info, probe_index);
+                auto ret = join->joinBlock(probe_process_info);
                 joined_rows += ret.rows();
                 return ret;
             }

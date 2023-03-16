@@ -675,7 +675,9 @@ void Join::setBuildConcurrencyAndInitJoinPartition(size_t build_concurrency_)
     // init for non-joined-streams.
     if (getFullness(kind) || isNullAwareSemiFamily(kind))
     {
-        rows_not_inserted_to_map.resize(getBuildConcurrency());
+        rows_not_inserted_to_map.reserve(getBuildConcurrency());
+        for (size_t i = 0; i < getBuildConcurrency(); ++i)
+            rows_not_inserted_to_map[i] = RowsNotInsertToMap(max_block_size);
     }
 }
 
@@ -775,7 +777,6 @@ void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
     setProbeConcurrency(probe_concurrency_);
     probe_sample_block = sample_block;
     probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
-    null_rows.resize(probe_concurrency_);
 }
 
 namespace
@@ -832,6 +833,7 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
 
 template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
 void NO_INLINE insertFromBlockImplTypeCase(
+    ASTTableJoin::Kind kind,
     Map & map,
     size_t rows,
     const ColumnRawPtrs & key_columns,
@@ -847,6 +849,7 @@ void NO_INLINE insertFromBlockImplTypeCase(
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(key_columns.size());
 
+    bool null_need_materialize = isNullAwareSemiFamily(kind);
     for (size_t i = 0; i < rows; ++i)
     {
         if (has_null_map && (*null_map)[i])
@@ -855,8 +858,7 @@ void NO_INLINE insertFromBlockImplTypeCase(
             {
                 /// for right/full out join, need to record the rows not inserted to map
                 auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
-                insertRowToList(&rows_not_inserted_to_map->head, elem, stored_block, i);
-                ++rows_not_inserted_to_map->size;
+                rows_not_inserted_to_map->insertRow(elem, stored_block, i, null_need_materialize);
             }
             continue;
         }
@@ -874,6 +876,7 @@ void NO_INLINE insertFromBlockImplTypeCase(
 
 template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
 void NO_INLINE insertFromBlockImplTypeCaseWithLock(
+    ASTTableJoin::Kind kind,
     Map & map,
     size_t rows,
     const ColumnRawPtrs & key_columns,
@@ -929,6 +932,8 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
         }
         segment_index_info[segment_index].push_back(i);
     }
+
+    bool null_need_materialize = isNullAwareSemiFamily(kind);
     for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
@@ -941,8 +946,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             {
                 /// for right/full out join or null-aware semi join, need to record the rows not inserted to map
                 auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
-                insertRowToList(&rows_not_inserted_to_map->head, elem, stored_block, index);
-                ++rows_not_inserted_to_map->size;
+                rows_not_inserted_to_map->insertRow(elem, stored_block, index, null_need_materialize);
             }
         }
         else
@@ -958,6 +962,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
 
 template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
 void insertFromBlockImplType(
+    ASTTableJoin::Kind kind,
     Map & map,
     size_t rows,
     const ColumnRawPtrs & key_columns,
@@ -976,40 +981,41 @@ void insertFromBlockImplType(
     {
         /// case 1, join with spill support, the partition level lock is acquired in `insertFromBlock`
         if (null_map)
-            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         else
-            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         return;
     }
     else if (enable_fine_grained_shuffle)
     {
         /// case 2, join with fine_grained_shuffle, no need to acquire any lock
         if (null_map)
-            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         else
-            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
     }
     else if (insert_concurrency > 1)
     {
         /// case 3, normal join with concurrency > 1, will acquire lock in `insertFromBlockImplTypeCaseWithLock`
         if (null_map)
-            insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+            insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, true>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         else
-            insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+            insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, false>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
     }
     else
     {
         /// case 4, normal join with concurrency == 1, no need to acquire any lock
         RUNTIME_CHECK(stream_index == 0);
         if (null_map)
-            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         else
-            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
     }
 }
 
 template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
 void insertFromBlockImpl(
+    ASTTableJoin::Kind kind,
     Join::Type type,
     Maps & maps,
     size_t rows,
@@ -1035,6 +1041,7 @@ void insertFromBlockImpl(
 #define M(TYPE)                                                                                                                                \
     case Join::Type::TYPE:                                                                                                                     \
         insertFromBlockImplType<STRICTNESS, typename KeyGetterForType<Join::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
+            kind,                                                                                                                              \
             *maps.TYPE,                                                                                                                        \
             rows,                                                                                                                              \
             key_columns,                                                                                                                       \
@@ -1315,23 +1322,23 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
         if (isNullAwareSemiFamily(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(kind, type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(kind, type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
         }
         else if (getFullness(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(kind, type, maps_any_full, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(kind, type, maps_all_full, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
         }
         else
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(kind, type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(kind, type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
         }
     }
 }
@@ -2341,69 +2348,22 @@ void Join::checkTypes(const Block & block) const
     checkTypesOfKeys(block, sample_block_with_keys);
 }
 
-Join::MaterializedNullRows::MaterializedNullRows()
-    : null_list(nullptr)
-    , null_list_pos(0)
-    , null_list_it(nullptr)
-    , materialized_rows(0)
-{}
-
-void Join::MaterializedNullRows::setRowList(const std::vector<Join::RowsNotInsertToMap> * null_list_)
+void Join::RowsNotInsertToMap::insertRow(Join::RowRefList * elem, Block * stored_block, size_t index, bool need_materialize)
 {
-    null_list = null_list_;
-}
-
-bool Join::MaterializedNullRows::fillColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, size_t & pos, size_t max_pace)
-{
-    RUNTIME_ASSERT(added_columns.size() >= left_columns + right_columns);
-
-    if (unlikely(max_pace == 0))
-        return false;
-
-    if (unlikely(materialized_columns.empty()))
+    insertRowToList(&head, elem, stored_block, index);
+    if (need_materialize)
     {
-        RUNTIME_ASSERT(right_columns > 0);
-        materialized_columns.resize(right_columns);
-        for (size_t j = 0; j < right_columns; ++j)
-            materialized_columns[j] = added_columns[j + left_columns]->cloneEmpty();
-    }
-
-    bool end = false;
-    while (materialized_rows < pos + max_pace)
-    {
-        while (null_list_it == nullptr)
+        if (materialized_columns.empty() || size % max_block_size == 0)
         {
-            if (null_list_pos >= null_list->size())
-            {
-                end = true;
-                break;
-            }
-            ++null_list_pos;
-            null_list_it = (*null_list)[null_list_pos - 1].head.next;
+            materialized_columns.emplace_back(stored_block->cloneEmptyColumns());
         }
-        if (end)
-            break;
-
-        for (size_t j = 0; j < right_columns; ++j)
-            materialized_columns[j]->insertFrom(*null_list_it->block->getByPosition(j).column.get(), null_list_it->row_num);
-
-        ++materialized_rows;
-        null_list_it = null_list_it->next;
+        auto & last_one = materialized_columns.back();
+        size_t columns = stored_block->columns();
+        RUNTIME_ASSERT(last_one.size() == columns);
+        for (size_t i = 0; i < columns; ++i)
+            last_one[i]->insertFrom(*stored_block->getByPosition(i).column.get(), index);
     }
-
-    if (materialized_rows <= pos)
-    {
-        /// No more rows should be filled.
-        return true;
-    }
-    size_t pace = std::min(materialized_rows - pos, max_pace);
-
-    for (size_t j = 0; j < right_columns; ++j)
-        added_columns[j + left_columns]->insertRangeFrom(*materialized_columns[j].get(), pos, pace);
-
-    pos += pace;
-
-    return end;
+    ++size;
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map, bool has_filter_map>
@@ -2412,7 +2372,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     Block & block,
     size_t left_columns,
     const BlocksList & right_blocks,
-    Join::MaterializedNullRows & null_rows,
+    const std::vector<Join::RowsNotInsertToMap> & null_rows,
     size_t max_block_size,
     const JoinOtherConditions & other_conditions,
     const ColumnRawPtrs & key_columns,
@@ -2660,7 +2620,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     Block & block,
     size_t left_columns,
     const BlocksList & right_blocks,
-    Join::MaterializedNullRows & null_rows,
+    const std::vector<Join::RowsNotInsertToMap> & null_rows,
     size_t max_block_size,
     const JoinOtherConditions & other_conditions,
     const ColumnRawPtrs & key_columns,
@@ -2717,7 +2677,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-void Join::joinBlockImplNullAware(Block & block, const Maps & maps, size_t stream_index) const
+void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
 {
     size_t keys_size = key_names_left.size();
     ColumnRawPtrs key_columns(keys_size);
@@ -2773,7 +2733,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps, size_t strea
             block,                                                                                                                                      \
             existing_columns,                                                                                                                           \
             blocks,                                                                                                                                     \
-            null_rows[stream_index],                                                                                                                    \
+            rows_not_inserted_to_map,                                                                                                                   \
             max_block_size,                                                                                                                             \
             other_conditions,                                                                                                                           \
             key_columns,                                                                                                                                \
@@ -2833,9 +2793,6 @@ void Join::workAfterBuildFinish()
 {
     if (isNullAwareSemiFamily(kind))
     {
-        for (size_t i = 0; i < probe_concurrency; ++i)
-            null_rows[i].setRowList(&rows_not_inserted_to_map);
-
         size_t null_rows_size = 0;
         for (const auto & i : rows_not_inserted_to_map)
             null_rows_size += i.size;
@@ -2857,7 +2814,7 @@ void Join::workAfterBuildFinish()
         if (unlikely(is_test))
             null_key_check_all_blocks_directly = false;
         else
-            null_key_check_all_blocks_directly = null_rows_size > total_input_build_rows * 0.33;
+            null_key_check_all_blocks_directly = static_cast<double>(null_rows_size) > static_cast<double>(total_input_build_rows) / 3.0;
     }
 
     if (isEnableSpill())
@@ -2937,10 +2894,9 @@ void Join::finishOneNonJoin(size_t partition_index)
     }
 }
 
-Block Join::joinBlock(ProbeProcessInfo & probe_process_info, size_t stream_index) const
+Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
 {
     std::shared_lock lock(rwlock);
-    assert(stream_index < getProbeConcurrency());
 
     probe_process_info.updateStartRow();
 
@@ -2998,17 +2954,17 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, size_t stream_index
     else if (kind == Cross_LeftAnti && strictness == Any)
         joinBlockImplCross<Cross_LeftSemi, Any>(block);
     else if (kind == NullAware_Anti && strictness == All)
-        joinBlockImplNullAware<NullAware_Anti, All>(block, maps_all, stream_index);
+        joinBlockImplNullAware<NullAware_Anti, All>(block, maps_all);
     else if (kind == NullAware_Anti && strictness == Any)
-        joinBlockImplNullAware<NullAware_Anti, Any>(block, maps_any, stream_index);
+        joinBlockImplNullAware<NullAware_Anti, Any>(block, maps_any);
     else if (kind == NullAware_LeftSemi && strictness == All)
-        joinBlockImplNullAware<NullAware_LeftSemi, All>(block, maps_all, stream_index);
+        joinBlockImplNullAware<NullAware_LeftSemi, All>(block, maps_all);
     else if (kind == NullAware_LeftSemi && strictness == Any)
-        joinBlockImplNullAware<NullAware_LeftSemi, Any>(block, maps_any, stream_index);
+        joinBlockImplNullAware<NullAware_LeftSemi, Any>(block, maps_any);
     else if (kind == NullAware_LeftAnti && strictness == All)
-        joinBlockImplNullAware<NullAware_LeftAnti, All>(block, maps_all, stream_index);
+        joinBlockImplNullAware<NullAware_LeftAnti, All>(block, maps_all);
     else if (kind == NullAware_LeftAnti && strictness == Any)
-        joinBlockImplNullAware<NullAware_LeftAnti, Any>(block, maps_any, stream_index);
+        joinBlockImplNullAware<NullAware_LeftAnti, Any>(block, maps_any);
     else
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 
@@ -3233,7 +3189,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size)
             {
                 spilled_partition_indexes.pop_front();
             }
-            return {restore_join, non_joined_data_stream, build_stream, probe_stream, restore_probe_streams.size()};
+            return {restore_join, non_joined_data_stream, build_stream, probe_stream};
         }
         if (spilled_partition_indexes.empty())
         {
@@ -3271,7 +3227,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size)
                 restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size);
         }
         auto non_joined_data_stream = get_back_stream(restore_non_joined_data_streams);
-        return {restore_join, non_joined_data_stream, build_stream, probe_stream, restore_probe_streams.size()};
+        return {restore_join, non_joined_data_stream, build_stream, probe_stream};
     }
     catch (...)
     {
@@ -3399,7 +3355,7 @@ void Join::releaseBuildPartitionHashTable(size_t partition_index, std::unique_lo
     const auto & join_partition = partitions[partition_index];
     if (getFullness(kind))
     {
-        rows_not_inserted_to_map[partition_index] = RowsNotInsertToMap();
+        rows_not_inserted_to_map[partition_index] = RowsNotInsertToMap(max_block_size);
     }
     size_t pool_bytes = join_partition->pool->size();
     join_partition->pool.reset();

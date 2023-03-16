@@ -129,7 +129,7 @@ public:
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
       */
-    Block joinBlock(ProbeProcessInfo & probe_process_info, size_t stream_index) const;
+    Block joinBlock(ProbeProcessInfo & probe_process_info) const;
 
     void checkTypes(const Block & block) const;
 
@@ -383,28 +383,19 @@ public:
 
     struct alignas(ABSL_CACHELINE_SIZE) RowsNotInsertToMap
     {
+        explicit RowsNotInsertToMap(size_t max_block_size_)
+            : max_block_size(max_block_size_)
+        {
+            RUNTIME_ASSERT(max_block_size > 0);
+        }
+
         RowRefList head;
+        /// Materialize rows.
+        size_t max_block_size;
+        std::vector<MutableColumns> materialized_columns;
         size_t size = 0;
-    };
 
-    /// MaterializedNullRows will materialize the needed rows in null list to speed up the process of copying rows.
-    class alignas(ABSL_CACHELINE_SIZE) MaterializedNullRows
-    {
-    public:
-        MaterializedNullRows();
-
-        /// Must call before calling `fillColumns`.
-        void setRowList(const std::vector<Join::RowsNotInsertToMap> * null_list);
-
-        /// Return if there are other rows in null list after this calling;
-        bool fillColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, size_t & pos, size_t max_pace);
-
-    private:
-        const std::vector<Join::RowsNotInsertToMap> * null_list;
-        size_t null_list_pos;
-        Join::RowRefList * null_list_it;
-        size_t materialized_rows;
-        MutableColumns materialized_columns;
+        void insertRow(RowRefList * elem, Block * stored_block, size_t index, bool need_materialize);
     };
 
 private:
@@ -427,7 +418,6 @@ private:
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
     size_t active_probe_concurrency;
-
 
     bool is_canceled = false;
     bool meet_error = false;
@@ -481,9 +471,6 @@ private:
     /// 2. Rows that are filtered by right join conditions
     /// For null-aware semi join family, including rows with NULL join keys.
     std::vector<RowsNotInsertToMap> rows_not_inserted_to_map;
-    /// null_rows is used in probe phase, one MaterializedNullRows per probe thread.
-    /// Set to mutable because `JoinBlock`-family functions are all const.
-    mutable std::vector<MaterializedNullRows> null_rows;
     /// Whether to directly check all blocks for row with null key.
     bool null_key_check_all_blocks_directly = false;
 
@@ -586,7 +573,7 @@ private:
     void workAfterProbeFinish();
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    void joinBlockImplNullAware(Block & block, const Maps & maps, size_t stream_index) const;
+    void joinBlockImplNullAware(Block & block, const Maps & maps) const;
 };
 
 struct RestoreInfo
@@ -595,15 +582,13 @@ struct RestoreInfo
     BlockInputStreamPtr non_joined_stream;
     BlockInputStreamPtr build_stream;
     BlockInputStreamPtr probe_stream;
-    size_t probe_index;
 
     RestoreInfo() = default;
-    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr non_joined_data_stream_, BlockInputStreamPtr build_stream_, BlockInputStreamPtr probe_stream_, size_t probe_index_)
+    RestoreInfo(JoinPtr & join_, BlockInputStreamPtr non_joined_data_stream_, BlockInputStreamPtr build_stream_, BlockInputStreamPtr probe_stream_)
         : join(join_)
         , non_joined_stream(non_joined_data_stream_)
         , build_stream(build_stream_)
         , probe_stream(probe_stream_)
-        , probe_index(probe_index_)
     {}
 };
 

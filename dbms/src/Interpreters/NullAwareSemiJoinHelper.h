@@ -92,7 +92,7 @@ public:
     }
 
     template <typename Mapped, NASemiJoinStep STEP>
-    void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, Join::MaterializedNullRows & null_rows, size_t & current_offset, size_t min_pace);
+    void fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<Join::RowsNotInsertToMap> & null_rows, size_t & current_offset, size_t min_pace);
 
     template <NASemiJoinStep STEP>
     void checkExprResult(ConstNullMapPtr eq_null_map, size_t offset_begin, size_t offset_end);
@@ -113,6 +113,7 @@ private:
     size_t pace;
     /// Position of null rows.
     size_t null_rows_pos;
+    size_t null_rows_cnt;
 
     /// Mapped data for one cell.
     const void * map_it;
@@ -129,7 +130,7 @@ public:
         size_t left_columns,
         size_t right_columns,
         const BlocksList & right_blocks,
-        Join::MaterializedNullRows & null_rows,
+        const std::vector<Join::RowsNotInsertToMap> & null_rows,
         size_t max_block_size,
         const JoinOtherConditions & other_conditions);
 
@@ -149,7 +150,7 @@ private:
     size_t left_columns;
     size_t right_columns;
     const BlocksList & right_blocks;
-    Join::MaterializedNullRows & null_rows;
+    const std::vector<Join::RowsNotInsertToMap> & null_rows;
     size_t max_block_size;
 
     const JoinOtherConditions & other_conditions;
