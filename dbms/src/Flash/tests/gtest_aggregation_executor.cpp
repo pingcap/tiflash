@@ -737,11 +737,22 @@ try
                          {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
                          {toVec<Int64>("s1", {}),
                           toVec<Int64>("s2", {})});
+    context.addExchangeReceiver("empty_recv",
+                                {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
+                                {toVec<Int64>("s1", {}), toVec<Int64>("s2", {})},
+                                5,
+                                {{"s2", TiDB::TP::TypeLongLong}});
 
     auto request = context
                        .scan("test_db", "empty_table")
                        .aggregation({Max(col("s1"))}, {col("s2")})
                        .build(context);
+    executeAndAssertColumnsEqual(request, {});
+
+    request = context
+                  .receive("empty_recv", 5)
+                  .aggregation({Max(col("s1"))}, {col("s2")}, 5)
+                  .build(context);
     executeAndAssertColumnsEqual(request, {});
 
     request = context.scan("test_db", "empty_table")
