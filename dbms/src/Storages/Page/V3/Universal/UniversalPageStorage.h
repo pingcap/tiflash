@@ -248,7 +248,7 @@ public:
 
     LoggerPtr log;
 
-    std::mutex checkpoint_mu;
+    mutable std::mutex checkpoint_mu;
     // We should restore this from remote store after restart
     UInt64 last_checkpoint_sequence = 0;
 };
