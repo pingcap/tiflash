@@ -125,7 +125,7 @@ using FileSegmentPtr = std::shared_ptr<FileSegment>;
 class LRUFileTable
 {
 public:
-    FileSegmentPtr get(const String & key)
+    FileSegmentPtr get(const String & key, bool update_lru = true)
     {
         auto itr = table.find(key);
         if (itr == table.end())
@@ -133,8 +133,11 @@ public:
             return nullptr;
         }
         auto & [file_seg, lru_itr] = itr->second;
-        // Move the key to the end of the queue. The iterator remains valid.
-        lru_queue.splice(lru_queue.end(), lru_queue, lru_itr);
+        if (update_lru)
+        {
+            // Move the key to the end of the queue. The iterator remains valid.
+            lru_queue.splice(lru_queue.end(), lru_queue, lru_itr);
+        }
         return file_seg;
     }
 
@@ -246,7 +249,7 @@ public:
     void restoreDMFile(const std::filesystem::directory_entry & dmfile_entry);
 
     void remove(const String & s3_key);
-    std::pair<UInt64, std::list<String>::iterator> removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f);
+    std::pair<Int64, std::list<String>::iterator> removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f);
     void removeDiskFile(const String & local_fname);
 
     // Estimated size is an empirical value.

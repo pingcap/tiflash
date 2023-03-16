@@ -444,9 +444,9 @@ public:
     // Meta data is small and 64KB is enough.
     static constexpr size_t meta_buffer_size = 64 * 1024;
     void finalizeMetaV2(WriteBuffer & buffer);
-    MetaBlockHandle writeSLPackStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest);
-    MetaBlockHandle writeSLPackPropertyToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest);
-    MetaBlockHandle writeColumnStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest);
+    MetaBlockHandle writeSLPackStatToBuffer(WriteBuffer & buffer);
+    MetaBlockHandle writeSLPackPropertyToBuffer(WriteBuffer & buffer);
+    MetaBlockHandle writeColumnStatToBuffer(WriteBuffer & buffer);
     std::vector<char> readMetaV2(const FileProviderPtr & file_provider);
     void parseMetaV2(std::string_view buffer);
     void parseColumnStat(std::string_view buffer);

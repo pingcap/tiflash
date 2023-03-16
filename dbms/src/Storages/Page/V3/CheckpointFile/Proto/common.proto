@@ -27,4 +27,5 @@ message WriterInfo {
 message RemoteInfo {
     string type_name = 1; // e.g. "S3" / "LocalFS"
     string name = 2; // Remote-type specific name for description purpose.
+    string root = 3; // Identifier for the cluster. It is the `storage.s3.root` when using S3
 }

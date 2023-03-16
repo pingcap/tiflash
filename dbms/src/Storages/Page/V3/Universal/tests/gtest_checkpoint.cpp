@@ -758,9 +758,8 @@ public:
             delegator,
             PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0});
         log = Logger::get("UniversalPageStorageServiceCheckpointTest");
-        s3_client = S3::ClientFactory::instance().sharedClient();
-        bucket = S3::ClientFactory::instance().bucket();
-        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
+        s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     }
 
 protected:
@@ -791,8 +790,7 @@ protected:
 
 protected:
     UniversalPageStorageServicePtr uni_ps_service;
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
+    std::shared_ptr<S3::TiFlashS3Client> s3_client;
     UInt64 tag = 0;
     UInt64 store_id = 2;
 
@@ -805,7 +803,7 @@ try
     auto page_storage = uni_ps_service->getUniversalPageStorage();
     auto store_info = metapb::Store{};
     store_info.set_id(store_id);
-    auto s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client, bucket);
+    auto s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
     auto remote_store = std::make_shared<DM::Remote::DataStoreS3>(::DB::tests::TiFlashTestEnv::getMockFileProvider());
     // Mock normal writes
     {
@@ -875,8 +873,8 @@ try
     auto ingest_from_dtfile = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = another_store_id, .table_id = 50, .file_id = 999});
     {
         // create object on s3 for locking
-        S3::uploadEmptyFile(*s3_client, bucket, ingest_from_data_file.toFullKey());
-        S3::uploadEmptyFile(*s3_client, bucket, ingest_from_dtfile.toFullKey());
+        S3::uploadEmptyFile(*s3_client, ingest_from_data_file.toFullKey());
+        S3::uploadEmptyFile(*s3_client, ingest_from_dtfile.toFullKey());
 
         UniversalWriteBatch batch;
         PS::V3::CheckpointLocation loc21{

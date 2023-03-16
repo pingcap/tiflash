@@ -74,29 +74,6 @@ public:
     }
 
 protected:
-    bool createBucketIfNotExist()
-    {
-        auto s3_client = S3::ClientFactory::instance().sharedClient();
-        auto bucket = S3::ClientFactory::instance().bucket();
-        Aws::S3::Model::CreateBucketRequest request;
-        request.SetBucket(bucket);
-        auto outcome = s3_client->CreateBucket(request);
-        if (outcome.IsSuccess())
-        {
-            LOG_DEBUG(Logger::get(), "Created bucket {}", bucket);
-        }
-        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
-        {
-            LOG_DEBUG(Logger::get(), "Bucket {} already exist", bucket);
-        }
-        else
-        {
-            const auto & err = outcome.GetError();
-            LOG_ERROR(Logger::get(), "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
-        }
-        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
-    }
-
     void dumpCheckpoint()
     {
         auto & global_context = TiFlashTestEnv::getGlobalContext();
@@ -221,7 +198,8 @@ try
     auto [index, term] = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
     persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
-    ASSERT_TRUE(createBucketIfNotExist());
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+    ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     dumpCheckpoint();
 
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
