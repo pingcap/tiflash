@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Core/ColumnWithTypeAndName.h>
+#include <Encryption/PosixWritableFile.h>
 #include <Interpreters/Context.h>
 #include <Poco/DirectoryIterator.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -34,9 +35,12 @@
 #include <algorithm>
 #include <magic_enum.hpp>
 #include <vector>
-
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int CORRUPTED_DATA;
+}
 namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
@@ -379,6 +383,57 @@ try
     auto file_provider = dbContext().getFileProvider();
     auto dmfile3 = DMFile::restore(file_provider, dmfile2->fileId(), dmfile2->pageId(), dmfile2->parentPath(), DMFile::ReadMetaMode::all());
     check_meta(dmfile1, dmfile3);
+}
+CATCH
+
+TEST_P(DMFileTest, MetaV2Broken)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+
+    const size_t num_rows_write = 128;
+
+    DMFileBlockOutputStream::BlockProperty block_property1;
+    block_property1.effective_num_rows = 1;
+    block_property1.gc_hint_version = 1;
+    block_property1.deleted_rows = 1;
+    DMFileBlockOutputStream::BlockProperty block_property2;
+    block_property2.effective_num_rows = 2;
+    block_property2.gc_hint_version = 2;
+    block_property2.deleted_rows = 2;
+    std::vector<DMFileBlockOutputStream::BlockProperty> block_propertys;
+    block_propertys.push_back(block_property1);
+    block_propertys.push_back(block_property2);
+    DMFilePtr dmfile;
+
+    Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
+    Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
+    auto mode = DMFileMode::DirectoryChecksum;
+    auto configuration = createConfiguration(mode);
+    dmfile = DMFile::create(1, parent_path, std::move(configuration), DMFileFormat::V3);
+    auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
+    stream->writePrefix();
+    stream->write(block1, block_property1);
+    stream->write(block2, block_property2);
+    stream->writeSuffix();
+
+    {
+        PosixWritableFile file(dmfile->metav2Path(), false, -1, 0666);
+        String s = "hello";
+        auto n = file.pwrite(s.data(), s.size(), 0);
+        ASSERT_EQ(n, s.size());
+    }
+
+    try
+    {
+        auto file_provider = dbContext().getFileProvider();
+        auto t = DMFile::restore(file_provider, dmfile->fileId(), dmfile->pageId(), dmfile->parentPath(), DMFile::ReadMetaMode::all());
+        FAIL(); // Should not come here.
+    }
+    catch (const DB::Exception & e)
+    {
+        ASSERT_EQ(e.code(), ErrorCodes::CORRUPTED_DATA) << e.message();
+    }
 }
 CATCH
 
