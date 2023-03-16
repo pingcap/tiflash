@@ -480,9 +480,6 @@ private:
     /// Indicate if the right table has a all-key-null row.
     std::atomic<bool> right_has_all_key_null_row{false};
 
-    /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
-    Arenas pools;
-
 private:
     Type type = Type::EMPTY;
 
@@ -588,8 +585,7 @@ struct RestoreInfo
         : join(join_)
         , non_joined_stream(non_joined_data_stream_)
         , build_stream(build_stream_)
-        , probe_stream(probe_stream_)
-    {}
+        , probe_stream(probe_stream_){};
 };
 
 struct ProbeProcessInfo
