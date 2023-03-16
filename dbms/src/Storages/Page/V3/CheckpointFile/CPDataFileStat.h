@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Common/Logger.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
@@ -29,12 +31,16 @@ using RemoteFileValidSizes = std::unordered_map<String, size_t>;
 struct CPDataFileStat
 {
     Int64 valid_size = 0;
-    Int64 total_size = 0;
+    // total_size < 0 indicate this value is not inited
+    Int64 total_size = -1;
 };
 
 class CPDataFilesStatCache
 {
 public:
+    // file_id -> CPDataFileStat
+    using CacheMap = std::unordered_map<String, CPDataFileStat>;
+
     /**
      * Update the valid size in the cache. Thread safe.
      *
@@ -49,9 +55,9 @@ public:
     /**
      * Update the total size field in the cache. Thread safe.
      */
-    void updateTotalSize(const std::unordered_map<String, CPDataFileStat> & total_sizes);
+    void updateTotalSize(const CacheMap & total_sizes);
 
-    std::unordered_map<String, CPDataFileStat> getCopy() const
+    CacheMap getCopy() const
     {
         std::lock_guard lock(mtx);
         return stats;
@@ -59,9 +65,15 @@ public:
 
 private:
     mutable std::mutex mtx;
-    // file_id -> CPDataFileStat
-    std::unordered_map<String, CPDataFileStat> stats;
+    CacheMap stats;
 };
+
+std::unordered_set<String> getRemoteFileIdsNeedCompact(
+    PS::V3::CPDataFilesStatCache::CacheMap & stats,
+    const DB::DM::Remote::RemoteGCThreshold & gc_threshold,
+    const DB::DM::Remote::IDataStorePtr & remote_store,
+    const LoggerPtr & log);
+
 } // namespace DB::PS::V3
 
 template <>

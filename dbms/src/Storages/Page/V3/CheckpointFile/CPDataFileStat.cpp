@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 
 namespace DB::PS::V3
@@ -36,7 +37,7 @@ void CPDataFilesStatCache::updateValidSize(const RemoteFileValidSizes & valid_si
         }
     }
     // If the file_id exists, write down the valid size, keep total_size unchanged.
-    // Else create a cache entry to write down valid size but leave total_size == 0.
+    // Else create a cache entry to write down valid size but leave total_size < 0.
     for (const auto & [file_id, valid_size] : valid_sizes)
     {
         auto res = stats.try_emplace(file_id, CPDataFileStat{});
@@ -44,7 +45,7 @@ void CPDataFilesStatCache::updateValidSize(const RemoteFileValidSizes & valid_si
     }
 }
 
-void CPDataFilesStatCache::updateTotalSize(const std::unordered_map<String, CPDataFileStat> & total_sizes)
+void CPDataFilesStatCache::updateTotalSize(const CPDataFilesStatCache::CacheMap & total_sizes)
 {
     std::lock_guard lock(mtx);
     for (const auto & [file_id, new_stat] : total_sizes)
@@ -57,6 +58,60 @@ void CPDataFilesStatCache::updateTotalSize(const std::unordered_map<String, CPDa
             iter->second.total_size = new_stat.total_size;
         }
     }
+}
+
+std::unordered_set<String> getRemoteFileIdsNeedCompact(
+    PS::V3::CPDataFilesStatCache::CacheMap & stats, // will be updated
+    const DM::Remote::RemoteGCThreshold & gc_threshold,
+    const DM::Remote::IDataStorePtr & remote_store,
+    const LoggerPtr & log)
+{
+    {
+        std::unordered_set<String> file_ids;
+        // If the total_size is 0, try to get the actual size from S3
+        for (const auto & [file_id, stat] : stats)
+        {
+            if (stat.total_size < 0)
+                file_ids.insert(file_id);
+        }
+        std::unordered_map<String, Int64> file_sizes = remote_store->getDataFileSizes(file_ids);
+        for (auto & [file_id, actual_size] : file_sizes)
+        {
+            // IO error or data file not exist, just skip it
+            if (actual_size < 0)
+            {
+                continue;
+            }
+            auto iter = stats.find(file_id);
+            RUNTIME_CHECK_MSG(iter != stats.end(), "file_id={} stats={}", file_id, stats);
+            iter->second.total_size = actual_size;
+        }
+    }
+
+    FmtBuffer fmt_buf;
+    fmt_buf.append("[");
+    std::unordered_set<String> rewrite_files;
+    for (const auto & [file_id, stat] : stats)
+    {
+        if (stat.total_size <= 0)
+            continue;
+        double valid_rate = 1.0 * stat.valid_size / stat.total_size;
+        if (valid_rate < gc_threshold.valid_rate
+            || stat.total_size < static_cast<Int64>(gc_threshold.min_file_threshold))
+        {
+            if (!rewrite_files.empty())
+                fmt_buf.append(", ");
+            fmt_buf.fmtAppend("{{key={} size={} rate={:.2f}}}", file_id, stat.total_size, valid_rate);
+            rewrite_files.emplace(file_id);
+        }
+    }
+    fmt_buf.append("]");
+    LOG_IMPL(
+        log,
+        (rewrite_files.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION),
+        "CheckpointData pick for compaction {}",
+        fmt_buf.toString());
+    return rewrite_files;
 }
 
 } // namespace DB::PS::V3

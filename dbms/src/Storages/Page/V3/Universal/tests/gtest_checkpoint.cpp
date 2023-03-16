@@ -945,7 +945,7 @@ try
         ASSERT_EQ("5", iter->page_id);
         ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
         ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
-    } // check the first manifest
+    } // check the second manifest
 }
 CATCH
 

@@ -195,12 +195,12 @@ public:
 
     void dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
 
-    std::unordered_map<String, PS::V3::CPDataFileStat> getRemoteDataFilesStatCache() const
+    PS::V3::CPDataFilesStatCache::CacheMap getRemoteDataFilesStatCache() const
     {
         return remote_data_files_stat_cache.getCopy();
     }
 
-    void updateRemoteFilesTotalSizes(const std::unordered_map<String, PS::V3::CPDataFileStat> & updated_stat)
+    void updateRemoteFilesTotalSizes(const PS::V3::CPDataFilesStatCache::CacheMap & updated_stat)
     {
         remote_data_files_stat_cache.updateTotalSize(updated_stat);
     }

@@ -127,12 +127,10 @@ bool UniversalPageStorageService::uploadCheckpoint()
 }
 
 std::unordered_set<String> UniversalPageStorageService::getRemoteFileIdsNeedCompact(
+    PS::V3::CPDataFilesStatCache::CacheMap & stats, // will be updated
     const DM::Remote::RemoteGCThreshold & gc_threshold,
-    DM::Remote::IDataStorePtr remote_store)
+    const DM::Remote::IDataStorePtr & remote_store)
 {
-    // In order to not block local GC updating the cache, get a copy of the cache
-    auto stats = uni_page_storage->getRemoteDataFilesStatCache();
-
     {
         std::unordered_set<String> file_ids;
         // If the total_size is 0, try to get the actual size from S3
@@ -155,9 +153,6 @@ std::unordered_set<String> UniversalPageStorageService::getRemoteFileIdsNeedComp
         }
     }
 
-    // update cache by the S3 result
-    uni_page_storage->updateRemoteFilesTotalSizes(stats);
-
     FmtBuffer fmt_buf;
     fmt_buf.append("[");
     std::unordered_set<String> rewrite_files;
@@ -176,7 +171,11 @@ std::unordered_set<String> UniversalPageStorageService::getRemoteFileIdsNeedComp
         }
     }
     fmt_buf.append("]");
-    LOG_INFO(log, "CheckpointData pick for compaction {}", fmt_buf.toString());
+    LOG_IMPL(
+        log,
+        (rewrite_files.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION),
+        "CheckpointData pick for compaction {}",
+        fmt_buf.toString());
     return rewrite_files;
 }
 
@@ -230,7 +229,13 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
         .valid_rate = settings.remote_gc_ratio,
         .min_file_threshold = static_cast<size_t>(settings.remote_gc_small_size),
     };
-    auto file_ids_to_compact = getRemoteFileIdsNeedCompact(gc_threshold, remote_store);
+
+    // In order to not block local GC updating the cache, get a copy of the cache
+    auto stats = uni_page_storage->getRemoteDataFilesStatCache();
+    auto file_ids_to_compact = getRemoteFileIdsNeedCompact(stats, gc_threshold, remote_store);
+    // update cache by the S3 result
+    uni_page_storage->updateRemoteFilesTotalSizes(stats);
+
     UniversalPageStorage::DumpCheckpointOptions opts{
         .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
         .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",
