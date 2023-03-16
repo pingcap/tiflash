@@ -14,6 +14,7 @@
         "jeff-hykin.better-cpp-syntax", // C++ Syntax
         "matepek.vscode-catch2-test-adapter", // Run gtests in UI
         "twxs.cmake",
+        "wayou.vscode-todo-highlight", // Highlight TODO keywords
         "ms-vscode.cmake-tools", // CMake actions in UI
         "bungcip.better-toml", // TOML Syntax highlighting
         "eamodio.gitlens", // Enable more git features

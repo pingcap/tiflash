@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# See `DockerImageSource` about how this image is built.
+# The source of this image is available at https://github.com/breezewish/tiflash-devcontainer
 FROM breezewish/tiflash-dev:0.0.3
 
 # Create directories to mount as volumes. These directories will be persisted
