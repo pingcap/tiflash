@@ -27,7 +27,6 @@ struct BaseRuntimeStatistics
     size_t concurrency = 0;
     UInt64 execution_time_ns = 0;
 
-
     void append(const BlockStreamProfileInfo &);
 };
 } // namespace DB

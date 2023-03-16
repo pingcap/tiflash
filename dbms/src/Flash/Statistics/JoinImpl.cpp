@@ -32,7 +32,6 @@ void JoinStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
         join_build_base.execution_time_ns);
 }
 
-
 void JoinStatistics::collectExtraRuntimeDetail()
 {
     const auto & join_execute_info_map = dag_context.getJoinExecuteInfoMap();

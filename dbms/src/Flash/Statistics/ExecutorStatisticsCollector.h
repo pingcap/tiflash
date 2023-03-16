@@ -21,7 +21,6 @@
 #include <tipb/select.pb.h>
 
 #include <map>
-#include <memory>
 
 namespace DB
 {
@@ -49,12 +48,18 @@ public:
 private:
     void collectRuntimeDetails();
 
+    void addLocalExecutionSummaries(tipb::SelectResponse & response);
+
+    void addRemoteExecutionSummaries(tipb::SelectResponse & response);
+
     void fillExecutionSummary(
         tipb::SelectResponse & response,
         const String & executor_id,
         const BaseRuntimeStatistics & statistic,
         UInt64 join_build_time,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
+
+    void fillListBasedExecutorsChild();
 
     template <typename T>
     bool appendImpl(const String & executor_id, const tipb::Executor * executor)

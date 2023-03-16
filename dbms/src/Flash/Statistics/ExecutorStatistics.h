@@ -40,16 +40,24 @@ public:
     ExecutorStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
         : dag_context(dag_context_)
     {
-        // Only tree based executor need to collect its children
         RUNTIME_CHECK(executor->has_executor_id());
         executor_id = executor->executor_id();
 
         type = ExecutorImpl::type;
 
-        getChildren(*executor).forEach([&](const tipb::Executor & child) {
-            RUNTIME_CHECK(child.has_executor_id());
-            children.push_back(child.executor_id());
-        });
+        // set children for tree-based executors
+        if (dag_context.return_executor_id)
+        {
+            getChildren(*executor).forEach([&](const tipb::Executor & child) {
+                RUNTIME_CHECK(child.has_executor_id());
+                children.push_back(child.executor_id());
+            });
+        }
+    }
+
+    void setChild(const String & child_id) override
+    {
+        children.push_back(child_id);
     }
 
     String toJson() const override

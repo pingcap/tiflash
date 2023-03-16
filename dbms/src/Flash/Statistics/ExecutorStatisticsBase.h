@@ -25,6 +25,8 @@ class ExecutorStatisticsBase
 public:
     virtual String toJson() const = 0;
 
+    virtual void setChild(const String & child_id) = 0;
+
     virtual void collectRuntimeDetail() = 0;
 
     virtual ~ExecutorStatisticsBase() = default;

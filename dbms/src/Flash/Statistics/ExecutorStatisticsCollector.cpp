@@ -65,7 +65,8 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
     dag_context = dag_context_;
     assert(dag_context);
     assert(dag_context->dag_request);
-    traverseExecutorsReverse(dag_context->dag_request, [&](const tipb::Executor & executor) {
+    // for tree-based executors
+    traverseExecutors(dag_context->dag_request, [&](const tipb::Executor & executor) {
         const auto & executor_id = executor.executor_id();
         if (!append<
                 AggStatistics,
@@ -87,6 +88,27 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
         }
         return true;
     });
+
+    fillListBasedExecutorsChild();
+}
+
+void ExecutorStatisticsCollector::fillListBasedExecutorsChild()
+{
+    if (!dag_context->return_executor_id)
+    {
+        // fill list-based executors child
+        auto size = dag_context->dag_request->executors_size();
+        RUNTIME_CHECK(size > 0);
+        const auto & executors = dag_context->dag_request->executors();
+        String child;
+        for (int i = 0; i < size; ++i)
+        {
+            const auto & executor_id = executors[i].executor_id();
+            if (i != 0)
+                profiles[executor_id]->setChild(child);
+            child = executor_id;
+        }
+    }
 }
 
 void ExecutorStatisticsCollector::collectRuntimeDetails()
@@ -130,6 +152,13 @@ void ExecutorStatisticsCollector::addExecuteSummaries(tipb::SelectResponse & res
 
     collectRuntimeDetails();
 
+    addLocalExecutionSummaries(response);
+
+    addRemoteExecutionSummaries(response);
+}
+
+void ExecutorStatisticsCollector::addLocalExecutionSummaries(tipb::SelectResponse & response)
+{
     if (dag_context->return_executor_id)
     {
         // fill in tree-based executors' execution summary
@@ -157,7 +186,10 @@ void ExecutorStatisticsCollector::addExecuteSummaries(tipb::SelectResponse & res
                 dag_context->scan_context_map);
         }
     }
+}
 
+void ExecutorStatisticsCollector::addRemoteExecutionSummaries(tipb::SelectResponse & response)
+{
     // TODO support cop remote read and disaggregated mode.
     auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context);
 
@@ -165,4 +197,5 @@ void ExecutorStatisticsCollector::addExecuteSummaries(tipb::SelectResponse & res
     for (auto & p : exchange_execution_summary.execution_summaries)
         fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), p.second, p.first, fill_executor_id);
 }
+
 } // namespace DB
