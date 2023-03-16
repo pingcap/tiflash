@@ -151,7 +151,6 @@ void loadMetadata(Context & context)
         /// There may exist .sql file with database creation statement.
         /// Or, if it is absent, then database with default engine is created.
         String database_attach_query;
-        std::cout << " database_metadata_file is  " << database_metadata_file << std::endl;
         if (Poco::File(database_metadata_file).exists())
         {
             ReadBufferFromFileProvider in(context.getFileProvider(), database_metadata_file, EncryptionPath(database_metadata_file, ""), 1024);
@@ -168,14 +167,15 @@ void loadMetadata(Context & context)
 
     std::vector<std::shared_ptr<legacy::ThreadPool>> table_thread_pools;
     for (const auto & database : databases) {
-        const auto db_name = database.first;
-        const auto meta_file = database.second;
-        std::cout << " meta_file is " << meta_file << std::endl;
+        const auto & db_name = database.first;
+        const auto & meta_file = database.second;
+
         std::shared_ptr<legacy::ThreadPool> load_tables_thread_pool = std::make_shared<legacy::ThreadPool>(SettingMaxThreads().getAutoValue());
+
         auto task = [&load_database, &context, &db_name, &meta_file, &load_tables_thread_pool, has_force_restore_data_flag] {
-            std::cout << " inner meta_file is " << meta_file << std::endl;
             load_database(context, db_name, meta_file, load_tables_thread_pool.get(), has_force_restore_data_flag);
         };
+
         table_thread_pools.push_back(load_tables_thread_pool);
         load_database_thread_pool.schedule(task);
     }
