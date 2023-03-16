@@ -44,7 +44,8 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added
 
     RUNTIME_CHECK_MSG(step == STEP, "current step {} != caller's step {}", static_cast<std::underlying_type<NASemiJoinStep>::type>(step), static_cast<std::underlying_type<NASemiJoinStep>::type>(STEP));
 
-    pace = std::max(pace, min_pace);
+    static constexpr size_t MAX_PACE = 8192;
+    pace = std::min(MAX_PACE, std::max(pace, min_pace));
 
     if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS)
     {
@@ -70,7 +71,6 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added
         current_offset += null_rows_pos - prev_pos;
     }
 
-    static constexpr size_t MAX_PACE = 8192;
     pace = std::min(MAX_PACE, pace * 2);
 }
 
