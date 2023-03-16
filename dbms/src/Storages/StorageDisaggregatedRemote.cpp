@@ -370,6 +370,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 {
     auto io_concurrency = static_cast<size_t>(static_cast<double>(num_streams) * db_context.getSettingsRef().disagg_read_concurrency_scale);
     LOG_DEBUG(log, "Build disagg streams with {} segment tasks, num_streams={} io_concurrency={}", remote_read_tasks->numSegments(), num_streams, io_concurrency);
+    // TODO: We can reduce max io_concurrency to numSegments.
 
     const auto & executor_id = table_scan.getTableScanExecutorID();
     // Build a RNPageReceiver to fetch the pages from all write nodes
