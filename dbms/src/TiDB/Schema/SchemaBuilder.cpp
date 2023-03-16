@@ -1388,28 +1388,28 @@ void SchemaBuilder<Getter, NameMapper>::dropAllSchema()
 
     /// Drop all tables.
     auto storage_map = tmt_context.getStorages().getAllStorage();
-    for (auto it = storage_map.begin(); it != storage_map.end(); it++)
+    for (const auto & storage : storage_map)
     {
-        auto table_info = it->second->getTableInfo();
+        auto table_info = storage.second->getTableInfo();
         if (table_info.keyspace_id != keyspace_id)
         {
             continue;
         }
-        applyDropPhysicalTable(it->second->getDatabaseName(), table_info.id);
-        LOG_DEBUG(log, "Table {}.{} dropped during drop all schemas", it->second->getDatabaseName(), name_mapper.debugTableName(table_info));
+        applyDropPhysicalTable(storage.second->getDatabaseName(), table_info.id);
+        LOG_DEBUG(log, "Table {}.{} dropped during drop all schemas", storage.second->getDatabaseName(), name_mapper.debugTableName(table_info));
     }
 
     /// Drop all dbs.
     const auto & dbs = context.getDatabases();
-    for (auto it = dbs.begin(); it != dbs.end(); it++)
+    for (const auto & db : dbs)
     {
-        auto db_keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(it->first);
+        auto db_keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(db.first);
         if (db_keyspace_id != keyspace_id)
         {
             continue;
         }
-        applyDropSchema(it->first);
-        LOG_DEBUG(log, "DB {} dropped during drop all schemas", it->first);
+        applyDropSchema(db.first);
+        LOG_DEBUG(log, "DB {} dropped during drop all schemas", db.first);
     }
 
     LOG_INFO(log, "Dropped all schemas.");
