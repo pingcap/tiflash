@@ -81,7 +81,7 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context_)
 
 void MPPTaskStatistics::collectRuntimeStatistics()
 {
-    const auto & executor_statistics_res = executor_statistics_collector.getResult();
+    const auto & executor_statistics_res = executor_statistics_collector.getProfiles();
     auto it = executor_statistics_res.find(sender_executor_id);
     RUNTIME_CHECK_MSG(it != executor_statistics_res.end(), "Can't find exchange sender statistics after `collectRuntimeStatistics`");
     const auto & return_statistics = it->second->getBaseRuntimeStatistics();
@@ -94,7 +94,6 @@ tipb::SelectResponse MPPTaskStatistics::genExecutionSummaryResponse()
 {
     return executor_statistics_collector.genExecutionSummaryResponse();
 }
-
 
 void MPPTaskStatistics::logTracingJson()
 {
@@ -110,7 +109,7 @@ void MPPTaskStatistics::logTracingJson()
         id.task_id,
         is_root,
         sender_executor_id,
-        executor_statistics_collector.resToJson(),
+        executor_statistics_collector.profilesToJson(),
         host,
         toNanoseconds(task_init_timestamp),
         toNanoseconds(task_start_timestamp),

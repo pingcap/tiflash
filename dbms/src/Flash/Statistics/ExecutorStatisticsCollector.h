@@ -38,13 +38,16 @@ public:
 
     void initialize(DAGContext * dag_context_);
 
-    void collectRuntimeDetails();
-
-    const std::map<String, ExecutorStatisticsPtr> & getResult() const { return res; }
-
-    String resToJson() const;
+    String profilesToJson() const;
 
     void addExecuteSummaries(tipb::SelectResponse & response);
+
+    tipb::SelectResponse genExecutionSummaryResponse();
+
+    const std::map<String, ExecutorStatisticsPtr> & getProfiles() const { return profiles; }
+
+private:
+    void collectRuntimeDetails();
 
     void fillExecutionSummary(
         tipb::SelectResponse & response,
@@ -53,22 +56,12 @@ public:
         UInt64 join_build_time,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
-    tipb::SelectResponse genExecutionSummaryResponse();
-
-private:
-    DAGContext * dag_context = nullptr;
-    std::map<String, ExecutorStatisticsPtr> res;
-
-    const LoggerPtr log;
-
-    bool fill_executor_id; // for testing list based executors
-
     template <typename T>
-    bool doAppend(const String & executor_id, const tipb::Executor * executor)
+    bool appendImpl(const String & executor_id, const tipb::Executor * executor)
     {
         if (T::isMatch(executor))
         {
-            res[executor_id] = std::make_shared<T>(executor, *dag_context);
+            profiles[executor_id] = std::make_shared<T>(executor, *dag_context);
             return true;
         }
         return false;
@@ -77,9 +70,15 @@ private:
     template <typename... Ts>
     bool append(const String & executor_id, const tipb::Executor * executor)
     {
-        RUNTIME_CHECK(res.find(executor_id) == res.end());
-        return (doAppend<Ts>(executor_id, executor) || ...);
+        RUNTIME_CHECK(profiles.find(executor_id) == profiles.end());
+        return (appendImpl<Ts>(executor_id, executor) || ...);
     }
+
+private:
+    DAGContext * dag_context = nullptr;
+    std::map<String, ExecutorStatisticsPtr> profiles;
+    const LoggerPtr log;
+    bool fill_executor_id; // for testing list based executors
 };
 using ExecutorStatisticsCollectorPtr = std::unique_ptr<ExecutorStatisticsCollector>;
 } // namespace DB

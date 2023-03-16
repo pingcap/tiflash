@@ -45,13 +45,13 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
 }
 } // namespace
 
-String ExecutorStatisticsCollector::resToJson() const
+String ExecutorStatisticsCollector::profilesToJson() const
 {
     FmtBuffer buffer;
     buffer.append("[");
     buffer.joinStr(
-        res.cbegin(),
-        res.cend(),
+        profiles.cbegin(),
+        profiles.cend(),
         [](const auto & s, FmtBuffer & fb) {
             fb.append(s.second->toJson());
         },
@@ -92,7 +92,7 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
 void ExecutorStatisticsCollector::collectRuntimeDetails()
 {
     assert(dag_context);
-    for (const auto & entry : res)
+    for (const auto & entry : profiles)
     {
         entry.second->collectRuntimeDetail();
     }
@@ -133,7 +133,6 @@ void ExecutorStatisticsCollector::addExecuteSummaries(tipb::SelectResponse & res
     if (dag_context->return_executor_id)
     {
         // fill in tree-based executors' execution summary
-        auto profiles = getResult();
         for (auto & p : profiles)
             fillExecutionSummary(
                 response,
@@ -145,7 +144,6 @@ void ExecutorStatisticsCollector::addExecuteSummaries(tipb::SelectResponse & res
     else
     {
         // fill in list-based executors' execution summary
-        auto profiles = getResult();
         assert(profiles.size() == dag_context->list_based_executors_order.size());
         for (const auto & executor_id : dag_context->list_based_executors_order)
         {
@@ -165,8 +163,6 @@ void ExecutorStatisticsCollector::addExecuteSummaries(tipb::SelectResponse & res
 
     // fill execution_summary to reponse for remote executor received by exchange.
     for (auto & p : exchange_execution_summary.execution_summaries)
-    {
         fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), p.second, p.first, fill_executor_id);
-    }
 }
 } // namespace DB
