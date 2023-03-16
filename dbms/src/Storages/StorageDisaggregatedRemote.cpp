@@ -265,7 +265,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
     const auto avg_establish_rpc_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.establish_rpc_ms; }) / summaries.size();
     const auto avg_build_remote_task_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.build_remote_task_ms; }) / summaries.size();
-    LOG_INFO(log, "establish disaggregated task rpc cost {:.2f}ms, build remote tasks cost {:.2f}ms", avg_establish_rpc_ms, avg_build_remote_task_ms);
+    LOG_INFO(log, "Establish disaggregated task finished, avg_rpc_elapsed={:.2f}ms, avg_build_task_elapsed={:.2f}ms", avg_establish_rpc_ms, avg_build_remote_task_ms);
 
     return read_task;
 }
