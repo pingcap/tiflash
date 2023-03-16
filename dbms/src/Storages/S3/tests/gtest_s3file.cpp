@@ -41,6 +41,8 @@
 #include <chrono>
 #include <fstream>
 
+#include "Encryption/PosixWritableFile.h"
+
 using namespace std::chrono_literals;
 using namespace DB::DM;
 using namespace DB::DM::tests;
@@ -80,6 +82,20 @@ public:
     Context & dbContext() { return *db_context; }
 
 protected:
+    void writeLocalFile(const String & path, size_t size)
+    {
+        PosixWritableFile file(path, /*truncate_when_exists*/ true, -1, 0600);
+        size_t write_size = 0;
+        while (write_size < size)
+        {
+            auto to_write = std::min(buf_unit.size(), size - write_size);
+            auto n = file.write(buf_unit.data(), to_write);
+            ASSERT_EQ(n, to_write);
+            write_size += n;
+        }
+        ASSERT_EQ(file.fsync(), 0);
+    }
+
     void writeFile(const String & key, size_t size, const WriteSettings & write_setting)
     {
         S3WritableFile file(s3_client, key, write_setting);
@@ -413,10 +429,8 @@ try
     String manifest_file = getTemporaryPath() + "/manifest";
 
     {
-        for (const auto & f : data_files)
-        {
-            Poco::File(f).createFile();
-        }
+        writeLocalFile(data_files[0], 34589);
+        writeLocalFile(data_files[1], 1234);
         Poco::File(manifest_file).createFile();
     }
 
@@ -427,15 +441,31 @@ try
     UInt64 sequence = 200;
     data_store->putCheckpointFiles(checkpoint, store_id, sequence);
 
+    Strings keys;
+    std::unordered_set<String> keyset;
     // ensure CheckpointDataFile, theirs lock file and CheckpointManifest are uploaded
     auto s3client = S3::ClientFactory::instance().sharedTiFlashClient();
     auto cp_data0 = S3::S3Filename::newCheckpointData(store_id, sequence, 0);
     ASSERT_TRUE(S3::objectExists(*s3client, cp_data0.toFullKey()));
     ASSERT_TRUE(S3::objectExists(*s3client, cp_data0.toView().getLockKey(store_id, sequence)));
+    keys.emplace_back(cp_data0.toView().getLockKey(store_id, sequence));
+    keyset.insert(keys.back());
     auto cp_data1 = S3::S3Filename::newCheckpointData(store_id, sequence, 1);
     ASSERT_TRUE(S3::objectExists(*s3client, cp_data1.toFullKey()));
     ASSERT_TRUE(S3::objectExists(*s3client, cp_data1.toView().getLockKey(store_id, sequence)));
+    keys.emplace_back(cp_data1.toView().getLockKey(store_id, sequence));
+    keyset.insert(keys.back());
+    // manifest
     ASSERT_TRUE(S3::objectExists(*s3client, S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey()));
+
+    // add an not exist key
+    keys.emplace_back(S3::S3Filename::newCheckpointData(store_id, sequence, 999).toView().getLockKey(store_id, sequence));
+    keyset.insert(keys.back());
+    auto file_sizes = data_store->getDataFileSizes(keyset);
+    ASSERT_EQ(file_sizes.size(), 3) << fmt::format("{}", file_sizes);
+    ASSERT_EQ(file_sizes.at(keys[0]), 34589);
+    ASSERT_EQ(file_sizes.at(keys[1]), 1234);
+    ASSERT_EQ(file_sizes.at(keys[2]), -1); // not exist or exception happens
 }
 CATCH
 

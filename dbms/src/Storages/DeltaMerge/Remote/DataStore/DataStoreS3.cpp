@@ -113,18 +113,27 @@ std::unordered_map<String, Int64> DataStoreS3::getDataFileSizes(const std::unord
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
     std::vector<std::future<std::tuple<String, Int64>>> actual_sizes;
-    for (const auto & lock_key: lock_keys)
+    for (const auto & lock_key : lock_keys)
     {
         auto task = std::make_shared<std::packaged_task<std::tuple<String, Int64>()>>(
             [&s3_client, lock_key = lock_key, log = this->log]() noexcept {
                 auto key_view = S3::S3FilenameView::fromKey(lock_key);
                 auto datafile_key = key_view.asDataFile().toFullKey();
-                auto object_info = S3::tryGetObjectInfo(*s3_client, datafile_key);
-                if (!object_info.exist || object_info.size < 0)
+                try
                 {
-                    LOG_WARNING(log, "failed to get S3 object size, key={} exist={} size={}", lock_key, object_info.exist, object_info.size);
+                    auto object_info = S3::tryGetObjectInfo(*s3_client, datafile_key);
+                    if (object_info.exist && object_info.size >= 0)
+                    {
+                        return std::make_tuple(lock_key, object_info.size);
+                    }
+                    // else fallback
+                    LOG_WARNING(log, "failed to get S3 object size, key={} datafile={} exist={} size={}", lock_key, datafile_key, object_info.exist, object_info.size);
                 }
-                return std::make_tuple(lock_key, object_info.size);
+                catch (...)
+                {
+                    tryLogCurrentException(log, fmt::format("failed to get S3 object size, key={} datafile={}", lock_key, datafile_key));
+                }
+                return std::make_tuple(lock_key, static_cast<Int64>(-1));
             });
         actual_sizes.emplace_back(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task] { (*task)(); });

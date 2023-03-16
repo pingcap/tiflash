@@ -67,6 +67,10 @@ public:
 private:
     explicit UniversalPageStorageService(Context & global_context_);
 
+    std::unordered_set<String> getRemoteFileIdsNeedCompact(
+        const DM::Remote::RemoteGCThreshold & gc_threshold,
+        DM::Remote::IDataStorePtr remote_store);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else

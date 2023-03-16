@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FmtUtils.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <IO/IOThreadPool.h>
@@ -36,8 +37,6 @@
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
-
-#include "Common/FmtUtils.h"
 
 
 namespace DB
@@ -440,8 +439,7 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
         .last_sequence = last_checkpoint_sequence,
     });
     // get the remote file ids that need to be compacted
-    const auto file_ids_to_compact = getRemoteFileIdsNeedCompact(options.remote_gc_threshold, options.remote_store);
-    bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
+    bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, options.file_ids_to_compact);
     writer->writeSuffix();
     writer.reset();
 
@@ -480,53 +478,6 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
     }
 
     last_checkpoint_sequence = snap->sequence;
-}
-
-std::unordered_set<String> UniversalPageStorage::getRemoteFileIdsNeedCompact(const DM::Remote::RemoteGCThreshold & gc_threshold, DM::Remote::IDataStorePtr remote_store)
-{
-    // In order to not block local GC updating the cache, get a copy of the cache
-    auto stats = remote_data_files_stat_cache.getCopy();
-
-    {
-        std::unordered_set<String> file_ids;
-        // If the total_size is 0, try to get the actual size from S3
-        for (const auto & [file_id, stat] : stats)
-        {
-            if (stat.total_size == 0)
-                file_ids.insert(file_id);
-        }
-        std::unordered_map<String, Int64> file_sizes = remote_store->getDataFileSizes(file_ids);
-        for (auto & [file_id, actual_size] : file_sizes)
-        {
-            auto iter = stats.find(file_id);
-            RUNTIME_CHECK(iter != stats.end(), file_id);
-            iter->second.total_size = actual_size;
-        }
-    }
-
-    // update cache by the S3 result
-    remote_data_files_stat_cache.updateTotalSize(stats);
-
-    FmtBuffer fmt_buf;
-    fmt_buf.append("[");
-    std::unordered_set<String> rewrite_files;
-    for (const auto & [file_id, stat] : stats)
-    {
-        if (stat.total_size <= 0)
-            continue;
-        double valid_rate = 1.0 * stat.valid_size / stat.total_size;
-        if (valid_rate < gc_threshold.valid_rate
-            || stat.total_size < static_cast<Int64>(gc_threshold.min_file_threshold))
-        {
-            if (!rewrite_files.empty())
-                fmt_buf.append(", ");
-            fmt_buf.fmtAppend("{{key={} size={} rate={:.2f}}}", file_id, stat.total_size, valid_rate);
-            rewrite_files.emplace(file_id);
-        }
-    }
-    fmt_buf.append("]");
-    LOG_INFO(log, "CheckpointData pick for compaction {}", fmt_buf.toString());
-    return rewrite_files;
 }
 
 } // namespace DB

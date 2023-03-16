@@ -15,6 +15,7 @@
 #pragma once
 
 #include <common/types.h>
+#include <fmt/format.h>
 
 #include <mutex>
 #include <unordered_map>
@@ -62,3 +63,15 @@ private:
     std::unordered_map<String, CPDataFileStat> stats;
 };
 } // namespace DB::PS::V3
+
+template <>
+struct fmt::formatter<DB::PS::V3::CPDataFileStat>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::PS::V3::CPDataFileStat & value, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return format_to(ctx.out(), "valid:{},total:{}", value.valid_size, value.total_size);
+    }
+};

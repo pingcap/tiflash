@@ -126,6 +126,60 @@ bool UniversalPageStorageService::uploadCheckpoint()
     return uploadCheckpointImpl(store_info, s3lock_client, remote_store);
 }
 
+std::unordered_set<String> UniversalPageStorageService::getRemoteFileIdsNeedCompact(
+    const DM::Remote::RemoteGCThreshold & gc_threshold,
+    DM::Remote::IDataStorePtr remote_store)
+{
+    // In order to not block local GC updating the cache, get a copy of the cache
+    auto stats = uni_page_storage->getRemoteDataFilesStatCache();
+
+    {
+        std::unordered_set<String> file_ids;
+        // If the total_size is 0, try to get the actual size from S3
+        for (const auto & [file_id, stat] : stats)
+        {
+            if (stat.total_size == 0)
+                file_ids.insert(file_id);
+        }
+        std::unordered_map<String, Int64> file_sizes = remote_store->getDataFileSizes(file_ids);
+        for (auto & [file_id, actual_size] : file_sizes)
+        {
+            // IO error or data file not exist, just skip it
+            if (actual_size < 0)
+            {
+                continue;
+            }
+            auto iter = stats.find(file_id);
+            RUNTIME_CHECK_MSG(iter != stats.end(), "file_id={} stats={}", file_id, stats);
+            iter->second.total_size = actual_size;
+        }
+    }
+
+    // update cache by the S3 result
+    uni_page_storage->updateRemoteFilesTotalSizes(stats);
+
+    FmtBuffer fmt_buf;
+    fmt_buf.append("[");
+    std::unordered_set<String> rewrite_files;
+    for (const auto & [file_id, stat] : stats)
+    {
+        if (stat.total_size <= 0)
+            continue;
+        double valid_rate = 1.0 * stat.valid_size / stat.total_size;
+        if (valid_rate < gc_threshold.valid_rate
+            || stat.total_size < static_cast<Int64>(gc_threshold.min_file_threshold))
+        {
+            if (!rewrite_files.empty())
+                fmt_buf.append(", ");
+            fmt_buf.fmtAppend("{{key={} size={} rate={:.2f}}}", file_id, stat.total_size, valid_rate);
+            rewrite_files.emplace(file_id);
+        }
+    }
+    fmt_buf.append("]");
+    LOG_INFO(log, "CheckpointData pick for compaction {}", fmt_buf.toString());
+    return rewrite_files;
+}
+
 bool UniversalPageStorageService::uploadCheckpointImpl(
     const metapb::Store & store_info,
     const S3::S3LockClientPtr & s3lock_client,
@@ -176,6 +230,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
         .valid_rate = settings.remote_gc_ratio,
         .min_file_threshold = static_cast<size_t>(settings.remote_gc_small_size),
     };
+    auto file_ids_to_compact = getRemoteFileIdsNeedCompact(gc_threshold, remote_store);
     UniversalPageStorage::DumpCheckpointOptions opts{
         .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
         .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",
@@ -191,8 +246,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
             .remote_store = remote_store,
         },
         .override_sequence = upload_info.upload_sequence, // override by upload_sequence
-        .remote_gc_threshold = gc_threshold,
-        .remote_store = remote_store,
+        .file_ids_to_compact = file_ids_to_compact,
     };
     uni_page_storage->dumpIncrementalCheckpoint(opts);
 
@@ -214,7 +268,7 @@ bool UniversalPageStorageService::gc()
 
     last_try_gc_time = now;
     // TODO: reload config
-    return this->uni_page_storage->gc({});
+    return this->uni_page_storage->gc();
 }
 
 UniversalPageStorageService::~UniversalPageStorageService()
