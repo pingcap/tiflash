@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Interpreters/Context.h>
 #include <Poco/DigestStream.h>
 #include <Poco/MD5Engine.h>
 #include <Poco/StreamCopier.h>
@@ -20,15 +21,17 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <Storages/S3/S3WritableFile.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <aws/core/Aws.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
@@ -64,9 +67,9 @@ public:
         buf_unit.resize(256);
         std::iota(buf_unit.begin(), buf_unit.end(), 0);
 
-        s3_client = S3::ClientFactory::instance().sharedClient();
-        bucket = S3::ClientFactory::instance().bucket();
-        ASSERT_TRUE(createBucketIfNotExist());
+        s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        data_store = std::make_shared<DM::Remote::DataStoreS3>(dbContext().getFileProvider());
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     }
 
     void reload()
@@ -77,29 +80,9 @@ public:
     Context & dbContext() { return *db_context; }
 
 protected:
-    bool createBucketIfNotExist()
-    {
-        Aws::S3::Model::CreateBucketRequest request;
-        request.SetBucket(bucket);
-        auto outcome = s3_client->CreateBucket(request);
-        if (outcome.IsSuccess())
-        {
-            LOG_DEBUG(log, "Created bucket {}", bucket);
-        }
-        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
-        {
-            LOG_DEBUG(log, "Bucket {} already exist", bucket);
-        }
-        else
-        {
-            const auto & err = outcome.GetError();
-            LOG_ERROR(log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
-        }
-        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
-    }
     void writeFile(const String & key, size_t size, const WriteSettings & write_setting)
     {
-        S3WritableFile file(s3_client, bucket, key, write_setting);
+        S3WritableFile file(s3_client, key, write_setting);
         size_t write_size = 0;
         while (write_size < size)
         {
@@ -115,7 +98,7 @@ protected:
 
     void verifyFile(const String & key, size_t size)
     {
-        S3RandomAccessFile file(s3_client, bucket, key);
+        S3RandomAccessFile file(s3_client, key);
         std::vector<char> tmp_buf;
         size_t read_size = 0;
         while (read_size < size)
@@ -157,70 +140,9 @@ protected:
         return res;
     }
 
-    static std::vector<String> getLocalFiles(const String & dir)
+    static void downloadDMFile(const DMFileOID & remote_oid, const String & local_dir, const std::vector<String> & target_files)
     {
-        std::vector<String> filenames;
-        Poco::DirectoryIterator end;
-        for (auto itr = Poco::DirectoryIterator{dir}; itr != end; ++itr)
-        {
-            if (itr->isFile())
-            {
-                // `NGC` file is unused in Cloud-Native mode.
-                if (itr.name() != "NGC")
-                {
-                    filenames.push_back(itr.name());
-                }
-            }
-        }
-        return filenames;
-    }
-
-    std::vector<String> uploadDMFile(DMFilePtr local_dmfile, const DMFileOID & oid)
-    {
-        Stopwatch sw;
-        RUNTIME_CHECK(local_dmfile->fileId() == oid.file_id);
-
-        const auto local_dir = local_dmfile->path();
-        auto local_files = getLocalFiles(local_dir);
-        RUNTIME_CHECK(!local_files.empty());
-
-        const auto remote_dir = S3::S3Filename::fromDMFileOID(oid).toFullKey();
-        LOG_DEBUG(log, "Start upload DMFile, local_dir={} remote_dir={} local_files={}", local_dir, remote_dir, local_files);
-
-        std::vector<std::future<void>> upload_results;
-        for (const auto & fname : local_files)
-        {
-            if (fname == DMFile::metav2FileName())
-            {
-                // meta file will be upload at last.
-                continue;
-            }
-            auto local_fname = fmt::format("{}/{}", local_dir, fname);
-            auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
-            S3::uploadFile(*s3_client, bucket, local_fname, remote_fname);
-        }
-
-        // Only when the meta upload is successful, the dmfile upload can be considered successful.
-        auto local_meta_fname = fmt::format("{}/{}", local_dir, DMFile::metav2FileName());
-        auto remote_meta_fname = fmt::format("{}/{}", remote_dir, DMFile::metav2FileName());
-        S3::uploadFile(*s3_client, bucket, local_meta_fname, remote_meta_fname);
-
-        LOG_DEBUG(log, "Upload DMFile finished, remote={}, cost={}ms", remote_dir, sw.elapsedMilliseconds());
-        return local_files;
-    }
-
-    void downloadDMFile(const DMFileOID & remote_oid, const String & local_dir, const std::vector<String> & target_files)
-    {
-        Stopwatch sw;
-        const auto remote_dir = S3::S3Filename::fromDMFileOID(remote_oid).toFullKey();
-        std::vector<std::future<void>> download_results;
-        for (const auto & name : target_files)
-        {
-            auto remote_fname = fmt::format("{}/{}", remote_dir, name);
-            auto local_fname = fmt::format("{}/{}", local_dir, name);
-            S3::downloadFile(*s3_client, bucket, local_fname, remote_fname);
-        }
-        LOG_DEBUG(log, "Download DMFile meta finished, remote_dir={}, local_dir={} cost={}ms", remote_dir, local_dir, sw.elapsedMilliseconds());
+        Remote::DataStoreS3::copyToLocal(remote_oid, target_files, local_dir);
     }
 
     std::unordered_map<String, size_t> listFiles(const DMFileOID & oid)
@@ -229,19 +151,19 @@ protected:
             S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKey(),
             oid.file_id,
             DMFile::Status::READABLE);
-        return S3::listPrefixWithSize(*s3_client, bucket, dmfile_dir + "/");
+        return S3::listPrefixWithSize(*s3_client, dmfile_dir + "/");
     }
 
     DMFilePtr restoreDMFile(const DMFileOID & oid)
     {
-        return DMFile::restore(db_context->getFileProvider(), oid.file_id, oid.file_id, S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKeyWithPrefix(), DMFile::ReadMetaMode::all());
+        return data_store->prepareDMFile(oid)->restore(DMFile::ReadMetaMode::all());
     }
 
     LoggerPtr log;
     std::vector<char> buf_unit;
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
+    std::shared_ptr<TiFlashS3Client> s3_client;
     S3WritableFile::UploadInfo last_upload_info;
+    Remote::IDataStorePtr data_store;
 };
 
 TEST_F(S3FileTest, SinglePart)
@@ -249,7 +171,7 @@ try
 {
     for (int i = 0; i < 10; i++)
     {
-        const size_t size = 256 * i + ::rand() % 256;
+        const size_t size = 256 * i + ::rand() % 256; // NOLINT(cert-msc50-cpp)
         const String key = "/a/b/c/singlepart";
         writeFile(key, size, WriteSettings{});
         ASSERT_EQ(last_upload_info.part_number, 0);
@@ -285,7 +207,7 @@ try
     WriteSettings write_setting;
     const String key = "/a/b/c/seek";
     writeFile(key, size, write_setting);
-    S3RandomAccessFile file(s3_client, bucket, key);
+    S3RandomAccessFile file(s3_client, key);
     {
         std::vector<char> tmp_buf(256);
         auto n = file.read(tmp_buf.data(), tmp_buf.size());
@@ -309,7 +231,7 @@ CATCH
 TEST_F(S3FileTest, WriteRead)
 try
 {
-    auto cols = DMTestEnv::getDefaultColumns();
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
 
     const size_t num_rows_write = 128;
 
@@ -330,12 +252,13 @@ try
     oid.store_id = 1;
     oid.table_id = 1;
     oid.file_id = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
+
     {
         // Prepare for write
         // Block 1: [0, 64)
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
+        Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
         // Block 2: [64, 128)
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
 
         auto configuration = std::make_optional<DMChecksumConfig>();
         dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), DMFileFormat::V3);
@@ -350,7 +273,8 @@ try
 
     std::vector<String> uploaded_files;
     {
-        uploaded_files = uploadDMFile(dmfile, oid);
+        data_store->putDMFile(dmfile, oid, /*remove_local*/ false);
+        uploaded_files = dmfile->listInternalFiles();
         auto files_with_size = listFiles(oid);
         ASSERT_EQ(uploaded_files.size(), files_with_size.size());
         LOG_TRACE(log, "{}\n", files_with_size);
@@ -403,4 +327,116 @@ try
     }
 }
 CATCH
+
+TEST_F(S3FileTest, RemoveLocal)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+
+    const size_t num_rows_write = 128;
+
+    auto read_dmfile = [&](DMFilePtr dmf) {
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder.build(dmf, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+            }));
+    };
+
+    DMFileBlockOutputStream::BlockProperty block_property1;
+    block_property1.effective_num_rows = 1;
+    block_property1.gc_hint_version = 1;
+    block_property1.deleted_rows = 1;
+    DMFileBlockOutputStream::BlockProperty block_property2;
+    block_property2.effective_num_rows = 2;
+    block_property2.gc_hint_version = 2;
+    block_property2.deleted_rows = 2;
+    std::vector<DMFileBlockOutputStream::BlockProperty> block_propertys;
+    block_propertys.push_back(block_property1);
+    block_propertys.push_back(block_property2);
+    auto parent_path = TiFlashStorageTestBasic::getTemporaryPath();
+    DMFilePtr dmfile;
+    DMFileOID oid;
+    oid.store_id = 1;
+    oid.table_id = 1;
+    oid.file_id = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
+
+    {
+        // Prepare for write
+        // Block 1: [0, 64)
+        Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
+        // Block 2: [64, 128)
+        Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
+
+        auto configuration = std::make_optional<DMChecksumConfig>();
+        dmfile = DMFile::create(oid.file_id, parent_path, std::move(configuration), DMFileFormat::V3);
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
+        stream->writePrefix();
+        stream->write(block1, block_property1);
+        stream->write(block2, block_property2);
+        stream->writeSuffix();
+
+        ASSERT_EQ(dmfile->getPackProperties().property_size(), 2);
+    }
+
+    std::vector<String> uploaded_files;
+    auto local_dir = dmfile->path();
+    ASSERT_TRUE(std::filesystem::exists(local_dir));
+    {
+        data_store->putDMFile(dmfile, oid, /*remove_local*/ true);
+        uploaded_files = dmfile->listInternalFiles();
+        auto files_with_size = listFiles(oid);
+        ASSERT_EQ(uploaded_files.size(), files_with_size.size());
+        LOG_TRACE(log, "{}\n", files_with_size);
+    }
+    ASSERT_FALSE(std::filesystem::exists(local_dir));
+    ASSERT_EQ(dmfile->path(), S3::S3Filename::fromDMFileOID(oid).toFullKeyWithPrefix());
+    read_dmfile(dmfile);
+
+    auto dmfile_from_s3 = restoreDMFile(oid);
+    ASSERT_NE(dmfile_from_s3, nullptr);
+    read_dmfile(dmfile_from_s3);
+}
+CATCH
+
+TEST_F(S3FileTest, CheckpointUpload)
+try
+{
+    // prepare
+    Strings data_files{
+        getTemporaryPath() + "/data_file_1",
+        getTemporaryPath() + "/data_file_2",
+    };
+    String manifest_file = getTemporaryPath() + "/manifest";
+
+    {
+        for (const auto & f : data_files)
+        {
+            Poco::File(f).createFile();
+        }
+        Poco::File(manifest_file).createFile();
+    }
+
+    PS::V3::LocalCheckpointFiles checkpoint{.data_files = data_files, .manifest_file = manifest_file};
+
+    // test upload
+    StoreID store_id = 987;
+    UInt64 sequence = 200;
+    data_store->putCheckpointFiles(checkpoint, store_id, sequence);
+
+    // ensure CheckpointDataFile, theirs lock file and CheckpointManifest are uploaded
+    auto s3client = S3::ClientFactory::instance().sharedTiFlashClient();
+    auto cp_data0 = S3::S3Filename::newCheckpointData(store_id, sequence, 0);
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data0.toFullKey()));
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data0.toView().getLockKey(store_id, sequence)));
+    auto cp_data1 = S3::S3Filename::newCheckpointData(store_id, sequence, 1);
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data1.toFullKey()));
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data1.toView().getLockKey(store_id, sequence)));
+    ASSERT_TRUE(S3::objectExists(*s3client, S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey()));
+}
+CATCH
+
 } // namespace DB::tests

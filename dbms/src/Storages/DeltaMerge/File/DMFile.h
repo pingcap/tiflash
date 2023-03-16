@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/FormatVersion.h>
+#include <Storages/S3/S3Filename.h>
 #include <common/logger_useful.h>
 
 namespace DB::DM
@@ -240,6 +241,8 @@ public:
         // Try to clean up temporary / dropped files
         bool clean_up = false;
     };
+    static std::vector<String> listLocal(const String & parent_path);
+    static std::vector<String> listS3(const String & parent_path);
     static std::set<UInt64> listAllInPath(const FileProviderPtr & file_provider, const String & parent_path, const ListOptions & options);
 
     // static helper function for getting path
@@ -328,6 +331,10 @@ public:
         return results;
     }
 
+    static String metav2FileName() { return "meta"; }
+    std::vector<String> listInternalFiles();
+    void switchToRemote(const S3::DMFileOID & oid);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -361,7 +368,7 @@ public:
     size_t colIndexSizeByName(const FileNameBase & file_name_base) { return Poco::File(colIndexPath(file_name_base)).getSize(); }
     size_t colDataSizeByName(const FileNameBase & file_name_base) { return Poco::File(colDataPath(file_name_base)).getSize(); }
     size_t colIndexSize(ColId id);
-    size_t colDataSize(ColId id);
+    size_t colDataSize(ColId id, bool is_null_map);
 
     String colDataPath(const FileNameBase & file_name_base) const { return subFilePath(colDataFileName(file_name_base)); }
     String colIndexPath(const FileNameBase & file_name_base) const { return subFilePath(colIndexFileName(file_name_base)); }
@@ -391,7 +398,6 @@ public:
     static String packStatFileName() { return "pack"; }
     static String packPropertyFileName() { return "property"; }
     static String configurationFileName() { return "config"; }
-    static String metav2FileName() { return "meta"; }
 
     static String colDataFileName(const FileNameBase & file_name_base);
     static String colIndexFileName(const FileNameBase & file_name_base);
@@ -438,9 +444,9 @@ public:
     // Meta data is small and 64KB is enough.
     static constexpr size_t meta_buffer_size = 64 * 1024;
     void finalizeMetaV2(WriteBuffer & buffer);
-    MetaBlockHandle writeSLPackStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest);
-    MetaBlockHandle writeSLPackPropertyToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest);
-    MetaBlockHandle writeColumnStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest);
+    MetaBlockHandle writeSLPackStatToBuffer(WriteBuffer & buffer);
+    MetaBlockHandle writeSLPackPropertyToBuffer(WriteBuffer & buffer);
+    MetaBlockHandle writeColumnStatToBuffer(WriteBuffer & buffer);
     std::vector<char> readMetaV2(const FileProviderPtr & file_provider);
     void parseMetaV2(std::string_view buffer);
     void parseColumnStat(std::string_view buffer);
@@ -469,6 +475,7 @@ private:
     DMFileFormat::Version version;
 
     friend class DMFileWriter;
+    friend class DMFileWriterRemote;
     friend class DMFileReader;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;

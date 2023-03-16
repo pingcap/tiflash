@@ -89,7 +89,7 @@ String BlobStoreGCInfo::toTypeString(const Type type_index) const
                 fb.fmtAppend("{}", i);
             },
             ", ")
-        .append("]}}");
+        .append("]}");
     return fmt_buf.toString();
 }
 
@@ -107,7 +107,7 @@ String BlobStoreGCInfo::toTypeTruncateString(const Type type_index) const
                 fb.fmtAppend("{}", i);
             },
             ", ")
-        .append("]}}");
+        .append("]}");
     return fmt_buf.toString();
 }
 } // namespace DB::PS::V3

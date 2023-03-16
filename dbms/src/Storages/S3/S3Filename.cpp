@@ -17,6 +17,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/S3/S3Filename.h>
+#include <common/types.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
 
@@ -40,10 +41,15 @@ const static re2::RE2 rgx_store_prefix("^s(?P<store_id>[0-9]+)/$");
 const static re2::RE2 rgx_data_or_manifest("^s(?P<store_id>[0-9]+)/(data|manifest)/(?P<data_subpath>.+)$");
 const static re2::RE2 rgx_subpath_manifest("mf_(?P<upload_seq>[0-9]+)");
 
+/// parsing DTFile
+const static re2::RE2 rgx_subpath_dtfile("t_(?P<table_id>[0-9]+)/dmf_(?P<file_id>[0-9]+)");
+const static re2::RE2 rgx_subpath_keyspace_dtfile("ks_(?P<keyspace_id>[0-9]+)_t_(?P<table_id>[0-9]+)/dmf_(?P<file_id>[0-9]+)");
+
 constexpr static std::string_view DELMARK_SUFFIX = ".del";
 
 // clang-format off
 
+constexpr static std::string_view fmt_allstore_prefix  = "s";
 constexpr static std::string_view fmt_store_prefix     = "s{store_id}/";
 constexpr static std::string_view fmt_manifest_prefix  = "s{store_id}/manifest/";
 constexpr static std::string_view fmt_manifest         = "s{store_id}/manifest/{subpath}";
@@ -84,6 +90,47 @@ String toFullKey(const S3FilenameType type, const StoreID store_id, const std::s
 }
 
 } // namespace details
+
+bool S3FilenameView::isDMFile() const
+{
+    // dmfile with table prefix
+    static_assert(details::fmt_subpath_dtfile[0] == 't', "dtfile prefix changed!");
+    static_assert(details::fmt_subpath_dtfile[1] == '_', "dtfile prefix changed!");
+
+    // dmfile with keyspace prefix
+    static_assert(details::fmt_subpath_keyspace_dtfile[0] == 'k', "keyspace dtfile prefix changed!");
+    static_assert(details::fmt_subpath_keyspace_dtfile[1] == 's', "keyspace dtfile prefix changed!");
+    static_assert(details::fmt_subpath_keyspace_dtfile[2] == '_', "keyspace dtfile prefix changed!");
+
+    return (startsWith(data_subpath, "t_") || startsWith(data_subpath, "ks_"));
+}
+
+DMFileOID S3FilenameView::getDMFileOID() const
+{
+    RUNTIME_CHECK(isDMFile());
+    TableID table_id;
+    UInt64 file_id;
+    re2::StringPiece prefix_sp{data_subpath.data(), data_subpath.size()};
+    if (startsWith(data_subpath, "t_"))
+    {
+        RUNTIME_CHECK(re2::RE2::FullMatch(prefix_sp, details::rgx_subpath_dtfile, &table_id, &file_id));
+        return DMFileOID{
+            .store_id = store_id,
+            .table_id = table_id,
+            .file_id = file_id,
+        };
+    }
+    else
+    {
+        UInt64 keyspace_id;
+        RUNTIME_CHECK(re2::RE2::FullMatch(prefix_sp, details::rgx_subpath_keyspace_dtfile, &keyspace_id, &table_id, &file_id));
+        return DMFileOID{
+            .store_id = store_id,
+            .table_id = table_id,
+            .file_id = file_id,
+        };
+    }
+}
 
 String S3FilenameView::toFullKey() const
 {
@@ -291,6 +338,11 @@ S3FilenameView::LockInfo S3FilenameView::getLockInfo() const
 
 //==== Generate S3 key from raw parts ====//
 
+String S3Filename::allStorePrefix()
+{
+    return String(details::fmt_allstore_prefix);
+}
+
 S3Filename S3Filename::fromStoreId(StoreID store_id)
 {
     return S3Filename{
@@ -326,6 +378,25 @@ S3Filename S3Filename::newCheckpointData(StoreID store_id, UInt64 upload_seq, UI
         .store_id = store_id,
         .data_subpath = fmt::format(details::fmt_subpath_checkpoint_data, fmt::arg("seq", upload_seq), fmt::arg("index", file_idx)),
     };
+}
+
+String S3Filename::newCheckpointDataNameTemplate(StoreID store_id, UInt64 lock_seq)
+{
+    return fmt::format(
+        details::fmt_lock_file,
+        fmt::arg("store_id", store_id),
+        fmt::arg("subpath", details::fmt_subpath_checkpoint_data), // available placeholder `seq`, `index`
+        fmt::arg("lock_store", store_id),
+        fmt::arg("lock_seq", lock_seq));
+}
+
+String S3Filename::newCheckpointManifestNameTemplate(StoreID store_id)
+{
+    return fmt::format(
+        details::fmt_manifest,
+        fmt::arg("store_id", store_id),
+        fmt::arg("subpath", details::fmt_subpath_manifest) // available placeholder `seq`
+    );
 }
 
 S3Filename S3Filename::newCheckpointManifest(StoreID store_id, UInt64 upload_seq)

@@ -17,8 +17,8 @@ tmp_path = "/tmp/tiflash/data/tmp"
 path = "/tmp/tiflash/data/db"
 capacity = "10737418240"
 
-mark_cache_size = 5368709120
-minmax_index_cache_size = 5368709120
+mark_cache_size = 1073741824
+minmax_index_cache_size = 1073741824
 tcp_port = 9000
 http_port = 8123
 

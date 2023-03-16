@@ -31,6 +31,7 @@ namespace DB::DM
 using HandleValuePtr = std::shared_ptr<String>;
 
 struct RowKeyRange;
+using RowKeyRanges = std::vector<RowKeyRange>;
 
 inline int compare(const char * a, size_t a_size, const char * b, size_t b_size)
 {
@@ -415,9 +416,11 @@ struct RowKeyRange
         HandleValuePtr min;
         HandleValuePtr max;
 
-        TableRangeMinMax(TableID table_id, bool is_common_handle)
+        TableRangeMinMax(KeyspaceID keyspace_id, TableID table_id, bool is_common_handle)
         {
             WriteBufferFromOwnString ss;
+            auto ks_pfx = DecodedTiKVKey::makeKeyspacePrefix(keyspace_id);
+            ss.write(ks_pfx.data(), ks_pfx.size());
             ss.write('t');
             EncodeInt64(table_id, ss);
             ss.write('_');
@@ -437,9 +440,9 @@ struct RowKeyRange
     };
 
     /// maybe use a LRU cache in case there are massive tables
-    static std::unordered_map<TableID, TableRangeMinMax> table_min_max_data;
+    static std::unordered_map<KeyspaceTableID, TableRangeMinMax, boost::hash<KeyspaceTableID>> table_min_max_data;
     static std::shared_mutex table_mutex;
-    static const TableRangeMinMax & getTableMinMaxData(TableID table_id, bool is_common_handle);
+    static const TableRangeMinMax & getTableMinMaxData(KeyspaceID keyspace_id, TableID table_id, bool is_common_handle);
 
     RowKeyRange(const RowKeyValue & start_, const RowKeyValue & end_, bool is_common_handle_, size_t rowkey_column_size_)
         : is_common_handle(is_common_handle_)
@@ -752,7 +755,8 @@ struct RowKeyRange
         {
             auto & start_key = *raw_keys.first;
             auto & end_key = *raw_keys.second;
-            const auto & table_range_min_max = getTableMinMaxData(table_id, is_common_handle);
+            auto keyspace_id = start_key.getKeyspaceID();
+            const auto & table_range_min_max = getTableMinMaxData(keyspace_id, table_id, is_common_handle);
             RowKeyValue start_value, end_value;
             if (start_key.compare(*table_range_min_max.min) <= 0)
             {
@@ -764,7 +768,7 @@ struct RowKeyRange
             else
             {
                 start_value = RowKeyValue(is_common_handle,
-                                          std::make_shared<std::string>(start_key.begin() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, start_key.end()));
+                                          std::make_shared<std::string>(RecordKVFormat::getRawTiDBPKView(start_key)));
             }
             if (end_key.compare(*table_range_min_max.max) >= 0)
             {
@@ -775,7 +779,7 @@ struct RowKeyRange
             }
             else
                 end_value = RowKeyValue(is_common_handle,
-                                        std::make_shared<std::string>(end_key.begin() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, end_key.end()));
+                                        std::make_shared<std::string>(RecordKVFormat::getRawTiDBPKView(end_key)));
             return RowKeyRange(start_value, end_value, is_common_handle, rowkey_column_size);
         }
         else
@@ -798,7 +802,6 @@ struct RowKeyRange
     }
     bool operator!=(const RowKeyRange & rhs) const { return !(*this == rhs); }
 }; // struct RowKeyRange
-using RowKeyRanges = std::vector<RowKeyRange>;
 
 // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
 inline String toDebugString(const RowKeyRanges & ranges)

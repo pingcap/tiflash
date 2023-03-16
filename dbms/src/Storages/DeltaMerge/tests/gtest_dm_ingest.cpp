@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
+#include <Common/UniThreadPool.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
 #include <TestUtils/InputStreamTestUtils.h>
-#include <common/ThreadPool.h>
 
 #include <future>
+#include <random>
 
 namespace DB
 {
@@ -231,7 +234,7 @@ try
     auto pool = std::make_shared<ThreadPool>(4);
     for (const auto & op : ops)
     {
-        pool->schedule([=, &log] {
+        pool->scheduleOrThrowOnError([=, &log] {
             try
             {
                 LOG_INFO(

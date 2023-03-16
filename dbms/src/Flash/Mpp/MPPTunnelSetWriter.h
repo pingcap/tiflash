@@ -32,7 +32,11 @@ public:
     void write(tipb::SelectResponse & response);
     // this is a broadcast or pass through writing.
     // data codec version V0
-    void broadcastOrPassThroughWrite(Blocks & blocks);
+    void broadcastWrite(Blocks & blocks);
+    void passThroughWrite(Blocks & blocks);
+    // data codec version > V0
+    void broadcastWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method);
+    void passThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method);
     // this is a partition writing.
     // data codec version V0
     void partitionWrite(Blocks & blocks, int16_t partition_id);

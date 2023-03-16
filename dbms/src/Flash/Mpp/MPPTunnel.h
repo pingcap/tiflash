@@ -549,6 +549,7 @@ private:
 
     void updateConnProfileInfo(size_t pushed_data_size)
     {
+        std::lock_guard lock(mu);
         connection_profile_info.bytes += pushed_data_size;
         connection_profile_info.packets += 1;
     }

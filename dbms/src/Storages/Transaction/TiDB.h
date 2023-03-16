@@ -47,6 +47,8 @@ namespace TiDB
 {
 using DB::ColumnID;
 using DB::DatabaseID;
+using DB::KeyspaceID;
+using DB::NullspaceID;
 using DB::String;
 using DB::TableID;
 using DB::Timestamp;
@@ -274,13 +276,21 @@ struct PartitionInfo
 struct DBInfo
 {
     DatabaseID id = -1;
+    KeyspaceID keyspace_id = NullspaceID;
     String name;
     String charset;
     String collate;
     SchemaState state;
 
     DBInfo() = default;
-    explicit DBInfo(const String & json) { deserialize(json); }
+    explicit DBInfo(const String & json, KeyspaceID keyspace_id_)
+    {
+        deserialize(json);
+        if (keyspace_id == NullspaceID)
+        {
+            keyspace_id = keyspace_id_;
+        }
+    }
 
     String serialize() const;
 
@@ -352,9 +362,9 @@ struct TableInfo
 
     TableInfo & operator=(const TableInfo &) = default;
 
-    explicit TableInfo(Poco::JSON::Object::Ptr json);
+    explicit TableInfo(Poco::JSON::Object::Ptr json, KeyspaceID keyspace_id_);
 
-    explicit TableInfo(const String & table_info_json);
+    explicit TableInfo(const String & table_info_json, KeyspaceID keyspace_id_);
 
     String serialize() const;
 
@@ -367,6 +377,8 @@ struct TableInfo
     // and partition ID for partition table,
     // whereas field `belonging_table_id` below actually means the table ID this partition belongs to.
     TableID id = DB::InvalidTableID;
+    // The keyspace where the table belongs to.
+    KeyspaceID keyspace_id = NullspaceID;
     String name;
     // Columns are listed in the order in which they appear in the schema.
     std::vector<ColumnInfo> columns;

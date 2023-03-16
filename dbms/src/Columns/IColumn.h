@@ -201,6 +201,8 @@ public:
       * 2. The input parameter `collator` does not work well for complex columns(column tuple),
       *     but it is only used by TiDB , which does not support complex columns, so just ignore
       *     the complex column will be ok.
+      * 3. Even if the restored column will be discarded, deserializeAndInsertFromArena still need to
+      *     insert the data because when spill happens, this column will be used during the merge agg stage.
       */
     virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) = 0;
     const char * deserializeAndInsertFromArena(const char * pos) { return deserializeAndInsertFromArena(pos, nullptr); }
@@ -255,7 +257,7 @@ public:
 
     /** Returns a permutation that sorts elements of this column,
       *  i.e. perm[i]-th element of source column should be i-th element of sorted column.
-      * reverse - reverse ordering (acsending).
+      * reverse - reverse ordering (ascending).
       * limit - if isn't 0, then only first limit elements of the result column could be sorted.
       * nan_direction_hint - see above.
       */

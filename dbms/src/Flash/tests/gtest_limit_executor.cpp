@@ -38,6 +38,10 @@ public:
         context.addMockTable({"test", "bigtable"},
                              {{"col", TiDB::TP::TypeString}},
                              {toNullableVec<String>("col", col)});
+
+        context.addMockTable({"test", "notNull"},
+                             {{"col", TiDB::TP::TypeString, false}},
+                             {toVec<String>("col", {"a", "b", "c", "d", "e", "f", "g", "h"})});
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(size_t limit_num)
@@ -50,6 +54,7 @@ public:
     const String table_name{"projection_test_table"};
     const String col_name{"limit_col"};
     const ColumnWithNullableString col0{"col0-0", {}, "col0-2", "col0-3", {}, "col0-5", "col0-6", "col0-7"};
+    const ColumnWithString col_not_null{"a", "b", "c", "d", "e", "f", "g", "h"};
 };
 
 TEST_F(LimitExecutorTestRunner, Limit)
@@ -79,6 +84,15 @@ try
 
         executeAndAssertRowsEqual(request, std::min(limit_num, col_data_num));
     }
+
+    request = context.scan("test", "notNull").limit(1).build(context);
+    expect_cols = {toVec<String>(col_name, ColumnWithString(col_not_null.begin(), col_not_null.begin() + 1))};
+
+    WRAP_FOR_TEST_BEGIN
+    ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols);
+    WRAP_FOR_TEST_END
+
+    executeAndAssertRowsEqual(request, 1);
 }
 CATCH
 

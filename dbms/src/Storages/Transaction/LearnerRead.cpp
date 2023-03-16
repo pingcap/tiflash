@@ -18,6 +18,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/Message.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/Transaction/KVStore.h>
@@ -29,7 +30,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/Utils.h>
-#include <common/ThreadPool.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 #include <fmt/chrono.h>
@@ -107,7 +107,7 @@ public:
             regions_info_ptr = &*regions_info;
             // Only for test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
             // todo support partition table
-            auto regions = tmt.getRegionTable().getRegionsByTable(logical_table_id);
+            auto regions = tmt.getRegionTable().getRegionsByTable(NullspaceID, logical_table_id);
             regions_info_ptr->reserve(regions.size());
             for (const auto & [id, region] : regions)
             {
@@ -149,7 +149,7 @@ LearnerReadSnapshot doLearnerRead(
     const LoggerPtr & log)
 {
     assert(log != nullptr);
-    RUNTIME_ASSERT(!(context.isDisaggregatedComputeMode() && context.useAutoScaler()));
+    RUNTIME_ASSERT(!(context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler));
 
     auto & tmt = context.getTMTContext();
 
@@ -384,7 +384,7 @@ LearnerReadSnapshot doLearnerRead(
                                     region_to_query.region_id,
                                     region_to_query.version,
                                     RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table),
-                                    RegionException::RegionReadStatusString(status));
+                                    magic_enum::enum_name(status));
                                 unavailable_regions.add(region->id(), status);
                             }
                         },
@@ -469,7 +469,7 @@ void validateQueryInfo(
                 region_query_info.region_id,
                 region_query_info.version,
                 RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_query_info.range_in_table),
-                RegionException::RegionReadStatusString(status));
+                magic_enum::enum_name(status));
         }
     }
 

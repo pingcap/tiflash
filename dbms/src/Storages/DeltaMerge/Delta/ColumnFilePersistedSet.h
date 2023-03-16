@@ -75,6 +75,14 @@ public:
     /// Only called after reboot.
     static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageIdU64 id);
 
+    static ColumnFilePersistedSetPtr createFromCheckpoint( //
+        DMContext & context,
+        UniversalPageStoragePtr temp_ps,
+        const RowKeyRange & segment_range,
+        NamespaceId ns_id,
+        PageIdU64 delta_id,
+        WriteBatches & wbs);
+
     /**
      * Resets the logger by using the one from the segment.
      * Segment_log is not available when constructing, because usually
@@ -148,7 +156,7 @@ public:
     /// Update the metadata to commit the compaction results
     bool installCompactionResults(const MinorCompactionPtr & compaction, WriteBatches & wbs);
 
-    ColumnFileSetSnapshotPtr createSnapshot(const StorageSnapshotPtr & storage_snap);
+    ColumnFileSetSnapshotPtr createSnapshot(const IColumnFileDataProviderPtr & data_provider);
 };
 
 } // namespace DM

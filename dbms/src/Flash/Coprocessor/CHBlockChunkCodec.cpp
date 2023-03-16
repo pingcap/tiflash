@@ -230,4 +230,11 @@ Block CHBlockChunkCodec::decode(const String & str, const Block & header)
     ReadBufferFromString read_buffer(str);
     return CHBlockChunkCodec(header).decodeImpl(read_buffer);
 }
+
+Block CHBlockChunkCodec::decode(const String & str)
+{
+    ReadBufferFromString read_buffer(str);
+    return decodeImpl(read_buffer);
+}
+
 } // namespace DB

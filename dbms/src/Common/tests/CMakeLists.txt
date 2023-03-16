@@ -30,12 +30,6 @@ target_link_libraries (hash_table tiflash_common_io)
 add_executable (small_table small_table.cpp)
 target_link_libraries (small_table tiflash_common_io)
 
-add_executable (parallel_aggregation parallel_aggregation.cpp)
-target_link_libraries (parallel_aggregation tiflash_common_io)
-
-add_executable (parallel_aggregation2 parallel_aggregation2.cpp)
-target_link_libraries (parallel_aggregation2 tiflash_common_io)
-
 add_executable (int_hashes_perf int_hashes_perf.cpp AvalancheTest.cpp Random.cpp)
 target_link_libraries (int_hashes_perf tiflash_common_io)
 
@@ -57,12 +51,6 @@ target_link_libraries (arena_with_free_lists tiflash_common_io)
 
 add_executable (pod_array pod_array.cpp)
 target_link_libraries (pod_array tiflash_common_io)
-
-add_executable (thread_creation_latency thread_creation_latency.cpp)
-target_link_libraries (thread_creation_latency tiflash_common_io)
-
-add_executable (thread_pool thread_pool.cpp)
-target_link_libraries (thread_pool tiflash_common_io)
 
 add_executable (array_cache array_cache.cpp)
 target_link_libraries (array_cache tiflash_common_io)

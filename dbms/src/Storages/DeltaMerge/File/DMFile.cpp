@@ -19,18 +19,22 @@
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <IO/IOSWrapper.h>
+#include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
+#include <aws/s3/model/CommonPrefix.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
 #include <boost/algorithm/string/classification.hpp>
+#include <filesystem>
 #include <utility>
 
 namespace DB
@@ -46,6 +50,7 @@ namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
 extern const char exception_before_dmfile_remove_from_disk[];
+extern const char force_use_dmfile_format_v3[];
 } // namespace FailPoints
 
 namespace DM
@@ -107,6 +112,11 @@ String DMFile::ngcPath() const
 
 DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, DMConfigurationOpt configuration, DMFileFormat::Version version)
 {
+    fiu_do_on(FailPoints::force_use_dmfile_format_v3, {
+        // some unit test we need mock upload DMFile to S3, which only support DMFileFormat::V3
+        version = DMFileFormat::V3;
+        LOG_WARNING(Logger::get(), "!!!force use DMFileFormat::V3!!!");
+    });
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(new DMFile(file_id,
                                     file_id,
@@ -211,13 +221,13 @@ size_t DMFile::colIndexSize(ColId id)
     }
 }
 
-size_t DMFile::colDataSize(ColId id)
+size_t DMFile::colDataSize(ColId id, bool is_null_map)
 {
     if (useMetaV2())
     {
         if (auto itr = column_stats.find(id); itr != column_stats.end())
         {
-            return itr->second.data_bytes;
+            return is_null_map ? itr->second.nullmap_data_bytes : itr->second.data_bytes;
         }
         else
         {
@@ -226,7 +236,8 @@ size_t DMFile::colDataSize(ColId id)
     }
     else
     {
-        return colDataSizeByName(getFileNameBase(id));
+        auto namebase = is_null_map ? getFileNameBase(id, {IDataType::Substream::NullMap}) : getFileNameBase(id);
+        return colDataSizeByName(namebase);
     }
 }
 
@@ -623,18 +634,44 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
     initializeIndices();
 }
 
+std::vector<String> DMFile::listLocal(const String & parent_path)
+{
+    Poco::File folder(parent_path);
+    std::vector<String> file_names;
+    if (folder.exists())
+    {
+        folder.list(file_names);
+    }
+    return file_names;
+}
+
+std::vector<String> DMFile::listS3(const String & parent_path)
+{
+    std::vector<String> filenames;
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+    auto list_prefix = parent_path + "/";
+    S3::listPrefixWithDelimiter(
+        *client,
+        list_prefix,
+        /*delimiter*/ "/",
+        [&filenames, &list_prefix](const Aws::S3::Model::CommonPrefix & prefix) {
+            RUNTIME_CHECK(prefix.GetPrefix().size() > list_prefix.size(), prefix.GetPrefix(), list_prefix);
+            auto short_name_size = prefix.GetPrefix().size() - list_prefix.size() - 1; // `1` for the delimiter in last.
+            filenames.push_back(prefix.GetPrefix().substr(list_prefix.size(), short_name_size)); // Cut prefix and last delimiter.
+            return S3::PageResult{.num_keys = 1, .more = true};
+        });
+    return filenames;
+}
+
 std::set<UInt64> DMFile::listAllInPath(
     const FileProviderPtr & file_provider,
     const String & parent_path,
     const DMFile::ListOptions & options)
 {
-    Poco::File folder(parent_path);
-    if (!folder.exists())
-        return {};
-    std::vector<std::string> file_names;
-    folder.list(file_names);
-    std::set<UInt64> file_ids;
+    auto s3_fname_view = S3::S3FilenameView::fromKeyWithPrefix(parent_path);
+    auto file_names = s3_fname_view.isValid() ? listS3(s3_fname_view.toFullKey()) : listLocal(parent_path);
 
+    std::set<UInt64> file_ids;
     auto try_parse_file_id = [](const String & name) -> std::optional<UInt64> {
         std::vector<std::string> ss;
         boost::split(ss, name, boost::is_any_of("_"));
@@ -768,20 +805,16 @@ void DMFile::initializeIndices()
     }
 }
 
-DMFile::MetaBlockHandle DMFile::writeSLPackStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest)
+DMFile::MetaBlockHandle DMFile::writeSLPackStatToBuffer(WriteBuffer & buffer)
 {
     auto offset = buffer.count();
     const char * data = reinterpret_cast<const char *>(&pack_stats[0]);
     size_t size = pack_stats.size() * sizeof(PackStat);
-    if (digest)
-    {
-        digest->update(data, size);
-    }
     writeString(data, size, buffer);
     return MetaBlockHandle{MetaBlockType::PackStat, offset, buffer.count() - offset};
 }
 
-DMFile::MetaBlockHandle DMFile::writeSLPackPropertyToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest)
+DMFile::MetaBlockHandle DMFile::writeSLPackPropertyToBuffer(WriteBuffer & buffer)
 {
     auto offset = buffer.count();
     for (const auto & pb : pack_properties.property())
@@ -789,55 +822,44 @@ DMFile::MetaBlockHandle DMFile::writeSLPackPropertyToBuffer(WriteBuffer & buffer
         PackProperty tmp{pb};
         const char * data = reinterpret_cast<const char *>(&tmp);
         size_t size = sizeof(PackProperty);
-        if (digest)
-        {
-            digest->update(data, size);
-        }
         writeString(data, size, buffer);
     }
     return MetaBlockHandle{MetaBlockType::PackProperty, offset, buffer.count() - offset};
 }
 
-DMFile::MetaBlockHandle DMFile::writeColumnStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest)
+DMFile::MetaBlockHandle DMFile::writeColumnStatToBuffer(WriteBuffer & buffer)
 {
     auto offset = buffer.count();
     writeIntBinary(column_stats.size(), buffer);
     for (const auto & [id, stat] : column_stats)
     {
-        auto tmp_buffer = WriteBufferFromOwnString{};
-        stat.serializeToBuffer(tmp_buffer);
-        auto serialized = tmp_buffer.releaseStr();
-        if (digest)
-        {
-            digest->update(serialized.data(), serialized.length());
-        }
-        writeString(serialized.data(), serialized.size(), buffer);
+        stat.serializeToBuffer(buffer);
     }
     return MetaBlockHandle{MetaBlockType::ColumnStat, offset, buffer.count() - offset};
 }
 
 void DMFile::finalizeMetaV2(WriteBuffer & buffer)
 {
+    auto tmp_buffer = WriteBufferFromOwnString{};
     auto digest = configuration ? configuration->createUnifiedDigest() : nullptr;
-    auto pack_stats_handle = writeSLPackStatToBuffer(buffer, digest);
-    auto pack_properties_handle = writeSLPackPropertyToBuffer(buffer, digest);
-    auto column_stats_handle = writeColumnStatToBuffer(buffer, digest);
+    auto pack_stats_handle = writeSLPackStatToBuffer(tmp_buffer);
+    auto pack_properties_handle = writeSLPackPropertyToBuffer(tmp_buffer);
+    auto column_stats_handle = writeColumnStatToBuffer(tmp_buffer);
 
-    writePODBinary(pack_stats_handle, buffer);
-    writePODBinary(pack_properties_handle, buffer);
-    writePODBinary(column_stats_handle, buffer);
+    writePODBinary(pack_stats_handle, tmp_buffer);
+    writePODBinary(pack_properties_handle, tmp_buffer);
+    writePODBinary(column_stats_handle, tmp_buffer);
     UInt64 meta_block_handle_count = 3;
-    writeIntBinary(meta_block_handle_count, buffer);
-    writeIntBinary(version, buffer);
+    writeIntBinary(meta_block_handle_count, tmp_buffer);
+    writeIntBinary(version, tmp_buffer);
 
-    if (digest)
+    // Write to file and do checksums.
+    auto s = tmp_buffer.releaseStr();
+    writeString(s.data(), s.size(), buffer);
+    if (configuration)
     {
-        digest->update(reinterpret_cast<const char *>(&pack_stats_handle), sizeof(MetaBlockHandle));
-        digest->update(reinterpret_cast<const char *>(&pack_properties_handle), sizeof(MetaBlockHandle));
-        digest->update(reinterpret_cast<const char *>(&column_stats_handle), sizeof(MetaBlockHandle));
-        digest->update(reinterpret_cast<const char *>(&meta_block_handle_count), sizeof(UInt64));
-        digest->update(reinterpret_cast<const char *>(&version), sizeof(DMFileFormat::Version));
-
+        auto digest = configuration->createUnifiedDigest();
+        digest->update(s.data(), s.size());
         auto checksum_result = digest->raw();
         writeString(checksum_result.data(), checksum_result.size(), buffer);
     }
@@ -892,7 +914,7 @@ void DMFile::parseMetaV2(std::string_view buffer)
         auto hash_size = digest->hashSize();
         ptr = ptr - hash_size;
         digest->update(buffer.data(), buffer.size() - sizeof(MetaFooter) - hash_size);
-        if (unlikely(digest->compareRaw(ptr)))
+        if (unlikely(!digest->compareRaw(ptr)))
         {
             LOG_ERROR(log, "{} checksum invalid", metav2Path());
             throw Exception(ErrorCodes::CORRUPTED_DATA, "{} checksum invalid", metav2Path());
@@ -977,5 +999,46 @@ void DMFile::finalizeDirName()
     }
     old_file.renameTo(new_path);
 }
+
+std::vector<String> DMFile::listInternalFiles()
+{
+    RUNTIME_CHECK(useMetaV2());
+    std::vector<String> fnames;
+    fnames.push_back(metav2FileName());
+    for (const auto & [col_id, stat] : column_stats)
+    {
+        auto name_base = getFileNameBase(col_id, {});
+        // .dat and .mrk are required.
+        fnames.push_back(colDataFileName(name_base));
+        fnames.push_back(colMarkFileName(name_base));
+        if (stat.index_bytes > 0)
+        {
+            fnames.push_back(colIndexFileName(name_base));
+        }
+
+        if (stat.type->isNullable())
+        {
+            auto null_name_base = getFileNameBase(col_id, {IDataType::Substream::NullMap});
+            fnames.push_back(colDataFileName(null_name_base));
+            fnames.push_back(colMarkFileName(null_name_base));
+        }
+    }
+    return fnames;
+}
+
+void DMFile::switchToRemote(const S3::DMFileOID & oid)
+{
+    RUNTIME_CHECK(useMetaV2());
+    RUNTIME_CHECK(status == Status::READABLE);
+
+    auto local_path = path();
+    // Update the parent_path so that it will read data from remote storage.
+    parent_path = S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKeyWithPrefix();
+
+    // Remove local directory.
+    std::filesystem::remove_all(local_path);
+}
+
+
 } // namespace DM
 } // namespace DB

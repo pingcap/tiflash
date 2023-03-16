@@ -17,6 +17,7 @@
 #include <Flash/Disaggregated/S3LockClient.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
+#include <aws/s3/S3Client.h>
 
 namespace DB::S3
 {
@@ -38,16 +39,16 @@ public:
     {
         // If the data file exist and no delmark exist, then create a lock file on `data_file_key`
         auto view = S3FilenameView::fromKey(data_file_key);
-        if (!objectExists(*s3_client, s3_client->bucket(), data_file_key))
+        if (!objectExists(*s3_client, data_file_key))
         {
             return {false, ""};
         }
         auto delmark_key = view.getDelMarkKey();
-        if (objectExists(*s3_client, s3_client->bucket(), delmark_key))
+        if (objectExists(*s3_client, delmark_key))
         {
             return {false, ""};
         }
-        uploadEmptyFile(*s3_client, s3_client->bucket(), view.getLockKey(lock_store_id, lock_seq));
+        uploadEmptyFile(*s3_client, view.getLockKey(lock_store_id, lock_seq));
         return {true, ""};
     }
 
@@ -57,17 +58,13 @@ public:
         // If there is no lock on the given `data_file_key`, then mark as deleted
         auto view = S3FilenameView::fromKey(data_file_key);
         auto lock_prefix = view.getLockPrefix();
-        bool any_lock_exist = false;
-        listPrefix(*s3_client, s3_client->bucket(), lock_prefix, [&any_lock_exist](const Aws::S3::Model::ListObjectsV2Result & result) -> S3::PageResult {
-            if (!result.GetContents().empty())
-                any_lock_exist = true;
-            return S3::PageResult{.num_keys = result.GetContents().size(), .more = false};
-        });
+        auto lock_key_opt = S3::anyKeyExistWithPrefix(*s3_client, lock_prefix);
+        bool any_lock_exist = lock_key_opt.has_value();
         if (any_lock_exist)
         {
             return {false, ""};
         }
-        uploadEmptyFile(*s3_client, s3_client->bucket(), view.getDelMarkKey());
+        uploadEmptyFile(*s3_client, view.getDelMarkKey());
         return {true, ""};
     }
 

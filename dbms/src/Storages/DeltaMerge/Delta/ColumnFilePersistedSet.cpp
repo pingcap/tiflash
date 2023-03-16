@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 
 #include <ext/scope_guard.h>
@@ -90,10 +91,32 @@ ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
     const RowKeyRange & segment_range,
     PageIdU64 id)
 {
-    Page page = context.storage_pool.metaReader()->read(id);
+    Page page = context.storage_pool->metaReader()->read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     auto column_files = deserializeSavedColumnFiles(context, segment_range, buf);
     return std::make_shared<ColumnFilePersistedSet>(id, column_files);
+}
+
+ColumnFilePersistedSetPtr ColumnFilePersistedSet::createFromCheckpoint( //
+    DMContext & context,
+    UniversalPageStoragePtr temp_ps,
+    const RowKeyRange & segment_range,
+    NamespaceId ns_id,
+    PageIdU64 delta_id,
+    WriteBatches & wbs)
+{
+    auto delta_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Meta, ns_id), delta_id);
+    auto meta_page = temp_ps->read(delta_page_id);
+    ReadBufferFromMemory meta_buf(meta_page.data.begin(), meta_page.data.size());
+    auto column_files = createColumnFilesFromCheckpoint(
+        context,
+        segment_range,
+        meta_buf,
+        temp_ps,
+        ns_id,
+        wbs);
+    auto new_persisted_set = std::make_shared<ColumnFilePersistedSet>(delta_id, column_files);
+    return new_persisted_set;
 }
 
 void ColumnFilePersistedSet::saveMeta(WriteBatches & wbs) const
@@ -340,9 +363,9 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     return true;
 }
 
-ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const StorageSnapshotPtr & storage_snap)
+ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const IColumnFileDataProviderPtr & data_provider)
 {
-    auto snap = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
+    auto snap = std::make_shared<ColumnFileSetSnapshot>(data_provider);
     snap->rows = rows;
     snap->bytes = bytes;
     snap->deletes = deletes;

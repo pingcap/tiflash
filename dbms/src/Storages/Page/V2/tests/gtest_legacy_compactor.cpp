@@ -14,6 +14,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <IO/ReadBufferFromMemory.h>
+#include <Interpreters/Context.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
@@ -170,8 +171,8 @@ TEST(LegacyCompactorTest, DISABLED_CompactAndRestore)
 try
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    const FileProviderPtr file_provider = ctx.getFileProvider();
-    StoragePathPool spool = ctx.getPathPool().withTable("test", "t", false);
+    const FileProviderPtr file_provider = ctx->getFileProvider();
+    StoragePathPool spool = ctx->getPathPool().withTable("test", "t", false);
     auto delegator = spool.getPSDiskDelegatorSingle("meta");
     auto bkg_pool = std::make_shared<DB::BackgroundProcessingPool>(4, "bg-page-");
     PageStorage storage("compact_test", delegator, PageStorageConfig{}, file_provider, *bkg_pool);
@@ -195,7 +196,7 @@ try
 
     PageStorage::MetaMergingQueue mergine_queue;
     {
-        if (auto reader = PageFile::MetaMergingReader::createFrom(page_file, ctx.getReadLimiter());
+        if (auto reader = PageFile::MetaMergingReader::createFrom(page_file, ctx->getReadLimiter());
             reader->hasNext())
         {
             reader->moveNext();

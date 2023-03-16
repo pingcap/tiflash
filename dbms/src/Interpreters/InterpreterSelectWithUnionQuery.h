@@ -49,8 +49,6 @@ public:
         const ASTPtr & query_ptr_,
         const Context & context_);
 
-    void ignoreWithTotals();
-
 private:
     ASTPtr query_ptr;
     Context context;

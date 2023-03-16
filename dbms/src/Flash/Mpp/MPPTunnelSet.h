@@ -60,6 +60,10 @@ public:
     {
         return external_thread_cnt;
     }
+    size_t getLocalTunnelCnt()
+    {
+        return local_tunnel_cnt;
+    }
 
     const std::vector<TunnelPtr> & getTunnels() const { return tunnels; }
 
@@ -73,6 +77,7 @@ private:
     const LoggerPtr log;
 
     int external_thread_cnt = 0;
+    size_t local_tunnel_cnt = 0;
 };
 
 class MPPTunnelSet : public MPPTunnelSetBase<MPPTunnel>

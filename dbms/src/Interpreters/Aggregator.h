@@ -220,15 +220,12 @@ struct AggregationMethodOneKeyStringNoCache
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
-    ALWAYS_INLINE static inline void insertKeyIntoColumns(const StringRef &, std::vector<IColumn *> &, size_t)
+    ALWAYS_INLINE static inline void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, size_t)
     {
-        // insert empty because such column will be discarded.
+        /// still need to insert data to key because spill may will use this
+        static_cast<ColumnString *>(key_columns[0])->insertData(key.data, key.size);
     }
-    // resize offsets for column string
-    ALWAYS_INLINE static inline void initAggKeys(size_t rows, IColumn * key_column)
-    {
-        static_cast<ColumnString *>(key_column)->getOffsets().resize_fill(rows, 0);
-    }
+    ALWAYS_INLINE static inline void initAggKeys(size_t, IColumn *) {}
 };
 
 /*
@@ -289,20 +286,15 @@ struct AggregationMethodFastPathTwoKeysNoCache
         column->getData().resize_fill(rows, 0);
     }
 
-    // Only update offsets but DO NOT insert string data.
-    // Because of https://github.com/pingcap/tiflash/blob/84c2650bc4320919b954babeceb5aeaadb845770/dbms/src/Columns/IColumn.h#L160-L173, such column will be discarded.
-    ALWAYS_INLINE static inline const char * insertAggKeyIntoColumnString(const char * pos, IColumn *)
+    ALWAYS_INLINE static inline const char * insertAggKeyIntoColumnString(const char * pos, IColumn * key_column)
     {
+        /// still need to insert data to key because spill may will use this
         const size_t string_size = *reinterpret_cast<const size_t *>(pos);
         pos += sizeof(string_size);
+        static_cast<ColumnString *>(key_column)->insertData(pos, string_size);
         return pos + string_size;
     }
-    // resize offsets for column string
-    ALWAYS_INLINE static inline void initAggKeyString(size_t rows, IColumn * key_column)
-    {
-        auto * column = static_cast<ColumnString *>(key_column);
-        column->getOffsets().resize_fill(rows, 0);
-    }
+    ALWAYS_INLINE static inline void initAggKeyString(size_t, IColumn *) {}
 
     template <>
     ALWAYS_INLINE static inline void initAggKeys<ColumnsHashing::KeyDescStringBin>(size_t rows, IColumn * key_column)
@@ -930,14 +922,6 @@ private:
 };
 using MergingBucketsPtr = std::shared_ptr<MergingBuckets>;
 
-/** How are "total" values calculated with WITH TOTALS?
-  * (For more details, see TotalsHavingBlockInputStream.)
-  *
-  * The data is aggregated as usual, but the states of the aggregate functions are not finalized.
-  * Later, the aggregate function states for all rows (passed through HAVING) are merged into one - this will be TOTALS.
-  *
-  */
-
 /** Aggregates the source of the blocks.
   */
 class Aggregator
@@ -1228,7 +1212,7 @@ protected:
     void convertToBlocksImplFinal(
         Method & method,
         Table & data,
-        std::vector<std::vector<IColumn *>> key_columns_vec,
+        std::vector<std::vector<IColumn *>> && key_columns_vec,
         std::vector<MutableColumns> & final_aggregate_columns_vec,
         Arena * arena) const;
 
@@ -1243,7 +1227,7 @@ protected:
     void convertToBlocksImplNotFinal(
         Method & method,
         Table & data,
-        std::vector<std::vector<IColumn *>> key_columns_vec,
+        std::vector<std::vector<IColumn *>> && key_columns_vec,
         std::vector<AggregateColumnsData> & aggregate_columns_vec) const;
 
     template <typename Filler>

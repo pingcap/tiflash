@@ -142,6 +142,37 @@ public:
 
     static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageIdU64 segment_id);
 
+    struct SegmentMetaInfo
+    {
+        SegmentFormat::Version version;
+        UInt64 epoch;
+        RowKeyRange range;
+        PageIdU64 segment_id;
+        PageIdU64 next_segment_id;
+        PageIdU64 delta_id;
+        PageIdU64 stable_id;
+    };
+
+    using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
+    static SegmentMetaInfos readAllSegmentsMetaInfoInRange( //
+        DMContext & context,
+        UInt64 remote_store_id,
+        NamespaceId ns_id,
+        const RowKeyRange & target_range,
+        UniversalPageStoragePtr temp_ps);
+
+    // Create a list of temp segments from checkpoint.
+    // The data of these temp segments will be included in `wbs`.
+    static Segments createTargetSegmentsFromCheckpoint( //
+        const LoggerPtr & parent_log,
+        DMContext & context,
+        UInt64 remote_store_id,
+        NamespaceId ns_id,
+        const SegmentMetaInfos & meta_infos,
+        const RowKeyRange & range,
+        UniversalPageStoragePtr temp_ps,
+        WriteBatches & wbs);
+
     void serialize(WriteBatchWrapper & wb);
 
     /// Attach a new ColumnFile into the Segment. The ColumnFile will be added to MemFileSet and flushed to disk later.
@@ -165,7 +196,7 @@ public:
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
-        const RSOperatorPtr & filter,
+        const PushDownFilterPtr & filter,
         UInt64 max_version,
         size_t expected_block_size);
 
@@ -437,6 +468,8 @@ public:
      */
     [[nodiscard]] SegmentPtr replaceData(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, SegmentSnapshotPtr segment_snap_opt = nullptr) const;
 
+    [[nodiscard]] SegmentPtr dangerouslyReplaceDataFromCheckpoint(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, WriteBatches & wbs, const ColumnFilePersisteds & column_file_persisteds) const;
+
     [[nodiscard]] SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
 
     /**
@@ -458,7 +491,8 @@ public:
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
-    void placeDeltaIndex(DMContext & dm_context);
+    void placeDeltaIndex(DMContext & dm_context) const;
+    void placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
 
     /// Compact the delta layer, merging fragment column files into bigger column files.
     /// It does not merge the delta into stable layer.
@@ -631,9 +665,18 @@ public:
                                                    const ColumnDefines & columns_to_read,
                                                    const SegmentSnapshotPtr & segment_snap,
                                                    const RowKeyRanges & read_ranges,
-                                                   const RSOperatorPtr & filter,
+                                                   const PushDownFilterPtr & filter,
                                                    UInt64 max_version,
                                                    size_t expected_block_size);
+
+    BlockInputStreamPtr getLateMaterializationStream(BitmapFilterPtr && bitmap_filter,
+                                                     const DMContext & dm_context,
+                                                     const ColumnDefines & columns_to_read,
+                                                     const SegmentSnapshotPtr & segment_snap,
+                                                     const RowKeyRanges & data_ranges,
+                                                     const PushDownFilterPtr & filter,
+                                                     UInt64 max_version,
+                                                     size_t expected_block_size);
 
 
 private:

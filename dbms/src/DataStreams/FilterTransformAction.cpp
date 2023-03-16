@@ -114,17 +114,17 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
         filter_holder = filter_and_holder.data_holder;
     }
 
-    size_t filtered_rows = countBytesInFilter(*filter);
-
-    /// If the current block is completely filtered out, let's move on to the next one.
-    if (filtered_rows == 0)
-        return false;
-
     if (return_filter)
     {
         res_filter = filter;
         return true;
     }
+
+    size_t filtered_rows = countBytesInFilter(*filter);
+
+    /// If the current block is completely filtered out, let's move on to the next one.
+    if (filtered_rows == 0)
+        return false;
 
     /// If all the rows pass through the filter.
     if (filtered_rows == rows)

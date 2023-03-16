@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
+#include <Interpreters/Context.h>
 #include <Parsers/makeDummyQuery.h>
 #include <fmt/core.h>
 
@@ -75,6 +76,11 @@ String DAGQuerySource::str(size_t)
 std::unique_ptr<IInterpreter> DAGQuerySource::interpreter(Context &, QueryProcessingStage::Enum)
 {
     return std::make_unique<InterpreterDAG>(context, *this);
+}
+
+DAGContext & DAGQuerySource::getDAGContext() const
+{
+    return *context.getDAGContext();
 }
 
 } // namespace DB

@@ -220,7 +220,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t col
 
 void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, int32_t collator_id, const Context & context)
 {
-    /// aggregation function is handled in Aggregation, so just treated as a column
+    /// aggregation function is handled in AggregationBinder, so just treated as a column
     auto ft = checkSchema(input, func->getColumnName());
     if (ft != input.end())
     {
