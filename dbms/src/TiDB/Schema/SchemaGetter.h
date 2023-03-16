@@ -129,6 +129,8 @@ struct SchemaDiff
 
 struct SchemaGetter
 {
+    static constexpr Int64 SchemaVersionNotExist = -1;
+
     KeyspaceSnapshot snap;
 
     KeyspaceID keyspace_id;
