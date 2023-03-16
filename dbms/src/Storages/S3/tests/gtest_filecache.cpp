@@ -652,4 +652,87 @@ TEST_F(FileCacheTest, LRUFileTable)
         ASSERT_EQ(table.begin(), table.end());
     }
 }
+
+TEST_F(FileCacheTest, EvictEmptyFile)
+try
+{
+    Stopwatch sw;
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 10, {"meta"});
+    auto total_size = objectsTotalSize(objects);
+    LOG_DEBUG(log, "genObjects: count={} total_size={} cost={}s", objects.size(), total_size, sw.elapsedSeconds());
+    auto cache_dir = fmt::format("{}/evict_empty_file", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .dtfile_level = 100};
+    calculateCacheCapacity(cache_config, total_size);
+    LOG_DEBUG(log, "total_size={} dt_cache_capacity={}", total_size, cache_config.getDTFileCapacity());
+    FileCache file_cache(capacity_metrics, cache_config);
+
+    // Cache empty files
+    DMFileOID empty_file_oid{.store_id = 111, .table_id = 2222, .file_id = 33333};
+    auto empty_s3_dmfile_path = ::DB::S3::S3Filename::fromDMFileOID(empty_file_oid).toFullKey();
+    std::vector<String> empty_s3_keys;
+    for (int i = 0; i < 5; ++i)
+    {
+        auto s3_key = fmt::format("{}/{}.dat", empty_s3_dmfile_path, i);
+        uploadEmptyFile(*s3_client, s3_key);
+        empty_s3_keys.push_back(s3_key);
+    }
+    for (const auto & s3_key : empty_s3_keys)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(s3_key);
+        ASSERT_EQ(file_cache.get(s3_fname), nullptr) << s3_key;
+        waitForBgDownload(file_cache);
+    }
+
+    // Cache empty files succ
+    for (const auto & s3_key : empty_s3_keys)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(s3_key);
+        auto file_seg = file_cache.get(s3_fname);
+        ASSERT_NE(file_seg, nullptr) << s3_key;
+        ASSERT_TRUE(file_seg->isReadyToRead());
+        ASSERT_EQ(file_seg->getSize(), 0);
+    }
+    ASSERT_EQ(file_cache.cache_used, 0);
+
+    // Make cache full
+    for (const auto & obj : objects)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
+        ASSERT_TRUE(s3_fname.isDataFile()) << obj.key;
+        ASSERT_EQ(file_cache.get(s3_fname), nullptr) << obj.key;
+    }
+    waitForBgDownload(file_cache);
+    ASSERT_EQ(file_cache.bg_download_fail_count.load(std::memory_order_relaxed), 0);
+    ASSERT_EQ(file_cache.bg_download_succ_count.load(std::memory_order_relaxed), objects.size() + empty_s3_keys.size());
+    ASSERT_EQ(file_cache.cache_used, file_cache.cache_capacity);
+    for (const auto & obj : objects)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
+        ASSERT_TRUE(s3_fname.isDataFile()) << obj.key;
+        auto file_seg = file_cache.get(s3_fname);
+        ASSERT_NE(file_seg, nullptr) << obj.key;
+        ASSERT_TRUE(file_seg->isReadyToRead());
+        ASSERT_EQ(file_seg->getSize(), obj.size);
+    }
+    ASSERT_EQ(file_cache.cache_used, file_cache.cache_capacity);
+
+    // Evict empty files
+    auto objects2 = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"meta"});
+    for (const auto & obj : objects2)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
+        ASSERT_TRUE(s3_fname.isDataFile()) << obj.key;
+        ASSERT_EQ(file_cache.get(s3_fname), nullptr) << obj.key;
+    }
+    waitForBgDownload(file_cache);
+
+    // Evict empty files succ
+    for (const auto & s3_key : empty_s3_keys)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(s3_key);
+        ASSERT_EQ(file_cache.get(s3_fname), nullptr) << s3_key;
+    }
+    waitForBgDownload(file_cache);
+}
+CATCH
 } // namespace DB::tests::S3
