@@ -502,8 +502,8 @@ RegionPtrWithSnapshotFiles::RegionPtrWithSnapshotFiles(
     , external_files(std::move(external_files_))
 {}
 
-RegionPtrWithCheckpointInfo::RegionPtrWithCheckpointInfo(CheckpointInfoPtr checkpoint_info_)
-    : base(checkpoint_info_->region)
+RegionPtrWithCheckpointInfo::RegionPtrWithCheckpointInfo(const Base & base_, CheckpointInfoPtr checkpoint_info_)
+    : base(base_)
     , checkpoint_info(std::move(checkpoint_info_))
 {}
 
