@@ -55,34 +55,34 @@ bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_
             return readImpl<TMTPKType::UNSPECIFIED>(block, data_list, force_decode);
         }
     }
-    catch (DB::Exception & exception)
+    catch (DB::Exception & exc)
     {
         // to print more info for debug the random ddl test issue(should serve stably when ddl #004#)
         // https://github.com/pingcap/tiflash/issues/7024
         auto print_column_defines = [&](const DM::ColumnDefinesPtr & column_defines) {
-            std::stringstream ss;
-            ss << " [column define : ";
+            FmtBuffer fmt_buf;
+            fmt_buf.append(" [column define : ");
             for (auto const & column_define : *column_defines)
             {
-                ss << "{ id " << column_define.id << ", name " << column_define.name << ", type " << column_define.type->getName() << "} ";
+                fmt_buf.fmtAppend("(id is {}, name is {}, type is {}) ", column_define.id, column_define.name, column_define.type->getName());
             }
-            ss << " ];";
-            return ss.str();
+            fmt_buf.append(" ];");
+            return fmt_buf.toString();
         };
 
         auto print_map = [](auto const & map) {
-            std::stringstream ss;
-            ss << " [map info : ";
+            FmtBuffer fmt_buf;
+            fmt_buf.append(" [map info : ");
             for (auto const & pair : map)
             {
-                ss << "{" << pair.first << ": " << pair.second << "} ";
+                fmt_buf.fmtAppend("(pair.first is {}, pair.second is {}) ", pair.first, pair.second);
             }
-            ss << " ];";
-            return ss.str();
+            fmt_buf.append(" ];");
+            return fmt_buf.toString();
         };
 
-        exception.addMessage(fmt::format("pk_type is {}, schema_snapshot->sorted_column_id_with_pos is {}, schema_snapshot->column_defines is {}, schema_snapshot->decoding_schema_version is {}, block schema is {}", schema_snapshot->pk_type, print_map(schema_snapshot->sorted_column_id_with_pos), print_column_defines(schema_snapshot->column_defines), schema_snapshot->decoding_schema_version, block.getNamesAndTypesList().toString()));
-        exception.rethrow();
+        exc.addMessage(fmt::format("pk_type is {}, schema_snapshot->sorted_column_id_with_pos is {}, schema_snapshot->column_defines is {}, decoding_snapshot_epoch is {}, block schema is {}", schema_snapshot->pk_type, print_map(schema_snapshot->sorted_column_id_with_pos), print_column_defines(schema_snapshot->column_defines), schema_snapshot->decoding_schema_version, block.dumpJsonStructure()));
+        exc.rethrow();
     }
 }
 
