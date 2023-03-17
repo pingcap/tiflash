@@ -1909,7 +1909,7 @@ try
     auto s0 = dir->createSnapshot();
     auto edit = dir->dumpSnapshotToEdit(s0);
     auto restore_from_edit = [](const PageEntriesEdit & edit) {
-        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
+        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit), nullptr);
         auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
@@ -1931,7 +1931,7 @@ TEST_F(PageDirectoryGCTest, DumpAndRestore)
 try
 {
     auto restore_from_edit = [](const PageEntriesEdit & edit) {
-        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
+        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit), nullptr);
         auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);

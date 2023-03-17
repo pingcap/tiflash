@@ -278,6 +278,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
 template <typename Trait>
 void PageDirectoryFactory<Trait>::loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader)
 {
+    DataFileIdSet data_file_ids;
     while (reader->remained())
     {
         auto record = reader->next();
@@ -292,8 +293,20 @@ void PageDirectoryFactory<Trait>::loadFromDisk(const PageDirectoryPtr & dir, WAL
         }
 
         // apply the edit read
-        auto edit = Trait::Serializer::deserializeFrom(record.value());
-        loadEdit(dir, edit);
+        if constexpr (std::is_same_v<Trait, u128::FactoryTrait>)
+        {
+            auto edit = Trait::Serializer::deserializeFrom(record.value(), nullptr);
+            loadEdit(dir, edit);
+        }
+        else if constexpr (std::is_same_v<Trait, universal::FactoryTrait>)
+        {
+            auto edit = Trait::Serializer::deserializeFrom(record.value(), &data_file_ids);
+            loadEdit(dir, edit);
+        }
+        else
+        {
+            RUNTIME_CHECK(false);
+        }
     }
 }
 
