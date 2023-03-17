@@ -21,6 +21,7 @@
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 #include <Storages/Page/V3/MapUtils.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
@@ -220,6 +221,7 @@ public:
         UInt64 lowest_seq,
         std::map<PageId, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
         PageEntriesV3 * entries_removed,
+        RemoteFileValidSizes * remote_file_sizes,
         const PageLock & page_lock);
     /**
      * Decrease the ref-count of entry with given `deref_ver`.
@@ -369,7 +371,14 @@ public:
 
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
-    PageEntries gcInMemEntries(bool return_removed_entries = true);
+    struct InMemGCOption
+    {
+        // if true collect the removed entries and return
+        bool need_removed_entries = true;
+        // collect the valid size of remote ids if not nullptr
+        RemoteFileValidSizes * remote_valid_sizes = nullptr;
+    };
+    PageEntries gcInMemEntries(const InMemGCOption & options);
 
     // Get the external id that is not deleted or being ref by another id by
     // `ns_id`.

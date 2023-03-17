@@ -27,6 +27,7 @@
 #endif
 
 #include <Common/Exception.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/formatReadable.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -50,11 +51,11 @@ namespace ErrorCodes
 extern const int INVALID_CONFIG_PARAMETER;
 } // namespace ErrorCodes
 
-static std::string getCanonicalPath(std::string path)
+static std::string getCanonicalPath(std::string path, std::string_view hint = "path")
 {
     Poco::trimInPlace(path);
     if (path.empty())
-        throw Exception("path configuration parameter is empty");
+        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "'{}' configuration parameter is empty", hint);
     if (path.back() != '/')
         path += '/';
     return path;
@@ -210,6 +211,8 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, const Logge
     }
 
     readConfig(table, "format_version", format_version);
+
+    readConfig(table, "api_version", api_version);
 
     auto get_bool_config_or_default = [&](const String & name, bool default_value) {
 #ifndef NDEBUG
@@ -547,6 +550,8 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     RUNTIME_CHECK(connection_timeout_ms > 0);
     readConfig(table, "request_timeout_ms", request_timeout_ms);
     RUNTIME_CHECK(request_timeout_ms > 0);
+    readConfig(table, "root", root);
+    getCanonicalPath(root, "root"); // ensure not empty and ends with '/'
 
     auto read_s3_auth_info_from_env = [&]() {
         access_key_id = Poco::Environment::get(S3_ACCESS_KEY_ID, /*default*/ "");
@@ -567,15 +572,26 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
 
     LOG_INFO(
         log,
-        "endpoint={} bucket={} max_connections={} connection_timeout_ms={} "
-        "request_timeout_ms={} access_key_id_size={}  secret_access_key_size={}",
+        "endpoint={} bucket={} root={} "
+        "max_connections={} connection_timeout_ms={} "
+        "request_timeout_ms={} access_key_id_size={} secret_access_key_size={}",
         endpoint,
         bucket,
+        root,
         max_connections,
         connection_timeout_ms,
         request_timeout_ms,
         access_key_id.size(),
         secret_access_key.size());
+
+    if (isS3Enabled())
+    {
+        if (endpoint.empty() || root.empty())
+        {
+            LOG_WARNING(log, "'storage.s3.endpoint' and 'storage.s3.root' must be set when S3 is enabled!");
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "'storage.s3.endpoint' and 'storage.s3.root' must be set when S3 is enabled!");
+        }
+    }
 }
 
 bool StorageS3Config::isS3Enabled() const

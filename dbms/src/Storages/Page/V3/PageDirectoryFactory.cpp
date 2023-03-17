@@ -53,7 +53,7 @@ PageDirectoryFactory<Trait>::createFromReader(const String & storage_name, WALSt
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     // It's no need to remove the expired entries in BlobStore, so skip filling removed_entries to improve performance.
-    dir->gcInMemEntries(/*return_removed_entries=*/false);
+    dir->gcInMemEntries({.need_removed_entries = false});
     LOG_INFO(DB::Logger::get(storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxIdAfterRestart(), dir->sequence);
 
     if (blob_stats)
@@ -106,7 +106,7 @@ PageDirectoryFactory<Trait>::createFromEdit(const String & storage_name, FilePro
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     // It's no need to remove the expired entries in BlobStore when restore, so no need to fill removed_entries.
-    dir->gcInMemEntries(/*return_removed_entries=*/false);
+    dir->gcInMemEntries({.need_removed_entries = false});
 
     if (blob_stats)
     {
@@ -215,8 +215,33 @@ void PageDirectoryFactory<Trait>::applyRecord(
             version_list->createNewEntry(restored_version, r.entry);
             break;
         case EditRecordType::UPDATE_DATA_FROM_REMOTE:
-            version_list->updateLocalCacheForRemotePage(restored_version, r.entry);
+        {
+            auto id_to_resolve = r.page_id;
+            auto sequence_to_resolve = restored_version.sequence;
+            auto version_list_iter = iter;
+            while (true)
+            {
+                const auto & current_version_list = version_list_iter->second;
+                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = current_version_list->resolveToPageId(sequence_to_resolve, /*ignore_delete=*/id_to_resolve != r.page_id, nullptr);
+                if (resolve_state == ResolveResult::TO_NORMAL)
+                {
+                    current_version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry);
+                    break;
+                }
+                else if (resolve_state == ResolveResult::TO_REF)
+                {
+                    id_to_resolve = next_id_to_resolve;
+                    sequence_to_resolve = next_ver_to_resolve.sequence;
+                }
+                else
+                {
+                    RUNTIME_CHECK(false);
+                }
+                version_list_iter = dir->mvcc_table_directory.lower_bound(id_to_resolve);
+                assert(version_list_iter != dir->mvcc_table_directory.end());
+            }
             break;
+        }
         case EditRecordType::DEL:
         case EditRecordType::VAR_DELETE: // nothing different from `DEL`
             version_list->createDelete(restored_version);

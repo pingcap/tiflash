@@ -31,7 +31,6 @@
 
 namespace DB::DM::Remote
 {
-
 /**
  * WNDisaggSnapshotManager holds all snapshots for disaggregated read tasks
  * in the write node. It's a single instance for each TiFlash node.
@@ -41,8 +40,8 @@ class WNDisaggSnapshotManager
 public:
     struct SnapshotWithExpireTime
     {
-        const DisaggReadSnapshotPtr snap;
-        const Timepoint expired_at;
+        DisaggReadSnapshotPtr snap;
+        Timepoint expired_at;
     };
 
 public:
@@ -50,15 +49,16 @@ public:
 
     ~WNDisaggSnapshotManager();
 
-    bool registerSnapshot(const DisaggTaskId & task_id, DisaggReadSnapshotPtr && snap, const Timepoint & expired_at)
+    bool registerSnapshot(const DisaggTaskId & task_id, const DisaggReadSnapshotPtr & snap, const Timepoint & expired_at)
     {
+        std::unique_lock lock(mtx);
         LOG_DEBUG(log, "Register Disaggregated Snapshot, task_id={}", task_id);
 
-        std::unique_lock lock(mtx);
-        if (auto iter = snapshots.find(task_id); iter != snapshots.end())
-            return false;
-
-        snapshots.emplace(task_id, SnapshotWithExpireTime{.snap = std::move(snap), .expired_at = expired_at});
+        // Since EstablishDisagg may be retried, there may be existing snapshot.
+        // We replace these existing snapshot using a new one.
+        snapshots.insert_or_assign(
+            task_id,
+            SnapshotWithExpireTime{.snap = snap, .expired_at = expired_at});
         return true;
     }
 
@@ -77,11 +77,10 @@ public:
 private:
     bool unregisterSnapshot(const DisaggTaskId & task_id)
     {
-        LOG_DEBUG(log, "Unregister Disaggregated Snapshot, task_id={}", task_id);
-
         std::unique_lock lock(mtx);
         if (auto iter = snapshots.find(task_id); iter != snapshots.end())
         {
+            LOG_DEBUG(log, "Unregister Disaggregated Snapshot, task_id={}", task_id);
             snapshots.erase(iter);
             return true;
         }

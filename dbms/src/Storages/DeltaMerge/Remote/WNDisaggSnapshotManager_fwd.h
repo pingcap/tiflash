@@ -18,7 +18,6 @@
 
 namespace DB::DM::Remote
 {
-
 class WNDisaggSnapshotManager;
 using WNDisaggSnapshotManagerPtr = std::shared_ptr<WNDisaggSnapshotManager>;
 

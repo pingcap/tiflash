@@ -35,6 +35,7 @@ class LateMaterializationBlockInputStream : public IProfilingBlockInputStream
 public:
     LateMaterializationBlockInputStream(
         const ColumnDefines & columns_to_read,
+        const String & filter_column_name_,
         BlockInputStreamPtr filter_column_stream_,
         SkippableBlockInputStreamPtr rest_column_stream_,
         const BitmapFilterPtr & bitmap_filter_,
@@ -49,7 +50,9 @@ protected:
 
 private:
     Block header;
-
+    // The name of the tmp filter column in filter_column_block which is added by the FilterBlockInputStream.
+    // The column is used to filter the block, but it is not included in the returned block.
+    const String & filter_column_name;
     // The stream used to read the filter column, and filter the block.
     BlockInputStreamPtr filter_column_stream;
     // The stream used to read the rest columns.
@@ -58,7 +61,6 @@ private:
     BitmapFilterPtr bitmap_filter;
 
     const LoggerPtr log;
-    IColumn::Filter mvcc_filter{};
 };
 
 } // namespace DB::DM

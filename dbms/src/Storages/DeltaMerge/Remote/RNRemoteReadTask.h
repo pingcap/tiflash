@@ -34,6 +34,7 @@
 namespace DB
 {
 class Context;
+struct FetchPagesRequest;
 namespace DM
 {
 namespace tests
@@ -100,6 +101,7 @@ public:
     const String & getErrorMessage() const;
 
     friend class tests::RemoteReadTaskTest;
+    friend struct DB::FetchPagesRequest;
 
 private:
     void insertTask(const RNRemoteSegmentReadTaskPtr & seg_task, std::unique_lock<std::mutex> &);
@@ -199,11 +201,6 @@ public:
         const String & address,
         const LoggerPtr & log);
 
-    // The page ids that is absent from local cache
-    const PageIdU64s & cacheMissPageIds() const { return page_ids_cache_miss; }
-
-    size_t totalCFTinys() const { return total_num_cftiny; }
-
     RowKeyRanges getReadRanges() const { return read_ranges; }
 
     BlockInputStreamPtr getInputStream(
@@ -214,12 +211,18 @@ public:
         size_t expected_block_size);
 
     void addPendingMsg() { num_msg_to_consume += 1; }
+
+    /// Returns true if there are more pending messages.
     bool addConsumedMsg()
     {
         num_msg_consumed += 1;
+        RUNTIME_CHECK(num_msg_consumed <= num_msg_to_consume);
+
         // return there are more pending msg or not
-        return num_msg_consumed == num_msg_to_consume;
+        return num_msg_consumed < num_msg_to_consume;
     }
+
+    void initColumnFileDataProvider(Remote::RNLocalPageCacheGuardPtr pages_guard);
 
     void receivePage(RemotePb::RemotePage && remote_page);
 
@@ -233,6 +236,8 @@ public:
     void prepare();
 
     friend class tests::RemoteReadTaskTest;
+    friend struct DB::FetchPagesRequest;
+    friend class RNRemoteReadTask;
 
     // Only used by buildFrom
     RNRemoteSegmentReadTask(
@@ -252,8 +257,8 @@ public:
     const String address;
 
 private:
-    // The snapshot of reading ids acquired from write node
-    std::vector<UInt64> delta_page_ids;
+    std::vector<UInt64> delta_tinycf_page_ids;
+    std::vector<size_t> delta_tinycf_page_sizes;
     std::vector<UInt64> stable_files;
 
     DMContextPtr dm_context;
@@ -261,14 +266,9 @@ private:
     RowKeyRanges read_ranges;
     SegmentSnapshotPtr segment_snap;
 
-    // The page ids need to fetch from write node
-    std::vector<UInt64> page_ids_cache_miss;
-    size_t total_num_cftiny;
-    Remote::RNLocalPageCacheGuardPtr local_cache_guard;
-
 public:
-    std::atomic<size_t> num_msg_to_consume;
-    std::atomic<size_t> num_msg_consumed;
+    std::atomic<size_t> num_msg_to_consume{0};
+    std::atomic<size_t> num_msg_consumed{0};
 
 private:
     std::mutex mtx_queue;

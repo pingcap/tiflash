@@ -406,7 +406,6 @@ extern const int PAGE_SIZE_NOT_MATCH = 9006;
 extern const int ILLFORMED_PAGE_NAME = 9007;
 extern const int ILLFORMAT_RAFT_ROW = 9008;
 extern const int REGION_DATA_SCHEMA_UPDATED = 9009;
-extern const int REGION_EPOCH_NOT_MATCH = 9010;
 
 extern const int LOCK_EXCEPTION = 10000;
 extern const int VERSION_ERROR = 10001;
@@ -426,6 +425,8 @@ extern const int PTHREAD_ERROR = 10014;
 extern const int PS_ENTRY_NOT_EXISTS = 10015;
 extern const int PS_ENTRY_NO_VALID_VERSION = 10016;
 extern const int PS_DIR_APPLY_INVALID_STATUS = 10017;
+extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR = 10018;
+extern const int REGION_LOCKED = 10019;
 
 extern const int S3_ERROR = 11000;
 extern const int CANNOT_SCHEDULE_TASK = 11001;

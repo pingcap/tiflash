@@ -40,7 +40,8 @@ class S3LockLocalManager
 public:
     S3LockLocalManager();
 
-    void initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientPtr s3lock_client_);
+    std::optional<CheckpointProto::ManifestFilePrefix>
+    initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientPtr s3lock_client_);
 
     struct ExtraLockInfo
     {
@@ -62,9 +63,6 @@ private:
     String createS3Lock(const String & datafile_key, const S3::S3FilenameView & s3_file, UInt64 lock_store_id);
 
 private:
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
-
     std::mutex mtx_store_init;
     std::condition_variable cv_init;
     StoreID store_id;

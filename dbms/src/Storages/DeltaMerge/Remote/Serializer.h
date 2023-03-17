@@ -15,6 +15,7 @@
 #include <IO/CompressedStream.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider_fwd.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
@@ -83,8 +84,6 @@ struct Serializer
     static ColumnFileSetSnapshotPtr deserializeColumnFileSet(
         const google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote> & proto,
         const Remote::IDataStorePtr & data_store,
-        StoreID remote_store_id,
-        TableID table_id,
         const RowKeyRange & segment_range);
 
     /// column file ///
@@ -92,7 +91,7 @@ struct Serializer
     static RemotePb::ColumnFileRemote serializeTo(const ColumnFileInMemory & cf_in_mem);
     static ColumnFileInMemoryPtr deserializeCFInMemory(const RemotePb::ColumnFileInMemory & proto);
 
-    static RemotePb::ColumnFileRemote serializeTo(const ColumnFileTiny & cf_tiny);
+    static RemotePb::ColumnFileRemote serializeTo(const ColumnFileTiny & cf_tiny, IColumnFileDataProviderPtr data_provider);
     static ColumnFileTinyPtr deserializeCFTiny(const RemotePb::ColumnFileTiny & proto);
 
     static RemotePb::ColumnFileRemote serializeTo(const ColumnFileDeleteRange & cf_delete_range);
@@ -101,7 +100,6 @@ struct Serializer
     static RemotePb::ColumnFileRemote serializeTo(const ColumnFileBig & cf_big);
     static ColumnFileBigPtr deserializeCFBig(
         const RemotePb::ColumnFileBig & proto,
-        const Remote::DMFileOID & oid,
         const Remote::IDataStorePtr & data_store,
         const RowKeyRange & segment_range);
 };

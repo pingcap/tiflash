@@ -124,6 +124,7 @@
     M(S3HeadObject)                            \
     M(S3ListObjects)                           \
     M(S3DeleteObject)                          \
+    M(S3CopyObject)                            \
     M(FileCacheHit)                            \
     M(FileCacheMiss)                           \
     M(FileCacheEvict)

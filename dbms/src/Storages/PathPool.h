@@ -159,6 +159,9 @@ public:
 
     void removeDTFile(UInt64 file_id);
 
+    void addS3DTFiles(const String & s3_stable_path_, std::set<UInt64> && file_ids_);
+    String getS3DTFile(UInt64 file_id);
+    void addS3DTFileSize(UInt64 file_id, size_t size);
     DISALLOW_COPY_AND_MOVE(StableDiskDelegator);
 
 private:
@@ -503,6 +506,9 @@ private:
     PathCapacityMetricsPtr global_capacity;
 
     FileProviderPtr file_provider;
+
+    String s3_stable_path;
+    std::set<UInt64> s3_file_ids;
 
     LoggerPtr log;
 };

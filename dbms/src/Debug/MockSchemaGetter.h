@@ -71,6 +71,8 @@ struct MockSchemaGetter
         }
         return res;
     }
+
+    KeyspaceID getKeyspaceID() const { return NullspaceID; }
 };
 
 } // namespace DB

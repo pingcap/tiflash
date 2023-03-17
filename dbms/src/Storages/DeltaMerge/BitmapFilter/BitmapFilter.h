@@ -31,6 +31,8 @@ public:
     void set(UInt32 start, UInt32 limit);
     // If return true, all data is match and do not fill the filter.
     bool get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
+    // filter[start, limit] & f -> f
+    void rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
 
     void runOptimize();
 

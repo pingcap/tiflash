@@ -35,7 +35,7 @@ public:
 private:
     Context & global_context;
 
-    TableID next_table_id = InvalidTableID;
+    KeyspaceTableID next_keyspace_table_id = KeyspaceTableID{NullspaceID, InvalidTableID};
 
     AtomicStopwatch gc_check_stop_watch;
 

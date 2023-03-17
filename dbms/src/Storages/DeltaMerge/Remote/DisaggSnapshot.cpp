@@ -75,7 +75,9 @@ SegmentReadTaskPtr DisaggPhysicalTableReadSnapshot::popTask(const UInt64 segment
     std::unique_lock lock(mtx);
     if (auto iter = tasks.find(segment_id); iter != tasks.end())
     {
-        return iter->second;
+        auto task = iter->second;
+        tasks.erase(iter);
+        return task;
     }
     return nullptr;
 }

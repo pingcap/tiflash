@@ -35,10 +35,11 @@ namespace DB
 //  Format: https://github.com/tikv/tikv/blob/9c0df6d68c72d30021b36d24275fdceca9864235/components/keys/src/lib.rs#L24
 //  And because some key will be migrated from kv engine to raft engine,
 //  kv engine and raft engine may write and delete the same key.
-//  So to distinguish data written by kv engine and raft engine, we prepend an `0x02` to the key written by kv engine.
+//  So to distinguish data written by kv engine and raft engine,
+//  we prepend an `0x01` to the key written by raft engine, andprepend an `0x02` to the key written by kv engine.
 //  For example, suppose a key in tikv to be {0x01, 0x02, 0x03}.
-//  If it is written by raft engine, then actual key uni ps see is the same as in tikv.
-//  But if it is written by kv engine, the actual key uni ps see will be {0x01, 0x01, 0x02, 0x03}.
+//  If it is written by raft engine, then actual key uni ps see will be {0x01, 0x01, 0x02, 0x03}.
+//  But if it is written by kv engine, the actual key uni ps see will be {0x02, 0x01, 0x02, 0x03}.
 //
 // KVStore related key
 //  Prefix = [optional prefix] + "kvs"
@@ -90,7 +91,12 @@ public:
         return buff.releaseStr();
     }
 
-    // data is in kv engine, so it is prepend by KV_PREFIX
+    static UniversalPageId toKVStoreKey(UInt64 region_id)
+    {
+        return toFullPageId(toSubPrefix(StorageType::KVStore), region_id);
+    }
+
+    // data is in kv engine, so it is prepended by KV_PREFIX
     // KV_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id APPLY_STATE_SUFFIX
     static UniversalPageId toRaftApplyStateKeyInKVEngine(UInt64 region_id)
     {
@@ -103,7 +109,7 @@ public:
         return buff.releaseStr();
     }
 
-    // data is in kv engine, so it is prepend by KV_PREFIX
+    // data is in kv engine, so it is prepended by KV_PREFIX
     // KV_PREFIX LOCAL_PREFIX REGION_META_PREFIX region_id REGION_STATE_SUFFIX
     static UniversalPageId toRegionLocalStateKeyInKVEngine(UInt64 region_id)
     {
@@ -116,14 +122,27 @@ public:
         return buff.releaseStr();
     }
 
-    // LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX
     static String toFullRaftLogPrefix(UInt64 region_id)
     {
         WriteBufferFromOwnString buff;
         writeChar(0x01, buff);
+        writeChar(0x01, buff);
         writeChar(0x02, buff);
         encodeUInt64(region_id, buff);
         writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id (RAFT_LOG_SUFFIX + 1)
+    static String toFullRaftLogScanEnd(UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x02, buff);
         return buff.releaseStr();
     }
 

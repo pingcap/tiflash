@@ -75,6 +75,7 @@ public:
     ImutRegionRangePtr getRange() const;
 
     metapb::Peer getPeer() const;
+    void setPeer(metapb::Peer &&);
 
     UInt64 version() const;
 

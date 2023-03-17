@@ -31,11 +31,6 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-extern const int REGION_EPOCH_NOT_MATCH;
-} // namespace ErrorCodes
-
 WNEstablishDisaggTaskHandler::WNEstablishDisaggTaskHandler(ContextPtr context_, const DM::DisaggTaskId & task_id)
     : context(std::move(context_))
     , log(Logger::get(task_id))
@@ -61,7 +56,9 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
     context->setSetting("read_tso", start_ts);
 
     if (request->timeout_s() < 0)
+    {
         throw TiFlashException(Errors::Coprocessor::BadRequest, "invalid timeout={}", request->timeout_s());
+    }
     else if (request->timeout_s() > 0)
     {
         context->setSetting("disagg_task_snapshot_timeout", request->timeout_s());
@@ -93,9 +90,9 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
         response->set_store_id(kvstore->getStoreID());
     }
 
-    auto snapshots = context->getSharedContextDisagg()->wn_snapshot_manager;
+    auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const auto & task_id = *dag_context->getDisaggTaskId();
-    auto snap = snapshots->getSnapshot(task_id);
+    auto snap = snaps->getSnapshot(task_id);
     RUNTIME_CHECK_MSG(snap, "Snapshot was missing, task_id={}", task_id);
 
     {
