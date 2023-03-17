@@ -34,6 +34,7 @@
 #include <future>
 #include <iomanip>
 #include <thread>
+#include "Common/UniThreadPool.h"
 
 
 namespace DB
@@ -42,7 +43,7 @@ static void executeCreateQuery(const String & query,
                                Context & context,
                                const String & database,
                                const String & file_name,
-                               legacy::ThreadPool * pool,
+                               ThreadPool * pool,
                                bool has_force_restore_data_flag)
 {
     ParserCreateQuery parser;
@@ -66,7 +67,7 @@ static void loadDatabase(
     Context & context,
     const String & database,
     const String & database_metadata_file,
-    legacy::ThreadPool * thread_pool,
+    ThreadPool * thread_pool,
     bool force_restore_data)
 {
     /// There may exist .sql file with database creation statement.
@@ -136,10 +137,10 @@ void loadMetadata(Context & context)
 
     
     /// For parallel tables loading.
-    legacy::ThreadPool load_database_thread_pool(SettingMaxThreads().getAutoValue());
+    ThreadPool load_database_thread_pool(SettingMaxThreads().getAutoValue());
 
     auto load_database = [&](Context & context, const String & database, const String & database_metadata_file,
-                                       legacy::ThreadPool * thread_pool, bool force_restore_data) {
+                                       ThreadPool * thread_pool, bool force_restore_data) {
         /// There may exist .sql file with database creation statement.
         /// Or, if it is absent, then database with default engine is created.
         String database_attach_query;
@@ -157,19 +158,19 @@ void loadMetadata(Context & context)
         executeCreateQuery(database_attach_query, context, database, database_metadata_file, thread_pool, force_restore_data);
     };
 
-    std::vector<std::shared_ptr<legacy::ThreadPool>> table_thread_pools;
+    std::vector<std::shared_ptr<ThreadPool>> table_thread_pools;
     for (const auto & database : databases) {
         const auto & db_name = database.first;
         const auto & meta_file = database.second;
 
-        std::shared_ptr<legacy::ThreadPool> load_tables_thread_pool = std::make_shared<legacy::ThreadPool>(SettingMaxThreads().getAutoValue());
+        std::shared_ptr<ThreadPool> load_tables_thread_pool = std::make_shared<ThreadPool>(SettingMaxThreads().getAutoValue());
 
         auto task = [&load_database, &context, &db_name, &meta_file, &load_tables_thread_pool, has_force_restore_data_flag] {
             load_database(context, db_name, meta_file, load_tables_thread_pool.get(), has_force_restore_data_flag);
         };
 
         table_thread_pools.push_back(load_tables_thread_pool);
-        load_database_thread_pool.schedule(task);
+        load_database_thread_pool.scheduleOrThrowOnError(task);
     }
 
     load_database_thread_pool.wait();

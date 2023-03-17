@@ -29,6 +29,7 @@
 #include <fmt/core.h>
 
 #include <sstream>
+#include "Common/UniThreadPool.h"
 
 
 namespace DB
@@ -362,7 +363,7 @@ void cleanupTables(IDatabase & database, const String & db_name, const Tables & 
     }
 }
 
-void startupTables(IDatabase & database, const String & db_name, Tables & tables, legacy::ThreadPool * thread_pool, Poco::Logger * log)
+void startupTables(IDatabase & database, const String & db_name, Tables & tables, ThreadPool * thread_pool, Poco::Logger * log)
 {
     LOG_INFO(log, "Starting up {} tables.", tables.size());
 
@@ -423,7 +424,7 @@ void startupTables(IDatabase & database, const String & db_name, Tables & tables
         };
 
         if (thread_pool)
-            thread_pool->schedule(task);
+            thread_pool->scheduleOrThrowOnError(task);
         else
             task();
 

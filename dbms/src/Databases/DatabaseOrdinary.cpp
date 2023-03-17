@@ -29,9 +29,9 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/DirectoryIterator.h>
-#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
+#include "Common/UniThreadPool.h"
 
 
 namespace DB
@@ -83,7 +83,7 @@ DatabaseOrdinary::DatabaseOrdinary(String name_, const String & metadata_path_, 
 }
 
 
-void DatabaseOrdinary::loadTables(Context & context, legacy::ThreadPool * thread_pool, bool has_force_restore_data_flag)
+void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag)
 {
     using FileNames = std::vector<std::string>;
     FileNames file_names = DatabaseLoading::listSQLFilenames(metadata_path, log);
@@ -131,7 +131,7 @@ void DatabaseOrdinary::loadTables(Context & context, legacy::ThreadPool * thread
         };
 
         if (thread_pool)
-            thread_pool->schedule(task);
+            thread_pool->scheduleOrThrowOnError(task);
         else
             task();
     }
