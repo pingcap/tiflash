@@ -51,12 +51,12 @@ void RaftDataReader::traverse(const UniversalPageId & start, const UniversalPage
 
 void RaftDataReader::traverseRemoteRaftLogForRegion(UInt64 region_id, const std::function<void(const UniversalPageId & page_id, const PS::V3::CheckpointLocation & location)> & acceptor)
 {
-    auto start = UniversalPageIdFormat::toFullRaftLogPrefix(region_id);
-    auto end = UniversalPageIdFormat::toFullRaftLogPrefix(region_id + 1);
+    auto [start, end] = UniversalPageIdFormat::getFullRaftLogScanRange(region_id);
     auto snapshot = uni_ps.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
     const auto page_ids = uni_ps.page_directory->getAllPageIdsInRange(start, end, snapshot);
     for (const auto & page_id : page_ids)
     {
+        RUNTIME_CHECK(page_id.size() == 20, page_id.size());
         auto maybe_location = uni_ps.getCheckpointLocation(page_id, snapshot);
         RUNTIME_CHECK(maybe_location.has_value());
         acceptor(page_id, *maybe_location);
