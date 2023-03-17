@@ -19,6 +19,7 @@
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DynamicThreadPool.h>
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
@@ -920,7 +921,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V5.identifier)
         {
             LOG_WARNING(log, "'storage.format_version' must be set to 5 when S3 is enabled!");
-            throw Exception("'storage.format_version' must be set to 5 when S3 is enabled!");
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "'storage.format_version' must be set to 5 when S3 is enabled!");
         }
         setStorageFormat(storage_config.format_version);
         LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
@@ -938,6 +939,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             // Use the default settings
             LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
+        }
+    }
+
+    // sanitize check for disagg mode
+    if (storage_config.s3_config.isS3Enabled())
+    {
+        if (auto disaggregated_mode = getDisaggregatedMode(config()); disaggregated_mode == DisaggregatedMode::None)
+        {
+            LOG_WARNING(log, "'flash.disaggregated_mode' must be set when S3 is enabled!");
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "'flash.disaggregated_mode' must be set when S3 is enabled!");
         }
     }
 
