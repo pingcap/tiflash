@@ -20,7 +20,6 @@
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
-#include <cassert>
 #include <map>
 
 namespace DB
