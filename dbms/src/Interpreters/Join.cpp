@@ -2351,10 +2351,9 @@ void Join::checkTypes(const Block & block) const
 
 void Join::RowsNotInsertToMap::insertRow(Join::RowRefList * elem, Block * stored_block, size_t index, bool need_materialize)
 {
-    insertRowToList(&head, elem, stored_block, index);
     if (need_materialize)
     {
-        if (materialized_columns_vec.empty() || size % max_block_size == 0)
+        if (materialized_columns_vec.empty() || total_size % max_block_size == 0)
             materialized_columns_vec.emplace_back(stored_block->cloneEmptyColumns());
 
         auto & last_one = materialized_columns_vec.back();
@@ -2363,7 +2362,11 @@ void Join::RowsNotInsertToMap::insertRow(Join::RowRefList * elem, Block * stored
         for (size_t i = 0; i < columns; ++i)
             last_one[i]->insertFrom(*stored_block->getByPosition(i).column.get(), index);
     }
-    ++size;
+    else
+    {
+        insertRowToList(&head, elem, stored_block, index);
+    }
+    ++total_size;
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map, bool has_filter_map>
@@ -2795,7 +2798,7 @@ void Join::workAfterBuildFinish()
     {
         size_t null_rows_size = 0;
         for (const auto & i : rows_not_inserted_to_map)
-            null_rows_size += i.size;
+            null_rows_size += i.total_size;
         /// Considering the rows with null key in left table, in the worse case, it may need to check all rows in right table.
         /// Null rows are used for speeding up the check process. If the result of null-aware equal expression is NULL, the
         /// check process can be finished.

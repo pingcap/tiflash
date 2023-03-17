@@ -29,9 +29,9 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
     , step_end(false)
     , result(NASemiJoinResultType::NULL_VALUE)
     , pace(1)
-    , null_rows_pos(0)
-    , columns_vec_pos(0)
-    , columns_index(0)
+    , pos_in_null_rows(0)
+    , pos_in_columns_vector(0)
+    , pos_in_columns(0)
     , map_it(map_it_)
 {
     static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftAnti
@@ -69,34 +69,35 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added
     else if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS)
     {
         size_t count = pace;
-        while (null_rows_pos < null_rows.size())
+        while (pos_in_null_rows < null_rows.size() && count > 0)
         {
-            const auto & rows = null_rows[null_rows_pos];
+            const auto & rows = null_rows[pos_in_null_rows];
 
-            while (columns_vec_pos < rows.materialized_columns_vec.size())
+            while (pos_in_columns_vector < rows.materialized_columns_vec.size() && count > 0)
             {
-                const auto & columns = rows.materialized_columns_vec[columns_vec_pos];
+                const auto & columns = rows.materialized_columns_vec[pos_in_columns_vector];
+                const size_t columns_size = columns[0]->size();
 
-                size_t insert_cnt = std::min(count, columns[0]->size() - columns_index);
+                size_t insert_cnt = std::min(count, columns_size - pos_in_columns);
                 for (size_t j = 0; j < right_columns; ++j)
-                    added_columns[j + left_columns]->insertRangeFrom(*columns[j].get(), columns_index, insert_cnt);
+                    added_columns[j + left_columns]->insertRangeFrom(*columns[j].get(), pos_in_columns, insert_cnt);
 
-                columns_index += insert_cnt;
+                pos_in_columns += insert_cnt;
                 count -= insert_cnt;
 
-                if (count == 0)
-                    break;
-
-                ++columns_vec_pos;
-                columns_index = 0;
+                if (pos_in_columns >= columns_size)
+                {
+                    ++pos_in_columns_vector;
+                    pos_in_columns = 0;
+                }
             }
 
-            if (count == 0)
-                break;
-
-            ++null_rows_pos;
-            columns_vec_pos = 0;
-            columns_index = 0;
+            if (pos_in_columns_vector >= rows.materialized_columns_vec.size())
+            {
+                ++pos_in_null_rows;
+                pos_in_columns_vector = 0;
+                pos_in_columns = 0;
+            }
         }
         step_end = count > 0;
         current_offset += pace - count;

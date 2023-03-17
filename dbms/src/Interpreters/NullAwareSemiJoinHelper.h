@@ -111,12 +111,12 @@ private:
     NASemiJoinResultType result;
 
     size_t pace;
-    /// Position of null rows.
-    size_t null_rows_pos;
-    /// Position of MutableColumns vector for a certain null rows.
-    size_t columns_vec_pos;
-    /// Index for a certain MutableColumns.
-    size_t columns_index;
+    /// Position in null rows.
+    size_t pos_in_null_rows;
+    /// Position in columns vector for a certain null rows.
+    size_t pos_in_columns_vector;
+    /// Position in columns for a certain columns vector of a certain null rows.
+    size_t pos_in_columns;
 
     /// Mapped data for one cell.
     const void * map_it;

@@ -389,12 +389,17 @@ public:
             RUNTIME_ASSERT(max_block_size > 0);
         }
 
+        /// Row list.
         RowRefList head;
-        /// Materialize rows.
-        size_t max_block_size;
+        /// Materialized rows.
         std::vector<MutableColumns> materialized_columns_vec;
-        size_t size = 0;
+        size_t max_block_size;
 
+        size_t total_size = 0;
+
+        /// Insert row to this structure.
+        /// If need_materialize is true, row will be inserted into materialized_columns_vec.
+        /// Else it will be inserted into row list.
         void insertRow(RowRefList * elem, Block * stored_block, size_t index, bool need_materialize);
     };
 
