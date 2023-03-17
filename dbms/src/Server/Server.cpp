@@ -955,6 +955,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
+    const auto disaggregated_mode = getDisaggregatedMode(config());
+    const auto use_autoscaler = useAutoScaler(config());
+
     // Some Storage's config is necessary for Proxy
     TiFlashStorageConfig storage_config;
     // Deprecated settings.
@@ -962,6 +965,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // "0" by default, means no quota, the actual disk capacity is used.
     size_t global_capacity_quota = 0;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
+    if (!storage_config.s3_config.bucket.empty())
+    {
+        storage_config.s3_config.enable(/*check_requirements*/ true, log);
+    }
+    else if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
+    {
+        // compute node with auto scaler, the requirements will be initted later.
+        storage_config.s3_config.enable(/*check_requirements*/ false, log);
+    }
+
     if (storage_config.format_version != 0)
     {
         if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V5.identifier)
@@ -1079,8 +1092,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
       */
     global_context = Context::createGlobal();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
-    global_context->getSharedContextDisagg()->disaggregated_mode = getDisaggregatedMode(config());
-    global_context->getSharedContextDisagg()->use_autoscaler = useAutoScaler(config());
+    global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
+    global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     /// Init File Provider
     bool enable_encryption = false;
@@ -1451,6 +1464,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
             kvstore->setStore(store_meta);
         }
         global_context->getTMTContext().reloadConfig(config());
+    }
+
+    // Disagg compute node with auto scaler needs to bootstrap the S3 config
+    // from any write node.
+    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode()
+        && global_context->getSharedContextDisagg()->use_autoscaler)
+    {
+        auto &tmt = global_context->getTMTContext();
+        // TODO: init S3 config by RPC to any WN
     }
 
     // Initialize the thread pool of storage before the storage engine is initialized.

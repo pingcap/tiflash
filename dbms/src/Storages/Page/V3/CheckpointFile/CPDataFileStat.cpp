@@ -77,7 +77,8 @@ std::unordered_set<String> getRemoteFileIdsNeedCompact(
 {
     {
         std::unordered_set<String> file_ids;
-        // If the total_size less than 0, try to get the actual size from S3
+        // If the total_size less than 0, it means the size has not been fetch from
+        // the remote store successfully, try to get the actual size from S3
         for (const auto & [file_id, stat] : stats)
         {
             if (stat.total_size < 0)
