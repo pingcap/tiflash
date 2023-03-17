@@ -99,7 +99,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added
                 pos_in_columns = 0;
             }
         }
-        step_end = count > 0;
+        step_end = pos_in_null_rows >= null_rows.size();
         current_offset += pace - count;
     }
 
