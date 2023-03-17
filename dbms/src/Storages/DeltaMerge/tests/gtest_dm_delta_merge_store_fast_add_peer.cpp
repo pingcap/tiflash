@@ -29,14 +29,13 @@
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/CheckpointInfo.h>
-#include <Storages/Transaction/FastAddPeer.h>
+#include <Storages/Transaction/FastAddPeerCache.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
-
 
 namespace DB
 {
@@ -284,8 +283,9 @@ try
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(store_id, upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
     checkpoint_info->remote_store_id = store_id;
-    checkpoint_info->temp_ps_wrapper = createTempPageStorage(*db_context, manifest_key, /*dir_seq*/ 100);
-    checkpoint_info->temp_ps = checkpoint_info->temp_ps_wrapper->temp_ps;
+    checkpoint_info->region_id = 1000;
+    checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(*db_context, manifest_key, /*dir_seq*/ 100);
+    checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     store->ingestSegmentsFromCheckpointInfo(*db_context, db_context->getSettingsRef(), RowKeyRange::newAll(false, 1), checkpoint_info);
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write / 2 + 2 * num_rows_write);
@@ -356,8 +356,9 @@ try
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(store_id, upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
     checkpoint_info->remote_store_id = store_id;
-    checkpoint_info->temp_ps_wrapper = createTempPageStorage(*db_context, manifest_key, /*dir_seq*/ 100);
-    checkpoint_info->temp_ps = checkpoint_info->temp_ps_wrapper->temp_ps;
+    checkpoint_info->region_id = 1000;
+    checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(*db_context, manifest_key, /*dir_seq*/ 100);
+    checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     store->ingestSegmentsFromCheckpointInfo(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write / 2)), checkpoint_info);
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write / 2);
 

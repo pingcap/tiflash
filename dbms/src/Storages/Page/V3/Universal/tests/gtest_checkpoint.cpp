@@ -91,18 +91,17 @@ public:
         return ret;
     }
 
-    void dumpCheckpoint(bool upload_success = true)
+    void dumpCheckpoint(bool upload_success = true, std::unordered_set<String> file_ids_to_compact = {})
     {
-        page_storage->dumpIncrementalCheckpoint({
+        page_storage->dumpIncrementalCheckpoint(UniversalPageStorage::DumpCheckpointOptions{
             .data_file_id_pattern = "{seq}_{index}.data",
             .data_file_path_pattern = dir + "{seq}_{index}.data",
             .manifest_file_id_pattern = "{seq}.manifest",
             .manifest_file_path_pattern = dir + "{seq}.manifest",
             .writer_info = *writer_info,
             .must_locked_files = {},
-            .persist_checkpoint = [upload_success](const PS::V3::LocalCheckpointFiles &) {
-                return upload_success;
-            },
+            .persist_checkpoint = [upload_success](const PS::V3::LocalCheckpointFiles &) { return upload_success; },
+            .compact_getter = [=] { return file_ids_to_compact; },
         });
     }
 
@@ -422,6 +421,54 @@ try
         ASSERT_EQ("5", iter->page_id);
         ASSERT_EQ("4_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info.data_location));
+    }
+
+    // Write and dump again with compact file ids
+
+    {
+        UniversalWriteBatch batch;
+        batch.putPage("7", tag, "alas, but where had Lord Rukkhadevata gone"); // New
+        page_storage->write(std::move(batch));
+    }
+    dumpCheckpoint(/*upload_success*/ true, /*file_ids_to_compact*/ {"4_0.data"});
+    {
+        ASSERT_TRUE(Poco::File(dir + "5.manifest").exists());
+        ASSERT_TRUE(Poco::File(dir + "5_0.data").exists());
+
+        auto manifest_file = PosixRandomAccessFile::create(dir + "5.manifest");
+        auto reader = CPManifestFileReader::create({
+            .plain_file = manifest_file,
+        });
+        auto im = CheckpointProto::StringsInternMap{};
+        auto prefix = reader->readPrefix();
+        auto edits = reader->readEdits(im);
+        auto records = edits->getRecords();
+
+        ASSERT_EQ(4, records.size());
+
+        auto iter = records.begin();
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        EXPECT_EQ("3", iter->page_id);
+        EXPECT_EQ("5_0.data", *iter->entry.checkpoint_info.data_location.data_file_id); // rewrite
+        EXPECT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        EXPECT_EQ("4", iter->page_id);
+        EXPECT_EQ("2_0.data", *iter->entry.checkpoint_info.data_location.data_file_id); // not rewrite
+        EXPECT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        EXPECT_EQ("5", iter->page_id);
+        EXPECT_EQ("5_0.data", *iter->entry.checkpoint_info.data_location.data_file_id); // rewrite
+        EXPECT_EQ("Dreamed of the day that she was born", readData(iter->entry.checkpoint_info.data_location));
+
+        iter++;
+        ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+        EXPECT_EQ("7", iter->page_id);
+        EXPECT_EQ("5_0.data", *iter->entry.checkpoint_info.data_location.data_file_id); // new write
+        EXPECT_EQ("alas, but where had Lord Rukkhadevata gone", readData(iter->entry.checkpoint_info.data_location));
     }
 }
 CATCH
@@ -749,17 +796,22 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
+        uni_ps_service = newService();
+        log = Logger::get("UniversalPageStorageServiceCheckpointTest");
+        s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
+    }
+
+    static UniversalPageStorageServicePtr newService()
+    {
         auto path = getTemporaryPath();
         auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
-        uni_ps_service = UniversalPageStorageService::createForTest(
+        return UniversalPageStorageService::createForTest(
             global_context,
             "test.t",
             delegator,
             PageStorageConfig{.blob_heavy_gc_valid_rate = 1.0});
-        log = Logger::get("UniversalPageStorageServiceCheckpointTest");
-        s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     }
 
 protected:
@@ -945,7 +997,15 @@ try
         ASSERT_EQ("5", iter->page_id);
         ASSERT_EQ("lock/s2/dat_1_0.lock_s2_1", *iter->entry.checkpoint_info.data_location.data_file_id); // this is the lock key to CPDataFile
         ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
-    } // check the first manifest
+    } // check the second manifest
+
+    // mock restart
+    auto new_service = newService();
+    EXPECT_EQ(new_service->uni_page_storage->last_checkpoint_sequence, 0);
+    new_service->uni_page_storage->initLocksLocalManager(store_id, s3lock_client);
+    EXPECT_EQ(new_service->uni_page_storage->last_checkpoint_sequence, 9);
+    auto upload_info = new_service->uni_page_storage->allocateNewUploadLocksInfo();
+    EXPECT_EQ(upload_info.upload_sequence, 3);
 }
 CATCH
 

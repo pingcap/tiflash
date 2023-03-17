@@ -74,10 +74,11 @@ Poco::Message::Priority convertLogLevel(Aws::Utils::Logging::LogLevel log_level)
     case Aws::Utils::Logging::LogLevel::Warn:
         return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Info:
-        // treat aws info logging as debug level
-        return Poco::Message::PRIO_DEBUG;
+        // treat aws info logging as trace level
+        return Poco::Message::PRIO_TRACE;
     case Aws::Utils::Logging::LogLevel::Debug:
-        return Poco::Message::PRIO_DEBUG;
+        // treat aws debug logging as trace level
+        return Poco::Message::PRIO_TRACE;
     case Aws::Utils::Logging::LogLevel::Trace:
         return Poco::Message::PRIO_TRACE;
     default:
@@ -492,7 +493,7 @@ void listPrefix(
 
         PageResult page_res{};
         const auto & result = outcome.GetResult();
-        auto page_keys = result.GetCommonPrefixes().size();
+        auto page_keys = result.GetContents().size();
         num_keys += page_keys;
         for (const auto & object : result.GetContents())
         {
@@ -614,7 +615,7 @@ std::unordered_map<String, size_t> listPrefixWithSize(const TiFlashS3Client & cl
     return keys_with_size;
 }
 
-std::pair<bool, Aws::Utils::DateTime> tryGetObjectModifiedTime(
+ObjectInfo tryGetObjectInfo(
     const TiFlashS3Client & client,
     const String & key)
 {
@@ -623,7 +624,7 @@ std::pair<bool, Aws::Utils::DateTime> tryGetObjectModifiedTime(
     {
         if (const auto & err = o.GetError(); isNotFoundError(err.GetErrorType()))
         {
-            return {false, {}};
+            return ObjectInfo{.exist = false, .size = 0, .last_modification_time = {}};
         }
         throw fromS3Error(o.GetError(), "Failed to check existence of object, bucket={} key={}", client.bucket(), key);
     }
@@ -631,7 +632,7 @@ std::pair<bool, Aws::Utils::DateTime> tryGetObjectModifiedTime(
     const auto & res = o.GetResult();
     // "DeleteMark" of S3 service, don't know what will lead to this
     RUNTIME_CHECK(!res.GetDeleteMarker(), client.bucket(), key);
-    return {true, res.GetLastModified()};
+    return ObjectInfo{.exist = true, .size = res.GetContentLength(), .last_modification_time = res.GetLastModified()};
 }
 
 void deleteObject(const TiFlashS3Client & client, const String & key)

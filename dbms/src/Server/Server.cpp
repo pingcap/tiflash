@@ -19,6 +19,7 @@
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DynamicThreadPool.h>
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
@@ -920,7 +921,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V5.identifier)
         {
             LOG_WARNING(log, "'storage.format_version' must be set to 5 when S3 is enabled!");
-            throw Exception("'storage.format_version' must be set to 5 when S3 is enabled!");
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "'storage.format_version' must be set to 5 when S3 is enabled!");
         }
         setStorageFormat(storage_config.format_version);
         LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
@@ -938,6 +939,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             // Use the default settings
             LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
+        }
+    }
+
+    // sanitize check for disagg mode
+    if (storage_config.s3_config.isS3Enabled())
+    {
+        if (auto disaggregated_mode = getDisaggregatedMode(config()); disaggregated_mode == DisaggregatedMode::None)
+        {
+            LOG_WARNING(log, "'flash.disaggregated_mode' must be set when S3 is enabled!");
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "'flash.disaggregated_mode' must be set when S3 is enabled!");
         }
     }
 
@@ -1326,27 +1337,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// This setting is currently a bit tricky:
     /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
     //    controls the number of total bytes keep in the memory.
-    /// - In disaggregated mode, its default value is 0. 0 means cache is disabled, and it
+    /// - In disaggregated mode, its default value is 2000. 0 means cache is disabled, and it
     ///   controls the **number** of trees keep in the memory. <-- Will be fixed.
     ///   We cannot support unlimited delta index cache in disaggregated mode for now,
     ///   because cache items will be never explicitly removed.
-    size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 0);
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
+        size_t n = config().getUInt64("delta_index_cache_count", 2000);
         // In disaggregate compute node, we will not use DeltaIndexManager to cache the delta index.
         // Instead, we use RNDeltaIndexCache.
 
         // TODO: Currently RNDeltaIndexCache caches by number of entities, instead of
         // number of bytes!
 
-        if (delta_index_cache_size > 100000)
-            delta_index_cache_size = 100000; // In case of someone incorrectly uses byte size.
-
-        global_context->getSharedContextDisagg()->initReadNodeDeltaIndexCache(delta_index_cache_size);
+        global_context->getSharedContextDisagg()->initReadNodeDeltaIndexCache(n);
     }
     else
     {
-        global_context->setDeltaIndexManager(delta_index_cache_size);
+        size_t n = config().getUInt64("delta_index_cache_size", 0);
+        global_context->setDeltaIndexManager(n);
     }
 
     /// Set path for format schema files
