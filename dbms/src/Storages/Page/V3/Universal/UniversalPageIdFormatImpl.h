@@ -122,28 +122,28 @@ public:
         return buff.releaseStr();
     }
 
-    // [RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX, RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id (RAFT_LOG_SUFFIX + 1))
-    static std::pair<String, String> getFullRaftLogScanRange(UInt64 region_id)
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id RAFT_LOG_SUFFIX
+    static String toFullRaftLogPrefix(UInt64 region_id)
     {
-        WriteBufferFromOwnString start_buff;
-        {
-            writeChar(0x01, start_buff);
-            writeChar(0x01, start_buff);
-            writeChar(0x02, start_buff);
-            encodeUInt64(region_id, start_buff);
-            writeChar(0x01, start_buff);
-        }
-        WriteBufferFromOwnString end_buff;
-        {
-            writeChar(0x01, start_buff);
-            writeChar(0x01, start_buff);
-            writeChar(0x02, start_buff);
-            encodeUInt64(region_id, start_buff);
-            writeChar(0x02, start_buff);
-        }
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
 
-
-        return std::make_pair(start_buff.releaseStr(), end_buff.releaseStr());
+    // RAFT_PREFIX LOCAL_PREFIX REGION_RAFT_PREFIX region_id (RAFT_LOG_SUFFIX + 1)
+    static String toFullRaftLogScanEnd(UInt64 region_id)
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x01, buff);
+        writeChar(0x02, buff);
+        encodeUInt64(region_id, buff);
+        writeChar(0x02, buff);
+        return buff.releaseStr();
     }
 
     static inline PageIdU64 getU64ID(const UniversalPageId & page_id)

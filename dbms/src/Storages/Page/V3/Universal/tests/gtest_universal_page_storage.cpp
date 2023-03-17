@@ -352,6 +352,8 @@ TEST_F(UniPageStorageTest, Scan)
         c_buff[1] = 7;
         wb.putPage(UniversalPageIdFormat::toFullPageId(region_prefix, 25), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
 
+        wb.putPage(UniversalPageIdFormat::toFullRaftLogScanEnd(region_id), tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+
         page_storage->write(std::move(wb));
     }
 
