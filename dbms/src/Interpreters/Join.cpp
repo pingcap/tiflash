@@ -856,9 +856,8 @@ void NO_INLINE insertFromBlockImplTypeCase(
         {
             if (rows_not_inserted_to_map)
             {
-                /// for right/full out join, need to record the rows not inserted to map
-                auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
-                rows_not_inserted_to_map->insertRow(elem, stored_block, i, null_need_materialize);
+                /// for right/full out join or null-aware semi join, need to insert into rows_not_inserted_to_map
+                rows_not_inserted_to_map->insertRow(stored_block, i, null_need_materialize, pool);
             }
             continue;
         }
@@ -944,10 +943,9 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             /// here ignore mutex because rows_not_inserted_to_map is privately owned by each stream thread
             for (auto index : segment_index_info[segment_index])
             {
-                /// for right/full out join or null-aware semi join, need to record the rows not inserted to map
-                auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
+                /// for right/full out join or null-aware semi join, need to insert into rows_not_inserted_to_map
                 RUNTIME_ASSERT(rows_not_inserted_to_map != nullptr);
-                rows_not_inserted_to_map->insertRow(elem, stored_block, index, null_need_materialize);
+                rows_not_inserted_to_map->insertRow(stored_block, index, null_need_materialize, pool);
             }
         }
         else
@@ -2349,7 +2347,7 @@ void Join::checkTypes(const Block & block) const
     checkTypesOfKeys(block, sample_block_with_keys);
 }
 
-void Join::RowsNotInsertToMap::insertRow(Join::RowRefList * elem, Block * stored_block, size_t index, bool need_materialize)
+void Join::RowsNotInsertToMap::insertRow(Block * stored_block, size_t index, bool need_materialize, Arena & pool)
 {
     if (need_materialize)
     {
@@ -2364,6 +2362,7 @@ void Join::RowsNotInsertToMap::insertRow(Join::RowRefList * elem, Block * stored
     }
     else
     {
+        auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
         insertRowToList(&head, elem, stored_block, index);
     }
     ++total_size;
