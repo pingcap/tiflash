@@ -16,6 +16,7 @@
 
 #include <memory>
 
+// TODO: this should not under DM folder and namespace
 namespace DB::DM::Remote
 {
 
@@ -24,5 +25,7 @@ using IDataStorePtr = std::shared_ptr<IDataStore>;
 
 class IPreparedDMFileToken;
 using IPreparedDMFileTokenPtr = std::shared_ptr<IPreparedDMFileToken>;
+
+struct RemoteGCThreshold;
 
 } // namespace DB::DM::Remote

@@ -162,7 +162,13 @@ std::optional<String> anyKeyExistWithPrefix(const TiFlashS3Client & client, cons
 std::unordered_map<String, size_t> listPrefixWithSize(const TiFlashS3Client & client, const String & prefix);
 
 
-std::pair<bool, Aws::Utils::DateTime> tryGetObjectModifiedTime(
+struct ObjectInfo
+{
+    bool exist = false;
+    Int64 size = 0;
+    Aws::Utils::DateTime last_modification_time;
+};
+ObjectInfo tryGetObjectInfo(
     const TiFlashS3Client & client,
     const String & key);
 

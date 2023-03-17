@@ -13,8 +13,11 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FmtUtils.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <IO/IOThreadPool.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
@@ -25,8 +28,15 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
+#include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3Filename.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
+
+#include <future>
+#include <mutex>
+#include <unordered_map>
+#include <unordered_set>
 
 
 namespace DB
@@ -341,7 +351,17 @@ PageIdU64 UniversalPageStorage::getMaxIdAfterRestart() const
 
 bool UniversalPageStorage::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
-    return manager.gc(*blob_store, *page_directory, write_limiter, read_limiter, log);
+    PS::V3::RemoteFileValidSizes remote_valid_sizes;
+    bool done_anything = manager.gc(
+        *blob_store,
+        *page_directory,
+        write_limiter,
+        read_limiter,
+        &remote_valid_sizes,
+        log);
+    // update the valid size cache of remote file ids
+    remote_data_files_stat_cache.updateValidSize(remote_valid_sizes);
+    return done_anything;
 }
 
 void UniversalPageStorage::registerUniversalExternalPagesCallbacks(const UniversalExternalPageCallbacks & callbacks)
@@ -366,10 +386,16 @@ void UniversalPageStorage::tryUpdateLocalCacheForRemotePages(UniversalWriteBatch
     }
 }
 
-void UniversalPageStorage::initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client) const
+void UniversalPageStorage::initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client)
 {
     assert(remote_locks_local_mgr != nullptr);
-    remote_locks_local_mgr->initStoreInfo(store_id, lock_client);
+    auto last_mf_prefix_opt = remote_locks_local_mgr->initStoreInfo(store_id, lock_client);
+    if (last_mf_prefix_opt)
+    {
+        // First init, we need to restore the `last_checkpoint_sequence` from last checkpoint
+        std::scoped_lock lock(checkpoint_mu);
+        last_checkpoint_sequence = last_mf_prefix_opt->local_sequence();
+    }
 }
 
 PS::V3::S3LockLocalManager::ExtraLockInfo UniversalPageStorage::allocateNewUploadLocksInfo() const
@@ -378,7 +404,15 @@ PS::V3::S3LockLocalManager::ExtraLockInfo UniversalPageStorage::allocateNewUploa
     return remote_locks_local_mgr->allocateNewUploadLocksInfo();
 }
 
-void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
+// a pre-checking to avoid unnecessary consumption of resources
+bool UniversalPageStorage::canSkipCheckpoint() const
+{
+    std::scoped_lock lock(checkpoint_mu);
+    auto snap = page_directory->createSnapshot(/*tracing_id*/ "canSkipCheckpoint");
+    return snap->sequence == last_checkpoint_sequence;
+}
+
+PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
 {
     std::scoped_lock lock(checkpoint_mu);
 
@@ -386,7 +420,7 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
     auto snap = page_directory->createSnapshot(/*tracing_id*/ "dumpIncrementalCheckpoint");
 
     if (snap->sequence == last_checkpoint_sequence)
-        return;
+        return {.has_new_data = false};
 
     auto edit_from_mem = page_directory->dumpSnapshotToEdit(snap);
 
@@ -431,7 +465,13 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
         .sequence = snap->sequence,
         .last_sequence = last_checkpoint_sequence,
     });
-    bool has_new_data = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem);
+    std::unordered_set<String> file_ids_to_compact;
+    if (options.compact_getter != nullptr)
+    {
+        file_ids_to_compact = options.compact_getter();
+    }
+    // get the remote file ids that need to be compacted
+    auto write_stats = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
     writer->writeSuffix();
     writer.reset();
 
@@ -448,13 +488,13 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
         if (!persist_done)
         {
             LOG_ERROR(log, "failed to persist checkpoint");
-            return;
+            return {.has_new_data = false}; // TODO: maybe return has_new_data=true but upload_success=false?
         }
     }
     catch (...)
     {
         tryLogCurrentException(log, "failed to persist checkpoint");
-        return;
+        return {.has_new_data = false}; // TODO: maybe return has_new_data=true but upload_success=false?
     }
 
     SYNC_FOR("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
@@ -462,7 +502,7 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
     // TODO: Currently, even when has_new_data == false,
     //   something will be written to DataFile (i.e., the file prefix).
     //   This can be avoided, as its content is useless.
-    if (has_new_data)
+    if (write_stats.has_new_data)
     {
         // Copy back the checkpoint info to the current PageStorage.
         // New checkpoint infos are attached in `writeEditsAndApplyCheckpointInfo`.
@@ -470,6 +510,7 @@ void UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage:
     }
 
     last_checkpoint_sequence = snap->sequence;
+    return write_stats;
 }
 
 } // namespace DB
