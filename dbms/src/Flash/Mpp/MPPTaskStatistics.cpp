@@ -56,7 +56,6 @@ void MPPTaskStatistics::recordReadWaitIndex(DAGContext & dag_context)
     }
     // else keep zero timestamp
 }
-
 namespace
 {
 Int64 toNanoseconds(MPPTaskStatistics::Timestamp timestamp)

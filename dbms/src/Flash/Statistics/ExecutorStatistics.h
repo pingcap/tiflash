@@ -133,7 +133,7 @@ protected:
         /// for join need to add the build time
         /// In TiFlash, a hash join's build side is finished before probe side starts,
         /// so the join probe side's running time does not include hash table's build time,
-        /// when construct ExecSummaries, we need add the build cost to probe executor
+        /// when construct Execution Summaries, we need add the build cost to probe executor
         auto all_join_id_it = dag_context.getExecutorIdToJoinIdMap().find(executor_id);
         if (all_join_id_it != dag_context.getExecutorIdToJoinIdMap().end())
         {

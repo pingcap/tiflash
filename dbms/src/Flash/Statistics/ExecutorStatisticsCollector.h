@@ -20,6 +20,7 @@
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
+#include <cassert>
 #include <map>
 
 namespace DB
@@ -62,21 +63,22 @@ private:
     void fillListBasedExecutorsChild();
 
     template <typename T>
-    bool appendImpl(const String & executor_id, const tipb::Executor * executor)
+    bool appendImpl(const tipb::Executor * executor)
     {
         if (T::isMatch(executor))
         {
-            profiles[executor_id] = std::make_shared<T>(executor, *dag_context);
+            profiles[executor->executor_id()] = std::make_shared<T>(executor, *dag_context);
             return true;
         }
         return false;
     }
 
     template <typename... Ts>
-    bool append(const String & executor_id, const tipb::Executor * executor)
+    bool append(const tipb::Executor * executor)
     {
-        RUNTIME_CHECK(profiles.find(executor_id) == profiles.end());
-        return (appendImpl<Ts>(executor_id, executor) || ...);
+        RUNTIME_CHECK(executor->has_executor_id());
+        RUNTIME_CHECK(profiles.find(executor->executor_id()) == profiles.end());
+        return (appendImpl<Ts>(executor) || ...);
     }
 
 private:
