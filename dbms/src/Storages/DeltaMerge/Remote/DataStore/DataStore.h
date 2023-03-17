@@ -63,6 +63,11 @@ public:
     /**
      * Blocks until a local DMFile is successfully put in the remote data store.
      * Should be used by a write node.
+     *
+     *
+     * `remove_local` When it is true, pfter put is success, the `local_dm_file`
+     * will turn to an instance pointing to remote location
+     * (`DMFile::switchToRemote`).
      */
     virtual void putDMFile(DMFilePtr local_dm_file, const S3::DMFileOID & oid, bool remove_local) = 0;
 

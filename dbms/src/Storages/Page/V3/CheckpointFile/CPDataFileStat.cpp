@@ -77,7 +77,7 @@ std::unordered_set<String> getRemoteFileIdsNeedCompact(
 {
     {
         std::unordered_set<String> file_ids;
-        // If the total_size is 0, try to get the actual size from S3
+        // If the total_size less than 0, try to get the actual size from S3
         for (const auto & [file_id, stat] : stats)
         {
             if (stat.total_size < 0)
@@ -119,7 +119,7 @@ std::unordered_set<String> getRemoteFileIdsNeedCompact(
     LOG_IMPL(
         log,
         (rewrite_files_info.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION),
-        "CheckpointData pick for compaction={} unchange={}",
+        "CheckpointData pick for compaction={} unchanged={}",
         rewrite_files_info,
         remain_files_info);
     return rewrite_files;
