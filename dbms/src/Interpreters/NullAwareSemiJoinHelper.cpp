@@ -233,10 +233,11 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
 void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NASemiJoinHelper::Result *> & res_list)
 {
+    std::list<NASemiJoinHelper::Result *> next_step_res_list;
+
     if constexpr (STRICTNESS == All)
     {
         /// Step of NOT_NULL_KEY_CHECK_MATCHED_ROWS only exist when strictness is all.
-        std::list<NASemiJoinHelper::Result *> next_step_res_list;
         runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS>(res_list, next_step_res_list);
         res_list.swap(next_step_res_list);
     }
@@ -244,7 +245,6 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NASemiJoin
     if (res_list.empty())
         return;
 
-    std::list<NASemiJoinHelper::Result *> next_step_res_list;
     runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS>(res_list, next_step_res_list);
     res_list.swap(next_step_res_list);
     if (res_list.empty())
