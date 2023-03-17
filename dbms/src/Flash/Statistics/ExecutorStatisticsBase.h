@@ -16,8 +16,6 @@
 
 #include <Flash/Statistics/BaseRuntimeStatistics.h>
 
-#include <memory>
-
 namespace DB
 {
 class ExecutorStatisticsBase
