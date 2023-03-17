@@ -241,7 +241,7 @@ struct Settings
     \
     M(SettingInt64, remote_checkpoint_interval_seconds, 30, "The interval of uploading checkpoint to the remote store. Unit is second.")                                                                                                \
     M(SettingInt64, remote_gc_interval_seconds, 3600, "The interval of running GC task on the remote store. Unit is second.")                                                                                                           \
-    M(SettingDouble, remote_gc_ratio, 0.2, "The files with valid rate less than this threshold will be compacted")                                                                                                                      \
+    M(SettingDouble, remote_gc_ratio, 0.5, "The files with valid rate less than this threshold will be compacted")                                                                                                                      \
     M(SettingInt64, remote_gc_small_size, 128 * 1024, "The files with total size less than this threshold will be compacted")                                                                                                           \
     M(SettingDouble, disagg_read_concurrency_scale, 20.0, "Scale * logical cpu cores = disaggregated read IO concurrency.")                                                                                                             \
     \
