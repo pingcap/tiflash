@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnsNumber.h>
+#include <Common/Exception.h>
 #include <Common/typeid_cast.h>
 #include <Core/Names.h>
 #include <Storages/ColumnsDescription.h>
@@ -25,8 +26,6 @@
 #include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
-
-#include "Common/Exception.h"
 
 namespace DB
 {
