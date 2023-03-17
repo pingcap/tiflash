@@ -15,12 +15,15 @@
 #pragma once
 
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 #include <Storages/Page/V3/CheckpointFile/CPDataFileWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileWriter.h>
 #include <Storages/Page/V3/CheckpointFile/CPWriteDataSource.h>
 #include <Storages/Page/V3/CheckpointFile/Proto/common.pb.h>
 #include <Storages/Page/V3/CheckpointFile/fwd.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+
+#include <unordered_set>
 
 namespace DB::PS::V3
 {
@@ -65,13 +68,18 @@ public:
     void writePrefix(const PrefixInfo & info);
 
     /**
+     * If the entry's remote file_id is contains by `file_ids_to_compact`, then the
+     * entry data will be write down to the new data file.
+     *
      * This function can be called multiple times if there are too many edits and
      * you want to write in a streaming way. You are also allowed to not call this
      * function at all, if there is no edit.
      *
      * You must call `writeSuffix` finally, if you don't plan to write edits anymore.
      */
-    bool /* has_new_data */ writeEditsAndApplyCheckpointInfo(universal::PageEntriesEdit & edit);
+    CPDataWriteStats writeEditsAndApplyCheckpointInfo(
+        universal::PageEntriesEdit & edit,
+        const std::unordered_set<String> & file_ids_to_compact = {});
 
     /**
      * This function must be called, and must be called last, after other `writeXxx`.

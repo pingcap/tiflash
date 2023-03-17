@@ -36,7 +36,7 @@ namespace DB
 UniversalPageStorageService::UniversalPageStorageService(Context & global_context_)
     : global_context(global_context_)
     , uni_page_storage(nullptr)
-    , log(Logger::get())
+    , log(Logger::get("UniPSService"))
 {
 }
 
@@ -126,13 +126,42 @@ bool UniversalPageStorageService::uploadCheckpoint()
     return uploadCheckpointImpl(store_info, s3lock_client, remote_store);
 }
 
+struct FileIdsToCompactGetter
+{
+    UniversalPageStoragePtr uni_page_storage;
+    DM::Remote::RemoteGCThreshold gc_threshold;
+    const DM::Remote::IDataStorePtr & remote_store;
+    LoggerPtr log;
+
+    std::unordered_set<String> operator()() const
+    {
+        // In order to not block local GC updating the cache, get a copy of the cache
+        auto stats = uni_page_storage->getRemoteDataFilesStatCache();
+        auto file_ids_to_compact = PS::V3::getRemoteFileIdsNeedCompact(stats, gc_threshold, remote_store, log);
+        // update cache by the S3 result
+        uni_page_storage->updateRemoteFilesTotalSizes(stats);
+        return file_ids_to_compact;
+    }
+};
+
 bool UniversalPageStorageService::uploadCheckpointImpl(
     const metapb::Store & store_info,
     const S3::S3LockClientPtr & s3lock_client,
     const DM::Remote::IDataStorePtr & remote_store)
 {
+    // `initLocksLocalManager` enable writes to remote store.
+    // if it is the first time after restart, it will load the last_upload_sequence
+    // and last_checkpoint_sequence from remote store.
     uni_page_storage->initLocksLocalManager(store_info.id(), s3lock_client);
-    const auto upload_info = uni_page_storage->allocateNewUploadLocksInfo();
+
+    // do a pre-check to avoid allocating upload_sequence but checkpoint is
+    // actually skip
+    // TODO: we can do it in a better way by splitting `dumpIncrementalCheckpoint`
+    //       into smaller parts to avoid this.
+    if (uni_page_storage->canSkipCheckpoint())
+    {
+        return false;
+    }
 
     auto wi = PS::V3::CheckpointProto::WriterInfo();
     {
@@ -147,7 +176,9 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
         ri->set_root(client->root());
     }
 
-
+    // TODO: directly write into remote store. But take care of the order
+    //       of CheckpointData files, lock files, and CheckpointManifest.
+    const auto upload_info = uni_page_storage->allocateNewUploadLocksInfo();
     auto local_dir = Poco::Path(global_context.getTemporaryPath() + fmt::format("/checkpoint_upload_{}", upload_info.upload_sequence)).absolute();
     Poco::File(local_dir).createDirectories();
     auto local_dir_str = local_dir.toString() + "/";
@@ -159,18 +190,24 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
      * In order to make the locks within same `upload_sequence` are public
      * to S3GCManager atomically, we must use a standalone `upload_sequence`
      * (which is managed by `S3LockLocalManager`) to override the
-     * CheckpoinDataFile and CheckpointManifest key.
+     * CheckpointDataFile and CheckpointManifest key.
      *
      * Example:
      * timeline:
      *    │--------------- A lockkey is uploading -----------------│
-     *    ^ snapshot->sequecne=10
+     *    ^ snapshot->sequence=10
      *             
      *             │-------- Checkpoint dumped and uploaded --│
      *             ^ snapshot->sequence=12
      * The checkpoint with snapshot->sequence=12 could finished before the lockkey with
      * sequence=10 uploaded.
      */
+    const auto & settings = global_context.getSettingsRef(); // TODO: make it dynamic reloadable
+    auto gc_threshold = DM::Remote::RemoteGCThreshold{
+        .valid_rate = settings.remote_gc_ratio,
+        .min_file_threshold = static_cast<size_t>(settings.remote_gc_small_size),
+    };
+
     UniversalPageStorage::DumpCheckpointOptions opts{
         .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
         .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",
@@ -186,10 +223,21 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
             .remote_store = remote_store,
         },
         .override_sequence = upload_info.upload_sequence, // override by upload_sequence
+        .compact_getter = FileIdsToCompactGetter{
+            .uni_page_storage = uni_page_storage,
+            .gc_threshold = gc_threshold,
+            .remote_store = remote_store,
+            .log = log,
+        },
     };
-    uni_page_storage->dumpIncrementalCheckpoint(opts);
+    const auto write_stats = uni_page_storage->dumpIncrementalCheckpoint(opts);
 
-    LOG_DEBUG(log, "Upload checkpoint with upload sequence {} success", upload_info.upload_sequence);
+    LOG_INFO(
+        log,
+        "Upload checkpoint success, upload_sequence={} incremental_bytes={} rewrite_bytes={}",
+        upload_info.upload_sequence,
+        write_stats.incremental_data_bytes,
+        write_stats.rewrite_data_bytes);
 
     // the checkpoint is uploaded to remote data store, remove local temp files
     Poco::File(local_dir).remove(true);
