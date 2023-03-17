@@ -574,7 +574,7 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
         log,
         "endpoint={} bucket={} root={} "
         "max_connections={} connection_timeout_ms={} "
-        "request_timeout_ms={} access_key_id_size={}  secret_access_key_size={}",
+        "request_timeout_ms={} access_key_id_size={} secret_access_key_size={}",
         endpoint,
         bucket,
         root,
@@ -583,6 +583,15 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
         request_timeout_ms,
         access_key_id.size(),
         secret_access_key.size());
+
+    if (isS3Enabled())
+    {
+        if (endpoint.empty() || root.empty())
+        {
+            LOG_WARNING(log, "'storage.s3.endpoint' and 'storage.s3.root' must be set when S3 is enabled!");
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "'storage.s3.endpoint' and 'storage.s3.root' must be set when S3 is enabled!");
+        }
+    }
 }
 
 bool StorageS3Config::isS3Enabled() const
