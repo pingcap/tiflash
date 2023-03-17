@@ -319,12 +319,7 @@ CreatingSets
 ~test_suite_name: FineGrainedShuffleAgg
 ~result_index: 0
 ~result:
-Union: <for test>
- Expression x 8: <final projection>
-  Expression: <expr after aggregation>
-   Aggregating: <enable fine grained shuffle>
-    Expression: <before aggregation>
-     MockExchangeReceiver
+pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> Aggregation|aggregation_1 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: FineGrainedShuffleAgg
 ~result_index: 1
