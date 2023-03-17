@@ -233,6 +233,7 @@ Model::HeadObjectOutcome MockS3Client::HeadObject(const Model::HeadObjectRequest
         };
         UNUSED(try_set_mtime);
         fiu_do_on(FailPoints::force_set_mocked_s3_object_mtime, { try_set_mtime(); });
+        r.SetContentLength(itr_obj->second.size());
         return r;
     }
     return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuchKey");

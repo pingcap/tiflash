@@ -64,7 +64,8 @@ try
     StoreID this_store_id = 100;
     PS::V3::S3LockLocalManager mgr;
     auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
-    mgr.initStoreInfo(this_store_id, mock_s3lock_client);
+    auto last_mf = mgr.initStoreInfo(this_store_id, mock_s3lock_client);
+    ASSERT_FALSE(last_mf.has_value());
 
     auto info = mgr.allocateNewUploadLocksInfo();
     ASSERT_EQ(1, info.upload_sequence);
@@ -139,7 +140,8 @@ try
     StoreID this_store_id = 100;
     PS::V3::S3LockLocalManager mgr;
     auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
-    mgr.initStoreInfo(this_store_id, mock_s3lock_client);
+    auto last_mf = mgr.initStoreInfo(this_store_id, mock_s3lock_client);
+    ASSERT_FALSE(last_mf.has_value());
 
     // Mock FAP ingest following pages from another store
     // - 1 dtfile

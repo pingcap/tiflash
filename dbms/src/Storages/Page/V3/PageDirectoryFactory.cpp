@@ -53,7 +53,7 @@ PageDirectoryFactory<Trait>::createFromReader(const String & storage_name, WALSt
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     // It's no need to remove the expired entries in BlobStore, so skip filling removed_entries to improve performance.
-    dir->gcInMemEntries(/*return_removed_entries=*/false);
+    dir->gcInMemEntries({.need_removed_entries = false});
     LOG_INFO(DB::Logger::get(storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxIdAfterRestart(), dir->sequence);
 
     if (blob_stats)
@@ -106,7 +106,7 @@ PageDirectoryFactory<Trait>::createFromEdit(const String & storage_name, FilePro
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     // It's no need to remove the expired entries in BlobStore when restore, so no need to fill removed_entries.
-    dir->gcInMemEntries(/*return_removed_entries=*/false);
+    dir->gcInMemEntries({.need_removed_entries = false});
 
     if (blob_stats)
     {
