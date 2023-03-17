@@ -97,7 +97,7 @@ RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
 
 RNRemoteSegmentThreadInputStream::~RNRemoteSegmentThreadInputStream()
 {
-    LOG_INFO(log, "RNRemoteSegmentThreadInputStream done, time blocked in pop task: {:.3f}sec, build task: {:.3f}sec", seconds_pop, seconds_build);
+    LOG_DEBUG(log, "RNRemoteSegmentThreadInputStream done, time blocked in pop task: {:.3f}sec, build task: {:.3f}sec", seconds_pop, seconds_build);
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_pop_ready_tasks).Observe(seconds_pop);
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_stream).Observe(seconds_build);
 }
