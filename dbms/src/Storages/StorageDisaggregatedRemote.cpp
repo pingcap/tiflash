@@ -265,7 +265,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
     const auto avg_establish_rpc_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.establish_rpc_ms; }) / summaries.size();
     const auto avg_build_remote_task_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.build_remote_task_ms; }) / summaries.size();
-    LOG_INFO(log, "establish disaggregated task rpc cost {:.2f}ms, build remote tasks cost {:.2f}ms", avg_establish_rpc_ms, avg_build_remote_task_ms);
+    LOG_INFO(log, "Establish disaggregated task finished, avg_rpc_elapsed={:.2f}ms, avg_build_task_elapsed={:.2f}ms", avg_establish_rpc_ms, avg_build_remote_task_ms);
 
     return read_task;
 }
@@ -368,7 +368,10 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     size_t num_streams,
     DAGPipeline & pipeline)
 {
-    LOG_DEBUG(log, "build streams with {} segment tasks, num_streams={}", remote_read_tasks->numSegments(), num_streams);
+    auto io_concurrency = static_cast<size_t>(static_cast<double>(num_streams) * db_context.getSettingsRef().disagg_read_concurrency_scale);
+    LOG_DEBUG(log, "Build disagg streams with {} segment tasks, num_streams={} io_concurrency={}", remote_read_tasks->numSegments(), num_streams, io_concurrency);
+    // TODO: We can reduce max io_concurrency to numSegments.
+
     const auto & executor_id = table_scan.getTableScanExecutorID();
     // Build a RNPageReceiver to fetch the pages from all write nodes
     auto * kv_cluster = db_context.getTMTContext().getKVCluster();
@@ -399,9 +402,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
 
-    auto io_concurrency = std::max(50, num_streams * 10);
     auto sub_streams_size = io_concurrency / num_streams;
-
     for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
     {
         // Build N UnionBlockInputStream, each one collects from M underlying RemoteInputStream.
