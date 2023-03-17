@@ -482,9 +482,9 @@ void KVStore::handleApplySnapshot(
     applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(external_files)}, tmt);
 }
 
-void KVStore::handleIngestCheckpoint(CheckpointInfoPtr checkpoint_info, TMTContext & tmt)
+void KVStore::handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt)
 {
-    applyPreHandledSnapshot(RegionPtrWithCheckpointInfo{checkpoint_info}, tmt);
+    applyPreHandledSnapshot(RegionPtrWithCheckpointInfo{region, checkpoint_info}, tmt);
 }
 
 EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
