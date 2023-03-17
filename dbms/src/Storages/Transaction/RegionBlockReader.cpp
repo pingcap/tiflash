@@ -26,6 +26,8 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 
+#include "Common/Exception.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -37,18 +39,51 @@ RegionBlockReader::RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schem
     : schema_snapshot{std::move(schema_snapshot_)}
 {}
 
+
 bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_list, bool force_decode)
 {
-    switch (schema_snapshot->pk_type)
+    try
     {
-    case TMTPKType::INT64:
-        return readImpl<TMTPKType::INT64>(block, data_list, force_decode);
-    case TMTPKType::UINT64:
-        return readImpl<TMTPKType::UINT64>(block, data_list, force_decode);
-    case TMTPKType::STRING:
-        return readImpl<TMTPKType::STRING>(block, data_list, force_decode);
-    default:
-        return readImpl<TMTPKType::UNSPECIFIED>(block, data_list, force_decode);
+        switch (schema_snapshot->pk_type)
+        {
+        case TMTPKType::INT64:
+            return readImpl<TMTPKType::INT64>(block, data_list, force_decode);
+        case TMTPKType::UINT64:
+            return readImpl<TMTPKType::UINT64>(block, data_list, force_decode);
+        case TMTPKType::STRING:
+            return readImpl<TMTPKType::STRING>(block, data_list, force_decode);
+        default:
+            return readImpl<TMTPKType::UNSPECIFIED>(block, data_list, force_decode);
+        }
+    }
+    catch (DB::Exception & exception)
+    {
+        // to print more info for debug the random ddl test issue(should serve stably when ddl #004#)
+        // https://github.com/pingcap/tiflash/issues/7024
+        auto print_column_defines = [&](const DM::ColumnDefinesPtr & column_defines) {
+            std::stringstream ss;
+            ss << " [column define : ";
+            for (auto const & column_define : *column_defines)
+            {
+                ss << "{ id " << column_define.id << ", name " << column_define.name << ", type " << column_define.type->getName() << "} ";
+            }
+            ss << " ];";
+            return ss.str();
+        };
+
+        auto print_map = [](auto const & map) {
+            std::stringstream ss;
+            ss << " [map info : ";
+            for (auto const & pair : map)
+            {
+                ss << "{" << pair.first << ": " << pair.second << "} ";
+            }
+            ss << " ];";
+            return ss.str();
+        };
+
+        exception.addMessage(fmt::format("pk_type is {}, schema_snapshot->sorted_column_id_with_pos is {}, schema_snapshot->column_defines is {}, schema_snapshot->decoding_schema_version is {}, block schema is {}", schema_snapshot->pk_type, print_map(schema_snapshot->sorted_column_id_with_pos), print_column_defines(schema_snapshot->column_defines), schema_snapshot->decoding_schema_version, block.getNamesAndTypesList().toString()));
+        exception.rethrow();
     }
 }
 
