@@ -94,6 +94,9 @@ public:
 private:
     void initialize();
 
+    // When reading, it is necessary to pass the extra information of file, such file size, the merged file information to S3RandomAccessFile::create.
+    // It is troublesome to pass parameters layer by layer. So currently, use thread_local global variable to pass parameters.
+    // TODO: refine these codes later.
     inline static thread_local std::optional<ReadFileInfo> read_file_info;
 
     std::shared_ptr<TiFlashS3Client> client_ptr;
