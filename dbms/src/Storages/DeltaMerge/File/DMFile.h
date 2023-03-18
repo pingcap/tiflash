@@ -252,8 +252,8 @@ public:
     static String getPathByStatus(const String & parent_path, UInt64 file_id, DMFile::Status status);
     static String getNGCPath(const String & parent_path, UInt64 file_id, DMFile::Status status);
 
-    bool canGC();
-    void enableGC();
+    bool canGC() const;
+    void enableGC() const;
     void remove(const FileProviderPtr & file_provider);
 
     // The ID for locating DTFile on disk
@@ -371,8 +371,8 @@ public:
     String mergedPath(UInt32 number) const { return subFilePath(mergedFilename(number)); }
 
     using FileNameBase = String;
-    size_t colIndexSizeByName(const FileNameBase & file_name_base) { return Poco::File(colIndexPath(file_name_base)).getSize(); }
-    size_t colDataSizeByName(const FileNameBase & file_name_base) { return Poco::File(colDataPath(file_name_base)).getSize(); }
+    size_t colIndexSizeByName(const FileNameBase & file_name_base) const { return Poco::File(colIndexPath(file_name_base)).getSize(); }
+    size_t colDataSizeByName(const FileNameBase & file_name_base) const { return Poco::File(colDataPath(file_name_base)).getSize(); }
     size_t colIndexSize(ColId id);
     size_t colDataSize(ColId id, bool is_null_map);
 

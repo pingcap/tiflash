@@ -108,6 +108,12 @@ bool UniversalPageStorageService::uploadCheckpoint()
         is_checkpoint_uploading.compare_exchange_strong(is_running, false);
     });
 
+    if (!global_context.isTMTContextInited())
+    {
+        LOG_INFO(log, "Skip checkpoint because context is not initialized");
+        return false;
+    }
+
     auto & tmt = global_context.getTMTContext();
 
     auto store_info = tmt.getKVStore()->getStoreMeta();

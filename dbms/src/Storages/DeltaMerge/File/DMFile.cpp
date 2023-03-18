@@ -751,12 +751,12 @@ std::set<UInt64> DMFile::listAllInPath(
     return file_ids;
 }
 
-bool DMFile::canGC()
+bool DMFile::canGC() const
 {
     return !Poco::File(ngcPath()).exists();
 }
 
-void DMFile::enableGC()
+void DMFile::enableGC() const
 {
     Poco::File ngc_file(ngcPath());
     if (ngc_file.exists())

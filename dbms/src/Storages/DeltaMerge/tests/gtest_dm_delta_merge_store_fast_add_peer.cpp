@@ -21,9 +21,12 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
+#include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathPool.h>
@@ -228,7 +231,7 @@ protected:
     UInt64 upload_sequence = 1000;
     bool already_initialize_data_store = false;
     bool already_initialize_write_ps = false;
-    DB::PageStorageRunMode orig_mode;
+    DB::PageStorageRunMode orig_mode = PageStorageRunMode::ONLY_V3;
 
     constexpr static const char * TRACING_NAME = "DeltaMergeStoreTestFastAddPeer";
 };
@@ -270,6 +273,29 @@ try
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write + num_rows_write, num_rows_write + 2 * num_rows_write, false);
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
         auto [range, file_ids] = genDMFile(*dm_context, block);
+        {
+            // Mock DMFiles are uploaded to S3 in SSTFilesToDTFilesOutputStream
+            auto remote_store = db_context->getSharedContextDisagg()->remote_data_store;
+            ASSERT_NE(remote_store, nullptr);
+            auto delegator = dm_context->path_pool->getStableDiskDelegator();
+            for (const auto & file_id : file_ids)
+            {
+                auto dm_file = DMFile::restore(
+                    db_context->getFileProvider(),
+                    file_id.id,
+                    file_id.id,
+                    delegator.getDTFilePath(file_id.id),
+                    DMFile::ReadMetaMode::all());
+                remote_store->putDMFile(
+                    dm_file,
+                    S3::DMFileOID{
+                        .store_id = store_id,
+                        .table_id = store->physical_table_id,
+                        .file_id = file_id.id,
+                    },
+                    true);
+            }
+        }
         store->ingestFiles(dm_context, range, file_ids, false);
         store->flushCache(*db_context, RowKeyRange::newAll(false, 1), true);
     }

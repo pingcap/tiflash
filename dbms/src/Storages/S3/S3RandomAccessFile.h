@@ -24,6 +24,11 @@
 
 #include <ext/scope_guard.h>
 
+/// Remove the population of thread_local from Poco
+#ifdef thread_local
+#undef thread_local
+#endif
+
 namespace Aws::S3
 {
 class S3Client;
