@@ -37,11 +37,6 @@ struct MergedSubFileInfo
         , size(size_)
     {}
 
-    explicit MergedSubFileInfo(ReadBuffer & buf)
-    {
-        parseFromBuffer(buf);
-    }
-
     void serializeToBuffer(WriteBuffer & buf) const
     {
         writeStringBinary(fname, buf);
@@ -50,12 +45,14 @@ struct MergedSubFileInfo
         writeIntBinary(size, buf);
     }
 
-    void parseFromBuffer(ReadBuffer & buf)
+    static MergedSubFileInfo parseFromBuffer(ReadBuffer & buf)
     {
-        readStringBinary(fname, buf);
-        readIntBinary(number, buf);
-        readIntBinary(offset, buf);
-        readIntBinary(size, buf);
+        MergedSubFileInfo info;
+        readStringBinary(info.fname, buf);
+        readIntBinary(info.number, buf);
+        readIntBinary(info.offset, buf);
+        readIntBinary(info.size, buf);
+        return info;
     }
 };
 } // namespace DB::DM

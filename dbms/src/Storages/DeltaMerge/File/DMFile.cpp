@@ -1002,7 +1002,7 @@ void DMFile::parseMergedSubFilePos(std::string_view buffer)
     merged_sub_file_infos.reserve(count);
     for (UInt64 i = 0; i < count; ++i)
     {
-        MergedSubFileInfo t(rbuf);
+        auto t = MergedSubFileInfo::parseFromBuffer(rbuf);
         auto fname = t.fname;
         merged_sub_file_infos.emplace(std::move(fname), std::move(t));
     }
