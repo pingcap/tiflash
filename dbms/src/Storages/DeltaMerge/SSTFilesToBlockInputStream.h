@@ -124,7 +124,7 @@ public:
                                       ColId pk_column_id_,
                                       const DecodingStorageSchemaSnapshotConstPtr & schema_snap);
 
-    static String getName()  { return "BoundedSSTFilesToBlockInputStream"; }
+    static String getName() { return "BoundedSSTFilesToBlockInputStream"; }
 
     void readPrefix();
 
