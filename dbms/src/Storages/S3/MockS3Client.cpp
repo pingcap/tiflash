@@ -45,7 +45,10 @@
 #include <common/types.h>
 #include <fiu.h>
 
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <mutex>
+#include <string_view>
 
 namespace DB::FailPoints
 {
@@ -76,10 +79,22 @@ Model::GetObjectOutcome MockS3Client::GetObject(const Model::GetObjectRequest & 
     {
         return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuchKey");
     }
-    auto * ss = new std::stringstream(itr_obj->second);
+    UInt64 left = 0;
+    UInt64 right = itr_obj->second.size() - 1;
+    if (request.RangeHasBeenSet())
+    {
+        std::vector<String> v;
+        constexpr std::string_view prefix = "bytes=";
+        boost::algorithm::split(v, request.GetRange().substr(prefix.size()), boost::algorithm::is_any_of("-"));
+        RUNTIME_CHECK(v.size() == 2, request.GetRange());
+        left = std::stoul(v[0]);
+        right = std::stoul(v[1]);
+    }
+    auto size = right - left + 1;
     Model::GetObjectResult result;
+    auto * ss = new std::stringstream(itr_obj->second.substr(left, size));
     result.ReplaceBody(ss);
-    result.SetContentLength(itr_obj->second.size());
+    result.SetContentLength(size);
     return result;
 }
 

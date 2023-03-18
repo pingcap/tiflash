@@ -424,6 +424,7 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_FALSE(file_cache.canCache(FileType::Meta));
+        ASSERT_FALSE(file_cache.canCache(FileType::Merged));
         ASSERT_FALSE(file_cache.canCache(FileType::Index));
         ASSERT_FALSE(file_cache.canCache(FileType::Mark));
         ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
@@ -439,6 +440,7 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_FALSE(file_cache.canCache(FileType::Merged));
         ASSERT_FALSE(file_cache.canCache(FileType::Index));
         ASSERT_FALSE(file_cache.canCache(FileType::Mark));
         ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
@@ -454,7 +456,8 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
-        ASSERT_TRUE(file_cache.canCache(FileType::Index));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
+        ASSERT_FALSE(file_cache.canCache(FileType::Index));
         ASSERT_FALSE(file_cache.canCache(FileType::Mark));
         ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
         ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
@@ -469,8 +472,9 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
-        ASSERT_TRUE(file_cache.canCache(FileType::Mark));
+        ASSERT_FALSE(file_cache.canCache(FileType::Mark));
         ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
         ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
         ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
@@ -484,9 +488,10 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
-        ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
+        ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
         ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
         ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
         ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
@@ -499,10 +504,11 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
         ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
-        ASSERT_TRUE(file_cache.canCache(FileType::DeleteMarkColData));
+        ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
         ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
         ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
         ASSERT_FALSE(file_cache.canCache(FileType::ColData));
@@ -514,11 +520,12 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
         ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
         ASSERT_TRUE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_TRUE(file_cache.canCache(FileType::VersionColData));
+        ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
         ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
         ASSERT_FALSE(file_cache.canCache(FileType::ColData));
     }
@@ -529,12 +536,13 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
         ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
         ASSERT_TRUE(file_cache.canCache(FileType::DeleteMarkColData));
         ASSERT_TRUE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_TRUE(file_cache.canCache(FileType::HandleColData));
+        ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
         ASSERT_FALSE(file_cache.canCache(FileType::ColData));
     }
     {
@@ -544,6 +552,23 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
+        ASSERT_TRUE(file_cache.canCache(FileType::Index));
+        ASSERT_TRUE(file_cache.canCache(FileType::Mark));
+        ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
+        ASSERT_TRUE(file_cache.canCache(FileType::DeleteMarkColData));
+        ASSERT_TRUE(file_cache.canCache(FileType::VersionColData));
+        ASSERT_TRUE(file_cache.canCache(FileType::HandleColData));
+        ASSERT_FALSE(file_cache.canCache(FileType::ColData));
+    }
+    {
+        UInt64 cache_level_ = 9;
+        auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
+        StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = cache_level_};
+        FileCache file_cache(capacity_metrics, cache_config);
+        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
+        ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
         ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
