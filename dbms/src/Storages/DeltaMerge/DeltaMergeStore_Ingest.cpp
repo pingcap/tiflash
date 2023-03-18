@@ -570,7 +570,7 @@ void DeltaMergeStore::ingestFiles(
     size_t bytes_on_disk = 0;
 
     auto remote_data_store = dm_context->db_context.getSharedContextDisagg()->remote_data_store;
-    StoreID store_id = 0;
+    StoreID store_id = InvalidStoreID;
     if (remote_data_store)
     {
         store_id = dm_context->db_context.getTMTContext().getKVStore()->getStoreID();

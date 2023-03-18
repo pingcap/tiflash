@@ -1756,6 +1756,14 @@ UniversalPageStoragePtr Context::getWriteNodePageStorage() const
     }
 }
 
+UniversalPageStoragePtr Context::tryGetWriteNodePageStorage() const
+{
+    auto lock = getLock();
+    if (shared->ps_write)
+        return shared->ps_write->getUniversalPageStorage();
+    return nullptr;
+}
+
 // In some unit tests, we may want to reinitialize WriteNodePageStorage multiple times to mock restart.
 // And we need to release old one before creating new one.
 // And we must do it explicitly. Because if we do it implicitly in `initializeWriteNodePageStorageIfNeed`, there is a potential deadlock here.

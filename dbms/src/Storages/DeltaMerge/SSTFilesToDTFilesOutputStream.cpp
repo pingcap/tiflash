@@ -140,7 +140,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::writeSuffix()
             GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode_upload).Observe(elapsed_seconds);
             break;
         case FileConvertJobType::IngestSST:
-            GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode_upload).Observe(elapsed_seconds);
+            GET_METRIC(tiflash_raft_command_duration_seconds, type_ingest_sst_upload).Observe(elapsed_seconds);
             break;
         }
     }

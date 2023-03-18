@@ -1296,16 +1296,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
           && global_context->getSharedContextDisagg()->use_autoscaler))
     {
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
-        auto wn_ps = global_context->getWriteNodePageStorage();
-        RUNTIME_ASSERT(wn_ps != nullptr);
-        store_ident = tryGetStoreIdent(wn_ps);
-        if (!store_ident)
+        if (auto wn_ps = global_context->tryGetWriteNodePageStorage(); wn_ps != nullptr)
         {
-            LOG_INFO(log, "StoreIdent not exist, new tiflash node");
-        }
-        else
-        {
-            LOG_INFO(log, "StoreIdent restored, {{{}}}", store_ident->ShortDebugString());
+            store_ident = tryGetStoreIdent(wn_ps);
+            if (!store_ident)
+            {
+                LOG_INFO(log, "StoreIdent not exist, new tiflash node");
+            }
+            else
+            {
+                LOG_INFO(log, "StoreIdent restored, {{{}}}", store_ident->ShortDebugString());
+            }
         }
     }
 
