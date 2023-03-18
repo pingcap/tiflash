@@ -1287,9 +1287,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Global PageStorage run mode is {}", magic_enum::enum_name(global_context->getPageStorageRunMode()));
     }
 
+    /// Try to restore the StoreIdent from UniPS. There are many services that require
+    /// `store_id` to generate the path to RemoteStore under disagg mode.
+    std::optional<raft_serverpb::StoreIdent> store_ident;
     // Only when this node is disagg compute node and autoscaler is enabled, we don't need the WriteNodePageStorage instance
     // Disagg compute node without autoscaler still need this instance for proxy's data
-    std::optional<raft_serverpb::StoreIdent> store_ident;
     if (!(global_context->getSharedContextDisagg()->isDisaggregatedComputeMode()
           && global_context->getSharedContextDisagg()->use_autoscaler))
     {
@@ -1439,7 +1441,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (store_ident)
         {
             // Many service would depends on `store_id` when disagg is enabled.
-            // setup the store_id restored from store_ident
+            // setup the store_id restored from store_ident ASAP
             // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
             auto kvstore = global_context->getTMTContext().getKVStore();
             metapb::Store store_meta;
@@ -1629,14 +1631,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             // proxy update store-id before status set `RaftProxyStatus::Running`
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
+            const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
+            if (store_ident)
+            {
+                RUNTIME_ASSERT(store_id == store_ident->store_id(), log, "store id mismatch store_id={} store_idnet.store_id={}", store_id, store_ident->store_id());
+            }
             if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
             {
                 // compute node do not need to handle read index
-                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", store_id);
             }
             else
             {
-                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", store_id);
 
                 if (!store_ident.has_value())
                 {
@@ -1646,7 +1653,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     bg_init_stores.waitUntilFinish();
                 }
 
-                size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
+                // if set 0, DO NOT enable read-index worker
+                size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1);
                 if (runner_cnt > 0)
                 {
                     auto & kvstore_ptr = tmt_context.getKVStore();

@@ -118,6 +118,8 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::writeSuffix()
             return fmt_buf.toString();
         }());
 
+    // We could create an async task once a DMFile is generated in `finalizeDTFileStream`
+    // to take more resources to shorten the time of IngestSST/ApplySnapshot.
     auto remote_data_store = context.getSharedContextDisagg()->remote_data_store;
     if (remote_data_store)
     {

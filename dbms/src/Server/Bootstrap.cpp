@@ -16,6 +16,7 @@
 #include <Common/RedactHelpers.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/Transaction/Types.h>
 #include <raft_serverpb.pb.h>
 
 namespace DB
@@ -36,6 +37,11 @@ tryGetStoreIdentFromKey(const UniversalPageStoragePtr & wn_ps, const String & ke
         "Failed to parse store ident, key={} data={}",
         Redact::keyToHexString(key.data(), key.size()),
         Redact::keyToHexString(page.data.data(), page.data.size()));
+    RUNTIME_ASSERT(
+        store_ident.store_id() != InvalidStoreID,
+        "Get invalid store_id from store ident, key={} store_ident={{{}}}",
+        Redact::keyToDebugString(key.data(), key.size()),
+        store_ident.ShortDebugString());
     return store_ident;
 }
 
