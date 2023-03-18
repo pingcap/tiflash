@@ -1466,14 +1466,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
     BgStorageInitHolder bg_init_stores;
-    if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode()
-        && store_ident.has_value())
+    if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        // This node has been bootstrap, the store_id is set, start sync schema before
-        // serving any requests. For the node has not been bootstrap, this stage will be
-        // postpone after bootstrap.
-        // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-        syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+        if (global_context->getSharedContextDisagg()->notDisaggregatedMode() || store_ident.has_value())
+        {
+            // This node has been bootstrapped, the `store_id` is set. Or non-disagg mode,
+            // do not depend on `store_id`. Start sync schema before serving any requests.
+            // For the node has not been bootstrapped, this stage will be postpone.
+            // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
+            syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+        }
     }
     // set default database for ch-client
     global_context->setCurrentDatabase(default_database);
@@ -1550,7 +1552,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-    if (/*has_been_bootstrap*/ store_ident.has_value())
+    if (global_context->getSharedContextDisagg()->notDisaggregatedMode() || /*has_been_bootstrap*/ store_ident.has_value())
     {
         // If S3 enabled, wait for all DeltaMergeStores' initialization
         // before this instance can accept requests.
@@ -1634,7 +1636,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
             if (store_ident)
             {
-                RUNTIME_ASSERT(store_id == store_ident->store_id(), log, "store id mismatch store_id={} store_idnet.store_id={}", store_id, store_ident->store_id());
+                RUNTIME_ASSERT(store_id == store_ident->store_id(), log, "store id mismatch store_id={} store_ident.store_id={}", store_id, store_ident->store_id());
             }
             if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
             {
@@ -1645,9 +1647,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {
                 LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", store_id);
 
-                if (!store_ident.has_value())
+                if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode() && !store_ident.has_value())
                 {
-                    // For the node has not been bootstrap, begin the very first schema sync with TiDB.
+                    // Not disagg node done it before
+                    // For the disagg node has not been bootstrap, begin the very first schema sync with TiDB.
                     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
                     syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
                     bg_init_stores.waitUntilFinish();
