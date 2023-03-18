@@ -579,12 +579,11 @@ void DeltaMergeStore::ingestFiles(
     DMFiles files;
     for (const auto & external_file : external_files)
     {
-        auto file_parent_path = delegate.getDTFilePath(external_file.id);
-
         // we always create a ref file to this DMFile with all meta info restored later, so here we just restore meta info to calculate its' memory and disk size
         DMFilePtr file;
         if (!remote_data_store)
         {
+            auto file_parent_path = delegate.getDTFilePath(external_file.id);
             file = DMFile::restore(
                 file_provider,
                 external_file.id,

@@ -45,7 +45,7 @@ bool GCManager::work()
         return false;
     }
 
-    LOG_DEBUG(log, "Start GC with keyspace id: {}, table id: {}", next_keyspace_table_id.first, next_keyspace_table_id.second);
+    LOG_DEBUG(log, "Start GC with keyspace={}, table_id={}", next_keyspace_table_id.first, next_keyspace_table_id.second);
     // Get a storage snapshot with weak_ptrs first
     // TODO: avoid gc on storage which have no data?
     std::map<KeyspaceTableID, std::weak_ptr<IManageableStorage>> storages;
@@ -83,7 +83,7 @@ bool GCManager::work()
             // do not acquire structure lock on the storage.
             auto gc_segments_num = storage->onSyncGc(gc_segments_limit, DM::GCOptions::newAll());
             gc_segments_limit = gc_segments_limit - gc_segments_num;
-            LOG_TRACE(ks_log, "GCManager gc {} segments of table {}", gc_segments_num, storage->getTableInfo().id);
+            LOG_TRACE(ks_log, "GCManager gc {} segments of table_id={}", gc_segments_num, storage->getTableInfo().id);
             // Reach the limit on the number of segments to be gc, stop here
             if (gc_segments_limit <= 0)
                 break;
@@ -104,7 +104,7 @@ bool GCManager::work()
 
     if (iter != storages.end())
         next_keyspace_table_id = iter->first;
-    LOG_DEBUG(log, "End GC and next gc will start with keyspace {}, table id: {}", next_keyspace_table_id.first, next_keyspace_table_id.second);
+    LOG_DEBUG(log, "End GC and next gc will start with keyspace={}, table_id={}", next_keyspace_table_id.first, next_keyspace_table_id.second);
     gc_check_stop_watch.restart();
     // Always return false
     return false;
