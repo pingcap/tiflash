@@ -65,7 +65,7 @@ public:
      * Should be used by a write node.
      *
      *
-     * `remove_local` When it is true, pfter put is success, the `local_dm_file`
+     * `remove_local` When it is true, after put is success, the `local_dm_file`
      * will turn to an instance pointing to remote location
      * (`DMFile::switchToRemote`).
      */
