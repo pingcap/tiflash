@@ -22,21 +22,32 @@ namespace DB
 {
 
 std::optional<raft_serverpb::StoreIdent>
-tryGetStoreIdent(const UniversalPageStoragePtr & wn_ps)
+tryGetStoreIdentFromKey(const UniversalPageStoragePtr & wn_ps, const String & key)
 {
-    auto page = wn_ps->read(
-        UniversalPageIdFormat::getStoreIdentId(),
-        nullptr,
-        {},
-        /*throw_on_not_exist*/ false);
+    raft_serverpb::StoreIdent store_ident;
+    auto page = wn_ps->read(key, nullptr, {}, /*throw_on_not_exist*/ false);
     if (!page.isValid())
     {
         return std::nullopt;
     }
-    raft_serverpb::StoreIdent store_ident;
     bool ok = store_ident.ParseFromString(String(page.data));
-    RUNTIME_ASSERT(ok, "Failed to parse store ident, data={}", Redact::keyToHexString(page.data.data(), page.data.size()));
+    RUNTIME_ASSERT(
+        ok,
+        "Failed to parse store ident, key={} data={}",
+        Redact::keyToHexString(key.data(), key.size()),
+        Redact::keyToHexString(page.data.data(), page.data.size()));
     return store_ident;
+}
+
+std::optional<raft_serverpb::StoreIdent>
+tryGetStoreIdent(const UniversalPageStoragePtr & wn_ps)
+{
+    // First try to get from raft engine
+    auto store_ident = tryGetStoreIdentFromKey(wn_ps, UniversalPageIdFormat::getStoreIdentId());
+    if (store_ident)
+        return store_ident;
+    // raft engine not exist, try find in kv engine
+    return tryGetStoreIdentFromKey(wn_ps, UniversalPageIdFormat::getStoreIdentIdInKVEngine());
 }
 
 } // namespace DB

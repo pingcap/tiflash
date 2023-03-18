@@ -148,6 +148,18 @@ public:
         return buff.releaseStr();
     }
 
+    // Store ident //
+
+    // KV_PREFIX LOCAL_PREFIX STORE_IDENT_KEY
+    static String getStoreIdentIdInKVEngine()
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x02, buff);
+        writeChar(0x01, buff);
+        writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
     // RAFT_PREFIX LOCAL_PREFIX STORE_IDENT_KEY
     static String getStoreIdentId()
     {

@@ -1303,7 +1303,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         else
         {
-            LOG_INFO(log, "StoreIdent restored, {}", store_ident->ShortDebugString());
+            LOG_INFO(log, "StoreIdent restored, {{{}}}", store_ident->ShortDebugString());
         }
     }
 

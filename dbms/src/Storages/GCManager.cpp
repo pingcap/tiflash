@@ -46,7 +46,7 @@ bool GCManager::work()
         gc_check_stop_watch.restart();
         return false;
     }
-    if (global_context.getSharedContextDisagg()->isDisaggregatedStorageMode())
+    if (global_context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         // We have disabled the background service for running this, just add a sanitize check
         assert(false);

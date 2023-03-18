@@ -1316,14 +1316,6 @@ DBGInvoker & Context::getDBGInvoker() const
     return shared->dbg_invoker;
 }
 
-TMTContext & Context::getTMTContext() const
-{
-    auto lock = getLock();
-    if (!shared->tmt_context)
-        throw Exception("no tmt context");
-    return *(shared->tmt_context);
-}
-
 void Context::setMarkCache(size_t cache_size_in_bytes)
 {
     auto lock = getLock();
@@ -1452,6 +1444,20 @@ void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::C
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
     shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config);
+}
+
+bool Context::isTMTContextInited() const
+{
+    auto lock = getLock();
+    return shared->tmt_context != nullptr;
+}
+
+TMTContext & Context::getTMTContext() const
+{
+    auto lock = getLock();
+    if (!shared->tmt_context)
+        throw Exception("no tmt context");
+    return *(shared->tmt_context);
 }
 
 void Context::initializePathCapacityMetric( //

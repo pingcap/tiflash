@@ -367,8 +367,6 @@ public:
     /// Execute inner functions, debug only.
     DBGInvoker & getDBGInvoker() const;
 
-    TMTContext & getTMTContext() const;
-
     /// Create a cache of marks of specified size. This can be done only once.
     void setMarkCache(size_t cache_size_in_bytes);
     std::shared_ptr<MarkCache> getMarkCache() const;
@@ -397,6 +395,8 @@ public:
     BackgroundProcessingPool & getPSBackgroundPool();
 
     void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
+    bool isTMTContextInited() const;
+    TMTContext & getTMTContext() const;
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
