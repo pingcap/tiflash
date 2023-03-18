@@ -14,9 +14,11 @@
 
 #include <Common/Logger.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/GCManager.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 
 namespace DB
@@ -43,6 +45,25 @@ bool GCManager::work()
     {
         gc_check_stop_watch.restart();
         return false;
+    }
+    if (global_context.getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        // We have disabled the background service for running this, just add a sanitize check
+        assert(false);
+        return false;
+    }
+    else if (global_context.getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        // For disagg enabled, we must wait before the store meta inited before doing compaction
+        // on segments. Or it will upload new data with incorrect remote path.
+        auto & kvstore = global_context.getTMTContext().getKVStore();
+        auto store_info = kvstore->getStoreMeta();
+        if (store_info.id() == InvalidStoreID)
+        {
+            LOG_INFO(log, "Skip GC because store meta is not initialized");
+            return false;
+        }
+        // else we can continue the background segments GC
     }
 
     LOG_DEBUG(log, "Start GC with keyspace={}, table_id={}", next_keyspace_table_id.first, next_keyspace_table_id.second);

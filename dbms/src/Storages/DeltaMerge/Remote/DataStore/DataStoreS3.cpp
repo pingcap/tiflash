@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
+#include <Storages/Transaction/Types.h>
 
 #include <future>
 #include <unordered_map>
@@ -29,6 +30,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
 {
     Stopwatch sw;
     RUNTIME_CHECK(local_dmfile->fileId() == oid.file_id);
+    RUNTIME_CHECK_MSG(oid.store_id != InvalidStoreID, "try to upload a DMFile with invalid StoreID, oid={} path={}", oid, local_dmfile->path());
 
     const auto local_dir = local_dmfile->path();
     const auto local_files = local_dmfile->listFilesForUpload();

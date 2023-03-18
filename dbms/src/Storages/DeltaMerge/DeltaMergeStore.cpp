@@ -245,15 +245,18 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
             auto segment_id = storage_pool->newMetaPageId();
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
             {
-                if (page_storage_run_mode == PageStorageRunMode::ONLY_V2)
-                {
-                    throw Exception(fmt::format("The first segment id should be {}", DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
-                }
+                RUNTIME_CHECK_MSG(
+                    page_storage_run_mode != PageStorageRunMode::ONLY_V2,
+                    "The first segment id should be {}, but get {}, run_mode={}",
+                    DELTA_MERGE_FIRST_SEGMENT_ID,
+                    segment_id,
+                    magic_enum::enum_name(page_storage_run_mode));
 
                 // In ONLY_V3 or MIX_MODE, If create a new DeltaMergeStore
                 // Should used fixed DELTA_MERGE_FIRST_SEGMENT_ID to create first segment
                 segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
             }
+            LOG_INFO(log, "creating the first segment with segment_id={}", segment_id);
 
             auto first_segment = Segment::newSegment( //
                 log,
@@ -286,7 +289,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
 
     setUpBackgroundTask(dm_context);
 
-    LOG_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", static_cast<UInt8>(page_storage_run_mode));
+    LOG_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", magic_enum::enum_name(page_storage_run_mode));
 }
 
 DeltaMergeStore::~DeltaMergeStore()
