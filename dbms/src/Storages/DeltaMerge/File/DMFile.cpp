@@ -1131,7 +1131,7 @@ void DMFile::finalizeSmallColumnDataFiles(FileProviderPtr & file_provider, Write
 
     auto finalize_cur = [&]() {
         cur_write_file->sync();
-        merged_files.push_back(std::move(cur_merged_file));
+        merged_files.push_back(cur_merged_file);
         cur_write_file.reset();
         cur_merged_file.size = 0;
     };

@@ -139,7 +139,8 @@ inline static String readMergedSubFilesFromS3(const S3RandomAccessFile::ReadFile
 
 inline static std::optional<String> readMergedSubFilesFromCachedFile(const S3RandomAccessFile::ReadFileInfo & read_file_info_)
 {
-    auto cached_file = tryOpenCachedFile(read_file_info_.merged_filename, read_file_info_.size);
+    auto s3_key = S3::S3FilenameView::fromKeyWithPrefix(read_file_info_.merged_filename).toFullKey();
+    auto cached_file = tryOpenCachedFile(s3_key, read_file_info_.size);
     if (cached_file != nullptr)
     {
         String data;
