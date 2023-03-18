@@ -43,6 +43,7 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     std::vector<std::future<void>> upload_results;
     for (const auto & [fname, fsize] : local_files)
     {
+        UNUSED(fsize);
         if (fname == DMFile::metav2FileName())
         {
             // meta file will be upload at last.
