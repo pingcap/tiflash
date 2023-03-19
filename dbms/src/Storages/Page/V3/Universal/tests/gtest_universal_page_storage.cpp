@@ -419,10 +419,10 @@ TEST_F(UniPageStorageTest, OnlyScanRaftLog)
             .data_file_id = std::make_shared<String>("hello"),
             .offset_in_file = 0,
             .size_in_file = 0};
-        wb.putRemotePage(UniversalPageIdFormat::toFullPageId(region_prefix, 10), tag, loc, {});
-        wb.putRemotePage(UniversalPageIdFormat::toFullPageId(region_prefix, 15), tag, loc, {});
-        wb.putRemotePage(UniversalPageIdFormat::toFullPageId(region_prefix, 18), tag, loc, {});
-        wb.putRemotePage(UniversalPageIdFormat::toFullRaftLogScanEnd(region_id), tag, loc, {});
+        wb.putRemotePage(UniversalPageIdFormat::toFullPageId(region_prefix, 10), tag, 0, loc, {});
+        wb.putRemotePage(UniversalPageIdFormat::toFullPageId(region_prefix, 15), tag, 0, loc, {});
+        wb.putRemotePage(UniversalPageIdFormat::toFullPageId(region_prefix, 18), tag, 0, loc, {});
+        wb.putRemotePage(UniversalPageIdFormat::toFullRaftLogScanEnd(region_id), tag, 0, loc, {});
 
         page_storage->write(std::move(wb));
     }
@@ -430,8 +430,8 @@ TEST_F(UniPageStorageTest, OnlyScanRaftLog)
     RaftDataReader reader(*page_storage);
     {
         size_t count = 0;
-        auto checker = [&](const UniversalPageId & page_id, const PS::V3::CheckpointLocation & location) {
-            UNUSED(location);
+        auto checker = [&](const UniversalPageId & page_id, PageSize page_size, const PS::V3::CheckpointLocation & location) {
+            UNUSED(page_size, location);
             ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(page_id), region_prefix);
             count++;
         };

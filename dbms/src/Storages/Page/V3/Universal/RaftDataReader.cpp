@@ -49,7 +49,7 @@ void RaftDataReader::traverse(const UniversalPageId & start, const UniversalPage
     }
 }
 
-void RaftDataReader::traverseRemoteRaftLogForRegion(UInt64 region_id, const std::function<void(const UniversalPageId & page_id, const PS::V3::CheckpointLocation & location)> & acceptor)
+void RaftDataReader::traverseRemoteRaftLogForRegion(UInt64 region_id, const std::function<void(const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location)> & acceptor)
 {
     auto start = UniversalPageIdFormat::toFullRaftLogPrefix(region_id);
     auto end = UniversalPageIdFormat::toFullRaftLogScanEnd(region_id);
@@ -62,7 +62,8 @@ void RaftDataReader::traverseRemoteRaftLogForRegion(UInt64 region_id, const std:
         RUNTIME_CHECK(page_id.size() == 20, page_id.size());
         auto maybe_location = uni_ps.getCheckpointLocation(page_id, snapshot);
         RUNTIME_CHECK(maybe_location.has_value());
-        acceptor(page_id, *maybe_location);
+        auto entry = uni_ps.getEntry(page_id, snapshot);
+        acceptor(page_id, entry.size, *maybe_location);
     }
 }
 

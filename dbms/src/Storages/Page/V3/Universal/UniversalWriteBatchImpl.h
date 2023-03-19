@@ -58,9 +58,9 @@ public:
         putPage(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag, read_buffer, size, data_sizes);
     }
 
-    void putRemotePage(PageIdU64 page_id, UInt64 tag, const PS::V3::CheckpointLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums)
+    void putRemotePage(PageIdU64 page_id, UInt64 tag, PageSize size, const PS::V3::CheckpointLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums)
     {
-        putRemotePage(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag, data_location, std::move(offset_and_checksums));
+        putRemotePage(UniversalPageIdFormat::toFullPageId(prefix, page_id), tag, size, data_location, std::move(offset_and_checksums));
     }
 
     void putExternal(PageIdU64 page_id, UInt64 tag)
@@ -114,9 +114,9 @@ public:
         putPage(page_id, tag, buffer_ptr, data.size(), data_sizes);
     }
 
-    void putRemotePage(const UniversalPageId & page_id, UInt64 tag, const PS::V3::CheckpointLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums)
+    void putRemotePage(const UniversalPageId & page_id, UInt64 tag, PageSize size, const PS::V3::CheckpointLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums)
     {
-        Write w{WriteBatchWriteType::PUT_REMOTE, page_id, tag, nullptr, /* size */ 0, "", std::move(offset_and_checksums), data_location};
+        Write w{WriteBatchWriteType::PUT_REMOTE, page_id, tag, nullptr, size, "", std::move(offset_and_checksums), data_location};
         writes.emplace_back(std::move(w));
         has_writes_from_remote = true;
     }

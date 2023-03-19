@@ -288,9 +288,9 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
         // Write raft log to uni ps
         UniversalWriteBatch wb;
         RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
-        raft_data_reader.traverseRemoteRaftLogForRegion(region_id, [&](const UniversalPageId & page_id, const PS::V3::CheckpointLocation & location) {
-            LOG_DEBUG(log, "Write raft log for region {} with index {}", region_id, UniversalPageIdFormat::getU64ID(page_id));
-            wb.putRemotePage(page_id, 0, location, {});
+        raft_data_reader.traverseRemoteRaftLogForRegion(region_id, [&](const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location) {
+            LOG_DEBUG(log, "Write raft log size {} for region {} with index {}", size, region_id, UniversalPageIdFormat::getU64ID(page_id));
+            wb.putRemotePage(page_id, 0, size, location, {});
         });
         auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
         wn_ps->write(std::move(wb));

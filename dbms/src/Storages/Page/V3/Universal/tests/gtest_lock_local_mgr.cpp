@@ -96,14 +96,14 @@ try
             .offset_in_file = 0,
             .size_in_file = 1024,
         };
-        wb.putRemotePage("2", 0, loc2, {});
+        wb.putRemotePage("2", 0, 1024, loc2, {});
 
         PS::V3::CheckpointLocation loc3{
             .data_file_id = key,
             .offset_in_file = 1024,
             .size_in_file = 10240,
         };
-        wb.putRemotePage("3", 0, loc3, {});
+        wb.putRemotePage("3", 0, 1024, loc3, {});
     }
     // mock UniversalPageStorage::write(wb)
     mgr.createS3LockForWriteBatch(wb);
@@ -168,14 +168,14 @@ try
             .offset_in_file = 0,
             .size_in_file = 1024,
         };
-        wb.putRemotePage("2", 0, loc2, {});
+        wb.putRemotePage("2", 0, 1024, loc2, {});
 
         PS::V3::CheckpointLocation loc3{
             .data_file_id = key,
             .offset_in_file = 1024,
             .size_in_file = 10240,
         };
-        wb.putRemotePage("3", 0, loc3, {});
+        wb.putRemotePage("3", 0, 1024, loc3, {});
     }
 
     // However, the dtfile is marked as deleted by S3GC before FAP apply

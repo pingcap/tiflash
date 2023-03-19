@@ -934,7 +934,7 @@ try
             .offset_in_file = 1024,
             .size_in_file = 1024,
         };
-        batch.putRemotePage("21", tag, loc21, {});
+        batch.putRemotePage("21", tag, 1024, loc21, {});
         PS::V3::CheckpointLocation loc22{
             .data_file_id = std::make_shared<String>(ingest_from_dtfile.toFullKey()),
             .offset_in_file = 0,
