@@ -48,6 +48,11 @@ public:
      */
     virtual bool syncSchemas(Context & context, KeyspaceID keyspace_id) = 0;
 
+    /**
+     *  Remove current version of CH schema.
+    */
+    virtual void removeCurrentVersion(KeyspaceID keyspace_id) = 0;
+
     virtual void reset() = 0;
 
     virtual TiDB::DBInfoPtr getDBInfoByName(const String & database_name) = 0;

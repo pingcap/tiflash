@@ -15,28 +15,30 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
+#include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/CheckpointInfo.h>
-#include <Storages/Transaction/FastAddPeer.h>
+#include <Storages/Transaction/FastAddPeerCache.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
-
-#include "DataStreams/OneBlockInputStream.h"
-
 
 namespace DB
 {
@@ -60,7 +62,8 @@ public:
     void SetUp() override
     {
         FailPointHelper::enableFailPoint(FailPoints::force_use_dmfile_format_v3);
-        ASSERT_TRUE(createBucketIfNotExist());
+        auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
         TiFlashStorageTestBasic::SetUp();
         auto & global_context = TiFlashTestEnv::getGlobalContext();
         if (global_context.getSharedContextDisagg()->remote_data_store == nullptr)
@@ -163,29 +166,6 @@ protected:
         return {handle_range, {external_file}}; // There are some duplicated info. This is to minimize the change to our test code.
     }
 
-    bool createBucketIfNotExist()
-    {
-        auto s3_client = S3::ClientFactory::instance().sharedClient();
-        auto bucket = S3::ClientFactory::instance().bucket();
-        Aws::S3::Model::CreateBucketRequest request;
-        request.SetBucket(bucket);
-        auto outcome = s3_client->CreateBucket(request);
-        if (outcome.IsSuccess())
-        {
-            LOG_DEBUG(Logger::get(), "Created bucket {}", bucket);
-        }
-        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
-        {
-            LOG_DEBUG(Logger::get(), "Bucket {} already exist", bucket);
-        }
-        else
-        {
-            const auto & err = outcome.GetError();
-            LOG_ERROR(Logger::get(), "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
-        }
-        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
-    }
-
     void dumpCheckpoint()
     {
         auto temp_dir = getTemporaryPath() + "/";
@@ -251,7 +231,7 @@ protected:
     UInt64 upload_sequence = 1000;
     bool already_initialize_data_store = false;
     bool already_initialize_write_ps = false;
-    DB::PageStorageRunMode orig_mode;
+    DB::PageStorageRunMode orig_mode = PageStorageRunMode::ONLY_V3;
 
     constexpr static const char * TRACING_NAME = "DeltaMergeStoreTestFastAddPeer";
 };
@@ -293,6 +273,29 @@ try
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write + num_rows_write, num_rows_write + 2 * num_rows_write, false);
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
         auto [range, file_ids] = genDMFile(*dm_context, block);
+        {
+            // Mock DMFiles are uploaded to S3 in SSTFilesToDTFilesOutputStream
+            auto remote_store = db_context->getSharedContextDisagg()->remote_data_store;
+            ASSERT_NE(remote_store, nullptr);
+            auto delegator = dm_context->path_pool->getStableDiskDelegator();
+            for (const auto & file_id : file_ids)
+            {
+                auto dm_file = DMFile::restore(
+                    db_context->getFileProvider(),
+                    file_id.id,
+                    file_id.id,
+                    delegator.getDTFilePath(file_id.id),
+                    DMFile::ReadMetaMode::all());
+                remote_store->putDMFile(
+                    dm_file,
+                    S3::DMFileOID{
+                        .store_id = store_id,
+                        .table_id = store->physical_table_id,
+                        .file_id = file_id.id,
+                    },
+                    true);
+            }
+        }
         store->ingestFiles(dm_context, range, file_ids, false);
         store->flushCache(*db_context, RowKeyRange::newAll(false, 1), true);
     }
@@ -306,8 +309,9 @@ try
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(store_id, upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
     checkpoint_info->remote_store_id = store_id;
-    checkpoint_info->temp_ps_wrapper = createTempPageStorage(*db_context, manifest_key, /*dir_seq*/ 100);
-    checkpoint_info->temp_ps = checkpoint_info->temp_ps_wrapper->temp_ps;
+    checkpoint_info->region_id = 1000;
+    checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(*db_context, manifest_key, /*dir_seq*/ 100);
+    checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     store->ingestSegmentsFromCheckpointInfo(*db_context, db_context->getSettingsRef(), RowKeyRange::newAll(false, 1), checkpoint_info);
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write / 2 + 2 * num_rows_write);
@@ -378,8 +382,9 @@ try
     const auto manifest_key = S3::S3Filename::newCheckpointManifest(store_id, upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
     checkpoint_info->remote_store_id = store_id;
-    checkpoint_info->temp_ps_wrapper = createTempPageStorage(*db_context, manifest_key, /*dir_seq*/ 100);
-    checkpoint_info->temp_ps = checkpoint_info->temp_ps_wrapper->temp_ps;
+    checkpoint_info->region_id = 1000;
+    checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(*db_context, manifest_key, /*dir_seq*/ 100);
+    checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     store->ingestSegmentsFromCheckpointInfo(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write / 2)), checkpoint_info);
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write / 2);
 

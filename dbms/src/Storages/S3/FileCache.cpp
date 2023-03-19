@@ -28,6 +28,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 
@@ -55,16 +56,15 @@ FileCache::FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemo
     , cache_capacity(config_.getDTFileCapacity())
     , cache_level(config_.dtfile_level)
     , cache_used(0)
-    , cache_min_age_seconds(config_.dtfile_cache_min_age_seconds)
     , log(Logger::get("FileCache"))
 {
     prepareDir(cache_dir);
     restore();
 }
 
-RandomAccessFilePtr FileCache::getRandomAccessFile(const S3::S3FilenameView & s3_fname)
+RandomAccessFilePtr FileCache::getRandomAccessFile(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize)
 {
-    auto file_seg = get(s3_fname);
+    auto file_seg = get(s3_fname, filesize);
     if (file_seg == nullptr)
     {
         return nullptr;
@@ -73,7 +73,7 @@ RandomAccessFilePtr FileCache::getRandomAccessFile(const S3::S3FilenameView & s3
     return std::make_shared<PosixRandomAccessFile>(file_seg->getLocalFileName(), /*flags*/ -1, /*read_limiter*/ nullptr, file_seg);
 }
 
-FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname)
+FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize)
 {
     auto s3_key = s3_fname.toFullKey();
     auto file_type = getFileType(s3_key);
@@ -108,7 +108,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname)
 
     // We don't know the exact size of a object/file, but we need reserve space to save the object/file.
     // A certain amount of space is reserved for each file type.
-    auto estimzted_size = getEstimatedSizeOfFileType(file_type);
+    auto estimzted_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
     if (!reserveSpaceImpl(file_type, estimzted_size, /*try_evict*/ true))
     {
         LOG_DEBUG(log, "s3_key={} space not enough, skip cache", s3_key);
@@ -126,6 +126,10 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname)
 // Remove `local_fname` from disk and remove parent directory if parent directory is empty.
 void FileCache::removeDiskFile(const String & local_fname)
 {
+    if (!std::filesystem::exists(local_fname))
+    {
+        return;
+    }
     try
     {
         auto fsize = std::filesystem::file_size(local_fname);
@@ -150,11 +154,11 @@ void FileCache::removeDiskFile(const String & local_fname)
     }
     catch (std::exception & e)
     {
-        LOG_WARNING(log, "Throw exception in removeFile: ", e.what());
+        LOG_WARNING(log, "Throw exception in removeFile {}: {}", local_fname, e.what());
     }
     catch (...)
     {
-        tryLogCurrentException("Throw exception in removeFile");
+        tryLogCurrentException("Throw exception in removeFile {}", local_fname);
     }
 }
 
@@ -172,13 +176,13 @@ void FileCache::remove(const String & s3_key)
     std::ignore = removeImpl(table, s3_key, f);
 }
 
-std::pair<UInt64, std::list<String>::iterator> FileCache::removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f)
+std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f)
 {
     // Except currenly thread and the FileTable,
     // there are other threads hold this FileSegment object.
     if (f.use_count() > 2)
     {
-        return {0, {}};
+        return {-1, {}};
     }
     ProfileEvents::increment(ProfileEvents::FileCacheEvict);
     const auto & local_fname = f->getLocalFileName();
@@ -256,20 +260,20 @@ UInt64 FileCache::tryEvictFrom(FileType evict_for, UInt64 size, FileType evict_f
     for (UInt32 try_evict_count = 0; try_evict_count < max_try_evict_count && itr != end; ++try_evict_count)
     {
         auto s3_key = *itr;
-        auto f = table.get(s3_key);
+        auto f = table.get(s3_key, /*update_lru*/ false);
         if (!check_last_access_time || !f->isRecentlyAccess(std::chrono::seconds(cache_min_age_seconds.load(std::memory_order_relaxed))))
         {
             auto [released_size, next_itr] = removeImpl(table, s3_key, f);
             LOG_DEBUG(log, "tryRemoveFile {} size={}", s3_key, released_size);
-            if (released_size == 0)
+            if (released_size < 0) // not remove
             {
                 ++itr;
             }
-            else
+            else // removed
             {
                 itr = next_itr;
+                total_released_size += released_size;
             }
-            total_released_size += released_size;
         }
         else
         {
@@ -304,7 +308,7 @@ bool FileCache::canCache(FileType file_type) const
 {
     return file_type != FileType::Unknow
         && static_cast<UInt64>(file_type) <= cache_level
-        && bg_downloading_count.load(std::memory_order_relaxed) < S3FileCachePool::get().getMaxThreads();
+        && bg_downloading_count.load(std::memory_order_relaxed) < S3FileCachePool::get().getMaxThreads() * max_downloading_count_scale.load(std::memory_order_relaxed);
 }
 
 FileType FileCache::getFileTypeOfColData(const std::filesystem::path & p)
@@ -342,6 +346,10 @@ FileType FileCache::getFileType(const String & fname)
     {
         return p.stem() == DM::DMFile::metav2FileName() ? FileType::Meta : FileType::Unknow;
     }
+    else if (ext == ".merged")
+    {
+        return FileType::Merged;
+    }
     else if (ext == ".idx")
     {
         return FileType::Index;
@@ -378,11 +386,9 @@ bool FileCache::finalizeReservedSize(FileType reserve_for, UInt64 reserved_size,
 void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
 {
     Stopwatch sw;
-    auto client = S3::ClientFactory::instance().sharedClient();
-    const auto & bucket = S3::ClientFactory::instance().bucket();
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     Aws::S3::Model::GetObjectRequest req;
-    req.SetBucket(bucket);
-    req.SetKey(s3_key);
+    client->setBucketAndKeyWithRoot(req, s3_key);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
     auto outcome = client->GetObject(req);
     if (!outcome.IsSuccess())
@@ -578,24 +584,20 @@ std::vector<FileSegmentPtr> FileCache::getAll()
     return file_segs;
 }
 
-void FileCache::updateConfig(Poco::Util::AbstractConfiguration & config_)
+void FileCache::updateConfig(const Settings & settings)
 {
-    if (!config_.has("storage.remote.cache"))
+    double max_downloading_scale = settings.dt_filecache_max_downloading_count_scale;
+    if (std::fabs(max_downloading_scale - max_downloading_count_scale.load(std::memory_order_relaxed)) > 0.001)
     {
-        return;
+        LOG_INFO(log, "max_downloading_count_scale {} => {}", max_downloading_count_scale.load(std::memory_order_relaxed), max_downloading_scale);
+        max_downloading_count_scale.store(max_downloading_scale, std::memory_order_relaxed);
     }
-    try
+
+    UInt64 cache_min_age = settings.dt_filecache_min_age_seconds;
+    if (cache_min_age != cache_min_age_seconds.load(std::memory_order_relaxed))
     {
-        StorageRemoteCacheConfig cache_config;
-        cache_config.parse(config_.getString("storage.remote.cache"), log);
-        if (cache_config.dtfile_cache_min_age_seconds != cache_min_age_seconds.load(std::memory_order_relaxed))
-        {
-            cache_min_age_seconds.store(cache_config.dtfile_cache_min_age_seconds, std::memory_order_relaxed);
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, "FileCache::updateConfig");
+        LOG_INFO(log, "cache_min_age_seconds {} => {}", cache_min_age_seconds.load(std::memory_order_relaxed), cache_min_age);
+        cache_min_age_seconds.store(cache_min_age, std::memory_order_relaxed);
     }
 }
 
