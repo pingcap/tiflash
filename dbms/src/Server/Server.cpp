@@ -61,6 +61,7 @@
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
 #include <Server/BgStorageInit.h>
+#include <Server/Bootstrap.h>
 #include <Server/CertificateReloader.h>
 #include <Server/HTTPHandlerFactory.h>
 #include <Server/MetricsPrometheus.h>
@@ -870,6 +871,51 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     }
 }
 
+void syncSchemaWithTiDB(
+    const TiFlashStorageConfig & storage_config,
+    BgStorageInitHolder & bg_init_stores,
+    const std::unique_ptr<Context> & global_context,
+    const LoggerPtr & log)
+{
+    /// Then, sync schemas with TiDB, and initialize schema sync service.
+    /// If in API V2 mode, each keyspace's schema is fetch lazily.
+    if (storage_config.api_version == 1)
+    {
+        for (int i = 0; i < 60; i++) // retry for 3 mins
+        {
+            try
+            {
+                global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context, NullspaceID);
+                break;
+            }
+            catch (Poco::Exception & e)
+            {
+                const int wait_seconds = 3;
+                LOG_ERROR(
+                    log,
+                    "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
+                    " seconds and try again.",
+                    e.displayText(),
+                    wait_seconds);
+                ::sleep(wait_seconds);
+            }
+        }
+        LOG_DEBUG(log, "Sync schemas done.");
+    }
+
+    // Init the DeltaMergeStore instances if data exist.
+    // Make the disk usage correct and prepare for serving
+    // queries.
+    bg_init_stores.start(
+        *global_context,
+        log,
+        storage_config.lazily_init_store,
+        storage_config.s3_config.isS3Enabled());
+
+    // init schema sync service with tidb
+    global_context->initializeSchemaSyncService();
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
@@ -1241,12 +1287,27 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Global PageStorage run mode is {}", magic_enum::enum_name(global_context->getPageStorageRunMode()));
     }
 
+    /// Try to restore the StoreIdent from UniPS. There are many services that require
+    /// `store_id` to generate the path to RemoteStore under disagg mode.
+    std::optional<raft_serverpb::StoreIdent> store_ident;
     // Only when this node is disagg compute node and autoscaler is enabled, we don't need the WriteNodePageStorage instance
     // Disagg compute node without autoscaler still need this instance for proxy's data
     if (!(global_context->getSharedContextDisagg()->isDisaggregatedComputeMode()
           && global_context->getSharedContextDisagg()->use_autoscaler))
     {
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
+        if (auto wn_ps = global_context->tryGetWriteNodePageStorage(); wn_ps != nullptr)
+        {
+            store_ident = tryGetStoreIdent(wn_ps);
+            if (!store_ident)
+            {
+                LOG_INFO(log, "StoreIdent not exist, new tiflash node");
+            }
+            else
+            {
+                LOG_INFO(log, "StoreIdent restored, {{{}}}", store_ident->ShortDebugString());
+            }
+        }
     }
 
     if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
@@ -1292,7 +1353,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->reloadDeltaTreeConfig(*config);
             if (FileCache::instance() != nullptr)
             {
-                FileCache::instance()->updateConfig(*config);
+                FileCache::instance()->updateConfig(global_context->getSettingsRef());
+            }
+            if (S3::ClientFactory::instance().isEnabled())
+            {
+                DM::DMFile::updateMergeFileConfig(global_context->getSettingsRef());
             }
 
             {
@@ -1344,7 +1409,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         size_t n = config().getUInt64("delta_index_cache_count", 2000);
-        // In disaggregate compute node, we will not use DeltaIndexManager to cache the delta index.
+        // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
         // Instead, we use RNDeltaIndexCache.
 
         // TODO: Currently RNDeltaIndexCache caches by number of entities, instead of
@@ -1374,6 +1439,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// create TMTContext
         auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), raft_config, storage_config.api_version, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
+        if (store_ident)
+        {
+            // Many service would depends on `store_id` when disagg is enabled.
+            // setup the store_id restored from store_ident ASAP
+            // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
+            auto kvstore = global_context->getTMTContext().getKVStore();
+            metapb::Store store_meta;
+            store_meta.set_id(store_ident->store_id());
+            store_meta.set_node_state(metapb::NodeState::Preparing);
+            kvstore->setStore(store_meta);
+        }
         global_context->getTMTContext().reloadConfig(config());
     }
 
@@ -1393,40 +1469,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     BgStorageInitHolder bg_init_stores;
     if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        /// Then, sync schemas with TiDB, and initialize schema sync service.
-        /// If in API V2 mode, each keyspace's schema is fetch lazily.
-        if (storage_config.api_version == 1)
+        if (global_context->getSharedContextDisagg()->notDisaggregatedMode() || store_ident.has_value())
         {
-            for (int i = 0; i < 60; i++) // retry for 3 mins
-            {
-                try
-                {
-                    global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context, NullspaceID);
-                    break;
-                }
-                catch (Poco::Exception & e)
-                {
-                    const int wait_seconds = 3;
-                    LOG_ERROR(
-                        log,
-                        "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
-                        " seconds and try again.",
-                        e.displayText(),
-                        wait_seconds);
-                    ::sleep(wait_seconds);
-                }
-            }
-            LOG_DEBUG(log, "Sync schemas done.");
+            // This node has been bootstrapped, the `store_id` is set. Or non-disagg mode,
+            // do not depend on `store_id`. Start sync schema before serving any requests.
+            // For the node has not been bootstrapped, this stage will be postpone.
+            // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
+            syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
         }
-
-        bg_init_stores.start(
-            *global_context,
-            log,
-            storage_config.lazily_init_store,
-            storage_config.s3_config.isS3Enabled());
-
-        // init schema sync service with tidb
-        global_context->initializeSchemaSyncService();
     }
     // set default database for ch-client
     global_context->setCurrentDatabase(default_database);
@@ -1502,10 +1552,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
     }
 
-    // If S3 enabled, wait for all DeltaMergeStores' initialization
-    // before this instance can accept requests.
-    // Else it just do nothing.
-    bg_init_stores.waitUntilFinish();
+    // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
+    if (global_context->getSharedContextDisagg()->notDisaggregatedMode() || /*has_been_bootstrap*/ store_ident.has_value())
+    {
+        // If S3 enabled, wait for all DeltaMergeStores' initialization
+        // before this instance can accept requests.
+        // Else it just do nothing.
+        bg_init_stores.waitUntilFinish();
+    }
 
     /// Then, startup grpc server to serve raft and/or flash services.
     FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
@@ -1580,16 +1634,31 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             // proxy update store-id before status set `RaftProxyStatus::Running`
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
+            const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
+            if (store_ident)
+            {
+                RUNTIME_ASSERT(store_id == store_ident->store_id(), log, "store id mismatch store_id={} store_ident.store_id={}", store_id, store_ident->store_id());
+            }
             if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
             {
                 // compute node do not need to handle read index
-                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", store_id);
             }
             else
             {
-                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader", store_id);
 
-                size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
+                if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode() && !store_ident.has_value())
+                {
+                    // Not disagg node done it before
+                    // For the disagg node has not been bootstrap, begin the very first schema sync with TiDB.
+                    // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
+                    syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+                    bg_init_stores.waitUntilFinish();
+                }
+
+                // if set 0, DO NOT enable read-index worker
+                size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1);
                 if (runner_cnt > 0)
                 {
                     auto & kvstore_ptr = tmt_context.getKVStore();

@@ -229,7 +229,7 @@ try
         auto s = reader->next();
         if (s.has_value())
         {
-            auto e = u128::Serializer::deserializeFrom(s.value());
+            auto e = u128::Serializer::deserializeFrom(s.value(), nullptr);
             num_entries_on_wal += e.size();
             EXPECT_TRUE(e.empty());
         }
@@ -305,7 +305,7 @@ try
         auto s = reader->next();
         if (s.has_value())
         {
-            auto e = u128::Serializer::deserializeFrom(s.value());
+            auto e = u128::Serializer::deserializeFrom(s.value(), nullptr);
             num_entries_on_wal += e.size();
             EXPECT_TRUE(e.empty());
         }
@@ -446,7 +446,7 @@ try
         auto s = reader->next();
         if (s.has_value())
         {
-            auto e = u128::Serializer::deserializeFrom(s.value());
+            auto e = u128::Serializer::deserializeFrom(s.value(), nullptr);
             num_entries_on_wal += e.size();
             for (const auto & r : e.getRecords())
             {

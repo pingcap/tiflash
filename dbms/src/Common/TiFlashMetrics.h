@@ -231,8 +231,11 @@ namespace DB
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                             \
         Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                              \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                                      \
+        F(type_ingest_sst_sst2dt, {{"type", "ingest_sst_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                                        \
+        F(type_ingest_sst_upload, {{"type", "ingest_sst_upload"}}, ExpBuckets{0.05, 2, 10}),                                                        \
         F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets{0.05, 2, 10}),                                                \
         F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                  \
+        F(type_apply_snapshot_predecode_upload, {{"type", "snapshot_predecode_upload"}}, ExpBuckets{0.05, 2, 10}),                                  \
         F(type_apply_snapshot_flush, {{"type", "snapshot_flush"}}, ExpBuckets{0.05, 2, 10}))                                                        \
     M(tiflash_raft_process_keys, "Total number of keys processed in some types of Raft commands", Counter,                                          \
         F(type_apply_snapshot, {"type", "apply_snapshot"}), F(type_ingest_sst, {"type", "ingest_sst"}))                                             \

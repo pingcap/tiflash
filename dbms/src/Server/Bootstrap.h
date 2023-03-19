@@ -12,35 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Common/Logger.h>
-#include <Common/nocopyable.h>
-#include <Interpreters/Context_fwd.h>
-
-#include <memory>
+#include <kvproto/raft_serverpb.pb.h>
 
 namespace DB
 {
-struct BgStorageInitHolder
-{
-    bool need_join = false;
-    std::unique_ptr<std::thread> init_thread;
 
-    void start(Context & global_context, const LoggerPtr & log, bool lazily_init_store, bool is_s3_enabled);
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
-    // wait until finish if need
-    void waitUntilFinish();
-
-    BgStorageInitHolder() = default;
-
-    // Exception safe for joining the init_thread
-    ~BgStorageInitHolder()
-    {
-        waitUntilFinish();
-    }
-
-    DISALLOW_COPY_AND_MOVE(BgStorageInitHolder);
-};
+std::optional<raft_serverpb::StoreIdent>
+tryGetStoreIdent(const UniversalPageStoragePtr & wn_ps);
 
 } // namespace DB

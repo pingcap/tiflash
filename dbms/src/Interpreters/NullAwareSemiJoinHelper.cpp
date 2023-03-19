@@ -28,8 +28,10 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
     , step(step_)
     , step_end(false)
     , result(NASemiJoinResultType::NULL_VALUE)
-    , null_rows_pos(0)
-    , null_rows_it(nullptr)
+    , pace(1)
+    , pos_in_null_rows(0)
+    , pos_in_columns_vector(0)
+    , pos_in_columns(0)
     , map_it(map_it_)
 {
     static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftAnti
@@ -38,18 +40,21 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <typename Mapped, NASemiJoinStep STEP>
-void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const PaddedPODArray<Join::RowRefList *> & null_rows, size_t & current_offset, size_t max_pace)
+void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<Join::RowsNotInsertToMap> & null_rows, size_t & current_offset, size_t min_pace)
 {
     static_assert(STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
 
     RUNTIME_CHECK_MSG(step == STEP, "current step {} != caller's step {}", static_cast<std::underlying_type<NASemiJoinStep>::type>(step), static_cast<std::underlying_type<NASemiJoinStep>::type>(STEP));
+
+    static constexpr size_t MAX_PACE = 8192;
+    pace = std::min(MAX_PACE, std::max(pace, min_pace));
 
     if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS)
     {
         static_assert(STRICTNESS == All);
 
         const auto * iter = static_cast<const Mapped *>(map_it);
-        for (size_t i = 0; i < max_pace && iter != nullptr; ++i)
+        for (size_t i = 0; i < pace && iter != nullptr; ++i)
         {
             for (size_t j = 0; j < right_columns; ++j)
                 added_columns[j + left_columns]->insertFrom(*iter->block->getByPosition(j).column.get(), iter->row_num);
@@ -63,26 +68,42 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added
     }
     else if constexpr (STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS)
     {
-        for (size_t i = 0; i < max_pace; ++i)
+        size_t count = pace;
+        while (pos_in_null_rows < null_rows.size() && count > 0)
         {
-            if (null_rows_it == nullptr)
+            const auto & rows = null_rows[pos_in_null_rows];
+
+            while (pos_in_columns_vector < rows.materialized_columns_vec.size() && count > 0)
             {
-                if (null_rows_pos >= null_rows.size())
+                const auto & columns = rows.materialized_columns_vec[pos_in_columns_vector];
+                const size_t columns_size = columns[0]->size();
+
+                size_t insert_cnt = std::min(count, columns_size - pos_in_columns);
+                for (size_t j = 0; j < right_columns; ++j)
+                    added_columns[j + left_columns]->insertRangeFrom(*columns[j].get(), pos_in_columns, insert_cnt);
+
+                pos_in_columns += insert_cnt;
+                count -= insert_cnt;
+
+                if (pos_in_columns >= columns_size)
                 {
-                    step_end = true;
-                    break;
+                    ++pos_in_columns_vector;
+                    pos_in_columns = 0;
                 }
-                ++null_rows_pos;
-                null_rows_it = null_rows[null_rows_pos - 1];
             }
 
-            for (size_t j = 0; j < right_columns; ++j)
-                added_columns[j + left_columns]->insertFrom(*null_rows_it->block->getByPosition(j).column.get(), null_rows_it->row_num);
-            ++current_offset;
-
-            null_rows_it = null_rows_it->next;
+            if (pos_in_columns_vector >= rows.materialized_columns_vec.size())
+            {
+                ++pos_in_null_rows;
+                pos_in_columns_vector = 0;
+                pos_in_columns = 0;
+            }
         }
+        step_end = pos_in_null_rows >= null_rows.size();
+        current_offset += pace - count;
     }
+
+    pace = std::min(MAX_PACE, pace * 2);
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
@@ -183,7 +204,7 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     size_t left_columns_,
     size_t right_columns_,
     const BlocksList & right_blocks_,
-    const PaddedPODArray<Join::RowRefList *> & null_rows_,
+    const std::vector<Join::RowsNotInsertToMap> & null_rows_,
     size_t max_block_size_,
     const JoinOtherConditions & other_conditions_)
     : block(block_)
@@ -205,15 +226,18 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
         /// The last column is `match_helper`.
         right_columns -= 1;
     }
+
+    RUNTIME_CHECK(right_columns > 0);
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Mapped>
 void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NASemiJoinHelper::Result *> & res_list)
 {
+    std::list<NASemiJoinHelper::Result *> next_step_res_list;
+
     if constexpr (STRICTNESS == All)
     {
         /// Step of NOT_NULL_KEY_CHECK_MATCHED_ROWS only exist when strictness is all.
-        std::list<NASemiJoinHelper::Result *> next_step_res_list;
         runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS>(res_list, next_step_res_list);
         res_list.swap(next_step_res_list);
     }
@@ -221,7 +245,6 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::joinResult(std::list<NASemiJoin
     if (res_list.empty())
         return;
 
-    std::list<NASemiJoinHelper::Result *> next_step_res_list;
     runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS>(res_list, next_step_res_list);
     res_list.swap(next_step_res_list);
     if (res_list.empty())
@@ -270,14 +293,14 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runStep(std::list<NASemiJoinHel
             columns[i]->popBack(columns[i]->size());
         }
 
-        size_t max_pace = std::max(1, max_block_size / res_list.size());
+        size_t min_pace = std::max(1, max_block_size / res_list.size());
         size_t current_offset = 0;
         offsets.clear();
 
         for (auto & res : res_list)
         {
             size_t prev_offset = current_offset;
-            res->template fillRightColumns<Mapped, STEP>(columns, left_columns, right_columns, null_rows, current_offset, max_pace);
+            res->template fillRightColumns<Mapped, STEP>(columns, left_columns, right_columns, null_rows, current_offset, min_pace);
 
             /// Note that current_offset - prev_offset may be zero.
             if (current_offset > prev_offset)

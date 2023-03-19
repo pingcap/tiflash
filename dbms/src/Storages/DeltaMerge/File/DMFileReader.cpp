@@ -29,6 +29,7 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
+#include <Storages/S3/S3RandomAccessFile.h>
 #include <fmt/format.h>
 
 
@@ -61,6 +62,7 @@ DMFileReader::Stream::Stream(
         if (res->empty()) // 0 rows.
             return res;
         size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
+        auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo(reader.dmfile->getReadFileInfo(col_id, reader.dmfile->colMarkFileName(file_name_base)));
         if (reader.dmfile->configuration)
         {
             auto buffer = createReadBufferFromFileBaseByFileProvider(
@@ -143,7 +145,7 @@ DMFileReader::Stream::Stream(
               buffer_size,
               aio_threshold,
               max_read_buffer_size);
-
+    auto data_guard = S3::S3RandomAccessFile::setReadFileInfo(reader.dmfile->getReadFileInfo(col_id, reader.dmfile->colDataFileName(file_name_base)));
     if (!reader.dmfile->configuration)
     {
         buf = std::make_unique<CompressedReadBufferFromFileProvider<true>>(reader.file_provider,
