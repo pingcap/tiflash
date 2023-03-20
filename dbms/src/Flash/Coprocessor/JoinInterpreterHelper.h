@@ -89,7 +89,7 @@ struct JoinNonEqualConditions
     String null_aware_eq_cond_name;
     ExpressionActionsPtr null_aware_eq_cond_expr;
 
-    /// Validate this JoinConditions and return error message if any.
+    /// Validate this JoinNonEqualConditions and return error message if any.
     String validate(ASTTableJoin::Kind kind) const
     {
         if (unlikely(!left_filter_column.empty() && !isLeftJoin(kind)))

@@ -134,7 +134,7 @@ public:
         const BlocksList & right_blocks,
         const std::vector<Join::RowsNotInsertToMap> & null_rows,
         size_t max_block_size,
-        const JoinNonEqualConditions & other_conditions);
+        const JoinNonEqualConditions & non_equal_conditions);
 
     void joinResult(std::list<Result *> & res_list);
 
@@ -155,7 +155,7 @@ private:
     const std::vector<Join::RowsNotInsertToMap> & null_rows;
     size_t max_block_size;
 
-    const JoinNonEqualConditions & other_conditions;
+    const JoinNonEqualConditions & non_equal_conditions;
 };
 
 } // namespace DB
