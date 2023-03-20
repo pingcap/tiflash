@@ -189,40 +189,6 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTy
         }
     return collators;
 }
-
-void doFillJoinOtherConditionsAction(
-    const Context & context,
-    const TiFlashJoin & tiflash_join,
-    const NamesAndTypes & source_columns,
-    const Names & probe_key_names,
-    const Names & build_key_names,
-    JoinNonEqualConditions & join_non_equal_conditions)
-{
-    const tipb::Join & join = tiflash_join.join;
-    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0 && !join.is_null_aware_semi_join())
-        return;
-
-    DAGExpressionAnalyzer dag_analyzer(source_columns, context);
-    ExpressionActionsChain chain;
-
-    if (join.other_conditions_size() > 0)
-        join_non_equal_conditions.other_cond_name = dag_analyzer.appendWhere(chain, join.other_conditions());
-
-    if (join.other_eq_conditions_from_in_size() > 0)
-        join_non_equal_conditions.other_eq_cond_from_in_name = dag_analyzer.appendWhere(chain, join.other_eq_conditions_from_in());
-
-    if (!chain.steps.empty())
-    {
-        join_non_equal_conditions.other_cond_expr = chain.getLastActions();
-        chain.addStep();
-    }
-
-    if (join.is_null_aware_semi_join())
-    {
-        join_non_equal_conditions.null_aware_eq_cond_name = dag_analyzer.appendNullAwareSemiJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
-        join_non_equal_conditions.null_aware_eq_cond_expr = chain.getLastActions();
-    }
-}
 } // namespace
 
 TiFlashJoin::TiFlashJoin(const tipb::Join & join_, bool is_test) // NOLINT(cppcoreguidelines-pro-type-member-init)
@@ -360,7 +326,29 @@ void TiFlashJoin::fillJoinOtherConditionsAction(
             right_input_header,
             probe_side_prepare_join);
 
-    return doFillJoinOtherConditionsAction(context, *this, columns_for_other_join_filter, probe_key_names, build_key_names, join_non_equal_conditions);
+    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0 && !join.is_null_aware_semi_join())
+        return;
+
+    DAGExpressionAnalyzer dag_analyzer(columns_for_other_join_filter, context);
+    ExpressionActionsChain chain;
+
+    if (join.other_conditions_size() > 0)
+        join_non_equal_conditions.other_cond_name = dag_analyzer.appendWhere(chain, join.other_conditions());
+
+    if (join.other_eq_conditions_from_in_size() > 0)
+        join_non_equal_conditions.other_eq_cond_from_in_name = dag_analyzer.appendWhere(chain, join.other_eq_conditions_from_in());
+
+    if (!chain.steps.empty())
+    {
+        join_non_equal_conditions.other_cond_expr = chain.getLastActions();
+        chain.addStep();
+    }
+
+    if (join.is_null_aware_semi_join())
+    {
+        join_non_equal_conditions.null_aware_eq_cond_name = dag_analyzer.appendNullAwareSemiJoinEqColumn(chain, probe_key_names, build_key_names, join_key_collators);
+        join_non_equal_conditions.null_aware_eq_cond_expr = chain.getLastActions();
+    }
 }
 
 std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
