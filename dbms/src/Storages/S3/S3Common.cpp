@@ -291,7 +291,7 @@ bool objectExists(const TiFlashS3Client & client, const String & key)
     throw fromS3Error(outcome.GetError(), "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
 }
 
-void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging)
+static bool doUploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging, bool throw_on_error)
 {
     Stopwatch sw;
     Aws::S3::Model::PutObjectRequest req;
@@ -305,14 +305,34 @@ void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const S
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
-        throw fromS3Error(result.GetError(), "S3 PutEmptyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+        if (throw_on_error)
+        {
+            throw fromS3Error(result.GetError(), "S3 PutEmptyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+        }
+        else
+        {
+            LOG_ERROR(client.log, "S3 PutEmptyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+            return false;
+        }
     }
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
     LOG_DEBUG(client.log, "uploadEmptyFile key={}, cost={:.2f}s", key, elapsed_seconds);
+    return true;
 }
 
-void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname)
+void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging, int max_retry_times)
+{
+    for (int i = 0; i < max_retry_times; ++i)
+    {
+        if (doUploadEmptyFile(client, key, tagging, /*throw_on_error*/ i == max_retry_times - 1))
+        {
+            break;
+        }
+    }
+}
+
+static bool doUploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, bool throw_on_error)
 {
     Stopwatch sw;
     Aws::S3::Model::PutObjectRequest req;
@@ -326,12 +346,32 @@ void uploadFile(const TiFlashS3Client & client, const String & local_fname, cons
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
-        throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
+        if (throw_on_error)
+        {
+            throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
+        }
+        else
+        {
+            LOG_ERROR(client.log, "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
+            return false;
+        }
     }
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
     LOG_DEBUG(client.log, "uploadFile local_fname={}, key={}, write_bytes={} cost={:.2f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
+    return true;
+}
+
+void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, int max_retry_times)
+{
+    for (int i = 0; i < max_retry_times; ++i)
+    {
+        if (doUploadFile(client, local_fname, remote_fname, /*throw_on_error*/ i == max_retry_times - 1))
+        {
+            break;
+        }
+    }
 }
 
 void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname)

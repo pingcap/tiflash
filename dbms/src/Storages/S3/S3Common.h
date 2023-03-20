@@ -125,7 +125,7 @@ Aws::S3::Model::HeadObjectOutcome headObject(const TiFlashS3Client & client, con
 
 bool objectExists(const TiFlashS3Client & client, const String & key);
 
-void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname);
+void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, int max_retry_times = 3);
 
 constexpr std::string_view TaggingObjectIsDeleted = "tiflash_deleted=true";
 void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days);
@@ -134,7 +134,7 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
  * tagging is the tag-set for the object. The tag-set must be encoded as URL Query
  * parameters. (For example, "Key1=Value1")
  */
-void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging = "");
+void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging = "", int max_retry_times = 3);
 
 void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname);
 
