@@ -34,19 +34,20 @@ Page S3PageReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
     if (remote_name_view.isLockFile())
     {
 #endif
-        remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, s3_client->bucket(), remote_name_view.asDataFile().toFullKey());
+        remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, remote_name_view.asDataFile().toFullKey());
 #ifdef DBMS_PUBLIC_GTEST
     }
     else
     {
         // Just used in unit test which want to just focus on read write logic
-        remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, s3_client->bucket(), *location.data_file_id);
+        remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, *location.data_file_id);
     }
 #endif
     ReadBufferFromRandomAccessFile buf(remote_file);
 
     buf.seek(location.offset_in_file, SEEK_SET);
     auto buf_size = location.size_in_file;
+    RUNTIME_CHECK(buf_size != 0, page_id_and_entry);
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
         free(p, buf_size);

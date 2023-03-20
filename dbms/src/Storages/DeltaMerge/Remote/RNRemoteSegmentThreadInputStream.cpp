@@ -29,7 +29,7 @@ namespace DB::DM
 BlockInputStreams RNRemoteSegmentThreadInputStream::buildInputStreams(
     const Context & db_context,
     const RNRemoteReadTaskPtr & remote_read_tasks,
-    const RNPagePreparerPtr & page_downloader,
+    const RNPagePreparerPtr & page_preparer,
     const DM::ColumnDefinesPtr & columns_to_read,
     UInt64 read_tso,
     size_t num_streams,
@@ -46,7 +46,7 @@ BlockInputStreams RNRemoteSegmentThreadInputStream::buildInputStreams(
         BlockInputStreamPtr stream = std::make_shared<DM::RNRemoteSegmentThreadInputStream>(
             db_context,
             remote_read_tasks,
-            page_downloader,
+            page_preparer,
             *columns_to_read,
             rs_filter,
             read_tso,
@@ -63,7 +63,7 @@ BlockInputStreams RNRemoteSegmentThreadInputStream::buildInputStreams(
 RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
     const Context & db_context_,
     RNRemoteReadTaskPtr read_tasks_,
-    RNPagePreparerPtr page_downloader_,
+    RNPagePreparerPtr page_preparer_,
     const ColumnDefines & columns_to_read_,
     const RSOperatorPtr & filter_,
     UInt64 max_version_,
@@ -73,7 +73,7 @@ RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
     std::string_view req_id)
     : db_context(db_context_)
     , read_tasks(std::move(read_tasks_))
-    , page_downloader(std::move(page_downloader_))
+    , page_preparer(std::move(page_preparer_))
     , columns_to_read(columns_to_read_)
     , filter(filter_)
     , header(toEmptyBlock(columns_to_read))
@@ -97,7 +97,7 @@ RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
 
 RNRemoteSegmentThreadInputStream::~RNRemoteSegmentThreadInputStream()
 {
-    LOG_INFO(log, "RNRemoteSegmentThreadInputStream done, time blocked in pop task: {:.3f}sec, build task: {:.3f}sec", seconds_pop, seconds_build);
+    LOG_DEBUG(log, "RNRemoteSegmentThreadInputStream done, time blocked in pop task: {:.3f}sec, build task: {:.3f}sec", seconds_pop, seconds_build);
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_pop_ready_tasks).Observe(seconds_pop);
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_stream).Observe(seconds_build);
 }

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/nocopyable.h>
 #include <Interpreters/Context_fwd.h>
 
 #include <memory>
@@ -31,11 +32,15 @@ struct BgStorageInitHolder
     // wait until finish if need
     void waitUntilFinish();
 
+    BgStorageInitHolder() = default;
+
     // Exception safe for joining the init_thread
     ~BgStorageInitHolder()
     {
         waitUntilFinish();
     }
+
+    DISALLOW_COPY_AND_MOVE(BgStorageInitHolder);
 };
 
 } // namespace DB

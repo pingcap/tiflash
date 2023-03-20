@@ -91,10 +91,10 @@ public:
         putPage(page_id, tag, buffer_ptr, data.size());
     }
 
-    void putRemotePage(PageIdU64 page_id, UInt64 tag, const PS::V3::CheckpointLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums)
+    void putRemotePage(PageIdU64 page_id, UInt64 tag, PageSize size, const PS::V3::CheckpointLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums)
     {
         if (uwb)
-            uwb->putRemotePage(page_id, tag, data_location, std::move(offset_and_checksums));
+            uwb->putRemotePage(page_id, tag, size, data_location, std::move(offset_and_checksums));
         else
             throw Exception(ErrorCodes::LOGICAL_ERROR, "try to put remote page with remote location with u64 id, page_id={}", page_id);
     }

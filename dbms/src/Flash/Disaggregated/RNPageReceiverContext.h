@@ -69,7 +69,7 @@ public:
         const DM::RNRemoteReadTaskPtr & remote_read_tasks,
         pingcap::kv::Cluster * cluster_);
 
-    FetchPagesRequest popRequest() const;
+    FetchPagesRequest nextFetchPagesRequest() const;
 
     FetchPagesResponseReaderPtr doRequest(const FetchPagesRequest & request) const;
 

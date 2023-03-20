@@ -50,7 +50,7 @@ TEST(WALSeriTest, AllPuts)
     for (auto & rec : edit.getMutRecords())
         rec.version = ver20;
 
-    auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
+    auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit), nullptr);
     ASSERT_EQ(deseri_edit.size(), 2);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT);
@@ -76,7 +76,7 @@ try
     for (auto & rec : edit.getMutRecords())
         rec.version = ver21;
 
-    auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
+    auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit), nullptr);
     ASSERT_EQ(deseri_edit.size(), 6);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT);
@@ -120,7 +120,7 @@ TEST(WALSeriTest, Upserts)
     edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 3), ver21_1, entry_p3_2);
     edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 5), ver21_1, entry_p5_2);
 
-    auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
+    auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit), nullptr);
     ASSERT_EQ(deseri_edit.size(), 3);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::UPSERT);
@@ -151,7 +151,7 @@ TEST(WALSeriTest, RefExternalAndEntry)
         edit.varDel(buildV3Id(TEST_NAMESPACE_ID, 1), ver2_0);
         edit.varRef(buildV3Id(TEST_NAMESPACE_ID, 2), ver3_0, buildV3Id(TEST_NAMESPACE_ID, 1));
 
-        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
+        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit), nullptr);
         ASSERT_EQ(deseri_edit.size(), 3);
         auto iter = deseri_edit.getRecords().begin();
         EXPECT_EQ(iter->type, EditRecordType::VAR_EXTERNAL);
@@ -176,7 +176,7 @@ TEST(WALSeriTest, RefExternalAndEntry)
         edit.varDel(buildV3Id(TEST_NAMESPACE_ID, 1), ver2_0);
         edit.varRef(buildV3Id(TEST_NAMESPACE_ID, 2), ver3_0, buildV3Id(TEST_NAMESPACE_ID, 1));
 
-        auto deseri_edit = DB::PS::V3::u128::Serializer::deserializeFrom(DB::PS::V3::u128::Serializer::serializeTo(edit));
+        auto deseri_edit = DB::PS::V3::u128::Serializer::deserializeFrom(DB::PS::V3::u128::Serializer::serializeTo(edit), nullptr);
         ASSERT_EQ(deseri_edit.size(), 3);
         auto iter = deseri_edit.getRecords().begin();
         EXPECT_EQ(iter->type, EditRecordType::VAR_ENTRY);
@@ -309,13 +309,25 @@ public:
     }
 
 protected:
+    template <typename PageEntriesEdit>
     static void applyWithSameVersion(const WALStorePtr & wal, PageEntriesEdit & edit, const PageVersion & version)
     {
         for (auto & r : edit.getMutRecords())
         {
             r.version = version;
         }
-        wal->apply(u128::Serializer::serializeTo(edit));
+        if constexpr (std::is_same_v<PageEntriesEdit, u128::PageEntriesEdit>)
+        {
+            wal->apply(u128::Serializer::serializeTo(edit));
+        }
+        else if constexpr (std::is_same_v<PageEntriesEdit, universal::PageEntriesEdit>)
+        {
+            wal->apply(universal::Serializer::serializeTo(edit));
+        }
+        else
+        {
+            RUNTIME_CHECK(false);
+        }
     }
 
     static void rollToNewLogWriter(const WALStorePtr & wal)
@@ -455,7 +467,7 @@ try
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = u128::Serializer::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value(), nullptr);
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
             num_applied_edit += 1;
         }
@@ -488,7 +500,7 @@ try
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = u128::Serializer::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value(), nullptr);
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
             num_applied_edit += 1;
         }
@@ -523,7 +535,7 @@ try
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = u128::Serializer::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value(), nullptr);
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
             num_applied_edit += 1;
         }
@@ -594,7 +606,7 @@ try
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = u128::Serializer::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value(), nullptr);
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
             num_applied_edit += 1;
         }
@@ -614,10 +626,116 @@ try
                 break;
             }
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = u128::Serializer::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value(), nullptr);
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
             num_applied_edit += 1;
         }
+        EXPECT_EQ(num_applied_edit, 3);
+    }
+}
+CATCH
+
+TEST_P(WALStoreTest, ShareDataFileID)
+try
+{
+    auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
+    auto path = getTemporaryPath();
+
+    auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
+    ASSERT_NE(wal, nullptr);
+
+    std::vector<size_t> size_each_edit;
+    // Stage 1. Apply with only remote pages
+    CheckpointLocation location1{
+        .data_file_id = std::make_shared<String>("hhhhh"),
+        .offset_in_file = 100,
+        .size_in_file = 2000,
+    };
+    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567, .checkpoint_info = {.data_location = location1, .is_valid = true}};
+    CheckpointLocation location2{
+        .data_file_id = std::make_shared<String>("hhhhh"),
+        .offset_in_file = 5000,
+        .size_in_file = 2000,
+    };
+    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567, .checkpoint_info = {.data_location = location2, .is_valid = true}};
+    PageVersion ver20(/*seq=*/20);
+    {
+        universal::PageEntriesEdit edit;
+        edit.put(UniversalPageId{"1"}, entry_p1);
+        edit.put(UniversalPageId{"2"}, entry_p2);
+        size_each_edit.emplace_back(edit.size());
+        applyWithSameVersion(wal, edit, ver20);
+    }
+
+    // Stage 2. Apply with puts and refs
+    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageVersion ver21(/*seq=*/21);
+    {
+        universal::PageEntriesEdit edit;
+        edit.put(UniversalPageId{"3"}, entry_p3);
+        edit.ref(UniversalPageId{"4"}, UniversalPageId{"3"});
+        size_each_edit.emplace_back(edit.size());
+        applyWithSameVersion(wal, edit, ver21);
+    }
+
+    // Stage 1. Write more remote pages
+    CheckpointLocation location6{
+        .data_file_id = std::make_shared<String>("hhhhh"),
+        .offset_in_file = 100,
+        .size_in_file = 2000,
+    };
+    PageEntryV3 entry_p6{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567, .checkpoint_info = {.data_location = location6, .is_valid = true}};
+    CheckpointLocation location7{
+        .data_file_id = std::make_shared<String>("hhhhh2"),
+        .offset_in_file = 5000,
+        .size_in_file = 2000,
+    };
+    PageEntryV3 entry_p7{.file_id = 1, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567, .checkpoint_info = {.data_location = location7, .is_valid = true}};
+    PageVersion ver22(/*seq=*/22);
+    {
+        universal::PageEntriesEdit edit;
+        edit.put(UniversalPageId{"100"}, entry_p6);
+        edit.put(UniversalPageId{"102"}, entry_p7);
+        size_each_edit.emplace_back(edit.size());
+        applyWithSameVersion(wal, edit, ver20);
+    }
+
+    wal.reset();
+
+    // Compare the data_file_id by address and not by value to make sure they point to the same address
+    struct Comparator
+    {
+        bool operator()(const std::shared_ptr<const String> & p1, const std::shared_ptr<const String> & p2) const
+        {
+            return p1 < p2;
+        }
+    };
+
+    {
+        size_t num_applied_edit = 0;
+        auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
+        DataFileIdSet data_file_ids;
+        std::set<std::shared_ptr<const String>, Comparator> result_file_ids;
+        while (reader->remained())
+        {
+            const auto record = reader->next();
+            if (!record)
+                break;
+            // Details of each edit is verified in `WALSeriTest`
+            auto edit = universal::Serializer::deserializeFrom(record.value(), &data_file_ids);
+            for (const auto & r : edit.getRecords())
+            {
+                if (r.type == EditRecordType::PUT && r.entry.checkpoint_info.has_value())
+                {
+                    result_file_ids.emplace(r.entry.checkpoint_info.data_location.data_file_id);
+                }
+            }
+            EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
+            num_applied_edit += 1;
+        }
+        ASSERT_EQ(result_file_ids.size(), 2);
+        ASSERT_EQ(data_file_ids.size(), 2);
         EXPECT_EQ(num_applied_edit, 3);
     }
 }
@@ -675,7 +793,7 @@ try
             // else it just run to the end of file.
             break;
         }
-        auto edit = u128::Serializer::deserializeFrom(record.value());
+        auto edit = u128::Serializer::deserializeFrom(record.value(), nullptr);
         num_pages_read += edit.size();
         EXPECT_EQ(size_each_edit[num_edits_read], edit.size()) << fmt::format("at idx={}", num_edits_read);
         num_edits_read += 1;
@@ -718,7 +836,7 @@ try
             // else it just run to the end of file.
             break;
         }
-        auto edit = u128::Serializer::deserializeFrom(record.value());
+        auto edit = u128::Serializer::deserializeFrom(record.value(), nullptr);
         num_pages_read += edit.size();
         num_edits_read += 1;
     }
@@ -827,7 +945,7 @@ TEST_P(WALStoreTest, WriteReadWithDifferentFormat)
                 reader->throwIfError();
                 break;
             }
-            auto edit = universal::Serializer::deserializeFrom(record.value());
+            auto edit = universal::Serializer::deserializeFrom(record.value(), nullptr);
             num_pages_read += edit.size();
         }
         EXPECT_EQ(num_pages_read, 6);
