@@ -87,7 +87,7 @@ public:
         , has_enforce_encode_type(has_enforce_encode_type_)
         , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"), tiflash_label_filter_)
         , collected(false)
-        , concurrency_(concurrency)
+        , concurrency(concurrency)
     {}
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -115,7 +115,7 @@ public:
             return detail;
 
         detail.packet_bytes = resp->ByteSizeLong();
-        for (int i = 0; i < chunk_size; i++)
+        for (int i = 0; i < chunk_size; ++i)
         {
             Block block;
             const tipb::Chunk & chunk = resp->chunks(i);
@@ -184,12 +184,12 @@ public:
 
     size_t getSourceNum() const { return 1; }
 
-    int getExternalThreadCnt() const { return concurrency_; }
+    int getExternalThreadCnt() const { return concurrency; }
 
     void close() {}
 
     bool collected = false;
-    int concurrency_;
+    int concurrency;
     bool opened = false;
 };
 } // namespace DB

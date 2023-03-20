@@ -230,6 +230,7 @@ void executePushedDownFilter(
     LoggerPtr log,
     PipelineExecGroupBuilder & group_builder)
 {
+    // ywq todo
     auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions, analyzer);
 
     assert(remote_read_sources_start_index <= group_builder.group.size());
