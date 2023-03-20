@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
+#include <common/defines.h>
+#include <fmt/format.h>
 
 namespace DB::PS::V3
 {
@@ -44,17 +46,45 @@ struct CheckpointLocation
     static CheckpointLocation fromProto(
         const CheckpointProto::EntryDataLocation & proto_rec,
         CheckpointProto::StringsInternMap & strings_map);
+
+    std::string toDebugString() const
+    {
+        return fmt::format("{{data_file_id: {}, offset_in_file: {}, size_in_file: {}}}", *data_file_id, offset_in_file, size_in_file);
+    }
 };
 
-struct CheckpointInfo
+// A more memory compact struct compared to std::optional<CheckpointInfo>
+struct OptionalCheckpointInfo
 {
     CheckpointLocation data_location;
+
+    /**
+     * Whether this object contains valid value or not
+     *
+     * Share the padding with following bits in this struct
+     */
+    bool is_valid = false;
 
     /**
      * Whether the PageEntry's local BlobData has been reclaimed.
      * If the data is reclaimed, you can only read out its data from the checkpoint.
      */
     bool is_local_data_reclaimed = false;
+
+    std::string toDebugString() const
+    {
+        if (is_valid)
+        {
+            return fmt::format("{{local_data_reclaimed: {}, data_location: {}}}", is_local_data_reclaimed, data_location.toDebugString());
+        }
+        else
+        {
+            return "invalid";
+        }
+    }
+
+public:
+    ALWAYS_INLINE bool has_value() const { return is_valid; } // NOLINT(readability-identifier-naming)
 };
 
 } // namespace DB::PS::V3

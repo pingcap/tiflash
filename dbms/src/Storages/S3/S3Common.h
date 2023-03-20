@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <Server/StorageConfigParser.h>
 #include <aws/core/Aws.h>
@@ -47,23 +48,44 @@ public:
     // Usually one tiflash instance only need access one bucket.
     // Store the bucket name to simpilfy some param passing.
 
-    explicit TiFlashS3Client(const String & bucket_name_);
+    TiFlashS3Client(const String & bucket_name_, const String & root_);
 
     TiFlashS3Client(
         const String & bucket_name_,
+        const String & root_,
         const Aws::Auth::AWSCredentials & credentials,
         const Aws::Client::ClientConfiguration & clientConfiguration,
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy signPayloads,
         bool useVirtualAddressing);
 
-    TiFlashS3Client(const String & bucket_name_, std::unique_ptr<Aws::S3::S3Client> && raw_client);
+    TiFlashS3Client(
+        const String & bucket_name_,
+        const String & root_,
+        std::unique_ptr<Aws::S3::S3Client> && raw_client);
 
     const String & bucket() const { return bucket_name; }
 
+    const String & root() const { return key_root; }
+
+    template <typename Request>
+    void setBucketAndKeyWithRoot(Request & req, const String & key) const
+    {
+        req.WithBucket(bucket_name).WithKey(key_root + key);
+    }
+
 private:
     const String bucket_name;
+    String key_root;
+
+public:
+    LoggerPtr log;
 };
 
+enum class S3GCMethod
+{
+    Lifecycle,
+    ScanThenDelete,
+};
 
 class ClientFactory
 {
@@ -78,10 +100,11 @@ public:
 
     void shutdown();
 
-    const String & bucket() const;
-    std::shared_ptr<Aws::S3::S3Client> sharedClient() const;
+    const String & bucket() const { return config.bucket; }
 
     std::shared_ptr<TiFlashS3Client> sharedTiFlashClient() const;
+
+    S3GCMethod gc_method = S3GCMethod::Lifecycle;
 
 private:
     ClientFactory() = default;
@@ -93,31 +116,29 @@ private:
 
     Aws::SDKOptions aws_options;
     StorageS3Config config;
-    std::shared_ptr<Aws::S3::S3Client> shared_client;
     std::shared_ptr<TiFlashS3Client> shared_tiflash_client;
-};
-
-struct ObjectInfo
-{
-    size_t size = 0;
-    time_t last_modification_time = 0;
 };
 
 bool isNotFoundError(Aws::S3::S3Errors error);
 
-Aws::S3::Model::HeadObjectOutcome headObject(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id = "");
+Aws::S3::Model::HeadObjectOutcome headObject(const TiFlashS3Client & client, const String & key);
 
-S3::ObjectInfo getObjectInfo(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool throw_on_error);
+bool objectExists(const TiFlashS3Client & client, const String & key);
 
-size_t getObjectSize(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool throw_on_error);
+void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname);
 
-bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id = "");
+constexpr std::string_view TaggingObjectIsDeleted = "tiflash_deleted=true";
+void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days);
 
-void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
+/**
+ * tagging is the tag-set for the object. The tag-set must be encoded as URL Query
+ * parameters. (For example, "Key1=Value1")
+ */
+void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging = "");
 
-void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, const String & key);
+void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname);
 
-void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname);
+void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key, const String & tagging);
 
 struct PageResult
 {
@@ -127,25 +148,39 @@ struct PageResult
     bool more;
 };
 void listPrefix(
-    const Aws::S3::S3Client & client,
-    const String & bucket,
+    const TiFlashS3Client & client,
     const String & prefix,
-    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
-void listPrefix(
+    std::function<PageResult(const Aws::S3::Model::Object & object)> pager);
+void listPrefixWithDelimiter(
+    const TiFlashS3Client & client,
+    const String & prefix,
+    std::string_view delimiter,
+    std::function<PageResult(const Aws::S3::Model::CommonPrefix & common_prefix)> pager);
+
+std::optional<String> anyKeyExistWithPrefix(const TiFlashS3Client & client, const String & prefix);
+
+std::unordered_map<String, size_t> listPrefixWithSize(const TiFlashS3Client & client, const String & prefix);
+
+
+struct ObjectInfo
+{
+    bool exist = false;
+    Int64 size = 0;
+    Aws::Utils::DateTime last_modification_time;
+};
+ObjectInfo tryGetObjectInfo(
+    const TiFlashS3Client & client,
+    const String & key);
+
+void deleteObject(const TiFlashS3Client & client, const String & key);
+
+// Unlike `listPrefix` or other methods above, this does not handle
+// the TiFlashS3Client `root`.
+void rawListPrefix(
     const Aws::S3::S3Client & client,
     const String & bucket,
     const String & prefix,
     std::string_view delimiter,
     std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
-
-std::unordered_map<String, size_t> listPrefixWithSize(const Aws::S3::S3Client & client, const String & bucket, const String & prefix);
-
-
-std::pair<bool, Aws::Utils::DateTime> tryGetObjectModifiedTime(
-    const Aws::S3::S3Client & client,
-    const String & bucket,
-    const String & key);
-
-void deleteObject(const Aws::S3::S3Client & client, const String & bucket, const String & key);
 
 } // namespace DB::S3

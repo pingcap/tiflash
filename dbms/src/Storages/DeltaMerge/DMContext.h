@@ -89,7 +89,7 @@ struct DMContext : private boost::noncopyable
 
     String tracing_id;
 
-    ScanContextPtr scan_context;
+    const ScanContextPtr scan_context;
 
 public:
     DMContext(const Context & db_context_,
@@ -100,7 +100,7 @@ public:
               bool is_common_handle_,
               size_t rowkey_column_size_,
               const DB::Settings & settings,
-              const ScanContextPtr & scan_context_ = std::make_shared<ScanContext>(),
+              const ScanContextPtr scan_context_ = nullptr,
               const String & tracing_id_ = "")
         : db_context(db_context_)
         , path_pool(path_pool_)
@@ -125,12 +125,13 @@ public:
         , enable_relevant_place(settings.dt_enable_relevant_place)
         , enable_skippable_place(settings.dt_enable_skippable_place)
         , tracing_id(tracing_id_)
-        , scan_context(scan_context_)
+        , scan_context(scan_context_ ? scan_context_ : std::make_shared<ScanContext>())
     {
     }
 
-    WriteLimiterPtr getWriteLimiter() const { return db_context.getWriteLimiter(); }
-    ReadLimiterPtr getReadLimiter() const { return db_context.getReadLimiter(); }
+    WriteLimiterPtr getWriteLimiter() const;
+    ReadLimiterPtr getReadLimiter() const;
+
     DM::DMConfigurationOpt createChecksumConfig() const
     {
         return DMChecksumConfig::fromDBContext(db_context);

@@ -19,7 +19,9 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
+#include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService_fwd.h>
 #include <Storages/PathPool_fwd.h>
 
@@ -27,6 +29,8 @@
 
 namespace DB
 {
+class FastAddPeerContext;
+using FastAddPeerContextPtr = std::shared_ptr<FastAddPeerContext>;
 
 /**
  * A shared context containing disaggregated mode related things.
@@ -43,14 +47,27 @@ struct SharedContextDisagg : private boost::noncopyable
 
     DisaggregatedMode disaggregated_mode = DisaggregatedMode::None;
 
-    bool use_autoscaler = true; // TODO: remove this after AutoScaler is stable. Only meaningful in DisaggregatedComputeMode.
+    // Only meaningful in DisaggregatedComputeMode.
+    bool use_autoscaler = false;
 
+    /// For both read node (downloading) and write node (uploading).
     DM::Remote::IDataStorePtr remote_data_store;
 
+    FastAddPeerContextPtr fap_context;
+
+    /// Only for write node.
+    DM::Remote::WNDisaggSnapshotManagerPtr wn_snapshot_manager;
+
     /// The PS instance available on Read Node.
-    UniversalPageStorageServicePtr rn_cache_ps;
-    /// The page cache in Read Node. It uses ps_rn_page_cache as storage to cache page data to local disk based on the LRU mechanism.
-    DB::DM::Remote::RNLocalPageCachePtr rn_cache;
+    UniversalPageStorageServicePtr rn_page_cache_storage;
+
+    /// Only for read node.
+    /// It is a cache for the pages data. It uses ps_rn_page_cache as storage to cache page data to local disk based on the LRU mechanism.
+    DB::DM::Remote::RNLocalPageCachePtr rn_page_cache;
+
+    /// Only for read node.
+    /// It is a cache for the delta index, stores in the memory.
+    DB::DM::Remote::RNDeltaIndexCachePtr rn_delta_index_cache;
 
     static SharedContextDisaggPtr create(Context & global_context_) { return std::make_shared<SharedContextDisagg>(global_context_); }
 
@@ -61,16 +78,29 @@ struct SharedContextDisagg : private boost::noncopyable
 
     void initReadNodePageCache(const PathPool & path_pool, const String & cache_dir, size_t cache_capacity);
 
+    /// Note that the unit of max_size is quantity, not byte size. It controls how
+    /// **many** of delta index will be maintained.
+    void initReadNodeDeltaIndexCache(size_t max_size);
+
+    void initWriteNodeSnapManager();
+
     void initRemoteDataStore(const FileProviderPtr & file_provider, bool s3_enabled);
+
+    void initFastAddPeerContext();
 
     bool isDisaggregatedComputeMode() const
     {
         return disaggregated_mode == DisaggregatedMode::Compute;
     }
+
     bool isDisaggregatedStorageMode() const
     {
-        // there is no difference
-        return disaggregated_mode == DisaggregatedMode::Storage || disaggregated_mode == DisaggregatedMode::None;
+        return disaggregated_mode == DisaggregatedMode::Storage;
+    }
+
+    bool notDisaggregatedMode() const
+    {
+        return disaggregated_mode == DisaggregatedMode::None;
     }
 };
 

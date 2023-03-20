@@ -18,11 +18,13 @@
 #include <Encryption/FileProvider_fwd.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/Config.h>
 #include <Storages/Page/ExternalPageCallbacks.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -73,9 +75,7 @@ public:
         const String & name,
         PSDiskDelegatorPtr delegator,
         const PageStorageConfig & config,
-        const FileProviderPtr & file_provider,
-        std::shared_ptr<Aws::S3::S3Client> s3_client = nullptr,
-        const String & bucket = "");
+        const FileProviderPtr & file_provider);
 
     UniversalPageStorage(
         String name,
@@ -135,7 +135,9 @@ public:
 
     std::optional<DB::PS::V3::CheckpointLocation> getCheckpointLocation(const UniversalPageId & page_id, SnapshotPtr snapshot = {}) const;
 
-    void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client) const;
+    void initLocksLocalManager(StoreID store_id, S3::S3LockClientPtr lock_client);
+
+    bool canSkipCheckpoint() const;
 
     PS::V3::S3LockLocalManager::ExtraLockInfo allocateNewUploadLocksInfo() const;
 
@@ -187,9 +189,23 @@ public:
          * By default it is std::nullopt, use the snapshot->sequence as `seq` value.
          */
         std::optional<UInt64> override_sequence = std::nullopt;
+
+        /**
+         */
+        const std::function<std::unordered_set<String>()> compact_getter = nullptr;
     };
 
-    void dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+    PS::V3::CPDataWriteStats dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
+
+    PS::V3::CPDataFilesStatCache::CacheMap getRemoteDataFilesStatCache() const
+    {
+        return remote_data_files_stat_cache.getCopy();
+    }
+
+    void updateRemoteFilesTotalSizes(const PS::V3::CPDataFilesStatCache::CacheMap & updated_stat)
+    {
+        remote_data_files_stat_cache.updateTotalSize(updated_stat);
+    }
 
     PageIdU64 getMaxIdAfterRestart() const;
 
@@ -223,6 +239,8 @@ public:
     using BlobStorePtr = std::unique_ptr<PS::V3::universal::BlobStoreType>;
     BlobStorePtr blob_store;
 
+    PS::V3::CPDataFilesStatCache remote_data_files_stat_cache;
+
     PS::V3::S3PageReaderPtr remote_reader;
     PS::V3::S3LockLocalManagerPtr remote_locks_local_mgr;
 
@@ -230,8 +248,8 @@ public:
 
     LoggerPtr log;
 
-    std::mutex checkpoint_mu;
-    // TODO: We should restore this from WAL. Otherwise the "last_sequence" in the files is not reliable
+    mutable std::mutex checkpoint_mu;
+    // We should restore this from remote store after restart
     UInt64 last_checkpoint_sequence = 0;
 };
 

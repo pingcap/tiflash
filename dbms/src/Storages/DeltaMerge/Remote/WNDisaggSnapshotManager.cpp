@@ -12,34 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Context.h>
-#include <Storages/BackgroundProcessingPool.h>
-#include <Storages/DeltaMerge/Remote/DisaggSnapshotManager.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
+#include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 
 namespace DB::DM::Remote
 {
-
-DisaggSnapshotManager::DisaggSnapshotManager(Context & ctx)
-    : global_ctx(ctx.getGlobalContext())
+WNDisaggSnapshotManager::WNDisaggSnapshotManager(BackgroundProcessingPool & bg_pool)
+    : pool(bg_pool)
     , log(Logger::get())
 {
-    handle = global_ctx.getBackgroundPool().addTask([&] {
+    handle = pool.addTask([&] {
         this->clearExpiredSnapshots();
         return false;
     });
 }
 
-DisaggSnapshotManager::~DisaggSnapshotManager()
+WNDisaggSnapshotManager::~WNDisaggSnapshotManager()
 {
     if (handle)
     {
-        global_ctx.getBackgroundPool().removeTask(handle);
+        pool.removeTask(handle);
         handle = nullptr;
     }
 }
 
+bool WNDisaggSnapshotManager::unregisterSnapshotIfEmpty(const DisaggTaskId & task_id)
+{
+    auto snap = getSnapshot(task_id);
+    if (!snap)
+        return false;
+    if (!snap->empty())
+        return false;
+    return unregisterSnapshot(task_id);
+}
 
-void DisaggSnapshotManager::clearExpiredSnapshots()
+void WNDisaggSnapshotManager::clearExpiredSnapshots()
 {
     std::unique_lock lock(mtx);
     Timepoint now = Clock::now();

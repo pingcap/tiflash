@@ -45,6 +45,11 @@ private:
     /// The id of data page which stores the data of this pack.
     PageIdU64 data_page_id;
 
+    /// HACK: Currently this field is only available when ColumnFileTiny is restored from remote proto.
+    /// It is not available when ColumnFileTiny is constructed or restored locally.
+    /// Maybe we should just drop this field, and store the data_page_size in somewhere else.
+    UInt64 data_page_size;
+
     /// The members below are not serialized.
 
     /// The cache data in memory.
@@ -102,6 +107,10 @@ public:
 
     PageIdU64 getDataPageId() const { return data_page_id; }
 
+    /// WARNING: DO NOT USE THIS MEMBER FUNCTION UNLESS YOU KNOW WHAT YOU ARE DOING.
+    /// This function will be refined and dropped soon.
+    UInt64 getDataPageSize() const { return data_page_size; }
+
     Block readBlockForMinorCompaction(const PageReader & page_reader) const;
 
     static ColumnFileTinyPtr writeColumnFile(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs, const CachePtr & cache = nullptr);
@@ -109,6 +118,8 @@ public:
     static PageIdU64 writeColumnFileData(const DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
     static ColumnFilePersistedPtr deserializeMetadata(const DMContext & context, ReadBuffer & buf, ColumnFileSchemaPtr & last_schema);
+
+    static std::tuple<ColumnFilePersistedPtr, BlockPtr> createFromCheckpoint(const DMContext & context, ReadBuffer & buf, UniversalPageStoragePtr temp_ps, const BlockPtr & last_schema, TableID ns_id, WriteBatches & wbs);
 
     bool mayBeFlushedFrom(ColumnFile * from_file) const override
     {

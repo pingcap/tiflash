@@ -308,7 +308,7 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
         RUNTIME_CHECK(last_iter != entries.end() && last_iter->second.isEntry());
         auto & ori_entry = last_iter->second.entry;
         RUNTIME_CHECK(ori_entry.checkpoint_info.has_value());
-        if (!ori_entry.checkpoint_info->is_local_data_reclaimed)
+        if (!ori_entry.checkpoint_info.is_local_data_reclaimed)
         {
             return false;
         }
@@ -316,7 +316,7 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(const PageVersio
         ori_entry.size = entry.size;
         ori_entry.offset = entry.offset;
         ori_entry.checksum = entry.checksum;
-        ori_entry.checkpoint_info->is_local_data_reclaimed = false;
+        ori_entry.checkpoint_info.is_local_data_reclaimed = false;
         return true;
     }
     throw Exception(fmt::format(
@@ -699,6 +699,7 @@ bool VersionedPageEntries<Trait>::cleanOutdatedEntries(
     UInt64 lowest_seq,
     std::map<PageId, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
     PageEntriesV3 * entries_removed,
+    RemoteFileValidSizes * remote_file_sizes,
     const PageLock & /*page_lock*/)
 {
     if (type == EditRecordType::VAR_EXTERNAL)
@@ -753,6 +754,23 @@ bool VersionedPageEntries<Trait>::cleanOutdatedEntries(
     // if `being_ref_count` > 1 (this means the entry is ref by other entries)
     bool last_entry_is_delete = !iter->second.isEntry();
     --iter; // keep the first version less than <lowest_seq+1, 0>
+
+    if (remote_file_sizes)
+    {
+        // the entries after `iter` are valid, collect the remote info size for remote GC
+        for (auto valid_iter = iter; valid_iter != entries.end(); ++valid_iter)
+        {
+            if (!valid_iter->second.isEntry())
+                continue;
+            auto entry = valid_iter->second.entry;
+            if (!entry.checkpoint_info.has_value())
+                continue;
+            const auto & file_id = *entry.checkpoint_info.data_location.data_file_id;
+            auto file_size_iter = remote_file_sizes->try_emplace(file_id, 0);
+            file_size_iter.first->second += entry.checkpoint_info.data_location.size_in_file;
+        }
+    }
+
     while (true)
     {
         if (iter->second.isDelete())
@@ -844,7 +862,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
             return false;
         // Clean outdated entries after decreased the ref-counter
         // set `normal_entries_to_deref` to be nullptr to ignore cleaning ref-var-entries
-        return cleanOutdatedEntries(lowest_seq, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock);
+        return cleanOutdatedEntries(lowest_seq, /*normal_entries_to_deref*/ nullptr, entries_removed, /*remote_file_sizes*/ nullptr, page_lock);
     }
 
     throw Exception(fmt::format("calling derefAndClean with invalid state [state={}]", toDebugString()));
@@ -1517,9 +1535,9 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 }
 
                 // collect the applied remote data_file_ids
-                if (r.entry.checkpoint_info)
+                if (r.entry.checkpoint_info.has_value())
                 {
-                    applied_data_files.emplace(*r.entry.checkpoint_info->data_location.data_file_id);
+                    applied_data_files.emplace(*r.entry.checkpoint_info.data_location.data_file_id);
                 }
             }
             catch (DB::Exception & e)
@@ -1551,12 +1569,31 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
 
         for (const auto & r : edit.getRecords())
         {
-            auto iter = mvcc_table_directory.lower_bound(r.page_id);
-            assert(iter != mvcc_table_directory.end());
-            auto & version_list = iter->second;
-            if (!version_list->updateLocalCacheForRemotePage(PageVersion(seq, 0), r.entry))
+            auto id_to_resolve = r.page_id;
+            auto sequence_to_resolve = seq;
+            while (true)
             {
-                ignored_entries.push_back(r.entry);
+                auto iter = mvcc_table_directory.lower_bound(id_to_resolve);
+                assert(iter != mvcc_table_directory.end());
+                auto & version_list = iter->second;
+                auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = version_list->resolveToPageId(sequence_to_resolve, /*ignore_delete=*/id_to_resolve != r.page_id, nullptr);
+                if (resolve_state == ResolveResult::TO_NORMAL)
+                {
+                    if (!version_list->updateLocalCacheForRemotePage(PageVersion(sequence_to_resolve, 0), r.entry))
+                    {
+                        ignored_entries.push_back(r.entry);
+                    }
+                    break;
+                }
+                else if (resolve_state == ResolveResult::TO_REF)
+                {
+                    id_to_resolve = next_id_to_resolve;
+                    sequence_to_resolve = next_ver_to_resolve.sequence;
+                }
+                else
+                {
+                    RUNTIME_CHECK(false);
+                }
             }
         }
     }
@@ -1795,7 +1832,7 @@ void PageDirectory<Trait>::copyCheckpointInfoFromEdit(PageEntriesEdit & edit)
 }
 
 template <typename Trait>
-typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(bool return_removed_entries)
+typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(const InMemGCOption & options)
 {
     UInt64 lowest_seq = sequence.load();
 
@@ -1859,7 +1896,8 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         const bool all_deleted = iter->second->cleanOutdatedEntries(
             lowest_seq,
             &normal_entries_to_deref,
-            return_removed_entries ? &all_del_entries : nullptr,
+            options.need_removed_entries ? &all_del_entries : nullptr,
+            options.remote_valid_sizes,
             iter->second->acquireLock());
 
         {
@@ -1898,7 +1936,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
             page_id,
             /*deref_ver=*/deref_counter.first,
             /*deref_count=*/deref_counter.second,
-            return_removed_entries ? &all_del_entries : nullptr);
+            options.need_removed_entries ? &all_del_entries : nullptr);
 
         if (all_deleted)
         {

@@ -15,7 +15,6 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
-#include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
@@ -778,12 +777,18 @@ Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_hel
     : meta(std::move(meta_))
     , log(Logger::get())
     , mapped_table_id(meta.getRange()->getMappedTableID())
+    , keyspace_id(meta.getRange()->getKeyspaceID())
     , proxy_helper(proxy_helper_)
 {}
 
 TableID Region::getMappedTableID() const
 {
     return mapped_table_id;
+}
+
+KeyspaceID Region::getKeyspaceID() const
+{
+    return keyspace_id;
 }
 
 void Region::setPeerState(raft_serverpb::PeerState state)

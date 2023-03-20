@@ -15,10 +15,11 @@
 #include <Common/Logger.h>
 #include <Common/typeid_cast.h>
 #include <Flash/Disaggregated/S3LockService.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/MockOwnerManager.h>
 #include <TiDB/OwnerManager.h>
@@ -43,7 +44,7 @@ public:
     void SetUp() override
     try
     {
-        db_context = std::make_unique<Context>(DB::tests::TiFlashTestEnv::getContext());
+        db_context = DB::tests::TiFlashTestEnv::getContext();
         log = Logger::get();
 
         auto & client_factory = DB::S3::ClientFactory::instance();
@@ -52,16 +53,9 @@ public:
         owner_manager = std::static_pointer_cast<MockOwnerManager>(OwnerManager::createMockOwner("owner_0"));
         owner_manager->campaignOwner();
 
-        if (is_s3_test_enabled)
-        {
-            s3_client = client_factory.sharedTiFlashClient();
-        }
-        else
-        {
-            s3_client = std::make_shared<MockS3Client>();
-        }
-        s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager, s3_client);
-        ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, s3_client->bucket());
+        s3_client = client_factory.sharedTiFlashClient();
+        s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager);
+        ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client);
         createS3DataFiles();
     }
     CATCH
@@ -72,7 +66,7 @@ public:
         for (size_t i = 1; i <= 5; ++i)
         {
             auto data_filename = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
-            DB::S3::uploadEmptyFile(*s3_client, s3_client->bucket(), data_filename.toFullKey());
+            DB::S3::uploadEmptyFile(*s3_client, fmt::format("{}/{}", data_filename.toFullKey(), DM::DMFile::metav2FileName()));
             ++dm_file_id;
         }
     }
@@ -84,7 +78,7 @@ public:
         {
             --dm_file_id;
             auto data_filename = S3Filename::fromDMFileOID(DMFileOID{.store_id = store_id, .table_id = physical_table_id, .file_id = dm_file_id});
-            DB::S3::deleteObject(*s3_client, s3_client->bucket(), data_filename.toFullKey());
+            DB::S3::deleteObject(*s3_client, data_filename.toFullKey());
         }
     }
 
@@ -138,9 +132,9 @@ try
 
     ASSERT_TRUE(status_code.ok()) << status_code.error_message();
     ASSERT_TRUE(response.result().has_success()) << response.ShortDebugString();
-    ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_key));
+    ASSERT_TRUE(DB::S3::objectExists(*s3_client, lock_key));
 
-    DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_key);
+    DB::S3::deleteObject(*s3_client, lock_key);
 }
 CATCH
 
@@ -159,9 +153,9 @@ try
 
     ASSERT_TRUE(status_code.ok()) << status_code.error_message();
     ASSERT_TRUE(response.result().has_success()) << response.ShortDebugString();
-    ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key));
+    ASSERT_TRUE(DB::S3::objectExists(*s3_client, delmark_key));
 
-    DB::S3::deleteObject(*s3_client, s3_client->bucket(), delmark_key);
+    DB::S3::deleteObject(*s3_client, delmark_key);
 }
 CATCH
 
@@ -181,7 +175,7 @@ try
         auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
         ASSERT_TRUE(status_code.ok()) << status_code.error_message();
-        ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key));
+        ASSERT_TRUE(DB::S3::objectExists(*s3_client, delmark_key));
     }
 
     // Try add lock file, should fail
@@ -196,10 +190,10 @@ try
         ASSERT_TRUE(status_code.ok());
         ASSERT_TRUE(!response.result().has_success()) << response.ShortDebugString();
         ASSERT_TRUE(response.result().has_conflict()) << response.ShortDebugString();
-        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_key));
+        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, lock_key));
     }
 
-    DB::S3::deleteObject(*s3_client, s3_client->bucket(), delmark_key);
+    DB::S3::deleteObject(*s3_client, delmark_key);
 }
 CATCH
 
@@ -222,7 +216,7 @@ try
         auto status_code = s3_lock_service->tryAddLock(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
-        ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_key));
+        ASSERT_TRUE(DB::S3::objectExists(*s3_client, lock_key));
     }
 
     // Try add delete mark, should fail
@@ -236,10 +230,10 @@ try
         ASSERT_TRUE(status_code.ok());
         ASSERT_TRUE(!response.result().has_success()) << response.ShortDebugString();
         ASSERT_TRUE(response.result().has_conflict()) << response.ShortDebugString();
-        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key));
+        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, delmark_key));
     }
 
-    DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_key);
+    DB::S3::deleteObject(*s3_client, lock_key);
 }
 CATCH
 
@@ -263,7 +257,7 @@ try
         ASSERT_TRUE(status_code.ok());
         ASSERT_TRUE(!response.result().has_success()) << response.ShortDebugString();
         ASSERT_TRUE(response.result().has_conflict()) << response.ShortDebugString();
-        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_key));
+        ASSERT_TRUE(!DB::S3::objectExists(*s3_client, lock_key));
     }
 }
 CATCH
@@ -288,9 +282,9 @@ try
 
             ASSERT_TRUE(status_code.ok());
             ASSERT_TRUE(response.result().has_success()) << response.ShortDebugString();
-            ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_key));
+            ASSERT_TRUE(DB::S3::objectExists(*s3_client, lock_key));
 
-            DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_key);
+            DB::S3::deleteObject(*s3_client, lock_key);
         }
     };
 
@@ -322,7 +316,7 @@ try
         auto status_code = s3_lock_service->tryMarkDelete(&request, &response);
 
         ASSERT_TRUE(status_code.ok());
-        ASSERT_TRUE(DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key));
+        ASSERT_TRUE(DB::S3::objectExists(*s3_client, delmark_key));
     };
 
     std::vector<std::thread> threads;
@@ -337,7 +331,7 @@ try
         thread.join();
     }
 
-    DB::S3::deleteObject(*s3_client, s3_client->bucket(), delmark_key);
+    DB::S3::deleteObject(*s3_client, delmark_key);
 }
 CATCH
 
@@ -396,13 +390,13 @@ try
         auto delmark_key = data_filename.toView().getDelMarkKey();
 
         // Either lock or delete file should exist
-        if (DB::S3::objectExists(*s3_client, s3_client->bucket(), delmark_key))
+        if (DB::S3::objectExists(*s3_client, delmark_key))
         {
-            DB::S3::deleteObject(*s3_client, s3_client->bucket(), delmark_key);
+            DB::S3::deleteObject(*s3_client, delmark_key);
         }
-        else if (DB::S3::objectExists(*s3_client, s3_client->bucket(), lock_key))
+        else if (DB::S3::objectExists(*s3_client, lock_key))
         {
-            DB::S3::deleteObject(*s3_client, s3_client->bucket(), lock_key);
+            DB::S3::deleteObject(*s3_client, lock_key);
         }
         else
         {

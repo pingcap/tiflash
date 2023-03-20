@@ -17,7 +17,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/RNPagePreparer.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
-#include <IO/IOThreadPool.h>
+#include <IO/IOThreadPools.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <common/logger_useful.h>
@@ -53,11 +53,19 @@ RNPagePreparer::RNPagePreparer(
         for (size_t index = 0; index < threads_num; ++index)
         {
             auto task = std::make_shared<std::packaged_task<void()>>([this, index] {
-                persistLoop(index);
+                try
+                {
+                    prepareLoop(index);
+                }
+                catch (...)
+                {
+                    auto ex = getCurrentExceptionMessage(true);
+                    LOG_ERROR(Logger::get(), "PagePrepareThread#{} read loop meet exception and exited, ex={}", index, ex);
+                }
             });
             persist_threads.emplace_back(task->get_future());
 
-            IOThreadPool::get().scheduleOrThrowOnError([task] { (*task)(); });
+            RNPagePreparerPool::get().scheduleOrThrowOnError([task] { (*task)(); });
         }
     }
     catch (...)
@@ -82,9 +90,9 @@ RNPagePreparer::~RNPagePreparer() noexcept
     }
 }
 
-void RNPagePreparer::persistLoop(size_t idx)
+void RNPagePreparer::prepareLoop(size_t idx)
 {
-    LoggerPtr log = exc_log->getChild(fmt::format("persist{}", idx));
+    LoggerPtr log = exc_log->getChild(fmt::format("PagePrepareThread#{}", idx));
 
 
     bool meet_error = false;

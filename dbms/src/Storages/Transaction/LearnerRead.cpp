@@ -107,7 +107,7 @@ public:
             regions_info_ptr = &*regions_info;
             // Only for test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
             // todo support partition table
-            auto regions = tmt.getRegionTable().getRegionsByTable(logical_table_id);
+            auto regions = tmt.getRegionTable().getRegionsByTable(NullspaceID, logical_table_id);
             regions_info_ptr->reserve(regions.size());
             for (const auto & [id, region] : regions)
             {
@@ -384,7 +384,7 @@ LearnerReadSnapshot doLearnerRead(
                                     region_to_query.region_id,
                                     region_to_query.version,
                                     RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table),
-                                    RegionException::RegionReadStatusString(status));
+                                    magic_enum::enum_name(status));
                                 unavailable_regions.add(region->id(), status);
                             }
                         },
@@ -469,7 +469,7 @@ void validateQueryInfo(
                 region_query_info.region_id,
                 region_query_info.version,
                 RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_query_info.range_in_table),
-                RegionException::RegionReadStatusString(status));
+                magic_enum::enum_name(status));
         }
     }
 

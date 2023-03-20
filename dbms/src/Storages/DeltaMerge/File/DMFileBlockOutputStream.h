@@ -34,18 +34,7 @@ class DMFileBlockOutputStream
 public:
     DMFileBlockOutputStream(const Context & context,
                             const DMFilePtr & dmfile,
-                            const ColumnDefines & write_columns)
-        : writer(
-            dmfile,
-            write_columns,
-            context.getFileProvider(),
-            context.getWriteLimiter(),
-            DMFileWriter::Options{
-                CompressionSettings(context.getSettingsRef().dt_compression_method, context.getSettingsRef().dt_compression_level),
-                context.getSettingsRef().min_compress_block_size,
-                context.getSettingsRef().max_compress_block_size})
-    {
-    }
+                            const ColumnDefines & write_columns);
 
     const DMFilePtr getFile() const { return writer.getFile(); }
 

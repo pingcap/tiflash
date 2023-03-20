@@ -29,7 +29,9 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
+#include <Storages/S3/S3RandomAccessFile.h>
 #include <fmt/format.h>
+
 
 namespace CurrentMetrics
 {
@@ -60,6 +62,7 @@ DMFileReader::Stream::Stream(
         if (res->empty()) // 0 rows.
             return res;
         size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
+        auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo(reader.dmfile->getReadFileInfo(col_id, reader.dmfile->colMarkFileName(file_name_base)));
         if (reader.dmfile->configuration)
         {
             auto buffer = createReadBufferFromFileBaseByFileProvider(
@@ -142,7 +145,7 @@ DMFileReader::Stream::Stream(
               buffer_size,
               aio_threshold,
               max_read_buffer_size);
-
+    auto data_guard = S3::S3RandomAccessFile::setReadFileInfo(reader.dmfile->getReadFileInfo(col_id, reader.dmfile->colDataFileName(file_name_base)));
     if (!reader.dmfile->configuration)
     {
         buf = std::make_unique<CompressedReadBufferFromFileProvider<true>>(reader.file_provider,
@@ -305,20 +308,42 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
     auto & use_packs = pack_filter.getUsePacks();
 
     size_t start_row_offset = next_row_offset;
-
-    size_t read_rows = 0;
     size_t next_pack_id_cp = next_pack_id;
-    while (next_pack_id_cp < use_packs.size() && read_rows + pack_stats[next_pack_id_cp].rows <= filter.size())
+
     {
-        const auto begin = filter.cbegin() + read_rows;
-        const auto end = filter.cbegin() + read_rows + pack_stats[next_pack_id_cp].rows;
-        use_packs[next_pack_id_cp] = use_packs[next_pack_id_cp] && std::find(begin, end, 1) != end;
-        read_rows += pack_stats[next_pack_id_cp].rows;
-        ++next_pack_id_cp;
+        // Use std::find to find the first 1 in the filter, these rows before the first 1 should be skipped.
+        // For example, filter is [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0], each pack has 3 rows
+        // 1. begin points to index 0, it points to index 3, skip = 3 >= 3, so use_packs[0] = false, read_rows = 3, next_pack_id_cp = 1
+        // 2. it != filter.cend(), so use_packs[1] = true, read_rows = 6, next_pack_id_cp = 2
+        // 3. begin points to index 6, and it points to index 6, skip = 0 < 3
+        // 4. it != filter.cend(), so use_packs[2] = true, read_rows = 9, next_pack_id_cp = 3
+        // 5. begin points to index 9, and it points to index 12, skip = 3 >= 3, so use_packs[3] = false, read_rows = 12, next_pack_id_cp = 4
+        // 6. it == filter.cend(), break
+        // read_rows = filter.size() = 12, next_pack_id_cp = 4
+        // This algorithm should be more efficient than check each pack one by one.
+        size_t read_rows = 0;
+        while (read_rows < filter.size())
+        {
+            const auto begin = filter.cbegin() + read_rows;
+            const auto it = std::find(begin, filter.cend(), 1);
+            auto skip = std::distance(begin, it);
+            while (next_pack_id_cp < use_packs.size() && skip >= pack_stats[next_pack_id_cp].rows)
+            {
+                use_packs[next_pack_id_cp] = false;
+                skip -= pack_stats[next_pack_id_cp].rows;
+                read_rows += pack_stats[next_pack_id_cp].rows;
+                ++next_pack_id_cp;
+            }
+            if (it == filter.cend())
+                break;
+            use_packs[next_pack_id_cp] = true;
+            read_rows += pack_stats[next_pack_id_cp].rows;
+            ++next_pack_id_cp;
+        }
+        // filter.size() equals to the number of rows in the next block
+        // so read_rows should be equal to filter.size() here.
+        RUNTIME_CHECK(read_rows == filter.size());
     }
-    // filter.size() equals to the number of rows in the next block
-    // so read_rows should be equal to filter.size() here.
-    RUNTIME_CHECK(read_rows == filter.size());
 
     // mark the next pack after next read as not used temporarily
     // to avoid reading it and its following packs in this round
@@ -332,7 +357,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
     Blocks blocks;
     blocks.reserve(next_pack_id_cp - next_pack_id);
 
-    read_rows = 0;
+    size_t read_rows = 0;
     for (size_t i = next_pack_id; i < next_pack_id_cp; ++i)
     {
         // When the next pack is not used or the pack is the last pack, call read() to read theses packs and filter them
@@ -345,9 +370,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
         {
             Block block = read();
 
-            IColumn::Filter block_filter;
-            block_filter.resize(block.rows());
-            std::copy(filter.cbegin() + read_rows, filter.cbegin() + read_rows + block.rows(), block_filter.begin());
+            IColumn::Filter block_filter(filter.cbegin() + read_rows, filter.cbegin() + read_rows + block.rows());
             read_rows += block.rows();
 
             if (size_t passed_count = countBytesInFilter(block_filter); passed_count != block.rows())

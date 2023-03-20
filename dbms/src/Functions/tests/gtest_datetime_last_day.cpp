@@ -16,7 +16,6 @@
 #include <Common/Exception.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsDateTime.h>
-#include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -37,10 +36,10 @@ try
     const String func_name = TiDBLastDayTransformerImpl<DataTypeMyDate::FieldType>::name;
 
     // Ignore invalid month error
-    DAGContext * dag_context = context.getDAGContext();
-    UInt64 ori_flags = dag_context->getFlags();
-    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
-    dag_context->clearWarnings();
+    auto & dag_context = getDAGContext();
+    UInt64 ori_flags = dag_context.getFlags();
+    dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    dag_context.clearWarnings();
 
     // nullable column test
     ASSERT_COLUMN_EQ(
@@ -109,7 +108,7 @@ try
         executeFunction(func_name,
                         {createConstColumn<MyDate>(3, MyDateTime{2000, 0, 10, 10, 10, 10, 0}.toPackedUInt())}));
 
-    dag_context->setFlags(ori_flags);
+    dag_context.setFlags(ori_flags);
 }
 CATCH
 

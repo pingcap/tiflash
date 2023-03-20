@@ -22,7 +22,7 @@ namespace DB::tests
 {
 static TableInfo getTableInfoByJson(const String & json_table_info)
 {
-    return TableInfo(json_table_info);
+    return TableInfo(json_table_info, NullspaceID);
 }
 TEST(DecodingStorageSchemaSnapshotTest, CheckPKInfosUnderClusteredIndex)
 {

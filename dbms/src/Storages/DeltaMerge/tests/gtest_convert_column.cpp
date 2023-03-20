@@ -301,7 +301,7 @@ try
 ,"comment":"","id":627,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":252,"state":5,"tiflash_replica":{"Count":0},"update_timestamp":422031263342264329
 })json";
 
-    TiDB::TableInfo table_info(json_table_info);
+    TiDB::TableInfo table_info(json_table_info, NullspaceID);
     const auto & columns = table_info.columns;
     EXPECT_EQ(columns.size(), 5);
 

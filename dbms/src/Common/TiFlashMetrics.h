@@ -107,7 +107,8 @@ namespace DB
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                                    \
     M(tiflash_schema_applying, "Whether the schema is applying or not (holding lock)", Gauge)                                                       \
     M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                                   \
-        F(type_full, {"type", "full"}), F(type_failed, {"type", "failed"}))                                                                         \
+        F(type_full, {"type", "full"}), F(type_failed, {"type", "failed"}),                                                                         \
+        F(type_drop_keyspace, {"type", "drop_keyspace"}))                                                                                           \
     M(tiflash_schema_trigger_count, "Total number of each kinds of schema sync trigger", Counter, /**/                                              \
         F(type_timer, {"type", "timer"}), F(type_raft_decode, {"type", "raft_decode"}), F(type_cop_read, {"type", "cop_read"}))                     \
     M(tiflash_schema_internal_ddl_count, "Total number of each kinds of internal ddl operations", Counter,                                          \
@@ -128,7 +129,8 @@ namespace DB
         F(type_syncing_data_freshness, {{"type", "data_freshness"}}, ExpBuckets{0.001, 2, 20}))                                                     \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                                       \
     M(tiflash_storage_command_count, "Total number of storage's command, such as delete range / shutdown /startup", Counter,                        \
-        F(type_delete_range, {"type", "delete_range"}), F(type_ingest, {"type", "ingest"}))                                                         \
+        F(type_delete_range, {"type", "delete_range"}), F(type_ingest, {"type", "ingest"}),                                                         \
+        F(type_ingest_checkpoint, {"type", "ingest_check_point"}))                                                                                  \
     M(tiflash_storage_subtask_count, "Total number of storage's sub task", Counter,                                                                 \
         F(type_delta_merge_bg, {"type", "delta_merge_bg"}),                                                                                         \
         F(type_delta_merge_bg_gc, {"type", "delta_merge_bg_gc"}),                                                                                   \
@@ -230,8 +232,11 @@ namespace DB
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                             \
         Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                              \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                                      \
+        F(type_ingest_sst_sst2dt, {{"type", "ingest_sst_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                                        \
+        F(type_ingest_sst_upload, {{"type", "ingest_sst_upload"}}, ExpBuckets{0.05, 2, 10}),                                                        \
         F(type_apply_snapshot_predecode, {{"type", "snapshot_predecode"}}, ExpBuckets{0.05, 2, 10}),                                                \
         F(type_apply_snapshot_predecode_sst2dt, {{"type", "snapshot_predecode_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                  \
+        F(type_apply_snapshot_predecode_upload, {{"type", "snapshot_predecode_upload"}}, ExpBuckets{0.05, 2, 10}),                                  \
         F(type_apply_snapshot_flush, {{"type", "snapshot_flush"}}, ExpBuckets{0.05, 2, 10}))                                                        \
     M(tiflash_raft_process_keys, "Total number of keys processed in some types of Raft commands", Counter,                                          \
         F(type_apply_snapshot, {"type", "apply_snapshot"}), F(type_ingest_sst, {"type", "ingest_sst"}))                                             \
@@ -309,6 +314,7 @@ namespace DB
         F(type_hit_count, {{"type", "hit_count"}}))                                                                                                 \
     M(tiflash_storage_s3_request_seconds, "S3 request duration in seconds", Histogram,                                                              \
         F(type_put_object, {{"type", "put_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_copy_object, {{"type", "copy_object"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
         F(type_get_object, {{"type", "get_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_create_multi_part_upload, {{"type", "create_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                         \
         F(type_upload_part, {{"type", "upload_part"}}, ExpBuckets{0.001, 2, 20}),                                                                   \

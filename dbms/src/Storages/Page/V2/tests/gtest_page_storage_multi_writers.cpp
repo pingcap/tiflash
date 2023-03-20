@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromMemory.h>
+#include <Interpreters/Context.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
@@ -27,7 +28,7 @@
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
@@ -45,7 +46,7 @@ class PageStorageMultiWriters_test : public DB::base::TiFlashStorageTestBasic
 {
 public:
     PageStorageMultiWriters_test()
-        : file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
+        : file_provider{DB::tests::TiFlashTestEnv::getDefaultFileProvider()}
     {}
 
 protected:

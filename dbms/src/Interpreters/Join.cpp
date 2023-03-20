@@ -20,6 +20,7 @@
 #include <Common/FailPoint.h>
 #include <Common/typeid_cast.h>
 #include <Core/ColumnNumbers.h>
+#include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/NonJoinedBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -112,6 +113,90 @@ ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block)
 
     return key_columns;
 }
+SpillConfig createSpillConfigWithNewSpillId(const SpillConfig & config, const String & new_spill_id)
+{
+    return SpillConfig(config.spill_dir, new_spill_id, config.max_cached_data_bytes_in_spiller, config.max_spilled_rows_per_file, config.max_spilled_bytes_per_file, config.file_provider);
+}
+size_t getRestoreJoinBuildConcurrency(size_t total_partitions, size_t spilled_partitions, Int64 join_restore_concurrency, size_t total_concurrency)
+{
+    if (join_restore_concurrency < 0)
+    {
+        /// restore serially, so one restore join will take up all the concurrency
+        return total_concurrency;
+    }
+    else if (join_restore_concurrency > 0)
+    {
+        /// try to restore `join_restore_concurrency` partition at a time, but restore_join_build_concurrency should be at least 2
+        return std::max(2, total_concurrency / join_restore_concurrency);
+    }
+    else
+    {
+        assert(total_partitions >= spilled_partitions);
+        size_t unspilled_partitions = total_partitions - spilled_partitions;
+        /// try to restore at most (unspilled_partitions - 1) partitions at a time
+        size_t max_concurrent_restore_partition = unspilled_partitions <= 1 ? 1 : unspilled_partitions - 1;
+        size_t restore_times = (spilled_partitions + max_concurrent_restore_partition - 1) / max_concurrent_restore_partition;
+        size_t restore_build_concurrency = (restore_times * total_concurrency) / spilled_partitions;
+        return std::max(2, restore_build_concurrency);
+    }
+}
+UInt64 inline updateHashValue(size_t restore_round, UInt64 x)
+{
+    static std::vector<UInt64> hash_constants{0xff51afd7ed558ccdULL, 0xc4ceb9fe1a85ec53ULL, 0xde43a68e4d184aa3ULL, 0x86f1fda459fa47c7ULL, 0xd91419add64f471fULL, 0xc18eea9cbe12489eULL, 0x2cb94f36b9fe4c38ULL, 0xef0f50cc5f0c4cbaULL};
+    static size_t hash_constants_size = hash_constants.size();
+    assert(hash_constants_size > 0 && (hash_constants_size & (hash_constants_size - 1)) == 0);
+    assert(restore_round != 0);
+    x ^= x >> 33;
+    x *= hash_constants[restore_round & (hash_constants_size - 1)];
+    x ^= x >> 33;
+    x *= hash_constants[(restore_round + 1) & (hash_constants_size - 1)];
+    x ^= x >> 33;
+    return x;
+}
+struct JoinBuildInfo
+{
+    bool enable_fine_grained_shuffle;
+    size_t fine_grained_shuffle_count;
+    bool enable_spill;
+    bool is_spilled;
+    size_t build_concurrency;
+    size_t restore_round;
+    bool needVirtualDispatchForProbeBlock() const
+    {
+        return enable_fine_grained_shuffle || (enable_spill && !is_spilled);
+    }
+};
+ColumnRawPtrs extractAndMaterializeKeyColumns(const Block & block, Columns & materialized_columns, const Strings & key_columns_names)
+{
+    ColumnRawPtrs key_columns(key_columns_names.size());
+    for (size_t i = 0; i < key_columns_names.size(); ++i)
+    {
+        key_columns[i] = block.getByName(key_columns_names[i]).column.get();
+
+        if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
+        {
+            materialized_columns.emplace_back(converted);
+            key_columns[i] = materialized_columns.back().get();
+        }
+    }
+    return key_columns;
+}
+
+void computeDispatchHash(size_t rows,
+                         const ColumnRawPtrs & key_columns,
+                         const TiDB::TiDBCollators & collators,
+                         std::vector<String> & partition_key_containers,
+                         size_t join_restore_round,
+                         WeakHash32 & hash)
+{
+    HashBaseWriterHelper::computeHash(rows, key_columns, collators, partition_key_containers, hash);
+    if (join_restore_round != 0)
+    {
+        auto & data = hash.getData();
+        for (size_t i = 0; i < rows; ++i)
+            data[i] = updateHashValue(join_restore_round, data[i]);
+    }
+}
 } // namespace
 
 const std::string Join::match_helper_prefix = "__left-semi-join-match-helper";
@@ -132,13 +217,20 @@ Join::Join(
     const String & req_id,
     bool enable_fine_grained_shuffle_,
     size_t fine_grained_shuffle_count_,
+    size_t max_bytes_before_external_join_,
+    const SpillConfig & build_spill_config_,
+    const SpillConfig & probe_spill_config_,
+    Int64 join_restore_concurrency_,
     const TiDB::TiDBCollators & collators_,
     const String & left_filter_column_,
     const String & right_filter_column_,
     const JoinOtherConditions & other_conditions,
     size_t max_block_size_,
-    const String & match_helper_name)
-    : match_helper_name(match_helper_name)
+    const String & match_helper_name,
+    size_t restore_round_,
+    bool is_test_)
+    : restore_round(restore_round_)
+    , match_helper_name(match_helper_name)
     , kind(kind_)
     , strictness(strictness_)
     , key_names_left(key_names_left_)
@@ -153,6 +245,11 @@ Join::Join(
     , other_conditions(other_conditions)
     , original_strictness(strictness)
     , max_block_size(max_block_size_)
+    , max_bytes_before_external_join(max_bytes_before_external_join_)
+    , build_spill_config(build_spill_config_)
+    , probe_spill_config(probe_spill_config_)
+    , join_restore_concurrency(join_restore_concurrency_)
+    , is_test(is_test_)
     , log(Logger::get(req_id))
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
@@ -179,7 +276,12 @@ Join::Join(
 
 void Join::meetError(const String & error_message_)
 {
-    std::lock_guard lk(build_probe_mutex);
+    std::unique_lock lock(build_probe_mutex);
+    meetErrorImpl(error_message_, lock);
+}
+
+void Join::meetErrorImpl(const String & error_message_, std::unique_lock<std::mutex> &)
+{
     if (meet_error)
         return;
     meet_error = true;
@@ -339,6 +441,56 @@ static size_t getTotalByteCountImpl(const Maps & maps, Join::Type type)
     }
 }
 
+template <typename Maps>
+static size_t getPartitionByteCountImpl(const Maps & maps, Join::Type type, size_t partition_index)
+{
+    switch (type)
+    {
+    case Join::Type::EMPTY:
+        return 0;
+    case Join::Type::CROSS:
+        return 0;
+
+#define M(NAME)            \
+    case Join::Type::NAME: \
+        return maps.NAME ? maps.NAME->getSegmentBufferSizeInBytes(partition_index) : 0;
+        APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+
+    default:
+        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+    }
+}
+
+template <typename Maps>
+static size_t clearMapPartition(const Maps & maps, Join::Type type, size_t partition_index)
+{
+    size_t ret = 0;
+    switch (type)
+    {
+    case Join::Type::EMPTY:
+        ret = 0;
+        break;
+    case Join::Type::CROSS:
+        ret = 0;
+        break;
+
+#define M(NAME)                                                  \
+    case Join::Type::NAME:                                       \
+        if (maps.NAME)                                           \
+        {                                                        \
+            ret = maps.NAME->resetSegmentTable(partition_index); \
+        }                                                        \
+        break;
+        APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+
+    default:
+        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+    }
+    return ret;
+}
+
 
 template <Join::Type type, typename Value, typename Mapped>
 struct KeyGetterForTypeImpl;
@@ -438,8 +590,7 @@ size_t Join::getTotalRowCount() const
 
     if (type == Type::CROSS)
     {
-        for (const auto & block : blocks)
-            res += block.rows();
+        res = total_input_build_rows;
     }
     else
     {
@@ -452,46 +603,81 @@ size_t Join::getTotalRowCount() const
     return res;
 }
 
-size_t Join::getTotalByteCount() const
+size_t Join::getPartitionByteCount(size_t partition_index) const
+{
+    size_t ret = 0;
+    ret += getPartitionByteCountImpl(maps_any, type, partition_index);
+    ret += getPartitionByteCountImpl(maps_all, type, partition_index);
+    ret += getPartitionByteCountImpl(maps_any_full, type, partition_index);
+    ret += getPartitionByteCountImpl(maps_all_full, type, partition_index);
+    return ret;
+}
+
+size_t Join::getTotalByteCount()
 {
     size_t res = 0;
-
-    if (type == Type::CROSS)
+    if (isEnableSpill())
     {
-        for (const auto & block : blocks)
-            res += block.bytes();
+        for (const auto & join_partition : partitions)
+            res += join_partition->memory_usage;
     }
     else
     {
-        res += getTotalByteCountImpl(maps_any, type);
-        res += getTotalByteCountImpl(maps_all, type);
-        res += getTotalByteCountImpl(maps_any_full, type);
-        res += getTotalByteCountImpl(maps_all_full, type);
-        for (const auto & pool : pools)
+        if (type == Type::CROSS)
         {
-            /// note the return value might not be accurate since it does not use lock, but should be enough for current usage
-            res += pool->size();
+            for (const auto & block : blocks)
+                res += block.bytes();
+        }
+        else
+        {
+            for (const auto & block : original_blocks)
+                res += block.bytes();
+            res += getTotalByteCountImpl(maps_any, type);
+            res += getTotalByteCountImpl(maps_all, type);
+            res += getTotalByteCountImpl(maps_any_full, type);
+            res += getTotalByteCountImpl(maps_all_full, type);
+
+            for (const auto & partition : partitions)
+            {
+                /// note the return value might not be accurate since it does not use lock, but should be enough for current usage
+                res += partition->pool->size();
+            }
         }
     }
+    if (peak_build_bytes_usage)
+        peak_build_bytes_usage = res;
 
     return res;
 }
 
-void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
+size_t Join::getPeakBuildBytesUsage()
+{
+    /// call `getTotalByteCount` first to make sure peak_build_bytes_usage has a meaningful value
+    getTotalByteCount();
+    return peak_build_bytes_usage;
+}
+
+void Join::setBuildConcurrencyAndInitJoinPartition(size_t build_concurrency_)
 {
     if (unlikely(build_concurrency > 0))
-        throw Exception("Logical error: `setBuildConcurrencyAndInitPool` shouldn't be called more than once", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Logical error: `setBuildConcurrencyAndInitJoinPartition` shouldn't be called more than once", ErrorCodes::LOGICAL_ERROR);
     /// do not set active_build_concurrency because in compile stage, `joinBlock` will be called to get generate header, if active_build_concurrency
     /// is set here, `joinBlock` will hang when used to get header
     build_concurrency = std::max(1, build_concurrency_);
 
+    partitions.reserve(build_concurrency);
     for (size_t i = 0; i < getBuildConcurrency(); ++i)
-        pools.emplace_back(std::make_shared<Arena>());
+    {
+        partitions.push_back(std::make_unique<JoinPartition>());
+        partitions.back()->pool = std::make_shared<Arena>();
+    }
+
     // init for non-joined-streams.
     if (getFullness(kind) || isNullAwareSemiFamily(kind))
     {
+        rows_not_inserted_to_map.reserve(getBuildConcurrency());
         for (size_t i = 0; i < getBuildConcurrency(); ++i)
-            rows_not_inserted_to_map.push_back(std::make_unique<RowRefList>());
+            rows_not_inserted_to_map.emplace_back(max_block_size);
     }
 }
 
@@ -531,16 +717,66 @@ void Join::setSampleBlock(const Block & block)
         sample_block_with_columns_to_add.insert(ColumnWithTypeAndName(Join::match_helper_type, match_helper_name));
 }
 
-void Join::init(const Block & sample_block, size_t build_concurrency_)
+std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_join_)
+{
+    return std::make_shared<Join>(
+        key_names_left,
+        key_names_right,
+        kind,
+        original_strictness,
+        log->identifier(),
+        false,
+        0,
+        max_bytes_before_external_join_,
+        createSpillConfigWithNewSpillId(build_spill_config, fmt::format("{}_hash_join_{}_build", log->identifier(), restore_round + 1)),
+        createSpillConfigWithNewSpillId(probe_spill_config, fmt::format("{}_hash_join_{}_probe", log->identifier(), restore_round + 1)),
+        join_restore_concurrency,
+        collators,
+        left_filter_column,
+        right_filter_column,
+        other_conditions,
+        max_block_size,
+        match_helper_name,
+        restore_round + 1,
+        is_test);
+}
+
+void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
 {
     std::unique_lock lock(rwlock);
     if (unlikely(initialized))
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
-    setBuildConcurrencyAndInitPool(build_concurrency_);
+    setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
+    build_sample_block = sample_block;
+    build_spiller = std::make_unique<Spiller>(build_spill_config, false, build_concurrency_, build_sample_block, log);
     /// Choose data structure to use for JOIN.
     initMapImpl(chooseMethod(getKeyColumns(key_names_right, sample_block), key_sizes));
+    if (type == Type::CROSS)
+    {
+        /// todo support spill for cross join
+        max_bytes_before_external_join = 0;
+        LOG_WARNING(log, "Cross join does not support spilling, so set max_bytes_before_external_join = 0");
+    }
+    if (isNullAwareSemiFamily(kind))
+    {
+        max_bytes_before_external_join = 0;
+        LOG_WARNING(log, "null aware join does not support spilling, so set max_bytes_before_external_join = 0");
+    }
     setSampleBlock(sample_block);
+    for (size_t i = 0; i < build_concurrency; i++)
+    {
+        partitions[i]->memory_usage += partitions[i]->pool->size();
+        partitions[i]->memory_usage += getPartitionByteCount(i);
+    }
+}
+
+void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
+{
+    std::unique_lock lock(rwlock);
+    setProbeConcurrency(probe_concurrency_);
+    probe_sample_block = sample_block;
+    probe_spiller = std::make_unique<Spiller>(probe_spill_config, false, build_concurrency, probe_sample_block, log);
 }
 
 namespace
@@ -597,6 +833,7 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
 
 template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
 void NO_INLINE insertFromBlockImplTypeCase(
+    ASTTableJoin::Kind kind,
     Map & map,
     size_t rows,
     const ColumnRawPtrs & key_columns,
@@ -604,7 +841,7 @@ void NO_INLINE insertFromBlockImplTypeCase(
     const TiDB::TiDBCollators & collators,
     Block * stored_block,
     ConstNullMapPtr null_map,
-    Join::RowRefList * rows_not_inserted_to_map,
+    Join::RowsNotInsertToMap * rows_not_inserted_to_map,
     size_t stream_index,
     Arena & pool)
 {
@@ -612,15 +849,15 @@ void NO_INLINE insertFromBlockImplTypeCase(
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(key_columns.size());
 
+    bool null_need_materialize = isNullAwareSemiFamily(kind);
     for (size_t i = 0; i < rows; ++i)
     {
         if (has_null_map && (*null_map)[i])
         {
             if (rows_not_inserted_to_map)
             {
-                /// for right/full out join, need to record the rows not inserted to map
-                auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
-                insertRowToList(rows_not_inserted_to_map, elem, stored_block, i);
+                /// for right/full out join or null-aware semi join, need to insert into rows_not_inserted_to_map
+                rows_not_inserted_to_map->insertRow(stored_block, i, null_need_materialize, pool);
             }
             continue;
         }
@@ -638,6 +875,7 @@ void NO_INLINE insertFromBlockImplTypeCase(
 
 template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
 void NO_INLINE insertFromBlockImplTypeCaseWithLock(
+    ASTTableJoin::Kind kind,
     Map & map,
     size_t rows,
     const ColumnRawPtrs & key_columns,
@@ -645,7 +883,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
     const TiDB::TiDBCollators & collators,
     Block * stored_block,
     ConstNullMapPtr null_map,
-    Join::RowRefList * rows_not_inserted_to_map,
+    Join::RowsNotInsertToMap * rows_not_inserted_to_map,
     size_t stream_index,
     Arena & pool)
 {
@@ -693,6 +931,8 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
         }
         segment_index_info[segment_index].push_back(i);
     }
+
+    bool null_need_materialize = isNullAwareSemiFamily(kind);
     for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
@@ -703,9 +943,9 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             /// here ignore mutex because rows_not_inserted_to_map is privately owned by each stream thread
             for (auto index : segment_index_info[segment_index])
             {
-                /// for right/full out join or null-aware semi join, need to record the rows not inserted to map
-                auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
-                insertRowToList(rows_not_inserted_to_map, elem, stored_block, index);
+                /// for right/full out join or null-aware semi join, need to insert into rows_not_inserted_to_map
+                RUNTIME_ASSERT(rows_not_inserted_to_map != nullptr);
+                rows_not_inserted_to_map->insertRow(stored_block, index, null_need_materialize, pool);
             }
         }
         else
@@ -721,6 +961,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
 
 template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
 void insertFromBlockImplType(
+    ASTTableJoin::Kind kind,
     Map & map,
     size_t rows,
     const ColumnRawPtrs & key_columns,
@@ -728,42 +969,52 @@ void insertFromBlockImplType(
     const TiDB::TiDBCollators & collators,
     Block * stored_block,
     ConstNullMapPtr null_map,
-    Join::RowRefList * rows_not_inserted_to_map,
+    Join::RowsNotInsertToMap * rows_not_inserted_to_map,
     size_t stream_index,
     size_t insert_concurrency,
     Arena & pool,
-    bool enable_fine_grained_shuffle)
+    bool enable_fine_grained_shuffle,
+    bool enable_join_spill)
 {
-    if (null_map)
+    if (enable_join_spill)
     {
-        if (insert_concurrency > 1 && !enable_fine_grained_shuffle)
-        {
-            insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
-        }
+        /// case 1, join with spill support, the partition level lock is acquired in `insertFromBlock`
+        if (null_map)
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         else
-        {
-            if (!enable_fine_grained_shuffle)
-                RUNTIME_CHECK(stream_index == 0);
-            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
-        }
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+        return;
+    }
+    else if (enable_fine_grained_shuffle)
+    {
+        /// case 2, join with fine_grained_shuffle, no need to acquire any lock
+        if (null_map)
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+        else
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+    }
+    else if (insert_concurrency > 1)
+    {
+        /// case 3, normal join with concurrency > 1, will acquire lock in `insertFromBlockImplTypeCaseWithLock`
+        if (null_map)
+            insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, true>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
+        else
+            insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, false>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
     }
     else
     {
-        if (insert_concurrency > 1 && !enable_fine_grained_shuffle)
-        {
-            insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
-        }
+        /// case 4, normal join with concurrency == 1, no need to acquire any lock
+        RUNTIME_CHECK(stream_index == 0);
+        if (null_map)
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
         else
-        {
-            if (!enable_fine_grained_shuffle)
-                RUNTIME_CHECK(stream_index == 0);
-            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
-        }
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(kind, map, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map, stream_index, pool);
     }
 }
 
 template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
 void insertFromBlockImpl(
+    ASTTableJoin::Kind kind,
     Join::Type type,
     Maps & maps,
     size_t rows,
@@ -772,11 +1023,12 @@ void insertFromBlockImpl(
     const TiDB::TiDBCollators & collators,
     Block * stored_block,
     ConstNullMapPtr null_map,
-    Join::RowRefList * rows_not_inserted_to_map,
+    Join::RowsNotInsertToMap * rows_not_inserted_to_map,
     size_t stream_index,
     size_t insert_concurrency,
     Arena & pool,
-    bool enable_fine_grained_shuffle)
+    bool enable_fine_grained_shuffle,
+    bool enable_join_spill)
 {
     switch (type)
     {
@@ -788,6 +1040,7 @@ void insertFromBlockImpl(
 #define M(TYPE)                                                                                                                                \
     case Join::Type::TYPE:                                                                                                                     \
         insertFromBlockImplType<STRICTNESS, typename KeyGetterForType<Join::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
+            kind,                                                                                                                              \
             *maps.TYPE,                                                                                                                        \
             rows,                                                                                                                              \
             key_columns,                                                                                                                       \
@@ -799,7 +1052,8 @@ void insertFromBlockImpl(
             stream_index,                                                                                                                      \
             insert_concurrency,                                                                                                                \
             pool,                                                                                                                              \
-            enable_fine_grained_shuffle);                                                                                                      \
+            enable_fine_grained_shuffle,                                                                                                       \
+            enable_join_spill);                                                                                                                \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -863,24 +1117,112 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
     std::shared_lock lock(rwlock);
     assert(stream_index < getBuildConcurrency());
+    total_input_build_rows += block.rows();
 
     if (unlikely(!initialized))
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
     Block * stored_block = nullptr;
+
+    if (!isEnableSpill())
     {
-        std::lock_guard lk(blocks_lock);
-        total_input_build_rows += block.rows();
-        blocks.push_back(block);
-        stored_block = &blocks.back();
-        original_blocks.push_back(block);
+        {
+            std::lock_guard lk(blocks_lock);
+            blocks.push_back(block);
+            stored_block = &blocks.back();
+            original_blocks.push_back(block);
+        }
+        insertFromBlockInternal(stored_block, stream_index);
     }
-    insertFromBlockInternal(stored_block, stream_index);
+    else
+    {
+        Blocks dispatch_blocks;
+        if (enable_fine_grained_shuffle)
+        {
+            dispatch_blocks.resize(build_concurrency, {});
+            dispatch_blocks[stream_index] = block;
+        }
+        else
+        {
+            dispatch_blocks = dispatchBlock(key_names_right, block);
+        }
+        assert(dispatch_blocks.size() == build_concurrency);
+
+        size_t bytes_to_be_added = 0;
+        for (const auto & partition_block : dispatch_blocks)
+        {
+            if (partition_block)
+            {
+                bytes_to_be_added += partition_block.bytes();
+            }
+        }
+        bool force_spill_partition_blocks = false;
+        {
+            std::unique_lock lk(build_probe_mutex);
+            if (max_bytes_before_external_join && bytes_to_be_added + getTotalByteCount() >= max_bytes_before_external_join)
+            {
+                force_spill_partition_blocks = true;
+            }
+        }
+
+        for (size_t j = stream_index; j < build_concurrency + stream_index; ++j)
+        {
+            stored_block = nullptr;
+            size_t i = j % build_concurrency;
+            if (!dispatch_blocks[i].rows())
+            {
+                continue;
+            }
+            Blocks blocks_to_spill;
+            {
+                const auto & join_partition = partitions[i];
+                std::unique_lock partition_lock(join_partition->partition_mutex);
+                partitions[i]->insertBlockForBuild(std::move(dispatch_blocks[i]));
+                if (join_partition->spill)
+                    blocks_to_spill = trySpillBuildPartition(i, force_spill_partition_blocks, partition_lock);
+                else
+                    stored_block = &(join_partition->build_partition.blocks.back());
+                if (stored_block != nullptr)
+                {
+                    size_t pool_size_before_insert = join_partition->pool->size();
+                    size_t map_size_before_insert = getPartitionByteCount(i);
+                    insertFromBlockInternal(stored_block, i);
+                    size_t pool_size_after_insert = join_partition->pool->size();
+                    size_t map_size_after_insert = getPartitionByteCount(i);
+                    if likely (pool_size_after_insert > pool_size_before_insert)
+                    {
+                        join_partition->memory_usage += (pool_size_after_insert - pool_size_before_insert);
+                    }
+                    if likely (map_size_after_insert > map_size_before_insert)
+                    {
+                        join_partition->memory_usage += (map_size_after_insert - map_size_before_insert);
+                    }
+                    continue;
+                }
+            }
+            build_spiller->spillBlocks(std::move(blocks_to_spill), i);
+        }
+#ifdef DBMS_PUBLIC_GTEST
+        // for join spill to disk gtest
+        if (restore_round == 2)
+            return;
+#endif
+        spillMostMemoryUsedPartitionIfNeed();
+    }
+}
+
+bool Join::isEnableSpill() const
+{
+    return max_bytes_before_external_join > 0;
+}
+
+bool Join::isRestoreJoin() const
+{
+    return restore_round > 0;
 }
 
 void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
 {
     size_t keys_size = key_names_right.size();
-    ColumnRawPtrs key_columns(keys_size);
 
     const Block & block = *stored_block;
 
@@ -889,18 +1231,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
     /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
     Columns materialized_columns;
-
-    /// Memoize key columns to work.
-    for (size_t i = 0; i < keys_size; ++i)
-    {
-        key_columns[i] = block.getByName(key_names_right[i]).column.get();
-
-        if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
-        {
-            materialized_columns.emplace_back(converted);
-            key_columns[i] = materialized_columns.back().get();
-        }
-    }
+    ColumnRawPtrs key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names_right);
 
     if (isNullAwareSemiFamily(kind))
     {
@@ -981,29 +1312,32 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
         }
     }
 
+    bool enable_join_spill = max_bytes_before_external_join;
+
     if (!isCrossJoin(kind))
     {
+        assert(partitions[stream_index]->pool != nullptr);
         /// Fill the hash table.
         if (isNullAwareSemiFamily(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrency(), *pools[stream_index], enable_fine_grained_shuffle);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(kind, type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrency(), *pools[stream_index], enable_fine_grained_shuffle);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(kind, type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
         }
         else if (getFullness(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrency(), *pools[stream_index], enable_fine_grained_shuffle);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(kind, type, maps_any_full, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrency(), *pools[stream_index], enable_fine_grained_shuffle);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(kind, type, maps_all_full, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
         }
         else
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrency(), *pools[stream_index], enable_fine_grained_shuffle);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(kind, type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrency(), *pools[stream_index], enable_fine_grained_shuffle);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(kind, type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
         }
     }
 }
@@ -1191,8 +1525,7 @@ void NO_INLINE joinBlockImplTypeCase(
     std::unique_ptr<IColumn::Offsets> & offsets_to_replicate,
     const std::vector<size_t> & right_indexes,
     const TiDB::TiDBCollators & collators,
-    bool enable_fine_grained_shuffle,
-    size_t fine_grained_shuffle_count,
+    const JoinBuildInfo & join_build_info,
     ProbeProcessInfo & probe_process_info)
 {
     if (rows == 0)
@@ -1209,22 +1542,19 @@ void NO_INLINE joinBlockImplTypeCase(
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(key_columns.size());
     Arena pool;
-    WeakHash32 shuffle_hash(0); /// reproduce hash values in FinedGrainedShuffleWriter
-    if (enable_fine_grained_shuffle && rows > 0)
+    WeakHash32 build_hash(0); /// reproduce hash values according to build stage
+    if (join_build_info.needVirtualDispatchForProbeBlock())
     {
+        assert(!(join_build_info.restore_round > 0 && join_build_info.enable_fine_grained_shuffle));
         /// TODO: consider adding a virtual column in Sender side to avoid computing cost and potential inconsistency by heterogeneous envs(AMD64, ARM64)
         /// Note: 1. Not sure, if inconsistency will do happen in heterogeneous envs
         ///       2. Virtual column would take up a little more network bandwidth, might lead to poor performance if network was bottleneck
         /// Currently, the computation cost is tolerable, since it's a very simple crc32 hash algorithm, and heterogeneous envs support is not considered
-        HashBaseWriterHelper::computeHash(rows,
-                                          key_columns,
-                                          collators,
-                                          sort_key_containers,
-                                          shuffle_hash);
+        computeDispatchHash(rows, key_columns, collators, sort_key_containers, join_build_info.restore_round, build_hash);
     }
 
     size_t segment_size = map.getSegmentSize();
-    const auto & shuffle_hash_data = shuffle_hash.getData();
+    const auto & build_hash_data = build_hash.getData();
     assert(probe_process_info.start_row < rows);
     size_t i;
     bool block_full = false;
@@ -1255,7 +1585,11 @@ void NO_INLINE joinBlockImplTypeCase(
             }
 
             size_t segment_index = 0;
-            if (enable_fine_grained_shuffle)
+            if (join_build_info.is_spilled)
+            {
+                segment_index = probe_process_info.partition_index;
+            }
+            else if (join_build_info.needVirtualDispatchForProbeBlock())
             {
                 /// Need to calculate the correct segment_index so that rows with same key will map to the same segment_index both in Build and Prob
                 /// The "reproduce" of segment_index generated in Build phase relies on the facts that:
@@ -1263,11 +1597,18 @@ void NO_INLINE joinBlockImplTypeCase(
                 /// 1. In FineGrainedShuffleWriter, selector value finally maps to packet_stream_id by '% fine_grained_shuffle_count'
                 /// 2. In ExchangeReceiver, build_stream_id = packet_stream_id % build_stream_count;
                 /// 3. In HashBuild, build_concurrency decides map's segment size, and build_steam_id decides the segment index
-                auto packet_stream_id = shuffle_hash_data[i] % fine_grained_shuffle_count;
-                if likely (fine_grained_shuffle_count == segment_size)
-                    segment_index = packet_stream_id;
+                if (join_build_info.enable_fine_grained_shuffle)
+                {
+                    auto packet_stream_id = build_hash_data[i] % join_build_info.fine_grained_shuffle_count;
+                    if likely (join_build_info.fine_grained_shuffle_count == segment_size)
+                        segment_index = packet_stream_id;
+                    else
+                        segment_index = packet_stream_id % segment_size;
+                }
                 else
-                    segment_index = packet_stream_id % segment_size;
+                {
+                    segment_index = build_hash_data[i] % join_build_info.build_concurrency;
+                }
             }
             else
             {
@@ -1327,8 +1668,7 @@ void joinBlockImplType(
     std::unique_ptr<IColumn::Offsets> & offsets_to_replicate,
     const std::vector<size_t> & right_indexes,
     const TiDB::TiDBCollators & collators,
-    bool enable_fine_grained_shuffle,
-    size_t fine_grained_shuffle_count,
+    const JoinBuildInfo & join_build_info,
     ProbeProcessInfo & probe_process_info)
 {
     if (null_map)
@@ -1344,8 +1684,7 @@ void joinBlockImplType(
             offsets_to_replicate,
             right_indexes,
             collators,
-            enable_fine_grained_shuffle,
-            fine_grained_shuffle_count,
+            join_build_info,
             probe_process_info);
     else
         joinBlockImplTypeCase<KIND, STRICTNESS, KeyGetter, Map, false>(
@@ -1360,8 +1699,7 @@ void joinBlockImplType(
             offsets_to_replicate,
             right_indexes,
             collators,
-            enable_fine_grained_shuffle,
-            fine_grained_shuffle_count,
+            join_build_info,
             probe_process_info);
 }
 } // namespace
@@ -1592,23 +1930,11 @@ template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename
 void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & probe_process_info) const
 {
     size_t keys_size = key_names_left.size();
-    ColumnRawPtrs key_columns(keys_size);
 
     /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
     /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
     Columns materialized_columns;
-
-    /// Memoize key columns to work with.
-    for (size_t i = 0; i < keys_size; ++i)
-    {
-        key_columns[i] = block.getByName(key_names_left[i]).column.get();
-
-        if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
-        {
-            materialized_columns.emplace_back(converted);
-            key_columns[i] = materialized_columns.back().get();
-        }
-    }
+    ColumnRawPtrs key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names_left);
 
     /// Keys with NULL value in any column won't join to anything.
     ColumnPtr null_map_holder;
@@ -1690,6 +2016,8 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     if (strictness == ASTTableJoin::Strictness::All)
         offsets_to_replicate = std::make_unique<IColumn::Offsets>(rows);
 
+    bool enable_spill_join = isEnableSpill();
+    JoinBuildInfo join_build_info{enable_fine_grained_shuffle, fine_grained_shuffle_count, enable_spill_join, is_spilled, build_concurrency, restore_round};
     switch (type)
     {
 #define M(TYPE)                                                                                                                                \
@@ -1706,8 +2034,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
             offsets_to_replicate,                                                                                                              \
             right_indexes,                                                                                                                     \
             collators,                                                                                                                         \
-            enable_fine_grained_shuffle,                                                                                                       \
-            fine_grained_shuffle_count,                                                                                                        \
+            join_build_info,                                                                                                                   \
             probe_process_info);                                                                                                               \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
@@ -2020,13 +2347,34 @@ void Join::checkTypes(const Block & block) const
     checkTypesOfKeys(block, sample_block_with_keys);
 }
 
+void Join::RowsNotInsertToMap::insertRow(Block * stored_block, size_t index, bool need_materialize, Arena & pool)
+{
+    if (need_materialize)
+    {
+        if (materialized_columns_vec.empty() || total_size % max_block_size == 0)
+            materialized_columns_vec.emplace_back(stored_block->cloneEmptyColumns());
+
+        auto & last_one = materialized_columns_vec.back();
+        size_t columns = stored_block->columns();
+        RUNTIME_ASSERT(last_one.size() == columns);
+        for (size_t i = 0; i < columns; ++i)
+            last_one[i]->insertFrom(*stored_block->getByPosition(i).column.get(), index);
+    }
+    else
+    {
+        auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
+        insertRowToList(&head, elem, stored_block, index);
+    }
+    ++total_size;
+}
+
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map, bool has_filter_map>
 void NO_INLINE joinBlockImplNullAwareInternal(
     const Map & map,
     Block & block,
     size_t left_columns,
     const BlocksList & right_blocks,
-    const PaddedPODArray<Join::RowRefList *> & null_rows,
+    const std::vector<Join::RowsNotInsertToMap> & null_rows,
     size_t max_block_size,
     const JoinOtherConditions & other_conditions,
     const ColumnRawPtrs & key_columns,
@@ -2035,6 +2383,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const ConstNullMapPtr & filter_map,
     const ConstNullMapPtr & all_key_null_map,
     const TiDB::TiDBCollators & collators,
+    bool null_key_check_all_blocks_directly,
     bool right_has_all_key_null_row,
     bool right_table_is_empty)
 {
@@ -2053,8 +2402,8 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>> res;
     res.reserve(rows);
     std::list<NASemiJoinResult<KIND, STRICTNESS> *> res_list;
-    /// We can just consider the result of semi join because `NASemiJoinResult::setResult` will correct
-    /// the result if it's not semi join.
+    /// We can just consider the result of left semi join because `NASemiJoinResult::setResult` will correct
+    /// the result if it's not left semi join.
     for (size_t i = 0; i < rows; ++i)
     {
         if constexpr (has_filter_map)
@@ -2093,10 +2442,12 @@ void NO_INLINE joinBlockImplNullAwareInternal(
                         continue;
                     }
                 }
-                /// Check null rows first to speed up getting the NULL result if possible.
                 /// In the worse case, all rows in the right table will be checked.
                 /// E.g. (1,null) in ((2,1),(2,3),(2,null),(3,null)) => false.
-                res.emplace_back(i, NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS, nullptr);
+                if (null_key_check_all_blocks_directly)
+                    res.emplace_back(i, NASemiJoinStep::NULL_KEY_CHECK_ALL_BLOCKS, nullptr);
+                else
+                    res.emplace_back(i, NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS, nullptr);
                 res_list.push_back(&res.back());
                 continue;
             }
@@ -2271,7 +2622,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     Block & block,
     size_t left_columns,
     const BlocksList & right_blocks,
-    const PaddedPODArray<Join::RowRefList *> & null_rows,
+    const std::vector<Join::RowsNotInsertToMap> & null_rows,
     size_t max_block_size,
     const JoinOtherConditions & other_conditions,
     const ColumnRawPtrs & key_columns,
@@ -2280,6 +2631,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const ConstNullMapPtr & filter_map,
     const ConstNullMapPtr & all_key_null_map,
     const TiDB::TiDBCollators & collators,
+    bool null_key_check_all_blocks_directly,
     bool right_has_all_key_null_row,
     bool right_table_is_empty)
 {
@@ -2298,6 +2650,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
         filter_map,                                                                                 \
         all_key_null_map,                                                                           \
         collators,                                                                                  \
+        null_key_check_all_blocks_directly,                                                         \
         right_has_all_key_null_row,                                                                 \
         right_table_is_empty);
 
@@ -2382,7 +2735,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             block,                                                                                                                                      \
             existing_columns,                                                                                                                           \
             blocks,                                                                                                                                     \
-            rows_with_null_keys,                                                                                                                        \
+            rows_not_inserted_to_map,                                                                                                                   \
             max_block_size,                                                                                                                             \
             other_conditions,                                                                                                                           \
             key_columns,                                                                                                                                \
@@ -2391,6 +2744,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             filter_map,                                                                                                                                 \
             all_key_null_map,                                                                                                                           \
             collators,                                                                                                                                  \
+            null_key_check_all_blocks_directly,                                                                                                         \
             right_has_all_key_null_row.load(std::memory_order_relaxed),                                                                                 \
             right_table_is_empty.load(std::memory_order_relaxed));                                                                                      \
         break;
@@ -2422,18 +2776,6 @@ void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right)
     }
 }
 
-void Join::finishOneProbe()
-{
-    std::unique_lock lock(build_probe_mutex);
-    if (active_probe_concurrency == 1)
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
-    }
-    --active_probe_concurrency;
-    if (active_probe_concurrency == 0)
-        probe_cv.notify_all();
-}
-
 void Join::finishOneBuild()
 {
     std::unique_lock lock(build_probe_mutex);
@@ -2453,13 +2795,78 @@ void Join::workAfterBuildFinish()
 {
     if (isNullAwareSemiFamily(kind))
     {
-        rows_with_null_keys.reserve(rows_not_inserted_to_map.size());
+        size_t null_rows_size = 0;
         for (const auto & i : rows_not_inserted_to_map)
+            null_rows_size += i.total_size;
+        /// Considering the rows with null key in left table, in the worse case, it may need to check all rows in right table.
+        /// Null rows are used for speeding up the check process. If the result of null-aware equal expression is NULL, the
+        /// check process can be finished.
+        /// However, if checking null rows does not get a NULL result, these null rows will be checked again in the process of
+        /// checking all blocks.
+        /// So there is a tradeoff between returning quickly and avoiding waste.
+        ///
+        /// If all rows have null key, test results at the time of writing show that the time consumed by checking null rows is
+        /// several times than that of checking all blocks, and it increases as the number of rows in the right table increases.
+        /// For example, the number of rows in right table is 2k and 20000k in left table, null rows take about 1 time as long
+        /// as all blocks. When the number of rows in right table is 5k, 1.4 times. 10k => 1.7 times. 20k => 1.9 times.
+        ///
+        /// Given that many null rows should be a rare case, let's use 2 times to simplify thinking.
+        /// So if null rows occupy 1/3 of all rows, the time consumed by null rows and all blocks are basically the same.
+        /// I choose 1/3 as the cutoff point. If null rows occupy more than 1/3, we should check all blocks directly.
+        if (unlikely(is_test))
+            null_key_check_all_blocks_directly = false;
+        else
+            null_key_check_all_blocks_directly = static_cast<double>(null_rows_size) > static_cast<double>(total_input_build_rows) / 3.0;
+    }
+
+    if (isEnableSpill())
+    {
+        if (hasPartitionSpilled())
         {
-            Join::RowRefList * p = i->next;
-            if (p != nullptr)
-                rows_with_null_keys.emplace_back(p);
+            trySpillBuildPartitions(true);
+            tryMarkBuildSpillFinish();
         }
+    }
+}
+
+void Join::workAfterProbeFinish()
+{
+    if (isEnableSpill())
+    {
+        if (hasPartitionSpilled())
+        {
+            trySpillProbePartitions(true);
+            tryMarkProbeSpillFinish();
+            if (!needReturnNonJoinedData())
+            {
+                releaseAllPartitions();
+            }
+        }
+    }
+}
+
+void Join::waitUntilAllBuildFinished() const
+{
+    std::unique_lock lock(build_probe_mutex);
+    build_cv.wait(lock, [&]() {
+        return active_build_concurrency == 0 || meet_error || is_canceled;
+    });
+    if (meet_error)
+        throw Exception(error_message);
+}
+
+void Join::finishOneProbe()
+{
+    std::unique_lock lock(build_probe_mutex);
+    if (active_probe_concurrency == 1)
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
+    }
+    --active_probe_concurrency;
+    if (active_probe_concurrency == 0)
+    {
+        workAfterProbeFinish();
+        probe_cv.notify_all();
     }
 }
 
@@ -2467,26 +2874,30 @@ void Join::waitUntilAllProbeFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
     probe_cv.wait(lock, [&]() {
-        return meet_error || active_probe_concurrency == 0;
+        return active_probe_concurrency == 0 || meet_error || is_canceled;
     });
     if (meet_error)
         throw Exception(error_message);
 }
 
-void Join::waitUntilAllBuildFinished() const
+
+void Join::finishOneNonJoin(size_t partition_index)
 {
-    std::unique_lock lock(build_probe_mutex);
-    build_cv.wait(lock, [&]() {
-        return meet_error || active_build_concurrency == 0;
-    });
-    if (meet_error)
-        throw Exception(error_message);
+    while (partition_index < build_concurrency)
+    {
+        std::unique_lock partition_lock(partitions[partition_index]->partition_mutex);
+        releaseBuildPartitionBlocks(partition_index, partition_lock);
+        releaseProbePartitionBlocks(partition_index, partition_lock);
+        if (!partitions[partition_index]->spill)
+        {
+            releaseBuildPartitionHashTable(partition_index, partition_lock);
+        }
+        partition_index += build_concurrency;
+    }
 }
 
 Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
 {
-    waitUntilAllBuildFinished();
-
     std::shared_lock lock(rwlock);
 
     probe_process_info.updateStartRow();
@@ -2587,14 +2998,405 @@ bool Join::needReturnNonJoinedData() const
     return getFullness(kind);
 }
 
-BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const
+BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size_) const
 {
-    return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size);
+    return std::make_shared<NonJoinedBlockInputStream>(*this, left_sample_block, index, step, max_block_size_);
 }
 
-void ProbeProcessInfo::resetBlock(Block && block_)
+Blocks Join::dispatchBlock(const Strings & key_columns_names, const Block & from_block)
+{
+    size_t num_shards = build_concurrency;
+    size_t num_cols = from_block.columns();
+    Blocks result(num_shards);
+    if (num_shards == 1)
+    {
+        result[0] = from_block;
+        return result;
+    }
+
+    IColumn::Selector selector = selectDispatchBlock(key_columns_names, from_block);
+
+
+    for (size_t i = 0; i < num_shards; ++i)
+        result[i] = from_block.cloneEmpty();
+
+    for (size_t i = 0; i < num_cols; ++i)
+    {
+        auto dispatched_columns = from_block.getByPosition(i).column->scatter(num_shards, selector);
+        assert(result.size() == dispatched_columns.size());
+        for (size_t block_index = 0; block_index < num_shards; ++block_index)
+        {
+            result[block_index].getByPosition(i).column = std::move(dispatched_columns[block_index]);
+        }
+    }
+    return result;
+}
+
+IColumn::Selector Join::hashToSelector(const WeakHash32 & hash) const
+{
+    size_t num_shards = build_concurrency;
+    const auto & data = hash.getData();
+    size_t num_rows = data.size();
+
+    IColumn::Selector selector(num_rows);
+
+    if unlikely (enable_fine_grained_shuffle && fine_grained_shuffle_count != build_concurrency)
+    {
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            selector[i] = data[i] % fine_grained_shuffle_count;
+            selector[i] = selector[i] % num_shards;
+        }
+    }
+    else
+    {
+        if (num_shards & (num_shards - 1))
+        {
+            for (size_t i = 0; i < num_rows; ++i)
+            {
+                selector[i] = data[i] % num_shards;
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < num_rows; ++i)
+            {
+                selector[i] = data[i] & (num_shards - 1);
+            }
+        }
+    }
+
+    return selector;
+}
+
+IColumn::Selector Join::selectDispatchBlock(const Strings & key_columns_names, const Block & from_block)
+{
+    Columns materialized_columns;
+    ColumnRawPtrs key_columns = extractAndMaterializeKeyColumns(from_block, materialized_columns, key_columns_names);
+
+    size_t num_rows = from_block.rows();
+    std::vector<std::string> sort_key_containers;
+    sort_key_containers.resize(key_columns.size());
+
+    WeakHash32 hash(0);
+    computeDispatchHash(num_rows, key_columns, collators, sort_key_containers, restore_round, hash);
+    return hashToSelector(hash);
+}
+
+void Join::spillMostMemoryUsedPartitionIfNeed()
+{
+    Int64 target_partition_index = -1;
+    size_t max_bytes = 0;
+    Blocks blocks_to_spill;
+
+    {
+        std::unique_lock lk(build_probe_mutex);
+#ifdef DBMS_PUBLIC_GTEST
+        // for join spill to disk gtest
+        if (restore_round == 1 && spilled_partition_indexes.size() >= partitions.size() / 2)
+            return;
+#endif
+        if (!disable_spill && restore_round >= 4)
+        {
+            LOG_DEBUG(log, fmt::format("restore round reach to 4, spilling will be disabled."));
+            disable_spill = true;
+            return;
+        }
+        if ((max_bytes_before_external_join && getTotalByteCount() <= max_bytes_before_external_join) || disable_spill)
+        {
+            return;
+        }
+        for (size_t j = 0; j < partitions.size(); ++j)
+        {
+            if (!partitions[j]->spill && (target_partition_index == -1 || partitions[j]->memory_usage > max_bytes))
+            {
+                target_partition_index = j;
+                max_bytes = partitions[j]->memory_usage;
+            }
+        }
+        if (target_partition_index == -1)
+        {
+            return;
+        }
+
+        RUNTIME_CHECK_MSG(build_concurrency > 1, "spilling is not is not supported when stream size = 1, please increase max_threads or set max_bytes_before_external_join = 0.");
+        is_spilled = true;
+
+        LOG_DEBUG(log, fmt::format("all bytes used : {} in join, partition size : {}", getTotalByteCount(), partitions.size()));
+        LOG_DEBUG(log, fmt::format("make round : {}, partition : {} spill.", restore_round, target_partition_index));
+
+        std::unique_lock partition_lock(partitions[target_partition_index]->partition_mutex);
+        partitions[target_partition_index]->spill = true;
+        releaseBuildPartitionHashTable(target_partition_index, partition_lock);
+        spilled_partition_indexes.push_back(target_partition_index);
+        blocks_to_spill = trySpillBuildPartition(target_partition_index, true, partition_lock);
+    }
+    build_spiller->spillBlocks(std::move(blocks_to_spill), target_partition_index);
+    LOG_DEBUG(log, fmt::format("all bytes used after spill : {}", getTotalByteCount()));
+}
+
+void Join::tryMarkBuildSpillFinish()
+{
+    if (!spilled_partition_indexes.empty())
+    {
+        build_spiller->finishSpill();
+    }
+}
+
+void Join::tryMarkProbeSpillFinish()
+{
+    if (!spilled_partition_indexes.empty())
+    {
+        probe_spiller->finishSpill();
+    }
+}
+
+bool Join::getPartitionSpilled(size_t partition_index)
+{
+    return partitions[partition_index]->spill;
+}
+
+
+bool Join::hasPartitionSpilledWithLock()
+{
+    std::unique_lock lk(build_probe_mutex);
+    return hasPartitionSpilled();
+}
+
+bool Join::hasPartitionSpilled()
+{
+    return !spilled_partition_indexes.empty();
+}
+
+RestoreInfo Join::getOneRestoreStream(size_t max_block_size)
+{
+    std::unique_lock lock(build_probe_mutex);
+    if (meet_error)
+        throw Exception(error_message);
+    try
+    {
+        LOG_DEBUG(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_non_joined_data_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_non_joined_data_streams.size()));
+        assert(restore_build_streams.size() == restore_probe_streams.size() && restore_build_streams.size() == restore_non_joined_data_streams.size());
+        auto get_back_stream = [](BlockInputStreams & streams) {
+            BlockInputStreamPtr stream = streams.back();
+            streams.pop_back();
+            return stream;
+        };
+        if (!restore_build_streams.empty())
+        {
+            auto build_stream = get_back_stream(restore_build_streams);
+            auto probe_stream = get_back_stream(restore_probe_streams);
+            auto non_joined_data_stream = get_back_stream(restore_non_joined_data_streams);
+            if (restore_build_streams.empty())
+            {
+                spilled_partition_indexes.pop_front();
+            }
+            return {restore_join, non_joined_data_stream, build_stream, probe_stream};
+        }
+        if (spilled_partition_indexes.empty())
+        {
+            return {};
+        }
+        auto spilled_partition_index = spilled_partition_indexes.front();
+        RUNTIME_CHECK_MSG(partitions[spilled_partition_index]->spill, "should not restore unspilled partition.");
+        if (restore_join_build_concurrency <= 0)
+            restore_join_build_concurrency = getRestoreJoinBuildConcurrency(partitions.size(), spilled_partition_indexes.size(), join_restore_concurrency, probe_concurrency);
+        /// for restore join we make sure that the bulid concurrency is at least 2, so it can be spill again
+        assert(restore_join_build_concurrency >= 2);
+        LOG_DEBUG(log, "partition {}, round {}, build concurrency {}", spilled_partition_index, restore_round, restore_join_build_concurrency);
+        restore_build_streams = build_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
+        restore_probe_streams = probe_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
+        restore_non_joined_data_streams.resize(restore_join_build_concurrency, nullptr);
+        RUNTIME_CHECK_MSG(restore_build_streams.size() == static_cast<size_t>(restore_join_build_concurrency), "restore streams size must equal to restore_join_build_concurrency");
+        auto new_max_bytes_before_external_join = static_cast<size_t>(max_bytes_before_external_join * (static_cast<double>(restore_join_build_concurrency) / build_concurrency));
+        restore_join = createRestoreJoin(std::max(1, new_max_bytes_before_external_join));
+        restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
+        restore_join->setInitActiveBuildConcurrency();
+        restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
+        for (Int64 i = 0; i < restore_join_build_concurrency; i++)
+        {
+            restore_build_streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(restore_build_streams[i], restore_join, i, log->identifier());
+        }
+        auto build_stream = get_back_stream(restore_build_streams);
+        auto probe_stream = get_back_stream(restore_probe_streams);
+        if (restore_build_streams.empty())
+        {
+            spilled_partition_indexes.pop_front();
+        }
+        if (needReturnNonJoinedData())
+        {
+            for (Int64 i = 0; i < restore_join_build_concurrency; i++)
+                restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size);
+        }
+        auto non_joined_data_stream = get_back_stream(restore_non_joined_data_streams);
+        return {restore_join, non_joined_data_stream, build_stream, probe_stream};
+    }
+    catch (...)
+    {
+        restore_build_streams.clear();
+        restore_probe_streams.clear();
+        restore_non_joined_data_streams.clear();
+        auto err_message = getCurrentExceptionMessage(false, true);
+        meetErrorImpl(err_message, lock);
+        throw Exception(err_message);
+    }
+}
+
+void Join::dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>> & partition_blocks_list)
+{
+    Blocks partition_blocks = dispatchBlock(key_names_left, block);
+    for (size_t i = 0; i < partition_blocks.size(); ++i)
+    {
+        if (partition_blocks[i].rows() == 0)
+            continue;
+        Blocks blocks_to_spill;
+        bool need_spill = false;
+        {
+            std::unique_lock partition_lock(partitions[i]->partition_mutex);
+            if (getPartitionSpilled(i))
+            {
+                //                insertBlockToProbePartition(std::move(partition_blocks[i]), i);
+                partitions[i]->insertBlockForProbe(std::move(partition_blocks[i]));
+                blocks_to_spill = trySpillProbePartition(i, false, partition_lock);
+                need_spill = true;
+            }
+        }
+        if (need_spill)
+        {
+            probe_spiller->spillBlocks(std::move(blocks_to_spill), i);
+        }
+        else
+            partition_blocks_list.push_back({i, partition_blocks[i]});
+    }
+}
+
+Blocks Join::trySpillBuildPartition(size_t partition_index, bool force, std::unique_lock<std::mutex> & partition_lock)
+{
+    const auto & join_partition = partitions[partition_index];
+    if (join_partition->spill
+        && ((force && join_partition->build_partition.bytes) || join_partition->build_partition.bytes >= build_spill_config.max_cached_data_bytes_in_spiller))
+    {
+        auto ret = join_partition->build_partition.original_blocks;
+        releaseBuildPartitionBlocks(partition_index, partition_lock);
+        if unlikely (join_partition->memory_usage != 0)
+        {
+            join_partition->memory_usage = 0;
+            LOG_WARNING(log, "Incorrect memory usage after spill");
+        }
+        return ret;
+    }
+    else
+    {
+        return {};
+    }
+}
+
+void Join::trySpillBuildPartitions(bool force)
+{
+    for (size_t i = 0; i < partitions.size(); ++i)
+    {
+        Blocks blocks_to_spill;
+        {
+            std::unique_lock partition_lock(partitions[i]->partition_mutex);
+            blocks_to_spill = trySpillBuildPartition(i, force, partition_lock);
+        }
+        build_spiller->spillBlocks(std::move(blocks_to_spill), i);
+    }
+}
+
+Blocks Join::trySpillProbePartition(size_t partition_index, bool force, std::unique_lock<std::mutex> & partition_lock)
+{
+    const auto & join_partition = partitions[partition_index];
+    if (join_partition->spill && ((force && join_partition->probe_partition.bytes) || join_partition->probe_partition.bytes >= probe_spill_config.max_cached_data_bytes_in_spiller))
+    {
+        auto ret = partitions[partition_index]->probe_partition.blocks;
+        releaseProbePartitionBlocks(partition_index, partition_lock);
+        if unlikely (join_partition->memory_usage != 0)
+        {
+            join_partition->memory_usage = 0;
+            LOG_WARNING(log, "Incorrect memory usage after spill");
+        }
+        return ret;
+    }
+    else
+        return {};
+}
+
+void Join::trySpillProbePartitions(bool force)
+{
+    for (size_t i = 0; i < partitions.size(); ++i)
+    {
+        Blocks blocks_to_spill;
+        {
+            std::unique_lock partition_lock(partitions[i]->partition_mutex);
+            blocks_to_spill = trySpillProbePartition(i, force, partition_lock);
+        }
+        probe_spiller->spillBlocks(std::move(blocks_to_spill), i);
+    }
+}
+
+void Join::releaseBuildPartitionBlocks(size_t partition_index, std::unique_lock<std::mutex> &)
+{
+    const auto & join_partition = partitions[partition_index];
+    if likely (join_partition->memory_usage >= join_partition->build_partition.bytes)
+        join_partition->memory_usage -= join_partition->build_partition.bytes;
+    else
+        join_partition->memory_usage = 0;
+    join_partition->build_partition.bytes = 0;
+    join_partition->build_partition.rows = 0;
+    join_partition->build_partition.blocks.clear();
+    join_partition->build_partition.original_blocks.clear();
+}
+
+void Join::releaseBuildPartitionHashTable(size_t partition_index, std::unique_lock<std::mutex> &)
+{
+    size_t map_bytes = clearMapPartition(maps_any, type, partition_index);
+    map_bytes += clearMapPartition(maps_all, type, partition_index);
+    map_bytes += clearMapPartition(maps_any_full, type, partition_index);
+    map_bytes += clearMapPartition(maps_all_full, type, partition_index);
+    const auto & join_partition = partitions[partition_index];
+    if (getFullness(kind))
+    {
+        rows_not_inserted_to_map[partition_index] = RowsNotInsertToMap(max_block_size);
+    }
+    size_t pool_bytes = join_partition->pool->size();
+    join_partition->pool.reset();
+    if likely (join_partition->memory_usage >= map_bytes + pool_bytes)
+        join_partition->memory_usage -= (map_bytes + pool_bytes);
+    else
+        join_partition->memory_usage = 0;
+}
+
+void Join::releaseProbePartitionBlocks(size_t partition_index, std::unique_lock<std::mutex> &)
+{
+    const auto & join_partition = partitions[partition_index];
+    join_partition->probe_partition.blocks.clear();
+    if likely (join_partition->memory_usage >= join_partition->probe_partition.bytes)
+        join_partition->memory_usage -= join_partition->probe_partition.bytes;
+    else
+        join_partition->memory_usage = 0;
+    join_partition->probe_partition.bytes = 0;
+    join_partition->probe_partition.rows = 0;
+}
+
+void Join::releaseAllPartitions()
+{
+    for (size_t i = 0; i < partitions.size(); ++i)
+    {
+        std::unique_lock partition_lock(partitions[i]->partition_mutex);
+        releaseBuildPartitionBlocks(i, partition_lock);
+        releaseProbePartitionBlocks(i, partition_lock);
+        if (!partitions[i]->spill)
+        {
+            releaseBuildPartitionHashTable(i, partition_lock);
+        }
+    }
+}
+
+void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
 {
     block = std::move(block_);
+    partition_index = partition_index_;
     start_row = 0;
     end_row = 0;
     all_rows_joined_finish = false;

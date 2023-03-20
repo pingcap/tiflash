@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/Page/V3/Universal/RaftDataReader.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 
 namespace DB
 {
@@ -36,7 +37,33 @@ void RaftDataReader::traverse(const UniversalPageId & start, const UniversalPage
     for (const auto & page_id : page_ids)
     {
         const auto page_id_and_entry = uni_ps.page_directory->getByID(page_id, snapshot);
-        acceptor(page_id, uni_ps.blob_store->read(page_id_and_entry));
+        const auto & checkpoint_info = page_id_and_entry.second.checkpoint_info;
+        if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
+        {
+            acceptor(page_id_and_entry.first, uni_ps.remote_reader->read(page_id_and_entry));
+        }
+        else
+        {
+            acceptor(page_id_and_entry.first, uni_ps.blob_store->read(page_id_and_entry));
+        }
+    }
+}
+
+void RaftDataReader::traverseRemoteRaftLogForRegion(UInt64 region_id, const std::function<void(const UniversalPageId & page_id, PageSize size, const PS::V3::CheckpointLocation & location)> & acceptor)
+{
+    auto start = UniversalPageIdFormat::toFullRaftLogPrefix(region_id);
+    auto end = UniversalPageIdFormat::toFullRaftLogScanEnd(region_id);
+    auto snapshot = uni_ps.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
+    const auto page_ids = uni_ps.page_directory->getAllPageIdsInRange(start, end, snapshot);
+    for (const auto & page_id : page_ids)
+    {
+        // TODO: change it when support key space
+        // 20 = 1(RAFT_PREFIX) + 1(LOCAL_PREFIX) + 1(REGION_RAFT_PREFIX) + 8(region id) + 1(RAFT_LOG_SUFFIX) + 8(raft log index)
+        RUNTIME_CHECK(page_id.size() == 20, page_id.size());
+        auto maybe_location = uni_ps.getCheckpointLocation(page_id, snapshot);
+        RUNTIME_CHECK(maybe_location.has_value());
+        auto entry = uni_ps.getEntry(page_id, snapshot);
+        acceptor(page_id, entry.size, *maybe_location);
     }
 }
 

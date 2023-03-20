@@ -102,6 +102,7 @@ struct StorageS3Config
     UInt64 max_connections = 1024;
     UInt64 connection_timeout_ms = 1000;
     UInt64 request_timeout_ms = 3000;
+    String root;
 
     inline static String S3_ACCESS_KEY_ID = "S3_ACCESS_KEY_ID";
     inline static String S3_SECRET_ACCESS_KEY = "S3_SECRET_ACCESS_KEY";
@@ -137,6 +138,7 @@ public:
 
     UInt64 format_version = 0;
     bool lazily_init_store = true;
+    UInt64 api_version = 1;
 
     StorageS3Config s3_config;
     StorageRemoteCacheConfig remote_cache_config;

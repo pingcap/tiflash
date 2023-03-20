@@ -72,6 +72,12 @@ metapb::Peer RegionMeta::getPeer() const
     return peer;
 }
 
+void RegionMeta::setPeer(metapb::Peer && p)
+{
+    std::lock_guard lock(mutex);
+    peer = p;
+}
+
 raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
 {
     std::lock_guard lock(mutex);
