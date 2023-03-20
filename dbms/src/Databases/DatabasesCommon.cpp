@@ -27,7 +27,7 @@
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
-
+#include <future>
 #include <sstream>
 #include "Common/UniThreadPool.h"
 
@@ -374,6 +374,8 @@ void startupTables(IDatabase & database, const String & db_name, Tables & tables
     std::mutex failed_tables_mutex;
     Tables tables_failed_to_startup;
 
+    std::vector<std::future<void>> futures;
+
     auto task_function = [&](Tables::iterator begin, Tables::iterator end) {
         for (auto it = begin; it != end; ++it)
         {
@@ -419,20 +421,30 @@ void startupTables(IDatabase & database, const String & db_name, Tables & tables
         else
             std::advance(end, bunch_size);
 
-        auto task = [&task_function, begin, end] {
+        auto task = std::make_shared<std::packaged_task<void()>>([&task_function, begin, end] {
             task_function(begin, end);
-        };
+        });
+        // auto task = [&task_function, begin, end] {
+        //     task_function(begin, end);
+        // };
 
-        if (thread_pool)
-            thread_pool->scheduleOrThrowOnError(task);
+        if (thread_pool){
+            futures.emplace_back(task->get_future());
+            thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
+        } 
         else
-            task();
+            (*task)();
 
         begin = end;
     }
 
-    if (thread_pool)
-        thread_pool->wait();
+    // if (thread_pool)
+    //     thread_pool->wait();
+    if (thread_pool){
+        for (auto & f : futures) {
+            f.get();
+        }      
+    }
 
     // Cleanup to asure the atomic of renaming
     cleanupTables(database, db_name, tables_failed_to_startup, log);

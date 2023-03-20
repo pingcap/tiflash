@@ -33,6 +33,7 @@
 #include <Storages/Transaction/TMTStorages.h>
 #include <common/logger_useful.h>
 #include "Common/UniThreadPool.h"
+#include <future>
 
 namespace DB
 {
@@ -122,6 +123,8 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};
 
+    std::vector<std::future<void>> futures;
+
     auto task_function = [&](std::vector<String>::const_iterator begin, std::vector<String>::const_iterator end) {
         for (auto it = begin; it != end; ++it)
         {
@@ -152,18 +155,26 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
         auto begin = table_files.begin() + i * bunch_size;
         auto end = (i + 1 == num_bunches) ? table_files.end() : (table_files.begin() + (i + 1) * bunch_size);
 
-        auto task = [&task_function, begin, end] {
+        auto task = std::make_shared<std::packaged_task<void()>>([&task_function, begin, end] {
             task_function(begin, end);
-        };
-        if (thread_pool)
-            thread_pool->scheduleOrThrowOnError(task);
+        });
+        // auto task = [&task_function, begin, end] {
+        //     task_function(begin, end);
+        // };
+        if (thread_pool){
+            futures.emplace_back(task->get_future());
+            thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
+        } 
         else
-            task();
+            (*task)();
     }
 
-    if (thread_pool)
-        thread_pool->wait();
-
+    if (thread_pool){
+        for (auto & f : futures) {
+            f.get();
+        }      
+    }
+        // thread_pool->wait();
     // After all tables was basically initialized, startup them.
     DatabaseLoading::startupTables(*this, name, tables, thread_pool, log);
 }

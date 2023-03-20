@@ -859,7 +859,7 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     // Note: Global Thread Pool must be larger than sub thread pools.
     GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 20);
     GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count);
-    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 8);
+    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 40);
 
     if (RNPagePreparerPool::instance)
     {
