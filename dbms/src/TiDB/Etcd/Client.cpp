@@ -189,7 +189,8 @@ Client::campaign(const String & name, const String & value, LeaseID lease_id)
     req.set_lease(lease_id);
 
     grpc::ClientContext context;
-    context.set_deadline(std::chrono::system_clock::now() + timeout);
+    // usually use `campaign` blocks until become leader or error happens,
+    // don't set timeout.
 
     v3electionpb::CampaignResponse resp;
     auto status = leaderClient()->election_stub->Campaign(&context, req, &resp);

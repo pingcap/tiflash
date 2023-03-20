@@ -64,7 +64,7 @@ inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf, bool 
     }
 }
 
-inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry, bool has_checkpoint_info)
+inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry, bool has_checkpoint_info, DataFileIdSet * data_file_id_set)
 {
     readIntBinary(entry.file_id, buf);
     readIntBinary(entry.offset, buf);
@@ -97,8 +97,23 @@ inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry, bool has
         readIntBinary(checkpoint_info.data_location.size_in_file, buf);
         String data_file_id;
         readStringBinary(data_file_id, buf);
-        // TODO: different entries' data_file_id could be highly duplicated, try to reuse the ptr to reduce memory overhead later.
-        checkpoint_info.data_location.data_file_id = std::make_shared<String>(data_file_id);
+        if (data_file_id_set != nullptr)
+        {
+            auto iter = data_file_id_set->find(data_file_id);
+            if (iter != data_file_id_set->end())
+            {
+                checkpoint_info.data_location.data_file_id = *iter;
+            }
+            else
+            {
+                checkpoint_info.data_location.data_file_id = std::make_shared<String>(data_file_id);
+                data_file_id_set->emplace(checkpoint_info.data_location.data_file_id);
+            }
+        }
+        else
+        {
+            checkpoint_info.data_location.data_file_id = std::make_shared<String>(data_file_id);
+        }
         entry.checkpoint_info = checkpoint_info;
     }
 }
@@ -156,7 +171,7 @@ void serializePutTo(const EditRecord & record, WriteBuffer & buf)
 }
 
 template <typename EditType>
-void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, EditType & edit)
+void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, EditType & edit, DataFileIdSet * data_file_id_set)
 {
     assert(record_type == EditRecordType::PUT || record_type == EditRecordType::UPSERT || record_type == EditRecordType::VAR_ENTRY || record_type == EditRecordType::UPDATE_DATA_FROM_REMOTE);
 
@@ -176,7 +191,7 @@ void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadB
     }
     deserializeVersionFrom(buf, rec.version);
     readIntBinary(rec.being_ref_count, buf);
-    deserializeEntryFrom(buf, rec.entry, has_checkpoint_info);
+    deserializeEntryFrom(buf, rec.entry, has_checkpoint_info, data_file_id_set);
 
     edit.appendRecord(rec);
 }
@@ -289,7 +304,7 @@ void deserializePutExternalFrom([[maybe_unused]] const EditRecordType record_typ
             readIntBinary(checkpoint_info.data_location.size_in_file, buf);
             String data_file_id;
             readStringBinary(data_file_id, buf);
-            // TODO: different entries' data_file_id could be highly duplicated, try to reuse the ptr to reduce memory overhead later.
+            // TODO: The `data_file_id` of external id is the lock key of DTFile, so it should almost have no duplication.
             checkpoint_info.data_location.data_file_id = std::make_shared<String>(data_file_id);
             rec.entry.checkpoint_info = checkpoint_info;
         }
@@ -335,7 +350,7 @@ void deserializeDelFrom([[maybe_unused]] const EditRecordType record_type, ReadB
 }
 
 template <typename EditType>
-void deserializeFrom(ReadBuffer & buf, EditType & edit)
+void deserializeFrom(ReadBuffer & buf, EditType & edit, DataFileIdSet * data_file_id_set)
 {
     EditRecordType record_type;
     while (!buf.eof())
@@ -348,7 +363,7 @@ void deserializeFrom(ReadBuffer & buf, EditType & edit)
         case EditRecordType::VAR_ENTRY:
         case EditRecordType::UPDATE_DATA_FROM_REMOTE:
         {
-            deserializePutFrom(record_type, buf, edit);
+            deserializePutFrom(record_type, buf, edit, data_file_id_set);
             break;
         }
         case EditRecordType::REF:
@@ -445,7 +460,7 @@ String Serializer<PageEntriesEdit>::serializeInCompressedFormTo(const PageEntrie
 
 
 template <typename PageEntriesEdit>
-PageEntriesEdit Serializer<PageEntriesEdit>::deserializeFrom(std::string_view record)
+PageEntriesEdit Serializer<PageEntriesEdit>::deserializeFrom(std::string_view record, DataFileIdSet * data_file_id_set)
 {
     PageEntriesEdit edit;
     ReadBufferFromMemory buf(record.data(), record.size());
@@ -454,12 +469,12 @@ PageEntriesEdit Serializer<PageEntriesEdit>::deserializeFrom(std::string_view re
     switch (version)
     {
     case WALSerializeVersion::Plain:
-        DB::PS::V3::deserializeFrom(buf, edit);
+        DB::PS::V3::deserializeFrom(buf, edit, data_file_id_set);
         break;
     case WALSerializeVersion::LZ4:
     {
         CompressedReadBuffer compressed_buf(buf);
-        DB::PS::V3::deserializeFrom(compressed_buf, edit);
+        DB::PS::V3::deserializeFrom(compressed_buf, edit, data_file_id_set);
         break;
     }
     default:

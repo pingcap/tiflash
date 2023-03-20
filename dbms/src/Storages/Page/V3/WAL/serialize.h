@@ -26,12 +26,34 @@ enum WALSerializeVersion : UInt32
     LZ4 = 2,
 };
 
+struct Comparator
+{
+    using is_transparent = void;
+
+    bool operator()(const std::shared_ptr<const String> & p1, const std::shared_ptr<const String> & p2) const
+    {
+        return *p1 < *p2;
+    }
+
+    bool operator()(const std::shared_ptr<const String> & p, const String & value) const
+    {
+        return *p < value;
+    }
+
+    bool operator()(const String & value, const std::shared_ptr<const String> & p) const
+    {
+        return value < *p;
+    }
+};
+
+using DataFileIdSet = std::set<std::shared_ptr<const String>, Comparator>;
+
 template <typename PageEntriesEdit>
 struct Serializer
 {
     static String serializeTo(const PageEntriesEdit & edit);
     static String serializeInCompressedFormTo(const PageEntriesEdit & edit);
-    static PageEntriesEdit deserializeFrom(std::string_view record);
+    static PageEntriesEdit deserializeFrom(std::string_view record, DataFileIdSet * data_file_id_set);
 };
 
 namespace u128

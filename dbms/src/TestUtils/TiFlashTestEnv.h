@@ -24,16 +24,16 @@
 #include <TestUtils/TiFlashTestException.h>
 #include <fmt/core.h>
 
-namespace Aws::S3
-{
-class S3Client;
-}
 
 namespace DB
 {
 struct Settings;
 class DAGContext;
 class MockStorage;
+namespace S3
+{
+class TiFlashS3Client;
+}
 } // namespace DB
 
 namespace DB::tests
@@ -105,9 +105,9 @@ public:
 
     static FileProviderPtr getMockFileProvider();
 
-    static bool createBucketIfNotExist(Aws::S3::S3Client & s3_client, const String & bucket);
+    static bool createBucketIfNotExist(::DB::S3::TiFlashS3Client & s3_client);
 
-    static void deleteBucket(Aws::S3::S3Client & s3_client, const String & bucket);
+    static void deleteBucket(::DB::S3::TiFlashS3Client & s3_client);
 
     TiFlashTestEnv() = delete;
 

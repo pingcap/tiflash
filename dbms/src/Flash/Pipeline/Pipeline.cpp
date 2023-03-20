@@ -251,6 +251,10 @@ bool Pipeline::isSupported(const tipb::DAGRequest & dag_request)
             case tipb::ExecType::TypeExpand:
             case tipb::ExecType::TypeAggregation:
                 return true;
+            case tipb::ExecType::TypeAggregation:
+                // TODO support fine grained shuffle.
+                if (!FineGrainedShuffle(&executor).enable())
+                    return true;
             default:
                 is_supported = false;
                 return false;

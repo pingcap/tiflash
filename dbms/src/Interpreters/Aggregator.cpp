@@ -1766,7 +1766,8 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(params.keys_size, "");
 
-    typename Method::State state(key_columns, key_sizes, params.collators);
+    /// in merge stage, don't need to care about the collator because the key is already the sort_key of original string
+    typename Method::State state(key_columns, key_sizes, {});
 
     /// For all rows.
     size_t rows = block.rows();

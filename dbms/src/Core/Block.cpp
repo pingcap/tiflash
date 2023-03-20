@@ -530,14 +530,16 @@ Block hstackBlocks(Blocks && blocks, const Block & header)
         return {};
 
     Block res = header.cloneEmpty();
-
     size_t num_rows = blocks.front().rows();
     for (const auto & block : blocks)
     {
         RUNTIME_CHECK_MSG(block.rows() == num_rows, "Cannot hstack blocks with different number of rows");
         for (const auto & elem : block)
         {
-            res.getByName(elem.name).column = std::move(elem.column);
+            if (likely(res.has(elem.name)))
+            {
+                res.getByName(elem.name).column = std::move(elem.column);
+            }
         }
     }
 
@@ -662,12 +664,12 @@ void getBlocksDifference(const Block & lhs, const Block & rhs, std::string & out
     WriteBufferFromString lhs_diff_writer(out_lhs_diff);
     WriteBufferFromString rhs_diff_writer(out_rhs_diff);
 
-    for (auto it = left_columns.rbegin(); it != left_columns.rend(); ++it)
+    for (auto it = left_columns.rbegin(); it != left_columns.rend(); ++it) // NOLINT
     {
         lhs_diff_writer << it->dumpStructure();
         lhs_diff_writer << ", position: " << lhs.getPositionByName(it->name) << '\n';
     }
-    for (auto it = right_columns.rbegin(); it != right_columns.rend(); ++it)
+    for (auto it = right_columns.rbegin(); it != right_columns.rend(); ++it) // NOLINT
     {
         rhs_diff_writer << it->dumpStructure();
         rhs_diff_writer << ", position: " << rhs.getPositionByName(it->name) << '\n';
