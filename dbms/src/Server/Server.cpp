@@ -849,6 +849,7 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 {
     // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
     size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
+    LOG_INFO(&Poco::Logger::get("hyy_adjustThreadPoolSize"), "max_io_thread_count is {}", max_io_thread_count);
 
     // Note: Global Thread Pool must be larger than sub thread pools.
     GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 20);

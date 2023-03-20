@@ -114,7 +114,7 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, ssize_t priority, std::
         else
             return false;
     };
-    LOG_INFO(&Poco::Logger::get("hyy_threadpool"), "into scheduleImpl");
+    LOG_INFO(&Poco::Logger::get("hyy_threadpool"), "into scheduleImpl with {}");
     {
         std::unique_lock lock(mutex);
         LOG_INFO(&Poco::Logger::get("hyy_threadpool"), "into scheduleImpl mutex lock");
@@ -125,6 +125,7 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, ssize_t priority, std::
 
         if (wait_microseconds) /// Check for optional. Condition is true if the optional is set and the value is zero.
         {
+            LOG_INFO(&Poco::Logger::get("hyy_threadpool"), "with wait_microseconds");
             if (!job_finished.wait_for(lock, std::chrono::microseconds(*wait_microseconds), pred))
                 return on_error(fmt::format("no free thread (timeout={})", *wait_microseconds));
         }
