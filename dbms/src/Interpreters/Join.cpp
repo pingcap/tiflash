@@ -57,46 +57,6 @@ extern const int ILLEGAL_COLUMN;
 
 namespace
 {
-/// Do I need to use the hash table maps_*_full, in which we remember whether the row was joined.
-bool getFullness(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Full;
-}
-bool isLeftJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Cross_Left;
-}
-bool isRightJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right;
-}
-bool isInnerJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Cross;
-}
-bool isAntiJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti;
-}
-bool isCrossJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Cross || kind == ASTTableJoin::Kind::Cross_Left
-        || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Cross_Anti
-        || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
-}
-/// (cartesian/null-aware) (anti) left semi join.
-bool isLeftSemiFamily(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::LeftSemi || kind == ASTTableJoin::Kind::LeftAnti
-        || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti
-        || kind == ASTTableJoin::Kind::NullAware_LeftSemi || kind == ASTTableJoin::Kind::NullAware_LeftAnti;
-}
-bool isNullAwareSemiFamily(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::NullAware_Anti || kind == ASTTableJoin::Kind::NullAware_LeftAnti
-        || kind == ASTTableJoin::Kind::NullAware_LeftSemi;
-}
-
 ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block)
 {
     size_t keys_size = key_names.size();
@@ -222,9 +182,7 @@ Join::Join(
     const SpillConfig & probe_spill_config_,
     Int64 join_restore_concurrency_,
     const TiDB::TiDBCollators & collators_,
-    const String & left_filter_column_,
-    const String & right_filter_column_,
-    const JoinOtherConditions & other_conditions,
+    const JoinNonEqualConditions & non_equal_conditions_,
     size_t max_block_size_,
     const String & match_helper_name,
     size_t restore_round_,
@@ -240,9 +198,7 @@ Join::Join(
     , probe_concurrency(0)
     , active_probe_concurrency(0)
     , collators(collators_)
-    , left_filter_column(left_filter_column_)
-    , right_filter_column(right_filter_column_)
-    , other_conditions(other_conditions)
+    , non_equal_conditions(non_equal_conditions_)
     , original_strictness(strictness)
     , max_block_size(max_block_size_)
     , max_bytes_before_external_join(max_bytes_before_external_join_)
@@ -254,7 +210,7 @@ Join::Join(
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
-    if (other_conditions.other_cond_expr != nullptr)
+    if (non_equal_conditions.other_cond_expr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
         if (strictness == ASTTableJoin::Strictness::Any)
@@ -262,12 +218,8 @@ Join::Join(
             strictness = ASTTableJoin::Strictness::All;
         }
     }
-    if (unlikely(!left_filter_column.empty() && !isLeftJoin(kind)))
-        throw Exception("Not supported: non left join with left conditions");
-    if (unlikely(!right_filter_column.empty() && !isRightJoin(kind)))
-        throw Exception("Not supported: non right join with right conditions");
 
-    String err = other_conditions.validate(isNullAwareSemiFamily(kind));
+    String err = non_equal_conditions.validate(kind);
     if (unlikely(!err.empty()))
         throw Exception("Validate join conditions error: {}" + err);
 
@@ -732,9 +684,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         createSpillConfigWithNewSpillId(probe_spill_config, fmt::format("{}_hash_join_{}_probe", log->identifier(), restore_round + 1)),
         join_restore_concurrency,
         collators,
-        left_filter_column,
-        right_filter_column,
-        other_conditions,
+        non_equal_conditions,
         max_block_size,
         match_helper_name,
         restore_round + 1,
@@ -1269,7 +1219,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
     /// Reuse null_map to record the filtered rows, the rows contains NULL or does not
     /// match the join filter will not insert to the maps
-    recordFilteredRows(block, right_filter_column, null_map_holder, null_map);
+    recordFilteredRows(block, non_equal_conditions.right_filter_column, null_map_holder, null_map);
 
     if (getFullness(kind))
     {
@@ -1746,14 +1696,14 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
  */
 void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & anti_filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_columns) const
 {
-    other_conditions.other_cond_expr->execute(block);
+    non_equal_conditions.other_cond_expr->execute(block);
 
     auto filter_column = ColumnUInt8::create();
     auto & filter = filter_column->getData();
     filter.assign(block.rows(), static_cast<UInt8>(1));
-    if (!other_conditions.other_cond_name.empty())
+    if (!non_equal_conditions.other_cond_name.empty())
     {
-        mergeNullAndFilterResult(block, filter, other_conditions.other_cond_name, false);
+        mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
     }
 
     ColumnUInt8::Container row_filter(filter.size(), 0);
@@ -1782,9 +1732,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
         /// nullmap and data of `other_eq_filter_from_in_column`.
         const ColumnUInt8::Container *eq_in_vec = nullptr, *eq_in_nullmap = nullptr;
-        if (!other_conditions.other_eq_cond_from_in_name.empty())
+        if (!non_equal_conditions.other_eq_cond_from_in_name.empty())
         {
-            auto orig_filter_column = block.getByName(other_conditions.other_eq_cond_from_in_name).column;
+            auto orig_filter_column = block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column;
             if (orig_filter_column->isColumnConst())
                 orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
             if (orig_filter_column->isColumnNullable())
@@ -1840,13 +1790,13 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         return;
     }
 
-    if (!other_conditions.other_eq_cond_from_in_name.empty())
+    if (!non_equal_conditions.other_eq_cond_from_in_name.empty())
     {
         /// other_eq_filter_from_in_column is used in anti semi join:
         /// if there is a row that return null or false for other_condition, then for anti semi join, this row should be returned.
         /// otherwise, it will check other_eq_filter_from_in_column, if other_eq_filter_from_in_column return false, this row should
         /// be returned, if other_eq_filter_from_in_column return true or null this row should not be returned.
-        mergeNullAndFilterResult(block, filter, other_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
+        mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
     }
 
     if (isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All)
@@ -1942,7 +1892,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
     /// reuse null_map to record the filtered rows, the rows contains NULL or does not
     /// match the join filter won't join to anything
-    recordFilteredRows(block, left_filter_column, null_map_holder, null_map);
+    recordFilteredRows(block, non_equal_conditions.left_filter_column, null_map_holder, null_map);
 
     size_t existing_columns = block.columns();
 
@@ -2085,7 +2035,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     }
 
     /// handle other conditions
-    if (!other_conditions.other_cond_name.empty() || !other_conditions.other_eq_cond_from_in_name.empty())
+    if (!non_equal_conditions.other_cond_name.empty() || !non_equal_conditions.other_eq_cond_from_in_name.empty())
     {
         if (!offsets_to_replicate)
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
@@ -2258,7 +2208,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
         right_table_rows += block_right.rows();
 
     size_t left_rows_per_iter = std::max(rows_left, 1);
-    if (max_block_size > 0 && right_table_rows > 0 && other_conditions.other_cond_expr != nullptr
+    if (max_block_size > 0 && right_table_rows > 0 && non_equal_conditions.other_cond_expr != nullptr
         && CrossJoinAdder<KIND, STRICTNESS>::allRightRowsMaybeAdded())
     {
         /// if other_condition is not null, and all right columns maybe added during join, try to use multiple iter
@@ -2308,7 +2258,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
             }
         }
         auto block_per_iter = block.cloneWithColumns(std::move(dst_columns));
-        if (other_conditions.other_cond_expr != nullptr)
+        if (non_equal_conditions.other_cond_expr != nullptr)
             handleOtherConditions(block_per_iter, is_row_matched, expanded_row_size_after_join, right_column_index);
         if (start == 0 || block_per_iter.rows() > 0)
             /// always need to generate at least one block
@@ -2331,7 +2281,7 @@ void Join::joinBlockImplCross(Block & block) const
     size_t rows_left = block.rows();
     ColumnPtr null_map_holder;
     ConstNullMapPtr null_map{};
-    recordFilteredRows(block, left_filter_column, null_map_holder, null_map);
+    recordFilteredRows(block, non_equal_conditions.left_filter_column, null_map_holder, null_map);
 
     std::unique_ptr<IColumn::Filter> filter = std::make_unique<IColumn::Filter>(rows_left);
     std::unique_ptr<IColumn::Offsets> offsets_to_replicate = std::make_unique<IColumn::Offsets>(rows_left);
@@ -2376,7 +2326,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const BlocksList & right_blocks,
     const std::vector<Join::RowsNotInsertToMap> & null_rows,
     size_t max_block_size,
-    const JoinOtherConditions & other_conditions,
+    const JoinNonEqualConditions & non_equal_conditions,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     const ConstNullMapPtr & null_map,
@@ -2530,7 +2480,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             right_blocks,
             null_rows,
             max_block_size,
-            other_conditions);
+            non_equal_conditions);
 
         helper.joinResult(res_list);
 
@@ -2624,7 +2574,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const BlocksList & right_blocks,
     const std::vector<Join::RowsNotInsertToMap> & null_rows,
     size_t max_block_size,
-    const JoinOtherConditions & other_conditions,
+    const JoinNonEqualConditions & non_equal_conditions,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     const ConstNullMapPtr & null_map,
@@ -2643,7 +2593,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
         right_blocks,                                                                               \
         null_rows,                                                                                  \
         max_block_size,                                                                             \
-        other_conditions,                                                                           \
+        non_equal_conditions,                                                                       \
         key_columns,                                                                                \
         key_sizes,                                                                                  \
         null_map,                                                                                   \
@@ -2712,7 +2662,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
 
     ColumnPtr filter_map_holder;
     ConstNullMapPtr filter_map{};
-    recordFilteredRows(block, left_filter_column, filter_map_holder, filter_map);
+    recordFilteredRows(block, non_equal_conditions.left_filter_column, filter_map_holder, filter_map);
 
     size_t existing_columns = block.columns();
 
@@ -2737,7 +2687,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             blocks,                                                                                                                                     \
             rows_not_inserted_to_map,                                                                                                                   \
             max_block_size,                                                                                                                             \
-            other_conditions,                                                                                                                           \
+            non_equal_conditions,                                                                                                                       \
             key_columns,                                                                                                                                \
             key_sizes,                                                                                                                                  \
             null_map,                                                                                                                                   \

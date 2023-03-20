@@ -18,7 +18,6 @@
 
 namespace DB
 {
-
 using enum ASTTableJoin::Strictness;
 using enum ASTTableJoin::Kind;
 
@@ -206,7 +205,7 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     const BlocksList & right_blocks_,
     const std::vector<Join::RowsNotInsertToMap> & null_rows_,
     size_t max_block_size_,
-    const JoinOtherConditions & other_conditions_)
+    const JoinNonEqualConditions & other_conditions_)
     : block(block_)
     , left_columns(left_columns_)
     , right_columns(right_columns_)

@@ -22,7 +22,6 @@
 
 namespace DB
 {
-
 enum class NASemiJoinStep : UInt8
 {
     /// Check other conditions for the right rows whose join key are equal to this left row.
@@ -135,7 +134,7 @@ public:
         const BlocksList & right_blocks,
         const std::vector<Join::RowsNotInsertToMap> & null_rows,
         size_t max_block_size,
-        const JoinOtherConditions & other_conditions);
+        const JoinNonEqualConditions & other_conditions);
 
     void joinResult(std::list<Result *> & res_list);
 
@@ -156,7 +155,7 @@ private:
     const std::vector<Join::RowsNotInsertToMap> & null_rows;
     size_t max_block_size;
 
-    const JoinOtherConditions & other_conditions;
+    const JoinNonEqualConditions & other_conditions;
 };
 
 } // namespace DB

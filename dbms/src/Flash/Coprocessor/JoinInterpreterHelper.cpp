@@ -190,40 +190,38 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTy
     return collators;
 }
 
-JoinOtherConditions doGenJoinOtherConditionsAction(
+void doFillJoinOtherConditionsAction(
     const Context & context,
     const TiFlashJoin & tiflash_join,
     const NamesAndTypes & source_columns,
     const Names & probe_key_names,
-    const Names & build_key_names)
+    const Names & build_key_names,
+    JoinNonEqualConditions & join_non_equal_conditions)
 {
     const tipb::Join & join = tiflash_join.join;
     if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0 && !join.is_null_aware_semi_join())
-        return {};
+        return;
 
     DAGExpressionAnalyzer dag_analyzer(source_columns, context);
     ExpressionActionsChain chain;
 
-    JoinOtherConditions cond;
     if (join.other_conditions_size() > 0)
-        cond.other_cond_name = dag_analyzer.appendWhere(chain, join.other_conditions());
+        join_non_equal_conditions.other_cond_name = dag_analyzer.appendWhere(chain, join.other_conditions());
 
     if (join.other_eq_conditions_from_in_size() > 0)
-        cond.other_eq_cond_from_in_name = dag_analyzer.appendWhere(chain, join.other_eq_conditions_from_in());
+        join_non_equal_conditions.other_eq_cond_from_in_name = dag_analyzer.appendWhere(chain, join.other_eq_conditions_from_in());
 
     if (!chain.steps.empty())
     {
-        cond.other_cond_expr = chain.getLastActions();
+        join_non_equal_conditions.other_cond_expr = chain.getLastActions();
         chain.addStep();
     }
 
     if (join.is_null_aware_semi_join())
     {
-        cond.null_aware_eq_cond_name = dag_analyzer.appendNullAwareSemiJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
-        cond.null_aware_eq_cond_expr = chain.getLastActions();
+        join_non_equal_conditions.null_aware_eq_cond_name = dag_analyzer.appendNullAwareSemiJoinEqColumn(chain, probe_key_names, build_key_names, tiflash_join.join_key_collators);
+        join_non_equal_conditions.null_aware_eq_cond_expr = chain.getLastActions();
     }
-
-    return cond;
 }
 } // namespace
 
@@ -347,13 +345,14 @@ NamesAndTypes TiFlashJoin::genJoinOutputColumns(
     return join_output_columns;
 }
 
-JoinOtherConditions TiFlashJoin::genJoinOtherConditionsAction(
+void TiFlashJoin::fillJoinOtherConditionsAction(
     const Context & context,
     const Block & left_input_header,
     const Block & right_input_header,
     const ExpressionActionsPtr & probe_side_prepare_join,
     const Names & probe_key_names,
-    const Names & build_key_names) const
+    const Names & build_key_names,
+    JoinNonEqualConditions & join_non_equal_conditions) const
 {
     auto columns_for_other_join_filter
         = genColumnsForOtherJoinFilter(
@@ -361,7 +360,7 @@ JoinOtherConditions TiFlashJoin::genJoinOtherConditionsAction(
             right_input_header,
             probe_side_prepare_join);
 
-    return doGenJoinOtherConditionsAction(context, *this, columns_for_other_join_filter, probe_key_names, build_key_names);
+    return doFillJoinOtherConditionsAction(context, *this, columns_for_other_join_filter, probe_key_names, build_key_names, join_non_equal_conditions);
 }
 
 std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
