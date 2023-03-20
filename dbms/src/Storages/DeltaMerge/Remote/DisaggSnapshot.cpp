@@ -51,8 +51,16 @@ SegmentPagesFetchTask DisaggReadSnapshot::popSegTask(TableID physical_table_id, 
     return task;
 }
 
+void DisaggReadSnapshot::iterateTableSnapshots(std::function<void(const DisaggPhysicalTableReadSnapshotPtr &)> fn) const
+{
+    std::shared_lock read_lock(mtx);
+    for (const auto & [_, table_snapshot] : table_snapshots)
+        fn(table_snapshot);
+}
+
 bool DisaggReadSnapshot::empty() const
 {
+    std::shared_lock read_lock(mtx);
     for (const auto & tbl : table_snapshots)
     {
         if (!tbl.second->empty())
