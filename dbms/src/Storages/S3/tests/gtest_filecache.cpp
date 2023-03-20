@@ -760,4 +760,60 @@ try
     waitForBgDownload(file_cache);
 }
 CATCH
+
+TEST_F(FileCacheTest, ManualDropCachedFiles)
+try
+{
+    Stopwatch sw;
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 5, {"meta"});
+    auto total_size = objectsTotalSize(objects);
+    LOG_DEBUG(log, "genObjects: count={} total_size={} cost={}s", objects.size(), total_size, sw.elapsedSeconds());
+    auto cache_dir = fmt::format("{}/evict_empty_file", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .dtfile_level = 100};
+    calculateCacheCapacity(cache_config, total_size);
+    LOG_DEBUG(log, "total_size={} dt_cache_capacity={}", total_size, cache_config.getDTFileCapacity());
+    FileCache file_cache(capacity_metrics, cache_config);
+
+    // Make cache full
+    for (const auto & obj : objects)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
+        ASSERT_TRUE(s3_fname.isDataFile()) << obj.key;
+        ASSERT_EQ(file_cache.get(s3_fname), nullptr) << obj.key;
+    }
+    waitForBgDownload(file_cache);
+    ASSERT_EQ(file_cache.bg_download_fail_count.load(std::memory_order_relaxed), 0);
+    ASSERT_EQ(file_cache.bg_download_succ_count.load(std::memory_order_relaxed), objects.size());
+    ASSERT_EQ(file_cache.cache_used, file_cache.cache_capacity);
+
+    // Drop cache manually
+    ASSERT_TRUE(std::filesystem::exists(cache_config.getDTFileCacheDir()));
+    std::filesystem::remove_all(cache_config.getDTFileCacheDir());
+    ASSERT_FALSE(std::filesystem::exists(cache_config.getDTFileCacheDir()));
+    ASSERT_EQ(file_cache.cache_used, file_cache.cache_capacity);
+
+    // Remove droped-files
+    Settings settings;
+    settings.set("dt_filecache_max_downloading_count_scale", "0.0"); // Disable download file from S3
+    file_cache.updateConfig(settings);
+    ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 0.0);
+    UInt64 released_size = 0;
+    for (const auto & obj : objects)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
+        auto file_seg = file_cache.get(s3_fname);
+        ASSERT_NE(file_seg, nullptr) << obj.key;
+
+        auto file = file_cache.getRandomAccessFile(S3FilenameView::fromKey(obj.key), obj.size);
+        ASSERT_EQ(file, nullptr);
+        released_size += file_seg->getSize();
+        ASSERT_EQ(file_cache.cache_used + released_size, file_cache.cache_capacity);
+
+        ASSERT_EQ(file_cache.get(s3_fname), nullptr); // Has been removed.
+    }
+    ASSERT_EQ(file_cache.cache_used, 0);
+    ASSERT_EQ(released_size, file_cache.cache_capacity);
+}
+CATCH
+
 } // namespace DB::tests::S3

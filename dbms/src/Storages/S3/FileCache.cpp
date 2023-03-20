@@ -69,8 +69,23 @@ RandomAccessFilePtr FileCache::getRandomAccessFile(const S3::S3FilenameView & s3
     {
         return nullptr;
     }
-    // PosixRandomAccessFile should hold the `file_seg` shared_ptr to prevent cached file from evicted.
-    return std::make_shared<PosixRandomAccessFile>(file_seg->getLocalFileName(), /*flags*/ -1, /*read_limiter*/ nullptr, file_seg);
+    if (likely(std::filesystem::exists(file_seg->getLocalFileName())))
+    {
+        // PosixRandomAccessFile should hold the `file_seg` shared_ptr to prevent cached file from evicted.
+        return std::make_shared<PosixRandomAccessFile>(file_seg->getLocalFileName(), /*flags*/ -1, /*read_limiter*/ nullptr, file_seg);
+    }
+    else
+    {
+        // Normally, this would not happen. But if someone removes cache files manually, the status of memory and filesystem are inconsistent.
+        // We can handle this situation by remove it from FileCache.
+        remove(s3_fname.toFullKey(), /*force*/ true);
+        LOG_WARNING(log,
+                    "s3_fname={} local_fname={} status={} not exists, remove it from FileCache",
+                    s3_fname.toFullKey(),
+                    file_seg->getLocalFileName(),
+                    magic_enum::enum_name(file_seg->getStatus()));
+        return nullptr;
+    }
 }
 
 FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize)
@@ -162,25 +177,25 @@ void FileCache::removeDiskFile(const String & local_fname)
     }
 }
 
-void FileCache::remove(const String & s3_key)
+void FileCache::remove(const String & s3_key, bool force)
 {
     auto file_type = getFileType(s3_key);
     auto & table = tables[static_cast<UInt64>(file_type)];
 
     std::lock_guard lock(mtx);
-    auto f = table.get(s3_key);
+    auto f = table.get(s3_key, /*update_lru*/ false);
     if (f == nullptr)
     {
         return;
     }
-    std::ignore = removeImpl(table, s3_key, f);
+    std::ignore = removeImpl(table, s3_key, f, force);
 }
 
-std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f)
+std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f, bool force)
 {
     // Except currenly thread and the FileTable,
     // there are other threads hold this FileSegment object.
-    if (f.use_count() > 2)
+    if (f.use_count() > 2 && !force)
     {
         return {-1, {}};
     }
