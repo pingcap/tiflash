@@ -1134,6 +1134,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_ERROR(log, "Cannot support S3 when encryption enabled.");
             throw Exception("Cannot support S3 when encryption enabled.");
         }
+        // disagg compute node with auto scaler will init the S3 client later.
         S3::ClientFactory::instance().init(storage_config.s3_config);
     }
 
@@ -1464,15 +1465,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
             kvstore->setStore(store_meta);
         }
         global_context->getTMTContext().reloadConfig(config());
-    }
 
-    // Disagg compute node with auto scaler needs to bootstrap the S3 config
-    // from any write node.
-    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode()
-        && global_context->getSharedContextDisagg()->use_autoscaler)
-    {
-        auto &tmt = global_context->getTMTContext();
-        // TODO: init S3 config by RPC to any WN
+        // setup the kv cluster for disagg compute node fetching config
+        if (S3::ClientFactory::instance().isEnabled())
+        {
+            auto & tmt = global_context->getTMTContext();
+            S3::ClientFactory::instance().setKVCluster(tmt.getKVCluster());
+        }
     }
 
     // Initialize the thread pool of storage before the storage engine is initialized.
