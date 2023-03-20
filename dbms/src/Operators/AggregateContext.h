@@ -76,7 +76,7 @@ private:
 
     MergingBucketsPtr merging_buckets;
     ManyAggregatedDataVariants many_data;
-    std::vector<ThreadData> threads_data;
+    std::vector<std::unique_ptr<ThreadData>> threads_data;
     size_t max_threads{};
 
     const LoggerPtr log;

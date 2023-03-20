@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/Logger.h>
 #include <Operators/AggregateContext.h>
 #include <Operators/Operator.h>
 
@@ -49,7 +48,7 @@ protected:
 
 private:
     Aggregator::Params params;
-    std::unique_ptr<AggregateContext> agg_context;
+    AggregateContext agg_context;
 
     LocalAggStatus status{LocalAggStatus::build};
 };

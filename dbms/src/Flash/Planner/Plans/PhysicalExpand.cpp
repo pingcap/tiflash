@@ -71,7 +71,6 @@ PhysicalPlanNodePtr PhysicalExpand::build(
     return physical_expand;
 }
 
-
 void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
 {
     String expand_extra_info = fmt::format("expand, expand_executor_id = {}: grouping set {}", execId(), shared_expand->getGroupingSetsDes());

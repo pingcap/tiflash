@@ -29,9 +29,9 @@ LocalAggregateTransform::LocalAggregateTransform(
     const Aggregator::Params & params_)
     : TransformOp(exec_status_, req_id)
     , params(params_)
+    , agg_context(req_id)
 {
-    agg_context = std::make_unique<AggregateContext>(req_id);
-    agg_context->initBuild(params, local_concurrency, /*hook=*/[&]() { return exec_status.isCancelled(); });
+    agg_context.initBuild(params, local_concurrency, /*hook=*/[&]() { return exec_status.isCancelled(); });
 }
 
 OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
@@ -43,15 +43,15 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
         {
             // status from build to convert.
             status = LocalAggStatus::convert;
-            agg_context->initConvergent();
-            if likely (!agg_context->useNullSource())
+            agg_context.initConvergent();
+            if likely (!agg_context.useNullSource())
             {
-                RUNTIME_CHECK(agg_context->getConvergentConcurrency() == local_concurrency);
-                block = agg_context->readForConvergent(0);
+                RUNTIME_CHECK(agg_context.getConvergentConcurrency() == local_concurrency);
+                block = agg_context.readForConvergent(0);
             }
             return OperatorStatus::HAS_OUTPUT;
         }
-        agg_context->buildOnBlock(0, block);
+        agg_context.buildOnBlock(0, block);
         block.clear();
         return OperatorStatus::NEED_INPUT;
     case LocalAggStatus::convert:
@@ -66,14 +66,14 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
     case LocalAggStatus::build:
         return OperatorStatus::NEED_INPUT;
     case LocalAggStatus::convert:
-        if likely (!agg_context->useNullSource())
-            block = agg_context->readForConvergent(0);
+        if likely (!agg_context.useNullSource())
+            block = agg_context.readForConvergent(0);
         return OperatorStatus::HAS_OUTPUT;
     }
 }
 
 void LocalAggregateTransform::transformHeaderImpl(Block & header_)
 {
-    header_ = agg_context->getHeader();
+    header_ = agg_context.getHeader();
 }
 } // namespace DB
