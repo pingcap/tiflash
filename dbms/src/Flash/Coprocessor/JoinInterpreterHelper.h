@@ -18,6 +18,7 @@
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/IDataType.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/JoinUtils.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Storages/Transaction/Collator.h>
 #include <tipb/executor.pb.h>
@@ -28,46 +29,6 @@
 namespace DB
 {
 class Context;
-
-/// Do I need to use the hash table maps_*_full, in which we remember whether the row was joined.
-inline bool getFullness(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Full;
-}
-inline bool isLeftJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Cross_Left;
-}
-inline bool isRightJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right;
-}
-inline bool isInnerJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Cross;
-}
-inline bool isAntiJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti;
-}
-inline bool isCrossJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Cross || kind == ASTTableJoin::Kind::Cross_Left
-        || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Cross_Anti
-        || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
-}
-/// (cartesian/null-aware) (anti) left semi join.
-inline bool isLeftSemiFamily(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::LeftSemi || kind == ASTTableJoin::Kind::LeftAnti
-        || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti
-        || kind == ASTTableJoin::Kind::NullAware_LeftSemi || kind == ASTTableJoin::Kind::NullAware_LeftAnti;
-}
-inline bool isNullAwareSemiFamily(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::NullAware_Anti || kind == ASTTableJoin::Kind::NullAware_LeftAnti
-        || kind == ASTTableJoin::Kind::NullAware_LeftSemi;
-}
 
 struct JoinKeyType
 {
