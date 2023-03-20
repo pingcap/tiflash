@@ -160,13 +160,10 @@ void loadMetadata(Context & context)
         const auto & db_name = database.first;
         const auto & meta_file = database.second;
 
-        std::shared_ptr<ThreadPool> load_tables_thread_pool = std::make_shared<ThreadPool>(SettingMaxThreads().getAutoValue());
-
-        auto task = [&load_database, &context, &db_name, &meta_file, &load_tables_thread_pool, has_force_restore_data_flag] {
-            load_database(context, db_name, meta_file, load_tables_thread_pool.get(), has_force_restore_data_flag);
+        auto task = [&load_database, &context, &db_name, &meta_file, has_force_restore_data_flag] {
+            load_database(context, db_name, meta_file, &LoadDatabasesPool::get(), has_force_restore_data_flag);
         };
 
-        table_thread_pools.push_back(load_tables_thread_pool);
         LoadDatabasesPool::get().scheduleOrThrowOnError(task);
     }
 
