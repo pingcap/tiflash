@@ -30,6 +30,7 @@ PhysicalPlanNodePtr PhysicalMockExchangeSender::build(
     auto physical_mock_exchange_sender = std::make_shared<PhysicalMockExchangeSender>(
         executor_id,
         child->getSchema(),
+        FineGrainedShuffle{},
         log->identifier(),
         child);
     // executeUnion will be call after sender.transform, so don't need to restore concurrency.
