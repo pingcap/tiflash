@@ -833,6 +833,16 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
             /*max_free_threads*/ default_num_threads / 2,
             /*queue_size*/ default_num_threads * 2);
     }
+
+    InitStoragesPool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
+
+    LoadDatabasesPool::initialize(
+            /*max_threads*/ default_num_threads,
+            /*max_free_threads*/ default_num_threads / 2,
+            /*queue_size*/ default_num_threads * 2);
 }
 
 void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
@@ -874,6 +884,12 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
         InitStoragesPool::instance->setMaxThreads(max_io_thread_count);
         InitStoragesPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
         InitStoragesPool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+
+    if (LoadDatabasesPool::instance) {
+        LoadDatabasesPool::instance->setMaxThreads(max_io_thread_count);
+        LoadDatabasesPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        LoadDatabasesPool::instance->setQueueSize(max_io_thread_count * 2);
     }
 }
 
