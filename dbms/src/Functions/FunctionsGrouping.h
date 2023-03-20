@@ -109,7 +109,7 @@ private:
         if (col_grouping_ids->isColumnNullable())
             processNullableGroupingIDs(static_cast<const ColumnNullable &>(*col_grouping_ids), col_res, row_num);
         else
-            processVectorGroupingIDs();
+            processVectorGroupingIDs(col_grouping_ids, col_res, row_num);
     }
 
     void processNullableGroupingIDs(const ColumnNullable & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
