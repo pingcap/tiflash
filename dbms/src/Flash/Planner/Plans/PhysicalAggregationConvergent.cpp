@@ -11,9 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/Plans/PhysicalAggregationConvergent.h>
 #include <Operators/AggregateConvergentSourceOp.h>
-#include <Operators/ExpressionTransformOp.h>
 #include <Operators/NullSourceOp.h>
 
 namespace DB
@@ -54,11 +54,6 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
         });
     }
 
-    if (!expr_after_agg->getActions().empty())
-    {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_after_agg));
-        });
-    }
+    executeExpression(exec_status, group_builder, expr_after_agg, log);
 }
 } // namespace DB

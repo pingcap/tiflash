@@ -28,7 +28,6 @@
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Flash/Planner/Plans/PhysicalAggregationConvergent.h>
 #include <Interpreters/Context.h>
-#include <Operators/ExpressionTransformOp.h>
 #include <Operators/LocalAggregateTransform.h>
 
 namespace DB
@@ -173,12 +172,7 @@ void PhysicalAggregation::buildPipelineExecGroup(
     // So only fine grained shuffle is considered here.
     assert(fine_grained_shuffle.enable());
 
-    if (!before_agg_actions->getActions().empty())
-    {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_agg_actions));
-        });
-    }
+    executeExpression(exec_status, group_builder, before_agg_actions, log);
 
     Block before_agg_header = group_builder.getCurrentHeader();
     size_t concurrency = group_builder.concurrency;
@@ -204,12 +198,7 @@ void PhysicalAggregation::buildPipelineExecGroup(
         builder.appendTransformOp(std::make_unique<LocalAggregateTransform>(exec_status, log->identifier(), params));
     });
 
-    if (!expr_after_agg->getActions().empty())
-    {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_after_agg));
-        });
-    }
+    executeExpression(exec_status, group_builder, expr_after_agg, log);
 }
 
 void PhysicalAggregation::buildPipeline(PipelineBuilder & builder)

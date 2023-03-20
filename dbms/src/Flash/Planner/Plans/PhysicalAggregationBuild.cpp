@@ -13,11 +13,11 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Interpreters/Context.h>
 #include <Operators/AggregateBuildSinkOp.h>
-#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
@@ -31,12 +31,7 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
     // So only non fine grained shuffle is considered here.
     assert(!fine_grained_shuffle.enable());
 
-    if (!before_agg_actions->getActions().empty())
-    {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_agg_actions));
-        });
-    }
+    executeExpression(exec_status, group_builder, before_agg_actions, log);
 
     Block before_agg_header = group_builder.getCurrentHeader();
     size_t concurrency = group_builder.concurrency;

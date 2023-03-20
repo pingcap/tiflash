@@ -25,6 +25,9 @@ namespace DB
 {
 class Context;
 
+class PipelineExecutorStatus;
+struct PipelineExecGroupBuilder;
+
 void restoreConcurrency(
     DAGPipeline & pipeline,
     size_t concurrency,
@@ -52,6 +55,12 @@ void executeExpression(
     const ExpressionActionsPtr & expr_actions,
     const LoggerPtr & log,
     const String & extra_info = "");
+
+void executeExpression(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const ExpressionActionsPtr & expr_actions,
+    const LoggerPtr & log);
 
 void orderStreams(
     DAGPipeline & pipeline,
