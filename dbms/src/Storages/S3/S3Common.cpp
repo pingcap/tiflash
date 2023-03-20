@@ -206,9 +206,20 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
         auto stores = kv_cluster->pd_client->getAllStores(/*exclude_tombstone*/ true);
         for (const auto & store : stores)
         {
+            std::map<String, String> labels;
+            for (const auto & label : store.labels())
+            {
+                labels[label.key()] = label.value();
+            }
+            const auto & send_address = store.address();
+            if (!pingcap::kv::labelFilterOnlyTiFlashWriteNode(labels))
+            {
+                LOG_INFO(log, "get disagg config ignore store by label, store_id={} address={}", store.id(), send_address);
+                continue;
+            }
+
             auto get_config_req = std::make_shared<disaggregated::GetDisaggConfigRequest>();
             auto rpc_call = pingcap::kv::RpcCall<disaggregated::GetDisaggConfigRequest>(get_config_req);
-            const auto & send_address = store.address();
             try
             {
                 kv_cluster->rpc_client->sendRequest(send_address, rpc_call, /*timeout=*/2);
@@ -219,23 +230,19 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
                 {
                     LOG_WARNING(
                         log,
-                        "invalid settings, store_id={} address={} s3.endpoint={} s3.bucket={} s3.root={}",
+                        "invalid settings, store_id={} address={} resp={}",
                         store.id(),
                         send_address,
-                        resp->s3_config().endpoint(),
-                        resp->s3_config().bucket(),
-                        resp->s3_config().root());
+                        resp->ShortDebugString());
                     continue;
                 }
 
                 LOG_INFO(
                     log,
-                    "get S3 config from write node, store_id={} address={} s3.endpoint={} s3.bucket={} s3.root={}",
+                    "get disagg config from write node, store_id={} address={} resp={}",
                     store.id(),
                     send_address,
-                    resp->s3_config().endpoint(),
-                    resp->s3_config().bucket(),
-                    resp->s3_config().root());
+                    resp->ShortDebugString());
                 return *resp;
             }
             catch (...)
@@ -493,7 +500,8 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 {
     bool lifecycle_rule_has_been_set = false;
     Aws::Vector<Aws::S3::Model::LifecycleRule> old_rules;
-    do {
+    do
+    {
         Aws::S3::Model::GetBucketLifecycleConfigurationRequest req;
         req.SetBucket(client.bucket());
         auto outcome = client.GetBucketLifecycleConfiguration(req);
