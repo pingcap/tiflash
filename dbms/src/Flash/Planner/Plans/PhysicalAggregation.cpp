@@ -169,6 +169,8 @@ void PhysicalAggregation::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    // For non fine grained shuffle, PhysicalAggregation will be broken into AggregateBuild and AggregateConvergent.
+    // So only fine grained shuffle is considered here.
     assert(fine_grained_shuffle.enable());
 
     if (!before_agg_actions->getActions().empty())

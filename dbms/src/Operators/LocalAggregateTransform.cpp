@@ -17,6 +17,12 @@
 
 namespace DB
 {
+namespace
+{
+/// for local agg, the concurrency of build and convert must both be 1.
+constexpr size_t local_concurrency = 1;
+} // namespace
+
 LocalAggregateTransform::LocalAggregateTransform(
     PipelineExecutorStatus & exec_status_,
     const String & req_id,
@@ -25,7 +31,7 @@ LocalAggregateTransform::LocalAggregateTransform(
     , params(params_)
 {
     agg_context = std::make_unique<AggregateContext>(req_id);
-    agg_context->initBuild(params, 1, /*hook=*/[&]() { return exec_status.isCancelled(); });
+    agg_context->initBuild(params, local_concurrency, /*hook=*/[&]() { return exec_status.isCancelled(); });
 }
 
 OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
@@ -35,11 +41,12 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
     case LocalAggStatus::build:
         if (unlikely(!block))
         {
+            // status from build to convert.
             status = LocalAggStatus::convert;
             agg_context->initConvergent();
             if likely (!agg_context->useNullSource())
             {
-                RUNTIME_CHECK(agg_context->getConvergentConcurrency() == 1);
+                RUNTIME_CHECK(agg_context->getConvergentConcurrency() == local_concurrency);
                 block = agg_context->readForConvergent(0);
             }
             return OperatorStatus::HAS_OUTPUT;

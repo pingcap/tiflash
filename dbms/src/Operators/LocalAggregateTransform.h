@@ -26,6 +26,7 @@ enum class LocalAggStatus
     convert,
 };
 
+/// Only do build and convert at the current operator, no sharing of objects with other operators.
 class LocalAggregateTransform : public TransformOp
 {
 public:
