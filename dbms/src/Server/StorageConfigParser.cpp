@@ -581,15 +581,14 @@ void StorageS3Config::parse(const String & content)
     }
 }
 
-void StorageS3Config::enable(bool check_requirements, const LoggerPtr & log)
+String StorageS3Config::toString() const
 {
-    is_enabled = true;
-
-    LOG_INFO(
-        log,
+    return fmt::format(
+        "StroageS3Config{{"
         "endpoint={} bucket={} root={} "
         "max_connections={} connection_timeout_ms={} "
-        "request_timeout_ms={} access_key_id_size={} secret_access_key_size={}",
+        "request_timeout_ms={} access_key_id_size={} secret_access_key_size={}"
+        "}}",
         endpoint,
         bucket,
         root,
@@ -598,6 +597,13 @@ void StorageS3Config::enable(bool check_requirements, const LoggerPtr & log)
         request_timeout_ms,
         access_key_id.size(),
         secret_access_key.size());
+}
+
+void StorageS3Config::enable(bool check_requirements, const LoggerPtr & log)
+{
+    is_enabled = true;
+
+    LOG_INFO(log, "enable with {}", toString());
 
     if (check_requirements)
     {

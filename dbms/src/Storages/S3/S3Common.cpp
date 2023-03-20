@@ -217,10 +217,25 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
 
                 if (resp->s3_config().endpoint().empty() || resp->s3_config().bucket().empty() || resp->s3_config().root().empty())
                 {
-                    LOG_WARNING(log, "invalid settings, store_id={} address={} s3.endpoint={} s3.bucket={} s3.root={}", store.id(), send_address, resp->s3_config().endpoint(), resp->s3_config().bucket(), resp->s3_config().root());
+                    LOG_WARNING(
+                        log,
+                        "invalid settings, store_id={} address={} s3.endpoint={} s3.bucket={} s3.root={}",
+                        store.id(),
+                        send_address,
+                        resp->s3_config().endpoint(),
+                        resp->s3_config().bucket(),
+                        resp->s3_config().root());
                     continue;
                 }
 
+                LOG_INFO(
+                    log,
+                    "get S3 config from write node, store_id={} address={} s3.endpoint={} s3.bucket={} s3.root={}",
+                    store.id(),
+                    send_address,
+                    resp->s3_config().endpoint(),
+                    resp->s3_config().bucket(),
+                    resp->s3_config().root());
                 return *resp;
             }
             catch (...)
@@ -273,6 +288,7 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::initClientFromWriteNode()
     while (kv_cluster == nullptr)
     {
         lock_init.unlock();
+        LOG_INFO(log, "waiting for kv_cluster init");
         std::this_thread::sleep_for(1s);
         lock_init.lock();
     }
@@ -283,6 +299,7 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::initClientFromWriteNode()
     config.endpoint = disagg_config.s3_config().endpoint();
     config.root = normalizedRoot(disagg_config.s3_config().root());
     config.bucket = disagg_config.s3_config().bucket();
+    LOG_INFO(log, "S3 config updated, {}", config.toString());
 
     shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
     client_is_inited = true; // init finish

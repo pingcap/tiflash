@@ -112,6 +112,8 @@ struct StorageS3Config
     void parse(const String & content);
     void enable(bool check_requirements, const LoggerPtr & log);
     bool isS3Enabled() const;
+
+    String toString() const;
 };
 
 struct StorageRemoteCacheConfig

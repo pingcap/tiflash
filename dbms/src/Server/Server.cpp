@@ -969,7 +969,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         storage_config.s3_config.enable(/*check_requirements*/ true, log);
     }
-    else if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
+    else if (disaggregated_mode == DisaggregatedMode::Compute /*&& use_autoscaler*/) // FIXME!!!!
     {
         // compute node with auto scaler, the requirements will be initted later.
         storage_config.s3_config.enable(/*check_requirements*/ false, log);
@@ -1134,7 +1134,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_ERROR(log, "Cannot support S3 when encryption enabled.");
             throw Exception("Cannot support S3 when encryption enabled.");
         }
-        // disagg compute node with auto scaler will init the S3 client later.
         S3::ClientFactory::instance().init(storage_config.s3_config);
     }
 
