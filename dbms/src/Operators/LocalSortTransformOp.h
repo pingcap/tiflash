@@ -26,6 +26,7 @@ enum class LocalSortStatus
     MERGE,
 };
 
+/// Only do partial and merge sort at the current operator, no sharing of objects with other operators.
 class LocalSortTransformOp : public TransformOp
 {
 public:
