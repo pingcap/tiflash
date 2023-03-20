@@ -926,7 +926,7 @@ try
     {
         // create object on s3 for locking
         S3::uploadEmptyFile(*s3_client, ingest_from_data_file.toFullKey());
-        S3::uploadEmptyFile(*s3_client, ingest_from_dtfile.toFullKey());
+        S3::uploadEmptyFile(*s3_client, fmt::format("{}/{}", ingest_from_dtfile.toFullKey(), DM::DMFile::metav2FileName()));
 
         UniversalWriteBatch batch;
         PS::V3::CheckpointLocation loc21{
@@ -934,7 +934,7 @@ try
             .offset_in_file = 1024,
             .size_in_file = 1024,
         };
-        batch.putRemotePage("21", tag, loc21, {});
+        batch.putRemotePage("21", tag, 1024, loc21, {});
         PS::V3::CheckpointLocation loc22{
             .data_file_id = std::make_shared<String>(ingest_from_dtfile.toFullKey()),
             .offset_in_file = 0,

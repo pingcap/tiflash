@@ -131,11 +131,12 @@ ParsedCheckpointDataHolderPtr buildParsedCheckpointData(Context & context, const
         if (!edits.has_value())
             break;
         auto records = edits->getRecords();
+        // Note the `data_file_id` in temp ps is all lock key, we need transform them to data key before write to local ps.
         for (auto & record : records)
         {
             if (record.type == PS::V3::EditRecordType::VAR_ENTRY)
             {
-                wb.putRemotePage(record.page_id, record.entry.tag, record.entry.checkpoint_info.data_location, std::move(record.entry.field_offsets));
+                wb.putRemotePage(record.page_id, record.entry.tag, record.entry.size, record.entry.checkpoint_info.data_location, std::move(record.entry.field_offsets));
             }
             else if (record.type == PS::V3::EditRecordType::VAR_REF)
             {

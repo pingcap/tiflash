@@ -152,7 +152,7 @@ try
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
         wb.putPage(r[0].page_id, 0, "local data");
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.size, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         wb.putRefPage(r[1].page_id, r[0].page_id);
         page_storage->write(std::move(wb));
     }
@@ -225,7 +225,7 @@ try
 
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.size, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -291,7 +291,7 @@ try
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
         wb.putPage(r[0].page_id, 0, "local data");
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.size, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -373,8 +373,8 @@ try
 
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
-        wb.putRemotePage(r[1].page_id, 0, r[1].entry.checkpoint_info.data_location, std::move(r[1].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.size, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[1].page_id, 0, r[0].entry.size, r[1].entry.checkpoint_info.data_location, std::move(r[1].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -449,7 +449,7 @@ try
 
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.size, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         wb.putRefPage(r[1].page_id, r[0].page_id);
         page_storage->write(std::move(wb));
     }

@@ -80,7 +80,7 @@ try
     auto s3name_dtfile = S3::S3Filename::fromDMFileOID(S3::DMFileOID{.store_id = old_store_id, .table_id = 10, .file_id = 5});
     auto s3name_datafile = S3::S3Filename::newCheckpointData(old_store_id, old_store_seq, 1);
     {
-        S3::uploadEmptyFile(*s3_client, s3name_dtfile.toFullKey());
+        S3::uploadEmptyFile(*s3_client, fmt::format("{}/{}", s3name_dtfile.toFullKey(), DM::DMFile::metav2FileName()));
         PS::V3::CheckpointLocation loc{
             .data_file_id = std::make_shared<String>(s3name_dtfile.toFullKey()),
             .offset_in_file = 0,
@@ -96,14 +96,14 @@ try
             .offset_in_file = 0,
             .size_in_file = 1024,
         };
-        wb.putRemotePage("2", 0, loc2, {});
+        wb.putRemotePage("2", 0, 1024, loc2, {});
 
         PS::V3::CheckpointLocation loc3{
             .data_file_id = key,
             .offset_in_file = 1024,
             .size_in_file = 10240,
         };
-        wb.putRemotePage("3", 0, loc3, {});
+        wb.putRemotePage("3", 0, 1024, loc3, {});
     }
     // mock UniversalPageStorage::write(wb)
     mgr.createS3LockForWriteBatch(wb);
@@ -168,14 +168,14 @@ try
             .offset_in_file = 0,
             .size_in_file = 1024,
         };
-        wb.putRemotePage("2", 0, loc2, {});
+        wb.putRemotePage("2", 0, 1024, loc2, {});
 
         PS::V3::CheckpointLocation loc3{
             .data_file_id = key,
             .offset_in_file = 1024,
             .size_in_file = 10240,
         };
-        wb.putRemotePage("3", 0, loc3, {});
+        wb.putRemotePage("3", 0, 1024, loc3, {});
     }
 
     // However, the dtfile is marked as deleted by S3GC before FAP apply

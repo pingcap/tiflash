@@ -47,6 +47,7 @@ Page S3PageReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
 
     buf.seek(location.offset_in_file, SEEK_SET);
     auto buf_size = location.size_in_file;
+    RUNTIME_CHECK(buf_size != 0, page_id_and_entry);
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
         free(p, buf_size);

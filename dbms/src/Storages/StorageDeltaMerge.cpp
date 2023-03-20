@@ -1040,6 +1040,7 @@ void StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(
     CheckpointInfoPtr checkpoint_info,
     const Settings & settings)
 {
+    GET_METRIC(tiflash_storage_command_count, type_ingest_checkpoint).Increment();
     return getAndMaybeInitStore()->ingestSegmentsFromCheckpointInfo(
         global_context,
         settings,
