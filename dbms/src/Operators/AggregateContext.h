@@ -76,6 +76,7 @@ private:
 
     MergingBucketsPtr merging_buckets;
     ManyAggregatedDataVariants many_data;
+    // use unique_ptr to avoid false sharing.
     std::vector<std::unique_ptr<ThreadData>> threads_data;
     size_t max_threads{};
 

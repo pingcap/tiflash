@@ -26,7 +26,7 @@ void AggregateContext::initBuild(const Aggregator::Params & params, size_t max_t
     threads_data.reserve(max_threads);
     for (size_t i = 0; i < max_threads; ++i)
     {
-        threads_data.emplace_back(std::make_unqiue<ThreadData>(params.keys_size, params.aggregates_size));
+        threads_data.emplace_back(std::make_unique<ThreadData>(params.keys_size, params.aggregates_size));
         many_data.emplace_back(std::make_shared<AggregatedDataVariants>());
     }
 
