@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Disaggregated/S3LockClient.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <aws/s3/S3Client.h>
@@ -39,7 +40,8 @@ public:
     {
         // If the data file exist and no delmark exist, then create a lock file on `data_file_key`
         auto view = S3FilenameView::fromKey(data_file_key);
-        if (!objectExists(*s3_client, data_file_key))
+        auto object_key = view.isDMFile() ? fmt::format("{}/{}", data_file_key, DM::DMFile::metav2FileName()) : data_file_key;
+        if (!objectExists(*s3_client, object_key))
         {
             return {false, ""};
         }

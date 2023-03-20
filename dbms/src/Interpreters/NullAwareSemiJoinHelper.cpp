@@ -18,7 +18,6 @@
 
 namespace DB
 {
-
 using enum ASTTableJoin::Strictness;
 using enum ASTTableJoin::Kind;
 
@@ -206,14 +205,14 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     const BlocksList & right_blocks_,
     const std::vector<Join::RowsNotInsertToMap> & null_rows_,
     size_t max_block_size_,
-    const JoinOtherConditions & other_conditions_)
+    const JoinNonEqualConditions & non_equal_conditions_)
     : block(block_)
     , left_columns(left_columns_)
     , right_columns(right_columns_)
     , right_blocks(right_blocks_)
     , null_rows(null_rows_)
     , max_block_size(max_block_size_)
-    , other_conditions(other_conditions_)
+    , non_equal_conditions(non_equal_conditions_)
 {
     static_assert(KIND == NullAware_Anti || KIND == NullAware_LeftAnti
                   || KIND == NullAware_LeftSemi);
@@ -393,19 +392,19 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
     /// In summary, it's correct as long as null_aware_eq_cond_expr is not executed solely when other_cond_expr exists.
 
     if constexpr (STRICTNESS == All)
-        other_conditions.other_cond_expr->execute(exec_block);
+        non_equal_conditions.other_cond_expr->execute(exec_block);
 
     ConstNullMapPtr eq_null_map = nullptr;
     if constexpr (STEP != NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS)
     {
-        other_conditions.null_aware_eq_cond_expr->execute(exec_block);
+        non_equal_conditions.null_aware_eq_cond_expr->execute(exec_block);
 
-        auto eq_column = exec_block.getByName(other_conditions.null_aware_eq_cond_name).column;
+        auto eq_column = exec_block.getByName(non_equal_conditions.null_aware_eq_cond_name).column;
         if (eq_column->isColumnConst())
         {
             eq_column = eq_column->convertToFullColumnIfConst();
             /// Attention: must set the full column to the original column otherwise eq_null_map will be a dangling pointer.
-            exec_block.getByName(other_conditions.null_aware_eq_cond_name).column = eq_column;
+            exec_block.getByName(non_equal_conditions.null_aware_eq_cond_name).column = eq_column;
         }
 
         RUNTIME_CHECK_MSG(eq_column->isColumnNullable(), "The null-aware equal condition column should be nullable, otherwise Anti/LeftAnti/LeftSemi should be used instead");
@@ -444,7 +443,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
     }
     else
     {
-        auto other_column = exec_block.getByName(other_conditions.other_cond_name).column;
+        auto other_column = exec_block.getByName(non_equal_conditions.other_cond_name).column;
         if (other_column->isColumnConst())
             other_column = other_column->convertToFullColumnIfConst();
 

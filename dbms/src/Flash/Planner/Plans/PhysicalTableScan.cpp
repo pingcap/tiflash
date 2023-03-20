@@ -32,7 +32,7 @@ PhysicalTableScan::PhysicalTableScan(
     const String & req_id,
     const TiDBTableScan & tidb_table_scan_,
     const Block & sample_block_)
-    : PhysicalLeaf(executor_id_, PlanType::TableScan, schema_, req_id)
+    : PhysicalLeaf(executor_id_, PlanType::TableScan, schema_, FineGrainedShuffle{}, req_id)
     , tidb_table_scan(tidb_table_scan_)
     , sample_block(sample_block_)
 {}
