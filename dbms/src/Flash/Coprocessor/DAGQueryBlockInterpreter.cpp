@@ -783,7 +783,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     {
         extra_info = String(enableFineGrainedShuffleExtraInfo);
         RUNTIME_CHECK(exchange_sender.tp() == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_sender.tp()));
-        RUNTIME_CHECK(stream_count <= 1024, stream_count);
+        RUNTIME_CHECK(stream_count <= maxFineGrainedStreamCount, stream_count);
     }
     pipeline.transform([&](auto & stream) {
         // construct writer

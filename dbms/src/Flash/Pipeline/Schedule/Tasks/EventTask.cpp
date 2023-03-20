@@ -54,14 +54,13 @@ void EventTask::finalize() noexcept
 {
     try
     {
-        bool tmp = false;
-        if (finalized.compare_exchange_strong(tmp, true))
-            finalizeImpl();
+        RUNTIME_CHECK(!finalized);
+        finalized = true;
+        finalizeImpl();
     }
     catch (...)
     {
-        // ignore exception from finalizeImpl.
-        LOG_WARNING(log, "finalizeImpl throw exception: {}", getCurrentExceptionMessage(true, true));
+        exec_status.onErrorOccurred(std::current_exception());
     }
 }
 
