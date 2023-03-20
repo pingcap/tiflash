@@ -34,7 +34,7 @@
 #include <future>
 #include <iomanip>
 #include <thread>
-#include "Common/UniThreadPool.h"
+#include "IO/IOThreadPools.h"
 
 
 namespace DB
@@ -136,9 +136,6 @@ void loadMetadata(Context & context)
     }
 
     
-    /// For parallel tables loading.
-    ThreadPool load_database_thread_pool(SettingMaxThreads().getAutoValue());
-
     auto load_database = [&](Context & context, const String & database, const String & database_metadata_file,
                                        ThreadPool * thread_pool, bool force_restore_data) {
         /// There may exist .sql file with database creation statement.
@@ -170,10 +167,11 @@ void loadMetadata(Context & context)
         };
 
         table_thread_pools.push_back(load_tables_thread_pool);
-        load_database_thread_pool.scheduleOrThrowOnError(task);
+        LoadDatabasesPool::get().scheduleOrThrowOnError(task);
     }
 
-    load_database_thread_pool.wait();
+    LoadDatabasesPool::get().wait();
+    LoadDatabasesPool::shutdown();
 
     if (has_force_restore_data_flag)
         force_restore_data_flag_file.remove();

@@ -31,6 +31,9 @@ public:
     // if end is empty, it will be transformed to a key larger than all raft data key
     void traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(const UniversalPageId & page_id, DB::Page page)> & acceptor);
 
+    // Only used to get raft log data from remote checkpoint data
+    void traverseRemoteRaftLogForRegion(UInt64 region_id, const std::function<void(const UniversalPageId & page_id, const PS::V3::CheckpointLocation & location)> & acceptor);
+
     // return the first id not less than `page_id`
     std::optional<UniversalPageId> getLowerBound(const UniversalPageId & page_id);
 

@@ -153,7 +153,6 @@ std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareFor
         column_names.push_back(column_info.name);
 
     auto scan_context = std::make_shared<DM::ScanContext>();
-
     SelectQueryInfo query_info;
     query_info.query = std::make_shared<ASTSelectQuery>();
     query_info.keep_order = false;
@@ -170,11 +169,11 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(Context & context, Int6
         auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
+            google::protobuf::RepeatedPtrField<tipb::Expr>{}, // Not care now
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
-        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(*filter_conditions, *analyzer);
-
+        auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions->conditions, *analyzer);
         BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1); // TODO: Support config max_block_size and num_streams
         // TODO: set num_streams, then ins.size() != 1
         BlockInputStreamPtr in = ins[0];

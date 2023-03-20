@@ -275,6 +275,11 @@ struct ContextShared
             tmt_context->shutdown();
         }
 
+        if (schema_sync_service)
+        {
+            schema_sync_service = nullptr;
+        }
+
         /** At this point, some tables may have threads that block our mutex.
           * To complete them correctly, we will copy the current list of tables,
           *  and ask them all to finish their work.
@@ -1311,14 +1316,6 @@ DBGInvoker & Context::getDBGInvoker() const
     return shared->dbg_invoker;
 }
 
-TMTContext & Context::getTMTContext() const
-{
-    auto lock = getLock();
-    if (!shared->tmt_context)
-        throw Exception("no tmt context");
-    return *(shared->tmt_context);
-}
-
 void Context::setMarkCache(size_t cache_size_in_bytes)
 {
     auto lock = getLock();
@@ -1447,6 +1444,20 @@ void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::C
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
     shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config);
+}
+
+bool Context::isTMTContextInited() const
+{
+    auto lock = getLock();
+    return shared->tmt_context != nullptr;
+}
+
+TMTContext & Context::getTMTContext() const
+{
+    auto lock = getLock();
+    if (!shared->tmt_context)
+        throw Exception("no tmt context");
+    return *(shared->tmt_context);
 }
 
 void Context::initializePathCapacityMetric( //
@@ -1708,12 +1719,7 @@ void Context::initializeWriteNodePageStorageIfNeed(const PathPool & path_pool)
     auto lock = getLock();
     if (shared->storage_run_mode == PageStorageRunMode::UNI_PS)
     {
-        if (shared->ps_write)
-        {
-            // GlobalStoragePool may be initialized many times in some test cases for restore.
-            LOG_WARNING(shared->log, "GlobalUniversalPageStorage(WriteNode) has already been initialized.");
-            shared->ps_write->shutdown();
-        }
+        RUNTIME_CHECK(shared->ps_write == nullptr);
         try
         {
             PageStorageConfig config;
@@ -1747,6 +1753,41 @@ UniversalPageStoragePtr Context::getWriteNodePageStorage() const
     {
         LOG_WARNING(shared->log, "Calling getWriteNodePageStorage() without initialization, stack={}", StackTrace().toString());
         return nullptr;
+    }
+}
+
+UniversalPageStoragePtr Context::tryGetWriteNodePageStorage() const
+{
+    auto lock = getLock();
+    if (shared->ps_write)
+        return shared->ps_write->getUniversalPageStorage();
+    return nullptr;
+}
+
+// In some unit tests, we may want to reinitialize WriteNodePageStorage multiple times to mock restart.
+// And we need to release old one before creating new one.
+// And we must do it explicitly. Because if we do it implicitly in `initializeWriteNodePageStorageIfNeed`, there is a potential deadlock here.
+// Thread A:
+//   Get lock on SharedContext -> call UniversalPageStorageService::shutdown -> remove background tasks -> try get rwlock on the task
+// Thread B:
+//   Get rwlock on task -> call a method on Context to get some object -> try to get lock on SharedContext
+void Context::tryReleaseWriteNodePageStorageForTest()
+{
+    UniversalPageStorageServicePtr ps_write;
+    {
+        auto lock = getLock();
+        if (shared->ps_write)
+        {
+            LOG_WARNING(shared->log, "Release GlobalUniversalPageStorage(WriteNode).");
+            ps_write = shared->ps_write;
+            shared->ps_write = nullptr;
+        }
+    }
+    if (ps_write)
+    {
+        // call shutdown without lock
+        ps_write->shutdown();
+        ps_write = nullptr;
     }
 }
 

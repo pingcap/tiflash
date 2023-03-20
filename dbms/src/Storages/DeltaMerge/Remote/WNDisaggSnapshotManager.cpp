@@ -17,7 +17,6 @@
 
 namespace DB::DM::Remote
 {
-
 WNDisaggSnapshotManager::WNDisaggSnapshotManager(BackgroundProcessingPool & bg_pool)
     : pool(bg_pool)
     , log(Logger::get())

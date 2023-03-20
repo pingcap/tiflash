@@ -180,6 +180,10 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                     // Call `ingestFiles` to delete data for range and ingest external DTFiles.
                     dm_storage->ingestFiles(new_key_range, new_region_wrap.external_files, /*clear_data_in_range=*/true, context.getSettingsRef());
                 }
+                else if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithCheckpointInfo>)
+                {
+                    dm_storage->ingestSegmentsFromCheckpointInfo(new_key_range, new_region_wrap.checkpoint_info, context.getSettingsRef());
+                }
                 else
                 {
                     // Call `deleteRange` to delete data for range
@@ -284,7 +288,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
 }
 
 /// `preHandleSSTsToDTFiles` read data from SSTFiles and generate DTFile(s) for commited data
-/// return the ids of DTFile(s), the uncommited data will be inserted to `new_region`
+/// return the ids of DTFile(s), the uncommitted data will be inserted to `new_region`
 std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
     RegionPtr new_region,
     const SSTViewVec snaps,
@@ -314,7 +318,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
         try
         {
             // Get storage schema atomically, will do schema sync if the storage does not exists.
-            // Will return the storage even if it is tombstoned.
+            // Will return the storage even if it is tombstone.
             const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(new_region, tmt);
             if (unlikely(storage == nullptr))
             {
@@ -476,6 +480,11 @@ void KVStore::handleApplySnapshot(
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
     auto external_files = preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
     applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(external_files)}, tmt);
+}
+
+void KVStore::handleIngestCheckpoint(RegionPtr region, CheckpointInfoPtr checkpoint_info, TMTContext & tmt)
+{
+    applyPreHandledSnapshot(RegionPtrWithCheckpointInfo{region, checkpoint_info}, tmt);
 }
 
 EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)

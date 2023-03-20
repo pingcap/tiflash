@@ -32,7 +32,8 @@ public:
 
     bool alwaysFalse() const;
     // return false if all filter out.
-    // if return_filter is true and all rows are passed, set res_filter = nullptr.
+    // When return_filter is true, res_filter will be set to the filter column.
+    // Always return true, and when filter conditions are always true, set res_filter = nullptr.
     bool transform(Block & block, FilterPtr & res_filter, bool return_filter);
     Block getHeader() const;
     ExpressionActionsPtr getExperssion() const;

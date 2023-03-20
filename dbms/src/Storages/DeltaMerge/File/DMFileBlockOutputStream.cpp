@@ -17,7 +17,6 @@
 
 namespace DB::DM
 {
-
 DMFileBlockOutputStream::DMFileBlockOutputStream(const Context & context,
                                                  const DMFilePtr & dmfile,
                                                  const ColumnDefines & write_columns)

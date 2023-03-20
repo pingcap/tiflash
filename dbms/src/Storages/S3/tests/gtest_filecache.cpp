@@ -14,7 +14,7 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
-#include <IO/IOThreadPool.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -55,9 +55,8 @@ public:
         tmp_dir = DB::tests::TiFlashTestEnv::getTemporaryPath("FileCacheTest");
         log = Logger::get("FileCacheTest");
         std::filesystem::remove_all(std::filesystem::path(tmp_dir));
-        s3_client = ::DB::S3::ClientFactory::instance().sharedClient();
-        bucket = ::DB::S3::ClientFactory::instance().bucket();
-        ASSERT_TRUE(createBucketIfNotExist());
+        s3_client = ::DB::S3::ClientFactory::instance().sharedTiFlashClient();
+        ASSERT_TRUE(DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
         std::random_device dev;
         rng = std::mt19937{dev()};
         next_id = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -65,10 +64,9 @@ public:
     }
 
 protected:
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
+    std::shared_ptr<TiFlashS3Client> s3_client;
     std::mt19937 rng;
-    UInt64 next_id;
+    UInt64 next_id = 0;
 
     inline static const std::vector<String> basenames = {
         "%2D1.dat",
@@ -88,31 +86,11 @@ protected:
         "meta",
     };
 
-    bool createBucketIfNotExist()
-    {
-        Aws::S3::Model::CreateBucketRequest request;
-        request.SetBucket(bucket);
-        Aws::S3::Model::CreateBucketOutcome outcome = s3_client->CreateBucket(request);
-        if (outcome.IsSuccess())
-        {
-            LOG_DEBUG(log, "Created bucket {}", bucket);
-        }
-        else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
-        {
-            LOG_DEBUG(log, "Bucket {} already exist", bucket);
-        }
-        else
-        {
-            const auto & err = outcome.GetError();
-            LOG_ERROR(log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
-        }
-        return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
-    }
 
     void writeFile(const String & key, char value, size_t size, const WriteSettings & write_setting)
     {
         Stopwatch sw;
-        S3WritableFile file(s3_client, bucket, key, write_setting);
+        S3WritableFile file(s3_client, key, write_setting);
         size_t write_size = 0;
         constexpr size_t buf_size = 1024 * 1024 * 10;
         String buf_unit(buf_size, value);
@@ -154,7 +132,7 @@ protected:
                     writeFile(key, value, size, WriteSettings{});
                 });
             upload_results.push_back(task->get_future());
-            IOThreadPool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+            S3FileCachePool::get().scheduleOrThrowOnError([task]() { (*task)(); });
             objects.emplace_back(ObjectInfo{.key = key, .value = value, .size = size});
         }
         for (auto & f : upload_results)
@@ -446,6 +424,7 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_FALSE(file_cache.canCache(FileType::Meta));
+        ASSERT_FALSE(file_cache.canCache(FileType::Merged));
         ASSERT_FALSE(file_cache.canCache(FileType::Index));
         ASSERT_FALSE(file_cache.canCache(FileType::Mark));
         ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
@@ -461,6 +440,7 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_FALSE(file_cache.canCache(FileType::Merged));
         ASSERT_FALSE(file_cache.canCache(FileType::Index));
         ASSERT_FALSE(file_cache.canCache(FileType::Mark));
         ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
@@ -476,7 +456,8 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
-        ASSERT_TRUE(file_cache.canCache(FileType::Index));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
+        ASSERT_FALSE(file_cache.canCache(FileType::Index));
         ASSERT_FALSE(file_cache.canCache(FileType::Mark));
         ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
         ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
@@ -491,8 +472,9 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
-        ASSERT_TRUE(file_cache.canCache(FileType::Mark));
+        ASSERT_FALSE(file_cache.canCache(FileType::Mark));
         ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
         ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
         ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
@@ -506,9 +488,10 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
-        ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
+        ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
         ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
         ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
         ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
@@ -521,10 +504,11 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
         ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
-        ASSERT_TRUE(file_cache.canCache(FileType::DeleteMarkColData));
+        ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
         ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
         ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
         ASSERT_FALSE(file_cache.canCache(FileType::ColData));
@@ -536,11 +520,12 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
         ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
         ASSERT_TRUE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_TRUE(file_cache.canCache(FileType::VersionColData));
+        ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
         ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
         ASSERT_FALSE(file_cache.canCache(FileType::ColData));
     }
@@ -551,12 +536,13 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
         ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
         ASSERT_TRUE(file_cache.canCache(FileType::DeleteMarkColData));
         ASSERT_TRUE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_TRUE(file_cache.canCache(FileType::HandleColData));
+        ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
         ASSERT_FALSE(file_cache.canCache(FileType::ColData));
     }
     {
@@ -566,6 +552,23 @@ try
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
+        ASSERT_TRUE(file_cache.canCache(FileType::Index));
+        ASSERT_TRUE(file_cache.canCache(FileType::Mark));
+        ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
+        ASSERT_TRUE(file_cache.canCache(FileType::DeleteMarkColData));
+        ASSERT_TRUE(file_cache.canCache(FileType::VersionColData));
+        ASSERT_TRUE(file_cache.canCache(FileType::HandleColData));
+        ASSERT_FALSE(file_cache.canCache(FileType::ColData));
+    }
+    {
+        UInt64 cache_level_ = 9;
+        auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, cache_level_);
+        StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = cache_level_};
+        FileCache file_cache(capacity_metrics, cache_config);
+        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
+        ASSERT_TRUE(file_cache.canCache(FileType::Meta));
+        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
         ASSERT_TRUE(file_cache.canCache(FileType::Index));
         ASSERT_TRUE(file_cache.canCache(FileType::Mark));
         ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
@@ -674,4 +677,87 @@ TEST_F(FileCacheTest, LRUFileTable)
         ASSERT_EQ(table.begin(), table.end());
     }
 }
+
+TEST_F(FileCacheTest, EvictEmptyFile)
+try
+{
+    Stopwatch sw;
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 10, {"meta"});
+    auto total_size = objectsTotalSize(objects);
+    LOG_DEBUG(log, "genObjects: count={} total_size={} cost={}s", objects.size(), total_size, sw.elapsedSeconds());
+    auto cache_dir = fmt::format("{}/evict_empty_file", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .dtfile_level = 100};
+    calculateCacheCapacity(cache_config, total_size);
+    LOG_DEBUG(log, "total_size={} dt_cache_capacity={}", total_size, cache_config.getDTFileCapacity());
+    FileCache file_cache(capacity_metrics, cache_config);
+
+    // Cache empty files
+    DMFileOID empty_file_oid{.store_id = 111, .table_id = 2222, .file_id = 33333};
+    auto empty_s3_dmfile_path = ::DB::S3::S3Filename::fromDMFileOID(empty_file_oid).toFullKey();
+    std::vector<String> empty_s3_keys;
+    for (int i = 0; i < 5; ++i)
+    {
+        auto s3_key = fmt::format("{}/{}.dat", empty_s3_dmfile_path, i);
+        uploadEmptyFile(*s3_client, s3_key);
+        empty_s3_keys.push_back(s3_key);
+    }
+    for (const auto & s3_key : empty_s3_keys)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(s3_key);
+        ASSERT_EQ(file_cache.get(s3_fname), nullptr) << s3_key;
+        waitForBgDownload(file_cache);
+    }
+
+    // Cache empty files succ
+    for (const auto & s3_key : empty_s3_keys)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(s3_key);
+        auto file_seg = file_cache.get(s3_fname);
+        ASSERT_NE(file_seg, nullptr) << s3_key;
+        ASSERT_TRUE(file_seg->isReadyToRead());
+        ASSERT_EQ(file_seg->getSize(), 0);
+    }
+    ASSERT_EQ(file_cache.cache_used, 0);
+
+    // Make cache full
+    for (const auto & obj : objects)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
+        ASSERT_TRUE(s3_fname.isDataFile()) << obj.key;
+        ASSERT_EQ(file_cache.get(s3_fname), nullptr) << obj.key;
+    }
+    waitForBgDownload(file_cache);
+    ASSERT_EQ(file_cache.bg_download_fail_count.load(std::memory_order_relaxed), 0);
+    ASSERT_EQ(file_cache.bg_download_succ_count.load(std::memory_order_relaxed), objects.size() + empty_s3_keys.size());
+    ASSERT_EQ(file_cache.cache_used, file_cache.cache_capacity);
+    for (const auto & obj : objects)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
+        ASSERT_TRUE(s3_fname.isDataFile()) << obj.key;
+        auto file_seg = file_cache.get(s3_fname);
+        ASSERT_NE(file_seg, nullptr) << obj.key;
+        ASSERT_TRUE(file_seg->isReadyToRead());
+        ASSERT_EQ(file_seg->getSize(), obj.size);
+    }
+    ASSERT_EQ(file_cache.cache_used, file_cache.cache_capacity);
+
+    // Evict empty files
+    auto objects2 = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"meta"});
+    for (const auto & obj : objects2)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
+        ASSERT_TRUE(s3_fname.isDataFile()) << obj.key;
+        ASSERT_EQ(file_cache.get(s3_fname), nullptr) << obj.key;
+    }
+    waitForBgDownload(file_cache);
+
+    // Evict empty files succ
+    for (const auto & s3_key : empty_s3_keys)
+    {
+        auto s3_fname = ::DB::S3::S3FilenameView::fromKey(s3_key);
+        ASSERT_EQ(file_cache.get(s3_fname), nullptr) << s3_key;
+    }
+    waitForBgDownload(file_cache);
+}
+CATCH
 } // namespace DB::tests::S3

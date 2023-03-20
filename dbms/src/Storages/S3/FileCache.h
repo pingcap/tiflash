@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <Encryption/RandomAccessFile.h>
+#include <Interpreters/Settings.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -46,6 +47,7 @@ public:
     {
         Unknow = 0,
         Meta,
+        Merged,
         Index,
         Mark, // .mkr, .null.mrk
         NullMap,
@@ -125,7 +127,7 @@ using FileSegmentPtr = std::shared_ptr<FileSegment>;
 class LRUFileTable
 {
 public:
-    FileSegmentPtr get(const String & key)
+    FileSegmentPtr get(const String & key, bool update_lru = true)
     {
         auto itr = table.find(key);
         if (itr == table.end())
@@ -133,8 +135,11 @@ public:
             return nullptr;
         }
         auto & [file_seg, lru_itr] = itr->second;
-        // Move the key to the end of the queue. The iterator remains valid.
-        lru_queue.splice(lru_queue.end(), lru_queue, lru_itr);
+        if (update_lru)
+        {
+            // Move the key to the end of the queue. The iterator remains valid.
+            lru_queue.splice(lru_queue.end(), lru_queue, lru_itr);
+        }
         return file_seg;
     }
 
@@ -211,9 +216,9 @@ public:
 
     FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_);
 
-    RandomAccessFilePtr getRandomAccessFile(const S3::S3FilenameView & s3_fname);
+    RandomAccessFilePtr getRandomAccessFile(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize);
 
-    void updateConfig(Poco::Util::AbstractConfiguration & config_);
+    void updateConfig(const Settings & settings);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -226,7 +231,7 @@ public:
 
     DISALLOW_COPY_AND_MOVE(FileCache);
 
-    FileSegmentPtr get(const S3::S3FilenameView & s3_fname);
+    FileSegmentPtr get(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize = std::nullopt);
 
     void bgDownload(const String & s3_key, FileSegmentPtr & file_seg);
     void download(const String & s3_key, FileSegmentPtr & file_seg);
@@ -246,7 +251,7 @@ public:
     void restoreDMFile(const std::filesystem::directory_entry & dmfile_entry);
 
     void remove(const String & s3_key);
-    std::pair<UInt64, std::list<String>::iterator> removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f);
+    std::pair<Int64, std::list<String>::iterator> removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f);
     void removeDiskFile(const String & local_fname);
 
     // Estimated size is an empirical value.
@@ -258,6 +263,7 @@ public:
     static constexpr UInt64 estimated_size_of_file_type[] = {
         0, // Unknow type, currently never cache it.
         8 * 1024, // Estimated size of meta.
+        1 * 1024 * 1024, // Estimated size of merged.
         8 * 1024, // Estimated size of index.
         8 * 1024, // Estimated size of mark.
         8 * 1024, // Estimated size of null map.
@@ -289,7 +295,8 @@ public:
     UInt64 cache_capacity;
     UInt64 cache_level;
     UInt64 cache_used;
-    std::atomic<UInt64> cache_min_age_seconds;
+    std::atomic<UInt64> cache_min_age_seconds = 1800;
+    std::atomic<double> max_downloading_count_scale = 1.0;
     std::array<LRUFileTable, magic_enum::enum_count<FileSegment::FileType>()> tables;
 
     // Currently, these variables are just use for testing.

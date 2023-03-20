@@ -16,7 +16,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/UniThreadPool.h>
-#include <IO/IOThreadPool.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Server/ServerInfo.h>
@@ -66,10 +66,22 @@ void initThreadPool()
 {
     size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
     GlobalThreadPool::initialize(
+        /*max_threads*/ default_num_threads * 20,
+        /*max_free_threads*/ default_num_threads,
+        /*queue_size*/ default_num_threads * 10);
+    S3FileCachePool::initialize(
         /*max_threads*/ default_num_threads,
         /*max_free_threads*/ default_num_threads / 2,
         /*queue_size*/ default_num_threads * 2);
-    IOThreadPool::initialize(
+    DataStoreS3Pool::initialize(
+        /*max_threads*/ default_num_threads,
+        /*max_free_threads*/ default_num_threads / 2,
+        /*queue_size*/ default_num_threads * 2);
+    RNRemoteReadTaskPool::initialize(
+        /*max_threads*/ default_num_threads,
+        /*max_free_threads*/ default_num_threads / 2,
+        /*queue_size*/ default_num_threads * 2);
+    RNPagePreparerPool::initialize(
         /*max_threads*/ default_num_threads,
         /*max_free_threads*/ default_num_threads / 2,
         /*queue_size*/ default_num_threads * 2);

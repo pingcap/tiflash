@@ -41,6 +41,10 @@ const static re2::RE2 rgx_store_prefix("^s(?P<store_id>[0-9]+)/$");
 const static re2::RE2 rgx_data_or_manifest("^s(?P<store_id>[0-9]+)/(data|manifest)/(?P<data_subpath>.+)$");
 const static re2::RE2 rgx_subpath_manifest("mf_(?P<upload_seq>[0-9]+)");
 
+/// parsing DTFile
+const static re2::RE2 rgx_subpath_dtfile("t_(?P<table_id>[0-9]+)/dmf_(?P<file_id>[0-9]+)");
+const static re2::RE2 rgx_subpath_keyspace_dtfile("ks_(?P<keyspace_id>[0-9]+)_t_(?P<table_id>[0-9]+)/dmf_(?P<file_id>[0-9]+)");
+
 constexpr static std::string_view DELMARK_SUFFIX = ".del";
 
 // clang-format off
@@ -99,6 +103,33 @@ bool S3FilenameView::isDMFile() const
     static_assert(details::fmt_subpath_keyspace_dtfile[2] == '_', "keyspace dtfile prefix changed!");
 
     return (startsWith(data_subpath, "t_") || startsWith(data_subpath, "ks_"));
+}
+
+DMFileOID S3FilenameView::getDMFileOID() const
+{
+    RUNTIME_CHECK(isDMFile());
+    TableID table_id;
+    UInt64 file_id;
+    re2::StringPiece prefix_sp{data_subpath.data(), data_subpath.size()};
+    if (startsWith(data_subpath, "t_"))
+    {
+        RUNTIME_CHECK(re2::RE2::FullMatch(prefix_sp, details::rgx_subpath_dtfile, &table_id, &file_id));
+        return DMFileOID{
+            .store_id = store_id,
+            .table_id = table_id,
+            .file_id = file_id,
+        };
+    }
+    else
+    {
+        UInt64 keyspace_id;
+        RUNTIME_CHECK(re2::RE2::FullMatch(prefix_sp, details::rgx_subpath_keyspace_dtfile, &keyspace_id, &table_id, &file_id));
+        return DMFileOID{
+            .store_id = store_id,
+            .table_id = table_id,
+            .file_id = file_id,
+        };
+    }
 }
 
 String S3FilenameView::toFullKey() const

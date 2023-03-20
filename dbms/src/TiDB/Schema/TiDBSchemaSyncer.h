@@ -102,6 +102,13 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return it->second;
     }
 
+    // After all tables have been physical dropped, remove the `cur_version` of given keyspace
+    void removeCurrentVersion(KeyspaceID keyspace_id) override
+    {
+        std::lock_guard lock(schema_mutex);
+        cur_versions.erase(keyspace_id);
+    }
+
     bool syncSchemas(Context & context, KeyspaceID keyspace_id) override
     {
         std::lock_guard lock(schema_mutex);
@@ -110,37 +117,57 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         auto getter = createSchemaGetter(keyspace_id);
 
         Int64 version = getter.getVersion();
-        if (version <= cur_version)
-        {
-            return false;
-        }
+
         Stopwatch watch;
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
-
-        LOG_INFO(ks_log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
 
         // Show whether the schema mutex is held for a long time or not.
         GET_METRIC(tiflash_schema_applying).Set(1.0);
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_applying).Set(0.0); });
 
-        GET_METRIC(tiflash_schema_apply_count, type_diff).Increment();
-        // After the feature concurrent DDL, TiDB does `update schema version` before `set schema diff`, and they are done in separate transactions.
-        // So TiFlash may see a schema version X but no schema diff X, meaning that the transaction of schema diff X has not been committed or has
-        // been aborted.
-        // However, TiDB makes sure that if we get a schema version X, then the schema diff X-1 must exist. Otherwise the transaction of schema diff
-        // X-1 is aborted and we can safely ignore it.
-        // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
-        // to X-1 and try to fetch the schema diff X next time.
-        Int64 version_after_load_diff = 0;
-        if (version_after_load_diff = tryLoadSchemaDiffs(getter, cur_version, version, context, ks_log); version_after_load_diff == -1)
+        // If the schema version not exists, drop all schemas.
+        if (version == SchemaGetter::SchemaVersionNotExist)
         {
-            GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
-            version_after_load_diff = loadAllSchema(getter, version, context);
+            // Tables and databases are already tombstoned and waiting for GC.
+            if (SchemaGetter::SchemaVersionNotExist == cur_version)
+                return false;
+
+            LOG_INFO(ks_log, "Start to drop schemas. schema version key not exists, keyspace should be deleted");
+            GET_METRIC(tiflash_schema_apply_count, type_drop_keyspace).Increment();
+
+            // The key range of the given keyspace is deleted by `UnsafeDestroyRange`, so the return result
+            // of `SchemaGetter::listDBs` is not reliable. Directly mark all databases and tables of this keyspace
+            // as a tombstone and let the SchemaSyncService drop them physically.
+            dropAllSchema(getter, context);
+            cur_versions[keyspace_id] = SchemaGetter::SchemaVersionNotExist;
         }
-        cur_versions[keyspace_id] = version_after_load_diff;
+        else
+        {
+            if (version <= cur_version)
+                return false;
+
+            LOG_INFO(ks_log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
+            GET_METRIC(tiflash_schema_apply_count, type_diff).Increment();
+
+            // After the feature concurrent DDL, TiDB does `update schema version` before `set schema diff`, and they are done in separate transactions.
+            // So TiFlash may see a schema version X but no schema diff X, meaning that the transaction of schema diff X has not been committed or has
+            // been aborted.
+            // However, TiDB makes sure that if we get a schema version X, then the schema diff X-1 must exist. Otherwise the transaction of schema diff
+            // X-1 is aborted and we can safely ignore it.
+            // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
+            // to X-1 and try to fetch the schema diff X next time.
+            Int64 version_after_load_diff = 0;
+            if (version_after_load_diff = tryLoadSchemaDiffs(getter, cur_version, version, context, ks_log); version_after_load_diff == -1)
+            {
+                GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
+                version_after_load_diff = loadAllSchema(getter, version, context);
+            }
+            cur_versions[keyspace_id] = version_after_load_diff;
+        }
+
         // TODO: (keyspace) attach keyspace id to the metrics.
         GET_METRIC(tiflash_schema_version).Set(cur_version);
-        LOG_INFO(ks_log, "End sync schema, version has been updated to {}{}", keyspace_id, cur_version, cur_version == version ? "" : "(latest diff is empty)");
+        LOG_INFO(ks_log, "End sync schema, version has been updated to {}{}", cur_version, cur_version == version ? "" : "(latest diff is empty)");
         return true;
     }
 
@@ -277,6 +304,12 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
         builder.syncAllSchema();
         return version;
+    }
+
+    void dropAllSchema(Getter & getter, Context & context)
+    {
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, -1);
+        builder.dropAllSchema();
     }
 };
 

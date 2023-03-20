@@ -25,8 +25,8 @@ using namespace Aws::S3;
 class MockS3Client final : public S3::TiFlashS3Client
 {
 public:
-    explicit MockS3Client(const String & bucket = "")
-        : TiFlashS3Client(bucket)
+    explicit MockS3Client(const String & bucket, const String & root)
+        : TiFlashS3Client(bucket, root)
     {}
 
     ~MockS3Client() override = default;
@@ -45,6 +45,8 @@ public:
     Model::GetObjectTaggingOutcome GetObjectTagging(const Model::GetObjectTaggingRequest & request) const override;
 
 private:
+    static String normalizedKey(String ori_key);
+
     // Object key -> Object data
     using BucketStorage = std::map<String, String>;
     // Object key -> Object tagging

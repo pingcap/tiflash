@@ -31,6 +31,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
@@ -42,8 +43,6 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
-#include <Storages/S3/S3Filename.h>
-#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
@@ -246,15 +245,18 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
             auto segment_id = storage_pool->newMetaPageId();
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
             {
-                if (page_storage_run_mode == PageStorageRunMode::ONLY_V2)
-                {
-                    throw Exception(fmt::format("The first segment id should be {}", DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
-                }
+                RUNTIME_CHECK_MSG(
+                    page_storage_run_mode != PageStorageRunMode::ONLY_V2,
+                    "The first segment id should be {}, but get {}, run_mode={}",
+                    DELTA_MERGE_FIRST_SEGMENT_ID,
+                    segment_id,
+                    magic_enum::enum_name(page_storage_run_mode));
 
                 // In ONLY_V3 or MIX_MODE, If create a new DeltaMergeStore
                 // Should used fixed DELTA_MERGE_FIRST_SEGMENT_ID to create first segment
                 segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
             }
+            LOG_INFO(log, "creating the first segment with segment_id={}", segment_id);
 
             auto first_segment = Segment::newSegment( //
                 log,
@@ -287,7 +289,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
 
     setUpBackgroundTask(dm_context);
 
-    LOG_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", static_cast<UInt8>(page_storage_run_mode));
+    LOG_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", magic_enum::enum_name(page_storage_run_mode));
 }
 
 DeltaMergeStore::~DeltaMergeStore()
@@ -422,7 +424,7 @@ void DeltaMergeStore::shutdown()
     LOG_TRACE(log, "Shutdown DeltaMerge end");
 }
 
-DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id, const ScanContextPtr & scan_context_)
+DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id, ScanContextPtr scan_context_)
 {
     std::shared_lock lock(read_write_mutex);
 
@@ -992,14 +994,14 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const RowKeyRanges & sorted_ranges,
                                         size_t num_streams,
                                         UInt64 max_version,
-                                        const RSOperatorPtr & filter,
+                                        const PushDownFilterPtr & filter,
                                         const String & tracing_id,
                                         bool keep_order,
                                         bool is_fast_scan,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index,
-                                        const ScanContextPtr & scan_context)
+                                        ScanContextPtr scan_context)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
@@ -1025,6 +1027,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
+    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order);
+    RUNTIME_CHECK_MSG(!filter || !filter->before_where || read_mode == ReadMode::Bitmap, "Push down filters needs bitmap");
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
@@ -1032,7 +1036,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         filter,
         max_version,
         expected_block_size,
-        getReadMode(db_context, is_fast_scan, keep_order),
+        read_mode,
         std::move(tasks),
         after_segment_read,
         log_tracing_id,
@@ -1082,14 +1086,14 @@ SourceOps DeltaMergeStore::readSourceOps(
     const RowKeyRanges & sorted_ranges,
     size_t num_streams,
     UInt64 max_version,
-    const RSOperatorPtr & filter,
+    const PushDownFilterPtr & filter,
     const String & tracing_id,
     bool keep_order,
     bool is_fast_scan,
     size_t expected_block_size,
     const SegmentIdSet & read_segments,
     size_t extra_table_id_index,
-    const ScanContextPtr & scan_context)
+    ScanContextPtr scan_context)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
@@ -1155,7 +1159,7 @@ DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
     size_t num_streams,
     const String & tracing_id,
     const SegmentIdSet & read_segments,
-    const ScanContextPtr & scan_context)
+    ScanContextPtr scan_context)
 {
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
     auto log_tracing_id = getLogTracingId(*dm_context);
