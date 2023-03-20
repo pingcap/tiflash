@@ -21,6 +21,9 @@ namespace
 {
 /// for local agg, the concurrency of build and convert must both be 1.
 constexpr size_t local_concurrency = 1;
+
+/// for local agg, the task_index of build and convert must both be 0.
+constexpr size_t task_index = 0;
 } // namespace
 
 LocalAggregateTransform::LocalAggregateTransform(
@@ -47,11 +50,11 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
             if likely (!agg_context.useNullSource())
             {
                 RUNTIME_CHECK(agg_context.getConvergentConcurrency() == local_concurrency);
-                block = agg_context.readForConvergent(0);
+                block = agg_context.readForConvergent(task_index);
             }
             return OperatorStatus::HAS_OUTPUT;
         }
-        agg_context.buildOnBlock(0, block);
+        agg_context.buildOnBlock(task_index, block);
         block.clear();
         return OperatorStatus::NEED_INPUT;
     case LocalAggStatus::convert:
@@ -67,7 +70,7 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
         return OperatorStatus::NEED_INPUT;
     case LocalAggStatus::convert:
         if likely (!agg_context.useNullSource())
-            block = agg_context.readForConvergent(0);
+            block = agg_context.readForConvergent(task_index);
         return OperatorStatus::HAS_OUTPUT;
     }
 }
