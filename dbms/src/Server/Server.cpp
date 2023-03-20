@@ -969,7 +969,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         storage_config.s3_config.enable(/*check_requirements*/ true, log);
     }
-    else if (disaggregated_mode == DisaggregatedMode::Compute /*&& use_autoscaler*/) // FIXME!!!!
+    else if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
     {
         // compute node with auto scaler, the requirements will be initted later.
         storage_config.s3_config.enable(/*check_requirements*/ false, log);
