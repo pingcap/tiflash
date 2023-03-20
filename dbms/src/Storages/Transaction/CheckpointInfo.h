@@ -12,26 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Context.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFI.h>
-
-using raft_serverpb::PeerState;
-using raft_serverpb::RaftApplyState;
-using raft_serverpb::RegionLocalState;
+#pragma once
 
 namespace DB
 {
-struct TempUniversalPageStorage;
-using TempUniversalPageStoragePtr = std::shared_ptr<TempUniversalPageStorage>;
+class ParsedCheckpointDataHolder;
+using ParsedCheckpointDataHolderPtr = std::shared_ptr<ParsedCheckpointDataHolder>;
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 struct CheckpointInfo
 {
-    UInt64 remote_store_id;
-    RegionLocalState region_state;
-    RaftApplyState apply_state;
-    RegionPtr region;
-    TempUniversalPageStoragePtr temp_ps_wrapper; // a wrapper to protect the path of `temp_ps` to be deleted
+    UInt64 remote_store_id = 0;
+    UInt64 region_id = 0;
+    ParsedCheckpointDataHolderPtr checkpoint_data_holder; // a wrapper to protect the path of `temp_ps` to be deleted
     UniversalPageStoragePtr temp_ps;
 };
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;

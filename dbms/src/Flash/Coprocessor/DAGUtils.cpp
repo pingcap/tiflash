@@ -1141,6 +1141,24 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     return input_col[column_index].name;
 }
 
+void getColumnNamesFromExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col, std::unordered_set<String> & col_name_set)
+{
+    if (expr.children_size() == 0)
+    {
+        if (isColumnExpr(expr))
+        {
+            col_name_set.insert(getColumnNameForColumnExpr(expr, input_col));
+        }
+    }
+    else
+    {
+        for (const auto & child : expr.children())
+        {
+            getColumnNamesFromExpr(child, input_col, col_name_set);
+        }
+    }
+}
+
 NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
 {
     auto column_index = decodeDAGInt64(expr.val());

@@ -406,6 +406,40 @@ TEST_F(UniPageStorageTest, Scan)
     }
 }
 
+TEST_F(UniPageStorageTest, OnlyScanRaftLog)
+{
+    UInt64 tag = 0;
+    const UInt64 region_id = 100;
+    const String region_prefix = UniversalPageIdFormat::toFullRaftLogPrefix(region_id);
+    // write some raft related data
+    {
+        UniversalWriteBatch wb;
+        wb.disableRemoteLock();
+        PS::V3::CheckpointLocation loc{
+            .data_file_id = std::make_shared<String>("hello"),
+            .offset_in_file = 0,
+            .size_in_file = 0};
+        wb.putRemotePage(UniversalPageIdFormat::toFullPageId(region_prefix, 10), tag, 0, loc, {});
+        wb.putRemotePage(UniversalPageIdFormat::toFullPageId(region_prefix, 15), tag, 0, loc, {});
+        wb.putRemotePage(UniversalPageIdFormat::toFullPageId(region_prefix, 18), tag, 0, loc, {});
+        wb.putRemotePage(UniversalPageIdFormat::toFullRaftLogScanEnd(region_id), tag, 0, loc, {});
+
+        page_storage->write(std::move(wb));
+    }
+
+    RaftDataReader reader(*page_storage);
+    {
+        size_t count = 0;
+        auto checker = [&](const UniversalPageId & page_id, PageSize page_size, const PS::V3::CheckpointLocation & location) {
+            UNUSED(page_size, location);
+            ASSERT_EQ(UniversalPageIdFormat::getFullPrefix(page_id), region_prefix);
+            count++;
+        };
+        reader.traverseRemoteRaftLogForRegion(region_id, checker);
+        ASSERT_EQ(count, 3);
+    }
+}
+
 TEST(UniPageStorageIdTest, UniversalPageId)
 {
     {

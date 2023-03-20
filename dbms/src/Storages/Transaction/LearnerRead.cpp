@@ -384,7 +384,7 @@ LearnerReadSnapshot doLearnerRead(
                                     region_to_query.region_id,
                                     region_to_query.version,
                                     RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table),
-                                    RegionException::RegionReadStatusString(status));
+                                    magic_enum::enum_name(status));
                                 unavailable_regions.add(region->id(), status);
                             }
                         },
@@ -469,7 +469,7 @@ void validateQueryInfo(
                 region_query_info.region_id,
                 region_query_info.version,
                 RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_query_info.range_in_table),
-                RegionException::RegionReadStatusString(status));
+                magic_enum::enum_name(status));
         }
     }
 

@@ -699,6 +699,7 @@ bool VersionedPageEntries<Trait>::cleanOutdatedEntries(
     UInt64 lowest_seq,
     std::map<PageId, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
     PageEntriesV3 * entries_removed,
+    RemoteFileValidSizes * remote_file_sizes,
     const PageLock & /*page_lock*/)
 {
     if (type == EditRecordType::VAR_EXTERNAL)
@@ -753,6 +754,23 @@ bool VersionedPageEntries<Trait>::cleanOutdatedEntries(
     // if `being_ref_count` > 1 (this means the entry is ref by other entries)
     bool last_entry_is_delete = !iter->second.isEntry();
     --iter; // keep the first version less than <lowest_seq+1, 0>
+
+    if (remote_file_sizes)
+    {
+        // the entries after `iter` are valid, collect the remote info size for remote GC
+        for (auto valid_iter = iter; valid_iter != entries.end(); ++valid_iter)
+        {
+            if (!valid_iter->second.isEntry())
+                continue;
+            auto entry = valid_iter->second.entry;
+            if (!entry.checkpoint_info.has_value())
+                continue;
+            const auto & file_id = *entry.checkpoint_info.data_location.data_file_id;
+            auto file_size_iter = remote_file_sizes->try_emplace(file_id, 0);
+            file_size_iter.first->second += entry.checkpoint_info.data_location.size_in_file;
+        }
+    }
+
     while (true)
     {
         if (iter->second.isDelete())
@@ -844,7 +862,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
             return false;
         // Clean outdated entries after decreased the ref-counter
         // set `normal_entries_to_deref` to be nullptr to ignore cleaning ref-var-entries
-        return cleanOutdatedEntries(lowest_seq, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock);
+        return cleanOutdatedEntries(lowest_seq, /*normal_entries_to_deref*/ nullptr, entries_removed, /*remote_file_sizes*/ nullptr, page_lock);
     }
 
     throw Exception(fmt::format("calling derefAndClean with invalid state [state={}]", toDebugString()));
@@ -1814,7 +1832,7 @@ void PageDirectory<Trait>::copyCheckpointInfoFromEdit(PageEntriesEdit & edit)
 }
 
 template <typename Trait>
-typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(bool return_removed_entries)
+typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(const InMemGCOption & options)
 {
     UInt64 lowest_seq = sequence.load();
 
@@ -1878,7 +1896,8 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         const bool all_deleted = iter->second->cleanOutdatedEntries(
             lowest_seq,
             &normal_entries_to_deref,
-            return_removed_entries ? &all_del_entries : nullptr,
+            options.need_removed_entries ? &all_del_entries : nullptr,
+            options.remote_valid_sizes,
             iter->second->acquireLock());
 
         {
@@ -1917,7 +1936,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
             page_id,
             /*deref_ver=*/deref_counter.first,
             /*deref_count=*/deref_counter.second,
-            return_removed_entries ? &all_del_entries : nullptr);
+            options.need_removed_entries ? &all_del_entries : nullptr);
 
         if (all_deleted)
         {

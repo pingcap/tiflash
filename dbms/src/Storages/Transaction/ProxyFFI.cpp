@@ -390,7 +390,7 @@ void HandlePurgePageStorage(const EngineStoreServerWrap * server)
     try
     {
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
-        uni_ps->gc();
+        uni_ps->gc({});
     }
     catch (...)
     {

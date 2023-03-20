@@ -247,6 +247,7 @@ void EtcdOwnerManager::camaignLoop(Etcd::SessionPtr session)
 
             const auto lease_id = session->leaseID();
             LOG_DEBUG(log, "new campaign loop with lease_id={:x}", lease_id);
+            // Let this thread blocks until becone owner or error occurs
             auto && [new_leader, status] = client->campaign(campaign_name, id, lease_id);
             if (!status.ok())
             {

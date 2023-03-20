@@ -14,11 +14,14 @@
 
 #include <Common/Exception.h>
 #include <Flash/Disaggregated/S3LockClient.h>
+#include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
+#include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/Universal/S3LockLocalManager.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
+#include <Storages/S3/S3RandomAccessFile.h>
 
 #include <magic_enum.hpp>
 
@@ -38,12 +41,14 @@ S3LockLocalManager::S3LockLocalManager()
 
 // `store_id` is inited later because they may not
 // accessable when S3LockLocalManager is created.
-void S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientPtr s3lock_client_)
+std::optional<CheckpointProto::ManifestFilePrefix>
+S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockClientPtr s3lock_client_)
 {
     if (inited_from_s3)
-        return;
+        return std::nullopt;
 
     RUNTIME_CHECK(actual_store_id != InvalidStoreID, actual_store_id);
+    std::optional<CheckpointProto::ManifestFilePrefix> prefix_opt;
     do
     {
         std::unique_lock latch_init(mtx_store_init);
@@ -53,10 +58,13 @@ void S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockCl
 
         // we need to restore the last_upload_sequence from S3
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-        const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, s3_client->bucket(), actual_store_id);
+        const auto manifests = S3::CheckpointManifestS3Set::getFromS3(*s3_client, actual_store_id);
         if (!manifests.empty())
         {
             last_upload_sequence = manifests.latestUploadSequence();
+            auto manifest_file = S3::S3RandomAccessFile::create(manifests.latestManifestKey());
+            auto reader = CPManifestFileReader::create(CPManifestFileReader::Options{.plain_file = manifest_file});
+            prefix_opt = reader->readPrefix();
         }
         else
         {
@@ -66,11 +74,16 @@ void S3LockLocalManager::initStoreInfo(StoreID actual_store_id, DB::S3::S3LockCl
         s3lock_client = std::move(s3lock_client_);
         store_id = actual_store_id;
 
-        LOG_INFO(log, "restore the last upload sequence from S3, sequence={}", last_upload_sequence);
+        LOG_INFO(
+            log,
+            "restore the last upload sequence from S3, last_upload_sequence={} last_prefix={}",
+            last_upload_sequence,
+            prefix_opt ? prefix_opt.value().ShortDebugString() : "{None}");
 
         inited_from_s3 = true;
     } while (false); // release lock_init
     cv_init.notify_all();
+    return prefix_opt;
 }
 
 S3LockLocalManager::ExtraLockInfo
@@ -171,7 +184,7 @@ String S3LockLocalManager::createS3Lock(const String & datafile_key, const S3::S
         // directly create lock through S3 client
         // TODO: handle s3 network error and retry?
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-        S3::uploadEmptyFile(*s3_client, s3_client->bucket(), lockkey);
+        S3::uploadEmptyFile(*s3_client, lockkey);
         LOG_DEBUG(log, "S3 lock created for local datafile, lockkey={}", lockkey);
     }
     else
