@@ -379,12 +379,18 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 {
     bool lifecycle_rule_has_been_set = false;
     Aws::Vector<Aws::S3::Model::LifecycleRule> old_rules;
-    {
+    do {
         Aws::S3::Model::GetBucketLifecycleConfigurationRequest req;
         req.SetBucket(client.bucket());
         auto outcome = client.GetBucketLifecycleConfiguration(req);
         if (!outcome.IsSuccess())
         {
+            const auto & error = outcome.GetError();
+            // The life cycle is not added at all
+            if (error.GetExceptionName() == "NoSuchLifecycleConfiguration")
+            {
+                break;
+            }
             throw fromS3Error(outcome.GetError(), "GetBucketLifecycle fail");
         }
 
@@ -413,7 +419,7 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
                 break;
             }
         }
-    }
+    } while (false);
 
     if (lifecycle_rule_has_been_set)
     {
