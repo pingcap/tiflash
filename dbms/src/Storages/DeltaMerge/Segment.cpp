@@ -200,7 +200,7 @@ StableValueSpacePtr createNewStable( //
     else
     {
         auto store_id = context.db_context.getTMTContext().getKVStore()->getStoreID();
-        Remote::DMFileOID oid{.store_id = store_id, .table_id = context.physical_table_id, .file_id = dtfile_id};
+        Remote::DMFileOID oid{.store_id = store_id, .keyspace_id = context.keyspace_id, .table_id = context.physical_table_id, .file_id = dtfile_id};
         data_store->putDMFile(dtfile, oid, /*remove_local*/ true);
         PS::V3::CheckpointLocation loc{
             .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
@@ -338,19 +338,15 @@ SegmentPtr Segment::restoreSegment( //
 
 Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     DMContext & context,
-    NamespaceId ns_id,
     const RowKeyRange & target_range,
     const CheckpointInfoPtr & checkpoint_info)
 {
     auto fap_context = context.db_context.getSharedContextDisagg()->fap_context;
-    TableIdentifier identifier{
-        .key_space_id = 0,
-        .table_id = ns_id,
-    };
+
     // If cache is empty, we read from DELTA_MERGE_FIRST_SEGMENT_ID to the end and build the cache.
     // Otherwise, we just read the segment that cover the range.
     PageIdU64 current_segment_id = 1;
-    auto end_to_segment_id_cache = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(identifier);
+    auto end_to_segment_id_cache = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(KeyspaceTableID{context.keyspace_id, context.physical_table_id});
     auto lock = end_to_segment_id_cache->lock();
     bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
     if (is_cache_ready)
@@ -363,7 +359,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     while (current_segment_id != 0)
     {
         Segment::SegmentMetaInfo segment_info;
-        auto target_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Meta, ns_id), current_segment_id);
+        auto target_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Meta, context.physical_table_id), current_segment_id);
         auto page = checkpoint_info->temp_ps->read(target_id);
         segment_info.segment_id = current_segment_id;
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -385,7 +381,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
     }
     if (!is_cache_ready)
     {
-        LOG_DEBUG(Logger::get(), "Build cache for table {} with {} segments", ns_id, end_key_and_segment_ids.size());
+        LOG_DEBUG(Logger::get(), "Build cache for keyspace {} table {} with {} segments", context.keyspace_id, context.physical_table_id, end_key_and_segment_ids.size());
         end_to_segment_id_cache->build(lock, std::move(end_key_and_segment_ids));
     }
     return segment_infos;
@@ -395,7 +391,6 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
     const LoggerPtr & parent_log,
     DMContext & context,
     UInt64 remote_store_id,
-    NamespaceId ns_id,
     const SegmentMetaInfos & meta_infos,
     const RowKeyRange & range,
     UniversalPageStoragePtr temp_ps,
@@ -406,8 +401,8 @@ Segments Segment::createTargetSegmentsFromCheckpoint( //
     for (const auto & segment_info : meta_infos)
     {
         LOG_DEBUG(parent_log, "Create segment begin. Delta id {} stable id {} range {} epoch {} next_segment_id {}", segment_info.delta_id, segment_info.stable_id, segment_info.range.toDebugString(), segment_info.epoch, segment_info.next_segment_id);
-        auto stable = StableValueSpace::createFromCheckpoint(context, temp_ps, ns_id, segment_info.stable_id, wbs);
-        auto delta = DeltaValueSpace::createFromCheckpoint(context, temp_ps, segment_info.range, ns_id, segment_info.delta_id, wbs);
+        auto stable = StableValueSpace::createFromCheckpoint(context, temp_ps, segment_info.stable_id, wbs);
+        auto delta = DeltaValueSpace::createFromCheckpoint(context, temp_ps, segment_info.range, segment_info.delta_id, wbs);
         auto segment = std::make_shared<Segment>(Logger::get("Checkpoint"), segment_info.epoch, segment_info.range.shrink(range), segment_info.segment_id, segment_info.next_segment_id, delta, stable);
         segments.push_back(segment);
         LOG_DEBUG(parent_log, "Create segment end. Delta id {} stable id {} range {} epoch {} next_segment_id {}", segment_info.delta_id, segment_info.stable_id, segment_info.range.toDebugString(), segment_info.epoch, segment_info.next_segment_id);
@@ -1185,25 +1180,20 @@ SegmentPtr Segment::dangerouslyReplaceDataFromCheckpoint(const Segment::Lock &, 
         }
         else if (auto * b = column_file->tryToBigFile(); b)
         {
-            auto new_file_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
-            auto old_page_id = b->getDataPageId();
-            wbs.data.putRefPage(new_file_id, old_page_id);
-            auto old_file_id = b->getFile()->fileId();
-            String file_parent_path;
-            if (dm_context.db_context.getSharedContextDisagg()->remote_data_store)
-            {
-                auto wn_ps = dm_context.db_context.getWriteNodePageStorage();
-                auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, dm_context.storage_pool->getNamespaceId()), old_page_id);
-                auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
-                const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
-                file_parent_path = S3::S3Filename::fromTableID(lock_key_view.store_id, dm_context.storage_pool->getNamespaceId()).toFullKeyWithPrefix();
-            }
-            else
-            {
-                file_parent_path = delegate.getDTFilePath(old_file_id);
-            }
-            auto new_dmfile = DMFile::restore(dm_context.db_context.getFileProvider(), old_file_id, new_file_id, file_parent_path, DMFile::ReadMetaMode::all());
-            auto new_column_file = b->cloneWith(dm_context, new_dmfile, rowkey_range);
+            auto new_data_page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+            auto old_data_page_id = b->getDataPageId();
+            wbs.data.putRefPage(new_data_page_id, old_data_page_id);
+            auto wn_ps = dm_context.db_context.getWriteNodePageStorage();
+            auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(dm_context.keyspace_id, StorageType::Data, dm_context.physical_table_id), old_data_page_id);
+            auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
+            auto data_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id)).asDataFile();
+            auto file_oid = data_key_view.getDMFileOID();
+            RUNTIME_CHECK(file_oid.file_id == b->getFile()->fileId(), file_oid.file_id, b->getFile()->fileId());
+            auto remote_data_store = dm_context.db_context.getSharedContextDisagg()->remote_data_store;
+            RUNTIME_CHECK(remote_data_store != nullptr);
+            auto prepared = remote_data_store->prepareDMFile(file_oid, new_data_page_id);
+            auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
+            auto new_column_file = b->cloneWith(dm_context, dmfile, rowkey_range);
             new_column_file_persisteds.push_back(new_column_file);
         }
         else

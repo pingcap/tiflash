@@ -199,7 +199,7 @@ TEST(S3FilenameTest, Prefix)
     {
         String table = "s2077/data/t_44";
         String table_with_prefix = "s3://s2077/data/t_44";
-        auto s3_fname = S3Filename::fromTableID(oid.store_id, oid.table_id);
+        auto s3_fname = S3Filename::fromTableID(oid.store_id, oid.keyspace_id, oid.table_id);
         ASSERT_EQ(s3_fname.toFullKey(), table);
         ASSERT_EQ(s3_fname.toFullKeyWithPrefix(), table_with_prefix);
     }
@@ -211,7 +211,7 @@ TEST(S3FilenameTest, StableTable)
     Int64 test_table_id = 44;
     String table_key = "s2077/data/t_44";
 
-    auto name = S3Filename::fromTableID(test_store_id, test_table_id);
+    auto name = S3Filename::fromTableID(test_store_id, NullspaceID, test_table_id);
     ASSERT_EQ(name.toFullKey(), table_key);
 
     auto view = S3FilenameView::fromKey(table_key);

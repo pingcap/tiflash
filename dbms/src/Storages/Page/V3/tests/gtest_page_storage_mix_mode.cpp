@@ -67,10 +67,11 @@ public:
         storage_path_pool_v2 = std::make_unique<StoragePathPool>(Strings{path}, Strings{path}, "test", "t1", true, cap_metrics, global_context.getFileProvider());
 
         global_context.setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
-        storage_pool_v2 = std::make_unique<DM::StoragePool>(global_context, TEST_NAMESPACE_ID, *storage_path_pool_v2, "test.t1");
+        storage_pool_v2 = std::make_unique<DM::StoragePool>(global_context, NullspaceID, TEST_NAMESPACE_ID, *storage_path_pool_v2, "test.t1");
 
         global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
         storage_pool_mix = std::make_unique<DM::StoragePool>(*db_context,
+                                                             NullspaceID,
                                                              TEST_NAMESPACE_ID,
                                                              *storage_path_pool_v2,
                                                              "test.t1");

@@ -157,7 +157,6 @@ public:
     using SegmentMetaInfos = std::vector<SegmentMetaInfo>;
     static SegmentMetaInfos readAllSegmentsMetaInfoInRange( //
         DMContext & context,
-        NamespaceId ns_id,
         const RowKeyRange & target_range,
         const CheckpointInfoPtr & checkpoint_info);
 
@@ -167,7 +166,6 @@ public:
         const LoggerPtr & parent_log,
         DMContext & context,
         UInt64 remote_store_id,
-        NamespaceId ns_id,
         const SegmentMetaInfos & meta_infos,
         const RowKeyRange & range,
         UniversalPageStoragePtr temp_ps,

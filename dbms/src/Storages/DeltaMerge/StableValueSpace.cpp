@@ -115,7 +115,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
         if (remote_data_store)
         {
             auto wn_ps = context.db_context.getWriteNodePageStorage();
-            auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, context.storage_pool->getNamespaceId()), page_id);
+            auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Data, context.physical_table_id), page_id);
             auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
             const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
             auto file_oid = lock_key_view.asDataFile().getDMFileOID();
@@ -144,13 +144,12 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
 StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
     DMContext & context,
     UniversalPageStoragePtr temp_ps,
-    TableID ns_id,
     PageIdU64 stable_id,
     WriteBatches & wbs)
 {
     auto stable = std::make_shared<StableValueSpace>(stable_id);
 
-    auto stable_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Meta, ns_id), stable_id);
+    auto stable_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Meta, context.physical_table_id), stable_id);
     auto page = temp_ps->read(stable_page_id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
 
@@ -171,7 +170,7 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
     {
         UInt64 page_id;
         readIntBinary(page_id, buf);
-        auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id), page_id);
+        auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Data, context.physical_table_id), page_id);
         auto remote_data_location = temp_ps->getCheckpointLocation(full_page_id);
         auto data_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id)).asDataFile();
         auto file_oid = data_key_view.getDMFileOID();

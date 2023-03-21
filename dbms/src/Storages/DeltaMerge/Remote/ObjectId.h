@@ -27,6 +27,7 @@ namespace DB::DM::Remote
 struct DMFileOID
 {
     StoreID store_id = 0;
+    KeyspaceID keyspace_id = NullspaceID;
     TableID table_id = 0;
     UInt64 file_id = 0;
 };
@@ -51,7 +52,7 @@ struct fmt::formatter<DB::DM::Remote::DMFileOID>
     template <typename FormatContext>
     auto format(const DB::DM::Remote::DMFileOID & value, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(ctx.out(), "{}_{}_{}", value.store_id, value.table_id, value.file_id);
+        return format_to(ctx.out(), "{}_{}_{}_{}", value.store_id, value.keyspace_id, value.table_id, value.file_id);
     }
 };
 
