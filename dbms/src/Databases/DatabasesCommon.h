@@ -64,11 +64,12 @@ ASTPtr getCreateQueryFromMetadata(const Context & context, const String & metada
 
 std::vector<String> listSQLFilenames(const String & meta_dir, Poco::Logger * log);
 
-// Startup tables with thread_pool. If exception with code TIDB_TABLE_ALREADY_EXISTS thrown in startup,
-// those tables' meta will be removed and deatch from database.
-void startupTables(IDatabase & database, const String & db_name, Tables & tables, ThreadPool * thread_pool, Poco::Logger * log);
+// // Startup tables with thread_pool. If exception with code TIDB_TABLE_ALREADY_EXISTS thrown in startup,
+// // those tables' meta will be removed and deatch from database.
+// void startupTables(IDatabase & database, const String & db_name, Tables & tables, ThreadPool * thread_pool, Poco::Logger * log);
+void cleanupTables(IDatabase & database, const String & db_name, const Tables & tables, Poco::Logger * log);
 
-void loadTable(Context & context,
+std::tuple<String, StoragePtr> loadTable(Context & context,
                IDatabase & database,
                const String & database_metadata_path,
                const String & database_name,

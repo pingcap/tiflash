@@ -47,6 +47,7 @@ extern const int FILE_DOESNT_EXIST;
 extern const int LOGICAL_ERROR;
 extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 extern const int SYNTAX_ERROR;
+extern const int TIDB_TABLE_ALREADY_EXISTS;
 } // namespace ErrorCodes
 
 namespace FailPoints
@@ -124,6 +125,8 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
     std::atomic<size_t> tables_processed{0};
 
     std::vector<std::future<void>> futures;
+    std::mutex failed_tables_mutex;
+    Tables tables_failed_to_startup;
 
     auto task_function = [&](std::vector<String>::const_iterator begin, std::vector<String>::const_iterator end) {
         for (auto it = begin; it != end; ++it)
@@ -136,7 +139,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
             }
 
             const String & table_file = *it;
-            DatabaseLoading::loadTable(
+            auto [table_name, table] = DatabaseLoading::loadTable(
                 context,
                 *this,
                 metadata_path,
@@ -145,6 +148,27 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
                 getEngineName(),
                 table_file,
                 has_force_restore_data_flag);
+
+            try
+            {
+                table->startup();
+            }
+            catch (DB::Exception & e)
+            {
+                if (e.code() == ErrorCodes::TIDB_TABLE_ALREADY_EXISTS)
+                {
+                    // While doing IStorage::startup, Exception thorwn with TIDB_TABLE_ALREADY_EXISTS,
+                    // means that we may crashed in the middle of renaming tables. We clean the meta file
+                    // for those storages by `cleanupTables`.
+                    // - If the storage is the outdated one after renaming, remove it is right.
+                    // - If the storage should be the target table, remove it means we "rollback" the
+                    //   rename action. And the table will be renamed by TiDBSchemaSyncer later.
+                    std::lock_guard lock(failed_tables_mutex);
+                    tables_failed_to_startup.emplace(table_name, table);
+                }
+                else
+                    throw;
+            }
         }
     };
 
@@ -158,9 +182,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
         auto task = std::make_shared<std::packaged_task<void()>>([&task_function, begin, end] {
             task_function(begin, end);
         });
-        // auto task = [&task_function, begin, end] {
-        //     task_function(begin, end);
-        // };
+
         if (thread_pool){
             futures.emplace_back(task->get_future());
             thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
@@ -174,9 +196,8 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
             f.get();
         }      
     }
-        // thread_pool->wait();
     // After all tables was basically initialized, startup them.
-    DatabaseLoading::startupTables(*this, name, tables, thread_pool, log);
+    DatabaseLoading::cleanupTables(*this, name, tables_failed_to_startup, log);
 }
 
 

@@ -46,6 +46,7 @@ extern const int FILE_DOESNT_EXIST;
 extern const int LOGICAL_ERROR;
 extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 extern const int SYNTAX_ERROR;
+extern const int TIDB_TABLE_ALREADY_EXISTS;
 } // namespace ErrorCodes
 
 namespace FailPoints
@@ -101,11 +102,13 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
 
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};
+    std::mutex failed_tables_mutex;
+    Tables tables_failed_to_startup;
 
     auto task_function = [&](FileNames::const_iterator begin, FileNames::const_iterator end) {
         for (auto it = begin; it != end; ++it)
         {
-            const String & table = *it;
+            const String & table_file = *it;
 
             /// Messages, so that it's not boring to wait for the server to load for a long time.
             if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
@@ -114,7 +117,27 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
                 watch.restart();
             }
 
-            DatabaseLoading::loadTable(context, *this, metadata_path, name, data_path, getEngineName(), table, has_force_restore_data_flag);
+            auto [table_name, table] = DatabaseLoading::loadTable(context, *this, metadata_path, name, data_path, getEngineName(), table_file, has_force_restore_data_flag);
+            try
+            {
+                table->startup();
+            }
+            catch (DB::Exception & e)
+            {
+                if (e.code() == ErrorCodes::TIDB_TABLE_ALREADY_EXISTS)
+                {
+                    // While doing IStorage::startup, Exception thorwn with TIDB_TABLE_ALREADY_EXISTS,
+                    // means that we may crashed in the middle of renaming tables. We clean the meta file
+                    // for those storages by `cleanupTables`.
+                    // - If the storage is the outdated one after renaming, remove it is right.
+                    // - If the storage should be the target table, remove it means we "rollback" the
+                    //   rename action. And the table will be renamed by TiDBSchemaSyncer later.
+                    std::lock_guard lock(failed_tables_mutex);
+                    tables_failed_to_startup.emplace(table_name, table);
+                }
+                else
+                    throw;
+            }
         }
     };
 
@@ -140,7 +163,8 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
         thread_pool->wait();
 
     /// After all tables was basically initialized, startup them.
-    DatabaseLoading::startupTables(*this, name, tables, thread_pool, log);
+    // DatabaseLoading::startupTables(*this, name, tables, thread_pool, log)
+    DatabaseLoading::cleanupTables(*this, name, tables_failed_to_startup, log);
 }
 
 void DatabaseOrdinary::createTable(const Context & context, const String & table_name, const StoragePtr & table, const ASTPtr & query)
