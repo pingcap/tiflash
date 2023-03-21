@@ -532,4 +532,51 @@ try
 }
 CATCH
 
+TEST_F(S3FileTest, RetryWrapper)
+try
+{
+    // Always succ
+    {
+        Int32 retry = 0;
+        retryWrapper([&retry](Int32 max_retry_times, Int32 current_retry) {
+            UNUSED(max_retry_times);
+            retry = current_retry;
+            return true;
+        },
+                     3);
+        ASSERT_EQ(retry, 0);
+    }
+
+    // Always fail
+    {
+        Int32 retry = 0;
+        try
+        {
+            retryWrapper([&retry](Int32 max_retry_times, Int32 current_retry) {
+                retry = current_retry;
+                RUNTIME_CHECK(max_retry_times - 1 != current_retry);
+                return false;
+            },
+                         3);
+        }
+        catch (...)
+        {
+        }
+        ASSERT_EQ(retry, 2);
+    }
+
+    // Partial fail
+    {
+        Int32 retry = 0;
+        retryWrapper([&retry](Int32 max_retry_times, Int32 current_retry) {
+            UNUSED(max_retry_times);
+            retry = current_retry;
+            return current_retry > 0;
+        },
+                     3);
+        ASSERT_EQ(retry, 1);
+    }
+}
+CATCH
+
 } // namespace DB::tests

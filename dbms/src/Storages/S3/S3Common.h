@@ -183,4 +183,18 @@ void rawListPrefix(
     std::string_view delimiter,
     std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
 
+template <typename F, typename... T>
+void retryWrapper(F f, T... args)
+{
+    Int32 i = 0;
+    while (true)
+    {
+        // When `f` return true or throw exception, break the loop.
+        if (f(args..., i))
+        {
+            break;
+        }
+        ++i;
+    }
+}
 } // namespace DB::S3
