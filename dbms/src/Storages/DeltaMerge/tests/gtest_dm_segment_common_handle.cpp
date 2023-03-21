@@ -55,7 +55,7 @@ protected:
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
-        storage_pool = std::make_shared<StoragePool>(*db_context, /*table_id*/ 100, *path_pool, "test.t1");
+        storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, /*table_id*/ 100, *path_pool, "test.t1");
         storage_pool->restore();
         if (!cols)
             cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
@@ -74,6 +74,7 @@ protected:
                                                   path_pool,
                                                   storage_pool,
                                                   /*min_version_*/ 0,
+                                                  NullspaceID,
                                                   /*physical_table_id*/ 100,
                                                   is_common_handle,
                                                   rowkey_column_size,

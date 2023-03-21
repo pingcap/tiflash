@@ -104,7 +104,7 @@ public:
         auto configuration = createConfiguration(mode);
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
         path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFileTest", false));
-        storage_pool = std::make_shared<StoragePool>(*db_context, /*ns_id*/ 100, *path_pool, "test.t1");
+        storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, /*ns_id*/ 100, *path_pool, "test.t1");
         dm_file = DMFile::create(1, parent_path, std::move(configuration), modeToVersion(mode));
         table_columns = std::make_shared<ColumnDefines>();
         column_cache = std::make_shared<ColumnCache>();
@@ -124,6 +124,7 @@ public:
             path_pool,
             storage_pool,
             /*min_version_*/ 0,
+            NullspaceID,
             /*physical_table_id*/ 100,
             false,
             1,
@@ -1269,7 +1270,7 @@ public:
         auto configuration = createConfiguration(mode);
 
         path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
-        storage_pool = std::make_shared<StoragePool>(*db_context, table_id, *path_pool, "test.t1");
+        storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, table_id, *path_pool, "test.t1");
         dm_file = DMFile::create(0, path, std::move(configuration), modeToVersion(mode));
         table_columns = std::make_shared<ColumnDefines>();
         column_cache = std::make_shared<ColumnCache>();
@@ -1291,6 +1292,7 @@ public:
             path_pool,
             storage_pool,
             /*min_version_*/ 0,
+            NullspaceID,
             /*physical_table_id*/ 100,
             is_common_handle,
             rowkey_column_size,
