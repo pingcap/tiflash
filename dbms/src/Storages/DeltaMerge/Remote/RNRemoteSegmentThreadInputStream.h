@@ -102,6 +102,8 @@ private:
     bool done = false;
 
     BlockInputStreamPtr cur_stream;
+    RNRemoteSegmentReadTaskPtr cur_read_task; // When reading from cur_stream we need cur_read_task is alive.
+
     UInt64 cur_segment_id;
 
     LoggerPtr log;

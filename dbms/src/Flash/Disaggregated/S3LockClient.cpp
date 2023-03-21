@@ -102,7 +102,7 @@ S3LockClient::sendTryMarkDeleteRequest(
 // Otherwise return <false, conflict_message>
 // This method will update the owner info when owner changed.
 // If deadline exceed or failed to get the owner info within
-// `timeour_s`, it will throw exception.
+// `timeout_s`, it will throw exception.
 template <typename Response, typename Request, typename SendRpc>
 std::pair<bool, String> S3LockClient::makeCall(SendRpc send, const Request & req, Int64 timeout_s, const LoggerPtr & tracing_log)
 {

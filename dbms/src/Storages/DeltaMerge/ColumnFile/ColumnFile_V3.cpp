@@ -102,7 +102,6 @@ ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint( //
     const RowKeyRange & segment_range,
     ReadBuffer & buf,
     UniversalPageStoragePtr temp_ps,
-    TableID ns_id,
     WriteBatches & wbs)
 {
     size_t column_file_count;
@@ -122,12 +121,12 @@ ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint( //
             break;
         case ColumnFile::Type::TINY_FILE:
         {
-            std::tie(column_file, last_schema) = ColumnFileTiny::createFromCheckpoint(context, buf, temp_ps, last_schema, ns_id, wbs);
+            std::tie(column_file, last_schema) = ColumnFileTiny::createFromCheckpoint(context, buf, temp_ps, last_schema, wbs);
             break;
         }
         case ColumnFile::Type::BIG_FILE:
         {
-            column_file = ColumnFileBig::createFromCheckpoint(context, segment_range, buf, temp_ps, ns_id, wbs);
+            column_file = ColumnFileBig::createFromCheckpoint(context, segment_range, buf, temp_ps, wbs);
             break;
         }
         default:

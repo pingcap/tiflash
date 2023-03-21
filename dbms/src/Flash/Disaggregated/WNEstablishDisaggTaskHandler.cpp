@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/TiFlashException.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Disaggregated/WNEstablishDisaggTaskHandler.h>
 #include <Flash/Executor/QueryExecutorHolder.h>
@@ -101,10 +102,9 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
     }
 
     using DM::Remote::Serializer;
-    for (const auto & [table_id, table_tasks] : snap->tableSnapshots())
-    {
-        response->add_tables(Serializer::serializeTo(table_tasks, task_id).SerializeAsString());
-    }
+    snap->iterateTableSnapshots([&](const DM::Remote::DisaggPhysicalTableReadSnapshotPtr & snap) {
+        response->add_tables(Serializer::serializeTo(snap, task_id).SerializeAsString());
+    });
 }
 
 } // namespace DB

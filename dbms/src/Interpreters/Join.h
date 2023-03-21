@@ -107,9 +107,7 @@ public:
          const SpillConfig & probe_spill_config_,
          Int64 join_restore_concurrency_,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
-         const String & left_filter_column = "",
-         const String & right_filter_column = "",
-         const JoinOtherConditions & conditions = {},
+         const JoinNonEqualConditions & non_equal_conditions_ = {},
          size_t max_block_size = 0,
          const String & match_helper_name = "",
          size_t restore_round = 0,
@@ -431,10 +429,7 @@ private:
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
-    String left_filter_column;
-    String right_filter_column;
-
-    const JoinOtherConditions other_conditions;
+    const JoinNonEqualConditions non_equal_conditions;
 
     ASTTableJoin::Strictness original_strictness;
     size_t max_block_size;
