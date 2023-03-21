@@ -405,6 +405,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         /* path_pool */ nullptr,
         /* storage_pool */ nullptr,
         /* min_version */ 0,
+        NullspaceID, // FIXME: pass right keyspace id
         table_id,
         /* is_common_handle */ segment_range.is_common_handle,
         /* rowkey_column_size */ segment_range.rowkey_column_size,

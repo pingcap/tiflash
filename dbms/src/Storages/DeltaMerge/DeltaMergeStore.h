@@ -244,6 +244,7 @@ public:
                     bool data_path_contains_database_name,
                     const String & db_name,
                     const String & table_name_,
+                    KeyspaceID keyspace_id_,
                     TableID physical_table_id_,
                     bool has_replica,
                     const ColumnDefines & columns,
@@ -687,6 +688,7 @@ public:
     String db_name;
     String table_name;
 
+    const KeyspaceID keyspace_id;
     const TableID physical_table_id;
 
     const bool is_common_handle;

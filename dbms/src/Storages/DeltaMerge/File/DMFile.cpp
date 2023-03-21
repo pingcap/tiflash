@@ -1104,7 +1104,7 @@ void DMFile::switchToRemote(const S3::DMFileOID & oid)
 
     auto local_path = path();
     // Update the parent_path so that it will read data from remote storage.
-    parent_path = S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKeyWithPrefix();
+    parent_path = S3::S3Filename::fromTableID(oid.store_id, oid.keyspace_id, oid.table_id).toFullKeyWithPrefix();
 
     // Remove local directory.
     std::filesystem::remove_all(local_path);

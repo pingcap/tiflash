@@ -112,7 +112,7 @@ void ExternalPageCallbacksManager<Trait>::registerExternalPagesCallbacks(const E
     {
         assert(callbacks.prefix != "");
     }
-    // NamespaceId(TableID) should not be reuse
+    // NamespaceID(TableID) should not be reuse
     RUNTIME_CHECK_MSG(
         callbacks_container.count(callbacks.prefix) == 0,
         "Try to create callbacks for duplicated prefix {}",

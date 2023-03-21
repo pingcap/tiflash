@@ -164,7 +164,7 @@ protected:
     std::unordered_map<String, size_t> listFiles(const DMFileOID & oid)
     {
         auto dmfile_dir = DMFile::getPathByStatus(
-            S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKey(),
+            S3::S3Filename::fromTableID(oid.store_id, oid.keyspace_id, oid.table_id).toFullKey(),
             oid.file_id,
             DMFile::Status::READABLE);
         return S3::listPrefixWithSize(*s3_client, dmfile_dir + "/");
