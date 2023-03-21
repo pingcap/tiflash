@@ -74,24 +74,25 @@ public:
     DisaggReadSnapshot() = default;
 
     // Add read tasks for a physical table.
-    // This function is not thread safe
     void addTask(TableID physical_table_id, DisaggPhysicalTableReadSnapshotPtr && task)
     {
         if (!task)
             return;
+        std::unique_lock lock(mtx);
         table_snapshots.emplace(physical_table_id, std::move(task));
     }
 
     // Pop one segment task for reading
     SegmentPagesFetchTask popSegTask(TableID physical_table_id, UInt64 segment_id);
 
+    void iterateTableSnapshots(std::function<void(const DisaggPhysicalTableReadSnapshotPtr &)>) const;
+
     bool empty() const;
-    const TableSnapshotMap & tableSnapshots() const { return table_snapshots; }
 
     DISALLOW_COPY(DisaggReadSnapshot);
 
 private:
-    mutable std::mutex mtx;
+    mutable std::shared_mutex mtx;
     TableSnapshotMap table_snapshots;
 };
 
@@ -105,7 +106,11 @@ public:
 
     SegmentReadTaskPtr popTask(UInt64 segment_id);
 
-    ALWAYS_INLINE bool empty() const { return tasks.empty(); }
+    ALWAYS_INLINE bool empty() const
+    {
+        std::shared_lock read_lock(mtx);
+        return tasks.empty();
+    }
 
     DISALLOW_COPY(DisaggPhysicalTableReadSnapshot);
 
@@ -118,7 +123,7 @@ public:
     std::shared_ptr<std::vector<tipb::FieldType>> output_field_types;
 
 private:
-    mutable std::mutex mtx;
+    mutable std::shared_mutex mtx;
     // segment_id -> SegmentReadTaskPtr
     std::unordered_map<UInt64, SegmentReadTaskPtr> tasks;
 };
