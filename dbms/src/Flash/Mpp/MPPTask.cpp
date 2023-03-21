@@ -20,6 +20,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
@@ -105,6 +106,11 @@ MPPTask::~MPPTask()
         current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
     abortTunnels("", true);
     LOG_DEBUG(log, "finish MPPTask: {}", id.toString());
+}
+
+bool MPPTask::isRootMPPTask() const
+{
+    return dag_context->isRootMPPTask();
 }
 
 void MPPTask::abortTunnels(const String & message, bool wait_sender_finish)

@@ -14,11 +14,12 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
 
 namespace DB
 {
+class DAGContext;
+
 void fillTiExecutionSummary(
     DAGContext & dag_context,
     tipb::ExecutorExecutionSummary * execution_summary,

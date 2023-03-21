@@ -44,20 +44,16 @@ public:
         executor_id = executor->executor_id();
 
         type = ExecutorImpl::type;
-
-        // set children for tree-based executors
-        if (dag_context.return_executor_id)
-        {
-            getChildren(*executor).forEach([&](const tipb::Executor & child) {
-                RUNTIME_CHECK(child.has_executor_id());
-                children.push_back(child.executor_id());
-            });
-        }
     }
 
     void setChild(const String & child_id) override
     {
         children.push_back(child_id);
+    }
+
+    void setChildren(const std::vector<String> & children_) override
+    {
+        children.insert(children.end(), children_.begin(), children_.end());
     }
 
     String toJson() const override

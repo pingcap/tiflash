@@ -39,7 +39,7 @@ public:
 
     String profilesToJson() const;
 
-    void addExecuteSummaries(tipb::SelectResponse & response);
+    void fillExecuteSummaries(tipb::SelectResponse & response);
 
     tipb::SelectResponse genExecutionSummaryResponse();
 
@@ -48,9 +48,9 @@ public:
 private:
     void collectRuntimeDetails();
 
-    void addLocalExecutionSummaries(tipb::SelectResponse & response);
+    void fillLocalExecutionSummaries(tipb::SelectResponse & response);
 
-    void addRemoteExecutionSummaries(tipb::SelectResponse & response);
+    void fillRemoteExecutionSummaries(tipb::SelectResponse & response);
 
     void fillExecutionSummary(
         tipb::SelectResponse & response,
@@ -60,6 +60,8 @@ private:
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
     void fillListBasedExecutorsChild();
+    void fillTreeBasedExecutorsChildren();
+
 
     template <typename T>
     bool appendImpl(const tipb::Executor * executor)

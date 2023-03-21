@@ -128,19 +128,19 @@ class DAGContext
 {
 public:
     // for non-mpp(cop/batchCop)
-    DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
+    DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
 
     // for mpp
-    DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
+    DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
 
     // for disaggregated task on write node
-    DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_);
+    DAGContext(tipb::DAGRequest & dag_request_, const DM::DisaggTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_);
 
     // for test
     explicit DAGContext(UInt64 max_error_count_);
 
     // for tests need to run query tasks.
-    DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
+    DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
 
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
@@ -274,7 +274,7 @@ public:
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
 
-    const tipb::DAGRequest * dag_request;
+    tipb::DAGRequest * dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
     /// dummy_query_string and dummy_ast is used for that
     String dummy_query_string;
@@ -326,7 +326,8 @@ public:
 private:
     void initExecutorIdToJoinIdMap();
     void initOutputInfo();
-    void initListBasedExecutors();
+    void initListBasedExecutors() const;
+    bool isTreeBasedExecutors() const;
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;

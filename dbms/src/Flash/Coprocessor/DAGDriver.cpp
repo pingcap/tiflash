@@ -116,7 +116,7 @@ try
         {
             ExecutorStatisticsCollector statistics_collector(log->identifier());
             statistics_collector.initialize(&dag_context);
-            statistics_collector.addExecuteSummaries(*dag_response);
+            statistics_collector.fillExecuteSummaries(*dag_response);
         }
     }
     else

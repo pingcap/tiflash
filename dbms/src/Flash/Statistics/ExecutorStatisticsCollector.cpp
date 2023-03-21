@@ -90,11 +90,12 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
     });
 
     fillListBasedExecutorsChild();
+    fillTreeBasedExecutorsChildren();
 }
 
 void ExecutorStatisticsCollector::fillListBasedExecutorsChild()
 {
-    if (!dag_context->return_executor_id)
+    if (dag_context->dag_request->executors_size() > 0)
     {
         // fill list-based executors child
         auto size = dag_context->dag_request->executors_size();
@@ -111,10 +112,27 @@ void ExecutorStatisticsCollector::fillListBasedExecutorsChild()
     }
 }
 
+void ExecutorStatisticsCollector::fillTreeBasedExecutorsChildren()
+{
+    if (dag_context->dag_request->has_root_executor())
+    {
+        traverseExecutors(dag_context->dag_request, [&](const tipb::Executor & executor) {
+            // set children for tree-based executors
+            std::vector<String> children;
+            getChildren(executor).forEach([&](const tipb::Executor & child) {
+                RUNTIME_CHECK(child.has_executor_id());
+                children.push_back(child.executor_id());
+            });
+            profiles[executor.executor_id()]->setChildren(children);
+            return true;
+        });
+    }
+}
+
 tipb::SelectResponse ExecutorStatisticsCollector::genExecutionSummaryResponse()
 {
     tipb::SelectResponse response;
-    addExecuteSummaries(response);
+    fillExecuteSummaries(response);
     return response;
 }
 
@@ -136,17 +154,17 @@ void ExecutorStatisticsCollector::fillExecutionSummary(
     fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), current, executor_id, fill_executor_id);
 }
 
-void ExecutorStatisticsCollector::addExecuteSummaries(tipb::SelectResponse & response)
+void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & response)
 {
     if (!dag_context->collect_execution_summaries)
         return;
 
     collectRuntimeDetails();
 
-    addLocalExecutionSummaries(response);
+    fillLocalExecutionSummaries(response);
 
     // TODO: remove filling remote execution summaries
-    addRemoteExecutionSummaries(response);
+    fillRemoteExecutionSummaries(response);
 }
 
 void ExecutorStatisticsCollector::collectRuntimeDetails()
@@ -156,7 +174,7 @@ void ExecutorStatisticsCollector::collectRuntimeDetails()
         entry.second->collectRuntimeDetail();
 }
 
-void ExecutorStatisticsCollector::addLocalExecutionSummaries(tipb::SelectResponse & response)
+void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectResponse & response)
 {
     if (dag_context->return_executor_id)
     {
@@ -187,7 +205,7 @@ void ExecutorStatisticsCollector::addLocalExecutionSummaries(tipb::SelectRespons
     }
 }
 
-void ExecutorStatisticsCollector::addRemoteExecutionSummaries(tipb::SelectResponse & response)
+void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectResponse & response)
 {
     // TODO: support cop remote read and disaggregated mode.
     auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context);
