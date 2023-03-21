@@ -242,6 +242,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     bool is_tiflash_right_join = tiflash_join.isTiFlashRightJoin();
 
+    JoinNonEqualConditions join_non_equal_conditions;
     // prepare probe side
     auto [probe_side_prepare_actions, probe_key_names, original_probe_key_names, probe_filter_column_name] = JoinInterpreterHelper::prepareJoin(
         context,
@@ -252,6 +253,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         is_tiflash_right_join,
         tiflash_join.getProbeConditions());
     RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
+    join_non_equal_conditions.left_filter_column = std::move(probe_filter_column_name);
 
     // prepare build side
     auto [build_side_prepare_actions, build_key_names, original_build_key_names, build_filter_column_name] = JoinInterpreterHelper::prepareJoin(
@@ -263,8 +265,9 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         is_tiflash_right_join,
         tiflash_join.getBuildConditions());
     RUNTIME_ASSERT(build_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
+    join_non_equal_conditions.right_filter_column = std::move(build_filter_column_name);
 
-    auto join_other_conditions = tiflash_join.genJoinOtherConditionsAction(context, left_input_header, right_input_header, probe_side_prepare_actions, original_probe_key_names, original_build_key_names);
+    tiflash_join.fillJoinOtherConditionsAction(context, left_input_header, right_input_header, probe_side_prepare_actions, original_probe_key_names, original_build_key_names, join_non_equal_conditions);
 
     const Settings & settings = context.getSettingsRef();
     SpillConfig build_spill_config(context.getTemporaryPath(), fmt::format("{}_hash_join_0_build", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider());
@@ -285,11 +288,11 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         probe_spill_config,
         settings.join_restore_concurrency,
         tiflash_join.join_key_collators,
-        probe_filter_column_name,
-        build_filter_column_name,
-        join_other_conditions,
+        join_non_equal_conditions,
         max_block_size,
-        match_helper_name);
+        match_helper_name,
+        0,
+        context.isTest());
 
     recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);
 
@@ -780,7 +783,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     {
         extra_info = String(enableFineGrainedShuffleExtraInfo);
         RUNTIME_CHECK(exchange_sender.tp() == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_sender.tp()));
-        RUNTIME_CHECK(stream_count <= 1024, stream_count);
+        RUNTIME_CHECK(stream_count <= maxFineGrainedStreamCount, stream_count);
     }
     pipeline.transform([&](auto & stream) {
         // construct writer

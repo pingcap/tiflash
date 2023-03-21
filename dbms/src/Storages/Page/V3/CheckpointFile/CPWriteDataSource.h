@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/Universal/S3PageReader.h>
 
 namespace DB::PS::V3
 {
@@ -45,6 +46,7 @@ public:
      */
     explicit CPWriteDataSourceBlobStore(BlobStore<universal::BlobStoreTrait> & blob_store_)
         : blob_store(blob_store_)
+        , remote_reader(std::make_unique<S3PageReader>())
     {}
 
     static CPWriteDataSourcePtr create(BlobStore<universal::BlobStoreTrait> & blob_store_)
@@ -56,6 +58,7 @@ public:
 
 private:
     BlobStore<universal::BlobStoreTrait> & blob_store;
+    S3PageReaderPtr remote_reader;
 };
 
 /**

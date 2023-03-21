@@ -23,6 +23,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -344,14 +345,14 @@ public:
                            const RowKeyRanges & sorted_ranges,
                            size_t num_streams,
                            UInt64 max_version,
-                           const RSOperatorPtr & filter,
+                           const PushDownFilterPtr & filter,
                            const String & tracing_id,
                            bool keep_order,
                            bool is_fast_scan = false,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID,
-                           const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+                           ScanContextPtr scan_context = nullptr);
 
 
     /// Read rows in two modes:
@@ -365,14 +366,14 @@ public:
                             const RowKeyRanges & sorted_ranges,
                             size_t num_streams,
                             UInt64 max_version,
-                            const RSOperatorPtr & filter,
+                            const PushDownFilterPtr & filter,
                             const String & tracing_id,
                             bool keep_order,
                             bool is_fast_scan = false,
                             size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                             const SegmentIdSet & read_segments = {},
                             size_t extra_table_id_index = InvalidColumnID,
-                            const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+                            ScanContextPtr scan_context = nullptr);
 
     Remote::DisaggPhysicalTableReadSnapshotPtr
     writeNodeBuildRemoteReadSnapshot(
@@ -382,7 +383,7 @@ public:
         size_t num_streams,
         const String & tracing_id,
         const SegmentIdSet & read_segments = {},
-        const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+        ScanContextPtr scan_context = nullptr);
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
     bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true);
@@ -483,7 +484,7 @@ public:
 private:
 #endif
 
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "", const ScanContextPtr & scan_context = std::make_shared<ScanContext>());
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "", ScanContextPtr scan_context = nullptr);
 
     static bool pkIsHandle(const ColumnDefine & handle_define)
     {

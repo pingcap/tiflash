@@ -19,7 +19,11 @@
 namespace DB
 {
 
-void PhysicalAggregationConvergent::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalAggregationConvergent::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
     aggregate_context->initConvergent();
 
@@ -28,7 +32,7 @@ void PhysicalAggregationConvergent::buildPipelineExec(PipelineExecGroupBuilder &
         group_builder.init(1);
         group_builder.transform([&](auto & builder) {
             builder.setSourceOp(std::make_unique<NullSourceOp>(
-                group_builder.exec_status,
+                exec_status,
                 aggregate_context->getHeader(),
                 log->identifier()));
         });
@@ -39,7 +43,7 @@ void PhysicalAggregationConvergent::buildPipelineExec(PipelineExecGroupBuilder &
         size_t index = 0;
         group_builder.transform([&](auto & builder) {
             builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(
-                group_builder.exec_status,
+                exec_status,
                 aggregate_context,
                 index++,
                 log->identifier()));
@@ -49,7 +53,7 @@ void PhysicalAggregationConvergent::buildPipelineExec(PipelineExecGroupBuilder &
     if (!expr_after_agg->getActions().empty())
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), expr_after_agg));
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_after_agg));
         });
     }
 }

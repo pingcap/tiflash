@@ -84,8 +84,6 @@ struct Serializer
     static ColumnFileSetSnapshotPtr deserializeColumnFileSet(
         const google::protobuf::RepeatedPtrField<RemotePb::ColumnFileRemote> & proto,
         const Remote::IDataStorePtr & data_store,
-        StoreID remote_store_id,
-        TableID table_id,
         const RowKeyRange & segment_range);
 
     /// column file ///
@@ -102,7 +100,6 @@ struct Serializer
     static RemotePb::ColumnFileRemote serializeTo(const ColumnFileBig & cf_big);
     static ColumnFileBigPtr deserializeCFBig(
         const RemotePb::ColumnFileBig & proto,
-        const Remote::DMFileOID & oid,
         const Remote::IDataStorePtr & data_store,
         const RowKeyRange & segment_range);
 };

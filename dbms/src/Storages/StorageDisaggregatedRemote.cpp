@@ -79,7 +79,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-extern const int REGION_EPOCH_NOT_MATCH;
+extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 } // namespace ErrorCodes
 
 BlockInputStreams StorageDisaggregated::readFromWriteNode(
@@ -88,7 +88,7 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
 {
     DM::RNRemoteReadTaskPtr remote_read_tasks;
 
-    pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
+    pingcap::kv::Backoffer bo(pingcap::kv::scanMaxBackoff);
     while (true)
     {
         // TODO: We could only retry failed stores.
@@ -108,11 +108,11 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
         }
         catch (DB::Exception & e)
         {
-            if (e.code() != ErrorCodes::REGION_EPOCH_NOT_MATCH)
+            if (e.code() != ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
                 throw;
 
-            bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message()));
-            LOG_INFO(log, "meets region epoch not match, retry to build remote read tasks");
+            bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
+            LOG_INFO(log, "Meets retryable error: {}, retry to build remote read tasks", e.message());
         }
     }
 
@@ -163,33 +163,51 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
                 if (resp->has_error())
                 {
-                    LOG_DEBUG(
-                        log,
-                        "Received EstablishDisaggregated response with error, addr={} err={}",
-                        batch_cop_task.store_addr,
-                        resp->error().msg());
-
-                    if (resp->error().code() == ErrorCodes::REGION_EPOCH_NOT_MATCH)
+                    if (resp->error().code() == ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
                     {
-                        // Refresh region cache and throw an exception for retrying
+                        // Refresh region cache and throw an exception for retrying.
+                        // Note: retry_region's region epoch is not set. We need to recover from the request.
+
+                        std::unordered_set<RegionID> retry_regions;
                         for (const auto & retry_region : resp->retry_regions())
+                            retry_regions.insert(retry_region.id());
+
+                        LOG_INFO(
+                            log,
+                            "Received EstablishDisaggregated response with retryable error: {}, addr={} retry_regions={}",
+                            resp->error().msg(),
+                            batch_cop_task.store_addr,
+                            retry_regions);
+
+                        for (const auto & region : req->regions())
                         {
-                            auto region_id = pingcap::kv::RegionVerID(
-                                retry_region.id(),
-                                retry_region.region_epoch().conf_ver(),
-                                retry_region.region_epoch().version());
-                            cluster->region_cache->dropRegion(region_id);
+                            if (retry_regions.contains(region.region_id()))
+                            {
+                                auto region_ver_id = pingcap::kv::RegionVerID(
+                                    region.region_id(),
+                                    region.region_epoch().conf_ver(),
+                                    region.region_epoch().version());
+                                cluster->region_cache->dropRegion(region_ver_id);
+                            }
                         }
-                        throw Exception(resp->error().msg(), ErrorCodes::REGION_EPOCH_NOT_MATCH);
+                        throw Exception(
+                            resp->error().msg(),
+                            ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
                     }
                     else
                     {
-                        // Meet other errors... May be not retirable?
-                        throw Exception(ErrorCodes::LOGICAL_ERROR,
-                                        "EstablishDisaggregatedTask failed, addr={} error={} code={}",
-                                        batch_cop_task.store_addr,
-                                        resp->error().msg(),
-                                        resp->error().code());
+                        LOG_WARNING(
+                            log,
+                            "Received EstablishDisaggregated response with error, addr={} err={}",
+                            batch_cop_task.store_addr,
+                            resp->error().msg());
+
+                        // Meet other errors... May be not retryable?
+                        throw Exception(
+                            resp->error().code(),
+                            "EstablishDisaggregatedTask failed: {}, addr={}",
+                            resp->error().msg(),
+                            batch_cop_task.store_addr);
                     }
                 }
 
@@ -227,7 +245,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
                     LOG_DEBUG(
                         log,
-                        "Build RNRemoteTableReadTask finished, elapsed={}s store={} addr={} segments={} task_id={}",
+                        "Build RNRemoteTableReadTask finished, elapsed={:.3f}s store={} addr={} segments={} task_id={}",
                         watch_table.elapsedSeconds(),
                         resp->store_id(),
                         batch_cop_task.store_addr,
@@ -247,7 +265,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
 
     const auto avg_establish_rpc_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.establish_rpc_ms; }) / summaries.size();
     const auto avg_build_remote_task_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.build_remote_task_ms; }) / summaries.size();
-    LOG_INFO(log, "establish disaggregated task rpc cost {:.2f}ms, build remote tasks cost {:.2f}ms", avg_establish_rpc_ms, avg_build_remote_task_ms);
+    LOG_INFO(log, "Establish disaggregated task finished, avg_rpc_elapsed={:.2f}ms, avg_build_task_elapsed={:.2f}ms", avg_establish_rpc_ms, avg_build_remote_task_ms);
 
     return read_task;
 }
@@ -314,17 +332,18 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
     const DM::ColumnDefinesPtr & columns_to_read)
 {
     if (!filter_conditions.hasValue())
-        return DM::EMPTY_FILTER;
+        return DM::EMPTY_RS_OPERATOR;
 
     const bool enable_rs_filter = db_context.getSettingsRef().dt_enable_rough_set_filter;
     if (!enable_rs_filter)
     {
         LOG_DEBUG(log, "Rough set filter is disabled.");
-        return DM::EMPTY_FILTER;
+        return DM::EMPTY_RS_OPERATOR;
     }
 
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filter_conditions.conditions,
+        google::protobuf::RepeatedPtrField<tipb::Expr>{}, // Not care now
         DAGPreparedSets{}, // Not care now
         NamesAndTypes{}, // Not care now
         db_context.getTimezoneInfo());
@@ -338,7 +357,7 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
         return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
     auto rs_operator = DM::FilterParser::parseDAGQuery(*dag_query, *columns_to_read, std::move(create_attr_by_column_id), log);
-    if (likely(rs_operator != DM::EMPTY_FILTER))
+    if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
         LOG_DEBUG(log, "Rough set filter: {}", rs_operator->toDebugString());
     return rs_operator;
 }
@@ -349,7 +368,10 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     size_t num_streams,
     DAGPipeline & pipeline)
 {
-    LOG_DEBUG(log, "build streams with {} segment tasks, num_streams={}", remote_read_tasks->numSegments(), num_streams);
+    auto io_concurrency = static_cast<size_t>(static_cast<double>(num_streams) * db_context.getSettingsRef().disagg_read_concurrency_scale);
+    LOG_DEBUG(log, "Build disagg streams with {} segment tasks, num_streams={} io_concurrency={}", remote_read_tasks->numSegments(), num_streams, io_concurrency);
+    // TODO: We can reduce max io_concurrency to numSegments.
+
     const auto & executor_id = table_scan.getTableScanExecutorID();
     // Build a RNPageReceiver to fetch the pages from all write nodes
     auto * kv_cluster = db_context.getTMTContext().getKVCluster();
@@ -361,7 +383,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         log->identifier(),
         executor_id);
 
-    bool do_prepare = true;
+    bool do_prepare = false;
 
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
@@ -380,9 +402,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 
     auto rs_operator = buildRSOperator(db_context, column_defines);
 
-    auto io_concurrency = std::max(50, num_streams * 10);
     auto sub_streams_size = io_concurrency / num_streams;
-
     for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
     {
         // Build N UnionBlockInputStream, each one collects from M underlying RemoteInputStream.

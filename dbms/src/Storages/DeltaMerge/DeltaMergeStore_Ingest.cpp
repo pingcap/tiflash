@@ -569,13 +569,33 @@ void DeltaMergeStore::ingestFiles(
     size_t bytes = 0;
     size_t bytes_on_disk = 0;
 
+    auto remote_data_store = dm_context->db_context.getSharedContextDisagg()->remote_data_store;
+    StoreID store_id = InvalidStoreID;
+    if (remote_data_store)
+    {
+        store_id = dm_context->db_context.getTMTContext().getKVStore()->getStoreID();
+    }
+
     DMFiles files;
     for (const auto & external_file : external_files)
     {
-        auto file_parent_path = delegate.getDTFilePath(external_file.id);
-
         // we always create a ref file to this DMFile with all meta info restored later, so here we just restore meta info to calculate its' memory and disk size
-        auto file = DMFile::restore(file_provider, external_file.id, external_file.id, file_parent_path, DMFile::ReadMetaMode::memoryAndDiskSize());
+        DMFilePtr file;
+        if (!remote_data_store)
+        {
+            auto file_parent_path = delegate.getDTFilePath(external_file.id);
+            file = DMFile::restore(
+                file_provider,
+                external_file.id,
+                external_file.id,
+                file_parent_path,
+                DMFile::ReadMetaMode::memoryAndDiskSize());
+        }
+        else
+        {
+            Remote::DMFileOID oid{.store_id = store_id, .table_id = dm_context->physical_table_id, .file_id = external_file.id};
+            file = remote_data_store->prepareDMFile(oid, external_file.id)->restore(DMFile::ReadMetaMode::memoryAndDiskSize());
+        }
         rows += file->getRows();
         bytes += file->getBytes();
         bytes_on_disk += file->getBytesOnDisk();
@@ -629,7 +649,6 @@ void DeltaMergeStore::ingestFiles(
     WriteBatches ingest_wbs(*storage_pool, dm_context->getWriteLimiter());
     if (!files.empty())
     {
-        auto remote_data_store = dm_context->db_context.getSharedContextDisagg()->remote_data_store;
         for (const auto & file : files)
         {
             if (!remote_data_store)
@@ -638,9 +657,7 @@ void DeltaMergeStore::ingestFiles(
             }
             else
             {
-                auto store_id = dm_context->db_context.getTMTContext().getKVStore()->getStoreID();
                 Remote::DMFileOID oid{.store_id = store_id, .table_id = dm_context->physical_table_id, .file_id = file->fileId()};
-                remote_data_store->putDMFile(file, oid, /*remove_local*/ true);
                 PS::V3::CheckpointLocation loc{
                     .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
                     .offset_in_file = 0,
@@ -804,17 +821,16 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
         ingest_range.toDebugString(),
         target_segments.size());
 
-    for (size_t file_idx = 0; file_idx < target_segments.size(); file_idx++)
+    for (size_t segment_idx = 0; segment_idx < target_segments.size(); segment_idx++)
     {
-        // This should not happen. Just check to be confident.
-        // Even if it happened, we could handle it gracefully here. (but it really means somewhere else is broken)
-        if (target_segments[file_idx]->getEstimatedRows() == 0)
+        // We may meet empty segment, just ignore it
+        if (target_segments[segment_idx]->getEstimatedRows() == 0)
         {
-            LOG_WARNING(
+            LOG_INFO(
                 log,
-                "Table ingest checkpoint using split - split ingest phase - Unexpected empty DMFile, skipped. ingest_range={} file_idx={}",
+                "Table ingest checkpoint using split - split ingest phase - Meet empty Segment, skipped. ingest_range={} segment_idx={}",
                 ingest_range.toDebugString(),
-                file_idx);
+                segment_idx);
             continue;
         }
 
@@ -826,7 +842,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
          *  │            │-- Seg --│------- Segment -----│                                │
          * We will try to ingest it into all overlapped segments.
          */
-        auto file_ingest_range = target_segments[file_idx]->getRowKeyRange();
+        auto file_ingest_range = target_segments[segment_idx]->getRowKeyRange();
         while (!file_ingest_range.none()) // This DMFile has remaining data to ingest
         {
             SegmentPtr segment;
@@ -853,13 +869,13 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
             LOG_INFO(
                 log,
                 "Table ingest checkpoint using split - split ingest phase - Try to ingest file into segment, segment_idx={} segment_id={} segment_ingest_range={} segment={} segment_ingest_range={}",
-                file_idx,
-                target_segments[file_idx]->segmentId(),
+                segment_idx,
+                target_segments[segment_idx]->segmentId(),
                 file_ingest_range.toDebugString(),
                 segment->simpleInfo(),
                 segment_ingest_range.toDebugString());
 
-            const bool succeeded = ingestSegmentDataIntoSegmentUsingSplit(*dm_context, segment, target_segments[file_idx]);
+            const bool succeeded = ingestSegmentDataIntoSegmentUsingSplit(*dm_context, segment, target_segments[segment_idx]);
             if (succeeded)
             {
                 updated_segments.insert(segment);
@@ -1008,9 +1024,15 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
         LOG_WARNING(log, "{}", msg);
         throw Exception(msg);
     }
-    LOG_INFO(log, "Ingest checkpoint from store {}", checkpoint_info->remote_store_id);
 
-    auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, checkpoint_info->remote_store_id, physical_table_id, range, checkpoint_info->temp_ps);
+    if (unlikely(range.none()))
+    {
+        LOG_INFO(log, "Meet empty ingest range from store {} for region {}. Ignore it.", checkpoint_info->remote_store_id, checkpoint_info->region_id);
+        return;
+    }
+
+    LOG_INFO(log, "Ingest checkpoint from store {} for region {}", checkpoint_info->remote_store_id, checkpoint_info->region_id);
+    auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, physical_table_id, range, checkpoint_info);
     LOG_INFO(log, "Ingest checkpoint segments num {}", segment_meta_infos.size());
     WriteBatches wbs{*dm_context->storage_pool};
     auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //
@@ -1031,7 +1053,7 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     wbs.writeLogAndData();
 
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
-    LOG_INFO(log, "Ingest checkpoint from store {} done", checkpoint_info->remote_store_id);
+    LOG_INFO(log, "Ingest checkpoint from store {} for region {} done", checkpoint_info->remote_store_id, checkpoint_info->region_id);
 
     for (auto & segment : restored_segments)
     {

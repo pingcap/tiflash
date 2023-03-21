@@ -29,7 +29,7 @@ namespace DB::DM
 BlockInputStreams RNRemoteSegmentThreadInputStream::buildInputStreams(
     const Context & db_context,
     const RNRemoteReadTaskPtr & remote_read_tasks,
-    const RNPagePreparerPtr & page_downloader,
+    const RNPagePreparerPtr & page_preparer,
     const DM::ColumnDefinesPtr & columns_to_read,
     UInt64 read_tso,
     size_t num_streams,
@@ -46,7 +46,7 @@ BlockInputStreams RNRemoteSegmentThreadInputStream::buildInputStreams(
         BlockInputStreamPtr stream = std::make_shared<DM::RNRemoteSegmentThreadInputStream>(
             db_context,
             remote_read_tasks,
-            page_downloader,
+            page_preparer,
             *columns_to_read,
             rs_filter,
             read_tso,
@@ -63,7 +63,7 @@ BlockInputStreams RNRemoteSegmentThreadInputStream::buildInputStreams(
 RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
     const Context & db_context_,
     RNRemoteReadTaskPtr read_tasks_,
-    RNPagePreparerPtr page_downloader_,
+    RNPagePreparerPtr page_preparer_,
     const ColumnDefines & columns_to_read_,
     const RSOperatorPtr & filter_,
     UInt64 max_version_,
@@ -73,7 +73,7 @@ RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
     std::string_view req_id)
     : db_context(db_context_)
     , read_tasks(std::move(read_tasks_))
-    , page_downloader(std::move(page_downloader_))
+    , page_preparer(std::move(page_preparer_))
     , columns_to_read(columns_to_read_)
     , filter(filter_)
     , header(toEmptyBlock(columns_to_read))
@@ -97,7 +97,7 @@ RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
 
 RNRemoteSegmentThreadInputStream::~RNRemoteSegmentThreadInputStream()
 {
-    LOG_INFO(log, "RNRemoteSegmentThreadInputStream done, time blocked in pop task: {:.3f}sec, build task: {:.3f}sec", seconds_pop, seconds_build);
+    LOG_DEBUG(log, "RNRemoteSegmentThreadInputStream done, time blocked in pop task: {:.3f}sec, build task: {:.3f}sec", seconds_pop, seconds_build);
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_pop_ready_tasks).Observe(seconds_pop);
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_stream).Observe(seconds_build);
 }
@@ -111,10 +111,10 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
         while (!cur_stream)
         {
             watch.restart();
-            auto task = read_tasks->nextReadyTask();
+            cur_read_task = read_tasks->nextReadyTask();
             seconds_pop += watch.elapsedSeconds();
             watch.restart();
-            if (!task)
+            if (!cur_read_task)
             {
                 // There is no task left or error happen
                 done = true;
@@ -127,17 +127,17 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
             }
 
             // Note that the segment task could come from different physical tables
-            cur_segment_id = task->segment_id;
-            physical_table_id = task->table_id;
+            cur_segment_id = cur_read_task->segment_id;
+            physical_table_id = cur_read_task->table_id;
             UNUSED(read_mode); // TODO: support more read mode
-            cur_stream = task->getInputStream(
+            cur_stream = cur_read_task->getInputStream(
                 columns_to_read,
-                task->getReadRanges(),
+                cur_read_task->getReadRanges(),
                 max_version,
                 filter,
                 expected_block_size);
             seconds_build += watch.elapsedSeconds();
-            LOG_TRACE(log, "Read blocks from remote segment begin, segment={} state={}", cur_segment_id, magic_enum::enum_name(task->state));
+            LOG_TRACE(log, "Read blocks from remote segment begin, segment={} state={}", cur_segment_id, magic_enum::enum_name(cur_read_task->state));
         }
 
         Block res = cur_stream->read(res_filter, return_filter);
@@ -146,6 +146,7 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
             LOG_TRACE(log, "Read blocks from remote segment end, segment={}", cur_segment_id);
             cur_segment_id = 0;
             cur_stream = {};
+            cur_read_task = nullptr;
             // try read from next task
             continue;
         }

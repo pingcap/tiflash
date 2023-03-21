@@ -47,6 +47,14 @@ protected:
     {}
 };
 
+struct RemoteGCThreshold
+{
+    // The file with valid rate less than `valid_rate` will be compact
+    double valid_rate;
+    // The file size less than `min_file_threshold` will be compact
+    size_t min_file_threshold;
+};
+
 class IDataStore : boost::noncopyable
 {
 public:
@@ -55,6 +63,11 @@ public:
     /**
      * Blocks until a local DMFile is successfully put in the remote data store.
      * Should be used by a write node.
+     *
+     *
+     * `remove_local` When it is true, after put is success, the `local_dm_file`
+     * will turn to an instance pointing to remote location
+     * (`DMFile::switchToRemote`).
      */
     virtual void putDMFile(DMFilePtr local_dm_file, const S3::DMFileOID & oid, bool remove_local) = 0;
 
@@ -69,6 +82,8 @@ public:
      */
     virtual IPreparedDMFileTokenPtr prepareDMFile(const S3::DMFileOID & oid, UInt64 page_id = 0) = 0;
 
+    virtual IPreparedDMFileTokenPtr prepareDMFileByKey(const String & remote_key) = 0;
+
     /**
      * Blocks until all checkpoint files are successfully put in the remote data store.
      * Returns true if all files are successfully uploaded.
@@ -78,6 +93,8 @@ public:
      * remote data source for a given `upload_seq`.
      */
     virtual bool putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) = 0;
+
+    virtual std::unordered_map<String, Int64> getDataFileSizes(const std::unordered_set<String> & lock_keys) = 0;
 };
 
 
