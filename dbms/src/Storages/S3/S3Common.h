@@ -184,7 +184,7 @@ void rawListPrefix(
     std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
 
 template <typename F, typename... T>
-void retryWrapper(F f, T... args)
+void retryWrapper(F f, const T &... args)
 {
     Int32 i = 0;
     while (true)
