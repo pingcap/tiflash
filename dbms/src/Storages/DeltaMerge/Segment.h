@@ -165,7 +165,7 @@ public:
     static Segments createTargetSegmentsFromCheckpoint( //
         const LoggerPtr & parent_log,
         DMContext & context,
-        UInt64 remote_store_id,
+        StoreID remote_store_id,
         const SegmentMetaInfos & meta_infos,
         const RowKeyRange & range,
         UniversalPageStoragePtr temp_ps,

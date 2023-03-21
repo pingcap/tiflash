@@ -17,6 +17,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/S3/S3Filename.h>
+#include <Storages/Transaction/Types.h>
 #include <common/types.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
@@ -124,7 +125,7 @@ DMFileOID S3FilenameView::getDMFileOID() const
     }
     else
     {
-        UInt32 keyspace_id;
+        KeyspaceID keyspace_id;
         RUNTIME_CHECK(re2::RE2::FullMatch(prefix_sp, details::rgx_subpath_keyspace_dtfile, &keyspace_id, &table_id, &file_id));
         return DMFileOID{
             .store_id = store_id,
