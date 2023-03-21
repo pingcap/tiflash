@@ -1795,6 +1795,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
             data_path_contains_database_name,
             table_column_info->db_name,
             table_column_info->table_name,
+            tidb_table_info.keyspace_id,
             tidb_table_info.id,
             tidb_table_info.replica_info.count > 0,
             std::move(table_column_info->table_column_defines),

@@ -102,10 +102,10 @@ public:
     RowKeyValue buildRowKeyValue(Int64 key);
     static RowKeyRange buildRowKeyRange(Int64 begin, Int64 end);
 
-    size_t getPageNumAfterGC(StorageType type, NamespaceId ns_id) const;
+    size_t getPageNumAfterGC(StorageType type, NamespaceID ns_id) const;
 
-    std::set<PageIdU64> getAliveExternalPageIdsWithoutGC(NamespaceId ns_id) const;
-    std::set<PageIdU64> getAliveExternalPageIdsAfterGC(NamespaceId ns_id) const;
+    std::set<PageIdU64> getAliveExternalPageIdsWithoutGC(NamespaceID ns_id) const;
+    std::set<PageIdU64> getAliveExternalPageIdsAfterGC(NamespaceID ns_id) const;
 
 protected:
     std::mt19937 random;

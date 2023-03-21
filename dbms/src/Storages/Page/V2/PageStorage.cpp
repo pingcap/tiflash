@@ -370,7 +370,7 @@ PageId PageStorage::getMaxId()
     return versioned_page_entries.getSnapshot("", ver_compact_handle)->version()->maxId();
 }
 
-PageId PageStorage::getNormalPageIdImpl(NamespaceId /*ns_id*/, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
+PageId PageStorage::getNormalPageIdImpl(NamespaceID /*ns_id*/, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
@@ -386,7 +386,7 @@ PageId PageStorage::getNormalPageIdImpl(NamespaceId /*ns_id*/, PageId page_id, S
     return is_ref_id ? normal_page_id : page_id;
 }
 
-DB::PageEntry PageStorage::getEntryImpl(NamespaceId /*ns_id*/, PageId page_id, SnapshotPtr snapshot)
+DB::PageEntry PageStorage::getEntryImpl(NamespaceID /*ns_id*/, PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -622,7 +622,7 @@ size_t PageStorage::getNumberOfPages()
 }
 
 // For debugging purpose
-std::set<PageId> PageStorage::getAliveExternalPageIds(NamespaceId /*ns_id*/)
+std::set<PageId> PageStorage::getAliveExternalPageIds(NamespaceID /*ns_id*/)
 {
     const auto & concrete_snap = getConcreteSnapshot();
     if (concrete_snap)
@@ -635,7 +635,7 @@ std::set<PageId> PageStorage::getAliveExternalPageIds(NamespaceId /*ns_id*/)
     }
 }
 
-DB::Page PageStorage::readImpl(NamespaceId /*ns_id*/, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+DB::Page PageStorage::readImpl(NamespaceID /*ns_id*/, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
@@ -656,7 +656,7 @@ DB::Page PageStorage::readImpl(NamespaceId /*ns_id*/, PageId page_id, const Read
     return file_reader->read(to_read, read_limiter).at(page_id);
 }
 
-PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+PageMap PageStorage::readImpl(NamespaceID /*ns_id*/, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
@@ -704,7 +704,7 @@ PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const PageIds & page_ids, c
     return page_map;
 }
 
-PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+PageMap PageStorage::readImpl(NamespaceID /*ns_id*/, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
@@ -752,7 +752,7 @@ PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageReadF
     return page_map;
 }
 
-Page PageStorage::readImpl(NamespaceId /*ns_id*/, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+Page PageStorage::readImpl(NamespaceID /*ns_id*/, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {

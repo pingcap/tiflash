@@ -237,9 +237,9 @@ TEST_F(UniPageStorageTest, TraverseWithSnap)
 
 TEST_F(UniPageStorageTest, GetMaxIdWithPrefix)
 {
-    const String prefix1 = UniversalPageIdFormat::toSubPrefix(StorageType::Log);
-    const String prefix2 = UniversalPageIdFormat::toSubPrefix(StorageType::Data);
-    const String prefix3 = UniversalPageIdFormat::toSubPrefix(StorageType::Data);
+    const String prefix1 = UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, /*ns_id*/ 100);
+    const String prefix2 = UniversalPageIdFormat::toFullPrefix(/*keyspace_id*/ 100, StorageType::Data, /*ns_id*/ 300);
+    const String prefix3 = UniversalPageIdFormat::toFullPrefix(/*keyspace_id*/ 300, StorageType::Data, /*ns_id*/ 700);
     const String prefix4 = "aaa";
     const String prefix5 = "bbb";
     const UInt64 tag = 0;

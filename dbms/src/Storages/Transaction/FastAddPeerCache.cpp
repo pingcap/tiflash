@@ -93,16 +93,16 @@ UniversalPageStoragePtr ParsedCheckpointDataHolder::getUniversalPageStorage()
     return temp_ps;
 }
 
-EndToSegmentIdPtr ParsedCheckpointDataHolder::getEndToSegmentIdCache(const TableIdentifier & identifier)
+EndToSegmentIdPtr ParsedCheckpointDataHolder::getEndToSegmentIdCache(const KeyspaceTableID & ks_tb_id)
 {
     std::unique_lock lock(mu);
-    auto iter = end_to_segment_ids.find(identifier);
+    auto iter = end_to_segment_ids.find(ks_tb_id);
     if (iter != end_to_segment_ids.end())
         return iter->second;
     else
     {
         auto cache = std::make_shared<EndToSegmentId>();
-        end_to_segment_ids.emplace(identifier, cache);
+        end_to_segment_ids.emplace(ks_tb_id, cache);
         return cache;
     }
 }

@@ -16,37 +16,7 @@
 
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-
-#include <boost/container_hash/hash_fwd.hpp>
-
-namespace DB
-{
-struct TableIdentifier
-{
-    UInt64 key_space_id;
-    DB::NamespaceId table_id;
-
-    bool operator==(const TableIdentifier & other) const
-    {
-        return key_space_id == other.key_space_id && table_id == other.table_id;
-    }
-};
-} // namespace DB
-
-namespace std
-{
-template <>
-struct hash<DB::TableIdentifier>
-{
-    size_t operator()(const DB::TableIdentifier & k) const
-    {
-        size_t seed = 0;
-        boost::hash_combine(seed, boost::hash_value(k.key_space_id));
-        boost::hash_combine(seed, boost::hash_value(k.table_id));
-        return seed;
-    }
-};
-} // namespace std
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
@@ -91,7 +61,7 @@ public:
 
     UniversalPageStoragePtr getUniversalPageStorage();
 
-    EndToSegmentIdPtr getEndToSegmentIdCache(const TableIdentifier & identifier);
+    EndToSegmentIdPtr getEndToSegmentIdCache(const KeyspaceTableID & ks_tb_id);
 
     ~ParsedCheckpointDataHolder()
     {
@@ -107,7 +77,7 @@ private:
     UniversalPageStoragePtr temp_ps;
 
     std::mutex mu; // protect segment_end_key_cache
-    using EndToSegmentIds = std::unordered_map<TableIdentifier, EndToSegmentIdPtr>;
+    using EndToSegmentIds = std::unordered_map<KeyspaceTableID, EndToSegmentIdPtr, boost::hash<KeyspaceTableID>>;
     EndToSegmentIds end_to_segment_ids;
 };
 using ParsedCheckpointDataHolderPtr = std::shared_ptr<ParsedCheckpointDataHolder>;

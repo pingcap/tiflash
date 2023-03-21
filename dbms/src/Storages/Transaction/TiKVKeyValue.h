@@ -17,13 +17,11 @@
 #include <Common/RedactHelpers.h>
 #include <Common/nocopyable.h>
 #include <Storages/Transaction/SerializationHelper.h>
+#include <Storages/Transaction/TiKVKeyspaceIDImpl.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
 {
-static const size_t KEYSPACE_PREFIX_LEN = 4;
-static const char TXN_MODE_PREFIX = 'x';
-
 template <bool is_key>
 struct StringObject : std::string
 {
