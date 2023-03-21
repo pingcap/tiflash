@@ -164,7 +164,7 @@ protected:
     std::unordered_map<String, size_t> listFiles(const DMFileOID & oid)
     {
         auto dmfile_dir = DMFile::getPathByStatus(
-            S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKey(),
+            S3::S3Filename::fromTableID(oid.store_id, oid.keyspace_id, oid.table_id).toFullKey(),
             oid.file_id,
             DMFile::Status::READABLE);
         return S3::listPrefixWithSize(*s3_client, dmfile_dir + "/");
@@ -290,10 +290,20 @@ try
     std::vector<String> uploaded_files;
     {
         data_store->putDMFile(dmfile, oid, /*remove_local*/ false);
-        uploaded_files = dmfile->listInternalFiles();
-        auto files_with_size = listFiles(oid);
-        ASSERT_EQ(uploaded_files.size(), files_with_size.size());
-        LOG_TRACE(log, "{}\n", files_with_size);
+        auto local_files_with_size = dmfile->listFilesForUpload();
+        auto remote_files_with_size = listFiles(oid);
+        ASSERT_EQ(local_files_with_size.size(), remote_files_with_size.size());
+        for (const auto & [fname, fsize] : local_files_with_size)
+        {
+            auto itr = remote_files_with_size.find(fname);
+            ASSERT_NE(itr, remote_files_with_size.end());
+            if (fname != DMFile::metav2FileName())
+            {
+                ASSERT_EQ(itr->second, fsize);
+            }
+            uploaded_files.push_back(fname);
+        }
+        LOG_TRACE(log, "remote_files_with_size => {}", remote_files_with_size);
     }
 
     {
@@ -403,10 +413,20 @@ try
     ASSERT_TRUE(std::filesystem::exists(local_dir));
     {
         data_store->putDMFile(dmfile, oid, /*remove_local*/ true);
-        uploaded_files = dmfile->listInternalFiles();
-        auto files_with_size = listFiles(oid);
-        ASSERT_EQ(uploaded_files.size(), files_with_size.size());
-        LOG_TRACE(log, "{}\n", files_with_size);
+        auto local_files_with_size = dmfile->listFilesForUpload();
+        auto remote_files_with_size = listFiles(oid);
+        ASSERT_EQ(local_files_with_size.size(), remote_files_with_size.size());
+        for (const auto & [fname, fsize] : local_files_with_size)
+        {
+            auto itr = remote_files_with_size.find(fname);
+            ASSERT_NE(itr, remote_files_with_size.end());
+            if (fname != DMFile::metav2FileName())
+            {
+                ASSERT_EQ(itr->second, fsize) << fname;
+            }
+            uploaded_files.push_back(fname);
+        }
+        LOG_TRACE(log, "remote_files_with_size => {}", remote_files_with_size);
     }
     ASSERT_FALSE(std::filesystem::exists(local_dir));
     ASSERT_EQ(dmfile->path(), S3::S3Filename::fromDMFileOID(oid).toFullKeyWithPrefix());

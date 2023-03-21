@@ -36,7 +36,7 @@ static constexpr PageIdU64 INVALID_PAGE_U64_ID = 0;
 using PageIdV3Internal = UInt128;
 using PageIdV3Internals = std::vector<PageIdV3Internal>;
 
-inline PageIdV3Internal buildV3Id(NamespaceId n_id, PageIdU64 p_id)
+inline PageIdV3Internal buildV3Id(NamespaceID n_id, PageIdU64 p_id)
 {
     // low bits first
     return PageIdV3Internal(p_id, n_id);

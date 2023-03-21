@@ -122,6 +122,7 @@ bool checkMatch(
         false,
         "test_database",
         name,
+        NullspaceID,
         /*table_id*/ next_table_id++,
         true,
         table_columns,

@@ -236,6 +236,7 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
         {
             PageEntryV3 entry;
             entry.file_id = INVALID_BLOBFILE_ID;
+            entry.size = write.size;
             entry.tag = write.tag;
             entry.checkpoint_info = OptionalCheckpointInfo{
                 .data_location = *write.data_location,
@@ -303,6 +304,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
             {
                 PageEntryV3 entry;
                 entry.file_id = INVALID_BLOBFILE_ID;
+                entry.size = write.size;
                 entry.tag = write.tag;
                 entry.checkpoint_info = OptionalCheckpointInfo{
                     .data_location = *write.data_location,
@@ -438,6 +440,7 @@ BlobStore<Trait>::write(typename Trait::WriteBatch && wb, const WriteLimiterPtr 
         {
             PageEntryV3 entry;
             entry.file_id = INVALID_BLOBFILE_ID;
+            entry.size = write.size;
             entry.tag = write.tag;
             entry.checkpoint_info = OptionalCheckpointInfo{
                 .data_location = *write.data_location,
@@ -518,6 +521,11 @@ void BlobStore<Trait>::remove(const PageEntries & del_entries)
     std::set<BlobFileId> blob_updated;
     for (const auto & entry : del_entries)
     {
+        if (entry.file_id == INVALID_BLOBFILE_ID)
+        {
+            RUNTIME_CHECK(entry.checkpoint_info.has_value() && entry.checkpoint_info.is_local_data_reclaimed);
+            continue;
+        }
         blob_updated.insert(entry.file_id);
         // External page size is 0
         if (entry.size == 0)

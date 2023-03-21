@@ -773,10 +773,10 @@ root = "root123"
         auto config = loadConfigFromString(test_case);
         LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
         auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
-        const auto & s3_config = storage.s3_config;
+        auto & s3_config = storage.s3_config;
         ASSERT_EQ(s3_config.access_key_id, env_access_key_id);
         ASSERT_EQ(s3_config.secret_access_key, env_secret_access_key);
-        ASSERT_EQ(s3_config.root, "root123");
+        ASSERT_EQ(s3_config.root, "root123/");
         if (i == 0)
         {
             ASSERT_TRUE(s3_config.endpoint.empty());
@@ -787,6 +787,8 @@ root = "root123"
         {
             ASSERT_EQ(s3_config.endpoint, "127.0.0.1:8080");
             ASSERT_EQ(s3_config.bucket, "s3_bucket");
+            ASSERT_FALSE(s3_config.isS3Enabled());
+            s3_config.enable(/*check_requirements*/ true, log);
             ASSERT_TRUE(s3_config.isS3Enabled());
         }
         else
@@ -803,7 +805,7 @@ root = "root123"
         auto config = loadConfigFromString(test_case);
         LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
         auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
-        const auto & s3_config = storage.s3_config;
+        auto & s3_config = storage.s3_config;
         if (i == 0)
         {
             ASSERT_TRUE(s3_config.endpoint.empty());
@@ -816,6 +818,8 @@ root = "root123"
         {
             ASSERT_EQ(s3_config.endpoint, "127.0.0.1:8080");
             ASSERT_EQ(s3_config.bucket, "s3_bucket");
+            ASSERT_FALSE(s3_config.isS3Enabled());
+            s3_config.enable(/*check_requirements*/ true, log);
             ASSERT_TRUE(s3_config.isS3Enabled());
             ASSERT_EQ(s3_config.access_key_id, "33333333");
             ASSERT_EQ(s3_config.secret_access_key, "44444444");

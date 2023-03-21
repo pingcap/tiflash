@@ -132,7 +132,7 @@ struct S3Filename
     static String allStorePrefix();
     static S3Filename fromStoreId(StoreID store_id);
     static S3Filename fromDMFileOID(const DMFileOID & oid);
-    static S3Filename fromTableID(StoreID store_id, TableID table_id);
+    static S3Filename fromTableID(StoreID store_id, KeyspaceID keyspace_id, TableID table_id);
     static S3Filename newCheckpointData(StoreID store_id, UInt64 upload_seq, UInt64 file_idx);
     static S3Filename newCheckpointManifest(StoreID store_id, UInt64 upload_seq);
 

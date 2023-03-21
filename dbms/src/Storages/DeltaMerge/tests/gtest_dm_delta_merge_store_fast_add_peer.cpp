@@ -21,9 +21,12 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
+#include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathPool.h>
@@ -53,9 +56,15 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
 namespace tests
 {
 // Simple test suit for DeltaMergeStoreTestFastAddPeer.
-class DeltaMergeStoreTestFastAddPeer : public DB::base::TiFlashStorageTestBasic
+class DeltaMergeStoreTestFastAddPeer
+    : public DB::base::TiFlashStorageTestBasic
+    , public testing::WithParamInterface<KeyspaceID>
 {
 public:
+    DeltaMergeStoreTestFastAddPeer()
+        : keyspace_id(GetParam())
+    {}
+
     void SetUp() override
     {
         FailPointHelper::enableFailPoint(FailPoints::force_use_dmfile_format_v3);
@@ -85,12 +94,7 @@ public:
         {
             already_initialize_write_ps = true;
         }
-        auto kvstore = db_context->getTMTContext().getKVStore();
-        {
-            auto meta_store = metapb::Store{};
-            meta_store.set_id(store_id);
-            kvstore->setStore(meta_store);
-        }
+        resetStoreId(current_store_id);
         global_context.getSharedContextDisagg()->initFastAddPeerContext();
     }
 
@@ -106,12 +110,26 @@ public:
         {
             global_context.setPageStorageRunMode(orig_mode);
         }
+        auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
+    }
+
+    void resetStoreId(UInt64 store_id)
+    {
+        auto kvstore = db_context->getTMTContext().getKVStore();
+        {
+            auto meta_store = metapb::Store{};
+            meta_store.set_id(store_id);
+            kvstore->setStore(meta_store);
+        }
     }
 
     DeltaMergeStorePtr
     reload(const ColumnDefinesPtr & pre_define_columns = {}, bool is_common_handle = false, size_t rowkey_column_size = 1)
     {
         TiFlashStorageTestBasic::reload();
+        auto kvstore = db_context->getTMTContext().getKVStore();
+        auto store_id = kvstore->getStoreID();
         if (auto ps = DB::tests::TiFlashTestEnv::getGlobalContext().getWriteNodePageStorage(); ps)
         {
             auto mock_s3lock_client = std::make_shared<DB::S3::MockS3LockClient>(DB::S3::ClientFactory::instance().sharedTiFlashClient());
@@ -128,8 +146,9 @@ public:
         DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
                                                                  false,
                                                                  "test",
-                                                                 "t_100",
-                                                                 100,
+                                                                 fmt::format("t_{}", table_id),
+                                                                 keyspace_id,
+                                                                 table_id,
                                                                  true,
                                                                  *cols,
                                                                  handle_column_define,
@@ -163,7 +182,7 @@ protected:
         return {handle_range, {external_file}}; // There are some duplicated info. This is to minimize the change to our test code.
     }
 
-    void dumpCheckpoint()
+    void dumpCheckpoint(UInt64 store_id)
     {
         auto temp_dir = getTemporaryPath() + "/";
         auto page_storage = db_context->getWriteNodePageStorage();
@@ -224,18 +243,22 @@ protected:
 
 protected:
     DeltaMergeStorePtr store;
-    UInt64 store_id = 100;
+    UInt64 current_store_id = 100;
+    KeyspaceID keyspace_id;
+    TableID table_id = 800;
     UInt64 upload_sequence = 1000;
     bool already_initialize_data_store = false;
     bool already_initialize_write_ps = false;
-    DB::PageStorageRunMode orig_mode;
+    DB::PageStorageRunMode orig_mode = PageStorageRunMode::ONLY_V3;
 
     constexpr static const char * TRACING_NAME = "DeltaMergeStoreTestFastAddPeer";
 };
 
-TEST_F(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPoint)
+TEST_P(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPoint)
 try
 {
+    UInt64 write_store_id = current_store_id + 1;
+    resetStoreId(write_store_id);
     {
         auto table_column_defines = DMTestEnv::getDefaultColumns();
 
@@ -270,23 +293,81 @@ try
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write + num_rows_write, num_rows_write + 2 * num_rows_write, false);
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
         auto [range, file_ids] = genDMFile(*dm_context, block);
+        {
+            // Mock DMFiles are uploaded to S3 in SSTFilesToDTFilesOutputStream
+            auto remote_store = db_context->getSharedContextDisagg()->remote_data_store;
+            ASSERT_NE(remote_store, nullptr);
+            auto delegator = dm_context->path_pool->getStableDiskDelegator();
+            for (const auto & file_id : file_ids)
+            {
+                auto dm_file = DMFile::restore(
+                    db_context->getFileProvider(),
+                    file_id.id,
+                    file_id.id,
+                    delegator.getDTFilePath(file_id.id),
+                    DMFile::ReadMetaMode::all());
+                remote_store->putDMFile(
+                    dm_file,
+                    S3::DMFileOID{
+                        .store_id = write_store_id,
+                        .keyspace_id = keyspace_id,
+                        .table_id = store->physical_table_id,
+                        .file_id = file_id.id,
+                    },
+                    true);
+            }
+        }
         store->ingestFiles(dm_context, range, file_ids, false);
         store->flushCache(*db_context, RowKeyRange::newAll(false, 1), true);
     }
 
-    dumpCheckpoint();
+    dumpCheckpoint(write_store_id);
 
     clearData();
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 0);
 
-    const auto manifest_key = S3::S3Filename::newCheckpointManifest(store_id, upload_sequence).toFullKey();
+    const auto manifest_key = S3::S3Filename::newCheckpointManifest(write_store_id, upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
-    checkpoint_info->remote_store_id = store_id;
+    checkpoint_info->remote_store_id = write_store_id;
     checkpoint_info->region_id = 1000;
     checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(*db_context, manifest_key, /*dir_seq*/ 100);
     checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
+    resetStoreId(current_store_id);
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+
+        store = reload(table_column_defines);
+    }
     store->ingestSegmentsFromCheckpointInfo(*db_context, db_context->getSettingsRef(), RowKeyRange::newAll(false, 1), checkpoint_info);
+
+    // check data file lock exists
+    {
+        const auto data_key = S3::S3Filename::newCheckpointData(write_store_id, upload_sequence, 0).toFullKey();
+        const auto data_key_view = S3::S3FilenameView::fromKey(data_key);
+        const auto lock_prefix = data_key_view.getLockPrefix();
+        auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+        std::set<String> lock_keys;
+        S3::listPrefix(*client, lock_prefix, [&](const Aws::S3::Model::Object & object) {
+            const auto & lock_key = object.GetKey();
+            // also store the object.GetLastModified() for removing
+            // outdated manifest objects
+            lock_keys.emplace(lock_key);
+            return DB::S3::PageResult{.num_keys = 1, .more = true};
+        });
+        // 2 lock files, 1 from write store, 1 from current store
+        ASSERT_EQ(lock_keys.size(), 2);
+        bool current_store_lock_exist = false;
+        for (const auto & lock_key : lock_keys)
+        {
+            auto lock_key_view = S3::S3FilenameView::fromKey(lock_key);
+            ASSERT_TRUE(lock_key_view.isLockFile());
+            auto lock_info = lock_key_view.getLockInfo();
+            if (lock_info.store_id == current_store_id)
+                current_store_lock_exist = true;
+        }
+        ASSERT_TRUE(current_store_lock_exist);
+    }
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write / 2 + 2 * num_rows_write);
 
@@ -296,7 +377,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPointWithSplit)
+TEST_P(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPointWithSplit)
 try
 {
     auto & global_settings = TiFlashTestEnv::getGlobalContext().getSettingsRef();
@@ -347,15 +428,16 @@ try
     }
     store->mergeDeltaAll(*db_context);
 
-    dumpCheckpoint();
+    UInt64 write_store_id = current_store_id + 1;
+    dumpCheckpoint(write_store_id);
 
     clearData();
 
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), 0);
 
-    const auto manifest_key = S3::S3Filename::newCheckpointManifest(store_id, upload_sequence).toFullKey();
+    const auto manifest_key = S3::S3Filename::newCheckpointManifest(write_store_id, upload_sequence).toFullKey();
     auto checkpoint_info = std::make_shared<CheckpointInfo>();
-    checkpoint_info->remote_store_id = store_id;
+    checkpoint_info->remote_store_id = write_store_id;
     checkpoint_info->region_id = 1000;
     checkpoint_info->checkpoint_data_holder = buildParsedCheckpointData(*db_context, manifest_key, /*dir_seq*/ 100);
     checkpoint_info->temp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
@@ -366,6 +448,11 @@ try
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write);
 }
 CATCH
+
+INSTANTIATE_TEST_CASE_P(
+    Type,
+    DeltaMergeStoreTestFastAddPeer,
+    testing::Values(NullspaceID, 300));
 } // namespace tests
 } // namespace DM
 } // namespace DB

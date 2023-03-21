@@ -28,6 +28,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 
@@ -55,16 +56,15 @@ FileCache::FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemo
     , cache_capacity(config_.getDTFileCapacity())
     , cache_level(config_.dtfile_level)
     , cache_used(0)
-    , cache_min_age_seconds(config_.dtfile_cache_min_age_seconds)
     , log(Logger::get("FileCache"))
 {
     prepareDir(cache_dir);
     restore();
 }
 
-RandomAccessFilePtr FileCache::getRandomAccessFile(const S3::S3FilenameView & s3_fname)
+RandomAccessFilePtr FileCache::getRandomAccessFile(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize)
 {
-    auto file_seg = get(s3_fname);
+    auto file_seg = get(s3_fname, filesize);
     if (file_seg == nullptr)
     {
         return nullptr;
@@ -73,7 +73,7 @@ RandomAccessFilePtr FileCache::getRandomAccessFile(const S3::S3FilenameView & s3
     return std::make_shared<PosixRandomAccessFile>(file_seg->getLocalFileName(), /*flags*/ -1, /*read_limiter*/ nullptr, file_seg);
 }
 
-FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname)
+FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize)
 {
     auto s3_key = s3_fname.toFullKey();
     auto file_type = getFileType(s3_key);
@@ -108,7 +108,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname)
 
     // We don't know the exact size of a object/file, but we need reserve space to save the object/file.
     // A certain amount of space is reserved for each file type.
-    auto estimzted_size = getEstimatedSizeOfFileType(file_type);
+    auto estimzted_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
     if (!reserveSpaceImpl(file_type, estimzted_size, /*try_evict*/ true))
     {
         LOG_DEBUG(log, "s3_key={} space not enough, skip cache", s3_key);
@@ -308,7 +308,7 @@ bool FileCache::canCache(FileType file_type) const
 {
     return file_type != FileType::Unknow
         && static_cast<UInt64>(file_type) <= cache_level
-        && bg_downloading_count.load(std::memory_order_relaxed) < S3FileCachePool::get().getMaxThreads();
+        && bg_downloading_count.load(std::memory_order_relaxed) < S3FileCachePool::get().getMaxThreads() * max_downloading_count_scale.load(std::memory_order_relaxed);
 }
 
 FileType FileCache::getFileTypeOfColData(const std::filesystem::path & p)
@@ -345,6 +345,10 @@ FileType FileCache::getFileType(const String & fname)
     if (ext.empty())
     {
         return p.stem() == DM::DMFile::metav2FileName() ? FileType::Meta : FileType::Unknow;
+    }
+    else if (ext == ".merged")
+    {
+        return FileType::Merged;
     }
     else if (ext == ".idx")
     {
@@ -580,24 +584,20 @@ std::vector<FileSegmentPtr> FileCache::getAll()
     return file_segs;
 }
 
-void FileCache::updateConfig(Poco::Util::AbstractConfiguration & config_)
+void FileCache::updateConfig(const Settings & settings)
 {
-    if (!config_.has("storage.remote.cache"))
+    double max_downloading_scale = settings.dt_filecache_max_downloading_count_scale;
+    if (std::fabs(max_downloading_scale - max_downloading_count_scale.load(std::memory_order_relaxed)) > 0.001)
     {
-        return;
+        LOG_INFO(log, "max_downloading_count_scale {} => {}", max_downloading_count_scale.load(std::memory_order_relaxed), max_downloading_scale);
+        max_downloading_count_scale.store(max_downloading_scale, std::memory_order_relaxed);
     }
-    try
+
+    UInt64 cache_min_age = settings.dt_filecache_min_age_seconds;
+    if (cache_min_age != cache_min_age_seconds.load(std::memory_order_relaxed))
     {
-        StorageRemoteCacheConfig cache_config;
-        cache_config.parse(config_.getString("storage.remote.cache"), log);
-        if (cache_config.dtfile_cache_min_age_seconds != cache_min_age_seconds.load(std::memory_order_relaxed))
-        {
-            cache_min_age_seconds.store(cache_config.dtfile_cache_min_age_seconds, std::memory_order_relaxed);
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, "FileCache::updateConfig");
+        LOG_INFO(log, "cache_min_age_seconds {} => {}", cache_min_age_seconds.load(std::memory_order_relaxed), cache_min_age);
+        cache_min_age_seconds.store(cache_min_age, std::memory_order_relaxed);
     }
 }
 

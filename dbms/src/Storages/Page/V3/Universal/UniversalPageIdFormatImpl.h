@@ -16,7 +16,10 @@
 
 #include <IO/Endian.h>
 #include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
+#include <Storages/Transaction/TiKVKeyspaceIDImpl.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -36,21 +39,26 @@ namespace DB
 //  And because some key will be migrated from kv engine to raft engine,
 //  kv engine and raft engine may write and delete the same key.
 //  So to distinguish data written by kv engine and raft engine,
-//  we prepend an `0x01` to the key written by raft engine, andprepend an `0x02` to the key written by kv engine.
+//  we prepend an `0x01` to the key written by raft engine, and prepend an `0x02` to the key written by kv engine.
 //  For example, suppose a key in tikv to be {0x01, 0x02, 0x03}.
 //  If it is written by raft engine, then actual key uni ps see will be {0x01, 0x01, 0x02, 0x03}.
 //  But if it is written by kv engine, the actual key uni ps see will be {0x02, 0x01, 0x02, 0x03}.
 //
-// KVStore related key
-//  Prefix = [optional prefix] + "kvs"
+// KVStore related key: "kvs" + RegionID
 //
 // Storage key
 //  Meta
-//      Prefix = [optional prefix] + "tm" + NamespaceId
+//      Prefix = [optional KeyspaceID] + "tm" + NamespaceID
 //  Log
-//      Prefix = [optional prefix] + "tl" + NamespaceId
+//      Prefix = [optional KeyspaceID] + "tl" + NamespaceID
 //  Data
-//      Prefix = [optional prefix] + "td" + NamespaceId
+//      Prefix = [optional KeyspaceID] + "td" + NamespaceID
+//
+// KeyspaceID format is the same as in https://github.com/tikv/rfcs/blob/master/text/0069-api-v2.md
+//  'x'(TXN_MODE_PREFIX) + keyspace_id(3 bytes, big endian)
+//  Note 'x' will be a reserved keyword, and should not be used in other prefix.
+//  If the first byte of a UniversalPageId is 'x', the next 3 bytes will be considered a KeyspaceID.
+//  If not, NullspaceID will be returned.
 
 struct UniversalPageIdFormat
 {
@@ -63,37 +71,25 @@ public:
         return buff.releaseStr();
     }
 
-    static inline String toSubPrefix(StorageType type)
-    {
-        switch (type)
-        {
-        case StorageType::Log:
-            return "tl";
-        case StorageType::Data:
-            return "td";
-        case StorageType::Meta:
-            return "tm";
-        case StorageType::KVStore:
-            return "kvs";
-        default:
-            throw Exception(fmt::format("Unknown storage type {}", static_cast<UInt8>(type)), ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-
-    static inline String toFullPrefix(StorageType type, NamespaceId ns_id)
+    static inline String toFullPrefix(KeyspaceID keyspace_id, StorageType type, NamespaceID ns_id)
     {
         WriteBufferFromOwnString buff;
-        writeString(toSubPrefix(type), buff);
+        if (type != StorageType::KVStore)
+        {
+            writeString(TiKVKeyspaceID::makeKeyspacePrefix(keyspace_id), buff);
+        }
+        writeString(getSubPrefix(type), buff);
         if (type != StorageType::KVStore)
         {
             UniversalPageIdFormat::encodeUInt64(ns_id, buff);
         }
+
         return buff.releaseStr();
     }
 
     static UniversalPageId toKVStoreKey(UInt64 region_id)
     {
-        return toFullPageId(toSubPrefix(StorageType::KVStore), region_id);
+        return toFullPageId(getSubPrefix(StorageType::KVStore), region_id);
     }
 
     // data is in kv engine, so it is prepended by KV_PREFIX
@@ -146,6 +142,28 @@ public:
         return buff.releaseStr();
     }
 
+    // Store ident //
+
+    // KV_PREFIX LOCAL_PREFIX STORE_IDENT_KEY
+    static String getStoreIdentIdInKVEngine()
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x02, buff);
+        writeChar(0x01, buff);
+        writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
+    // RAFT_PREFIX LOCAL_PREFIX STORE_IDENT_KEY
+    static String getStoreIdentId()
+    {
+        WriteBufferFromOwnString buff;
+        writeChar(0x01, buff);
+        writeChar(0x01, buff);
+        writeChar(0x01, buff);
+        return buff.releaseStr();
+    }
+
     static inline PageIdU64 getU64ID(const UniversalPageId & page_id)
     {
         if (page_id.size() >= sizeof(UInt64))
@@ -154,10 +172,22 @@ public:
             return INVALID_PAGE_U64_ID;
     }
 
+    static inline KeyspaceID getKeyspaceID(const UniversalPageId & page_id)
+    {
+        return TiKVKeyspaceID::getKeyspaceID(std::string_view(page_id.data(), page_id.size()));
+    }
+
     static inline String getFullPrefix(const UniversalPageId & page_id)
     {
         size_t prefix_length = (page_id.size() >= sizeof(UInt64)) ? (page_id.size() - sizeof(UInt64)) : page_id.size();
         return page_id.substr(0, prefix_length).toStr();
+    }
+
+    static inline bool isType(const UniversalPageId & page_id, StorageType type)
+    {
+        const auto & page_id_str = page_id.asStr();
+        auto page_id_without_keyspace = TiKVKeyspaceID::removeKeyspaceID(std::string_view(page_id_str.data(), page_id_str.size()));
+        return page_id_without_keyspace.starts_with(getSubPrefix(type));
     }
 
 private:
@@ -171,6 +201,23 @@ private:
     {
         auto v = *(reinterpret_cast<const UInt64 *>(s));
         return toBigEndian(v);
+    }
+
+    static String getSubPrefix(StorageType type)
+    {
+        switch (type)
+        {
+        case StorageType::Log:
+            return "tl";
+        case StorageType::Data:
+            return "td";
+        case StorageType::Meta:
+            return "tm";
+        case StorageType::KVStore:
+            return "kvs";
+        default:
+            throw Exception(fmt::format("Unknown storage type {}", static_cast<UInt8>(type)), ErrorCodes::LOGICAL_ERROR);
+        }
     }
 };
 } // namespace DB

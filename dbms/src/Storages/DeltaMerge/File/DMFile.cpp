@@ -25,6 +25,7 @@
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/MergedFile.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
@@ -33,6 +34,7 @@
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
+#include <atomic>
 #include <boost/algorithm/string/classification.hpp>
 #include <filesystem>
 #include <utility>
@@ -44,6 +46,7 @@ namespace ErrorCodes
 extern const int CANNOT_READ_ALL_DATA;
 extern const int CORRUPTED_DATA;
 extern const int INCORRECT_DATA;
+extern const int BAD_ARGUMENTS;
 } // namespace ErrorCodes
 
 namespace FailPoints
@@ -285,6 +288,11 @@ EncryptionPath DMFile::encryptionConfigurationPath() const
 EncryptionPath DMFile::encryptionMetav2Path() const
 {
     return EncryptionPath(encryptionBasePath(), metav2FileName());
+}
+
+EncryptionPath DMFile::encryptionMergedPath(UInt32 number) const
+{
+    return EncryptionPath(encryptionBasePath(), mergedFilename(number));
 }
 
 String DMFile::colDataFileName(const FileNameBase & file_name_base)
@@ -743,12 +751,12 @@ std::set<UInt64> DMFile::listAllInPath(
     return file_ids;
 }
 
-bool DMFile::canGC()
+bool DMFile::canGC() const
 {
     return !Poco::File(ngcPath()).exists();
 }
 
-void DMFile::enableGC()
+void DMFile::enableGC() const
 {
     Poco::File ngc_file(ngcPath());
     if (ngc_file.exists())
@@ -838,19 +846,34 @@ DMFile::MetaBlockHandle DMFile::writeColumnStatToBuffer(WriteBuffer & buffer)
     return MetaBlockHandle{MetaBlockType::ColumnStat, offset, buffer.count() - offset};
 }
 
+DMFile::MetaBlockHandle DMFile::writeMergedSubFilePosotionsToBuffer(WriteBuffer & buffer)
+{
+    auto offset = buffer.count();
+
+    writeIntBinary(merged_files.size(), buffer);
+    const auto * data = reinterpret_cast<const char *>(&merged_files[0]);
+    auto bytes = merged_files.size() * sizeof(MergedFile);
+    writeString(data, bytes, buffer);
+
+    writeIntBinary(merged_sub_file_infos.size(), buffer);
+    for (const auto & [fname, info] : merged_sub_file_infos)
+    {
+        info.serializeToBuffer(buffer);
+    }
+    return MetaBlockHandle{MetaBlockType::MergedSubFilePos, offset, buffer.count() - offset};
+}
+
 void DMFile::finalizeMetaV2(WriteBuffer & buffer)
 {
     auto tmp_buffer = WriteBufferFromOwnString{};
-    auto digest = configuration ? configuration->createUnifiedDigest() : nullptr;
-    auto pack_stats_handle = writeSLPackStatToBuffer(tmp_buffer);
-    auto pack_properties_handle = writeSLPackPropertyToBuffer(tmp_buffer);
-    auto column_stats_handle = writeColumnStatToBuffer(tmp_buffer);
-
-    writePODBinary(pack_stats_handle, tmp_buffer);
-    writePODBinary(pack_properties_handle, tmp_buffer);
-    writePODBinary(column_stats_handle, tmp_buffer);
-    UInt64 meta_block_handle_count = 3;
-    writeIntBinary(meta_block_handle_count, tmp_buffer);
+    std::array meta_block_handles = {
+        writeSLPackStatToBuffer(tmp_buffer),
+        writeSLPackPropertyToBuffer(tmp_buffer),
+        writeColumnStatToBuffer(tmp_buffer),
+        writeMergedSubFilePosotionsToBuffer(tmp_buffer),
+    };
+    writePODBinary(meta_block_handles, tmp_buffer);
+    writeIntBinary(static_cast<UInt64>(meta_block_handles.size()), tmp_buffer);
     writeIntBinary(version, tmp_buffer);
 
     // Write to file and do checksums.
@@ -942,6 +965,9 @@ void DMFile::parseMetaV2(std::string_view buffer)
         case MetaBlockType::PackStat:
             parsePackStat(buffer.substr(handle->offset, handle->size));
             break;
+        case MetaBlockType::MergedSubFilePos:
+            parseMergedSubFilePos(buffer.substr(handle->offset, handle->size));
+            break;
         default:
             throw Exception(ErrorCodes::INCORRECT_DATA, "MetaBlockType {} is not recognized", magic_enum::enum_name(handle->type));
         }
@@ -959,6 +985,26 @@ void DMFile::parseColumnStat(std::string_view buffer)
         ColumnStat stat;
         stat.parseFromBuffer(rbuf);
         column_stats.emplace(stat.col_id, std::move(stat));
+    }
+}
+
+void DMFile::parseMergedSubFilePos(std::string_view buffer)
+{
+    ReadBufferFromString rbuf(buffer);
+
+    UInt64 merged_files_count;
+    readIntBinary(merged_files_count, rbuf);
+    merged_files.resize(merged_files_count);
+    readString(reinterpret_cast<char *>(merged_files.data()), merged_files_count * sizeof(MergedFile), rbuf);
+
+    UInt64 count;
+    readIntBinary(count, rbuf);
+    merged_sub_file_infos.reserve(count);
+    for (UInt64 i = 0; i < count; ++i)
+    {
+        auto t = MergedSubFileInfo::parseFromBuffer(rbuf);
+        auto fname = t.fname;
+        merged_sub_file_infos.emplace(std::move(fname), std::move(t));
     }
 }
 
@@ -1000,30 +1046,55 @@ void DMFile::finalizeDirName()
     old_file.renameTo(new_path);
 }
 
-std::vector<String> DMFile::listInternalFiles()
+std::vector<std::pair<String, UInt64>> DMFile::listFilesForUpload()
 {
     RUNTIME_CHECK(useMetaV2());
-    std::vector<String> fnames;
-    fnames.push_back(metav2FileName());
-    for (const auto & [col_id, stat] : column_stats)
+    std::vector<std::pair<String, UInt64>> fnames;
+    fnames.emplace_back(metav2FileName(), /*file_size*/ 0); // We don't need the meta file's size currently.
+    for (const auto & merged_file : merged_files)
     {
-        auto name_base = getFileNameBase(col_id, {});
-        // .dat and .mrk are required.
-        fnames.push_back(colDataFileName(name_base));
-        fnames.push_back(colMarkFileName(name_base));
-        if (stat.index_bytes > 0)
+        fnames.emplace_back(mergedFilename(merged_file.number), merged_file.size);
+    }
+    auto col_fnames = listColumnFilesWithSize();
+    for (const auto & [fname, fsize] : col_fnames)
+    {
+        auto itr = merged_sub_file_infos.find(fname);
+        if (itr == merged_sub_file_infos.end())
         {
-            fnames.push_back(colIndexFileName(name_base));
-        }
-
-        if (stat.type->isNullable())
-        {
-            auto null_name_base = getFileNameBase(col_id, {IDataType::Substream::NullMap});
-            fnames.push_back(colDataFileName(null_name_base));
-            fnames.push_back(colMarkFileName(null_name_base));
+            fnames.emplace_back(fname, fsize);
         }
     }
     return fnames;
+}
+
+std::vector<std::pair<String, UInt64>> DMFile::listColumnFilesWithSize()
+{
+    RUNTIME_CHECK(useMetaV2());
+    std::vector<std::pair<String, UInt64>> fnames;
+    for (const auto & [col_id, stat] : column_stats)
+    {
+        listFilesOfColumn(col_id, stat, [&fnames](String && fname, UInt64 fsize) {
+            fnames.emplace_back(std::move(fname), fsize);
+        });
+    }
+    return fnames;
+}
+
+void DMFile::listFilesOfColumn(ColId col_id, const ColumnStat & stat, std::function<void(String && fname, UInt64 fsize)> && handle)
+{
+    auto name_base = getFileNameBase(col_id, {});
+    handle(colDataFileName(name_base), stat.data_bytes);
+    handle(colMarkFileName(name_base), stat.mark_bytes);
+    if (stat.index_bytes > 0)
+    {
+        handle(colIndexFileName(name_base), stat.index_bytes);
+    }
+    if (stat.type->isNullable())
+    {
+        auto null_name_base = getFileNameBase(col_id, {IDataType::Substream::NullMap});
+        handle(colDataFileName(null_name_base), stat.nullmap_data_bytes);
+        handle(colMarkFileName(null_name_base), stat.nullmap_mark_bytes);
+    }
 }
 
 void DMFile::switchToRemote(const S3::DMFileOID & oid)
@@ -1033,12 +1104,165 @@ void DMFile::switchToRemote(const S3::DMFileOID & oid)
 
     auto local_path = path();
     // Update the parent_path so that it will read data from remote storage.
-    parent_path = S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKeyWithPrefix();
+    parent_path = S3::S3Filename::fromTableID(oid.store_id, oid.keyspace_id, oid.table_id).toFullKeyWithPrefix();
 
     // Remove local directory.
     std::filesystem::remove_all(local_path);
 }
 
+void DMFile::finalizeSmallColumnDataFiles(FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter)
+{
+    std::unique_ptr<WriteBufferFromFileBase> cur_write_file;
+    MergedFile cur_merged_file;
+
+    auto create_write_file = [&](UInt64 number) {
+        return std::make_unique<WriteBufferFromFileProvider>(
+            file_provider,
+            mergedPath(number),
+            encryptionMergedPath(number),
+            /*create_new_encryption_info*/ false,
+            write_limiter);
+    };
+
+    auto init_cur = [&]() {
+        cur_merged_file.number = merged_files.size();
+        cur_write_file = create_write_file(cur_merged_file.number);
+    };
+
+    auto finalize_cur = [&]() {
+        cur_write_file->sync();
+        merged_files.push_back(cur_merged_file);
+        cur_write_file.reset();
+        cur_merged_file.size = 0;
+    };
+
+    auto copy_file_to_cur = [&](const String & fname, UInt64 fsize) {
+        auto read_file = openForRead(file_provider, subFilePath(fname), EncryptionPath(encryptionBasePath(), fname), fsize);
+        std::vector<char> read_buf(fsize);
+        auto read_size = read_file.readBig(read_buf.data(), read_buf.size());
+        RUNTIME_CHECK(read_size == fsize, fname, read_size, fsize);
+        cur_write_file->write(read_buf.data(), read_buf.size());
+        merged_sub_file_infos.emplace(fname, MergedSubFileInfo(fname, cur_merged_file.number, /*offset*/ cur_merged_file.size, /*size*/ read_buf.size()));
+        cur_merged_file.size += read_buf.size();
+    };
+
+    auto copy_files_to_cur = [&](const std::vector<std::pair<String, UInt64>> & fnames) {
+        for (const auto & [fname, fsize] : fnames)
+        {
+            copy_file_to_cur(fname, fsize);
+        }
+    };
+
+    for (const auto & [col_id, stat] : column_stats)
+    {
+        std::vector<std::pair<String, UInt64>> fnames;
+        listFilesOfColumn(col_id, stat, [&fnames](String && fname, UInt64 fsize) {
+            if (fsize <= small_file_size_threshold.load(std::memory_order_relaxed))
+            {
+                fnames.emplace_back(std::move(fname), fsize);
+            }
+        });
+        if (fnames.empty())
+        {
+            continue;
+        }
+
+        if (cur_merged_file.size >= merged_file_max_size.load(std::memory_order_relaxed))
+        {
+            finalize_cur();
+        }
+
+        if (cur_write_file == nullptr)
+        {
+            init_cur();
+        }
+
+        copy_files_to_cur(fnames);
+    }
+
+    if (cur_write_file != nullptr)
+    {
+        finalize_cur();
+    }
+}
+
+UInt64 DMFile::getFileSize(ColId col_id, const String & filename) const
+{
+    auto itr = column_stats.find(col_id);
+    RUNTIME_CHECK(itr != column_stats.end(), col_id);
+    if (endsWith(filename, ".idx"))
+    {
+        return itr->second.index_bytes;
+    }
+    else if (endsWith(filename, ".null.dat"))
+    {
+        return itr->second.nullmap_data_bytes;
+    }
+    else if (endsWith(filename, ".null.mrk"))
+    {
+        return itr->second.nullmap_mark_bytes;
+    }
+    else if (endsWith(filename, ".dat"))
+    {
+        return itr->second.data_bytes;
+    }
+    else if (endsWith(filename, ".mrk"))
+    {
+        return itr->second.mark_bytes;
+    }
+    else
+    {
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknow filename={} col_id={}", filename, col_id);
+    }
+}
+
+S3::S3RandomAccessFile::ReadFileInfo DMFile::getReadFileInfo(ColId col_id, const String & filename) const
+{
+    auto itr = merged_sub_file_infos.find(filename);
+    if (itr != merged_sub_file_infos.end())
+    {
+        return getMergedFileInfoOfColumn(itr->second);
+    }
+    else
+    {
+        return S3::S3RandomAccessFile::ReadFileInfo{.size = getFileSize(col_id, filename)};
+    }
+}
+
+S3::S3RandomAccessFile::ReadFileInfo DMFile::getMergedFileInfoOfColumn(const MergedSubFileInfo & file_info) const
+{
+    S3::S3RandomAccessFile::ReadFileInfo read_file_info;
+
+    read_file_info.merged_filename = mergedPath(file_info.number);
+    read_file_info.read_merged_offset = file_info.offset;
+    read_file_info.read_merged_size = file_info.size;
+
+    // Get filesize of merged file.
+    auto itr = std::find_if(
+        merged_files.begin(),
+        merged_files.end(),
+        [&file_info](const auto & merged_file) {
+            return merged_file.number == file_info.number;
+        });
+    RUNTIME_CHECK(itr != merged_files.end());
+    read_file_info.size = itr->size;
+    return read_file_info;
+}
+
+void DMFile::updateMergeFileConfig(const Settings & settings)
+{
+    if (settings.dt_small_file_size_threshold != small_file_size_threshold.load(std::memory_order_relaxed))
+    {
+        LOG_INFO(Logger::get(), "small_file_size_threshold {} => {}", small_file_size_threshold.load(std::memory_order_relaxed), settings.dt_small_file_size_threshold.get());
+        small_file_size_threshold.store(settings.dt_small_file_size_threshold, std::memory_order_relaxed);
+    }
+
+    if (settings.dt_merged_file_max_size != merged_file_max_size.load(std::memory_order_relaxed))
+    {
+        LOG_INFO(Logger::get(), "merged_file_max_size {} => {}", small_file_size_threshold.load(std::memory_order_relaxed), settings.dt_merged_file_max_size.get());
+        merged_file_max_size.store(settings.dt_merged_file_max_size, std::memory_order_relaxed);
+    }
+}
 
 } // namespace DM
 } // namespace DB

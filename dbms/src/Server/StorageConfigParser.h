@@ -95,6 +95,8 @@ public:
 
 struct StorageS3Config
 {
+    bool is_enabled = false;
+
     String endpoint;
     String bucket;
     String access_key_id;
@@ -107,8 +109,11 @@ struct StorageS3Config
     inline static String S3_ACCESS_KEY_ID = "S3_ACCESS_KEY_ID";
     inline static String S3_SECRET_ACCESS_KEY = "S3_SECRET_ACCESS_KEY";
 
-    void parse(const String & content, const LoggerPtr & log);
+    void parse(const String & content);
+    void enable(bool check_requirements, const LoggerPtr & log);
     bool isS3Enabled() const;
+
+    String toString() const;
 };
 
 struct StorageRemoteCacheConfig
@@ -116,8 +121,6 @@ struct StorageRemoteCacheConfig
     String dir;
     UInt64 capacity = 0;
     UInt64 dtfile_level = 100;
-    UInt64 dtfile_cache_min_age_seconds = 30 * 60; // Files of the same priority can only be evicted from files
-        // that were not accessed within `dtfile_cache_min_age_seconds` seconds.
     double delta_rate = 0.3;
 
     bool isCacheEnabled() const;

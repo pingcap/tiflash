@@ -137,7 +137,6 @@ ColumnFilePersisteds createColumnFilesFromCheckpoint( //
     const RowKeyRange & segment_range,
     ReadBuffer & buf,
     UniversalPageStoragePtr temp_ps,
-    TableID ns_id,
     WriteBatches & wbs)
 {
     // Check binary version
@@ -148,7 +147,7 @@ ColumnFilePersisteds createColumnFilesFromCheckpoint( //
     switch (version)
     {
     case DeltaFormat::V3:
-        column_files = createColumnFilesInV3FormatFromCheckpoint(context, segment_range, buf, temp_ps, ns_id, wbs);
+        column_files = createColumnFilesInV3FormatFromCheckpoint(context, segment_range, buf, temp_ps, wbs);
         break;
     default:
         throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),

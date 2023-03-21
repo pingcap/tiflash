@@ -28,11 +28,12 @@ namespace DB
 PhysicalMockExchangeReceiver::PhysicalMockExchangeReceiver(
     const String & executor_id_,
     const NamesAndTypes & schema_,
+    const FineGrainedShuffle & fine_grained_shuffle_,
     const String & req_id,
     const Block & sample_block_,
     const BlockInputStreams & mock_streams_,
     size_t source_num_)
-    : PhysicalLeaf(executor_id_, PlanType::MockExchangeReceiver, schema_, req_id)
+    : PhysicalLeaf(executor_id_, PlanType::MockExchangeReceiver, schema_, fine_grained_shuffle_, req_id)
     , sample_block(sample_block_)
     , mock_streams(mock_streams_)
     , source_num(source_num_)
@@ -43,13 +44,14 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::ExchangeReceiver & exchange_receiver,
-    size_t fine_grained_stream_count)
+    const FineGrainedShuffle & fine_grained_shuffle)
 {
-    auto [schema, mock_streams] = mockSchemaAndStreamsForExchangeReceiver(context, executor_id, log, exchange_receiver, fine_grained_stream_count);
+    auto [schema, mock_streams] = mockSchemaAndStreamsForExchangeReceiver(context, executor_id, log, exchange_receiver, fine_grained_shuffle.stream_count);
 
     auto physical_mock_exchange_receiver = std::make_shared<PhysicalMockExchangeReceiver>(
         executor_id,
         schema,
+        fine_grained_shuffle,
         log->identifier(),
         Block(schema),
         mock_streams,
@@ -63,12 +65,16 @@ void PhysicalMockExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipel
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockExchangeReceiver::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalMockExchangeReceiver::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
     group_builder.init(mock_streams.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(group_builder.exec_status, log->identifier(), mock_streams[i++]));
+        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
     });
 }
 

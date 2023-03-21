@@ -175,7 +175,7 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(const DMContext & con
     return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id);
 }
 
-std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(const DMContext & context, ReadBuffer & buf, UniversalPageStoragePtr temp_ps, const BlockPtr & last_schema, TableID ns_id, WriteBatches & wbs)
+std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(const DMContext & context, ReadBuffer & buf, UniversalPageStoragePtr temp_ps, const BlockPtr & last_schema, WriteBatches & wbs)
 {
     auto schema = deserializeSchema(buf);
     if (!schema)
@@ -189,11 +189,20 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     readIntBinary(rows, buf);
     readIntBinary(bytes, buf);
     auto new_cf_id = context.storage_pool->newLogPageId();
-    auto remote_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Log, ns_id), data_page_id);
+    auto remote_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Log, context.physical_table_id), data_page_id);
+    // The `data_file_id` in temp_ps is lock key, we need convert it to data key before write to local ps
     auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
     RUNTIME_CHECK(remote_data_location.has_value());
+    auto remote_data_file_lock_key_view = S3::S3FilenameView::fromKey(*remote_data_location->data_file_id);
+    RUNTIME_CHECK(remote_data_file_lock_key_view.isLockFile());
+    auto remote_data_file_key = remote_data_file_lock_key_view.asDataFile().toFullKey();
+    PS::V3::CheckpointLocation new_remote_data_location{
+        .data_file_id = std::make_shared<String>(remote_data_file_key),
+        .offset_in_file = remote_data_location->offset_in_file,
+        .size_in_file = remote_data_location->size_in_file};
     auto entry = temp_ps->getEntry(remote_page_id);
-    wbs.log.putRemotePage(new_cf_id, 0, *remote_data_location, std::move(entry.field_offsets));
+    LOG_DEBUG(Logger::get(), "Write remote page[page_id={} remote_location={}] using local page id {}", remote_page_id, new_remote_data_location.toDebugString(), new_cf_id);
+    wbs.log.putRemotePage(new_cf_id, 0, entry.size, new_remote_data_location, std::move(entry.field_offsets));
 
     auto column_file_schema = std::make_shared<ColumnFileSchema>(*schema);
     return {std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id), std::move(schema)};

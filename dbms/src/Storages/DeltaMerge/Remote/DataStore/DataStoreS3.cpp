@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
+#include <Storages/Transaction/Types.h>
 
 #include <future>
 #include <unordered_map>
@@ -29,10 +30,11 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
 {
     Stopwatch sw;
     RUNTIME_CHECK(local_dmfile->fileId() == oid.file_id);
+    RUNTIME_CHECK_MSG(oid.store_id != InvalidStoreID, "try to upload a DMFile with invalid StoreID, oid={} path={}", oid, local_dmfile->path());
 
     const auto local_dir = local_dmfile->path();
-    const auto local_files = local_dmfile->listInternalFiles();
-    auto itr_meta = std::find(local_files.cbegin(), local_files.cend(), DMFile::metav2FileName());
+    const auto local_files = local_dmfile->listFilesForUpload();
+    auto itr_meta = std::find_if(local_files.cbegin(), local_files.cend(), [](const auto & file_with_size) { return file_with_size.first == DMFile::metav2FileName(); });
     RUNTIME_CHECK(itr_meta != local_files.cend());
 
     const auto remote_dir = S3::S3Filename::fromDMFileOID(oid).toFullKey();
@@ -41,8 +43,9 @@ void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, b
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
     std::vector<std::future<void>> upload_results;
-    for (const auto & fname : local_files)
+    for (const auto & [fname, fsize] : local_files)
     {
+        UNUSED(fsize);
         if (fname == DMFile::metav2FileName())
         {
             // meta file will be upload at last.
@@ -192,7 +195,7 @@ DMFilePtr S3PreparedDMFileToken::restore(DMFile::ReadMetaMode read_mode)
         file_provider,
         oid.file_id,
         page_id,
-        S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKeyWithPrefix(),
+        S3::S3Filename::fromTableID(oid.store_id, oid.keyspace_id, oid.table_id).toFullKeyWithPrefix(),
         read_mode);
 }
 } // namespace DB::DM::Remote

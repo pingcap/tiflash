@@ -14,37 +14,30 @@
 
 #pragma once
 
+#include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 
 namespace DB
 {
-class Pipeline;
-using PipelinePtr = std::shared_ptr<Pipeline>;
-
-// The base class of pipeline related event.
-class PipelineEvent : public Event
+class FineGrainedPipelineEvent : public Event
 {
 public:
-    PipelineEvent(
+    FineGrainedPipelineEvent(
         PipelineExecutorStatus & exec_status_,
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
-        Context & context_,
-        const PipelinePtr & pipeline_)
+        PipelineExecPtr && pipeline_exec_)
         : Event(exec_status_, std::move(mem_tracker_), req_id)
-        , context(context_)
-        , pipeline(pipeline_)
-    {}
-
-    void finishImpl() override
+        , pipeline_exec(std::move(pipeline_exec_))
     {
-        // Plan nodes in pipeline hold resources like hash table for join, when destruction they will operate memory tracker in MPP task. But MPP task may get destructed once `exec_status.onEventFinish()` is called.
-        // So pipeline needs to be released before `exec_status.onEventFinish()` is called.
-        pipeline.reset();
+        assert(pipeline_exec);
     }
 
 protected:
-    Context & context;
-    PipelinePtr pipeline;
+    std::vector<TaskPtr> scheduleImpl() override;
+
+private:
+    // The pipeline exec for executing the specific fine-grained partition.
+    PipelineExecPtr pipeline_exec;
 };
 } // namespace DB
