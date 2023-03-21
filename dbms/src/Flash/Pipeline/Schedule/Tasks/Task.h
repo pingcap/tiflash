@@ -62,7 +62,7 @@ protected:
     virtual ExecTaskStatus awaitImpl() noexcept { return ExecTaskStatus::RUNNING; }
 
 private:
-    bool switchStatus(ExecTaskStatus to) noexcept;
+    void switchStatus(ExecTaskStatus to) noexcept;
 
 protected:
     MemoryTrackerPtr mem_tracker;

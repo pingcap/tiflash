@@ -14,8 +14,8 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
-#include <common/logger_useful.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
 
@@ -28,51 +28,70 @@ extern const char random_pipeline_model_task_construct_failpoint[];
 
 namespace
 {
-    
+// TODO supports more detailed status transfer metrics, such as from waiting to running.
+void addToStatusMetrics(ExecTaskStatus to)
+{
+    switch (to)
+    {
+    case ExecTaskStatus::INIT:
+        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
+        break;
+    case ExecTaskStatus::WAITING:
+        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_waiting).Increment();
+        break;
+    case ExecTaskStatus::RUNNING:
+        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_running).Increment();
+        break;
+    case ExecTaskStatus::FINISHED:
+        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_finished).Increment();
+        break;
+    case ExecTaskStatus::ERROR:
+        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_error).Increment();
+        break;
+    case ExecTaskStatus::CANCELLED:
+        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_cancelled).Increment();
+        break;
+    }
+}
+} // namespace
+
+Task::Task()
+    : mem_tracker(nullptr)
+    , log(Logger::get())
+{
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
+    GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
 }
 
-    Task::Task()
-        : mem_tracker(nullptr)
-        , log(Logger::get())
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
-    }
+Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
+    : mem_tracker(std::move(mem_tracker_))
+    , log(Logger::get(req_id))
+{
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
+    GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
+}
 
-    Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
-        : mem_tracker(std::move(mem_tracker_))
-        , log(Logger::get(req_id))
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_task_construct_failpoint);
-    }
+ExecTaskStatus Task::execute() noexcept
+{
+    assert(getMemTracker().get() == current_memory_tracker);
+    switchStatus(executeImpl());
+    return exec_status;
+}
 
-    ExecTaskStatus Task::execute() noexcept
-    {
-        assert(getMemTracker().get() == current_memory_tracker);
-        if (switchStatus(executeImpl()))
-        {
-            
-        }
-        return exec_status;
-    }
+ExecTaskStatus Task::await() noexcept
+{
+    assert(getMemTracker().get() == current_memory_tracker);
+    switchStatus(awaitImpl());
+    return exec_status;
+}
 
-    ExecTaskStatus Task::await() noexcept
+void Task::switchStatus(ExecTaskStatus to) noexcept
+{
+    if (exec_status != to)
     {
-        assert(getMemTracker().get() == current_memory_tracker);
-        if (switchStatus(awaitImpl()))
-        {
-            
-        }
-        return exec_status;
+        LOG_TRACE(log, "switch status: {} --> {}", magic_enum::enum_name(exec_status), magic_enum::enum_name(to));
+        addToStatusMetrics(to);
+        exec_status = to;
     }
-
-    bool Task::switchStatus(ExecTaskStatus to) noexcept
-    {
-        if (exec_status != to)
-        {
-            LOG_TRACE(log, "switch status: {} --> {}", magic_enum::enum_name(exec_status), magic_enum::enum_name(to));
-            exec_status = to;
-            return true;
-        }
-        return false;
-    }
+}
 } // namespace DB

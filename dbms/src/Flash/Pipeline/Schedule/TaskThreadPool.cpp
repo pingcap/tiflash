@@ -30,7 +30,7 @@ TaskThreadPool::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
     , scheduler(scheduler_)
 {
     GET_METRIC(tiflash_pipeline_scheduler, type_pending_tasks_count).Set(0);
-    GET_METRIC(tiflash_pipeline_scheduler, type_executing_tasks_count).Set(0);
+    GET_METRIC(tiflash_pipeline_scheduler, type_running_tasks_count).Set(0);
     GET_METRIC(tiflash_pipeline_scheduler, type_task_thread_pool_size).Set(0);
 
     RUNTIME_CHECK(thread_num > 0);
@@ -81,7 +81,7 @@ void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
     assert(task);
     TRACE_MEMORY(task);
 
-    GET_METRIC(tiflash_pipeline_scheduler, type_executing_tasks_count).Increment();
+    GET_METRIC(tiflash_pipeline_scheduler, type_running_tasks_count).Increment();
 
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
     ExecTaskStatus status;
@@ -97,7 +97,7 @@ void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
         }
     }
 
-    GET_METRIC(tiflash_pipeline_scheduler, type_executing_tasks_count).Decrement();
+    GET_METRIC(tiflash_pipeline_scheduler, type_running_tasks_count).Decrement();
     switch (status)
     {
     case ExecTaskStatus::RUNNING:
