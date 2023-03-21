@@ -12,17 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/BlockStreamProfileInfo.h>
-#include <Flash/Statistics/BaseRuntimeStatistics.h>
+#pragma once
+
+#include <Flash/Coprocessor/ExecutionSummary.h>
 
 namespace DB
 {
-void BaseRuntimeStatistics::append(const BlockStreamProfileInfo & profile_info)
-{
-    rows += profile_info.rows;
-    blocks += profile_info.blocks;
-    bytes += profile_info.bytes;
-    execution_time_ns = std::max(execution_time_ns, profile_info.execution_time);
-    ++concurrency;
-}
+class DAGContext;
+
+void fillTiExecutionSummary(
+    DAGContext & dag_context,
+    tipb::ExecutorExecutionSummary * execution_summary,
+    ExecutionSummary & current,
+    const String & executor_id,
+    bool force_fill_executor_id);
 } // namespace DB

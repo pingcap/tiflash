@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
+#include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
@@ -309,7 +310,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     const String & executor_id,
     uint64_t fine_grained_shuffle_stream_count_,
     Int32 local_tunnel_version_,
-    const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_)
+    const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
