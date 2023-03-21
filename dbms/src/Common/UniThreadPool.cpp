@@ -23,7 +23,6 @@
 #include <cassert>
 #include <iostream>
 #include <type_traits>
-#include "common/logger_useful.h"
 
 namespace DB::ErrorCodes
 {
@@ -114,6 +113,7 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, ssize_t priority, std::
         else
             return false;
     };
+
     {
         std::unique_lock lock(mutex);
 
@@ -126,10 +126,8 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, ssize_t priority, std::
             if (!job_finished.wait_for(lock, std::chrono::microseconds(*wait_microseconds), pred))
                 return on_error(fmt::format("no free thread (timeout={})", *wait_microseconds));
         }
-        else {
+        else
             job_finished.wait(lock, pred);
-        }
-            
 
         if (shutdown)
             return on_error("shutdown");

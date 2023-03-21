@@ -167,9 +167,9 @@ void loadMetadata(Context & context)
         LoadDatabasesPool::get().scheduleOrThrowOnError(task);
     }
 
-    LoadDatabasesPool::get().wait(); // 这个是可以的？
+    LoadDatabasesPool::get().wait();
     LoadDatabasesPool::shutdown();
-    LoadDatabasesPool::shutdown();
+    LoadTablesPool::shutdown();
 
     if (has_force_restore_data_flag)
         force_restore_data_flag_file.remove();

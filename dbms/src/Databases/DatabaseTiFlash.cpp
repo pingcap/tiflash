@@ -32,7 +32,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <common/logger_useful.h>
-#include "Common/UniThreadPool.h"
+#include <Common/UniThreadPool.h>
 #include <future>
 
 namespace DB
@@ -149,26 +149,29 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
                 table_file,
                 has_force_restore_data_flag);
 
-            try
-            {
-                table->startup();
-            }
-            catch (DB::Exception & e)
-            {
-                if (e.code() == ErrorCodes::TIDB_TABLE_ALREADY_EXISTS)
+            if (table) {
+                try
                 {
-                    // While doing IStorage::startup, Exception thorwn with TIDB_TABLE_ALREADY_EXISTS,
-                    // means that we may crashed in the middle of renaming tables. We clean the meta file
-                    // for those storages by `cleanupTables`.
-                    // - If the storage is the outdated one after renaming, remove it is right.
-                    // - If the storage should be the target table, remove it means we "rollback" the
-                    //   rename action. And the table will be renamed by TiDBSchemaSyncer later.
-                    std::lock_guard lock(failed_tables_mutex);
-                    tables_failed_to_startup.emplace(table_name, table);
+                    table->startup();
                 }
-                else
-                    throw;
+                catch (DB::Exception & e)
+                {
+                    if (e.code() == ErrorCodes::TIDB_TABLE_ALREADY_EXISTS)
+                    {
+                        // While doing IStorage::startup, Exception thorwn with TIDB_TABLE_ALREADY_EXISTS,
+                        // means that we may crashed in the middle of renaming tables. We clean the meta file
+                        // for those storages by `cleanupTables`.
+                        // - If the storage is the outdated one after renaming, remove it is right.
+                        // - If the storage should be the target table, remove it means we "rollback" the
+                        //   rename action. And the table will be renamed by TiDBSchemaSyncer later.
+                        std::lock_guard lock(failed_tables_mutex);
+                        tables_failed_to_startup.emplace(table_name, table);
+                    }
+                    else
+                        throw;
+                }
             }
+            
         }
     };
 
