@@ -471,11 +471,13 @@ void listPrefix(
 {
     Stopwatch sw;
     Aws::S3::Model::ListObjectsV2Request req;
-    req.WithBucket(client.bucket()).WithPrefix(client.root() + prefix);
+    bool is_root_single_slash = client.root() == "/";
+    // If the `root == '/'`, don't append the root to the prefix, otherwise S3 list doesn't work.
+    req.WithBucket(client.bucket()).WithPrefix(is_root_single_slash ? prefix : client.root() + prefix);
 
     // If the `root == '/'`, then the return result will cut it off
     // else we need to cut the root in the following codes
-    bool need_cut = client.root() != "/";
+    bool need_cut = !is_root_single_slash;
     size_t cut_size = client.root().size();
 
     bool done = false;
@@ -534,7 +536,9 @@ void listPrefixWithDelimiter(
 {
     Stopwatch sw;
     Aws::S3::Model::ListObjectsV2Request req;
-    req.WithBucket(client.bucket()).WithPrefix(client.root() + prefix);
+    bool is_root_single_slash = client.root() == "/";
+    // If the `root == '/'`, don't append the root to the prefix, otherwise S3 list doesn't work.
+    req.WithBucket(client.bucket()).WithPrefix(is_root_single_slash ? prefix : client.root() + prefix);
     if (!delimiter.empty())
     {
         req.SetDelimiter(String(delimiter));
@@ -542,7 +546,7 @@ void listPrefixWithDelimiter(
 
     // If the `root == '/'`, then the return result will cut it off
     // else we need to cut the root in the following codes
-    bool need_cut = client.root() != "/";
+    bool need_cut = !is_root_single_slash;
     size_t cut_size = client.root().size();
 
     bool done = false;
