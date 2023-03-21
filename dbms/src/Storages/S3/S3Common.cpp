@@ -182,6 +182,7 @@ bool ClientFactory::isEnabled() const
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     config = config_;
+    RUNTIME_CHECK(!config.root.starts_with("//"), config.root);
     config.root = normalizedRoot(config.root);
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
