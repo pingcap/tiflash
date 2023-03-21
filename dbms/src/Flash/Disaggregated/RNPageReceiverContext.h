@@ -54,7 +54,7 @@ struct FetchPagesRequest
     String identifier() const
     {
         assert(isValid());
-        return fmt::format("{}+{}+{}", seg_task->store_id, seg_task->table_id, seg_task->segment_id);
+        return fmt::format("{}+{}+{}+{}", seg_task->store_id, seg_task->ks_table_id.first, seg_task->ks_table_id.second, seg_task->segment_id);
     }
 
     String debugString() const;

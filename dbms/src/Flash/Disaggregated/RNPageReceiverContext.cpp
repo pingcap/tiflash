@@ -21,8 +21,10 @@
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 #include <grpcpp/completion_queue.h>
 #include <kvproto/disaggregated.pb.h>
+#include <kvproto/kvrpcpb.pb.h>
 
 #include <cassert>
 #include <tuple>
@@ -99,8 +101,14 @@ FetchPagesRequest::FetchPagesRequest(DM::RNRemoteSegmentReadTaskPtr seg_task_)
     if (!seg_task)
         return;
 
-    *req->mutable_snapshot_id() = seg_task->snapshot_id.toMeta();
-    req->set_table_id(seg_task->table_id);
+    auto meta = seg_task->snapshot_id.toMeta();
+    // The keyspace_id here is not vital, as we locate the table and segment by given
+    // snapshot_id. But it could be helpful for debugging.
+    auto keyspace_id = seg_task->ks_table_id.first;
+    meta.set_keyspace_id(keyspace_id);
+    meta.set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
+    *req->mutable_snapshot_id() = meta;
+    req->set_table_id(seg_task->ks_table_id.second);
     req->set_segment_id(seg_task->segment_id);
 
     {
@@ -110,7 +118,7 @@ FetchPagesRequest::FetchPagesRequest(DM::RNRemoteSegmentReadTaskPtr seg_task_)
         {
             auto page_oid = DM::Remote::PageOID{
                 .store_id = seg_task->store_id,
-                .table_id = seg_task->table_id,
+                .ks_table_id = seg_task->ks_table_id,
                 .page_id = page_id,
             };
             cf_tiny_oids.emplace_back(page_oid);
