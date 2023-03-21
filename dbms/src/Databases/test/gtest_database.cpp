@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/UniThreadPool.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
@@ -31,7 +32,6 @@
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
-#include <Common/UniThreadPool.h>
 #include <common/logger_useful.h>
 
 #include <optional>
