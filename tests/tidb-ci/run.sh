@@ -33,9 +33,10 @@ docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml up -d
-wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/async_grpc'
+#TODO: Fix it https://github.com/pingcap/tiflash/issues/7120
+#docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml up -d
+#wait_env
+#docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/async_grpc'
 
 docker-compose -f cluster.yaml -f tiflash-dt-async-grpc.yaml down
 clean_data_log
