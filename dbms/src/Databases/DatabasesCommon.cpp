@@ -26,6 +26,7 @@
 #include <Storages/StorageFactory.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
+
 #include <future>
 #include <sstream>
 
@@ -281,13 +282,13 @@ std::vector<String> listSQLFilenames(const String & meta_dir, Poco::Logger * log
 }
 
 std::tuple<String, StoragePtr> loadTable(Context & context,
-               IDatabase & database,
-               const String & database_metadata_path,
-               const String & database_name,
-               const String & database_data_path,
-               const String & database_engine,
-               const String & file_name,
-               bool has_force_restore_data_flag)
+                                         IDatabase & database,
+                                         const String & database_metadata_path,
+                                         const String & database_name,
+                                         const String & database_data_path,
+                                         const String & database_engine,
+                                         const String & file_name,
+                                         bool has_force_restore_data_flag)
 {
     Poco::Logger * log = &Poco::Logger::get("loadTable");
     const String table_metadata_path = database_metadata_path + (endsWith(database_metadata_path, "/") ? "" : "/") + file_name;
@@ -337,11 +338,6 @@ std::tuple<String, StoragePtr> loadTable(Context & context,
 
     return std::make_tuple("", nullptr);
 }
-
-
-// static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
-// static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
-// static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
 
 void cleanupTables(IDatabase & database, const String & db_name, const Tables & tables, Poco::Logger * log)
 {

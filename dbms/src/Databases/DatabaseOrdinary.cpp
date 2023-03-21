@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/UniThreadPool.h>
 #include <Common/escapeForFileName.h>
 #include <Databases/DatabaseMemory.h>
 #include <Databases/DatabaseOrdinary.h>
@@ -31,7 +32,7 @@
 #include <Poco/DirectoryIterator.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
-#include <Common/UniThreadPool.h>
+
 #include <future>
 
 namespace DB
@@ -120,9 +121,10 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
             }
 
             auto [table_name, table] = DatabaseLoading::loadTable(context, *this, metadata_path, name, data_path, getEngineName(), table_file, has_force_restore_data_flag);
-            
+
             /// After table was basically initialized, startup it.
-            if (table) {
+            if (table)
+            {
                 try
                 {
                     table->startup();
@@ -159,18 +161,21 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
             task_function(begin, end);
         });
 
-        if (thread_pool){
+        if (thread_pool)
+        {
             futures.emplace_back(task->get_future());
             thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
-        } 
+        }
         else
             (*task)();
     }
 
-    if (thread_pool){
-        for (auto & f : futures) {
+    if (thread_pool)
+    {
+        for (auto & f : futures)
+        {
             f.get();
-        }      
+        }
     }
 
     // DatabaseLoading::startupTables(*this, name, tables, thread_pool, log)

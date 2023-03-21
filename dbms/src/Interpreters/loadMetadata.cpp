@@ -18,6 +18,7 @@
 #include <Databases/DatabaseTiFlash.h>
 #include <Databases/DatabasesCommon.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/loadMetadata.h>
@@ -34,7 +35,6 @@
 #include <future>
 #include <iomanip>
 #include <thread>
-#include "IO/IOThreadPools.h"
 
 
 namespace DB
@@ -135,9 +135,8 @@ void loadMetadata(Context & context)
         }
     }
 
-    
-    auto load_database = [&](Context & context, const String & database, const String & database_metadata_file,
-                                       ThreadPool * thread_pool, bool force_restore_data) {
+
+    auto load_database = [&](Context & context, const String & database, const String & database_metadata_file, ThreadPool * thread_pool, bool force_restore_data) {
         /// There may exist .sql file with database creation statement.
         /// Or, if it is absent, then database with default engine is created.
         String database_attach_query;
@@ -156,7 +155,8 @@ void loadMetadata(Context & context)
     };
 
     std::vector<std::shared_ptr<ThreadPool>> table_thread_pools;
-    for (const auto & database : databases) {
+    for (const auto & database : databases)
+    {
         const auto & db_name = database.first;
         const auto & meta_file = database.second;
 

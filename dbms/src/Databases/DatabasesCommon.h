@@ -66,13 +66,13 @@ std::vector<String> listSQLFilenames(const String & meta_dir, Poco::Logger * log
 void cleanupTables(IDatabase & database, const String & db_name, const Tables & tables, Poco::Logger * log);
 
 std::tuple<String, StoragePtr> loadTable(Context & context,
-               IDatabase & database,
-               const String & database_metadata_path,
-               const String & database_name,
-               const String & database_data_path,
-               const String & database_engine,
-               const String & file_name,
-               bool has_force_restore_data_flag);
+                                         IDatabase & database,
+                                         const String & database_metadata_path,
+                                         const String & database_name,
+                                         const String & database_data_path,
+                                         const String & database_engine,
+                                         const String & file_name,
+                                         bool has_force_restore_data_flag);
 } // namespace DatabaseLoading
 
 

@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Server/BgStorageInit.h>
 #include <Storages/IManageableStorage.h>
@@ -21,7 +22,6 @@
 #include <common/logger_useful.h>
 
 #include <thread>
-#include <IO/IOThreadPools.h>
 
 namespace DB
 {
@@ -48,10 +48,10 @@ void BgStorageInitHolder::start(Context & global_context, const LoggerPtr & log,
 
     auto do_init_stores = [&global_context, &log] {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
-        
+
         std::atomic<int> init_cnt = 0;
         std::atomic<int> err_cnt = 0;
-        
+
         auto init_stores_function = [&](const auto & ks_table_id, auto & storage) {
             // This will skip the init of storages that do not contain any data. TiFlash now sync the schema and
             // create all tables regardless the table have define TiFlash replica or not, so there may be lots

@@ -31,7 +31,7 @@
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
-#include <common/ThreadPool.h>
+#include <Common/UniThreadPool.h>
 #include <common/logger_useful.h>
 
 #include <optional>
@@ -515,7 +515,7 @@ try
 
     {
         // If we loadTable for db2, new table meta should be removed.
-        legacy::ThreadPool thread_pool(2);
+        ThreadPool thread_pool(2);
         db2->loadTables(*ctx, &thread_pool, true);
 
         Poco::File new_meta_file(db2->getTableMetadataPath(tbl_name));

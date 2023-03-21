@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
+#include <Common/UniThreadPool.h>
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 #include <Databases/DatabaseTiFlash.h>
@@ -32,7 +33,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <common/logger_useful.h>
-#include <Common/UniThreadPool.h>
+
 #include <future>
 
 namespace DB
@@ -149,7 +150,9 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
                 table_file,
                 has_force_restore_data_flag);
 
-            if (table) {
+            /// After table was basically initialized, startup it.
+            if (table)
+            {
                 try
                 {
                     table->startup();
@@ -171,7 +174,6 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
                         throw;
                 }
             }
-            
         }
     };
 
@@ -186,18 +188,21 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
             task_function(begin, end);
         });
 
-        if (thread_pool){
+        if (thread_pool)
+        {
             futures.emplace_back(task->get_future());
             thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
-        } 
+        }
         else
             (*task)();
     }
 
-    if (thread_pool){
-        for (auto & f : futures) {
+    if (thread_pool)
+    {
+        for (auto & f : futures)
+        {
             f.get();
-        }      
+        }
     }
     // After all tables was basically initialized, startup them.
     DatabaseLoading::cleanupTables(*this, name, tables_failed_to_startup, log);
