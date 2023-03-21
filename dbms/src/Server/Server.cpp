@@ -972,11 +972,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     else if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
     {
-        if (!use_autoscaler_without_s3) // Keep the behavior running disagg without S3 when auto scaler is enable.
+        if (!use_autoscaler_without_s3) 
         {
             // compute node with auto scaler, the requirements will be initted later.
             storage_config.s3_config.enable(/*check_requirements*/ false, log);
         }
+        // else keep the behavior running disagg without S3 when auto scaler is enable.
     }
 
     if (storage_config.format_version != 0)
