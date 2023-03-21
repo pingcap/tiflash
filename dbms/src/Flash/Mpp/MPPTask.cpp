@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTask.h>
@@ -108,6 +108,11 @@ MPPTask::~MPPTask()
     LOG_DEBUG(log, "finish MPPTask: {}", id.toString());
 }
 
+bool MPPTask::isRootMPPTask() const
+{
+    return dag_context->isRootMPPTask();
+}
+
 void MPPTask::abortTunnels(const String & message, bool wait_sender_finish)
 {
     {
@@ -141,10 +146,7 @@ void MPPTask::finishWrite()
 {
     RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
     if (dag_context->collect_execution_summaries)
-    {
-        ExecutionSummaryCollector summary_collector(*dag_context);
-        tunnel_set->sendExecutionSummary(summary_collector.genExecutionSummaryResponse());
-    }
+        tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
     tunnel_set->finishWrite();
 }
 

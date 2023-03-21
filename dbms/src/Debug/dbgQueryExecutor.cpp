@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,14 +14,15 @@
 
 #include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Debug/dbgQueryExecutor.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/CoprocessorHandler.h>
+#include <Flash/Mpp/MPPTask.h>
 #include <Interpreters/Context.h>
 #include <Server/MockComputeClient.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
-
 namespace DB
 {
 using TiFlashTestEnv = tests::TiFlashTestEnv;
@@ -299,7 +300,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
     }
 }
 
-tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
+tipb::SelectResponse executeDAGRequest(Context & context, tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
 {
     static auto log = Logger::get();
     LOG_DEBUG(log, "Handling DAG request: {}", dag_request.DebugString());
