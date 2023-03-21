@@ -44,7 +44,8 @@ extern const Event FileCacheEvict;
 namespace DB::ErrorCodes
 {
 extern const int S3_ERROR;
-}
+extern const int FILE_DOESNT_EXIST;
+} // namespace DB::ErrorCodes
 
 namespace DB
 {
@@ -69,22 +70,27 @@ RandomAccessFilePtr FileCache::getRandomAccessFile(const S3::S3FilenameView & s3
     {
         return nullptr;
     }
-    if (likely(std::filesystem::exists(file_seg->getLocalFileName())))
+    try
     {
         // PosixRandomAccessFile should hold the `file_seg` shared_ptr to prevent cached file from evicted.
         return std::make_shared<PosixRandomAccessFile>(file_seg->getLocalFileName(), /*flags*/ -1, /*read_limiter*/ nullptr, file_seg);
     }
-    else
+    catch (const DB::Exception & e)
     {
-        // Normally, this would not happen. But if someone removes cache files manually, the status of memory and filesystem are inconsistent.
-        // We can handle this situation by remove it from FileCache.
-        remove(s3_fname.toFullKey(), /*force*/ true);
         LOG_WARNING(log,
-                    "s3_fname={} local_fname={} status={} not exists, remove it from FileCache",
+                    "s3_fname={} local_fname={} status={} errcode={} errmsg={}",
                     s3_fname.toFullKey(),
                     file_seg->getLocalFileName(),
-                    magic_enum::enum_name(file_seg->getStatus()));
-        return nullptr;
+                    magic_enum::enum_name(file_seg->getStatus()),
+                    e.code(),
+                    e.message());
+        if (e.code() == ErrorCodes::FILE_DOESNT_EXIST)
+        {
+            // Normally, this would not happen. But if someone removes cache files manually, the status of memory and filesystem are inconsistent.
+            // We can handle this situation by remove it from FileCache.
+            remove(s3_fname.toFullKey(), /*force*/ true);
+        }
+        throw; // Rethrow currently exception, caller should handle it.
     }
 }
 
