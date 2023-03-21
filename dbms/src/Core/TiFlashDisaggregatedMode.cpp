@@ -14,7 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Core/TiFlashDisaggregatedMode.h>
-#include "Poco/Util/LayeredConfiguration.h"
+#include <Poco/Util/LayeredConfiguration.h>
 
 namespace DB
 {
