@@ -475,14 +475,14 @@ CreatingSets
 ~test_suite_name: ListBase
 ~result_index: 0
 ~result:
-pipeline#0: AggregationConvergent|3_aggregation -> Filter|4_selection -> Limit|5_limit -> Projection|NonTiDBOperator
- |- pipeline#1: MockTableScan|1_table_scan -> Filter|2_selection -> AggregationBuild|3_aggregation
+pipeline#0: AggregationConvergent|aggregation_2 -> Filter|selection_3 -> Limit|limit_4 -> Projection|NonTiDBOperator
+ |- pipeline#1: MockTableScan|table_scan_0 -> Filter|selection_1 -> AggregationBuild|aggregation_2
 @
 ~test_suite_name: ListBase
 ~result_index: 1
 ~result:
-pipeline#0: AggregationConvergent|3_aggregation -> Filter|4_selection -> TopN|5_top_n -> Projection|NonTiDBOperator
- |- pipeline#1: MockTableScan|1_table_scan -> Filter|2_selection -> AggregationBuild|3_aggregation
+pipeline#0: AggregationConvergent|aggregation_2 -> Filter|selection_3 -> TopN|topn_4 -> Projection|NonTiDBOperator
+ |- pipeline#1: MockTableScan|table_scan_0 -> Filter|selection_1 -> AggregationBuild|aggregation_2
 @
 ~test_suite_name: ExpandPlan
 ~result_index: 0
