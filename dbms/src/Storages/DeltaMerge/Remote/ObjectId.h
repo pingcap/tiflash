@@ -52,7 +52,14 @@ struct fmt::formatter<DB::DM::Remote::DMFileOID>
     template <typename FormatContext>
     auto format(const DB::DM::Remote::DMFileOID & value, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(ctx.out(), "{}_{}_{}_{}", value.store_id, value.keyspace_id, value.table_id, value.file_id);
+        if (value.keyspace_id == DB::NullspaceID)
+        {
+            return format_to(ctx.out(), "{}_{}_{}", value.store_id, value.table_id, value.file_id);
+        }
+        else
+        {
+            return format_to(ctx.out(), "{}_{}_{}_{}", value.store_id, value.keyspace_id, value.table_id, value.file_id);
+        }
     }
 };
 
