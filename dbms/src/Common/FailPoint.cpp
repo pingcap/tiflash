@@ -97,8 +97,8 @@ namespace DB
     M(invalid_mpp_version)                                   \
     M(force_fail_in_flush_region_data)                       \
     M(force_use_dmfile_format_v3)                            \
-    M(force_set_mocked_s3_object_mtime)
-
+    M(force_set_mocked_s3_object_mtime)                      \
+    M(force_stop_background_checkpoint_upload)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
