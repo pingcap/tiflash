@@ -972,7 +972,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     else if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
     {
-        if (!use_autoscaler_without_s3) 
+        if (!use_autoscaler_without_s3)
         {
             // compute node with auto scaler, the requirements will be initted later.
             storage_config.s3_config.enable(/*check_requirements*/ false, log);
