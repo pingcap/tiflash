@@ -50,6 +50,8 @@
 
 #include <ext/scope_guard.h>
 
+#include "Flash/Coprocessor/RequestUtils.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -743,9 +745,10 @@ grpc::Status FlashService::FetchDisaggPages(
 
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const DM::DisaggTaskId task_id(request->snapshot_id());
+    const auto keyspace_id = RequestUtils::deriveKeyspaceID(request->snapshot_id());
     auto logger = Logger::get(task_id);
 
-    LOG_DEBUG(logger, "Fetching pages, table_id={} segment_id={}", task_id, request->table_id(), request->segment_id());
+    LOG_DEBUG(logger, "Fetching pages, keyspace_id={} table_id={} segment_id={}", keyspace_id, request->table_id(), request->segment_id());
 
     SCOPE_EXIT({
         // The snapshot is created in the 1st request (Establish), and will be destroyed when all FetchPages are finished.

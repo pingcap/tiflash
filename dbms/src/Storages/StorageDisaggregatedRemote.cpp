@@ -54,6 +54,8 @@
 #include <atomic>
 #include <numeric>
 
+#include "kvrpcpb.pb.h"
+
 namespace pingcap::kv
 {
 // The rpc trait
@@ -286,7 +288,7 @@ StorageDisaggregated::buildDisaggregatedTaskForNode(
     const auto & settings = db_context.getSettingsRef();
     auto establish_req = std::make_shared<disaggregated::EstablishDisaggTaskRequest>();
     {
-        auto * meta = establish_req->mutable_meta();
+        disaggregated::DisaggTaskMeta * meta = establish_req->mutable_meta();
         meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
         meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
         meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
@@ -294,6 +296,9 @@ StorageDisaggregated::buildDisaggregatedTaskForNode(
         auto * dag_context = db_context.getDAGContext();
         meta->set_task_id(dag_context->getMPPTaskId().task_id);
         meta->set_executor_id(table_scan.getTableScanExecutorID());
+        const auto keyspace_id = dag_context->getKeyspaceID();
+        meta->set_keyspace_id(keyspace_id);
+        meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
     }
     // how long the task is valid on the write node
     establish_req->set_timeout_s(DEFAULT_DISAGG_TASK_TIMEOUT_SEC);

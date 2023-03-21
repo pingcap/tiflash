@@ -19,6 +19,7 @@ package DB.DM.RemotePb;
 message RemotePhysicalTable {
     bytes snapshot_id = 1; // disaggregated.DisaggTaskMeta
     uint64 table_id = 2;
+    uint32 keyspace_id = 4;
     repeated RemoteSegment segments = 3;
 }
 

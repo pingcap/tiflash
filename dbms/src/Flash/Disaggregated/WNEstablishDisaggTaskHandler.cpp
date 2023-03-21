@@ -16,6 +16,7 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/Disaggregated/WNEstablishDisaggTaskHandler.h>
 #include <Flash/Executor/QueryExecutorHolder.h>
 #include <Flash/executeQuery.h>
@@ -44,7 +45,6 @@ WNEstablishDisaggTaskHandler::WNEstablishDisaggTaskHandler(ContextPtr context_, 
 void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggTaskRequest * request)
 {
     const auto & meta = request->meta();
-    DM::DisaggTaskId task_id(meta);
 
     auto & tmt_context = context->getTMTContext();
     TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context);
@@ -73,7 +73,7 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
 
     dag_context = std::make_unique<DAGContext>(
         dag_req,
-        task_id,
+        meta,
         std::move(tables_regions_info),
         context->getClientInfo().current_address.toString(),
         log);
