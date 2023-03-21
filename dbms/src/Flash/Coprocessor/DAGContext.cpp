@@ -23,6 +23,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <tipb/executor.pb.h>
 #include <kvproto/disaggregated.pb.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
