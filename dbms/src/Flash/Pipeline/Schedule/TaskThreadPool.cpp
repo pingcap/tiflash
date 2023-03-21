@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/FiFOTaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
@@ -28,6 +29,9 @@ TaskThreadPool::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
     : task_queue(std::make_unique<FIFOTaskQueue>())
     , scheduler(scheduler_)
 {
+    GET_METRIC(tiflash_pipeline_scheduler, type_pending_tasks_count).Set(0);
+    GET_METRIC(tiflash_pipeline_scheduler, type_executing_tasks_count).Set(0);
+
     RUNTIME_CHECK(thread_num > 0);
     threads.reserve(thread_num);
     for (size_t i = 0; i < thread_num; ++i)
@@ -57,6 +61,7 @@ void TaskThreadPool::loop(size_t thread_no) noexcept
     TaskPtr task;
     while (likely(task_queue->take(task)))
     {
+        GET_METRIC(tiflash_pipeline_scheduler, type_pending_tasks_count).Decrement();
         handleTask(task, thread_logger);
         assert(!task);
         ASSERT_MEMORY_TRACKER
@@ -70,6 +75,8 @@ void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
     assert(task);
     TRACE_MEMORY(task);
 
+    GET_METRIC(tiflash_pipeline_scheduler, type_executing_tasks_count).Increment();
+
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
     ExecTaskStatus status;
     while (true)
@@ -80,6 +87,7 @@ void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
             break;
     }
 
+    GET_METRIC(tiflash_pipeline_scheduler, type_executing_tasks_count).Decrement();
     switch (status)
     {
     case ExecTaskStatus::RUNNING:
@@ -98,11 +106,13 @@ void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
 
 void TaskThreadPool::submit(TaskPtr && task) noexcept
 {
+    GET_METRIC(tiflash_pipeline_scheduler, type_pending_tasks_count).Increment();
     task_queue->submit(std::move(task));
 }
 
 void TaskThreadPool::submit(std::vector<TaskPtr> & tasks) noexcept
 {
+    GET_METRIC(tiflash_pipeline_scheduler, type_pending_tasks_count).Increment(tasks.size());
     task_queue->submit(tasks);
 }
 } // namespace DB

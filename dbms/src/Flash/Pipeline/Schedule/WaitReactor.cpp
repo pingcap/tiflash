@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
@@ -97,6 +98,7 @@ private:
 WaitReactor::WaitReactor(TaskScheduler & scheduler_)
     : scheduler(scheduler_)
 {
+    GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(0);
     thread = std::thread(&WaitReactor::loop, this);
 }
 
@@ -141,6 +143,7 @@ void WaitReactor::loop() noexcept
     while (take_from_waiting_task_list())
     {
         assert(!local_waiting_tasks.empty());
+        GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(local_waiting_tasks.size());
         auto task_it = local_waiting_tasks.begin();
         while (task_it != local_waiting_tasks.end())
         {
