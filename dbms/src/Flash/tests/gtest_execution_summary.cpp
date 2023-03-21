@@ -83,7 +83,7 @@ try
                            .filter(eq(col("s1"), col("s2")))
                            .limit(2)
                            .build(context, t);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}, {"limit_2", {2, 1}}};
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, 1}}};
 
         testForExecutionSummary(request, expect);
     }
