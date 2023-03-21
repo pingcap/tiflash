@@ -22,6 +22,7 @@
 #include <Debug/MockStorage.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/Disaggregated/WNEstablishDisaggTaskHandler.h>
 #include <Flash/Disaggregated/WNFetchPagesStreamWriter.h>
@@ -49,8 +50,6 @@
 #include <kvproto/disaggregated.pb.h>
 
 #include <ext/scope_guard.h>
-
-#include "Flash/Coprocessor/RequestUtils.h"
 
 namespace DB
 {

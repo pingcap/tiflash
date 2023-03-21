@@ -49,7 +49,8 @@ Serializer::serializeTo(const DisaggPhysicalTableReadSnapshotPtr & snap, const D
     std::shared_lock read_lock(snap->mtx);
     RemotePb::RemotePhysicalTable remote_table;
     remote_table.set_snapshot_id(task_id.toMeta().SerializeAsString());
-    remote_table.set_table_id(snap->physical_table_id);
+    remote_table.set_keyspace_id(snap->ks_physical_table_id.first);
+    remote_table.set_table_id(snap->ks_physical_table_id.second);
     for (const auto & [seg_id, seg_task] : snap->tasks)
     {
         auto remote_seg = Serializer::serializeTo(
