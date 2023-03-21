@@ -106,6 +106,14 @@ TEST(S3FilenameTest, StableFile)
 
         ASSERT_EQ(view.toFullKey(), fullkey);
 
+        // test DMFileOID
+        auto file_old = view.getDMFileOID();
+        ASSERT_EQ(file_old.store_id, test_store_id);
+        ASSERT_EQ(file_old.keyspace_id, NullspaceID);
+        ASSERT_EQ(file_old.table_id, 44);
+        ASSERT_EQ(file_old.file_id, 57);
+        ASSERT_EQ(S3Filename::fromDMFileOID(file_old).toFullKey(), fullkey);
+
         ASSERT_TRUE(view.isDataFile());
         ASSERT_EQ(view.getLockKey(1234, 50), "lock/s2077/t_44/dmf_57.lock_s1234_50");
         ASSERT_EQ(view.getLockPrefix(), "lock/s2077/t_44/dmf_57.lock_"); // prefix for S3 LIST
@@ -133,7 +141,59 @@ TEST(S3FilenameTest, StableFile)
     auto view = S3FilenameView::fromKey(fullkey);
     check(view);
 
-    DMFileOID oid{.store_id = test_store_id, .table_id = 44, .file_id = 57};
+    DMFileOID oid{.store_id = test_store_id, .keyspace_id = NullspaceID, .table_id = 44, .file_id = 57};
+    auto r = S3Filename::fromDMFileOID(oid);
+    ASSERT_EQ(r.toFullKey(), fullkey);
+    check(r.toView());
+}
+
+TEST(S3FilenameTest, StableFileWithKeyspace)
+{
+    UInt64 test_store_id = 2077;
+    String fullkey = "s2077/data/ks_300_t_44/dmf_57";
+    auto check = [&](const S3FilenameView & view) {
+        ASSERT_EQ(view.type, S3FilenameType::DataFile) << magic_enum::enum_name(view.type);
+        ASSERT_EQ(view.store_id, test_store_id);
+        ASSERT_EQ(view.data_subpath, "ks_300_t_44/dmf_57");
+
+        ASSERT_EQ(view.toFullKey(), fullkey);
+
+        // test DMFileOID
+        auto file_old = view.getDMFileOID();
+        ASSERT_EQ(file_old.store_id, test_store_id);
+        ASSERT_EQ(file_old.keyspace_id, 300);
+        ASSERT_EQ(file_old.table_id, 44);
+        ASSERT_EQ(file_old.file_id, 57);
+        ASSERT_EQ(S3Filename::fromDMFileOID(file_old).toFullKey(), fullkey);
+
+        ASSERT_TRUE(view.isDataFile());
+        ASSERT_EQ(view.getLockKey(1234, 50), "lock/s2077/ks_300_t_44/dmf_57.lock_s1234_50");
+        ASSERT_EQ(view.getLockPrefix(), "lock/s2077/ks_300_t_44/dmf_57.lock_"); // prefix for S3 LIST
+        ASSERT_EQ(view.getDelMarkKey(), "s2077/data/ks_300_t_44/dmf_57.del");
+
+        ASSERT_FALSE(view.isLockFile());
+
+        // test lockkey for stable file
+        const auto lockkey = view.getLockKey(1234, 50);
+        const auto lock_view = S3FilenameView::fromKey(lockkey);
+        ASSERT_EQ(lock_view.type, S3FilenameType::LockFile) << magic_enum::enum_name(view.type);
+        ASSERT_EQ(lock_view.store_id, test_store_id);
+        ASSERT_EQ(String(lock_view.data_subpath), "ks_300_t_44/dmf_57");
+
+        ASSERT_FALSE(lock_view.isDataFile());
+        ASSERT_TRUE(lock_view.isLockFile());
+        const auto lock_info = lock_view.getLockInfo();
+        ASSERT_EQ(lock_info.store_id, 1234);
+        ASSERT_EQ(lock_info.sequence, 50);
+
+        // test delmark
+        auto delmark_view = S3FilenameView::fromKey(view.getDelMarkKey());
+        ASSERT_TRUE(delmark_view.isDelMark());
+    };
+    auto view = S3FilenameView::fromKey(fullkey);
+    check(view);
+
+    DMFileOID oid{.store_id = test_store_id, .keyspace_id = 300, .table_id = 44, .file_id = 57};
     auto r = S3Filename::fromDMFileOID(oid);
     ASSERT_EQ(r.toFullKey(), fullkey);
     check(r.toView());
