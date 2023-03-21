@@ -21,7 +21,6 @@
 #include <Flash/Planner/ExecutorIdGenerator.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <tipb/executor.pb.h>
 #include <kvproto/disaggregated.pb.h>
 #include <tipb/executor.pb.h>
 
