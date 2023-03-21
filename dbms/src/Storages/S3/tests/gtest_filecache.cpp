@@ -45,6 +45,11 @@ using DMFileOID = ::DB::S3::DMFileOID;
 using S3Filename = ::DB::S3::S3Filename;
 using FileType = ::DB::FileSegment::FileType;
 
+namespace DB::ErrorCodes
+{
+extern const int FILE_DOESNT_EXIST;
+}
+
 namespace DB::tests::S3
 {
 class FileCacheTest : public ::testing::Test
@@ -803,9 +808,15 @@ try
         auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
         auto file_seg = file_cache.get(s3_fname);
         ASSERT_NE(file_seg, nullptr) << obj.key;
-
-        auto file = file_cache.getRandomAccessFile(S3FilenameView::fromKey(obj.key), obj.size);
-        ASSERT_EQ(file, nullptr);
+        try
+        {
+            auto file = file_cache.getRandomAccessFile(S3FilenameView::fromKey(obj.key), obj.size);
+            FAIL();
+        }
+        catch (DB::Exception & e)
+        {
+            ASSERT_EQ(e.code(), ErrorCodes::FILE_DOESNT_EXIST);
+        }
         released_size += file_seg->getSize();
         ASSERT_EQ(file_cache.cache_used + released_size, file_cache.cache_capacity);
 
