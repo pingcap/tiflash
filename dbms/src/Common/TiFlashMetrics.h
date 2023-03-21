@@ -325,7 +325,12 @@ namespace DB
     M(tiflash_pipeline_scheduler, "pipeline scheduler", Gauge,                                                                                      \
         F(type_waiting_tasks_count, {"type", "waiting_tasks_count"}),                                                                               \
         F(type_pending_tasks_count, {"type", "pending_tasks_count"}),                                                                               \
-        F(type_executing_tasks_count, {"type", "executing_tasks_count"}))
+        F(type_executing_tasks_count, {"type", "executing_tasks_count"}),                                                                           \
+        F(type_task_thread_pool_size, {"type", "task_thread_pool_size"}),                                                                           \
+        F(type_max_execution_time_ms_of_a_round, {"type", "max_execution_time_ms_of_a_round"}))                                                     \
+    M(tiflash_pipeline_task_status_switch, "pipeline task status switch", Counter,                                                                  \
+        F(type_waiting_to_executing, {"type", "waiting_to_executing"}),                                                                             \
+        F(type_executing_to_waiting, {"type", "executing_to_waiting"}))
 
 // clang-format on
 

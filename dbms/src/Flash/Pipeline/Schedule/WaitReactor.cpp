@@ -143,7 +143,6 @@ void WaitReactor::loop() noexcept
     while (take_from_waiting_task_list())
     {
         assert(!local_waiting_tasks.empty());
-        GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(local_waiting_tasks.size());
         auto task_it = local_waiting_tasks.begin();
         while (task_it != local_waiting_tasks.end())
         {
@@ -153,6 +152,8 @@ void WaitReactor::loop() noexcept
                 ++task_it;
             ASSERT_MEMORY_TRACKER
         }
+
+        GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(local_waiting_tasks.size());
 
         if (!spinner.submitReadyTasks())
             spinner.tryYield();

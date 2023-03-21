@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Flash/Pipeline/Schedule/TaskExecutionMetrics.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
@@ -51,5 +52,7 @@ private:
     TaskScheduler & scheduler;
 
     std::vector<std::thread> threads;
+
+    TaskExecutionMetrics task_metrics;
 };
 } // namespace DB

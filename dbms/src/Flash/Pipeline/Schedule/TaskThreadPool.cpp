@@ -31,6 +31,7 @@ TaskThreadPool::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
 {
     GET_METRIC(tiflash_pipeline_scheduler, type_pending_tasks_count).Set(0);
     GET_METRIC(tiflash_pipeline_scheduler, type_executing_tasks_count).Set(0);
+    GET_METRIC(tiflash_pipeline_scheduler, type_task_thread_pool_size).Set(0);
 
     RUNTIME_CHECK(thread_num > 0);
     threads.reserve(thread_num);
@@ -52,6 +53,11 @@ void TaskThreadPool::waitForStop()
 
 void TaskThreadPool::loop(size_t thread_no) noexcept
 {
+    GET_METRIC(tiflash_pipeline_scheduler, type_task_thread_pool_size).Increment();
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_pipeline_scheduler, type_task_thread_pool_size).Decrement();
+    });
+
     auto thread_no_str = fmt::format("thread_no={}", thread_no);
     auto thread_logger = logger->getChild(thread_no_str);
     setThreadName(thread_no_str.c_str());
@@ -82,9 +88,13 @@ void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
     while (true)
     {
         status = task->execute();
+        auto execute_time_ns = stopwatch.elapsed();
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (status != ExecTaskStatus::RUNNING || stopwatch.elapsed() >= YIELD_MAX_TIME_SPENT_NS)
+        if (status != ExecTaskStatus::RUNNING || execute_time_ns >= YIELD_MAX_TIME_SPENT_NS)
+        {
+            task_metrics.updateOnRound(execute_time_ns);
             break;
+        }
     }
 
     GET_METRIC(tiflash_pipeline_scheduler, type_executing_tasks_count).Decrement();
