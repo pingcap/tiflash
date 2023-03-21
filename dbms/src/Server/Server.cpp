@@ -1495,11 +1495,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
         DB::DM::SegmentReaderPoolManager::instance().stop();
         FileCache::shutdown();
+        global_context->shutdown();
         if (storage_config.s3_config.isS3Enabled())
         {
             S3::ClientFactory::instance().shutdown();
         }
-        global_context->shutdown();
         LOG_DEBUG(log, "Shutted down storages.");
     });
 
