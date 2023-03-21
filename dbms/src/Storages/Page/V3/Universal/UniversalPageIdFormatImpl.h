@@ -71,18 +71,19 @@ public:
         return buff.releaseStr();
     }
 
-    static inline String toKVStorePrefix()
-    {
-        return getSubPrefix(StorageType::KVStore);
-    }
-
     static inline String toFullPrefix(KeyspaceID keyspace_id, StorageType type, NamespaceID ns_id)
     {
         RUNTIME_CHECK(type != StorageType::KVStore);
         WriteBufferFromOwnString buff;
-        writeString(TiKVKeyspaceID::makeKeyspacePrefix(keyspace_id), buff);
+        if (type != StorageType::KVStore)
+        {
+            writeString(TiKVKeyspaceID::makeKeyspacePrefix(keyspace_id), buff);
+        }
         writeString(getSubPrefix(type), buff);
-        UniversalPageIdFormat::encodeUInt64(ns_id, buff);
+        if (type != StorageType::KVStore)
+        {
+            UniversalPageIdFormat::encodeUInt64(ns_id, buff);
+        }
 
         return buff.releaseStr();
     }

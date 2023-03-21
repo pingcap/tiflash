@@ -593,7 +593,7 @@ void DeltaMergeStore::ingestFiles(
         }
         else
         {
-            Remote::DMFileOID oid{.store_id = store_id, .table_id = dm_context->physical_table_id, .file_id = external_file.id};
+            Remote::DMFileOID oid{.store_id = store_id, .keyspace_id = keyspace_id, .table_id = dm_context->physical_table_id, .file_id = external_file.id};
             file = remote_data_store->prepareDMFile(oid, external_file.id)->restore(DMFile::ReadMetaMode::memoryAndDiskSize());
         }
         rows += file->getRows();
@@ -657,7 +657,7 @@ void DeltaMergeStore::ingestFiles(
             }
             else
             {
-                Remote::DMFileOID oid{.store_id = store_id, .table_id = dm_context->physical_table_id, .file_id = file->fileId()};
+                Remote::DMFileOID oid{.store_id = store_id, .keyspace_id = dm_context->keyspace_id, .table_id = dm_context->physical_table_id, .file_id = file->fileId()};
                 PS::V3::CheckpointLocation loc{
                     .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
                     .offset_in_file = 0,

@@ -119,6 +119,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
             auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
             const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
             auto file_oid = lock_key_view.asDataFile().getDMFileOID();
+            RUNTIME_CHECK(file_oid.keyspace_id == context.keyspace_id);
             RUNTIME_CHECK(file_oid.table_id == context.physical_table_id);
             auto prepared = remote_data_store->prepareDMFile(file_oid, page_id);
             dmfile = prepared->restore(DMFile::ReadMetaMode::all());

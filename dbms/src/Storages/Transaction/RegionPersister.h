@@ -66,7 +66,7 @@ private:
         switch (run_mode)
         {
         case PageStorageRunMode::UNI_PS:
-            return UniversalPageIdFormat::toKVStorePrefix();
+            return UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::KVStore, ns_id);
         default:
             return ns_id;
         }
