@@ -146,9 +146,9 @@ public:
         DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
                                                                  false,
                                                                  "test",
-                                                                 "t_100",
+                                                                 fmt::format("t_{}", table_id),
                                                                  keyspace_id,
-                                                                 /*physical_table_id_*/ 100,
+                                                                 table_id,
                                                                  true,
                                                                  *cols,
                                                                  handle_column_define,
@@ -245,6 +245,7 @@ protected:
     DeltaMergeStorePtr store;
     UInt64 current_store_id = 100;
     KeyspaceID keyspace_id;
+    TableID table_id = 800;
     UInt64 upload_sequence = 1000;
     bool already_initialize_data_store = false;
     bool already_initialize_write_ps = false;
@@ -309,6 +310,7 @@ try
                     dm_file,
                     S3::DMFileOID{
                         .store_id = write_store_id,
+                        .keyspace_id = keyspace_id,
                         .table_id = store->physical_table_id,
                         .file_id = file_id.id,
                     },
