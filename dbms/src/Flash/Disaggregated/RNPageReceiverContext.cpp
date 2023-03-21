@@ -118,7 +118,7 @@ FetchPagesRequest::FetchPagesRequest(DM::RNRemoteSegmentReadTaskPtr seg_task_)
         {
             auto page_oid = DM::Remote::PageOID{
                 .store_id = seg_task->store_id,
-                .ks_table_id = seg_task_->ks_table_id,
+                .ks_table_id = seg_task->ks_table_id,
                 .page_id = page_id,
             };
             cf_tiny_oids.emplace_back(page_oid);
