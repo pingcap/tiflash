@@ -65,9 +65,9 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
     dag_context = dag_context_;
     assert(dag_context);
 
-    if likely (dag_context->dag_request)
+    if likely (dag_context->dag_request())
     {
-        traverseExecutors(dag_context->dag_request, [&](const tipb::Executor & executor) {
+        traverseExecutors(dag_context->dag_request(), [&](const tipb::Executor & executor) {
             RUNTIME_CHECK(executor.has_executor_id());
             if (!append<
                     AggStatistics,
@@ -118,7 +118,7 @@ void ExecutorStatisticsCollector::fillTreeBasedExecutorsChildren()
 {
     if (dag_context->dag_request->has_root_executor())
     {
-        traverseExecutors(dag_context->dag_request, [&](const tipb::Executor & executor) {
+        traverseExecutors(dag_context->dag_request(), [&](const tipb::Executor & executor) {
             // set children for tree-based executors
             std::vector<String> children;
             getChildren(executor).forEach([&](const tipb::Executor & child) {
@@ -178,7 +178,7 @@ void ExecutorStatisticsCollector::collectRuntimeDetails()
 
 void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectResponse & response)
 {
-    if (dag_context->return_executor_id)
+    if (dag_context->dag_request.isTreeBased())
     {
         // fill in tree-based executors' execution summary
         for (auto & p : profiles)
@@ -192,8 +192,8 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
     else
     {
         // fill in list-based executors' execution summary
-        RUNTIME_CHECK(profiles.size() == dag_context->list_based_executors_order.size());
-        for (const auto & executor_id : dag_context->list_based_executors_order)
+        RUNTIME_CHECK(profiles.size() == dag_context->dag_request.list_based_executors_order.size());
+        for (const auto & executor_id : dag_context->dag_request.list_based_executors_order)
         {
             auto it = profiles.find(executor_id);
             RUNTIME_CHECK(it != profiles.end());

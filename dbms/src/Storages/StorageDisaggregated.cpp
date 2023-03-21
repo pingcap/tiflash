@@ -158,7 +158,7 @@ RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
     std::vector<pingcap::kv::RegionVerID> region_ids = RequestUtils::setUpRegionInfos(batch_cop_task, dispatch_req);
 
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
-    const auto * dag_req = context.getDAGContext()->dag_request;
+    const auto * dag_req = context.getDAGContext()->dag_request();
     tipb::DAGRequest sender_dag_req;
     sender_dag_req.set_time_zone_name(dag_req->time_zone_name());
     sender_dag_req.set_time_zone_offset(dag_req->time_zone_offset());

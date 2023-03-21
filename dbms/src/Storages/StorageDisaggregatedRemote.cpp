@@ -304,7 +304,7 @@ StorageDisaggregated::buildDisaggregatedTaskForNode(
 
     {
         // Setup the encoded plan
-        const auto * dag_req = context.getDAGContext()->dag_request;
+        const auto * dag_req = context.getDAGContext()->dag_request();
         tipb::DAGRequest table_scan_req;
         table_scan_req.set_time_zone_name(dag_req->time_zone_name());
         table_scan_req.set_time_zone_offset(dag_req->time_zone_offset());
