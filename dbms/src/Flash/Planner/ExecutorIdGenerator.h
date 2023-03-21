@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,29 +43,29 @@ private:
         switch (executor.tp())
         {
         case tipb::ExecType::TypeSelection:
-            return fmt::format("{}_selection", ++current_id);
+            return fmt::format("selection_{}", current_id++);
         case tipb::ExecType::TypeProjection:
-            return fmt::format("{}_projection", ++current_id);
+            return fmt::format("project_{}", current_id++);
         case tipb::ExecType::TypeStreamAgg:
         case tipb::ExecType::TypeAggregation:
-            return fmt::format("{}_aggregation", ++current_id);
+            return fmt::format("aggregation_{}", current_id++);
         case tipb::ExecType::TypeTopN:
-            return fmt::format("{}_top_n", ++current_id);
+            return fmt::format("topn_{}", current_id++);
         case tipb::ExecType::TypeLimit:
-            return fmt::format("{}_limit", ++current_id);
+            return fmt::format("limit_{}", current_id++);
         case tipb::ExecType::TypeExchangeSender:
-            return fmt::format("{}_exchange_sender", ++current_id);
+            return fmt::format("exchange_sender_{}", current_id++);
         case tipb::ExecType::TypeExchangeReceiver:
-            return fmt::format("{}_exchange_receiver", ++current_id);
+            return fmt::format("exchange_receiver_{}", current_id++);
         case tipb::ExecType::TypeTableScan:
         case tipb::ExecType::TypePartitionTableScan:
-            return fmt::format("{}_table_scan", ++current_id);
+            return fmt::format("table_scan_{}", current_id++);
         case tipb::ExecType::TypeSort:
-            return fmt::format("{}_sort", ++current_id);
+            return fmt::format("sort_{}", current_id++);
         case tipb::ExecType::TypeWindow:
-            return fmt::format("{}_window", ++current_id);
+            return fmt::format("window_{}", current_id++);
         case tipb::ExecType::TypeJoin:
-            return fmt::format("{}_join", ++current_id);
+            return fmt::format("join_{}", current_id++);
         default:
             throw TiFlashException(
                 fmt::format("Unsupported executor in DAG request: {}", executor.DebugString()),
