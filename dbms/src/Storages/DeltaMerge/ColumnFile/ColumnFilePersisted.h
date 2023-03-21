@@ -55,7 +55,6 @@ ColumnFilePersisteds createColumnFilesFromCheckpoint( //
     const RowKeyRange & segment_range,
     ReadBuffer & buf,
     UniversalPageStoragePtr temp_ps,
-    TableID ns_id,
     WriteBatches & wbs);
 
 void serializeSavedColumnFilesInV2Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
@@ -69,7 +68,6 @@ ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint( //
     const RowKeyRange & segment_range,
     ReadBuffer & buf,
     UniversalPageStoragePtr temp_ps,
-    TableID ns_id,
     WriteBatches & wbs);
 } // namespace DM
 } // namespace DB

@@ -56,9 +56,15 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
 namespace tests
 {
 // Simple test suit for DeltaMergeStoreTestFastAddPeer.
-class DeltaMergeStoreTestFastAddPeer : public DB::base::TiFlashStorageTestBasic
+class DeltaMergeStoreTestFastAddPeer
+    : public DB::base::TiFlashStorageTestBasic
+    , public testing::WithParamInterface<KeyspaceID>
 {
 public:
+    DeltaMergeStoreTestFastAddPeer()
+        : keyspace_id(GetParam())
+    {}
+
     void SetUp() override
     {
         FailPointHelper::enableFailPoint(FailPoints::force_use_dmfile_format_v3);
@@ -104,6 +110,8 @@ public:
         {
             global_context.setPageStorageRunMode(orig_mode);
         }
+        auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
     }
 
     void resetStoreId(UInt64 store_id)
@@ -138,8 +146,9 @@ public:
         DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
                                                                  false,
                                                                  "test",
-                                                                 "t_100",
-                                                                 100,
+                                                                 fmt::format("t_{}", table_id),
+                                                                 keyspace_id,
+                                                                 table_id,
                                                                  true,
                                                                  *cols,
                                                                  handle_column_define,
@@ -235,6 +244,8 @@ protected:
 protected:
     DeltaMergeStorePtr store;
     UInt64 current_store_id = 100;
+    KeyspaceID keyspace_id;
+    TableID table_id = 800;
     UInt64 upload_sequence = 1000;
     bool already_initialize_data_store = false;
     bool already_initialize_write_ps = false;
@@ -243,7 +254,7 @@ protected:
     constexpr static const char * TRACING_NAME = "DeltaMergeStoreTestFastAddPeer";
 };
 
-TEST_F(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPoint)
+TEST_P(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPoint)
 try
 {
     UInt64 write_store_id = current_store_id + 1;
@@ -299,6 +310,7 @@ try
                     dm_file,
                     S3::DMFileOID{
                         .store_id = write_store_id,
+                        .keyspace_id = keyspace_id,
                         .table_id = store->physical_table_id,
                         .file_id = file_id.id,
                     },
@@ -365,7 +377,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPointWithSplit)
+TEST_P(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPointWithSplit)
 try
 {
     auto & global_settings = TiFlashTestEnv::getGlobalContext().getSettingsRef();
@@ -436,6 +448,11 @@ try
     verifyRows(RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()), num_rows_write);
 }
 CATCH
+
+INSTANTIATE_TEST_CASE_P(
+    Type,
+    DeltaMergeStoreTestFastAddPeer,
+    testing::Values(NullspaceID, 300));
 } // namespace tests
 } // namespace DM
 } // namespace DB

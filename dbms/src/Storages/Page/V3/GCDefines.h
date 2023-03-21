@@ -118,7 +118,7 @@ namespace u128
 struct ExternalPageCallbacksManagerTrait
 {
     using PageId = PageIdV3Internal;
-    using Prefix = NamespaceId;
+    using Prefix = NamespaceID;
     using ExternalPageCallbacks = DB::ExternalPageCallbacks;
     using PageDirectory = PageDirectoryType;
     using BlobStore = BlobStoreType;
