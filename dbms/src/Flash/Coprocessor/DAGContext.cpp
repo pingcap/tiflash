@@ -180,7 +180,7 @@ void DAGContext::initOutputInfo()
 }
 
 
-void DAGContext::initListBasedExecutors() const
+void DAGContext::initListBasedExecutors()
 {
     if (!isTreeBasedExecutors())
     {
@@ -189,6 +189,9 @@ void DAGContext::initListBasedExecutors() const
         {
             auto * executor = dag_request->mutable_executors(i);
             const auto & executor_id = id_generator.generate(*executor);
+            list_based_executors_order.push_back(executor_id);
+            // Set executor_id for list based executor,
+            // then we can fill executor_id for Execution Summaries of list-based executors
             executor->set_executor_id(executor_id);
         }
     }

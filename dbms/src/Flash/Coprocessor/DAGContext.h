@@ -326,7 +326,7 @@ public:
 private:
     void initExecutorIdToJoinIdMap();
     void initOutputInfo();
-    void initListBasedExecutors() const;
+    void initListBasedExecutors();
     bool isTreeBasedExecutors() const;
 
 private:

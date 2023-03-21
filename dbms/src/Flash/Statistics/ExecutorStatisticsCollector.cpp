@@ -64,33 +64,35 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
 {
     dag_context = dag_context_;
     assert(dag_context);
-    RUNTIME_CHECK(dag_context->dag_request);
 
-    traverseExecutors(dag_context->dag_request, [&](const tipb::Executor & executor) {
-        RUNTIME_CHECK(executor.has_executor_id());
-        if (!append<
-                AggStatistics,
-                ExchangeReceiverStatistics,
-                ExchangeSenderStatistics,
-                FilterStatistics,
-                JoinStatistics,
-                LimitStatistics,
-                ProjectStatistics,
-                SortStatistics,
-                TableScanStatistics,
-                TopNStatistics,
-                WindowStatistics,
-                ExpandStatistics>(&executor))
-        {
-            throw TiFlashException(
-                fmt::format("Unknown executor type, executor_id: {}", executor.executor_id()),
-                Errors::Coprocessor::Internal);
-        }
-        return true;
-    });
+    if likely (dag_context->dag_request)
+    {
+        traverseExecutors(dag_context->dag_request, [&](const tipb::Executor & executor) {
+            RUNTIME_CHECK(executor.has_executor_id());
+            if (!append<
+                    AggStatistics,
+                    ExchangeReceiverStatistics,
+                    ExchangeSenderStatistics,
+                    FilterStatistics,
+                    JoinStatistics,
+                    LimitStatistics,
+                    ProjectStatistics,
+                    SortStatistics,
+                    TableScanStatistics,
+                    TopNStatistics,
+                    WindowStatistics,
+                    ExpandStatistics>(&executor))
+            {
+                throw TiFlashException(
+                    fmt::format("Unknown executor type, executor_id: {}", executor.executor_id()),
+                    Errors::Coprocessor::Internal);
+            }
+            return true;
+        });
 
-    fillListBasedExecutorsChild();
-    fillTreeBasedExecutorsChildren();
+        fillListBasedExecutorsChild();
+        fillTreeBasedExecutorsChildren();
+    }
 }
 
 void ExecutorStatisticsCollector::fillListBasedExecutorsChild()
