@@ -51,6 +51,16 @@ namespace ErrorCodes
 extern const int INVALID_CONFIG_PARAMETER;
 } // namespace ErrorCodes
 
+static String getNormalizedS3Root(String root)
+{
+    Poco::trimInPlace(root);
+    if (root.empty())
+        return "/";
+    if (root.back() != '/')
+        root += '/';
+    return root;
+}
+
 static std::string getCanonicalPath(std::string path, std::string_view hint = "path")
 {
     Poco::trimInPlace(path);
@@ -399,7 +409,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
 
     if (config.has("storage.s3"))
     {
-        storage_config.s3_config.parse(config.getString("storage.s3"), log);
+        storage_config.s3_config.parse(config.getString("storage.s3"));
     }
 
     if (config.has("storage.remote.cache"))
@@ -536,7 +546,7 @@ bool StorageIORateLimitConfig::operator==(const StorageIORateLimitConfig & confi
         && config.tune_base == tune_base && config.min_bytes_per_sec == min_bytes_per_sec && config.auto_tune_sec == auto_tune_sec;
 }
 
-void StorageS3Config::parse(const String & content, const LoggerPtr & log)
+void StorageS3Config::parse(const String & content)
 {
     std::istringstream ss(content);
     cpptoml::parser p(ss);
@@ -551,7 +561,7 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     readConfig(table, "request_timeout_ms", request_timeout_ms);
     RUNTIME_CHECK(request_timeout_ms > 0);
     readConfig(table, "root", root);
-    getCanonicalPath(root, "root"); // ensure not empty and ends with '/'
+    root = getNormalizedS3Root(root); // ensure ends with '/'
 
     auto read_s3_auth_info_from_env = [&]() {
         access_key_id = Poco::Environment::get(S3_ACCESS_KEY_ID, /*default*/ "");
@@ -569,12 +579,16 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
         secret_access_key.clear();
         read_s3_auth_info_from_config();
     }
+}
 
-    LOG_INFO(
-        log,
+String StorageS3Config::toString() const
+{
+    return fmt::format(
+        "StroageS3Config{{"
         "endpoint={} bucket={} root={} "
         "max_connections={} connection_timeout_ms={} "
-        "request_timeout_ms={} access_key_id_size={} secret_access_key_size={}",
+        "request_timeout_ms={} access_key_id_size={} secret_access_key_size={}"
+        "}}",
         endpoint,
         bucket,
         root,
@@ -583,20 +597,28 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
         request_timeout_ms,
         access_key_id.size(),
         secret_access_key.size());
+}
 
-    if (isS3Enabled())
+void StorageS3Config::enable(bool check_requirements, const LoggerPtr & log)
+{
+    is_enabled = true;
+
+    LOG_INFO(log, "enable with {}", toString());
+
+    if (check_requirements)
     {
-        if (endpoint.empty() || root.empty())
+        if (bucket.empty() || endpoint.empty() || root.empty())
         {
-            LOG_WARNING(log, "'storage.s3.endpoint' and 'storage.s3.root' must be set when S3 is enabled!");
-            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "'storage.s3.endpoint' and 'storage.s3.root' must be set when S3 is enabled!");
+            const auto * msg = "'storage.s3.bucket', 'storage.s3.endpoint' and 'storage.s3.root' must be set when S3 is enabled!";
+            LOG_WARNING(log, msg);
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, msg);
         }
     }
 }
 
 bool StorageS3Config::isS3Enabled() const
 {
-    return !bucket.empty();
+    return is_enabled;
 }
 
 void StorageRemoteCacheConfig::parse(const String & content, const LoggerPtr & log)

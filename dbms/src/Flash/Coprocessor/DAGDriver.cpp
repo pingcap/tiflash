@@ -19,10 +19,10 @@
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
+#include <Flash/Statistics/ExecutorStatisticsCollector.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
@@ -114,8 +114,9 @@ try
 
         if (dag_context.collect_execution_summaries)
         {
-            ExecutionSummaryCollector summary_collector(dag_context);
-            summary_collector.addExecuteSummaries(*dag_response);
+            ExecutorStatisticsCollector statistics_collector(log->identifier());
+            statistics_collector.initialize(&dag_context);
+            statistics_collector.fillExecuteSummaries(*dag_response);
         }
     }
     else
@@ -146,8 +147,9 @@ try
 
         if (dag_context.collect_execution_summaries)
         {
-            ExecutionSummaryCollector summary_collector(dag_context);
-            auto execution_summary_response = summary_collector.genExecutionSummaryResponse();
+            ExecutorStatisticsCollector statistics_collector(log->identifier());
+            statistics_collector.initialize(&dag_context);
+            auto execution_summary_response = statistics_collector.genExecutionSummaryResponse();
             streaming_writer->write(execution_summary_response);
         }
     }

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
@@ -130,7 +131,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     return batch_cop_tasks;
 }
 
-StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
+RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
     const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
     auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
@@ -196,7 +197,7 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     // Ignore sender.PartitionKeys and sender.Types because it's a PassThrough sender.
 
     dispatch_req->set_encoded_plan(sender_dag_req.SerializeAsString());
-    return StorageDisaggregated::RequestAndRegionIDs{dispatch_req, region_ids, batch_cop_task.store_id};
+    return RequestAndRegionIDs{dispatch_req, region_ids, batch_cop_task.store_id};
 }
 
 tipb::Executor StorageDisaggregated::buildTableScanTiPB()
