@@ -957,7 +957,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     const auto disaggregated_mode = getDisaggregatedMode(config());
     const auto use_autoscaler = useAutoScaler(config());
-    const bool use_autoscaler_without_s3 = useAutoScaler(config());
+    const bool use_autoscaler_without_s3 = useAutoScalerWithoutS3(config());
 
     // Some Storage's config is necessary for Proxy
     TiFlashStorageConfig storage_config;
