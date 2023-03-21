@@ -23,7 +23,7 @@ namespace u128
 struct PageIdTrait
 {
     using PageId = PageIdV3Internal;
-    using Prefix = NamespaceId;
+    using Prefix = NamespaceID;
 
     static inline PageId getInvalidID()
     {

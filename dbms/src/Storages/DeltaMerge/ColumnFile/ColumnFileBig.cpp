@@ -95,7 +95,7 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(const DMContext & cont
     if (remote_data_store)
     {
         auto wn_ps = context.db_context.getWriteNodePageStorage();
-        auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, context.storage_pool->getNamespaceId()), file_page_id);
+        auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Data, context.physical_table_id), file_page_id);
         auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
         const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
         auto file_oid = lock_key_view.asDataFile().getDMFileOID();
@@ -117,7 +117,6 @@ ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(DMContext & context, 
                                                            const RowKeyRange & target_range,
                                                            ReadBuffer & buf,
                                                            UniversalPageStoragePtr temp_ps,
-                                                           TableID ns_id,
                                                            WriteBatches & wbs)
 {
     UInt64 file_page_id;
@@ -127,7 +126,7 @@ ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(DMContext & context, 
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
-    auto remote_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id), file_page_id);
+    auto remote_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Data, context.physical_table_id), file_page_id);
     auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
     auto data_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id)).asDataFile();
     auto file_oid = data_key_view.getDMFileOID();

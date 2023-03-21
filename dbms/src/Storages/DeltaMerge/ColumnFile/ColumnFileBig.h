@@ -92,7 +92,6 @@ public:
                                                        const RowKeyRange & target_range,
                                                        ReadBuffer & buf,
                                                        UniversalPageStoragePtr temp_ps,
-                                                       TableID ns_id,
                                                        WriteBatches & wbs);
 
     String toString() const override
