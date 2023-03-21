@@ -35,12 +35,12 @@ void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
     scan_context->merge(other.tiflash_scan_context());
 }
 
-void ExecutionSummary::set(const BaseRuntimeStatistics & other)
+void ExecutionSummary::fill(const BaseRuntimeStatistics & other)
 {
     time_processed_ns = other.execution_time_ns;
-    num_produced_rows += other.rows;
-    num_iterations += other.blocks;
-    concurrency += other.concurrency;
+    num_produced_rows = other.rows;
+    num_iterations = other.blocks;
+    concurrency = other.concurrency;
 }
 
 void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)

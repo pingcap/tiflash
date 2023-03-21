@@ -38,7 +38,7 @@ struct ExecutionSummary
 
     void merge(const ExecutionSummary & other);
     void merge(const tipb::ExecutorExecutionSummary & other);
-    void set(const BaseRuntimeStatistics & other);
+    void fill(const BaseRuntimeStatistics & other);
     void init(const tipb::ExecutorExecutionSummary & other);
 };
 

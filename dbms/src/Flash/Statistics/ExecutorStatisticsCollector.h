@@ -30,9 +30,9 @@ class ExecutorStatisticsCollector
 {
 public:
     explicit ExecutorStatisticsCollector(const String & req_id,
-                                         bool fill_executor_id_ = false)
+                                         bool force_fill_executor_id_ = false)
         : log(Logger::get(req_id))
-        , fill_executor_id(fill_executor_id_)
+        , force_fill_executor_id(force_fill_executor_id_)
     {}
 
     void initialize(DAGContext * dag_context_);
@@ -86,7 +86,7 @@ private:
     DAGContext * dag_context = nullptr;
     std::map<String, ExecutorStatisticsPtr> profiles;
     const LoggerPtr log;
-    bool fill_executor_id; // for testing list based executors
+    bool force_fill_executor_id; // for testing list based executors
 };
 using ExecutorStatisticsCollectorPtr = std::unique_ptr<ExecutorStatisticsCollector>;
 } // namespace DB

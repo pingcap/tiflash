@@ -22,7 +22,7 @@ void fillTiExecutionSummary(
     tipb::ExecutorExecutionSummary * execution_summary,
     ExecutionSummary & current,
     const String & executor_id,
-    bool fill_executor_id)
+    bool force_fill_executor_id)
 {
     execution_summary->set_time_processed_ns(current.time_processed_ns);
     execution_summary->set_num_produced_rows(current.num_produced_rows);
@@ -32,7 +32,7 @@ void fillTiExecutionSummary(
 
     // tree-based executors will have executor_id.
     // In ut, list-based executor will have executor_id for result comparision.
-    if (dag_context.return_executor_id || fill_executor_id)
+    if (dag_context.return_executor_id || force_fill_executor_id)
         execution_summary->set_executor_id(executor_id);
 }
 } // namespace DB

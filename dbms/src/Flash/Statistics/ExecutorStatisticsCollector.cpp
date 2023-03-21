@@ -146,14 +146,14 @@ void ExecutorStatisticsCollector::fillExecutionSummary(
     const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const
 {
     ExecutionSummary current;
-    current.set(statistic);
+    current.fill(statistic);
     current.time_processed_ns += join_build_time;
     // merge detailed table scan profile
     if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
         current.scan_context->merge(*(iter->second));
 
     current.time_processed_ns += dag_context->compile_time_ns;
-    fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), current, executor_id, fill_executor_id);
+    fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), current, executor_id, force_fill_executor_id);
 }
 
 void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & response)
@@ -214,7 +214,7 @@ void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectRespo
 
     // fill execution_summaries from remote executor received by exchange.
     for (auto & p : exchange_execution_summary.execution_summaries)
-        fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), p.second, p.first, fill_executor_id);
+        fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), p.second, p.first, force_fill_executor_id);
 }
 
 } // namespace DB
