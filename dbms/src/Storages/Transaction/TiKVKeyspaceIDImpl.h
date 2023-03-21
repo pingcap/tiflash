@@ -16,6 +16,7 @@
 
 #include <IO/Endian.h>
 #include <Storages/Transaction/Types.h>
+#include <common/defines.h>
 
 namespace DB
 {

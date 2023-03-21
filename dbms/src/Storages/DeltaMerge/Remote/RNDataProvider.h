@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/Remote/RNDataProvider_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB::DM::Remote
 {
@@ -27,19 +28,19 @@ private:
     RNLocalPageCachePtr page_cache;
     RNLocalPageCacheGuardPtr pages_guard; // Only keep for maintaining lifetime for related keys
 
-    UInt64 store_id;
-    Int64 table_id;
+    StoreID store_id;
+    KeyspaceTableID ks_table_id;
 
 public:
     explicit ColumnFileDataProviderRNLocalPageCache(
         RNLocalPageCachePtr page_cache_,
         RNLocalPageCacheGuardPtr pages_guard_,
-        UInt64 store_id_,
-        Int64 table_id_)
+        StoreID store_id_,
+        KeyspaceTableID ks_table_id_)
         : page_cache(page_cache_)
         , pages_guard(pages_guard_)
         , store_id(store_id_)
-        , table_id(table_id_)
+        , ks_table_id(ks_table_id_)
     {}
 
     Page readTinyData(
