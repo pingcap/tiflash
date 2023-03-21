@@ -86,7 +86,7 @@ public:
         : namespace_id(TEST_NAMESPACE_ID)
     {}
 #endif
-    explicit WriteBatch(NamespaceId namespace_id_)
+    explicit WriteBatch(NamespaceID namespace_id_)
         : namespace_id(namespace_id_)
     {}
 
@@ -231,7 +231,7 @@ public:
         sequence = seq;
     }
 
-    NamespaceId getNamespaceId() const
+    NamespaceID getNamespaceID() const
     {
         return namespace_id;
     }
@@ -295,7 +295,7 @@ public:
 private:
     Writes writes;
     SequenceID sequence = 0;
-    NamespaceId namespace_id;
+    NamespaceID namespace_id;
     size_t total_data_size = 0;
 };
 } // namespace DB

@@ -53,7 +53,7 @@ private:
 private:
     PipelineExecutorStatus & exec_status;
     EventPtr event;
-    std::atomic_bool finalized{false};
+    bool finalized = false;
 };
 
 } // namespace DB

@@ -46,6 +46,12 @@ public:
 
     static StableValueSpacePtr restore(DMContext & context, PageIdU64 id);
 
+    static StableValueSpacePtr createFromCheckpoint( //
+        DMContext & context,
+        UniversalPageStoragePtr temp_ps,
+        PageIdU64 stable_id,
+        WriteBatches & wbs);
+
     /**
      * Resets the logger by using the one from the segment.
      * Segment_log is not available when constructing, because usually

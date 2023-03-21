@@ -49,6 +49,7 @@ void SimplePKTestBasic::reload()
                                               false,
                                               "test",
                                               DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
+                                              NullspaceID,
                                               101,
                                               true,
                                               *cols,

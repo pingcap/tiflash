@@ -604,12 +604,12 @@ PageIdU64 SegmentTestBasic::getRandomSegmentId() // Complexity is O(n)
     return segment_id;
 }
 
-size_t SegmentTestBasic::getPageNumAfterGC(StorageType type, NamespaceId ns_id) const
+size_t SegmentTestBasic::getPageNumAfterGC(StorageType type, NamespaceID ns_id) const
 {
     if (storage_pool->uni_ps)
     {
         storage_pool->uni_ps->gc(/* not_skip */ true);
-        return storage_pool->uni_ps->getNumberOfPages(UniversalPageIdFormat::toFullPrefix(type, ns_id));
+        return storage_pool->uni_ps->getNumberOfPages(UniversalPageIdFormat::toFullPrefix(NullspaceID, type, ns_id));
     }
     else
     {
@@ -646,11 +646,11 @@ size_t SegmentTestBasic::getPageNumAfterGC(StorageType type, NamespaceId ns_id) 
     }
 }
 
-std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsWithoutGC(NamespaceId ns_id) const
+std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsWithoutGC(NamespaceID ns_id) const
 {
     if (storage_pool->uni_ps)
     {
-        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id)));
+        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, ns_id)));
     }
     else
     {
@@ -666,12 +666,12 @@ std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsWithoutGC(Namespace
     }
 }
 
-std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceId ns_id) const
+std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceID ns_id) const
 {
     if (storage_pool->uni_ps)
     {
         storage_pool->uni_ps->gc(/* not_skip */ true);
-        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id)));
+        return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, ns_id)));
     }
     else
     {
@@ -693,7 +693,7 @@ SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPt
 {
     TiFlashStorageTestBasic::reload(std::move(db_settings));
     storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-    storage_pool = std::make_shared<StoragePool>(*db_context, NAMESPACE_ID, *storage_path_pool, "test.t1");
+    storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, NAMESPACE_ID, *storage_path_pool, "test.t1");
     storage_pool->restore();
     ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID) : pre_define_columns;
     setColumns(cols);
@@ -707,6 +707,7 @@ void SegmentTestBasic::reloadDMContext()
                                              storage_path_pool,
                                              storage_pool,
                                              /*min_version_*/ 0,
+                                             NullspaceID,
                                              /*physical_table_id*/ 100,
                                              options.is_common_handle,
                                              1,
@@ -765,6 +766,7 @@ std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(Pa
     RUNTIME_CHECK(snapshot != nullptr);
     return {segment, snapshot};
 }
+
 std::vector<Block> SegmentTestBasic::readSegment(PageIdU64 segment_id, bool need_row_id, const RowKeyRanges & ranges)
 {
     auto [segment, snapshot] = getSegmentForRead(segment_id);

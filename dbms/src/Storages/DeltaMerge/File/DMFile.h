@@ -17,15 +17,17 @@
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
+#include <Interpreters/Settings.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/File/MergedFile.h>
 #include <Storages/DeltaMerge/File/dtpb/dmfile.pb.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/S3/S3Filename.h>
+#include <Storages/S3/S3RandomAccessFile.h>
 #include <common/logger_useful.h>
-
 namespace DB::DM
 {
 class DMFile;
@@ -171,6 +173,7 @@ public:
         PackStat = 0,
         PackProperty,
         ColumnStat,
+        MergedSubFilePos,
     };
     struct MetaBlockHandle
     {
@@ -249,8 +252,8 @@ public:
     static String getPathByStatus(const String & parent_path, UInt64 file_id, DMFile::Status status);
     static String getNGCPath(const String & parent_path, UInt64 file_id, DMFile::Status status);
 
-    bool canGC();
-    void enableGC();
+    bool canGC() const;
+    void enableGC() const;
     void remove(const FileProviderPtr & file_provider);
 
     // The ID for locating DTFile on disk
@@ -332,8 +335,10 @@ public:
     }
 
     static String metav2FileName() { return "meta"; }
-    std::vector<String> listInternalFiles();
+    std::vector<std::pair<String, UInt64>> listFilesForUpload();
     void switchToRemote(const S3::DMFileOID & oid);
+
+    static void updateMergeFileConfig(const Settings & settings);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -363,10 +368,11 @@ public:
     String packPropertyPath() const { return subFilePath(packPropertyFileName()); }
     String configurationPath() const { return subFilePath(configurationFileName()); }
     String metav2Path() const { return subFilePath(metav2FileName()); }
+    String mergedPath(UInt32 number) const { return subFilePath(mergedFilename(number)); }
 
     using FileNameBase = String;
-    size_t colIndexSizeByName(const FileNameBase & file_name_base) { return Poco::File(colIndexPath(file_name_base)).getSize(); }
-    size_t colDataSizeByName(const FileNameBase & file_name_base) { return Poco::File(colDataPath(file_name_base)).getSize(); }
+    size_t colIndexSizeByName(const FileNameBase & file_name_base) const { return Poco::File(colIndexPath(file_name_base)).getSize(); }
+    size_t colDataSizeByName(const FileNameBase & file_name_base) const { return Poco::File(colDataPath(file_name_base)).getSize(); }
     size_t colIndexSize(ColId id);
     size_t colDataSize(ColId id, bool is_null_map);
 
@@ -388,6 +394,7 @@ public:
     EncryptionPath encryptionPackPropertyPath() const;
     EncryptionPath encryptionConfigurationPath() const;
     EncryptionPath encryptionMetav2Path() const;
+    EncryptionPath encryptionMergedPath(UInt32 number) const;
 
     static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
     {
@@ -398,6 +405,7 @@ public:
     static String packStatFileName() { return "pack"; }
     static String packPropertyFileName() { return "property"; }
     static String configurationFileName() { return "config"; }
+    static String mergedFilename(UInt32 number) { return fmt::format("{}.merged", number); }
 
     static String colDataFileName(const FileNameBase & file_name_base);
     static String colIndexFileName(const FileNameBase & file_name_base);
@@ -444,18 +452,27 @@ public:
     // Meta data is small and 64KB is enough.
     static constexpr size_t meta_buffer_size = 64 * 1024;
     void finalizeMetaV2(WriteBuffer & buffer);
-    MetaBlockHandle writeSLPackStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest);
-    MetaBlockHandle writeSLPackPropertyToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest);
-    MetaBlockHandle writeColumnStatToBuffer(WriteBuffer & buffer, DB::UnifiedDigestBaseBox & digest);
+    MetaBlockHandle writeSLPackStatToBuffer(WriteBuffer & buffer);
+    MetaBlockHandle writeSLPackPropertyToBuffer(WriteBuffer & buffer);
+    MetaBlockHandle writeColumnStatToBuffer(WriteBuffer & buffer);
+    MetaBlockHandle writeMergedSubFilePosotionsToBuffer(WriteBuffer & buffer);
     std::vector<char> readMetaV2(const FileProviderPtr & file_provider);
     void parseMetaV2(std::string_view buffer);
     void parseColumnStat(std::string_view buffer);
+    void parseMergedSubFilePos(std::string_view buffer);
     void parsePackProperty(std::string_view buffer);
     void parsePackStat(std::string_view buffer);
     void finalizeDirName();
     bool useMetaV2() const { return version == DMFileFormat::V3; }
 
-private:
+    std::vector<std::pair<String, UInt64>> listColumnFilesWithSize();
+    static void listFilesOfColumn(ColId col_id, const ColumnStat & stat, std::function<void(String && fname, UInt64 fsize)> && handle);
+
+    void finalizeSmallColumnDataFiles(FileProviderPtr & file_provider, WriteLimiterPtr & write_limiter);
+    UInt64 getFileSize(ColId col_id, const String & filename) const;
+    S3::S3RandomAccessFile::ReadFileInfo getReadFileInfo(ColId col_id, const String & filename) const;
+    S3::S3RandomAccessFile::ReadFileInfo getMergedFileInfoOfColumn(const MergedSubFileInfo & file_info) const;
+
     // The id to construct the file path on disk.
     UInt64 file_id;
     // It is the page_id that represent this file in the PageStorage. It could be the same as file id.
@@ -474,7 +491,20 @@ private:
 
     DMFileFormat::Version version;
 
+    struct MergedFile
+    {
+        UInt64 number = 0;
+        UInt64 size = 0;
+    };
+    PaddedPODArray<MergedFile> merged_files;
+    // Filename -> MergedSubFileInfo
+    std::unordered_map<String, MergedSubFileInfo> merged_sub_file_infos;
+
+    inline static std::atomic<UInt64> small_file_size_threshold = 128 * 1024; // 128KB
+    inline static std::atomic<UInt64> merged_file_max_size = 1 * 1024 * 1024; // 1MB
+
     friend class DMFileWriter;
+    friend class DMFileWriterRemote;
     friend class DMFileReader;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;

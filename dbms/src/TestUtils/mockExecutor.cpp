@@ -188,9 +188,9 @@ DAGRequestBuilder & DAGRequestBuilder::buildExchangeReceiver(const String & exch
     for (const auto & column : columns)
     {
         TiDB::ColumnInfo info;
-        info.tp = column.second;
-        info.name = column.first;
-        schema.push_back({exchange_name + "." + column.first, info});
+        info.name = column.name;
+        info.tp = column.type;
+        schema.push_back({exchange_name + "." + info.name, info});
     }
 
     root = mock::compileExchangeReceiver(getExecutorIndex(), schema, fine_grained_shuffle_stream_count, std::static_pointer_cast<mock::ExchangeSenderBinder>(root));
@@ -268,10 +268,15 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNameVec col_names)
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchange_type)
+DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchange_type, MockColumnNameVec part_keys, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
-    root = mock::compileExchangeSender(root, getExecutorIndex(), exchange_type);
+    auto partition_key_list = std::make_shared<ASTExpressionList>();
+    for (const auto & part_key : part_keys)
+    {
+        partition_key_list->children.push_back(col(part_key));
+    }
+    root = mock::compileExchangeSender(root, getExecutorIndex(), exchange_type, partition_key_list, fine_grained_shuffle_stream_count);
     return *this;
 }
 
@@ -388,25 +393,26 @@ DAGRequestBuilder & DAGRequestBuilder::expand(MockVVecColumnNameVec grouping_set
     return *this;
 }
 
-void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint)
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, size_t concurrency_hint)
 {
-    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(mock_column_infos), "mock_table_scan"));
-    addMockTable(db, table, mock_column_infos, columns, concurrency_hint);
+    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(columnInfos), "mock_table_scan"));
+    addMockTable(db, table, columnInfos, columns, concurrency_hint);
 }
 
 void MockDAGRequestContext::addMockTableSchema(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
 {
     mock_storage->addTableSchema(db + "." + table, columnInfos);
 }
+
 void MockDAGRequestContext::addMockTableSchema(const MockTableName & name, const MockColumnInfoVec & columnInfos)
 {
     mock_storage->addTableSchema(name.first + "." + name.second, columnInfos);
 }
 
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & mock_column_infos, size_t concurrency_hint)
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, size_t concurrency_hint)
 {
-    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(mock_column_infos), "mock_table_scan"));
-    addMockTable(name, mock_column_infos, columns, concurrency_hint);
+    auto columns = getColumnWithTypeAndName(genNamesAndTypes(mockColumnInfosToTiDBColumnInfos(columnInfos), "mock_table_scan"));
+    addMockTable(name, columnInfos, columns, concurrency_hint);
 }
 
 void MockDAGRequestContext::addMockTableConcurrencyHint(const String & db, const String & table, size_t concurrency_hint)
@@ -507,7 +513,7 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, const MockC
         {
             for (size_t col_index = 0; col_index < columns.size(); col_index++)
             {
-                if (columns[col_index].name == mock_column_info.first)
+                if (columns[col_index].name == mock_column_info.name)
                 {
                     partition_column_ids.push_back(col_index);
                     break;
@@ -582,7 +588,7 @@ void MockDAGRequestContext::assertMockInput(const MockColumnInfoVec & columnInfo
 {
     assert(columnInfos.size() == columns.size());
     for (size_t i = 0; i < columns.size(); ++i)
-        assert(columnInfos[i].first == columns[i].name);
+        assert(columnInfos[i].name == columns[i].name);
 }
 
 } // namespace DB::tests

@@ -19,6 +19,8 @@
 
 namespace DB
 {
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 namespace DM
 {
 struct WriteBatches;
@@ -48,11 +50,24 @@ void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & c
 /// Recreate column file instances from buf.
 ColumnFilePersisteds deserializeSavedColumnFiles(const DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
 
+ColumnFilePersisteds createColumnFilesFromCheckpoint( //
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf,
+    UniversalPageStoragePtr temp_ps,
+    WriteBatches & wbs);
+
 void serializeSavedColumnFilesInV2Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
 ColumnFilePersisteds deserializeSavedColumnFilesInV2Format(const DMContext & context, ReadBuffer & buf, UInt64 version);
 
 void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
 ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(const DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
 
+ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint( //
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf,
+    UniversalPageStoragePtr temp_ps,
+    WriteBatches & wbs);
 } // namespace DM
 } // namespace DB

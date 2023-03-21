@@ -35,12 +35,12 @@ extern const int LOGICAL_ERROR;
 class WriteBatchWrapper : private boost::noncopyable
 {
 public:
-    explicit WriteBatchWrapper(PageStorageRunMode mode, StorageType tag, NamespaceId ns_id)
+    explicit WriteBatchWrapper(PageStorageRunMode mode, KeyspaceID keyspace_id, StorageType tag, NamespaceID ns_id)
     {
         switch (mode)
         {
         case PageStorageRunMode::UNI_PS:
-            uwb = std::make_unique<UniversalWriteBatch>(UniversalPageIdFormat::toFullPrefix(tag, ns_id));
+            uwb = std::make_unique<UniversalWriteBatch>(UniversalPageIdFormat::toFullPrefix(keyspace_id, tag, ns_id));
             wb = nullptr;
             break;
         default:
@@ -50,7 +50,7 @@ public:
         }
     }
 
-    explicit WriteBatchWrapper(PageStorageRunMode mode, std::variant<String, NamespaceId> && prefix)
+    explicit WriteBatchWrapper(PageStorageRunMode mode, std::variant<String, NamespaceID> && prefix)
     {
         switch (mode)
         {
@@ -59,7 +59,7 @@ public:
             wb = nullptr;
             break;
         default:
-            wb = std::make_unique<WriteBatch>(std::get<NamespaceId>(prefix));
+            wb = std::make_unique<WriteBatch>(std::get<NamespaceID>(prefix));
             uwb = nullptr;
             break;
         }
@@ -89,6 +89,14 @@ public:
     {
         auto buffer_ptr = std::make_shared<ReadBufferFromOwnString>(data);
         putPage(page_id, tag, buffer_ptr, data.size());
+    }
+
+    void putRemotePage(PageIdU64 page_id, UInt64 tag, PageSize size, const PS::V3::CheckpointLocation & data_location, PageFieldOffsetChecksums && offset_and_checksums)
+    {
+        if (uwb)
+            uwb->putRemotePage(page_id, tag, size, data_location, std::move(offset_and_checksums));
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "try to put remote page with remote location with u64 id, page_id={}", page_id);
     }
 
     void putExternal(PageIdU64 page_id, UInt64 tag)

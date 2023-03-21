@@ -17,6 +17,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/S3/S3Filename.h>
+#include <Storages/Transaction/Types.h>
 #include <common/types.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
@@ -41,6 +42,10 @@ const static re2::RE2 rgx_store_prefix("^s(?P<store_id>[0-9]+)/$");
 const static re2::RE2 rgx_data_or_manifest("^s(?P<store_id>[0-9]+)/(data|manifest)/(?P<data_subpath>.+)$");
 const static re2::RE2 rgx_subpath_manifest("mf_(?P<upload_seq>[0-9]+)");
 
+/// parsing DTFile
+const static re2::RE2 rgx_subpath_dtfile("t_(?P<table_id>[0-9]+)/dmf_(?P<file_id>[0-9]+)");
+const static re2::RE2 rgx_subpath_keyspace_dtfile("ks_(?P<keyspace_id>[0-9]+)_t_(?P<table_id>[0-9]+)/dmf_(?P<file_id>[0-9]+)");
+
 constexpr static std::string_view DELMARK_SUFFIX = ".del";
 
 // clang-format off
@@ -55,8 +60,9 @@ constexpr static std::string_view fmt_datafile_prefix  = "s{store_id}/data/";
 constexpr static std::string_view fmt_data_file        = "s{store_id}/data/{subpath}";
 constexpr static std::string_view fmt_subpath_checkpoint_data            = "dat_{seq}_{index}";
 constexpr static std::string_view fmt_subpath_dttable                    = "t_{table_id}";
+constexpr static std::string_view fmt_subpath_keyspace_dttable           = "ks_{keyspace_id}_t_{table_id}";
 constexpr static std::string_view fmt_subpath_dtfile                     = "t_{table_id}/dmf_{id}";
-constexpr static std::string_view fmt_subpath_keyspace_dtfile            = "ks_{keyspace}_t_{table_id}/dmf_{id}";
+constexpr static std::string_view fmt_subpath_keyspace_dtfile            = "ks_{keyspace_id}_t_{table_id}/dmf_{id}";
 
 // lock prefix for all stores
 constexpr static std::string_view fmt_lock_prefix = "lock/";
@@ -99,6 +105,35 @@ bool S3FilenameView::isDMFile() const
     static_assert(details::fmt_subpath_keyspace_dtfile[2] == '_', "keyspace dtfile prefix changed!");
 
     return (startsWith(data_subpath, "t_") || startsWith(data_subpath, "ks_"));
+}
+
+DMFileOID S3FilenameView::getDMFileOID() const
+{
+    RUNTIME_CHECK(isDMFile());
+    TableID table_id;
+    UInt64 file_id;
+    re2::StringPiece prefix_sp{data_subpath.data(), data_subpath.size()};
+    if (startsWith(data_subpath, "t_"))
+    {
+        RUNTIME_CHECK(re2::RE2::FullMatch(prefix_sp, details::rgx_subpath_dtfile, &table_id, &file_id));
+        return DMFileOID{
+            .store_id = store_id,
+            .keyspace_id = NullspaceID,
+            .table_id = table_id,
+            .file_id = file_id,
+        };
+    }
+    else
+    {
+        KeyspaceID keyspace_id;
+        RUNTIME_CHECK(re2::RE2::FullMatch(prefix_sp, details::rgx_subpath_keyspace_dtfile, &keyspace_id, &table_id, &file_id));
+        return DMFileOID{
+            .store_id = store_id,
+            .keyspace_id = keyspace_id,
+            .table_id = table_id,
+            .file_id = file_id,
+        };
+    }
 }
 
 String S3FilenameView::toFullKey() const
@@ -322,22 +357,42 @@ S3Filename S3Filename::fromStoreId(StoreID store_id)
 
 S3Filename S3Filename::fromDMFileOID(const DMFileOID & oid)
 {
-    // TODO: adapt with keyspace
-    UNUSED(details::fmt_subpath_keyspace_dtfile);
-    return S3Filename{
-        .type = S3FilenameType::DataFile,
-        .store_id = oid.store_id,
-        .data_subpath = fmt::format(details::fmt_subpath_dtfile, fmt::arg("table_id", oid.table_id), fmt::arg("id", oid.file_id)),
-    };
+    if (oid.keyspace_id == NullspaceID)
+    {
+        return S3Filename{
+            .type = S3FilenameType::DataFile,
+            .store_id = oid.store_id,
+            .data_subpath = fmt::format(details::fmt_subpath_dtfile, fmt::arg("table_id", oid.table_id), fmt::arg("id", oid.file_id)),
+        };
+    }
+    else
+    {
+        return S3Filename{
+            .type = S3FilenameType::DataFile,
+            .store_id = oid.store_id,
+            .data_subpath = fmt::format(details::fmt_subpath_keyspace_dtfile, fmt::arg("table_id", oid.table_id), fmt::arg("keyspace_id", oid.keyspace_id), fmt::arg("id", oid.file_id)),
+        };
+    }
 }
 
-S3Filename S3Filename::fromTableID(StoreID store_id, TableID table_id)
+S3Filename S3Filename::fromTableID(StoreID store_id, KeyspaceID keyspace_id, TableID table_id)
 {
-    return S3Filename{
-        .type = S3FilenameType::DataFile,
-        .store_id = store_id,
-        .data_subpath = fmt::format(details::fmt_subpath_dttable, fmt::arg("table_id", table_id)),
-    };
+    if (keyspace_id == NullspaceID)
+    {
+        return S3Filename{
+            .type = S3FilenameType::DataFile,
+            .store_id = store_id,
+            .data_subpath = fmt::format(details::fmt_subpath_dttable, fmt::arg("table_id", table_id)),
+        };
+    }
+    else
+    {
+        return S3Filename{
+            .type = S3FilenameType::DataFile,
+            .store_id = store_id,
+            .data_subpath = fmt::format(details::fmt_subpath_keyspace_dttable, fmt::arg("keyspace_id", keyspace_id), fmt::arg("table_id", table_id)),
+        };
+    }
 }
 
 S3Filename S3Filename::newCheckpointData(StoreID store_id, UInt64 upload_seq, UInt64 file_idx)

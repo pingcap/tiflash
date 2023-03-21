@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Encryption/PosixWritableFile.h>
 #include <Interpreters/Context.h>
 #include <Poco/DigestStream.h>
 #include <Poco/MD5Engine.h>
@@ -23,6 +24,7 @@
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
@@ -67,10 +69,9 @@ public:
         buf_unit.resize(256);
         std::iota(buf_unit.begin(), buf_unit.end(), 0);
 
-        s3_client = S3::ClientFactory::instance().sharedClient();
-        bucket = S3::ClientFactory::instance().bucket();
+        s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         data_store = std::make_shared<DM::Remote::DataStoreS3>(dbContext().getFileProvider());
-        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     }
 
     void reload()
@@ -81,9 +82,23 @@ public:
     Context & dbContext() { return *db_context; }
 
 protected:
+    void writeLocalFile(const String & path, size_t size)
+    {
+        PosixWritableFile file(path, /*truncate_when_exists*/ true, -1, 0600);
+        size_t write_size = 0;
+        while (write_size < size)
+        {
+            auto to_write = std::min(buf_unit.size(), size - write_size);
+            auto n = file.write(buf_unit.data(), to_write);
+            ASSERT_EQ(n, to_write);
+            write_size += n;
+        }
+        ASSERT_EQ(file.fsync(), 0);
+    }
+
     void writeFile(const String & key, size_t size, const WriteSettings & write_setting)
     {
-        S3WritableFile file(s3_client, bucket, key, write_setting);
+        S3WritableFile file(s3_client, key, write_setting);
         size_t write_size = 0;
         while (write_size < size)
         {
@@ -99,7 +114,7 @@ protected:
 
     void verifyFile(const String & key, size_t size)
     {
-        S3RandomAccessFile file(s3_client, bucket, key);
+        S3RandomAccessFile file(s3_client, key);
         std::vector<char> tmp_buf;
         size_t read_size = 0;
         while (read_size < size)
@@ -149,10 +164,10 @@ protected:
     std::unordered_map<String, size_t> listFiles(const DMFileOID & oid)
     {
         auto dmfile_dir = DMFile::getPathByStatus(
-            S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKey(),
+            S3::S3Filename::fromTableID(oid.store_id, oid.keyspace_id, oid.table_id).toFullKey(),
             oid.file_id,
             DMFile::Status::READABLE);
-        return S3::listPrefixWithSize(*s3_client, bucket, dmfile_dir + "/");
+        return S3::listPrefixWithSize(*s3_client, dmfile_dir + "/");
     }
 
     DMFilePtr restoreDMFile(const DMFileOID & oid)
@@ -162,8 +177,7 @@ protected:
 
     LoggerPtr log;
     std::vector<char> buf_unit;
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
+    std::shared_ptr<TiFlashS3Client> s3_client;
     S3WritableFile::UploadInfo last_upload_info;
     Remote::IDataStorePtr data_store;
 };
@@ -209,7 +223,7 @@ try
     WriteSettings write_setting;
     const String key = "/a/b/c/seek";
     writeFile(key, size, write_setting);
-    S3RandomAccessFile file(s3_client, bucket, key);
+    S3RandomAccessFile file(s3_client, key);
     {
         std::vector<char> tmp_buf(256);
         auto n = file.read(tmp_buf.data(), tmp_buf.size());
@@ -276,10 +290,20 @@ try
     std::vector<String> uploaded_files;
     {
         data_store->putDMFile(dmfile, oid, /*remove_local*/ false);
-        uploaded_files = dmfile->listInternalFiles();
-        auto files_with_size = listFiles(oid);
-        ASSERT_EQ(uploaded_files.size(), files_with_size.size());
-        LOG_TRACE(log, "{}\n", files_with_size);
+        auto local_files_with_size = dmfile->listFilesForUpload();
+        auto remote_files_with_size = listFiles(oid);
+        ASSERT_EQ(local_files_with_size.size(), remote_files_with_size.size());
+        for (const auto & [fname, fsize] : local_files_with_size)
+        {
+            auto itr = remote_files_with_size.find(fname);
+            ASSERT_NE(itr, remote_files_with_size.end());
+            if (fname != DMFile::metav2FileName())
+            {
+                ASSERT_EQ(itr->second, fsize);
+            }
+            uploaded_files.push_back(fname);
+        }
+        LOG_TRACE(log, "remote_files_with_size => {}", remote_files_with_size);
     }
 
     {
@@ -389,10 +413,20 @@ try
     ASSERT_TRUE(std::filesystem::exists(local_dir));
     {
         data_store->putDMFile(dmfile, oid, /*remove_local*/ true);
-        uploaded_files = dmfile->listInternalFiles();
-        auto files_with_size = listFiles(oid);
-        ASSERT_EQ(uploaded_files.size(), files_with_size.size());
-        LOG_TRACE(log, "{}\n", files_with_size);
+        auto local_files_with_size = dmfile->listFilesForUpload();
+        auto remote_files_with_size = listFiles(oid);
+        ASSERT_EQ(local_files_with_size.size(), remote_files_with_size.size());
+        for (const auto & [fname, fsize] : local_files_with_size)
+        {
+            auto itr = remote_files_with_size.find(fname);
+            ASSERT_NE(itr, remote_files_with_size.end());
+            if (fname != DMFile::metav2FileName())
+            {
+                ASSERT_EQ(itr->second, fsize) << fname;
+            }
+            uploaded_files.push_back(fname);
+        }
+        LOG_TRACE(log, "remote_files_with_size => {}", remote_files_with_size);
     }
     ASSERT_FALSE(std::filesystem::exists(local_dir));
     ASSERT_EQ(dmfile->path(), S3::S3Filename::fromDMFileOID(oid).toFullKeyWithPrefix());
@@ -411,14 +445,14 @@ try
     Strings data_files{
         getTemporaryPath() + "/data_file_1",
         getTemporaryPath() + "/data_file_2",
+        getTemporaryPath() + "/data_file_3",
     };
     String manifest_file = getTemporaryPath() + "/manifest";
 
     {
-        for (const auto & f : data_files)
-        {
-            Poco::File(f).createFile();
-        }
+        writeLocalFile(data_files[0], 345 * 1024);
+        writeLocalFile(data_files[1], 156 * 1024);
+        writeLocalFile(data_files[2], 1234);
         Poco::File(manifest_file).createFile();
     }
 
@@ -429,16 +463,72 @@ try
     UInt64 sequence = 200;
     data_store->putCheckpointFiles(checkpoint, store_id, sequence);
 
+    Strings keys;
+    std::unordered_set<String> keyset;
     // ensure CheckpointDataFile, theirs lock file and CheckpointManifest are uploaded
-    auto s3client = S3::ClientFactory::instance().sharedClient();
-    auto s3bucket = S3::ClientFactory::instance().bucket();
+    auto s3client = S3::ClientFactory::instance().sharedTiFlashClient();
     auto cp_data0 = S3::S3Filename::newCheckpointData(store_id, sequence, 0);
-    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, cp_data0.toFullKey()));
-    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, cp_data0.toView().getLockKey(store_id, sequence)));
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data0.toFullKey()));
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data0.toView().getLockKey(store_id, sequence)));
+    keys.emplace_back(cp_data0.toView().getLockKey(store_id, sequence));
+    keyset.insert(keys.back());
     auto cp_data1 = S3::S3Filename::newCheckpointData(store_id, sequence, 1);
-    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, cp_data1.toFullKey()));
-    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, cp_data1.toView().getLockKey(store_id, sequence)));
-    ASSERT_TRUE(S3::objectExists(*s3client, s3bucket, S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey()));
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data1.toFullKey()));
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data1.toView().getLockKey(store_id, sequence)));
+    keys.emplace_back(cp_data1.toView().getLockKey(store_id, sequence));
+    keyset.insert(keys.back());
+    auto cp_data2 = S3::S3Filename::newCheckpointData(store_id, sequence, 2);
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data2.toFullKey()));
+    ASSERT_TRUE(S3::objectExists(*s3client, cp_data2.toView().getLockKey(store_id, sequence)));
+    keys.emplace_back(cp_data2.toView().getLockKey(store_id, sequence));
+    keyset.insert(keys.back());
+    // manifest
+    ASSERT_TRUE(S3::objectExists(*s3client, S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey()));
+
+    // add an not exist key
+    keys.emplace_back(S3::S3Filename::newCheckpointData(store_id, sequence, 999).toView().getLockKey(store_id, sequence));
+    keyset.insert(keys.back());
+    auto file_sizes = data_store->getDataFileSizes(keyset);
+    ASSERT_EQ(file_sizes.size(), 4) << fmt::format("{}", file_sizes);
+    ASSERT_EQ(file_sizes.at(keys[0]), 345 * 1024);
+    ASSERT_EQ(file_sizes.at(keys[1]), 156 * 1024);
+    ASSERT_EQ(file_sizes.at(keys[2]), 1234);
+    ASSERT_EQ(file_sizes.at(keys[3]), -1); // not exist or exception happens
+
+    PS::V3::CPDataFilesStatCache cache;
+    auto gc_threshold = DB::DM::Remote::RemoteGCThreshold{.valid_rate = 0.2, .min_file_threshold = 128 * 1024};
+    {
+        auto stats = cache.getCopy(); // valid size is not collected
+        EXPECT_EQ(stats.size(), 0);
+        auto files_to_compact = PS::V3::getRemoteFileIdsNeedCompact(stats, gc_threshold, data_store, log);
+        ASSERT_TRUE(files_to_compact.empty());
+        // nothing added
+        EXPECT_EQ(stats.size(), 0);
+    }
+    {
+        cache.updateValidSize(PS::V3::RemoteFileValidSizes{
+            {keys[0], 300 * 1024}, // big, valid rate is high
+            {keys[1], 16 * 1024}, // big, valid rate is low
+            {keys[2], 1234}, // small
+        });
+        auto stats = cache.getCopy(); // valid size is collected
+        // total size are updated
+        EXPECT_EQ(stats.at(keys[0]).valid_size, 300 * 1024);
+        EXPECT_EQ(stats.at(keys[1]).valid_size, 16 * 1024);
+        EXPECT_EQ(stats.at(keys[2]).valid_size, 1234);
+        auto files_to_compact = PS::V3::getRemoteFileIdsNeedCompact(stats, gc_threshold, data_store, log);
+        ASSERT_EQ(files_to_compact.size(), 2) << fmt::format("{}", files_to_compact);
+        ASSERT_TRUE(files_to_compact.contains(keys[1])) << fmt::format("{}", files_to_compact);
+        ASSERT_TRUE(files_to_compact.contains(keys[2])) << fmt::format("{}", files_to_compact);
+        ASSERT_TRUE(!files_to_compact.contains(keys[0])) << fmt::format("{}", files_to_compact);
+        // total size are updated
+        EXPECT_EQ(stats.at(keys[0]).total_size, 345 * 1024);
+        EXPECT_EQ(stats.at(keys[0]).valid_size, 300 * 1024);
+        EXPECT_EQ(stats.at(keys[1]).total_size, 156 * 1024);
+        EXPECT_EQ(stats.at(keys[1]).valid_size, 16 * 1024);
+        EXPECT_EQ(stats.at(keys[2]).total_size, 1234);
+        EXPECT_EQ(stats.at(keys[2]).valid_size, 1234);
+    }
 }
 CATCH
 

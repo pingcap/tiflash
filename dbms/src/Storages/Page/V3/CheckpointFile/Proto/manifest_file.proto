@@ -68,6 +68,7 @@ message EntryDataLocation {
 
 message EditRecord {
     EditType type = 1;
+    // Note page_id are not valid utf-8 string. Don't use string type.
     bytes page_id = 2;
     bytes ori_page_id = 3;
     uint64 version_sequence = 4;

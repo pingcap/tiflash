@@ -38,8 +38,6 @@ class CheckpointManifestS3Set
 public:
     static CheckpointManifestS3Set getFromS3(const S3::TiFlashS3Client & client, StoreID store_id);
 
-    static CheckpointManifestS3Set getFromS3(const Aws::S3::S3Client & client, const String & bucket, StoreID store_id);
-
     static CheckpointManifestS3Set create(const std::vector<CheckpointManifestS3Object> & manifest_keys);
 
     ALWAYS_INLINE bool empty() const { return manifests.empty(); }

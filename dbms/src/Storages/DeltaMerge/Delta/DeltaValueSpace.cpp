@@ -17,10 +17,12 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
 
 #include <ext/scope_guard.h>
@@ -59,6 +61,17 @@ void DeltaValueSpace::abandon(DMContext & context)
 DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageIdU64 id)
 {
     auto persisted_file_set = ColumnFilePersistedSet::restore(context, segment_range, id);
+    return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
+}
+
+DeltaValueSpacePtr DeltaValueSpace::createFromCheckpoint( //
+    DMContext & context,
+    UniversalPageStoragePtr temp_ps,
+    const RowKeyRange & segment_range,
+    PageIdU64 delta_id,
+    WriteBatches & wbs)
+{
+    auto persisted_file_set = ColumnFilePersistedSet::createFromCheckpoint(context, temp_ps, segment_range, delta_id, wbs);
     return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
 }
 
@@ -129,7 +142,12 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
             // to the file id.
             wbs.data.putRefPage(new_page_id, f->getDataPageId());
             auto file_id = f->getFile()->fileId();
-            auto file_parent_path = delegator.getDTFilePath(file_id);
+            auto old_dmfile = f->getFile();
+            auto file_parent_path = old_dmfile->parentPath();
+            if (!context.db_context.getSharedContextDisagg()->remote_data_store)
+            {
+                RUNTIME_CHECK(file_parent_path == delegator.getDTFilePath(file_id));
+            }
             auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* page_id= */ new_page_id, file_parent_path, DMFile::ReadMetaMode::all());
 
             auto new_column_file = f->cloneWith(context, new_file, target_range);

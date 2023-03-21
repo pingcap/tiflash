@@ -80,6 +80,7 @@ struct S3FilenameView
 
     ALWAYS_INLINE bool isDataFile() const { return type == S3FilenameType::DataFile; }
     bool isDMFile() const;
+    DMFileOID getDMFileOID() const;
     // Return the lock key prefix for finding any locks on this data file through `S3::LIST`
     String getLockPrefix() const;
     // Return the lock key for writing lock file on S3
@@ -131,7 +132,7 @@ struct S3Filename
     static String allStorePrefix();
     static S3Filename fromStoreId(StoreID store_id);
     static S3Filename fromDMFileOID(const DMFileOID & oid);
-    static S3Filename fromTableID(StoreID store_id, TableID table_id);
+    static S3Filename fromTableID(StoreID store_id, KeyspaceID keyspace_id, TableID table_id);
     static S3Filename newCheckpointData(StoreID store_id, UInt64 upload_seq, UInt64 file_idx);
     static S3Filename newCheckpointManifest(StoreID store_id, UInt64 upload_seq);
 

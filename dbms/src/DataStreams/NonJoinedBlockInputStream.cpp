@@ -168,7 +168,7 @@ void NonJoinedBlockInputStream::setNextCurrentNotMappedRow()
 {
     while (current_not_mapped_row == nullptr && next_index < parent.rows_not_inserted_to_map.size())
     {
-        current_not_mapped_row = parent.rows_not_inserted_to_map[next_index]->next;
+        current_not_mapped_row = parent.rows_not_inserted_to_map[next_index].head.next;
         next_index += step;
     }
 }

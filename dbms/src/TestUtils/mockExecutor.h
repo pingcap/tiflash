@@ -30,8 +30,6 @@ namespace DB
 {
 namespace tests
 {
-using MockColumnInfo = std::pair<String, TiDB::TP>;
-using MockColumnInfoVec = std::vector<MockColumnInfo>;
 using MockTableName = std::pair<String, String>;
 using MockOrderByItem = std::pair<String, bool>;
 using MockOrderByItemVec = std::vector<MockOrderByItem>;
@@ -114,8 +112,7 @@ public:
     }
     DAGRequestBuilder & project(MockColumnNameVec col_names);
 
-
-    DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
+    DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type, MockColumnNameVec part_keys = {}, uint64_t fine_grained_shuffle_stream_count = 0);
 
     /// User should prefer using other simplified join buidler API instead of this one unless he/she have to test
     /// join conditional expressions and knows how TiDB translates sql's `join on` clause to conditional expressions.
@@ -186,6 +183,7 @@ public:
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
     void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+
     void updateMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
     {
         addMockTableColumnData(db, table, columns);
@@ -262,6 +260,7 @@ MockWindowFrame buildDefaultRowsFrame();
 #define Min(expr) makeASTFunction("min", (expr))
 #define Count(expr) makeASTFunction("count", (expr))
 #define Sum(expr) makeASTFunction("sum", (expr))
+#define CountDistinct(expr) makeASTFunction("countDistinct", (expr))
 
 /// Window functions
 #define RowNumber() makeASTFunction("RowNumber")
