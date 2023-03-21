@@ -45,6 +45,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 #include <kvproto/disaggregated.pb.h>
+#include <kvproto/kvrpcpb.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/RegionCache.h>
@@ -53,8 +54,6 @@
 
 #include <atomic>
 #include <numeric>
-
-#include "kvrpcpb.pb.h"
 
 namespace pingcap::kv
 {

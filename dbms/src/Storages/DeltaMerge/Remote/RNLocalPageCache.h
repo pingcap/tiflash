@@ -21,10 +21,9 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
+#include <Storages/Transaction/Types.h>
 
 #include <boost/noncopyable.hpp>
-
-#include "Storages/Transaction/Types.h"
 
 namespace DB
 {

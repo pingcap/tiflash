@@ -16,7 +16,6 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/Disaggregated/WNEstablishDisaggTaskHandler.h>
 #include <Flash/Executor/QueryExecutorHolder.h>
 #include <Flash/executeQuery.h>

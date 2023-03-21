@@ -21,14 +21,13 @@
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteReadTask.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 #include <grpcpp/completion_queue.h>
 #include <kvproto/disaggregated.pb.h>
+#include <kvproto/kvrpcpb.pb.h>
 
 #include <cassert>
 #include <tuple>
-
-#include "Storages/Transaction/Types.h"
-#include "kvrpcpb.pb.h"
 
 namespace pingcap::kv
 {

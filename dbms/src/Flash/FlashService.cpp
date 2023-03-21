@@ -745,6 +745,7 @@ grpc::Status FlashService::FetchDisaggPages(
 
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const DM::DisaggTaskId task_id(request->snapshot_id());
+    // get the keyspace from meta, it is now used for debugging
     const auto keyspace_id = RequestUtils::deriveKeyspaceID(request->snapshot_id());
     auto logger = Logger::get(task_id);
 

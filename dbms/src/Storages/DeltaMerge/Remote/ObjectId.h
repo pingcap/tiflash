@@ -14,11 +14,10 @@
 
 #pragma once
 
+#include <Core/Types.h>
 #include <Storages/Transaction/Types.h>
 #include <common/types.h>
 #include <fmt/format.h>
-
-#include "Core/Types.h"
 
 namespace DB::DM::Remote
 {
