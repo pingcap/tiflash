@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <Common/setThreadName.h>
 #include <Debug/MockStorage.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/Disaggregated/WNEstablishDisaggTaskHandler.h>
 #include <Flash/Disaggregated/WNFetchPagesStreamWriter.h>
@@ -43,7 +44,9 @@
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
+#include <grpcpp/support/status.h>
 #include <grpcpp/support/status_code_enum.h>
+#include <kvproto/disaggregated.pb.h>
 
 #include <ext/scope_guard.h>
 
@@ -793,6 +796,31 @@ grpc::Status FlashService::FetchDisaggPages(
         LOG_ERROR(logger, "FetchDisaggPages meet unknown exception");
         return record_error(grpc::StatusCode::INTERNAL, "other exception");
     }
+}
+
+grpc::Status FlashService::GetDisaggConfig(grpc::ServerContext * grpc_context, const disaggregated::GetDisaggConfigRequest *, disaggregated::GetDisaggConfigResponse * response)
+{
+    if (!context->getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        return grpc::Status(
+            grpc::StatusCode::UNIMPLEMENTED,
+            fmt::format(
+                "can not handle GetDisaggConfig with mode={}",
+                magic_enum::enum_name(context->getSharedContextDisagg()->disaggregated_mode)));
+    }
+
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    const auto local_s3config = S3::ClientFactory::instance().getConfigCopy();
+    auto * s3_config = response->mutable_s3_config();
+    s3_config->set_endpoint(local_s3config.endpoint);
+    s3_config->set_bucket(local_s3config.bucket);
+    s3_config->set_root(local_s3config.root);
+
+    return grpc::Status::OK;
 }
 
 void FlashService::setMockStorage(MockStorage * mock_storage_)

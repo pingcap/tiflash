@@ -12,22 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/TiKVKeyValue.h>
+#pragma once
+
+#include <Flash/Coprocessor/ExecutionSummary.h>
 
 namespace DB
 {
-KeyspaceID DecodedTiKVKey::getKeyspaceID() const
-{
-    return TiKVKeyspaceID::getKeyspaceID(std::string_view(data(), size()));
-}
+class DAGContext;
 
-std::string_view DecodedTiKVKey::getUserKey() const
-{
-    return TiKVKeyspaceID::removeKeyspaceID(std::string_view(data(), size()));
-}
-
-std::string DecodedTiKVKey::makeKeyspacePrefix(KeyspaceID keyspace_id)
-{
-    return TiKVKeyspaceID::makeKeyspacePrefix(keyspace_id);
-}
+void fillTiExecutionSummary(
+    DAGContext & dag_context,
+    tipb::ExecutorExecutionSummary * execution_summary,
+    ExecutionSummary & current,
+    const String & executor_id,
+    bool force_fill_executor_id);
 } // namespace DB
