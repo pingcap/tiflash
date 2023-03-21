@@ -31,7 +31,7 @@ void TaskExecutionMetrics::updateOnRound(uint64_t execution_time_ns)
             return;
         if (max_execution_time_ns_of_a_round.compare_exchange_strong(cur_max_ns, execution_time_ns))
         {
-            GET_METRIC(tiflash_pipeline_scheduler, type_max_execution_time_ms_of_a_round).Set(max_execution_time_ns_of_a_round.load() / 1000);
+            GET_METRIC(tiflash_pipeline_scheduler, type_max_execution_time_ms_of_a_round).Set(max_execution_time_ns_of_a_round.load() / 1000.0);
             return;
         }
     }
