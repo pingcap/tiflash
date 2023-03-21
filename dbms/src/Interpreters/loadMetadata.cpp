@@ -161,7 +161,7 @@ void loadMetadata(Context & context)
         const auto & meta_file = database.second;
 
         auto task = [&load_database, &context, &db_name, &meta_file, has_force_restore_data_flag] {
-            load_database(context, db_name, meta_file, &LoadDatabasesPool::get(), has_force_restore_data_flag);
+            load_database(context, db_name, meta_file, &LoadTablesPool::get(), has_force_restore_data_flag);
         };
 
         LoadDatabasesPool::get().scheduleOrThrowOnError(task);
