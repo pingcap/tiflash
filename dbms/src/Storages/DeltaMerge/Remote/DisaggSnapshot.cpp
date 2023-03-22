@@ -32,7 +32,7 @@ SegmentPagesFetchTask DisaggReadSnapshot::popSegTask(TableID physical_table_id, 
         return SegmentPagesFetchTask::error(fmt::format("Segment task not found by table_id, table_id={}, segment_id={}", physical_table_id, segment_id));
     }
 
-    assert(table_iter->second->physical_table_id == physical_table_id);
+    assert(table_iter->second->ks_physical_table_id.second == physical_table_id);
     auto seg_task = table_iter->second->popTask(segment_id);
     if (!seg_task)
     {
@@ -51,8 +51,16 @@ SegmentPagesFetchTask DisaggReadSnapshot::popSegTask(TableID physical_table_id, 
     return task;
 }
 
+void DisaggReadSnapshot::iterateTableSnapshots(std::function<void(const DisaggPhysicalTableReadSnapshotPtr &)> fn) const
+{
+    std::shared_lock read_lock(mtx);
+    for (const auto & [_, table_snapshot] : table_snapshots)
+        fn(table_snapshot);
+}
+
 bool DisaggReadSnapshot::empty() const
 {
+    std::shared_lock read_lock(mtx);
     for (const auto & tbl : table_snapshots)
     {
         if (!tbl.second->empty())
@@ -61,8 +69,8 @@ bool DisaggReadSnapshot::empty() const
     return true;
 }
 
-DisaggPhysicalTableReadSnapshot::DisaggPhysicalTableReadSnapshot(TableID table_id_, SegmentReadTasks && tasks_)
-    : physical_table_id(table_id_)
+DisaggPhysicalTableReadSnapshot::DisaggPhysicalTableReadSnapshot(KeyspaceTableID ks_table_id_, SegmentReadTasks && tasks_)
+    : ks_physical_table_id(ks_table_id_)
 {
     for (auto && t : tasks_)
     {

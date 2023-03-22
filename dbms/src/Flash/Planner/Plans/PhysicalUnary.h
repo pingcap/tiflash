@@ -31,9 +31,10 @@ public:
         const String & executor_id_,
         const PlanType & type_,
         const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_)
-        : PhysicalPlanNode(executor_id_, type_, schema_, req_id)
+        : PhysicalPlanNode(executor_id_, type_, schema_, fine_grained_shuffle_, req_id)
         , child(child_)
     {
         RUNTIME_ASSERT(child, log, "children(0) shouldn't be nullptr");

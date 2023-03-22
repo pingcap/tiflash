@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -187,6 +187,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
 {
     for (int i = executors.size() - 1; i >= 0; i--)
     {
+        assert(executors[i].has_executor_id());
         switch (executors[i].tp())
         {
         case tipb::ExecType::TypeTableScan:
@@ -196,48 +197,33 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
             /// the executor name, it will result in the same order as it is
             /// in the dag_request, this is needed when filling execution_summary
             /// in DAGDriver
-            if (executors[i].has_executor_id())
-                source_name = executors[i].executor_id();
-            else
-                source_name = std::to_string(i) + "_tablescan";
+            source_name = executors[i].executor_id();
             break;
         case tipb::ExecType::TypeSelection:
             GET_METRIC(tiflash_coprocessor_executor_count, type_sel).Increment();
             assignOrThrowException(&selection, &executors[i], SEL_NAME);
-            if (executors[i].has_executor_id())
-                selection_name = executors[i].executor_id();
-            else
-                selection_name = std::to_string(i) + "_selection";
+            selection_name = executors[i].executor_id();
             break;
         case tipb::ExecType::TypeStreamAgg:
             RUNTIME_CHECK_MSG(executors[i].aggregation().group_by_size() == 0, STREAM_AGG_ERROR);
         case tipb::ExecType::TypeAggregation:
             GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
             assignOrThrowException(&aggregation, &executors[i], AGG_NAME);
-            if (executors[i].has_executor_id())
-                aggregation_name = executors[i].executor_id();
-            else
-                aggregation_name = std::to_string(i) + "_aggregation";
+            aggregation_name = executors[i].executor_id();
             break;
         case tipb::ExecType::TypeTopN:
             GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
             assignOrThrowException(&limit_or_topn, &executors[i], TOPN_NAME);
-            if (executors[i].has_executor_id())
-                limit_or_topn_name = executors[i].executor_id();
-            else
-                limit_or_topn_name = std::to_string(i) + "_limitOrTopN";
+            limit_or_topn_name = executors[i].executor_id();
             break;
         case tipb::ExecType::TypeLimit:
             GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
             assignOrThrowException(&limit_or_topn, &executors[i], LIMIT_NAME);
-            if (executors[i].has_executor_id())
-                limit_or_topn_name = executors[i].executor_id();
-            else
-                limit_or_topn_name = std::to_string(i) + "_limitOrTopN";
+            limit_or_topn_name = executors[i].executor_id();
             break;
         default:
             throw TiFlashException(
-                "Unsupported executor in DAG request: " + executors[i].DebugString(),
+                fmt::format("Unsupported executor in DAG request: {}", executors[i].DebugString()),
                 Errors::Coprocessor::Unimplemented);
         }
     }

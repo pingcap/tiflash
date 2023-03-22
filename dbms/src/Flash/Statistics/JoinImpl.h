@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,8 +43,6 @@ private:
     String build_side_child;
     bool is_spill_enabled = false;
     bool is_spilled = false;
-
-    BaseRuntimeStatistics non_joined_base;
 
     BaseRuntimeStatistics join_build_base;
 
