@@ -40,6 +40,8 @@ class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 class RNRemoteReadTask;
 using RNRemoteReadTaskPtr = std::shared_ptr<RNRemoteReadTask>;
+class RNRemoteTableReadTask;
+using RNRemoteTableReadTaskPtr = std::shared_ptr<RNRemoteTableReadTask>;
 } // namespace DM
 
 // Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
@@ -85,11 +87,16 @@ private:
     BlockInputStreams readFromWriteNode(
         const Context & db_context,
         unsigned num_streams);
-    DM::RNRemoteReadTaskPtr buildDisaggregatedTask(
+    DM::RNRemoteReadTaskPtr buildDisaggTasks(
         const Context & db_context,
         const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
+    void buildDisaggTask(
+        const Context & db_context,
+        const pingcap::coprocessor::BatchCopTask & batch_cop_task,
+        std::vector<DM::RNRemoteTableReadTaskPtr> & build_results,
+        std::mutex & build_results_lock);
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest>
-    buildDisaggregatedTaskForNode(
+    buildDisaggTaskForNode(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
     DM::RSOperatorPtr buildRSOperator(

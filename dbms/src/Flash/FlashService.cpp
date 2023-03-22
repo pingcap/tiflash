@@ -46,6 +46,7 @@
 #include <grpcpp/support/status_code_enum.h>
 
 #include <ext/scope_guard.h>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -643,12 +644,12 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
         current_memory_tracker = nullptr;
     });
 
-    auto record_error = [&](int flash_err_code, const String & err_msg) {
+    auto record_other_error = [&](int flash_err_code, const String & err_msg) {
         // Note: We intentinally do not remove the snapshot from the SnapshotManager
         // when this request is failed. Consider this case:
         // EstablishDisagg for A: ---------------- Failed --------------------------------------------- Cleanup Snapshot for A
         // EstablishDisagg for B: - Failed - RN retry EstablishDisagg for A+B -- InsertSnapshot for A+B ----- FetchPages (Boom!)
-        auto * err = response->mutable_error();
+        auto * err = response->mutable_error()->mutable_error_other();
         err->set_code(flash_err_code);
         err->set_msg(err_msg);
     };
@@ -660,51 +661,39 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
     }
     catch (const RegionException & e)
     {
-        for (const auto & region_id : e.unavailable_region)
-        {
-            auto * retry_region = response->add_retry_regions();
-            retry_region->set_id(region_id);
-            // Note: retry_region's version and epoch is not set, because we miss these information
-            // from the exception.
-        }
         LOG_INFO(logger, "EstablishDisaggTask meet RegionException {} (retryable), regions={}", e.message(), e.unavailable_region);
-        record_error(
-            ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR,
-            fmt::format("Retryable error: {}", e.message()));
+
+        auto * error = response->mutable_error()->mutable_error_region();
+        error->set_msg(e.message());
+        for (const auto & region_id : e.unavailable_region)
+            error->add_region_ids(region_id);
     }
     catch (const LockException & e)
     {
-        auto * retry_region = response->add_retry_regions();
-        retry_region->set_id(e.region_id);
-        // Note: retry_region's version and epoch is not set, because we miss these information
-        // from the exception.
+        LOG_INFO(logger, "EstablishDisaggTask meet LockException (retryable), region_id={} lock_version={}", e.region_id, e.lock_info->lock_version());
 
-        LOG_INFO(logger, "EstablishDisaggTask meet LockException (retryable), region_id={}", e.region_id);
-        // TODO: We may need to send this error back to TiDB? Otherwise TiDB
-        // may not resolve lock in time.
-        record_error(
-            ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR,
-            fmt::format("Retryable error: {}", e.message()));
+        auto * error = response->mutable_error()->mutable_error_locked();
+        error->mutable_locked()->CopyFrom(*e.lock_info);
     }
     catch (Exception & e)
     {
         LOG_ERROR(logger, "EstablishDisaggTask meet exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
-        record_error(e.code(), e.message());
+        record_other_error(e.code(), e.message());
     }
     catch (const pingcap::Exception & e)
     {
         LOG_ERROR(logger, "EstablishDisaggTask meet KV Client Exception: {}", e.message());
-        record_error(e.code(), e.message());
+        record_other_error(e.code(), e.message());
     }
     catch (std::exception & e)
     {
         LOG_ERROR(logger, "EstablishDisaggTask meet std::exception: {}", e.what());
-        record_error(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
+        record_other_error(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
     }
     catch (...)
     {
         LOG_ERROR(logger, "EstablishDisaggTask meet unknown exception");
-        record_error(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
+        record_other_error(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
     }
 
     LOG_DEBUG(
