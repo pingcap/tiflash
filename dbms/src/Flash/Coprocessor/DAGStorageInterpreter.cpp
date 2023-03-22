@@ -561,7 +561,8 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         {
             // We can also use current thread to resolve lock, but it will block next process.
             // So, force this region retry in another thread in CoprocessorBlockInputStream.
-            force_retry.emplace(e.region_id);
+            for (const auto & lock : e.locks)
+                force_retry.emplace(lock.first);
         }
         catch (const RegionException & e)
         {

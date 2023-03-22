@@ -673,10 +673,12 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
     }
     catch (const LockException & e)
     {
-        LOG_INFO(logger, "EstablishDisaggTask meet LockException (retryable), region_id={} lock_version={}", e.region_id, e.lock_info->lock_version());
+        LOG_INFO(logger, "EstablishDisaggTask meet LockException: {} (retryable)", e.message());
 
         auto * error = response->mutable_error()->mutable_error_locked();
-        error->mutable_locked()->CopyFrom(*e.lock_info);
+        error->set_msg(e.message());
+        for (const auto & lock : e.locks)
+            error->add_locked()->CopyFrom(*lock.second);
     }
     catch (Exception & e)
     {

@@ -232,23 +232,23 @@ void StorageDisaggregated::buildDisaggTask(
 
             LOG_INFO(
                 log,
-                "Received EstablishDisaggregated response with retryable error: Key is locked, addr={} lock={}",
-                batch_cop_task.store_addr,
-                error.locked().DebugString());
+                "Received EstablishDisaggregated response with retryable error: {}, addr={}",
+                error.msg(),
+                batch_cop_task.store_addr);
 
-            // TODO: Better to construct the Backoff according to remaining backoff time.
+            // Try to resolve all locks.
             kv::Backoffer bo(kv::copNextMaxBackoff);
-            kv::LockPtr lock = std::make_shared<kv::Lock>(error.locked());
             std::vector<uint64_t> pushed;
-            std::vector<kv::LockPtr> locks{lock};
+            std::vector<kv::LockPtr> locks{};
+            for (const auto & lock_info : error.locked())
+                locks.emplace_back(std::make_shared<kv::Lock>(lock_info));
             auto before_expired = cluster->lock_resolver->resolveLocks(bo, sender_target_mpp_task_id.query_id.start_ts, locks, pushed);
 
             // TODO: Use `pushed` to bypass large txn.
-            UNUSED(pushed);
-            UNUSED(before_expired);
+            LOG_DEBUG(log, "Finished resolve locks, n_locks={} pushed.size={} before_expired={}", locks.size(), pushed.size(), before_expired);
 
             throw Exception(
-                "Key is locked",
+                error.msg(),
                 ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
         }
         else
