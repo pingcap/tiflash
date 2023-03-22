@@ -265,7 +265,7 @@ void MPPTask::unregisterTask()
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
-    auto dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
+    dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
     TMTContext & tmt_context = context->getTMTContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions/mpp::DispatchTaskRequest::table_regions.
     /// The ones defined in tipb::TableScan will never be used and can be removed later.

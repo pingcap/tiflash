@@ -109,6 +109,8 @@ private:
 
     void initExchangeReceivers();
 
+    // To make sure dag_req is not destroyed before the mpp task ends.
+    tipb::DAGRequest dag_req;
     mpp::TaskMeta meta;
     MPPTaskId id;
 

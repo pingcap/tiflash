@@ -87,7 +87,7 @@ DAGRequest::DAGRequest(tipb::DAGRequest * dag_request_)
 
 void DAGRequest::checkOrSetExecutorId()
 {
-    if (isTreeBased())
+    if (is_tree_based)
     {
         // check duplicate executor_id for tree based request.
         std::unordered_set<String> ids;
@@ -125,13 +125,13 @@ const tipb::Executor & DAGRequest::rootExecutor() const
 
 void DAGRequest::traverse(std::function<bool(const tipb::Executor &)> && func) const
 {
-    if likely (dag_request)
-        traverseExecutors(dag_request, std::move(func));
+    check(dag_request, "dagrequest cannot be null");
+    traverseExecutors(dag_request, std::move(func));
 }
 
 void DAGRequest::traverseReverse(std::function<void(const tipb::Executor &)> && func) const
 {
-    if likely (dag_request)
-        traverseExecutorsReverse(dag_request, std::move(func));
+    check(dag_request, "dagrequest cannot be null");
+    traverseExecutorsReverse(dag_request, std::move(func));
 }
 } // namespace DB
