@@ -1,0 +1,41 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+FROM hub.pingcap.net/tiflash/tiflash-llvm-base:multi-arch as builder
+
+# copy tiflash directory to /build/tics
+COPY . /build/tics
+
+# build tiflash release
+RUN sh /build/tics/release-centos7-llvm/scripts/build-release.sh
+
+# package
+FROM hub.pingcap.net/tiflash/centos:7.9.2009-multi-arch
+
+USER root
+WORKDIR /root/
+
+ENV HOME /root/
+ENV TZ Asia/Shanghai
+ENV LD_LIBRARY_PATH /tiflash
+
+RUN yum makecache && \
+    yum -y install gdb strace net-tools bind-utils lsof tcpdump && \
+    yum clean all && \
+    rm -rf /var/cache/yum && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+COPY --from=builder /build/tics/release-centos7-llvm/tiflash /tiflash
+
+ENTRYPOINT ["/tiflash/tiflash", "server"]

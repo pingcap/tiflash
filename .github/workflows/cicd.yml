@@ -1,0 +1,97 @@
+name: CICD
+
+on:
+  workflow_dispatch:
+    inputs:
+      gcr_target:
+        description: "push to gcr for daily run (leave empty to skip)"
+        type: choice
+        required: false
+        default: ""
+        options:
+          - ""
+          - "tiflash"
+          - "tiflash-compute"
+
+jobs:
+  build-arm64:
+    name: Build ARM64 Image
+    runs-on: arm64
+    timeout-minutes: 180
+    steps:
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Build Docker Image
+        run: |
+          docker build -f release-centos7-llvm/dockerfiles/Dockerfile-tiflash-cse-multiarch -t xexplorersun/tiflash:cse-${{ github.sha }}-arm64 .
+      - name: Push image
+        run: |
+          docker push xexplorersun/tiflash:cse-${{ github.sha }}-arm64
+  build-amd64:
+    name: Build AMD64 Image
+    runs-on: amd64
+    timeout-minutes: 180
+    outputs:
+      image: tiflash-cse:${{ github.sha }}-amd64
+    steps:
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          ref: ${{ github.event.inputs.branch }}
+          fetch-depth: 0
+
+      - name: Build Docker Image
+        run: |
+          docker build -f release-centos7-llvm/dockerfiles/Dockerfile-tiflash-cse-multiarch -t xexplorersun/tiflash:cse-${{ github.sha }}-amd64 .
+      - name: Push image
+        run: |
+          docker push xexplorersun/tiflash:cse-${{ github.sha }}-amd64
+  multi-arch:
+    name: Create Multi-Architecture Image
+    runs-on: arm64
+    needs: ["build-arm64", "build-amd64"]
+    steps:
+      - name: create-manifest
+        run: |
+          docker manifest create xexplorersun/tiflash:cse-${{ github.sha }} \
+          --amend xexplorersun/tiflash:cse-${{ github.sha }}-amd64 \
+          --amend xexplorersun/tiflash:cse-${{ github.sha }}-arm64
+      - name: push-manifest
+        run: |
+          docker manifest push xexplorersun/tiflash:cse-${{ github.sha }}
+
+  sync-image-tiflash:
+    name: Sync image to GCR tiflash
+    runs-on: arm64
+    needs: ["multi-arch"]
+    if: ${{ inputs.gcr_target == 'tiflash' }}
+    steps:
+      - name: create-manifest
+        run: |
+          docker manifest create xexplorersun/tiflash:v6.6.0 \
+          --amend xexplorersun/tiflash:cse-${{ github.sha }}-amd64 \
+          --amend xexplorersun/tiflash:cse-${{ github.sha }}-arm64
+      - name: push-manifest
+        run: |
+          docker manifest push xexplorersun/tiflash:v6.6.0
+
+  sync-image-tiflash-compute:
+    name: Sync image to GCR tiflash-compute
+    runs-on: arm64
+    needs: ["multi-arch"]
+    if: ${{ inputs.gcr_target == 'tiflash-compute' }}
+    steps:
+      - name: create-manifest
+        run: |
+          docker manifest create xexplorersun/tiflash-compute:v6.6.0 \
+          --amend xexplorersun/tiflash:cse-${{ github.sha }}-amd64 \
+          --amend xexplorersun/tiflash:cse-${{ github.sha }}-arm64
+      - name: push-manifest
+        run: |
+          docker manifest push xexplorersun/tiflash-compute:v6.6.0

@@ -396,7 +396,6 @@ python3 release-centos7-llvm/scripts/run-clang-tidy.py -p cmake-build-debug -j 2
 # if there are too much errors, you can try to run the script again with `-fix`
 python3 format-diff.py --diff_from $merge_base
 ```
-
 ## License
 
 TiFlash is under the Apache 2.0 license. See the [LICENSE](./LICENSE) file for details.
