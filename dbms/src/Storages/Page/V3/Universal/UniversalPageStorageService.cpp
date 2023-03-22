@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/File.h>
@@ -32,6 +33,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_stop_background_checkpoint_upload[];
+}
 
 UniversalPageStorageService::UniversalPageStorageService(Context & global_context_)
     : global_context(global_context_)
@@ -102,6 +107,12 @@ bool UniversalPageStorageService::uploadCheckpoint()
     bool v = false;
     if (!is_checkpoint_uploading.compare_exchange_strong(v, true))
         return false;
+
+    fiu_do_on(FailPoints::force_stop_background_checkpoint_upload, {
+        // Disable background upload checkpoint process in unit tests
+        LOG_WARNING(log, "!!!force disable UniversalPageStorageService::uploadCheckpoint!!!");
+        return false;
+    });
 
     SCOPE_EXIT({
         bool is_running = true;

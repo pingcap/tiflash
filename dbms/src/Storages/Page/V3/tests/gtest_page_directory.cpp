@@ -51,7 +51,7 @@ using u128::PageEntriesEdit;
 
 TEST(ExternalIdsByNamespaceTest, Simple)
 {
-    NamespaceId ns_id = 100;
+    NamespaceID ns_id = 100;
     ExternalIdsByNamespace<typename u128::PageIdTrait> external_ids_by_ns;
 
     {

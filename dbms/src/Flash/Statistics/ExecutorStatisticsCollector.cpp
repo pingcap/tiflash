@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,30 +13,45 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Statistics/CommonExecutorImpl.h>
 #include <Flash/Statistics/ExchangeReceiverImpl.h>
 #include <Flash/Statistics/ExchangeSenderImpl.h>
+#include <Flash/Statistics/ExecutionSummaryHelper.h>
 #include <Flash/Statistics/ExecutorStatisticsCollector.h>
 #include <Flash/Statistics/JoinImpl.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Flash/Statistics/traverseExecutors.h>
-
 namespace DB
 {
-DAGContext & ExecutorStatisticsCollector::getDAGContext() const
+namespace
 {
-    assert(dag_context);
-    return *dag_context;
+RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context)
+{
+    RemoteExecutionSummary exchange_execution_summary;
+    for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
+    {
+        for (const auto & stream_ptr : map_entry.second)
+        {
+            if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()); exchange_receiver_stream_ptr)
+            {
+                exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
+            }
+        }
+    }
+    return exchange_execution_summary;
 }
+} // namespace
 
-String ExecutorStatisticsCollector::resToJson() const
+String ExecutorStatisticsCollector::profilesToJson() const
 {
     FmtBuffer buffer;
     buffer.append("[");
     buffer.joinStr(
-        res.cbegin(),
-        res.cend(),
+        profiles.cbegin(),
+        profiles.cend(),
         [](const auto & s, FmtBuffer & fb) {
             fb.append(s.second->toJson());
         },
@@ -47,40 +62,159 @@ String ExecutorStatisticsCollector::resToJson() const
 
 void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
 {
-    assert(dag_context_);
     dag_context = dag_context_;
-    assert(dag_context->dag_request);
-    traverseExecutors(dag_context->dag_request, [&](const tipb::Executor & executor) {
-        RUNTIME_CHECK(executor.has_executor_id());
-        const auto & executor_id = executor.executor_id();
-        if (!append<
-                AggStatistics,
-                ExchangeReceiverStatistics,
-                ExchangeSenderStatistics,
-                FilterStatistics,
-                JoinStatistics,
-                LimitStatistics,
-                ProjectStatistics,
-                SortStatistics,
-                TableScanStatistics,
-                TopNStatistics,
-                WindowStatistics,
-                ExpandStatistics>(executor_id, &executor))
+    assert(dag_context);
+
+    if likely (dag_context->dag_request)
+    {
+        traverseExecutors(dag_context->dag_request, [&](const tipb::Executor & executor) {
+            RUNTIME_CHECK(executor.has_executor_id());
+            if (!append<
+                    AggStatistics,
+                    ExchangeReceiverStatistics,
+                    ExchangeSenderStatistics,
+                    FilterStatistics,
+                    JoinStatistics,
+                    LimitStatistics,
+                    ProjectStatistics,
+                    SortStatistics,
+                    TableScanStatistics,
+                    TopNStatistics,
+                    WindowStatistics,
+                    ExpandStatistics>(&executor))
+            {
+                throw TiFlashException(
+                    fmt::format("Unknown executor type, executor_id: {}", executor.executor_id()),
+                    Errors::Coprocessor::Internal);
+            }
+            return true;
+        });
+
+        fillListBasedExecutorsChild();
+        fillTreeBasedExecutorsChildren();
+    }
+}
+
+void ExecutorStatisticsCollector::fillListBasedExecutorsChild()
+{
+    if (dag_context->dag_request->executors_size() > 0)
+    {
+        // fill list-based executors child
+        auto size = dag_context->dag_request->executors_size();
+        RUNTIME_CHECK(size > 0);
+        const auto & executors = dag_context->dag_request->executors();
+        String child;
+        for (int i = 0; i < size; ++i)
         {
-            throw TiFlashException(
-                fmt::format("Unknown executor type, executor_id: {}", executor_id),
-                Errors::Coprocessor::Internal);
+            const auto & executor_id = executors[i].executor_id();
+            if (i != 0)
+                profiles[executor_id]->setChild(child);
+            child = executor_id;
         }
-        return true;
-    });
+    }
+}
+
+void ExecutorStatisticsCollector::fillTreeBasedExecutorsChildren()
+{
+    if (dag_context->dag_request->has_root_executor())
+    {
+        traverseExecutors(dag_context->dag_request, [&](const tipb::Executor & executor) {
+            // set children for tree-based executors
+            std::vector<String> children;
+            getChildren(executor).forEach([&](const tipb::Executor & child) {
+                RUNTIME_CHECK(child.has_executor_id());
+                children.push_back(child.executor_id());
+            });
+            profiles[executor.executor_id()]->setChildren(children);
+            return true;
+        });
+    }
+}
+
+tipb::SelectResponse ExecutorStatisticsCollector::genExecutionSummaryResponse()
+{
+    tipb::SelectResponse response;
+    fillExecuteSummaries(response);
+    return response;
+}
+
+void ExecutorStatisticsCollector::fillExecutionSummary(
+    tipb::SelectResponse & response,
+    const String & executor_id,
+    const BaseRuntimeStatistics & statistic,
+    UInt64 join_build_time,
+    const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const
+{
+    ExecutionSummary current;
+    current.fill(statistic);
+    current.time_processed_ns += join_build_time;
+    // merge detailed table scan profile
+    if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
+        current.scan_context->merge(*(iter->second));
+
+    current.time_processed_ns += dag_context->compile_time_ns;
+    fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), current, executor_id, force_fill_executor_id);
+}
+
+void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & response)
+{
+    if (!dag_context->collect_execution_summaries)
+        return;
+
+    collectRuntimeDetails();
+
+    fillLocalExecutionSummaries(response);
+
+    // TODO: remove filling remote execution summaries
+    fillRemoteExecutionSummaries(response);
 }
 
 void ExecutorStatisticsCollector::collectRuntimeDetails()
 {
     assert(dag_context);
-    for (const auto & entry : res)
-    {
+    for (const auto & entry : profiles)
         entry.second->collectRuntimeDetail();
+}
+
+void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectResponse & response)
+{
+    if (dag_context->return_executor_id)
+    {
+        // fill in tree-based executors' execution summary
+        for (auto & p : profiles)
+            fillExecutionSummary(
+                response,
+                p.first,
+                p.second->getBaseRuntimeStatistics(),
+                p.second->processTimeForJoinBuild(),
+                dag_context->scan_context_map);
+    }
+    else
+    {
+        // fill in list-based executors' execution summary
+        RUNTIME_CHECK(profiles.size() == dag_context->list_based_executors_order.size());
+        for (const auto & executor_id : dag_context->list_based_executors_order)
+        {
+            auto it = profiles.find(executor_id);
+            RUNTIME_CHECK(it != profiles.end());
+            fillExecutionSummary(
+                response,
+                executor_id,
+                it->second->getBaseRuntimeStatistics(),
+                0, // No join executors in list-based executors
+                dag_context->scan_context_map);
+        }
     }
 }
+
+void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectResponse & response)
+{
+    // TODO: support cop remote read and disaggregated mode.
+    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context);
+
+    // fill execution_summaries from remote executor received by exchange.
+    for (auto & p : exchange_execution_summary.execution_summaries)
+        fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), p.second, p.first, force_fill_executor_id);
+}
+
 } // namespace DB

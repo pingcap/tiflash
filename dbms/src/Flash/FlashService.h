@@ -97,6 +97,8 @@ public:
     // from the TiFlash write node.
     grpc::Status FetchDisaggPages(grpc::ServerContext * grpc_context, const disaggregated::FetchDisaggPagesRequest * request, grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer) override;
 
+    grpc::Status GetDisaggConfig(grpc::ServerContext * grpc_context, const disaggregated::GetDisaggConfigRequest * request, disaggregated::GetDisaggConfigResponse * response) override;
+
     void setMockStorage(MockStorage * mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
     Context * getContext() { return context; }

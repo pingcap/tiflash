@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ struct BaseRuntimeStatistics
     size_t rows = 0;
     size_t blocks = 0;
     size_t bytes = 0;
-
+    size_t concurrency = 0;
     UInt64 execution_time_ns = 0;
 
     void append(const BlockStreamProfileInfo &);

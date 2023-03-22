@@ -49,7 +49,6 @@ public:
     static StableValueSpacePtr createFromCheckpoint( //
         DMContext & context,
         UniversalPageStoragePtr temp_ps,
-        TableID ns_id,
         PageIdU64 stable_id,
         WriteBatches & wbs);
 
