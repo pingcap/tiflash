@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Core/Block.h>
+#include <Operators/OperatorProfileInfo.h>
 
 #include <memory>
 
@@ -40,6 +41,13 @@ enum class OperatorStatus
     NEED_INPUT,
     // means that SourceOp/TransformOp outputs a block as input to the subsequent operators.
     HAS_OUTPUT,
+};
+
+enum class OperatorType
+{
+    Source,
+    Transform,
+    Sink,
 };
 
 // TODO support operator profile info like `BlockStreamProfileInfo`.
@@ -80,8 +88,15 @@ public:
         header = header_;
     }
 
+    void setProfileInfo(OperatorProfileInfoPtr profile_info_)
+    {
+        profile_info = profile_info_;
+        profile_info->start();
+    }
+
 protected:
     PipelineExecutorStatus & exec_status;
+    OperatorProfileInfoPtr profile_info;
     const LoggerPtr log;
     Block header;
 };

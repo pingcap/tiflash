@@ -30,9 +30,11 @@ class ExecutorStatisticsCollector
 {
 public:
     explicit ExecutorStatisticsCollector(const String & req_id,
-                                         bool force_fill_executor_id_ = false)
+                                         bool force_fill_executor_id_ = false,
+                                         bool enable_pipeline_ = false)
         : log(Logger::get(req_id))
         , force_fill_executor_id(force_fill_executor_id_)
+        , enable_pipeline(enable_pipeline_)
     {}
 
     void initialize(DAGContext * dag_context_);
@@ -47,6 +49,8 @@ public:
 
 private:
     void collectRuntimeDetails();
+
+    void collectRuntimeDetailsForPipeline();
 
     void fillLocalExecutionSummaries(tipb::SelectResponse & response);
 
@@ -87,6 +91,7 @@ private:
     std::map<String, ExecutorStatisticsPtr> profiles;
     const LoggerPtr log;
     bool force_fill_executor_id; // for testing list based executors
+    bool enable_pipeline;
 };
 using ExecutorStatisticsCollectorPtr = std::unique_ptr<ExecutorStatisticsCollector>;
 } // namespace DB

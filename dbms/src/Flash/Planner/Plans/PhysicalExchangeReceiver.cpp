@@ -27,6 +27,8 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <fmt/format.h>
 
+#include "Operators/Operator.h"
+
 namespace DB
 {
 PhysicalExchangeReceiver::PhysicalExchangeReceiver(
@@ -96,7 +98,7 @@ void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline,
 void PhysicalExchangeReceiver::buildPipelineExecGroup(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
-    Context & /*context*/,
+    Context & context,
     size_t concurrency)
 {
     if (fine_grained_shuffle.enable())
@@ -104,13 +106,17 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
 
     group_builder.init(concurrency);
     size_t partition_id = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(
-            exec_status,
-            log->identifier(),
-            mpp_exchange_receiver,
-            /*stream_id=*/fine_grained_shuffle.enable() ? partition_id++ : 0));
-    });
+    group_builder.transform(
+        [&](auto & builder) {
+            builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(
+                exec_status,
+                log->identifier(),
+                mpp_exchange_receiver,
+                /*stream_id=*/fine_grained_shuffle.enable() ? partition_id++ : 0));
+        },
+        context,
+        executor_id,
+        OperatorType::Source);
 }
 
 void PhysicalExchangeReceiver::finalize(const Names & parent_require)

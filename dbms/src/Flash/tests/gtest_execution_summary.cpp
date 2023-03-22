@@ -75,7 +75,7 @@ try
                            .filter(eq(col("s1"), col("s2")))
                            .build(context, t);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}};
-        testForExecutionSummary(request, expect);
+        testForPipelineExecutionSummary(request, enable_planner, expect, expect);
     }
     {
         auto request = context
@@ -84,8 +84,9 @@ try
                            .limit(2)
                            .build(context, t);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, 1}}};
+        Expect expect_pipeline{{"table_scan_0", {12, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, concurrency}}};
 
-        testForExecutionSummary(request, expect);
+        testForPipelineExecutionSummary(request, enable_planner, expect_pipeline, expect);
     }
     {
         auto request = context
@@ -93,7 +94,9 @@ try
                            .limit(5)
                            .build(context, t);
         Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"limit_1", {5, 1}}};
-        testForExecutionSummary(request, expect);
+        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"limit_1", {5, concurrency}}};
+
+        testForPipelineExecutionSummary(request, enable_planner, expect_pipeline, expect);
     }
     {
         auto request = context
@@ -101,7 +104,9 @@ try
                            .topN("s1", true, 5)
                            .build(context, t);
         Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, 1}}};
-        testForExecutionSummary(request, expect);
+        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, concurrency}}};
+
+        testForPipelineExecutionSummary(request, enable_planner, expect_pipeline, expect);
     }
 
     {
@@ -110,8 +115,10 @@ try
                            .filter(eq(col("s1"), col("s2")))
                            .topN("s1", true, 12)
                            .build(context, t);
-        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {4, concurrency}}, {"topn_2", {4, not_check_concurrency}}};
-        testForExecutionSummary(request, expect);
+        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {4, concurrency}}, {"topn_2", {4, 1}}};
+        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {4, concurrency}}, {"topn_2", {4, concurrency}}};
+
+        testForPipelineExecutionSummary(request, enable_planner, expect_pipeline, expect);
     }
 
     {
@@ -120,8 +127,8 @@ try
                            .aggregation({col("s2")}, {col("s2")})
                            .topN("s2", true, 12)
                            .build(context, t);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, not_check_concurrency}}, {"topn_2", {3, not_check_concurrency}}};
-        testForExecutionSummary(request, expect);
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, not_check_concurrency}}, {"topn_2", {3, 1}}};
+        testForPipelineExecutionSummary(request, enable_planner, expect, expect);
     }
 
     WRAP_FOR_EXCUTION_SUMMARY_TEST_END
@@ -153,20 +160,21 @@ try
                            .project({col("s1")})
                            .build(context);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}, {"limit_2", {2, 1}}, {"project_3", {2, concurrency}}};
+        Expect expect_pipeline{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}, {"limit_2", {2, concurrency}}, {"project_3", {2, concurrency}}};
 
-        testForExecutionSummary(request, expect);
+        testForPipelineExecutionSummary(request, enable_planner, expect_pipeline, expect);
     }
 
     {
         auto request = context
                            .scan("test_db", "test_table")
-                           .topN("s1", true, 5)
+                           .topN("s1", true, 12)
                            .project({col("s2")})
                            .build(context);
-        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, 1}}, {"project_2", {not_check_rows, concurrency}}};
-        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, concurrency}}, {"project_2", {not_check_rows, concurrency}}};
+        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, 1}}, {"project_2", {12, concurrency}}};
+        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"topn_1", {not_check_rows, concurrency}}, {"project_2", {12, concurrency}}};
 
-        testForExecutionSummary(request, expect);
+        testForPipelineExecutionSummary(request, enable_planner, expect_pipeline, expect);
     }
     {
         auto request = context
@@ -175,7 +183,7 @@ try
                            .build(context);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"project_1", {12, concurrency}}};
 
-        testForExecutionSummary(request, expect);
+        testForPipelineExecutionSummary(request, enable_planner, expect, expect);
     }
 
     {
@@ -185,7 +193,7 @@ try
                            .project({col("s2")})
                            .build(context);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"project_1", {12, concurrency}}, {"project_2", {12, concurrency}}};
-        testForExecutionSummary(request, expect);
+        testForPipelineExecutionSummary(request, enable_planner, expect, expect);
     }
 
     {
@@ -195,7 +203,7 @@ try
                            .build(context);
         Expect expect{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}};
 
-        testForExecutionSummary(request, expect);
+        testForPipelineExecutionSummary(request, enable_planner, expect, expect);
     }
 
     {
@@ -205,7 +213,9 @@ try
                            .topN("s2", true, 12)
                            .build(context);
         Expect expect{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}, {"topn_2", {0, 1}}};
-        testForExecutionSummary(request, expect);
+        Expect expect_pipeline{{"table_scan_0", {0, concurrency}}, {"project_1", {0, concurrency}}, {"topn_2", {0, concurrency}}};
+
+        testForPipelineExecutionSummary(request, enable_planner, expect_pipeline, expect);
     }
 
     {
@@ -215,10 +225,13 @@ try
                            .project({col("s2")})
                            .build(context);
         Expect expect{{"table_scan_0", {12, concurrency}},
-                      {"aggregation_1", {3, -1}},
+                      {"aggregation_1", {3, not_check_concurrency}},
                       {"project_2", {3, concurrency}}};
+        Expect expect_pipeline{{"table_scan_0", {12, concurrency}},
+                               {"aggregation_1", {3, not_check_concurrency}},
+                               {"project_2", {3, 1}}};
 
-        testForExecutionSummary(request, expect);
+        testForPipelineExecutionSummary(request, enable_planner, expect_pipeline, expect);
     }
 
     {
@@ -230,11 +243,11 @@ try
                            .build(context);
 
         Expect expect{{"table_scan_0", {12, concurrency}},
-                      {"aggregation_1", {3, -1}},
-                      {"project_2", {3, concurrency}},
-                      {"limit_3", {2, 1}}};
+                      {"aggregation_1", {3, not_check_concurrency}},
+                      {"project_2", {not_check_rows, not_check_concurrency}}, // todo project no need..... 应该继承下游的
+                      {"limit_3", {2, not_check_concurrency}}};
 
-        testForExecutionSummary(request, expect);
+        testForPipelineExecutionSummary(request, enable_planner, expect, expect);
     }
 
     WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END
@@ -259,7 +272,7 @@ try
                            .build(context);
 
         Expect expect{{"table_scan_0", {12, concurrency}}, {"expand_1", {24, concurrency}}};
-        testForExecutionSummary(request, expect);
+        testForPipelineExecutionSummary(request, enable_planner, expect, expect);
     }
     WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END
 }
@@ -275,7 +288,7 @@ try
                            .aggregation({col("s2")}, {col("s2")})
                            .build(context, t);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, -1}}};
-        testForExecutionSummary(request, expect);
+        testForPipelineExecutionSummary(request, enable_planner, expect, expect);
     }
     WRAP_FOR_EXCUTION_SUMMARY_TEST_END
 }

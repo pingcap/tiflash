@@ -24,6 +24,8 @@
 #include <Interpreters/Context.h>
 #include <Operators/ExchangeSenderSinkOp.h>
 
+#include "Operators/Operator.h"
+
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalExchangeSender::build(
@@ -99,24 +101,28 @@ void PhysicalExchangeSender::buildPipelineExecGroup(
         RUNTIME_CHECK(fine_grained_shuffle.stream_count <= maxFineGrainedStreamCount, fine_grained_shuffle.stream_count);
     }
 
-    group_builder.transform([&](auto & builder) {
-        // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
-            partition_col_ids,
-            partition_col_collators,
-            exchange_type,
-            context.getSettingsRef().dag_records_per_chunk,
-            context.getSettingsRef().batch_send_min_limit,
-            *context.getDAGContext(),
-            fine_grained_shuffle.enable(),
-            fine_grained_shuffle.stream_count,
-            fine_grained_shuffle.batch_size,
-            compression_mode,
-            context.getSettingsRef().batch_send_min_limit_compression,
-            log->identifier(),
-            /*is_async=*/true);
-        builder.setSinkOp(std::make_unique<ExchangeSenderSinkOp>(exec_status, log->identifier(), std::move(response_writer)));
-    });
+    group_builder.transform(
+        [&](auto & builder) {
+            // construct writer
+            std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
+                partition_col_ids,
+                partition_col_collators,
+                exchange_type,
+                context.getSettingsRef().dag_records_per_chunk,
+                context.getSettingsRef().batch_send_min_limit,
+                *context.getDAGContext(),
+                fine_grained_shuffle.enable(),
+                fine_grained_shuffle.stream_count,
+                fine_grained_shuffle.batch_size,
+                compression_mode,
+                context.getSettingsRef().batch_send_min_limit_compression,
+                log->identifier(),
+                /*is_async=*/true);
+            builder.setSinkOp(std::make_unique<ExchangeSenderSinkOp>(exec_status, log->identifier(), std::move(response_writer)));
+        },
+        context,
+        executor_id,
+        OperatorType::Sink);
 }
 
 void PhysicalExchangeSender::finalize(const Names & parent_require)

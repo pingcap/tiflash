@@ -77,13 +77,21 @@ void PhysicalTopN::buildPipelineExecGroup(
 {
     if (!before_sort_actions->getActions().empty())
     {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_sort_actions));
-        });
+        group_builder.transform(
+            [&](auto & builder) {
+                builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_sort_actions));
+            },
+            context,
+            executor_id,
+            OperatorType::Transform);
     }
-    group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<TopNTransformOp>(exec_status, log->identifier(), order_descr, limit, context.getSettingsRef().max_block_size));
-    });
+    group_builder.transform(
+        [&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<TopNTransformOp>(exec_status, log->identifier(), order_descr, limit, context.getSettingsRef().max_block_size));
+        },
+        context,
+        executor_id,
+        OperatorType::Transform);
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)

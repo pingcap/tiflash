@@ -85,12 +85,16 @@ void PhysicalExpand::expandTransform(DAGPipeline & child_pipeline)
 void PhysicalExpand::buildPipelineExecGroup(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
-    Context & /*context*/,
+    Context & context,
     size_t /*concurrency*/)
 {
-    group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expand_actions));
-    });
+    group_builder.transform(
+        [&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expand_actions));
+        },
+        context,
+        executor_id,
+        OperatorType::Transform);
 }
 
 void PhysicalExpand::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)

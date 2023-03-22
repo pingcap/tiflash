@@ -16,11 +16,25 @@
 
 namespace DB
 {
+void registerProfileInfo(PipelineExecBuilder & builder, OperatorProfileInfoGroup & profile_group, OperatorType type)
+{
+    auto profile = std::make_shared<OperatorProfileInfo>();
+    if (type == OperatorType::Source)
+        builder.source_op->setProfileInfo(profile);
+    else if (type == OperatorType::Transform)
+        builder.transform_ops.back()->setProfileInfo(profile);
+    else if (type == OperatorType::Sink)
+        builder.sink_op->setProfileInfo(profile);
+
+    profile_group.emplace_back(profile);
+}
+
 void PipelineExecBuilder::setSourceOp(SourceOpPtr && source_op_)
 {
     assert(!source_op && source_op_);
     source_op = std::move(source_op_);
 }
+
 void PipelineExecBuilder::appendTransformOp(TransformOpPtr && transform_op)
 {
     assert(source_op && transform_op);
@@ -28,6 +42,7 @@ void PipelineExecBuilder::appendTransformOp(TransformOpPtr && transform_op)
     transform_op->transformHeader(header);
     transform_ops.push_back(std::move(transform_op));
 }
+
 void PipelineExecBuilder::setSinkOp(SinkOpPtr && sink_op_)
 {
     assert(!sink_op && sink_op_);

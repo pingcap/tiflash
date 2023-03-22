@@ -103,7 +103,7 @@ void serializeSelection(const String & executor_id, const tipb::Selection & sel,
             serializeExpression(expr, buf);
         },
         " and ");
-    buf.append("}\n");
+    buf.append("\n");
 }
 
 void serializeLimit(const String & executor_id, const tipb::Limit & limit, FmtBuffer & buf)

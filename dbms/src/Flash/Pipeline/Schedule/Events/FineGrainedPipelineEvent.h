@@ -15,19 +15,20 @@
 #pragma once
 
 #include <Flash/Pipeline/Exec/PipelineExec.h>
-#include <Flash/Pipeline/Schedule/Events/Event.h>
-
+#include <Flash/Pipeline/Schedule/Events/PipelineEvent.h>
 namespace DB
 {
-class FineGrainedPipelineEvent : public Event
+class FineGrainedPipelineEvent : public PipelineEvent
 {
 public:
     FineGrainedPipelineEvent(
         PipelineExecutorStatus & exec_status_,
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
+        Context & context_,
+        size_t concurrency_,
         PipelineExecPtr && pipeline_exec_)
-        : Event(exec_status_, std::move(mem_tracker_), req_id)
+        : PipelineEvent(exec_status_, std::move(mem_tracker_), req_id, context_, concurrency_)
         , pipeline_exec(std::move(pipeline_exec_))
     {
         assert(pipeline_exec);

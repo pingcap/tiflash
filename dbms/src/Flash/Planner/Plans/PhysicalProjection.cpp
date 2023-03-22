@@ -149,14 +149,18 @@ void PhysicalProjection::buildBlockInputStreamImpl(DAGPipeline & pipeline, Conte
 void PhysicalProjection::buildPipelineExecGroup(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
-    Context & /*context*/,
+    Context & context,
     size_t /*concurrency*/)
 {
     if (project_actions && !project_actions->getActions().empty())
     {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), project_actions));
-        });
+        group_builder.transform(
+            [&](auto & builder) {
+                builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), project_actions));
+            },
+            context,
+            executor_id,
+            OperatorType::Transform);
     }
 }
 

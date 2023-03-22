@@ -23,6 +23,8 @@
 #include <Interpreters/Context.h>
 #include <Operators/BlockInputStreamSourceOp.h>
 
+#include "Operators/Operator.h"
+
 namespace DB
 {
 PhysicalMockExchangeReceiver::PhysicalMockExchangeReceiver(
@@ -68,14 +70,18 @@ void PhysicalMockExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipel
 void PhysicalMockExchangeReceiver::buildPipelineExecGroup(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
-    Context & /*context*/,
+    Context & context,
     size_t /*concurrency*/)
 {
     group_builder.init(mock_streams.size());
     size_t i = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
-    });
+    group_builder.transform(
+        [&](auto & builder) {
+            builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
+        },
+        context,
+        executor_id,
+        OperatorType::Source);
 }
 
 void PhysicalMockExchangeReceiver::finalize(const Names & parent_require)

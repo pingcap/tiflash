@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <unordered_map>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
@@ -31,6 +32,7 @@
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
+#include <Operators/OperatorProfileInfo.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -62,6 +64,12 @@ struct JoinExecuteInfo
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 class ProcessListEntry;
+
+// a group of profile for same operator
+using OperatorProfileInfoGroup = std::vector<OperatorProfileInfoPtr>;
+
+// a group of profile for same executor
+using ExecutorProfileInfo = std::vector<OperatorProfileInfoGroup>;
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 {
@@ -143,6 +151,7 @@ public:
     DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
 
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
+    std::unordered_map<String, ExecutorProfileInfo> & getPipelineProfilesMap();
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
@@ -336,6 +345,10 @@ private:
     TableLockHolders table_locks;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
+
+    /// executor_id, ExecutorProfileInfo
+    std::unordered_map<String, ExecutorProfileInfo> pipeline_profiles_map;
+
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
     std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo

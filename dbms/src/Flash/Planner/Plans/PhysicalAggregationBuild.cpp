@@ -13,10 +13,15 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalAggregationBuild.h>
 #include <Interpreters/Context.h>
 #include <Operators/AggregateSinkOp.h>
 #include <Operators/ExpressionTransformOp.h>
+#include <Operators/OperatorProfileInfo.h>
+
+#include "Operators/Operator.h"
 
 namespace DB
 {
@@ -28,15 +33,25 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
 {
     if (!before_agg_actions->getActions().empty())
     {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_agg_actions));
-        });
+        group_builder.transform(
+            [&](auto & builder) {
+                builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_agg_actions));
+            },
+            context,
+            executor_id,
+            OperatorType::Transform);
     }
 
+    OperatorProfileInfoGroup profile_group;
+    profile_group.reserve(group_builder.concurrency);
     size_t build_index = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSinkOp(std::make_unique<AggregateSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
-    });
+    group_builder.transform(
+        [&](auto & builder) {
+            builder.setSinkOp(std::make_unique<AggregateSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
+        },
+        context,
+        executor_id,
+        OperatorType::Sink);
 
     Block before_agg_header = group_builder.getCurrentHeader();
     size_t concurrency = group_builder.concurrency;

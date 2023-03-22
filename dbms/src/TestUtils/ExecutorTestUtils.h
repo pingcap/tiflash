@@ -132,11 +132,26 @@ public:
     static constexpr int not_check_rows = -1;
     static constexpr UInt64 not_check_concurrency = -1;
 
-
     void testForExecutionSummary(
         const std::shared_ptr<tipb::DAGRequest> & request,
         const Expect & expect,
+        bool enable_planner = false,
+        bool enable_pipeline = false,
         size_t concurrency = 10);
+
+    void testForPipelineExecutionSummary(const std::shared_ptr<tipb::DAGRequest> & request,
+                                         bool enable_planner,
+                                         const Expect & expect_pipeline,
+                                         const Expect & expect_pull)
+    {
+        if (enable_planner)
+        {
+            enablePipeline(true);
+            testForExecutionSummary(request, expect_pipeline, enable_planner, true);
+        }
+        enablePipeline(false);
+        testForExecutionSummary(request, expect_pull, enable_planner, false);
+    }
 
 private:
     void executeExecutor(

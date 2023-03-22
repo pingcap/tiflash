@@ -24,6 +24,8 @@
 #include <Flash/Statistics/JoinImpl.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Flash/Statistics/traverseExecutors.h>
+
+#include "tipb/select.pb.h"
 namespace DB
 {
 namespace
@@ -161,9 +163,17 @@ void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & re
     if (!dag_context->collect_execution_summaries)
         return;
 
-    collectRuntimeDetails();
-
-    fillLocalExecutionSummaries(response);
+    if (!enable_pipeline)
+    {
+        collectRuntimeDetails();
+        fillLocalExecutionSummaries(response);
+    }
+    else
+    {
+        collectRuntimeDetailsForPipeline();
+        // todo add execution time....
+        fillLocalExecutionSummaries(response);
+    }
 
     // TODO: remove filling remote execution summaries
     fillRemoteExecutionSummaries(response);
@@ -216,5 +226,14 @@ void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectRespo
     for (auto & p : exchange_execution_summary.execution_summaries)
         fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), p.second, p.first, force_fill_executor_id);
 }
+
+/// Pipeline model summary collection
+void ExecutorStatisticsCollector::collectRuntimeDetailsForPipeline()
+{
+    assert(dag_context);
+    for (const auto & entry : profiles)
+        entry.second->collectRuntimeDetailPipeline();
+}
+
 
 } // namespace DB

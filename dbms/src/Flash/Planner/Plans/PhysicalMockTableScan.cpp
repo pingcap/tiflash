@@ -122,17 +122,25 @@ void PhysicalMockTableScan::buildPipelineExecGroup(
         auto source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(exec_status, context, table_id, concurrency);
         group_builder.init(source_ops.size());
         size_t i = 0;
-        group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::move(source_ops[i++]));
-        });
+        group_builder.transform(
+            [&](auto & builder) {
+                builder.setSourceOp(std::move(source_ops[i++]));
+            },
+            context,
+            executor_id,
+            OperatorType::Source);
     }
     else
     {
         group_builder.init(mock_streams.size());
         size_t i = 0;
-        group_builder.transform([&](auto & builder) {
-            builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
-        });
+        group_builder.transform(
+            [&](auto & builder) {
+                builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
+            },
+            context,
+            executor_id,
+            OperatorType::Source);
     }
 }
 

@@ -15,33 +15,27 @@
 #pragma once
 
 #include <Flash/Pipeline/Schedule/Events/Event.h>
-#include <Flash/Pipeline/Schedule/Events/PipelineEvent.h>
 
 namespace DB
 {
-class Pipeline;
-using PipelinePtr = std::shared_ptr<Pipeline>;
+class Context;
 
-class PlainPipelineEvent : public PipelineEvent
+class PipelineEvent : public Event
 {
 public:
-    PlainPipelineEvent(
+    PipelineEvent(
         PipelineExecutorStatus & exec_status_,
         MemoryTrackerPtr mem_tracker_,
         const String & req_id,
         Context & context_,
-        size_t concurrency_,
-        const PipelinePtr & pipeline_)
-        : PipelineEvent(exec_status_, std::move(mem_tracker_), req_id, context_, concurrency_)
-        , pipeline(pipeline_)
+        size_t concurrency_)
+        : Event(exec_status_, std::move(mem_tracker_), req_id)
+        , context(context_)
+        , concurrency(concurrency_)
     {}
 
 protected:
-    std::vector<TaskPtr> scheduleImpl() override;
-
-    void finishImpl() override;
-
-private:
-    PipelinePtr pipeline;
+    Context & context[[maybe_unused]];
+    size_t concurrency[[maybe_unused]];
 };
 } // namespace DB
