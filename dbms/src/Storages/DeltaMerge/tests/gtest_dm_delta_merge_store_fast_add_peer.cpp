@@ -45,6 +45,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_use_dmfile_format_v3[];
+extern const char force_stop_background_checkpoint_upload[];
 } // namespace FailPoints
 namespace DM
 {
@@ -62,6 +63,7 @@ public:
     void SetUp() override
     {
         FailPointHelper::enableFailPoint(FailPoints::force_use_dmfile_format_v3);
+        FailPointHelper::enableFailPoint(FailPoints::force_stop_background_checkpoint_upload);
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
         TiFlashStorageTestBasic::SetUp();
@@ -95,6 +97,7 @@ public:
     void TearDown() override
     {
         FailPointHelper::disableFailPoint(FailPoints::force_use_dmfile_format_v3);
+        FailPointHelper::disableFailPoint(FailPoints::force_stop_background_checkpoint_upload);
         auto & global_context = TiFlashTestEnv::getGlobalContext();
         if (!already_initialize_data_store)
         {
