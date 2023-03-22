@@ -132,12 +132,32 @@ void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & /*args*/,
     }
 }
 
-void dbgFuncActiveThreadsInDynamicThreadPool(Context &, const ASTs &, DBGInvoker::Printer output)
+void dbgFuncWaitUntilNoTempActiveThreadsInDynamicThreadPool(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
     if (DynamicThreadPool::global_instance)
     {
-        auto value = GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Value();
-        output(std::to_string(static_cast<Int64>(value)));
+        static const UInt64 MAX_WAIT_TIME = 10;
+        auto wait_time = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+        wait_time = std::min(wait_time, MAX_WAIT_TIME);
+        /// should update the value when there is long running threads using dynamic thread pool
+        static const int expected_value = 0;
+
+        while (wait_time > 0)
+        {
+            if (GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Value() == expected_value)
+            {
+                output("0");
+                return;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            --wait_time;
+        }
+        if (GET_METRIC(tiflash_thread_count, type_active_threads_of_thdpool).Value() == expected_value)
+        {
+            output("0");
+            return;
+        }
+        output("1");
     }
     else
     {
