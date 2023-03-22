@@ -423,27 +423,29 @@ void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
     assert(config.method == S3GCMethod::Lifecycle);
 
     auto view = S3FilenameView::fromKey(datafile_key);
-    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     RUNTIME_CHECK(view.isDataFile(), magic_enum::enum_name(view.type), datafile_key);
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+    auto sub_logger = log->getChild(fmt::format("remove_key={}", datafile_key));
     if (!view.isDMFile())
     {
         // CheckpointDataFile is a single object, add tagging for it and update its mtime
         rewriteObjectWithTagging(*client, datafile_key, String(TaggingObjectIsDeleted));
-        LOG_INFO(log, "datafile deleted by lifecycle tagging, key={}", datafile_key);
+        LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging", datafile_key);
     }
     else
     {
         // DMFile is composed by multiple objects, need extra work to remove all of them.
-        // Rewrite all objects with tagging belong to this DMFile
+        // Rewrite all objects with tagging belong to this DMFile. Note "/" is need for
+        // scanning only the sub objects of given key of this DMFile
         // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
         //       sub file for DMFile, try clean them later.
-        S3::listPrefix(*client, datafile_key + "/", [this, &client, &datafile_key](const Aws::S3::Model::Object & object) {
+        S3::listPrefix(*client, datafile_key + "/", [&client, &datafile_key, &sub_logger](const Aws::S3::Model::Object & object) {
             const auto & sub_key = object.GetKey();
             rewriteObjectWithTagging(*client, sub_key, String(TaggingObjectIsDeleted));
-            LOG_INFO(log, "datafile deleted by lifecycle tagging, key={} sub_key={}", datafile_key, sub_key);
+            LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging, sub_key={}", datafile_key, sub_key);
             return PageResult{.num_keys = 1, .more = true};
         });
-        LOG_INFO(log, "datafile deleted by lifecycle tagging, all sub keys are deleted, key={}", datafile_key);
+        LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging, all sub keys are deleted", datafile_key);
     }
 }
 
@@ -454,25 +456,27 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
     auto view = S3FilenameView::fromKey(datafile_key);
     RUNTIME_CHECK(view.isDataFile(), magic_enum::enum_name(view.type), datafile_key);
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+    auto sub_logger = log->getChild(fmt::format("remove_key={}", datafile_key));
     if (!view.isDMFile())
     {
         // CheckpointDataFile is a single object, remove it.
         deleteObject(*client, datafile_key);
-        LOG_INFO(log, "datafile deleted, key={}", datafile_key);
+        LOG_INFO(sub_logger, "datafile deleted, key={}", datafile_key);
     }
     else
     {
         // DMFile is composed by multiple objects, need extra work to remove all of them.
-        // Remove all objects belong to this DMFile
+        // Remove all objects belong to this DMFile. Note suffix "/" is need for scanning
+        // only the sub objects of given key of this DMFile.
         // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
         //       sub file for DMFile, try clean them later.
-        S3::listPrefix(*client, datafile_key + "/", [this, &client, &datafile_key](const Aws::S3::Model::Object & object) {
+        S3::listPrefix(*client, datafile_key + "/", [&client, &datafile_key, &sub_logger](const Aws::S3::Model::Object & object) {
             const auto & sub_key = object.GetKey();
             deleteObject(*client, sub_key);
-            LOG_INFO(log, "datafile deleted, key={} sub_key={}", datafile_key, sub_key);
+            LOG_INFO(sub_logger, "datafile deleted, sub_key={}", datafile_key, sub_key);
             return PageResult{.num_keys = 1, .more = true};
         });
-        LOG_INFO(log, "datafile deleted, all sub keys are deleted, key={}", datafile_key);
+        LOG_INFO(sub_logger, "datafile deleted, all sub keys are deleted", datafile_key);
     }
 }
 
