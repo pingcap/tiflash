@@ -875,7 +875,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
                 segment->simpleInfo(),
                 segment_ingest_range.toDebugString());
 
-            const bool succeeded = ingestSegmentDataIntoSegmentUsingSplit(*dm_context, segment, target_segments[segment_idx]);
+            const bool succeeded = ingestSegmentDataIntoSegmentUsingSplit(*dm_context, segment, segment_ingest_range, target_segments[segment_idx]);
             if (succeeded)
             {
                 updated_segments.insert(segment);
@@ -904,10 +904,10 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
 bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
     DMContext & dm_context,
     const SegmentPtr & segment,
+    const RowKeyRange & ingest_range,
     const SegmentPtr & segment_to_ingest)
 {
     const auto & segment_range = segment->getRowKeyRange();
-    const auto & ingest_range = segment_to_ingest->getRowKeyRange();
 
     // The ingest_range must fall in segment's range.
     RUNTIME_CHECK(
