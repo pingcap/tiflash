@@ -17,8 +17,11 @@
 #include <common/types.h>
 #include <tipb/select.pb.h>
 
+#include <functional>
+
 namespace DB
 {
+// TODO move more requrest related codes from DAGContext to here.
 class DAGRequest
 {
 public:
@@ -31,6 +34,16 @@ public:
     const tipb::DAGRequest & operator*() const { return *dag_request; }
 
     bool isTreeBased() const { return is_tree_based; }
+
+    const tipb::Executor & rootExecutor() const;
+
+    /// traverse tipb::executor of DAGRequest and apply function.
+    /// func: (const tipb::Executor &) -> bool, return true to continue traverse.
+    void traverse(std::function<bool(const tipb::Executor &)> && func) const;
+
+    /// traverse tipb::executor of DAGRequest in reverse order and apply function.
+    /// func: (const tipb::Executor &).
+    void traverseReverse(std::function<void(const tipb::Executor &)> && func) const;
 
 private:
     void checkOrSetExecutorId();

@@ -189,7 +189,7 @@ void DAGContext::initExecutorIdToJoinIdMap()
         return;
 
     executor_id_to_join_id_map.clear();
-    traverseExecutorsReverse(dag_request(), [&](const tipb::Executor & executor) {
+    dag_request.traverseReverse([&](const tipb::Executor & executor) {
         std::vector<String> all_join_id;
         // for mpp, dag_request.has_root_executor() == true, can call `getChildren` directly.
         getChildren(executor).forEach([&](const tipb::Executor & child) {

@@ -15,7 +15,6 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Statistics/traverseExecutors.h>
-#include <Flash/Coprocessor/collectOutputFieldTypes.h>
 
 namespace DB
 {
@@ -71,11 +70,12 @@ public:
 private:
     UInt32 current_id = 0;
 };
-}
+} // namespace
 
-DAGRequest::DAGRequest(tipb::DAGRequest * dag_request_): dag_request(dag_request_)
+DAGRequest::DAGRequest(tipb::DAGRequest * dag_request_)
+    : dag_request(dag_request_)
 {
-    // Will only appear in tests.
+    // Will only occur in tests.
     if unlikely (!dag_request)
         return;
 
@@ -111,8 +111,27 @@ void DAGRequest::checkOrSetExecutorId()
             // Set executor_id for list based executor,
             // then we can fill executor_id for Execution Summaries of list-based executors
             executor->set_executor_id(executor_id);
+            // The begin of list_based_executors_order is the leaf node like table scan.
             list_based_executors_order.push_back(executor_id);
         }
     }
+}
+
+const tipb::Executor & DAGRequest::rootExecutor() const
+{
+    check(dag_request, "dagrequest cannot be null");
+    return isTreeBased() ? dag_request->root_executor() : dag_request->executors(dag_request->executors_size() - 1);
+}
+
+void DAGRequest::traverse(std::function<bool(const tipb::Executor &)> && func) const
+{
+    if likely (dag_request)
+        traverseExecutors(dag_request, std::move(func));
+}
+
+void DAGRequest::traverseReverse(std::function<void(const tipb::Executor &)> && func) const
+{
+    if likely (dag_request)
+        traverseExecutorsReverse(dag_request, std::move(func));
 }
 } // namespace DB

@@ -24,6 +24,7 @@
 #include <Flash/Statistics/JoinImpl.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Flash/Statistics/traverseExecutors.h>
+
 namespace DB
 {
 namespace
@@ -65,69 +66,57 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
     dag_context = dag_context_;
     assert(dag_context);
 
-    if likely (dag_context->dag_request())
-    {
-        traverseExecutors(dag_context->dag_request(), [&](const tipb::Executor & executor) {
-            RUNTIME_CHECK(executor.has_executor_id());
-            if (!append<
-                    AggStatistics,
-                    ExchangeReceiverStatistics,
-                    ExchangeSenderStatistics,
-                    FilterStatistics,
-                    JoinStatistics,
-                    LimitStatistics,
-                    ProjectStatistics,
-                    SortStatistics,
-                    TableScanStatistics,
-                    TopNStatistics,
-                    WindowStatistics,
-                    ExpandStatistics>(&executor))
-            {
-                throw TiFlashException(
-                    fmt::format("Unknown executor type, executor_id: {}", executor.executor_id()),
-                    Errors::Coprocessor::Internal);
-            }
-            return true;
-        });
-
-        fillListBasedExecutorsChild();
-        fillTreeBasedExecutorsChildren();
-    }
-}
-
-void ExecutorStatisticsCollector::fillListBasedExecutorsChild()
-{
-    if (dag_context->dag_request->executors_size() > 0)
-    {
-        // fill list-based executors child
-        auto size = dag_context->dag_request->executors_size();
-        RUNTIME_CHECK(size > 0);
-        const auto & executors = dag_context->dag_request->executors();
-        String child;
-        for (int i = 0; i < size; ++i)
+    dag_context->dag_request.traverse([&](const tipb::Executor & executor) {
+        assert(executor.has_executor_id());
+        if (!append<
+                AggStatistics,
+                ExchangeReceiverStatistics,
+                ExchangeSenderStatistics,
+                FilterStatistics,
+                JoinStatistics,
+                LimitStatistics,
+                ProjectStatistics,
+                SortStatistics,
+                TableScanStatistics,
+                TopNStatistics,
+                WindowStatistics,
+                ExpandStatistics>(&executor))
         {
-            const auto & executor_id = executors[i].executor_id();
-            if (i != 0)
-                profiles[executor_id]->setChild(child);
-            child = executor_id;
+            throw TiFlashException(
+                fmt::format("Unknown executor type, executor_id: {}", executor.executor_id()),
+                Errors::Coprocessor::Internal);
         }
-    }
+        return true;
+    });
+
+    fillChildren();
 }
 
-void ExecutorStatisticsCollector::fillTreeBasedExecutorsChildren()
+void ExecutorStatisticsCollector::fillChildren()
 {
-    if (dag_context->dag_request->has_root_executor())
+    if (dag_context->dag_request.isTreeBased())
     {
-        traverseExecutors(dag_context->dag_request(), [&](const tipb::Executor & executor) {
-            // set children for tree-based executors
+        // set children for tree-based executors
+        dag_context->dag_request.traverse([&](const tipb::Executor & executor) {
             std::vector<String> children;
             getChildren(executor).forEach([&](const tipb::Executor & child) {
-                RUNTIME_CHECK(child.has_executor_id());
+                assert(child.has_executor_id());
                 children.push_back(child.executor_id());
             });
             profiles[executor.executor_id()]->setChildren(children);
             return true;
         });
+    }
+    else
+    {
+        // fill list-based executors child
+        std::optional<String> child;
+        for (const auto & executor_id : dag_context->dag_request.list_based_executors_order)
+        {
+            if (child)
+                profiles[executor_id]->setChild(*child);
+            child = executor_id;
+        }
     }
 }
 

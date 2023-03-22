@@ -109,7 +109,6 @@ private:
 
     void initExchangeReceivers();
 
-    tipb::DAGRequest dag_req;
     mpp::TaskMeta meta;
     MPPTaskId id;
 
