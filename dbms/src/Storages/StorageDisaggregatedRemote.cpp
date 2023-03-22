@@ -142,7 +142,6 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggTasks(
     build_results.reserve(tasks_n);
 
     auto thread_manager = newThreadManager();
-    // auto * cluster = context.getTMTContext().getKVCluster();
     const auto & executor_id = table_scan.getTableScanExecutorID();
     const DM::DisaggTaskId task_id(context.getDAGContext()->getMPPTaskId(), executor_id);
 
@@ -187,7 +186,6 @@ void StorageDisaggregated::buildDisaggTask(
         batch_cop_task.store_addr,
         resp->tables_size());
 
-    // auto this_elapse_ms = watch.elapsedMillisecondsFromLastTime();
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_establish).Observe(watch.elapsedSeconds());
     watch.restart();
 
