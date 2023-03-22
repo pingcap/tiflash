@@ -1914,7 +1914,7 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;
-        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, deseri_edit);
+        auto d = factory.createFromEditForTest(getCurrentTestName(), provider, delegator, deseri_edit);
         return d;
     };
     {
@@ -1936,7 +1936,7 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;
-        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, deseri_edit);
+        auto d = factory.createFromEditForTest(getCurrentTestName(), provider, delegator, deseri_edit);
         return d;
     };
 
@@ -2160,7 +2160,7 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;
-        auto d = factory.setBlobStats(stats).createFromEdit(getCurrentTestName(), provider, delegator, edit);
+        auto d = factory.setBlobStats(stats).createFromEditForTest(getCurrentTestName(), provider, delegator, edit);
         return d;
     };
     {
@@ -2203,7 +2203,7 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;
-        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, edit);
+        auto d = factory.createFromEditForTest(getCurrentTestName(), provider, delegator, edit);
         return d;
     };
 
