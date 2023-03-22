@@ -35,6 +35,7 @@
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/GetObjectResult.h>
 #include <aws/s3/model/GetObjectTaggingRequest.h>
+#include <aws/s3/model/GetObjectTaggingResult.h>
 #include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/HeadObjectResult.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
@@ -142,12 +143,26 @@ Model::CopyObjectOutcome MockS3Client::CopyObject(const Model::CopyObjectRequest
 Model::GetObjectTaggingOutcome MockS3Client::GetObjectTagging(const Model::GetObjectTaggingRequest & request) const
 {
     std::lock_guard lock(mtx);
-    auto itr = storage_tagging.find(request.GetBucket());
-    if (itr == storage_tagging.end())
+    bool object_exist = false;
     {
-        return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuckBucket");
+        auto itr = storage.find(request.GetBucket());
+        if (itr == storage.end())
+        {
+            return Aws::S3::S3ErrorMapper::GetErrorForName("NoSuckBucket");
+        }
+        object_exist = itr->second.count(normalizedKey(request.GetKey())) > 0;
     }
-    auto taggings = storage_tagging[request.GetBucket()][normalizedKey(request.GetKey())];
+
+    auto object_tagging_iter = storage_tagging[request.GetBucket()].find(normalizedKey(request.GetKey()));
+    RUNTIME_CHECK_MSG(object_exist, "try to get tagging of non-exist object, bucket={} key={}", request.GetBucket(), request.GetKey());
+
+    // object exist but tag not exist, consider it as empty
+    if (object_tagging_iter == storage_tagging[request.GetBucket()].end())
+    {
+        return Model::GetObjectTaggingResult{};
+    }
+
+    auto taggings = object_tagging_iter->second;
     auto pos = taggings.find('=');
     RUNTIME_CHECK(pos != String::npos, taggings, pos, taggings.size());
     Aws::S3::Model::Tag tag;
