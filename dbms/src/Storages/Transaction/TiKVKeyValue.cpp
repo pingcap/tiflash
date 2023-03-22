@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/Transaction/TiKVKeyspaceIDImpl.h>
 
 namespace DB
 {

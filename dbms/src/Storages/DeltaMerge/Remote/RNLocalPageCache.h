@@ -21,6 +21,7 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
+#include <Storages/Transaction/Types.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -213,7 +214,14 @@ public:
 private:
     static UniversalPageId buildCacheId(const PageOID & oid)
     {
-        return fmt::format("{}_{}_{}", oid.store_id, oid.table_id, oid.page_id);
+        if (oid.ks_table_id.first == NullspaceID)
+        {
+            return fmt::format("{}_{}_{}", oid.store_id, oid.ks_table_id.second, oid.page_id);
+        }
+        else
+        {
+            return fmt::format("{}_{}_{}_{}", oid.store_id, oid.ks_table_id.first, oid.ks_table_id.second, oid.page_id);
+        }
     }
 
 #ifndef DBMS_PUBLIC_GTEST

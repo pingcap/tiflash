@@ -102,7 +102,7 @@ class DisaggPhysicalTableReadSnapshot
     friend struct Serializer;
 
 public:
-    DisaggPhysicalTableReadSnapshot(TableID table_id_, SegmentReadTasks && tasks_);
+    DisaggPhysicalTableReadSnapshot(KeyspaceTableID ks_table_id_, SegmentReadTasks && tasks_);
 
     SegmentReadTaskPtr popTask(UInt64 segment_id);
 
@@ -115,7 +115,7 @@ public:
     DISALLOW_COPY(DisaggPhysicalTableReadSnapshot);
 
 public:
-    const TableID physical_table_id;
+    const KeyspaceTableID ks_physical_table_id;
 
     // TODO: these members are the same in the logical table level,
     //       maybe we can reuse them to reduce memory consumption.

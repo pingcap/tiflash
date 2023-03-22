@@ -45,6 +45,7 @@
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 
 #include <atomic>
@@ -1178,7 +1179,7 @@ DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
     GET_METRIC(tiflash_disaggregated_read_tasks_count).Increment(tasks.size());
     LOG_DEBUG(tracing_logger, "Read create segment snapshot done");
 
-    return std::make_unique<Remote::DisaggPhysicalTableReadSnapshot>(physical_table_id, std::move(tasks));
+    return std::make_unique<Remote::DisaggPhysicalTableReadSnapshot>(KeyspaceTableID{keyspace_id, physical_table_id}, std::move(tasks));
 }
 
 size_t forceMergeDeltaRows(const DMContextPtr & dm_context)

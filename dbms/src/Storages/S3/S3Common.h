@@ -76,7 +76,9 @@ public:
     template <typename Request>
     void setBucketAndKeyWithRoot(Request & req, const String & key) const
     {
-        req.WithBucket(bucket_name).WithKey(key_root + key);
+        bool is_root_single_slash = key_root == "/";
+        // If the `root == '/'`, don't prepend the root to the prefix, otherwise S3 list doesn't work.
+        req.WithBucket(bucket_name).WithKey(is_root_single_slash ? key : key_root + key);
     }
 
 private:
