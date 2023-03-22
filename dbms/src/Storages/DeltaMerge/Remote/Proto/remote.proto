@@ -66,7 +66,6 @@ message ColumnFileInMemory {
     repeated bytes block_columns = 2;
 
     uint64 rows = 3;
-    // uint64 bytes = 4;
 }
 
 message ColumnFileTiny {
