@@ -26,10 +26,48 @@ void check(bool condition, const String & err_msg)
         throw TiFlashException(err_msg, Errors::Coprocessor::BadRequest);
 }
 
-class ExecutorIdGenerator
+class ListBasedExecutorIdGenerator
 {
 public:
+    explicit ListBasedExecutorIdGenerator(tipb::DAGRequest * dag_request)
+    {
+        assert(dag_request->executors_size() > 0);
+        // To check duplicate executor_id for list based request.
+        // Normally list based requests do not set the executor id, but here it is just in case.
+        for (int i = 0; i < dag_request->executors_size(); ++i)
+        {
+            const auto & executor = dag_request->executors(i);
+            if (executor.has_executor_id())
+            {
+                const auto & executor_id = executor.executor_id();
+                check(executor_id_set.find(executor_id) == executor_id_set.end(), fmt::format("in list based request, executor id `{}` duplicate, which is unexpected.", executor_id));
+                executor_id_set.insert(executor_id);
+            }
+        }
+    }
+
     String generate(const tipb::Executor & executor)
+    {
+        // Has checked in constructor.
+        if (executor.has_executor_id())
+            return executor.executor_id();
+
+        for (size_t i = 0; i < 5; ++i)
+        {
+            auto gen_id = doGenerate(executor);
+            if (executor_id_set.find(gen_id) == executor_id_set.end())
+            {
+                executor_id_set.insert(gen_id);
+                return gen_id;
+            }
+        }
+        throw Exception(fmt::format(
+            "We have failed five times to generate a unique id for list base executor, exists ids are: [{}]",
+            fmt::join(executor_id_set, ",")));
+    }
+
+private:
+    String doGenerate(const tipb::Executor & executor)
     {
         assert(!executor.has_executor_id());
         switch (executor.tp())
@@ -69,6 +107,7 @@ public:
 
 private:
     UInt32 current_id = 0;
+    std::unordered_set<String> executor_id_set;
 };
 } // namespace
 
@@ -93,7 +132,7 @@ void DAGRequest::checkOrSetExecutorId()
         std::unordered_set<String> ids;
         traverseExecutorTree(dag_request->root_executor(), [&](const tipb::Executor & executor) {
             check(executor.has_executor_id(), "for tree based request, executor id cannot be null");
-            auto executor_id = executor.executor_id();
+            const auto & executor_id = executor.executor_id();
             check(ids.find(executor_id) == ids.end(), fmt::format("in tree based request, executor id `{}` duplicate, which is unexpected.", executor_id));
             ids.insert(executor_id);
             return true;
@@ -102,11 +141,10 @@ void DAGRequest::checkOrSetExecutorId()
     else
     {
         // generate executor_id for list based request.
-        ExecutorIdGenerator id_generator;
+        ListBasedExecutorIdGenerator id_generator{dag_request};
         for (int i = 0; i < dag_request->executors_size(); ++i)
         {
             auto * executor = dag_request->mutable_executors(i);
-            check(!executor->has_executor_id(), fmt::format("for list based request, executor id must be null, the unexpected executor id: {}", executor->executor_id()));
             const auto & executor_id = id_generator.generate(*executor);
             // Set executor_id for list based executor,
             // then we can fill executor_id for Execution Summaries of list-based executors
@@ -119,19 +157,19 @@ void DAGRequest::checkOrSetExecutorId()
 
 const tipb::Executor & DAGRequest::rootExecutor() const
 {
-    check(dag_request, "dagrequest cannot be null");
+    check(dag_request, "dagrequest can't be null");
     return isTreeBased() ? dag_request->root_executor() : dag_request->executors(dag_request->executors_size() - 1);
 }
 
 void DAGRequest::traverse(std::function<bool(const tipb::Executor &)> && func) const
 {
-    check(dag_request, "dagrequest cannot be null");
+    check(dag_request, "dagrequest can't be null");
     traverseExecutors(dag_request, std::move(func));
 }
 
 void DAGRequest::traverseReverse(std::function<void(const tipb::Executor &)> && func) const
 {
-    check(dag_request, "dagrequest cannot be null");
+    check(dag_request, "dagrequest can't be null");
     traverseExecutorsReverse(dag_request, std::move(func));
 }
 } // namespace DB
