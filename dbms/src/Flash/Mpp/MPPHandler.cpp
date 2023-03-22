@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,9 @@
 
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPHandler.h>
+#include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/Utils.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>

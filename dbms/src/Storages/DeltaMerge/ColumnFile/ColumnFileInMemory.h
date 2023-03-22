@@ -55,7 +55,10 @@ public:
     explicit ColumnFileInMemory(const ColumnFileSchemaPtr & schema_, const CachePtr & cache_ = nullptr)
         : schema(schema_)
         , cache(cache_ ? cache_ : std::make_shared<Cache>(schema_->getSchema()))
-    {}
+    {
+        rows = cache->block.rows();
+        bytes = cache->block.bytes();
+    }
 
     Type getType() const override { return Type::INMEMORY_FILE; }
 

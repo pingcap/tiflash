@@ -79,7 +79,6 @@ public:
         DMContext & context,
         UniversalPageStoragePtr temp_ps,
         const RowKeyRange & segment_range,
-        NamespaceId ns_id,
         PageIdU64 delta_id,
         WriteBatches & wbs);
 

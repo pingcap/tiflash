@@ -175,7 +175,7 @@ TrackedMppDataPacketPtr ToCompressedPacket(
     assert(uncompressed_source);
     for ([[maybe_unused]] const auto & chunk : uncompressed_source->getPacket().chunks())
     {
-        assert(chunk.empty());
+        assert(!chunk.empty());
         assert(static_cast<CompressionMethodByte>(chunk[0]) == CompressionMethodByte::NONE);
     }
 

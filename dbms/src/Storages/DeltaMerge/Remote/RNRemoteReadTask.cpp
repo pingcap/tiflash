@@ -128,7 +128,7 @@ void RNRemoteReadTask::updateTaskState(const RNRemoteSegmentReadTaskPtr & seg_ta
         {
             auto & task = *task_iter;
             if (task->store_id != seg_task->store_id
-                || task->table_id != seg_task->table_id
+                || task->ks_table_id != seg_task->ks_table_id
                 || task->segment_id != seg_task->segment_id)
             {
                 continue;
@@ -312,7 +312,7 @@ RNRemoteTableReadTaskPtr RNRemoteTableReadTask::buildFrom(
     // ensure the local cache pages.
     auto table_task = std::make_shared<RNRemoteTableReadTask>(
         store_id,
-        remote_table.table_id(),
+        KeyspaceTableID{remote_table.keyspace_id(), remote_table.table_id()},
         snapshot_id,
         address);
 
@@ -334,7 +334,7 @@ RNRemoteTableReadTaskPtr RNRemoteTableReadTask::buildFrom(
                 remote_seg,
                 snapshot_id,
                 table_task->store_id,
-                table_task->table_id,
+                table_task->ks_table_id,
                 table_task->address,
                 log);
         });
@@ -357,14 +357,14 @@ Allocator<false> RNRemoteSegmentReadTask::allocator;
 
 RNRemoteSegmentReadTask::RNRemoteSegmentReadTask(
     DisaggTaskId snapshot_id_,
-    UInt64 store_id_,
-    TableID table_id_,
+    StoreID store_id_,
+    KeyspaceTableID ks_table_id_,
     UInt64 segment_id_,
     String address_,
     LoggerPtr log_)
     : snapshot_id(std::move(snapshot_id_))
     , store_id(store_id_)
-    , table_id(table_id_)
+    , ks_table_id(ks_table_id_)
     , segment_id(segment_id_)
     , address(std::move(address_))
     , log(std::move(log_))
@@ -375,8 +375,8 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
     const Context & db_context,
     const RemotePb::RemoteSegment & proto,
     const DisaggTaskId & snapshot_id,
-    UInt64 store_id,
-    TableID table_id,
+    StoreID store_id,
+    KeyspaceTableID ks_table_id,
     const String & address,
     const LoggerPtr & log)
 {
@@ -395,7 +395,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
     auto task = std::make_shared<RNRemoteSegmentReadTask>(
         snapshot_id,
         store_id,
-        table_id,
+        ks_table_id,
         proto.segment_id(),
         address,
         log);
@@ -405,7 +405,8 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         /* path_pool */ nullptr,
         /* storage_pool */ nullptr,
         /* min_version */ 0,
-        table_id,
+        ks_table_id.first,
+        ks_table_id.second,
         /* is_common_handle */ segment_range.is_common_handle,
         /* rowkey_column_size */ segment_range.rowkey_column_size,
         db_context.getSettingsRef(),
@@ -425,7 +426,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
     task->segment_snap = Remote::Serializer::deserializeSegmentSnapshotFrom(
         *(task->dm_context),
         store_id,
-        table_id,
+        ks_table_id.second,
         proto);
 
     // Note: At this moment, we still cannot read from `task->segment_snap`,
@@ -450,9 +451,10 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         task->delta_tinycf_page_sizes = persisted_sizes;
 
         LOG_INFO(log,
-                 "Build RemoteSegmentReadTask, store_id={} table_id={} memtable_cfs={} persisted_cfs={}",
+                 "Build RemoteSegmentReadTask, store_id={} keyspace_id={} table_id={} memtable_cfs={} persisted_cfs={}",
                  task->store_id,
-                 task->table_id,
+                 task->ks_table_id.first,
+                 task->ks_table_id.second,
                  task->segment_snap->delta->getMemTableSetSnapshot()->getColumnFileCount(),
                  task->segment_snap->delta->getPersistedFileSetSnapshot()->getColumnFileCount());
     }
@@ -470,7 +472,7 @@ void RNRemoteSegmentReadTask::initColumnFileDataProvider(Remote::RNLocalPageCach
         page_cache,
         pages_guard,
         store_id,
-        table_id);
+        ks_table_id);
 }
 
 void RNRemoteSegmentReadTask::receivePage(RemotePb::RemotePage && remote_page)
@@ -481,8 +483,9 @@ void RNRemoteSegmentReadTask::receivePage(RemotePb::RemotePage && remote_page)
     // Use LocalPageCache
     auto oid = Remote::PageOID{
         .store_id = store_id,
-        .table_id = table_id,
-        .page_id = remote_page.page_id()};
+        .ks_table_id = ks_table_id,
+        .page_id = remote_page.page_id(),
+    };
     auto read_buffer = std::make_shared<ReadBufferFromMemory>(remote_page.data().data(), buf_size);
     PageFieldSizes field_sizes;
     field_sizes.reserve(remote_page.field_sizes_size());

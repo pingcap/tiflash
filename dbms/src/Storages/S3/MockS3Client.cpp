@@ -42,11 +42,11 @@
 #include <aws/s3/model/Object.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/UploadPartRequest.h>
+#include <boost_wrapper/string_split.h>
 #include <common/types.h>
 #include <fiu.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <mutex>
 #include <string_view>
 

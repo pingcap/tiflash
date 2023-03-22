@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/ExecutionSummary.h>
+#include <Flash/Statistics/BaseRuntimeStatistics.h>
 
 namespace DB
 {
@@ -32,6 +33,14 @@ void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
     num_iterations += other.num_iterations();
     concurrency += other.concurrency();
     scan_context->merge(other.tiflash_scan_context());
+}
+
+void ExecutionSummary::fill(const BaseRuntimeStatistics & other)
+{
+    time_processed_ns = other.execution_time_ns;
+    num_produced_rows = other.rows;
+    num_iterations = other.blocks;
+    concurrency = other.concurrency;
 }
 
 void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
