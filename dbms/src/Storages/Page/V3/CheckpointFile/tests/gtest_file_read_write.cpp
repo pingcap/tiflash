@@ -37,6 +37,13 @@ public:
         dir = getTemporaryPath();
         dropDataOnDisk(dir);
         createIfNotExist(dir);
+
+        data_file_path_pattern = dir + "/data_{index}";
+        data_file_id_pattern = "data_{index}";
+        manifest_file_path = dir + "/manifest_foo";
+        manifest_file_id = "manifest_foo";
+
+        log = Logger::get("CheckpointFileTest");
     }
 
     std::string readData(const V3::CheckpointLocation & location)
@@ -57,17 +64,22 @@ public:
     }
 
 protected:
-    std::string dir;
+    String dir;
+    String data_file_id_pattern;
+    String data_file_path_pattern;
+    String manifest_file_id;
+    String manifest_file_path;
+    LoggerPtr log;
 };
 
 TEST_F(CheckpointFileTest, WritePrefixOnly)
 try
 {
     auto writer = CPFilesWriter::create({
-        .data_file_path = dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = CPWriteDataSourceFixture::create({}),
     });
 
@@ -76,13 +88,17 @@ try
         .sequence = 5,
         .last_sequence = 3,
     });
-
+    auto data_file_paths = writer->data_file_paths;
     writer.reset();
 
-    ASSERT_TRUE(Poco::File(dir + "/data_1").exists());
-    ASSERT_TRUE(Poco::File(dir + "/manifest_foo").exists());
+    ASSERT_FALSE(data_file_paths.empty());
+    for (const auto & path : data_file_paths)
+    {
+        ASSERT_TRUE(Poco::File(path).exists());
+    }
+    ASSERT_TRUE(Poco::File(manifest_file_path).exists());
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -96,10 +112,10 @@ TEST_F(CheckpointFileTest, WriteEditsWithoutPrefix)
 try
 {
     auto writer = CPFilesWriter::create({
-        .data_file_path = dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = CPWriteDataSourceFixture::create({}),
     });
 
@@ -117,10 +133,10 @@ TEST_F(CheckpointFileTest, WriteEdits)
 try
 {
     auto writer = CPFilesWriter::create({
-        .data_file_path = dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = CPWriteDataSourceFixture::create({}),
     });
 
@@ -134,10 +150,11 @@ try
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "water"});
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
+    LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -173,10 +190,10 @@ TEST_F(CheckpointFileTest, WriteMultipleEdits)
 try
 {
     auto writer = CPFilesWriter::create({
-        .data_file_path = dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = CPWriteDataSourceFixture::create({{5, "Said she just dreamed a dream"},
                                                          {10, "nahida opened her eyes"}}),
     });
@@ -199,10 +216,11 @@ try
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "rain"});
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
+    LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -226,7 +244,7 @@ try
         ASSERT_EQ(29, r[0].entry.size);
         ASSERT_TRUE(r[0].entry.checkpoint_info.is_valid);
         ASSERT_TRUE(r[0].entry.checkpoint_info.is_local_data_reclaimed);
-        ASSERT_EQ("data_1", *r[0].entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("data_0", *r[0].entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("Said she just dreamed a dream", readData(r[0].entry.checkpoint_info.data_location));
 
         ASSERT_EQ(EditRecordType::VAR_REF, r[1].type);
@@ -239,7 +257,7 @@ try
         ASSERT_EQ(22, r[2].entry.size);
         ASSERT_TRUE(r[2].entry.checkpoint_info.is_valid);
         ASSERT_TRUE(r[2].entry.checkpoint_info.is_local_data_reclaimed);
-        ASSERT_EQ("data_1", *r[2].entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("data_0", *r[2].entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("nahida opened her eyes", readData(r[2].entry.checkpoint_info.data_location));
 
         ASSERT_EQ(EditRecordType::VAR_DELETE, r[3].type);
@@ -258,7 +276,7 @@ try
         auto locks = manifest_reader->readLocks();
         ASSERT_TRUE(locks.has_value());
         ASSERT_EQ(1, locks->size());
-        ASSERT_EQ(1, locks->count("data_1"));
+        ASSERT_EQ(1, locks->count("data_0"));
     }
     {
         auto locks = manifest_reader->readLocks();
@@ -271,10 +289,10 @@ TEST_F(CheckpointFileTest, WriteEditsWithCheckpointInfo)
 try
 {
     auto writer = CPFilesWriter::create({
-        .data_file_path = dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = CPWriteDataSourceFixture::create({{10, "nahida opened her eyes"}}),
     });
 
@@ -305,10 +323,11 @@ try
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "sun"});
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
+    LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -337,7 +356,7 @@ try
         ASSERT_EQ(22, r[2].entry.size);
         ASSERT_TRUE(r[2].entry.checkpoint_info.is_valid);
         ASSERT_TRUE(r[2].entry.checkpoint_info.is_local_data_reclaimed);
-        ASSERT_EQ("data_1", *r[2].entry.checkpoint_info.data_location.data_file_id);
+        ASSERT_EQ("data_0", *r[2].entry.checkpoint_info.data_location.data_file_id);
         ASSERT_EQ("nahida opened her eyes", readData(r[2].entry.checkpoint_info.data_location));
 
         ASSERT_EQ(EditRecordType::VAR_DELETE, r[3].type);
@@ -351,7 +370,7 @@ try
         auto locks = manifest_reader->readLocks();
         ASSERT_TRUE(locks.has_value());
         ASSERT_EQ(2, locks->size());
-        ASSERT_EQ(1, locks->count("data_1"));
+        ASSERT_EQ(1, locks->count("data_0"));
         ASSERT_EQ(1, locks->count("my_file_id"));
     }
     {
@@ -384,10 +403,10 @@ try
     }
 
     auto writer = CPFilesWriter::create({
-        .data_file_path = dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = CPWriteDataSourceBlobStore::create(blob_store),
     });
     writer->writePrefix({
@@ -396,10 +415,11 @@ try
         .last_sequence = 3,
     });
     writer->writeEditsAndApplyCheckpointInfo(edits);
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
+    LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -453,7 +473,7 @@ try
         auto locks = manifest_reader->readLocks();
         ASSERT_TRUE(locks.has_value());
         ASSERT_EQ(1, locks->size());
-        ASSERT_EQ(1, locks->count("data_1"));
+        ASSERT_EQ(1, locks->count("data_0"));
     }
     {
         auto locks = manifest_reader->readLocks();
@@ -466,10 +486,10 @@ TEST_F(CheckpointFileTest, WriteEmptyEdits)
 try
 {
     auto writer = CPFilesWriter::create({
-        .data_file_path = dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = CPWriteDataSourceFixture::create({}),
     });
 
@@ -487,10 +507,11 @@ try
         edits.appendRecord({.type = EditRecordType::VAR_DELETE, .page_id = "snow"});
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
+    LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -518,10 +539,10 @@ TEST_F(CheckpointFileTest, WriteEditsNotCalled)
 try
 {
     auto writer = CPFilesWriter::create({
-        .data_file_path = dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = CPWriteDataSourceFixture::create({}),
     });
 
@@ -530,10 +551,11 @@ try
         .sequence = 5,
         .last_sequence = 3,
     });
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
+    LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -554,10 +576,10 @@ TEST_F(CheckpointFileTest, PreDefinedLocks)
 try
 {
     auto writer = CPFilesWriter::create({
-        .data_file_path = dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = CPWriteDataSourceFixture::create({{10, "nahida opened her eyes"}}),
         .must_locked_files = {"f1", "fx"},
     });
@@ -586,10 +608,11 @@ try
         edits.appendRecord({.type = EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
+    LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -611,7 +634,7 @@ try
         ASSERT_EQ(1, locks->count("f1"));
         ASSERT_EQ(1, locks->count("fx"));
         ASSERT_EQ(1, locks->count("my_file_id"));
-        ASSERT_EQ(1, locks->count("data_1"));
+        ASSERT_EQ(1, locks->count("data_0"));
     }
     {
         auto locks = manifest_reader->readLocks();
@@ -624,10 +647,10 @@ TEST_F(CheckpointFileTest, LotsOfEdits)
 try
 {
     auto writer = CPFilesWriter::create({
-        .data_file_path = dir + "/data_1",
-        .data_file_id = "this-is-simply-a-very-long-data-file-id-7b768082-db43-4e65-a0fb-d34645200298",
-        .manifest_file_path = dir + "/manifest_1",
-        .manifest_file_id = "manifest_1",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = "this-is-simply-a-very-long-data-file-id-7b768082-db43-4e65-a0fb-d34645200298-{index}",
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = CPWriteDataSourceFixture::create({{10, "nahida opened her eyes"}}),
     });
 
@@ -646,10 +669,11 @@ try
             });
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
+    LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
     writer.reset();
 
-    auto manifest_file = PosixRandomAccessFile::create(dir + "/manifest_1");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
