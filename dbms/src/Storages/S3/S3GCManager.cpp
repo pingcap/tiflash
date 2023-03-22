@@ -424,6 +424,7 @@ void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
 
     auto view = S3FilenameView::fromKey(datafile_key);
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+    RUNTIME_CHECK(view.isDataFile(), magic_enum::enum_name(view.type), datafile_key);
     if (!view.isDMFile())
     {
         // CheckpointDataFile is a single object, add tagging for it and update its mtime
@@ -436,7 +437,7 @@ void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
         // Rewrite all objects with tagging belong to this DMFile
         // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
         //       sub file for DMFile, try clean them later.
-        S3::listPrefix(*client, datafile_key, [this, &client, &datafile_key](const Aws::S3::Model::Object & object) {
+        S3::listPrefix(*client, datafile_key + "/", [this, &client, &datafile_key](const Aws::S3::Model::Object & object) {
             const auto & sub_key = object.GetKey();
             rewriteObjectWithTagging(*client, sub_key, String(TaggingObjectIsDeleted));
             LOG_INFO(log, "datafile deleted by lifecycle tagging, key={} sub_key={}", datafile_key, sub_key);
@@ -451,6 +452,7 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
     assert(config.method == S3GCMethod::ScanThenDelete);
 
     auto view = S3FilenameView::fromKey(datafile_key);
+    RUNTIME_CHECK(view.isDataFile(), magic_enum::enum_name(view.type), datafile_key);
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     if (!view.isDMFile())
     {
@@ -464,7 +466,7 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
         // Remove all objects belong to this DMFile
         // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
         //       sub file for DMFile, try clean them later.
-        S3::listPrefix(*client, datafile_key, [this, &client, &datafile_key](const Aws::S3::Model::Object & object) {
+        S3::listPrefix(*client, datafile_key + "/", [this, &client, &datafile_key](const Aws::S3::Model::Object & object) {
             const auto & sub_key = object.GetKey();
             deleteObject(*client, sub_key);
             LOG_INFO(log, "datafile deleted, key={} sub_key={}", datafile_key, sub_key);
