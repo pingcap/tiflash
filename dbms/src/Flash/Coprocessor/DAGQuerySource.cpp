@@ -26,15 +26,15 @@ namespace DB
 DAGQuerySource::DAGQuerySource(Context & context_)
     : context(context_)
 {
-    const tipb::DAGRequest & dag_request = *getDAGContext().dag_request;
-    if (dag_request.has_root_executor())
+    const auto & dag_request = getDAGContext().dag_request;
+    if (dag_request.isTreeBased())
     {
         QueryBlockIDGenerator id_generator;
-        root_query_block = std::make_shared<DAGQueryBlock>(dag_request.root_executor(), id_generator);
+        root_query_block = std::make_shared<DAGQueryBlock>(dag_request->root_executor(), id_generator);
     }
     else
     {
-        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
+        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request->executors());
     }
 }
 
