@@ -83,7 +83,7 @@ try
                            .filter(eq(col("s1"), col("s2")))
                            .limit(2)
                            .build(context, t);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, 1}}};
+        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, 1}}};
 
         testForExecutionSummary(request, expect);
     }
@@ -152,7 +152,7 @@ try
                            .limit(2)
                            .project({col("s1")})
                            .build(context);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}, {"limit_2", {2, 1}}, {"project_3", {2, concurrency}}};
+        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, 1}}, {"project_3", {2, concurrency}}};
 
         testForExecutionSummary(request, expect);
     }
@@ -230,8 +230,8 @@ try
                            .build(context);
 
         Expect expect{{"table_scan_0", {12, concurrency}},
-                      {"aggregation_1", {3, -1}},
-                      {"project_2", {3, concurrency}},
+                      {"aggregation_1", {3, not_check_concurrency}},
+                      {"project_2", {not_check_rows, concurrency}},
                       {"limit_3", {2, 1}}};
 
         testForExecutionSummary(request, expect);

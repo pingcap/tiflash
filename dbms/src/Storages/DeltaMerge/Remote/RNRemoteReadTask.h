@@ -133,19 +133,19 @@ class RNRemoteTableReadTask
 {
 public:
     RNRemoteTableReadTask(
-        UInt64 store_id_,
-        TableID table_id_,
+        StoreID store_id_,
+        KeyspaceTableID ks_table_id_,
         DisaggTaskId snap_id_,
         const String & address_)
         : store_id(store_id_)
-        , table_id(table_id_)
+        , ks_table_id(ks_table_id_)
         , snapshot_id(std::move(snap_id_))
         , address(address_)
     {}
 
     StoreID storeID() const { return store_id; }
 
-    TableID tableID() const { return table_id; }
+    KeyspaceTableID ksTableID() const { return ks_table_id; }
 
     static RNRemoteTableReadTaskPtr buildFrom(
         const Context & db_context,
@@ -180,7 +180,7 @@ public:
 
 private:
     const StoreID store_id;
-    const TableID table_id;
+    const KeyspaceTableID ks_table_id;
     const DisaggTaskId snapshot_id;
     const String address;
 
@@ -197,7 +197,7 @@ public:
         const RemotePb::RemoteSegment & proto,
         const DisaggTaskId & snapshot_id,
         StoreID store_id,
-        TableID table_id,
+        KeyspaceTableID ks_table_id,
         const String & address,
         const LoggerPtr & log);
 
@@ -243,7 +243,7 @@ public:
     RNRemoteSegmentReadTask(
         DisaggTaskId snapshot_id_,
         StoreID store_id_,
-        TableID table_id_,
+        KeyspaceTableID ks_table_id_,
         UInt64 segment_id_,
         String address_,
         LoggerPtr log_);
@@ -252,7 +252,7 @@ public:
     SegmentReadTaskState state = SegmentReadTaskState::Init;
     const DisaggTaskId snapshot_id;
     const StoreID store_id;
-    const TableID table_id;
+    const KeyspaceTableID ks_table_id;
     const UInt64 segment_id;
     const String address;
 

@@ -266,6 +266,7 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
         return;
 
     config = config_;
+    RUNTIME_CHECK(!config.root.starts_with("//"), config.root);
     config.root = normalizedRoot(config.root);
 
     if (config.bucket.empty())
@@ -412,7 +413,7 @@ bool objectExists(const TiFlashS3Client & client, const String & key)
     throw fromS3Error(outcome.GetError(), "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
 }
 
-void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging)
+static bool doUploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging, Int32 max_retry_times, Int32 current_retry)
 {
     Stopwatch sw;
     Aws::S3::Model::PutObjectRequest req;
@@ -426,14 +427,28 @@ void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const S
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
-        throw fromS3Error(result.GetError(), "S3 PutEmptyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+        if (current_retry == max_retry_times - 1) // Last request
+        {
+            throw fromS3Error(result.GetError(), "S3 PutEmptyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+        }
+        else
+        {
+            LOG_ERROR(client.log, "S3 PutEmptyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+            return false;
+        }
     }
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
     LOG_DEBUG(client.log, "uploadEmptyFile key={}, cost={:.2f}s", key, elapsed_seconds);
+    return true;
 }
 
-void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname)
+void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging, int max_retry_times)
+{
+    retryWrapper(doUploadEmptyFile, client, key, tagging, max_retry_times);
+}
+
+static bool doUploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, Int32 max_retry_times, Int32 current_retry)
 {
     Stopwatch sw;
     Aws::S3::Model::PutObjectRequest req;
@@ -447,12 +462,26 @@ void uploadFile(const TiFlashS3Client & client, const String & local_fname, cons
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
-        throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
+        if (current_retry == max_retry_times - 1) // Last request
+        {
+            throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
+        }
+        else
+        {
+            LOG_ERROR(client.log, "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
+            return false;
+        }
     }
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
     LOG_DEBUG(client.log, "uploadFile local_fname={}, key={}, write_bytes={} cost={:.2f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
+    return true;
+}
+
+void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, int max_retry_times)
+{
+    retryWrapper(doUploadFile, client, local_fname, remote_fname, max_retry_times);
 }
 
 void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname)
@@ -599,11 +628,13 @@ void listPrefix(
 {
     Stopwatch sw;
     Aws::S3::Model::ListObjectsV2Request req;
-    req.WithBucket(client.bucket()).WithPrefix(client.root() + prefix);
+    bool is_root_single_slash = client.root() == "/";
+    // If the `root == '/'`, don't prepend the root to the prefix, otherwise S3 list doesn't work.
+    req.WithBucket(client.bucket()).WithPrefix(is_root_single_slash ? prefix : client.root() + prefix);
 
     // If the `root == '/'`, then the return result will cut it off
     // else we need to cut the root in the following codes
-    bool need_cut = client.root() != "/";
+    bool need_cut = !is_root_single_slash;
     size_t cut_size = client.root().size();
 
     bool done = false;
@@ -662,7 +693,9 @@ void listPrefixWithDelimiter(
 {
     Stopwatch sw;
     Aws::S3::Model::ListObjectsV2Request req;
-    req.WithBucket(client.bucket()).WithPrefix(client.root() + prefix);
+    bool is_root_single_slash = client.root() == "/";
+    // If the `root == '/'`, don't prepend the root to the prefix, otherwise S3 list doesn't work.
+    req.WithBucket(client.bucket()).WithPrefix(is_root_single_slash ? prefix : client.root() + prefix);
     if (!delimiter.empty())
     {
         req.SetDelimiter(String(delimiter));
@@ -670,7 +703,7 @@ void listPrefixWithDelimiter(
 
     // If the `root == '/'`, then the return result will cut it off
     // else we need to cut the root in the following codes
-    bool need_cut = client.root() != "/";
+    bool need_cut = !is_root_single_slash;
     size_t cut_size = client.root().size();
 
     bool done = false;

@@ -136,7 +136,6 @@ RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
 {
     auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
     ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
-    // TODO(iosmanthus): support S3 remote read in keyspace mode.
     auto keyspace_id = context.getDAGContext()->getKeyspaceID();
     dispatch_req_meta->set_keyspace_id(keyspace_id);
     dispatch_req_meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);

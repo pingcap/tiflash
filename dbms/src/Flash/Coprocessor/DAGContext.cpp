@@ -20,6 +20,7 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <kvproto/disaggregated.pb.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
@@ -81,7 +82,8 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
     initOutputInfo();
 }
 
-DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const DM::DisaggTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_)
+// for disaggregated task on write node
+DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const disaggregated::DisaggTaskMeta & task_meta_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_)
     : dag_request(&dag_request_)
     , dummy_query_string(dag_request->DebugString())
     , dummy_ast(makeDummyQuery())
@@ -95,10 +97,11 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const DM::DisaggTaskId &
     , log(std::move(log_))
     , flags(dag_request->flags())
     , sql_mode(dag_request->sql_mode())
-    , disaggregated_id(std::make_unique<DM::DisaggTaskId>(task_id_))
+    , disaggregated_id(std::make_unique<DM::DisaggTaskId>(task_meta_))
     , max_recorded_error_count(getMaxErrorCount(*dag_request))
     , warnings(max_recorded_error_count)
     , warning_count(0)
+    , keyspace_id(RequestUtils::deriveKeyspaceID(task_meta_))
 {
     initOutputInfo();
 }

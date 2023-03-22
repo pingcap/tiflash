@@ -17,7 +17,6 @@
 #include <Common/RedactHelpers.h>
 #include <Common/nocopyable.h>
 #include <Storages/Transaction/SerializationHelper.h>
-#include <Storages/Transaction/TiKVKeyspaceIDImpl.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
