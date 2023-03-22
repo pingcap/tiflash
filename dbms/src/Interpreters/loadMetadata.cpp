@@ -88,47 +88,6 @@ static void loadDatabase(
     executeCreateQuery(database_attach_query, context, database, database_metadata_file, thread_pool, force_restore_data);
 }
 
-
-struct LoadDatabasesTrait
-{
-};
-struct LoadTablesTrait
-{
-};
-using LoadDatabasesPool = IOThreadPool<LoadDatabasesTrait>;
-using LoadTablesPool = IOThreadPool<LoadTablesTrait>;
-
-void setLoadMetadataThreadPool(const Context & context)
-{
-    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
-    LoadDatabasesPool::initialize(
-        /*max_threads*/ default_num_threads,
-        /*max_free_threads*/ default_num_threads / 2,
-        /*queue_size*/ default_num_threads * 2);
-
-    LoadTablesPool::initialize(
-        /*max_threads*/ default_num_threads,
-        /*max_free_threads*/ default_num_threads / 2,
-        /*queue_size*/ default_num_threads * 2);
-
-    // how about the parameter setting?
-    size_t max_io_thread_count = std::ceil(context.getSettingsRef().io_thread_count_scale * default_num_threads / 2);
-    if (LoadDatabasesPool::instance)
-    {
-        LoadDatabasesPool::instance->setMaxThreads(max_io_thread_count);
-        LoadDatabasesPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-        LoadDatabasesPool::instance->setQueueSize(max_io_thread_count * 2);
-    }
-
-    if (LoadTablesPool::instance)
-    {
-        LoadTablesPool::instance->setMaxThreads(max_io_thread_count);
-        LoadTablesPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-        LoadTablesPool::instance->setQueueSize(max_io_thread_count * 2);
-    }
-}
-
-
 void loadMetadata(Context & context)
 {
     const String path = context.getPath() + "metadata/";
@@ -194,24 +153,23 @@ void loadMetadata(Context & context)
         executeCreateQuery(database_attach_query, context, database, database_metadata_file, thread_pool, force_restore_data);
     };
 
-    setLoadMetadataThreadPool(context);
+    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency()) * context.getSettingsRef().io_thread_count_scale * 5 ;
+    auto load_databases_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
+    auto load_tables_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
 
-    std::vector<std::shared_ptr<ThreadPool>> table_thread_pools;
     for (const auto & database : databases)
     {
         const auto & db_name = database.first;
         const auto & meta_file = database.second;
 
-        auto task = [&load_database, &context, &db_name, &meta_file, has_force_restore_data_flag] {
-            load_database(context, db_name, meta_file, &LoadTablesPool::get(), has_force_restore_data_flag);
+        auto task = [&load_database, &context, &db_name, &meta_file, has_force_restore_data_flag, &load_tables_thread_pool] {
+            load_database(context, db_name, meta_file, &load_tables_thread_pool, has_force_restore_data_flag);
         };
 
-        LoadDatabasesPool::get().scheduleOrThrowOnError(task);
+        load_databases_thread_pool.scheduleOrThrowOnError(task);
     }
 
-    LoadDatabasesPool::get().wait();
-    LoadDatabasesPool::shutdown();
-    LoadTablesPool::shutdown();
+    load_databases_thread_pool.wait();
 
     if (has_force_restore_data_flag)
         force_restore_data_flag_file.remove();

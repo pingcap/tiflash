@@ -16,7 +16,6 @@
 
 #include <Common/Exception.h>
 #include <Common/UniThreadPool.h>
-#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -26,8 +25,6 @@ template <typename Type>
 class IOThreadPool
 {
     friend void adjustThreadPoolSize(const Settings & settings, size_t logical_cores);
-    friend void setLoadMetadataThreadPool(const Context & context);
-    friend void setStorageInitThreadPool(const Context & context);
 
     static inline std::unique_ptr<ThreadPool> instance;
 
