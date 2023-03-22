@@ -89,6 +89,46 @@ static void loadDatabase(
 }
 
 
+
+struct LoadDatabasesTrait
+{
+};
+struct LoadTablesTrait
+{
+};
+using LoadDatabasesPool = IOThreadPool<LoadDatabasesTrait>;
+using LoadTablesPool = IOThreadPool<LoadTablesTrait>;
+
+void setLoadMetadataThreadPool(const Context & context) {
+    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
+    LoadDatabasesPool::initialize(
+        /*max_threads*/ default_num_threads,
+        /*max_free_threads*/ default_num_threads / 2,
+        /*queue_size*/ default_num_threads * 2);
+
+    LoadTablesPool::initialize(
+        /*max_threads*/ default_num_threads,
+        /*max_free_threads*/ default_num_threads / 2,
+        /*queue_size*/ default_num_threads * 2);
+
+     // how about the parameter setting?
+    size_t max_io_thread_count = std::ceil(context.getSettingsRef().io_thread_count_scale * default_num_threads / 2);
+    if (LoadDatabasesPool::instance)
+    {
+        LoadDatabasesPool::instance->setMaxThreads(max_io_thread_count);
+        LoadDatabasesPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        LoadDatabasesPool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+
+    if (LoadTablesPool::instance)
+    {
+        LoadTablesPool::instance->setMaxThreads(max_io_thread_count);
+        LoadTablesPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        LoadTablesPool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+}
+
+
 void loadMetadata(Context & context)
 {
     const String path = context.getPath() + "metadata/";
@@ -153,6 +193,8 @@ void loadMetadata(Context & context)
 
         executeCreateQuery(database_attach_query, context, database, database_metadata_file, thread_pool, force_restore_data);
     };
+
+    setLoadMetadataThreadPool(context);
 
     std::vector<std::shared_ptr<ThreadPool>> table_thread_pools;
     for (const auto & database : databases)

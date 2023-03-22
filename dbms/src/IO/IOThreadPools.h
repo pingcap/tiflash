@@ -38,18 +38,6 @@ struct RNPreparerTrait
 {
 };
 
-struct LoadDatabasesTrait
-{
-};
-
-struct InitStoragesTrait
-{
-};
-
-struct LoadTablesTrait
-{
-};
-
 } // namespace io_pool_details
 
 // TODO: Move these out.
@@ -57,7 +45,4 @@ using DataStoreS3Pool = IOThreadPool<io_pool_details::DataStoreS3Trait>;
 using S3FileCachePool = IOThreadPool<io_pool_details::S3FileCacheTrait>;
 using RNRemoteReadTaskPool = IOThreadPool<io_pool_details::RemoteReadTaskTrait>;
 using RNPagePreparerPool = IOThreadPool<io_pool_details::RNPreparerTrait>;
-using LoadDatabasesPool = IOThreadPool<io_pool_details::LoadDatabasesTrait>;
-using InitStoragesPool = IOThreadPool<io_pool_details::InitStoragesTrait>;
-using LoadTablesPool = IOThreadPool<io_pool_details::LoadTablesTrait>;
 } // namespace DB

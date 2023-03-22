@@ -178,7 +178,6 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
         }
     }
 
-    // DatabaseLoading::startupTables(*this, name, tables, thread_pool, log)
     DatabaseLoading::cleanupTables(*this, name, tables_failed_to_startup, log);
 }
 

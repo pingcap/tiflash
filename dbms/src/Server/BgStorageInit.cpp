@@ -38,6 +38,27 @@ void BgStorageInitHolder::waitUntilFinish()
     // or has been detach
 }
 
+struct InitStoragesTrait
+{
+};
+using InitStoragesPool = IOThreadPool<InitStoragesTrait>;
+void setStorageInitThreadPool(const Context & context) {
+    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
+    InitStoragesPool::initialize(
+        /*max_threads*/ default_num_threads,
+        /*max_free_threads*/ default_num_threads / 2,
+        /*queue_size*/ default_num_threads * 2);
+
+     // how about the parameter setting?
+    size_t max_io_thread_count = std::ceil(context.getSettingsRef().io_thread_count_scale * default_num_threads / 2);
+    if (InitStoragesPool::instance)
+    {
+        InitStoragesPool::instance->setMaxThreads(max_io_thread_count);
+        InitStoragesPool::instance->setMaxFreeThreads(max_io_thread_count / 2);
+        InitStoragesPool::instance->setQueueSize(max_io_thread_count * 2);
+    }
+}
+
 void BgStorageInitHolder::start(Context & global_context, const LoggerPtr & log, bool lazily_init_store, bool is_s3_enabled)
 {
     RUNTIME_CHECK_MSG(
@@ -70,6 +91,8 @@ void BgStorageInitHolder::start(Context & global_context, const LoggerPtr & log,
                 tryLogCurrentException(log, fmt::format("Storage inited fail, keyspace_id={} table_id={}", ks_id, table_id));
             }
         };
+
+        setStorageInitThreadPool(global_context);
 
         for (auto & iter : storages)
         {
