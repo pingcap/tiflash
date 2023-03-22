@@ -48,8 +48,6 @@ public:
 private:
     void checkOrSetExecutorId();
 
-    void initOutputInfo();
-
 public:
     tipb::DAGRequest * dag_request;
 

@@ -61,9 +61,7 @@ public:
                 return gen_id;
             }
         }
-        throw Exception(fmt::format(
-            "We have failed five times to generate a unique id for list base executor, exists ids are: [{}]",
-            fmt::join(executor_id_set, ",")));
+        throw Exception(fmt::format("We have failed five times to generate a unique id for list base executor, exists ids are: [{}]", fmt::join(executor_id_set, ",")));
     }
 
 private:
@@ -100,7 +98,7 @@ private:
             return fmt::format("expand_{}", current_id++);
         default:
             throw TiFlashException(
-                fmt::format("Unsupported executor in DAG request: {}", executor.DebugString()),
+                fmt::format("Unsupported executor in list based DAG request: {}", executor.DebugString()),
                 Errors::Coprocessor::Unimplemented);
         }
     }
