@@ -378,7 +378,7 @@ void DAGStorageInterpreter::prepare()
 
     // Do learner read
     const DAGContext & dag_context = *context.getDAGContext();
-    if (dag_context.isBatchCop() || dag_context.isMPPTask())
+    if (dag_context.isBatchCop() || dag_context.isMPPTask() || dag_context.is_disaggregated_task)
         learner_read_snapshot = doBatchCopLearnerRead();
     else
         learner_read_snapshot = doCopLearnerRead();
