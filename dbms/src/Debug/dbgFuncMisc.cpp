@@ -94,7 +94,7 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
         return;
     }
     String target_line;
-    for (auto iter = key_line_candidates.rbegin(); iter != key_line_candidates.rend(); iter++)
+    for (auto iter = key_line_candidates.rbegin(); iter != key_line_candidates.rend(); iter++) // NOLINT
     {
         if (getReadTSOForLog(*iter) == target_read_tso)
         {
