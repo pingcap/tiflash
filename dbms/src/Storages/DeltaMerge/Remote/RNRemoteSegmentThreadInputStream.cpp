@@ -20,6 +20,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Remote/RNRemoteSegmentThreadInputStream.h>
+#include <Storages/Transaction/Types.h>
 
 #include <magic_enum.hpp>
 #include <memory>
@@ -81,6 +82,7 @@ RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
     , expected_block_size(std::max(expected_block_size_, static_cast<size_t>(db_context.getSettingsRef().dt_segment_stable_pack_rows)))
     , read_mode(read_mode_)
     , extra_table_id_index(extra_table_id_index_)
+    , keyspace_id(NullspaceID)
     , physical_table_id(-1)
     , seconds_pop(0.0)
     , seconds_build(0.0)
@@ -128,7 +130,8 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
 
             // Note that the segment task could come from different physical tables
             cur_segment_id = cur_read_task->segment_id;
-            physical_table_id = cur_read_task->table_id;
+            keyspace_id = cur_read_task->ks_table_id.first;
+            physical_table_id = cur_read_task->ks_table_id.second;
             UNUSED(read_mode); // TODO: support more read mode
             cur_stream = cur_read_task->getInputStream(
                 columns_to_read,
@@ -137,13 +140,13 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
                 filter,
                 expected_block_size);
             seconds_build += watch.elapsedSeconds();
-            LOG_TRACE(log, "Read blocks from remote segment begin, segment={} state={}", cur_segment_id, magic_enum::enum_name(cur_read_task->state));
+            LOG_TRACE(log, "Read blocks from remote segment begin, segment_id={} state={}", cur_segment_id, magic_enum::enum_name(cur_read_task->state));
         }
 
         Block res = cur_stream->read(res_filter, return_filter);
         if (!res)
         {
-            LOG_TRACE(log, "Read blocks from remote segment end, segment={}", cur_segment_id);
+            LOG_TRACE(log, "Read blocks from remote segment end, segment_id={}", cur_segment_id);
             cur_segment_id = 0;
             cur_stream = {};
             cur_read_task = nullptr;

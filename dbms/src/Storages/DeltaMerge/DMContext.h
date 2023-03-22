@@ -52,6 +52,7 @@ struct DMContext : private boost::noncopyable
     // gc safe-point, maybe update.
     DB::Timestamp min_version;
 
+    const KeyspaceID keyspace_id;
     const TableID physical_table_id;
 
     bool is_common_handle;
@@ -96,6 +97,7 @@ public:
               const StoragePathPoolPtr & path_pool_,
               const StoragePoolPtr & storage_pool_,
               const DB::Timestamp min_version_,
+              KeyspaceID keyspace_id_,
               TableID physical_table_id_,
               bool is_common_handle_,
               size_t rowkey_column_size_,
@@ -106,6 +108,7 @@ public:
         , path_pool(path_pool_)
         , storage_pool(storage_pool_)
         , min_version(min_version_)
+        , keyspace_id(keyspace_id_)
         , physical_table_id(physical_table_id_)
         , is_common_handle(is_common_handle_)
         , rowkey_column_size(rowkey_column_size_)

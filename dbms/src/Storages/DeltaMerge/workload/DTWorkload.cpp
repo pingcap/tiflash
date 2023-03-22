@@ -58,6 +58,7 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
         true,
         table_info->db_name,
         table_info->table_name,
+        NullspaceID,
         table_info->table_id,
         true,
         *table_info->columns,
