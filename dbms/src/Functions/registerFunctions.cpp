@@ -45,7 +45,7 @@ void registerFunctionsDuration(FunctionFactory &);
 void registerFunctionsRegexp(FunctionFactory &);
 void registerFunctionsJson(FunctionFactory &);
 void registerFunctionsIsIPAddr(FunctionFactory &);
-
+void registerFunctionsGrouping(FunctionFactory & factory);
 
 void registerFunctions()
 {
@@ -75,6 +75,7 @@ void registerFunctions()
     registerFunctionsRegexp(factory);
     registerFunctionsJson(factory);
     registerFunctionsIsIPAddr(factory);
+    registerFunctionsGrouping(factory);
 }
 
 } // namespace DB

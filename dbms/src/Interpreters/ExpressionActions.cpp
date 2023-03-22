@@ -712,6 +712,11 @@ BlockInputStreamPtr ExpressionActions::createStreamWithNonJoinedDataIfFullOrRigh
     return {};
 }
 
+void ExpressionActions::setMetaData(const tipb::Expr & expr)
+{
+    actions.back().setMetaData(expr);
+}
+
 void ExpressionActionsChain::addStep()
 {
     if (steps.empty())

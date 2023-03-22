@@ -401,6 +401,16 @@ String DAGExpressionAnalyzerHelper::buildRegexpFunction(
     return analyzer->applyFunction(func_name, argument_names, actions, collator);
 }
 
+String DAGExpressionAnalyzerHelper::buildGroupingFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    const ExpressionActionsPtr & actions)
+{
+    auto result_name = DAGExpressionAnalyzerHelper::buildDefaultFunction(analyzer, expr, actions);
+    actions->setMetaData(expr);
+    return result_name;
+}
+
 String DAGExpressionAnalyzerHelper::buildDefaultFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
@@ -457,6 +467,9 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"date_sub", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateSub>},
      {"regexp", DAGExpressionAnalyzerHelper::buildRegexpFunction},
      {"replaceRegexpAll", DAGExpressionAnalyzerHelper::buildRegexpFunction},
-     {"tidbRound", DAGExpressionAnalyzerHelper::buildRoundFunction}});
+     {"tidbRound", DAGExpressionAnalyzerHelper::buildRoundFunction},
+     {"grouping", DAGExpressionAnalyzerHelper::buildGroupingFunction}});
+
+DAGExpressionAnalyzerHelper::FunctionNeedMetaData DAGExpressionAnalyzerHelper::function_need_meta_data{"grouping"};
 
 } // namespace DB

@@ -19,6 +19,8 @@
 #include <Core/Names.h>
 #include <Interpreters/Expand.h>
 #include <Storages/Transaction/Collator.h>
+#include <tipb/expression.pb.h>
+#include <Functions/IFunction.h>
 
 #include <unordered_map>
 #include <unordered_set>
@@ -37,10 +39,7 @@ using NamesWithAliases = std::vector<NameWithAlias>;
 class Join;
 class Expand;
 
-class IFunctionBase;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
-
-class IFunctionBuilder;
 using FunctionBuilderPtr = std::shared_ptr<IFunctionBuilder>;
 
 class IDataType;
@@ -117,6 +116,7 @@ public:
 
     std::string toString() const;
 
+    void setMetaData(const tipb::Expr & expr) { function->setMetaData(expr); }
 private:
     friend class ExpressionActions;
 
@@ -166,6 +166,9 @@ public:
 
     /// Adds new column names to out_new_columns (formed as a result of the added action).
     void add(const ExpressionAction & action, Names & out_new_columns);
+
+    // Set meta data for the last ExpressionAction
+    void setMetaData(const tipb::Expr & expr);
 
     /// Adds to the beginning the removal of all extra columns.
     void prependProjectInput();

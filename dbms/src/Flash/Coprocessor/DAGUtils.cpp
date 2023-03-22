@@ -25,6 +25,7 @@
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <tipb/expression.pb.h>
 
 #include <unordered_map>
 namespace DB
@@ -682,6 +683,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::UpperUTF8, "upperUTF8"},
     {tipb::ScalarFuncSig::Upper, "upperBinary"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
+
+    {tipb::ScalarFuncSig::GroupingSig, "grouping"}
 });
 
 template <typename GetColumnsFunc, typename GetDataTypeFunc>

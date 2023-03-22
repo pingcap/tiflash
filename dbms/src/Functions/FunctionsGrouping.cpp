@@ -12,7 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsGrouping.h>
+
 namespace DB
 {
-
+void registerFunctionsGrouping(FunctionFactory & factory)
+{
+    factory.registerFunction<FunctionGrouping<NameGrouping>>();
+}
 } // namespace DB

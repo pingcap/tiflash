@@ -87,6 +87,11 @@ public:
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
 
+    static String buildGroupingFunction(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions);
+
     static String buildDefaultFunction(
         DAGExpressionAnalyzer * analyzer,
         const tipb::Expr & expr,
@@ -94,7 +99,9 @@ public:
 
     using FunctionBuilder = std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, const ExpressionActionsPtr &)>;
     using FunctionBuilderMap = std::unordered_map<String, FunctionBuilder>;
+    using FunctionNeedMetaData = std::set<String>;
 
     static FunctionBuilderMap function_builder_map;
+    static FunctionNeedMetaData function_need_meta_data;
 };
 } // namespace DB

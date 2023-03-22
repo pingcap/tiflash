@@ -20,6 +20,7 @@
 #include <Core/Names.h>
 #include <DataTypes/IDataType.h>
 #include <Storages/Transaction/Collator.h>
+#include <tipb/expression.pb.h>
 
 #include <memory>
 
@@ -173,7 +174,12 @@ public:
       */
     virtual Monotonicity getMonotonicityForRange(const IDataType & /*type*/, const Field & /*left*/, const Field & /*right*/) const
     {
-        throw Exception("Function " + getName() + " has no information about its monotonicity.", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(fmt::format("Function {} has no information about its monotonicity.", getName()), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    virtual void setMetaData(const tipb::Expr & /*expr*/)
+    {
+        throw Exception(fmt::format("Function {} doesn't override setMetaData", getName()), ErrorCodes::NOT_IMPLEMENTED);
     }
 };
 
@@ -269,7 +275,7 @@ public:
     using Monotonicity = IFunctionBase::Monotonicity;
     virtual Monotonicity getMonotonicityForRange(const IDataType & /*type*/, const Field & /*left*/, const Field & /*right*/) const
     {
-        throw Exception("Function " + getName() + " has no information about its monotonicity.", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(fmt::format("Function {} has no information about its monotonicity.", getName()), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /// For non-variadic functions, return number of arguments; otherwise return zero (that should be ignored).
@@ -277,7 +283,7 @@ public:
 
     virtual DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const
     {
-        throw Exception("getReturnType is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(fmt::format("getReturnType is not implemented for {}", getName()), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /// Get the result type by argument type. If the function does not apply to these arguments, throw an exception.
@@ -294,10 +300,15 @@ public:
 
     virtual void getLambdaArgumentTypes(DataTypes & /*arguments*/) const
     {
-        throw Exception("Function " + getName() + " can't have lambda-expressions as arguments", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(fmt::format("Function {} can't have lambda-expressions as arguments", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     virtual void setCollator(const TiDB::TiDBCollatorPtr &) {}
+
+    virtual void setMetaData(const tipb::Expr & /*expr*/)
+    {
+        throw Exception(fmt::format("Function {} doesn't override setMetaData()", getName()), ErrorCodes::NOT_IMPLEMENTED);
+    }
 };
 
 /// Wrappers over IFunction.
@@ -353,6 +364,11 @@ public:
     IFunctionBase::Monotonicity getMonotonicityForRange(const IDataType & type, const Field & left, const Field & right) const override
     {
         return function->getMonotonicityForRange(type, left, right);
+    }
+
+    void setMetaData(const tipb::Expr & expr) override
+    {
+        function->setMetaData(expr);
     }
 
 private:

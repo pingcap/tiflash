@@ -71,10 +71,8 @@ public:
         {
             return std::make_shared<DataTypeNumber<ResultType>>();
         }
-        else
-        {
-            throw Exception(fmt::format("Illegal type {} of argument of grouping function", arg_data_type->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        }
+
+        throw Exception(fmt::format("Illegal type {} of argument of grouping function", arg_data_type->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -95,13 +93,52 @@ public:
             processNonConstGroupingIDs(col_grouping_ids, block.getByPosition(result).column, block.rows());
     }
 
+    void setMetaData(const tipb::Expr & expr) override
+    {
+        const auto & meta_data = expr.groupingmeta();
+        version = meta_data.version();
+        size_t num = meta_data.grouping_ids_size();
+
+        if (num <= 0)
+            throw Exception("number of grouping_ids should be greater than 0");
+
+        if (version == 1 || version == 2)
+            meta_grouping_id = meta_data.grouping_ids().at(0);
+        else
+        {
+            for (size_t i = 0; i < num; ++i)
+                meta_grouping_ids.insert(meta_data.grouping_ids().at(i));
+        }
+    }
+
+    // TODO The following functions are for test, may need being changed or deleted
+
+    void setVersion(UInt32 version_) { version = version_; }
+    void setMetaGroupingID(UInt64 meta_grouping_id_) { meta_grouping_id = meta_grouping_id_;}
+    void setMetaGroupingIDs(const std::set<UInt64> meta_grouping_ids_) { meta_grouping_ids = meta_grouping_ids_; }
+
+    UInt32 getVersion() const
+    {
+        return version;
+    }
+
+    UInt64 getMetaGroupingID() const
+    {
+        return meta_grouping_id;
+    }
+
+    const std::set<UInt64> & getMetaGroupingIDs() const
+    {
+        return meta_grouping_ids;
+    }
+
 private:
     void processConstGroupingIDs(const ColumnConst * col_grouping_ids_const, ColumnPtr & col_res, size_t row_num) const
     {
         UInt64 grouping_id = col_grouping_ids_const->getUInt(0);
         auto res = grouping(grouping_id);
 
-        col_res = DataTypeNumber<ResultType>().createColumnConst(row_num, Field(res));
+        col_res = DataTypeNumber<ResultType>().createColumnConst(row_num, Field(static_cast<UInt64>(res)));
     }
 
     void processNonConstGroupingIDs(const ColumnPtr & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
@@ -148,24 +185,6 @@ private:
         };
     }
 
-    UInt32 getVersion() const
-    {
-        // TODO
-        return 0;
-    }
-
-    UInt64 getMetaGroupingID() const
-    {
-        // TODO
-        return 0;
-    }
-
-    std::set<UInt64> getMetaGroupingIDs() const
-    {
-        // TODO
-        return std::set<UInt64>();
-    }
-
     template <int version>
     void groupingNullableVec(const ColumnNullable & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
     {
@@ -180,12 +199,12 @@ private:
         // get result's data container
         auto col_vec_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_vec_res->getData();
-        vec_res.assign(row_num, 0);
+        vec_res.assign(row_num, static_cast<ResultType>(0));
 
         // get result's null map
         auto nullmap_col_res = ColumnUInt8::create();
         typename ColumnUInt8::Container & res_null_map = nullmap_col_res->getData();
-        res_null_map.assign(row_num, 1);
+        res_null_map.assign(row_num, static_cast<UInt8>(1));
 
         for (size_t i = 0; i < row_num; ++i)
         {
@@ -215,7 +234,7 @@ private:
         // get result's data container
         auto col_vec_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_vec_res->getData();
-        vec_res.assign(row_num, 0);
+        vec_res.assign(row_num, static_cast<ResultType>(0));
 
         for (size_t i = 0; i < row_num; ++i)
         {
@@ -260,7 +279,12 @@ private:
         return iter == meta_grouping_ids.end();
     }
 
+private:
     TiDB::TiDBCollatorPtr collator = nullptr;
+
+    UInt32 version = 0;
+    UInt64 meta_grouping_id = 0;
+    std::set<UInt64> meta_grouping_ids = {};
 };
 
 } // namespace DB
