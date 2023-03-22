@@ -42,14 +42,15 @@ struct InitStoragesTrait
 {
 };
 using InitStoragesPool = IOThreadPool<InitStoragesTrait>;
-void setStorageInitThreadPool(const Context & context) {
+void setStorageInitThreadPool(const Context & context)
+{
     size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
     InitStoragesPool::initialize(
         /*max_threads*/ default_num_threads,
         /*max_free_threads*/ default_num_threads / 2,
         /*queue_size*/ default_num_threads * 2);
 
-     // how about the parameter setting?
+    // how about the parameter setting?
     size_t max_io_thread_count = std::ceil(context.getSettingsRef().io_thread_count_scale * default_num_threads / 2);
     if (InitStoragesPool::instance)
     {

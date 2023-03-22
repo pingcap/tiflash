@@ -204,7 +204,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
             f.get();
         }
     }
-    
+
     DatabaseLoading::cleanupTables(*this, name, tables_failed_to_startup, log);
 }
 
