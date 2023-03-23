@@ -56,10 +56,9 @@ public:
         createIfNotExist(path);
         file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        s3_client = S3::ClientFactory::instance().sharedClient();
-        bucket = S3::ClientFactory::instance().bucket();
+        s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
-        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
+        ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
 
         page_storage = UniversalPageStorage::create("write", delegator, config, file_provider);
         page_storage->restore();
@@ -76,7 +75,7 @@ public:
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         auto storage = UniversalPageStorage::create("test.t", delegator, config_, file_provider);
         storage->restore();
-        auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client, bucket);
+        auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
         storage->initLocksLocalManager(100, mock_s3lock_client);
         return storage;
     }
@@ -86,7 +85,7 @@ public:
         const String & full_path = dir + "/" + f_name;
         ReadBufferPtr src_buf = std::make_shared<ReadBufferFromFile>(full_path);
         S3::WriteSettings write_setting;
-        WritableFilePtr dst_file = std::make_shared<S3::S3WritableFile>(s3_client, bucket, f_name, write_setting);
+        WritableFilePtr dst_file = std::make_shared<S3::S3WritableFile>(s3_client, f_name, write_setting);
         WriteBufferPtr dst_buf = std::make_shared<WriteBufferFromWritableFile>(dst_file);
         copyData(*src_buf, *dst_buf);
         dst_buf->next();
@@ -97,7 +96,7 @@ public:
 protected:
     void deleteBucket()
     {
-        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client, bucket);
+        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
     }
 
 protected:
@@ -105,8 +104,7 @@ protected:
     String remote_dir;
     FileProviderPtr file_provider;
     PSDiskDelegatorPtr delegator;
-    std::shared_ptr<Aws::S3::S3Client> s3_client;
-    String bucket;
+    std::shared_ptr<S3::TiFlashS3Client> s3_client;
     PageStorageConfig config;
     std::shared_ptr<UniversalPageStorage> page_storage;
 
@@ -154,7 +152,7 @@ try
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
         wb.putPage(r[0].page_id, 0, "local data");
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.size, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         wb.putRefPage(r[1].page_id, r[0].page_id);
         page_storage->write(std::move(wb));
     }
@@ -227,7 +225,7 @@ try
 
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.size, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -293,7 +291,7 @@ try
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
         wb.putPage(r[0].page_id, 0, "local data");
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.size, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -321,7 +319,7 @@ try
     }
 
     // create an empty bucket because reload will try to read from S3
-    ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client, bucket));
+    ASSERT_TRUE(::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client));
     reload();
 
     {
@@ -375,8 +373,8 @@ try
 
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
-        wb.putRemotePage(r[1].page_id, 0, r[1].entry.checkpoint_info.data_location, std::move(r[1].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.size, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[1].page_id, 0, r[0].entry.size, r[1].entry.checkpoint_info.data_location, std::move(r[1].entry.field_offsets));
         page_storage->write(std::move(wb));
     }
 
@@ -451,7 +449,7 @@ try
 
         UniversalWriteBatch wb;
         wb.disableRemoteLock();
-        wb.putRemotePage(r[0].page_id, 0, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
+        wb.putRemotePage(r[0].page_id, 0, r[0].entry.size, r[0].entry.checkpoint_info.data_location, std::move(r[0].entry.field_offsets));
         wb.putRefPage(r[1].page_id, r[0].page_id);
         page_storage->write(std::move(wb));
     }

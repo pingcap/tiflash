@@ -60,7 +60,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
                 index_cache,
                 /*set_cache_if_miss*/ true,
                 {range},
-                EMPTY_FILTER,
+                EMPTY_RS_OPERATOR,
                 {},
                 dm_context->db_context.getFileProvider(),
                 dm_context->getReadLimiter(),
@@ -110,7 +110,6 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
     for (size_t i = 0; i < size; ++i)
     {
         readIntBinary(page_id, buf);
-        auto file_id = context.storage_pool->dataReader()->getNormalPageId(page_id);
 
         DMFilePtr dmfile;
         if (remote_data_store)
@@ -119,14 +118,14 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageIdU64 id)
             auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, context.storage_pool->getNamespaceId()), page_id);
             auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
             const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
-            auto dtfile_key = lock_key_view.asDataFile();
-            auto file_oid = dtfile_key.getDMFileOID();
+            auto file_oid = lock_key_view.asDataFile().getDMFileOID();
             RUNTIME_CHECK(file_oid.table_id == context.physical_table_id);
             auto prepared = remote_data_store->prepareDMFile(file_oid, page_id);
             dmfile = prepared->restore(DMFile::ReadMetaMode::all());
         }
         else
         {
+            auto file_id = context.storage_pool->dataReader()->getNormalPageId(page_id);
             auto path_delegate = context.path_pool->getStableDiskDelegator();
             auto file_parent_path = path_delegate.getDTFilePath(file_id);
             dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
@@ -167,21 +166,16 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
         readIntBinary(size, buf);
     }
 
+    auto remote_data_store = context.db_context.getSharedContextDisagg()->remote_data_store;
     for (size_t i = 0; i < size; ++i)
     {
         UInt64 page_id;
         readIntBinary(page_id, buf);
-        auto remote_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id), page_id);
-        auto remote_file_id = temp_ps->getNormalPageId(remote_page_id);
-        auto file_id = UniversalPageIdFormat::getU64ID(remote_file_id);
-        auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
-        const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
-        S3::DMFileOID file_oid{
-            .store_id = lock_key_view.store_id,
-            .table_id = ns_id,
-            .file_id = file_id};
-        RUNTIME_CHECK(lock_key_view.asDataFile().toFullKey() == S3::S3Filename::fromDMFileOID(file_oid).toFullKey());
-        auto data_key = S3::S3Filename::fromDMFileOID(file_oid).toFullKey();
+        auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id), page_id);
+        auto remote_data_location = temp_ps->getCheckpointLocation(full_page_id);
+        auto data_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id)).asDataFile();
+        auto file_oid = data_key_view.getDMFileOID();
+        auto data_key = data_key_view.toFullKey();
         auto delegator = context.path_pool->getStableDiskDelegator();
         auto new_local_page_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
         PS::V3::CheckpointLocation loc{
@@ -190,11 +184,10 @@ StableValueSpacePtr StableValueSpace::createFromCheckpoint( //
             .size_in_file = 0,
         };
         wbs.data.putRemoteExternal(new_local_page_id, loc);
-
-        auto parent_path = S3::S3Filename::fromTableID(lock_key_view.store_id, ns_id).toFullKeyWithPrefix();
-        auto new_dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, new_local_page_id, parent_path, DMFile::ReadMetaMode::all());
+        auto prepared = remote_data_store->prepareDMFile(file_oid, new_local_page_id);
+        auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
         wbs.writeLogAndData();
-        stable->files.push_back(new_dmfile);
+        stable->files.push_back(dmfile);
     }
 
     stable->valid_rows = valid_rows;
@@ -340,7 +333,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             context.db_context.getGlobalContext().getMinMaxIndexCache(),
             /*set_cache_if_miss*/ false,
             {rowkey_range},
-            EMPTY_FILTER,
+            EMPTY_RS_OPERATOR,
             {},
             context.db_context.getFileProvider(),
             context.getReadLimiter(),

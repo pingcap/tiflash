@@ -27,6 +27,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <absl/base/optimization.h>
 
 #include <shared_mutex>
 
@@ -106,12 +107,11 @@ public:
          const SpillConfig & probe_spill_config_,
          Int64 join_restore_concurrency_,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
-         const String & left_filter_column = "",
-         const String & right_filter_column = "",
-         const JoinOtherConditions & conditions = {},
+         const JoinNonEqualConditions & non_equal_conditions_ = {},
          size_t max_block_size = 0,
          const String & match_helper_name = "",
-         size_t restore_round = 0);
+         size_t restore_round = 0,
+         bool is_test = true);
 
     size_t restore_round;
 
@@ -379,6 +379,27 @@ public:
     SpillerPtr build_spiller;
     SpillerPtr probe_spiller;
 
+    struct alignas(ABSL_CACHELINE_SIZE) RowsNotInsertToMap
+    {
+        explicit RowsNotInsertToMap(size_t max_block_size_)
+            : max_block_size(max_block_size_)
+        {
+            RUNTIME_ASSERT(max_block_size > 0);
+        }
+
+        /// Row list
+        RowRefList head;
+        /// Materialized rows
+        std::vector<MutableColumns> materialized_columns_vec;
+        size_t max_block_size;
+
+        size_t total_size = 0;
+
+        /// Insert row to this structure.
+        /// If need_materialize is true, row will be inserted into materialized_columns_vec.
+        /// Else it will be inserted into row list.
+        void insertRow(Block * stored_block, size_t index, bool need_materialize, Arena & pool);
+    };
 
 private:
     friend class NonJoinedBlockInputStream;
@@ -401,7 +422,6 @@ private:
     size_t probe_concurrency;
     size_t active_probe_concurrency;
 
-
     bool is_canceled = false;
     bool meet_error = false;
     String error_message;
@@ -409,16 +429,7 @@ private:
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
-    String left_filter_column;
-    String right_filter_column;
-
-    const JoinOtherConditions other_conditions;
-
-    /// For null-aware semi join with no other condition.
-    /// Indicate if the right table is empty.
-    std::atomic<bool> right_table_is_empty{true};
-    /// Indicate if the right table has a all-key-null row.
-    std::atomic<bool> right_has_all_key_null_row{false};
+    const JoinNonEqualConditions non_equal_conditions;
 
     ASTTableJoin::Strictness original_strictness;
     size_t max_block_size;
@@ -459,10 +470,15 @@ private:
     /// 1. Rows with NULL join keys
     /// 2. Rows that are filtered by right join conditions
     /// For null-aware semi join family, including rows with NULL join keys.
-    std::vector<std::unique_ptr<RowRefList>> rows_not_inserted_to_map;
+    std::vector<RowsNotInsertToMap> rows_not_inserted_to_map;
+    /// Whether to directly check all blocks for row with null key.
+    bool null_key_check_all_blocks_directly = false;
 
-    /// The RowRefList in `rows_not_inserted_to_map` that removes the empty RowRefList.
-    PaddedPODArray<RowRefList *> rows_with_null_keys;
+    /// For null-aware semi join with no other condition.
+    /// Indicate if the right table is empty.
+    std::atomic<bool> right_table_is_empty{true};
+    /// Indicate if the right table has a all-key-null row.
+    std::atomic<bool> right_has_all_key_null_row{false};
 
 private:
     Type type = Type::EMPTY;
@@ -475,6 +491,8 @@ private:
     Block sample_block_with_columns_to_add;
     /// Block with key columns in the same order they appear in the right-side table.
     Block sample_block_with_keys;
+
+    bool is_test;
 
     Block build_sample_block;
     Block probe_sample_block;
@@ -579,7 +597,7 @@ struct ProbeProcessInfo
     size_t end_row;
     bool all_rows_joined_finish;
 
-    ProbeProcessInfo(UInt64 max_block_size_)
+    explicit ProbeProcessInfo(UInt64 max_block_size_)
         : max_block_size(max_block_size_)
         , all_rows_joined_finish(true){};
 

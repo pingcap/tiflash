@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
 #include <Storages/Page/Page.h>
@@ -25,7 +26,6 @@
 
 namespace DB
 {
-class Context;
 class ReadBuffer;
 using ReadBufferPtr = std::shared_ptr<ReadBuffer>;
 

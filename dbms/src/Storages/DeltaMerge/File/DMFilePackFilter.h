@@ -239,6 +239,7 @@ private:
             auto index_file_size = dmfile->colIndexSize(col_id);
             if (index_file_size == 0)
                 return std::make_shared<MinMaxIndex>(*type);
+            auto index_guard = S3::S3RandomAccessFile::setReadFileInfo(dmfile->getReadFileInfo(col_id, dmfile->colIndexFileName(file_name_base)));
             if (!dmfile->configuration)
             {
                 auto index_buf = ReadBufferFromFileProvider(

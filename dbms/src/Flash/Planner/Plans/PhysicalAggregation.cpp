@@ -76,6 +76,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     auto physical_agg = std::make_shared<PhysicalAggregation>(
         executor_id,
         schema,
+        fine_grained_shuffle,
         log->identifier(),
         child,
         before_agg_actions,
@@ -83,8 +84,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
         collators,
         AggregationInterpreterHelper::isFinalAgg(aggregation),
         aggregate_descriptions,
-        expr_after_agg_actions,
-        fine_grained_shuffle);
+        expr_after_agg_actions);
     return physical_agg;
 }
 

@@ -45,7 +45,7 @@ void ColumnFileBig::calculateStat(const DMContext & context)
         index_cache,
         /*set_cache_if_miss*/ false,
         {segment_range},
-        EMPTY_FILTER,
+        EMPTY_RS_OPERATOR,
         {},
         context.db_context.getFileProvider(),
         context.getReadLimiter(),
@@ -89,7 +89,6 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(const DMContext & cont
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
-    auto file_id = context.storage_pool->dataReader()->getNormalPageId(file_page_id);
     String file_parent_path;
     DMFilePtr dmfile;
     auto remote_data_store = context.db_context.getSharedContextDisagg()->remote_data_store;
@@ -99,13 +98,13 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(const DMContext & cont
         auto full_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, context.storage_pool->getNamespaceId()), file_page_id);
         auto remote_data_location = wn_ps->getCheckpointLocation(full_page_id);
         const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
-        auto dtfile_key = lock_key_view.asDataFile();
-        auto file_oid = dtfile_key.getDMFileOID();
+        auto file_oid = lock_key_view.asDataFile().getDMFileOID();
         auto prepared = remote_data_store->prepareDMFile(file_oid, file_page_id);
         dmfile = prepared->restore(DMFile::ReadMetaMode::all());
     }
     else
     {
+        auto file_id = context.storage_pool->dataReader()->getNormalPageId(file_page_id);
         file_parent_path = context.path_pool->getStableDiskDelegator().getDTFilePath(file_id);
         dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_page_id, file_parent_path, DMFile::ReadMetaMode::all());
     }
@@ -128,35 +127,24 @@ ColumnFilePersistedPtr ColumnFileBig::createFromCheckpoint(DMContext & context, 
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
-    // get target dtfile s3 key
     auto remote_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Data, ns_id), file_page_id);
     auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
-    auto remote_file_id = temp_ps->getNormalPageId(remote_page_id);
-    auto file_id = UniversalPageIdFormat::getU64ID(remote_file_id);
-
-    const auto & lock_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id));
-    S3::DMFileOID file_oid{
-        .store_id = lock_key_view.store_id,
-        .table_id = ns_id,
-        .file_id = file_id};
-    RUNTIME_CHECK(lock_key_view.asDataFile().toFullKey() == S3::S3Filename::fromDMFileOID(file_oid).toFullKey());
-
-    auto data_key = S3::S3Filename::fromDMFileOID(file_oid).toFullKey();
+    auto data_key_view = S3::S3FilenameView::fromKey(*(remote_data_location->data_file_id)).asDataFile();
+    auto file_oid = data_key_view.getDMFileOID();
+    auto data_key = data_key_view.toFullKey();
     auto delegator = context.path_pool->getStableDiskDelegator();
-    auto & storage_pool = context.storage_pool;
-    auto new_local_page_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+    auto new_local_page_id = context.storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     PS::V3::CheckpointLocation loc{
         .data_file_id = std::make_shared<String>(data_key),
         .offset_in_file = 0,
         .size_in_file = 0,
     };
     wbs.data.putRemoteExternal(new_local_page_id, loc);
-
-    auto parent_path = S3::S3Filename::fromTableID(lock_key_view.store_id, ns_id).toFullKeyWithPrefix();
-    auto new_dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, new_local_page_id, parent_path, DMFile::ReadMetaMode::all());
+    auto remote_data_store = context.db_context.getSharedContextDisagg()->remote_data_store;
+    auto prepared = remote_data_store->prepareDMFile(file_oid, new_local_page_id);
+    auto dmfile = prepared->restore(DMFile::ReadMetaMode::all());
     wbs.writeLogAndData();
-    new_dmfile->enableGC();
-    auto * dp_file = new ColumnFileBig(new_dmfile, valid_rows, valid_bytes, target_range);
+    auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, target_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
 

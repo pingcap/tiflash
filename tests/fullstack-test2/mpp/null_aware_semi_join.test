@@ -409,3 +409,121 @@ mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp
 |    4 |    4 |                                         NULL |
 |    5 |    5 |                                            0 |
 +------+------+----------------------------------------------+
+
+mysql> drop table if exists test.t2;
+mysql> drop table if exists test.s2;
+mysql> create table test.t2(a varchar(20) COLLATE utf8mb4_general_ci, b varchar(20) COLLATE utf8mb4_general_ci);
+mysql> create table test.s2(a varchar(20) COLLATE utf8mb4_general_ci, b varchar(20) COLLATE utf8mb4_general_ci);
+mysql> alter table test.t2 set tiflash replica 1;
+mysql> alter table test.s2 set tiflash replica 1;
+
+mysql> insert into test.t2 values('a', 'A'), ('b', 'b'), ('c', 'c'), ('d', 'dd'), ('e', 'e');
+mysql> insert into test.s2 values('a', 'a'), (null, 'b'), ('c', null), (null, 'dD'), ('D', 'DD'), ('E', null);
+
+func> wait_table test t2
+func> wait_table test s2
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b from t2 where (a,b) not in (select a,b from s2);
+# empty
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) not in (select a,b from s2) from t2;
++------+------+-----------------------------------+
+| a    | b    | (a,b) not in (select a,b from s2) |
++------+------+-----------------------------------+
+| a    | A    |                                 0 |
+| b    | b    |                              NULL |
+| c    | c    |                              NULL |
+| d    | dd   |                                 0 |
+| e    | e    |                              NULL |
++------+------+-----------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) in (select a,b from s2) from t2;
++------+------+-------------------------------+
+| a    | b    | (a,b) in (select a,b from s2) |
++------+------+-------------------------------+
+| a    | A    |                             1 |
+| b    | b    |                          NULL |
+| c    | c    |                          NULL |
+| d    | dd   |                             1 |
+| e    | e    |                          NULL |
++------+------+-------------------------------+
+
+mysql> truncate test.t2;
+mysql> truncate test.s2;
+mysql> insert into test.t2 values('aa', 'aa'), ('bb', 'bb'), ('cc', null), ('dd', 'dd');
+mysql> insert into test.s2 values('AA', 'aa'), (null, 'bb'), ('cC', null), (null, null);
+
+func> wait_table test t2
+func> wait_table test s2
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b from t2 where (a,b) not in (select a,b from s2);
+# empty
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) not in (select a,b from s2) from t2;
++------+------+-----------------------------------+
+| a    | b    | (a,b) not in (select a,b from s2) |
++------+------+-----------------------------------+
+| aa   | aa   |                                 0 |
+| bb   | bb   |                              NULL |
+| cc   | NULL |                              NULL |
+| dd   | dd   |                              NULL |
++------+------+-----------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) in (select a,b from s2) from t2;
++------+------+-------------------------------+
+| a    | b    | (a,b) in (select a,b from s2) |
++------+------+-------------------------------+
+| aa   | aa   |                             1 |
+| bb   | bb   |                          NULL |
+| cc   | NULL |                          NULL |
+| dd   | dd   |                          NULL |
++------+------+-------------------------------+
+
+mysql> truncate test.t2;
+mysql> truncate test.s2;
+mysql> insert into test.t2 values('a', null), ('Bb', 'CC'), (null, 'bb'), ('d', 'dD'), ('E', 'EE'), (null, 'AA'), ('d', null), (null, null);
+mysql> insert into test.s2 values('b', 'AA'), ('bb', 'cc'), ('b', null), ('C', null), ('D', 'Dd'), ('d', null);
+
+func> wait_table test t2
+func> wait_table test s2
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b from t2 where (a,b) not in (select a,b from s2);
++------+------+
+| a    | b    |
++------+------+
+| a    | NULL |
+| E    | EE   |
++------+------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) not in (select a,b from s2) from t2;
++------+------+-----------------------------------+
+| a    | b    | (a,b) not in (select a,b from s2) |
++------+------+-----------------------------------+
+| a    | NULL |                                 1 |
+| Bb   | CC   |                                 0 |
+| NULL | bb   |                              NULL |
+| d    | dD   |                                 0 |
+| E    | EE   |                                 1 |
+| NULL | AA   |                              NULL |
+| d    | NULL |                              NULL |
+| NULL | NULL |                              NULL |
++------+------+-----------------------------------+
+
+mysql> use test;set @@tidb_isolation_read_engines='tiflash';set tidb_enforce_mpp=1;set tidb_enable_null_aware_anti_join=on; select a,b,(a,b) in (select a,b from s2) from t2;
++------+------+-------------------------------+
+| a    | b    | (a,b) in (select a,b from s2) |
++------+------+-------------------------------+
+| a    | NULL |                             0 |
+| Bb   | CC   |                             1 |
+| NULL | bb   |                          NULL |
+| d    | dD   |                             1 |
+| E    | EE   |                             0 |
+| NULL | AA   |                          NULL |
+| d    | NULL |                          NULL |
+| NULL | NULL |                          NULL |
++------+------+-------------------------------+
+
+mysql> drop table if exists test.t
+mysql> drop table if exists test.s
+mysql> drop table if exists test.t2
+mysql> drop table if exists test.s2

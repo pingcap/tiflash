@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
@@ -72,10 +74,11 @@ Poco::Message::Priority convertLogLevel(Aws::Utils::Logging::LogLevel log_level)
     case Aws::Utils::Logging::LogLevel::Warn:
         return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Info:
-        // treat aws info logging as debug level
-        return Poco::Message::PRIO_DEBUG;
+        // treat aws info logging as trace level
+        return Poco::Message::PRIO_TRACE;
     case Aws::Utils::Logging::LogLevel::Debug:
-        return Poco::Message::PRIO_DEBUG;
+        // treat aws debug logging as trace level
+        return Poco::Message::PRIO_TRACE;
     case Aws::Utils::Logging::LogLevel::Trace:
         return Poco::Message::PRIO_TRACE;
     default:
@@ -125,24 +128,49 @@ private:
 namespace DB::S3
 {
 
-TiFlashS3Client::TiFlashS3Client(const String & bucket_name_)
+// ensure the `key_root` format like "user0/". No '/' at the beginning and '/' at the end
+String normalizedRoot(String ori_root) // a copy for changing
+{
+    if (startsWith(ori_root, "/") && ori_root.size() != 1)
+    {
+        ori_root = ori_root.substr(1, ori_root.size());
+    }
+    if (!endsWith(ori_root, "/"))
+    {
+        ori_root += "/";
+    }
+    return ori_root;
+}
+
+TiFlashS3Client::TiFlashS3Client(const String & bucket_name_, const String & root_)
     : bucket_name(bucket_name_)
-{}
+    , key_root(normalizedRoot(root_))
+    , log(Logger::get(fmt::format("bucket={} root={}", bucket_name, key_root)))
+{
+}
 
 TiFlashS3Client::TiFlashS3Client(
     const String & bucket_name_,
+    const String & root_,
     const Aws::Auth::AWSCredentials & credentials,
     const Aws::Client::ClientConfiguration & clientConfiguration,
     Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy signPayloads,
     bool useVirtualAddressing)
     : Aws::S3::S3Client(credentials, clientConfiguration, signPayloads, useVirtualAddressing)
     , bucket_name(bucket_name_)
+    , key_root(normalizedRoot(root_))
+    , log(Logger::get(fmt::format("bucket={} root={}", bucket_name, key_root)))
 {
 }
 
-TiFlashS3Client::TiFlashS3Client(const String & bucket_name_, std::unique_ptr<Aws::S3::S3Client> && raw_client)
+TiFlashS3Client::TiFlashS3Client(
+    const String & bucket_name_,
+    const String & root_,
+    std::unique_ptr<Aws::S3::S3Client> && raw_client)
     : Aws::S3::S3Client(std::move(*raw_client))
     , bucket_name(bucket_name_)
+    , key_root(normalizedRoot(root_))
+    , log(Logger::get(fmt::format("bucket={} root={}", bucket_name, key_root)))
 {
 }
 
@@ -154,24 +182,23 @@ bool ClientFactory::isEnabled() const
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     config = config_;
+    config.root = normalizedRoot(config.root);
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
     if (!mock_s3_)
     {
-        shared_client = create();
-        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, create());
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
     }
     else
     {
-        shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket);
-        shared_client = shared_tiflash_client; // share the same object
+        shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket, config.root);
     }
 }
 
 void ClientFactory::shutdown()
 {
+    // Reset S3Client before Aws::ShutdownAPI.
     shared_tiflash_client.reset();
-    shared_client.reset(); // Reset S3Client before Aws::ShutdownAPI.
     Aws::Utils::Logging::ShutdownAWSLogging();
     Aws::ShutdownAPI(aws_options);
 }
@@ -189,22 +216,11 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create() const
     return create(config);
 }
 
-const String & ClientFactory::bucket() const
-{
-    // `bucket` is read-only.
-    return config.bucket;
-}
-
-std::shared_ptr<Aws::S3::S3Client> ClientFactory::sharedClient() const
-{
-    // `shared_client` is created during initialization and destroyed when process exits
-    // which means it is read-only when processing requests. So, it is safe to read `shared_client`
-    // without acquiring lock.
-    return shared_client;
-}
-
 std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient() const
 {
+    // `shared_tiflash_client` is created during initialization and destroyed
+    // when process exits which means it is read-only when processing requests.
+    // So, it is safe to read `shared_tiflash_client` without acquiring lock.
     return shared_tiflash_client;
 }
 
@@ -250,44 +266,19 @@ bool isNotFoundError(Aws::S3::S3Errors error)
     return error == Aws::S3::S3Errors::RESOURCE_NOT_FOUND || error == Aws::S3::S3Errors::NO_SUCH_KEY;
 }
 
-Aws::S3::Model::HeadObjectOutcome headObject(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id)
+Aws::S3::Model::HeadObjectOutcome headObject(const TiFlashS3Client & client, const String & key)
 {
     ProfileEvents::increment(ProfileEvents::S3HeadObject);
     Stopwatch sw;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_s3_request_seconds, type_head_object).Observe(sw.elapsedSeconds()); });
     Aws::S3::Model::HeadObjectRequest req;
-    req.WithBucket(bucket).WithKey(key);
-    if (!version_id.empty())
-    {
-        req.SetVersionId(version_id);
-    }
+    client.setBucketAndKeyWithRoot(req, key);
     return client.HeadObject(req);
 }
 
-S3::ObjectInfo getObjectInfo(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool throw_on_error)
+bool objectExists(const TiFlashS3Client & client, const String & key)
 {
-    auto outcome = headObject(client, bucket, key, version_id);
-
-    if (outcome.IsSuccess())
-    {
-        auto read_result = outcome.GetResultWithOwnership();
-        return {.size = static_cast<size_t>(read_result.GetContentLength()), .last_modification_time = read_result.GetLastModified().Millis() / 1000};
-    }
-    else if (throw_on_error)
-    {
-        throw fromS3Error(outcome.GetError(), "Failed to HEAD object, key={}", key);
-    }
-    return {};
-}
-
-size_t getObjectSize(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool throw_on_error)
-{
-    return getObjectInfo(client, bucket, key, version_id, throw_on_error).size;
-}
-
-bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id)
-{
-    auto outcome = headObject(client, bucket, key, version_id);
+    auto outcome = headObject(client, key);
     if (outcome.IsSuccess())
     {
         return true;
@@ -297,14 +288,14 @@ bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const
     {
         return false;
     }
-    throw fromS3Error(outcome.GetError(), "Failed to check existence of object, bucket={} key={}", bucket, key);
+    throw fromS3Error(outcome.GetError(), "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
 }
 
-void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & tagging)
+void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging)
 {
     Stopwatch sw;
     Aws::S3::Model::PutObjectRequest req;
-    req.WithBucket(bucket).WithKey(key);
+    client.setBucketAndKeyWithRoot(req, key);
     if (!tagging.empty())
         req.SetTagging(tagging);
     req.SetContentType("binary/octet-stream");
@@ -314,19 +305,18 @@ void uploadEmptyFile(const Aws::S3::S3Client & client, const String & bucket, co
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
-        throw fromS3Error(result.GetError(), "S3 PutEmptyObject failed, bucket={} key={}", bucket, key);
+        throw fromS3Error(result.GetError(), "S3 PutEmptyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
     }
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
-    static auto log = Logger::get();
-    LOG_DEBUG(log, "uploadEmptyFile remote_fname={}, cost={:.2f}s", key, elapsed_seconds);
+    LOG_DEBUG(client.log, "uploadEmptyFile key={}, cost={:.2f}s", key, elapsed_seconds);
 }
 
-void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname)
+void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname)
 {
     Stopwatch sw;
     Aws::S3::Model::PutObjectRequest req;
-    req.WithBucket(bucket).WithKey(remote_fname);
+    client.setBucketAndKeyWithRoot(req, remote_fname);
     req.SetContentType("binary/octet-stream");
     auto istr = Aws::MakeShared<Aws::FStream>("PutObjectInputStream", local_fname, std::ios_base::in | std::ios_base::binary);
     RUNTIME_CHECK_MSG(istr->is_open(), "Open {} fail: {}", local_fname, strerror(errno));
@@ -336,26 +326,24 @@ void uploadFile(const Aws::S3::S3Client & client, const String & bucket, const S
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
-        throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} key={}", local_fname, bucket, remote_fname);
+        throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
     }
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
-    static auto log = Logger::get();
-    LOG_DEBUG(log, "uploadFile local_fname={}, remote_fname={}, write_bytes={} cost={:.2f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
+    LOG_DEBUG(client.log, "uploadFile local_fname={}, key={}, write_bytes={} cost={:.2f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
 }
 
-void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const String & local_fname, const String & remote_fname)
+void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname)
 {
     Stopwatch sw;
     Aws::S3::Model::GetObjectRequest req;
-    req.SetBucket(bucket);
-    req.SetKey(remote_fname);
+    client.setBucketAndKeyWithRoot(req, remote_fname);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
     auto outcome = client.GetObject(req);
     if (!outcome.IsSuccess())
     {
-        throw fromS3Error(outcome.GetError(), "remote_fname={}", remote_fname);
+        throw fromS3Error(outcome.GetError(), "S3 GetObject failed, bucket={} root={} key={}", client.bucket(), client.root(), remote_fname);
     }
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, outcome.GetResult().GetContentLength());
     GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
@@ -365,33 +353,35 @@ void downloadFile(const Aws::S3::S3Client & client, const String & bucket, const
     RUNTIME_CHECK_MSG(ostr.good(), "Write {} fail: {}", local_fname, strerror(errno));
 }
 
-void rewriteObjectWithTagging(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & tagging)
+void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key, const String & tagging)
 {
     Stopwatch sw;
     Aws::S3::Model::CopyObjectRequest req;
     // rewrite the object with `key`, adding tagging to the new object
-    req.WithBucket(bucket).WithCopySource(bucket + "/" + key).WithKey(key) //
+    // The copy_source format is "${source_bucket}/${source_key}"
+    auto copy_source = client.bucket() + "/" + (client.root() == "/" ? "" : client.root()) + key;
+    client.setBucketAndKeyWithRoot(req, key);
+    req.WithCopySource(copy_source) //
         .WithTagging(tagging)
         .WithTaggingDirective(Aws::S3::Model::TaggingDirective::REPLACE);
     ProfileEvents::increment(ProfileEvents::S3CopyObject);
     auto outcome = client.CopyObject(req);
     if (!outcome.IsSuccess())
     {
-        throw fromS3Error(outcome.GetError(), "key={}", key);
+        throw fromS3Error(outcome.GetError(), "S3 CopyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
     }
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_copy_object).Observe(elapsed_seconds);
-    static auto log = Logger::get();
-    LOG_DEBUG(log, "rewrite object key={} cost={:.2f}s", key, elapsed_seconds);
+    LOG_DEBUG(client.log, "rewrite object key={} cost={:.2f}s", key, elapsed_seconds);
 }
 
-void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & bucket, Int32 expire_days)
+void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 {
     bool lifecycle_rule_has_been_set = false;
     Aws::Vector<Aws::S3::Model::LifecycleRule> old_rules;
     {
         Aws::S3::Model::GetBucketLifecycleConfigurationRequest req;
-        req.SetBucket(bucket);
+        req.SetBucket(client.bucket());
         auto outcome = client.GetBucketLifecycleConfiguration(req);
         if (!outcome.IsSuccess())
         {
@@ -425,23 +415,22 @@ void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & b
         }
     }
 
-    static LoggerPtr log = Logger::get();
     if (lifecycle_rule_has_been_set)
     {
-        LOG_INFO(log, "The lifecycle rule has been set, n_rules={} filter={}", old_rules.size(), TaggingObjectIsDeleted);
+        LOG_INFO(client.log, "The lifecycle rule has been set, n_rules={} filter={}", old_rules.size(), TaggingObjectIsDeleted);
         return;
     }
     else
     {
         UNUSED(expire_days);
-        LOG_WARNING(log, "The lifecycle rule with filter \"{}\" has not been set, please check the bucket lifecycle configuration", TaggingObjectIsDeleted);
+        LOG_WARNING(client.log, "The lifecycle rule with filter \"{}\" has not been set, please check the bucket lifecycle configuration", TaggingObjectIsDeleted);
         return;
     }
 
 #if 0
     // Adding rule by AWS SDK is failed, don't know why
     // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
-    LOG_INFO(log, "The lifecycle rule with filter \"{}\" has not been added, n_rules={}", TaggingObjectIsDeleted, old_rules.size());
+    LOG_INFO(client.log, "The lifecycle rule with filter \"{}\" has not been added, n_rules={}", TaggingObjectIsDeleted, old_rules.size());
     static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
     std::vector<Aws::S3::Model::Tag> filter_tags{Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true")};
     Aws::S3::Model::LifecycleRuleFilter filter;
@@ -471,23 +460,195 @@ void ensureLifecycleRuleExist(const Aws::S3::S3Client & client, const String & b
     {
         throw fromS3Error(outcome.GetError(), "PutBucketLifecycle fail");
     }
-    LOG_INFO(log, "The lifecycle rule has been added, new_n_rules={} tag={}", old_rules.size() + 1, TaggingObjectIsDeleted);
+    LOG_INFO(client.log, "The lifecycle rule has been added, new_n_rules={} tag={}", old_rules.size(), TaggingObjectIsDeleted);
 #endif
 }
 
 void listPrefix(
-    const Aws::S3::S3Client & client,
-    const String & bucket,
+    const TiFlashS3Client & client,
     const String & prefix,
-    std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager)
+    std::function<PageResult(const Aws::S3::Model::Object & object)> pager)
 {
-    // Usually we don't need to set delimiter.
-    // Check the docs here for Delimiter && CommonPrefixes when you really need it.
-    // https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-prefixes.html
-    listPrefix(client, bucket, prefix, /*delimiter*/ "", pager);
+    Stopwatch sw;
+    Aws::S3::Model::ListObjectsV2Request req;
+    req.WithBucket(client.bucket()).WithPrefix(client.root() + prefix);
+
+    // If the `root == '/'`, then the return result will cut it off
+    // else we need to cut the root in the following codes
+    bool need_cut = client.root() != "/";
+    size_t cut_size = client.root().size();
+
+    bool done = false;
+    size_t num_keys = 0;
+    while (!done)
+    {
+        Stopwatch sw_list;
+        ProfileEvents::increment(ProfileEvents::S3ListObjects);
+        auto outcome = client.ListObjectsV2(req);
+        if (!outcome.IsSuccess())
+        {
+            throw fromS3Error(outcome.GetError(), "S3 ListObjectV2s failed, bucket={} root={} prefix={}", client.bucket(), client.root(), prefix);
+        }
+        GET_METRIC(tiflash_storage_s3_request_seconds, type_list_objects).Observe(sw_list.elapsedSeconds());
+
+        PageResult page_res{};
+        const auto & result = outcome.GetResult();
+        auto page_keys = result.GetContents().size();
+        num_keys += page_keys;
+        for (const auto & object : result.GetContents())
+        {
+            if (!need_cut)
+            {
+                page_res = pager(object);
+            }
+            else
+            {
+                // Copy the `Object` to cut off the `root` from key, the cost should be acceptable :(
+                auto object_without_root = object;
+                object_without_root.SetKey(object.GetKey().substr(cut_size, object.GetKey().size()));
+                page_res = pager(object_without_root);
+            }
+            if (!page_res.more)
+                break;
+        }
+
+        // handle the result size over max size
+        done = !result.GetIsTruncated();
+        if (!done && page_res.more)
+        {
+            const auto & next_token = result.GetNextContinuationToken();
+            req.SetContinuationToken(next_token);
+            LOG_DEBUG(client.log, "listPrefix prefix={}, keys={}, total_keys={}, next_token={}", prefix, page_keys, num_keys, next_token);
+        }
+    }
+    LOG_DEBUG(client.log, "listPrefix prefix={}, total_keys={}, cost={:.2f}s", prefix, num_keys, sw.elapsedSeconds());
 }
 
-void listPrefix(
+// Check the docs here for Delimiter && CommonPrefixes when you really need it.
+// https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-prefixes.html
+void listPrefixWithDelimiter(
+    const TiFlashS3Client & client,
+    const String & prefix,
+    std::string_view delimiter,
+    std::function<PageResult(const Aws::S3::Model::CommonPrefix & common_prefix)> pager)
+{
+    Stopwatch sw;
+    Aws::S3::Model::ListObjectsV2Request req;
+    req.WithBucket(client.bucket()).WithPrefix(client.root() + prefix);
+    if (!delimiter.empty())
+    {
+        req.SetDelimiter(String(delimiter));
+    }
+
+    // If the `root == '/'`, then the return result will cut it off
+    // else we need to cut the root in the following codes
+    bool need_cut = client.root() != "/";
+    size_t cut_size = client.root().size();
+
+    bool done = false;
+    size_t num_keys = 0;
+    while (!done)
+    {
+        Stopwatch sw_list;
+        ProfileEvents::increment(ProfileEvents::S3ListObjects);
+        auto outcome = client.ListObjectsV2(req);
+        if (!outcome.IsSuccess())
+        {
+            throw fromS3Error(outcome.GetError(), "S3 ListObjectV2s failed, bucket={} root={} prefix={} delimiter={}", client.bucket(), client.root(), prefix, delimiter);
+        }
+        GET_METRIC(tiflash_storage_s3_request_seconds, type_list_objects).Observe(sw_list.elapsedSeconds());
+
+        PageResult page_res{};
+        const auto & result = outcome.GetResult();
+        auto page_keys = result.GetCommonPrefixes().size();
+        num_keys += page_keys;
+        for (const auto & prefix : result.GetCommonPrefixes())
+        {
+            if (!need_cut)
+            {
+                page_res = pager(prefix);
+            }
+            else
+            {
+                // Copy the `CommonPrefix` to cut off the `root`, the cost should be acceptable :(
+                auto prefix_without_root = prefix;
+                prefix_without_root.SetPrefix(prefix.GetPrefix().substr(cut_size, prefix.GetPrefix().size()));
+                page_res = pager(prefix_without_root);
+            }
+            if (!page_res.more)
+                break;
+        }
+
+        // handle the result size over max size
+        done = !result.GetIsTruncated();
+        if (!done && page_res.more)
+        {
+            const auto & next_token = result.GetNextContinuationToken();
+            req.SetContinuationToken(next_token);
+            LOG_DEBUG(client.log, "listPrefixWithDelimiter prefix={}, delimiter={}, keys={}, total_keys={}, next_token={}", prefix, delimiter, page_keys, num_keys, next_token);
+        }
+    }
+    LOG_DEBUG(client.log, "listPrefixWithDelimiter prefix={}, delimiter={}, total_keys={}, cost={:.2f}s", prefix, delimiter, num_keys, sw.elapsedSeconds());
+}
+
+std::optional<String> anyKeyExistWithPrefix(const TiFlashS3Client & client, const String & prefix)
+{
+    std::optional<String> key_opt;
+    listPrefix(client, prefix, [&key_opt](const Aws::S3::Model::Object & object) {
+        key_opt = object.GetKey();
+        return PageResult{
+            .num_keys = 1,
+            .more = false, // do not need more result
+        };
+    });
+    return key_opt;
+}
+
+std::unordered_map<String, size_t> listPrefixWithSize(const TiFlashS3Client & client, const String & prefix)
+{
+    std::unordered_map<String, size_t> keys_with_size;
+    listPrefix(client, prefix, [&](const Aws::S3::Model::Object & object) {
+        keys_with_size.emplace(object.GetKey().substr(prefix.size()), object.GetSize()); // Cut prefix
+        return PageResult{.num_keys = 1, .more = true};
+    });
+
+    return keys_with_size;
+}
+
+ObjectInfo tryGetObjectInfo(
+    const TiFlashS3Client & client,
+    const String & key)
+{
+    auto o = headObject(client, key);
+    if (!o.IsSuccess())
+    {
+        if (const auto & err = o.GetError(); isNotFoundError(err.GetErrorType()))
+        {
+            return ObjectInfo{.exist = false, .size = 0, .last_modification_time = {}};
+        }
+        throw fromS3Error(o.GetError(), "Failed to check existence of object, bucket={} key={}", client.bucket(), key);
+    }
+    // Else the object still exist
+    const auto & res = o.GetResult();
+    // "DeleteMark" of S3 service, don't know what will lead to this
+    RUNTIME_CHECK(!res.GetDeleteMarker(), client.bucket(), key);
+    return ObjectInfo{.exist = true, .size = res.GetContentLength(), .last_modification_time = res.GetLastModified()};
+}
+
+void deleteObject(const TiFlashS3Client & client, const String & key)
+{
+    Stopwatch sw;
+    Aws::S3::Model::DeleteObjectRequest req;
+    client.setBucketAndKeyWithRoot(req, key);
+    ProfileEvents::increment(ProfileEvents::S3DeleteObject);
+    auto o = client.DeleteObject(req);
+    RUNTIME_CHECK(o.IsSuccess(), o.GetError().GetMessage());
+    const auto & res = o.GetResult();
+    UNUSED(res);
+    GET_METRIC(tiflash_storage_s3_request_seconds, type_delete_object).Observe(sw.elapsedSeconds());
+}
+
+void rawListPrefix(
     const Aws::S3::S3Client & client,
     const String & bucket,
     const String & prefix,
@@ -502,7 +663,7 @@ void listPrefix(
         req.SetDelimiter(String(delimiter));
     }
 
-    static auto log = Logger::get("S3ListPrefix");
+    static auto log = Logger::get("S3RawListPrefix");
 
     bool done = false;
     size_t num_keys = 0;
@@ -513,7 +674,7 @@ void listPrefix(
         auto outcome = client.ListObjectsV2(req);
         if (!outcome.IsSuccess())
         {
-            throw fromS3Error(outcome.GetError(), "S3 ListObjects failed, bucket={} prefix={} delimiter={}", bucket, prefix, delimiter);
+            throw fromS3Error(outcome.GetError(), "S3 ListObjectV2s failed, bucket={} prefix={} delimiter={}", bucket, prefix, delimiter);
         }
         GET_METRIC(tiflash_storage_s3_request_seconds, type_list_objects).Observe(sw_list.elapsedSeconds());
 
@@ -527,61 +688,10 @@ void listPrefix(
         {
             const auto & next_token = result.GetNextContinuationToken();
             req.SetContinuationToken(next_token);
-            LOG_DEBUG(log, "listPrefix prefix={}, keys={}, total_keys={}, next_token={}", prefix, page_res.num_keys, num_keys, next_token);
+            LOG_DEBUG(log, "rawListPrefix bucket={} prefix={} delimiter={} keys={} total_keys={} next_token={}", bucket, prefix, delimiter, page_res.num_keys, num_keys, next_token);
         }
     }
-    LOG_DEBUG(log, "listPrefix prefix={}, total_keys={}, cost={:.2f}s", prefix, num_keys, sw.elapsedSeconds());
-}
-
-std::unordered_map<String, size_t> listPrefixWithSize(const Aws::S3::S3Client & client, const String & bucket, const String & prefix)
-{
-    std::unordered_map<String, size_t> keys_with_size;
-    listPrefix(client, bucket, prefix, "", [&](const Aws::S3::Model::ListObjectsV2Result & result) {
-        const auto & objects = result.GetContents();
-        keys_with_size.reserve(keys_with_size.size() + objects.size());
-        for (const auto & object : objects)
-        {
-            keys_with_size.emplace(object.GetKey().substr(prefix.size()), object.GetSize()); // Cut prefix
-        }
-        return PageResult{.num_keys = objects.size(), .more = true};
-    });
-
-    return keys_with_size;
-}
-
-std::pair<bool, Aws::Utils::DateTime> tryGetObjectModifiedTime(
-    const Aws::S3::S3Client & client,
-    const String & bucket,
-    const String & key)
-{
-    auto o = headObject(client, bucket, key);
-    if (!o.IsSuccess())
-    {
-        if (const auto & err = o.GetError(); isNotFoundError(err.GetErrorType()))
-        {
-            return {false, {}};
-        }
-        throw fromS3Error(o.GetError(), "Failed to check existence of object, bucket={} key={}", bucket, key);
-    }
-    // Else the object still exist
-    const auto & res = o.GetResult();
-    // "DeleteMark" of S3 service, don't know what will lead to this
-    RUNTIME_CHECK(!res.GetDeleteMarker(), bucket, key);
-    return {true, res.GetLastModified()};
-}
-
-void deleteObject(const Aws::S3::S3Client & client, const String & bucket, const String & key)
-{
-    Stopwatch sw;
-    Aws::S3::Model::DeleteObjectRequest req;
-    req.SetBucket(bucket);
-    req.SetKey(key);
-    ProfileEvents::increment(ProfileEvents::S3DeleteObject);
-    auto o = client.DeleteObject(req);
-    RUNTIME_CHECK(o.IsSuccess(), o.GetError().GetMessage());
-    const auto & res = o.GetResult();
-    UNUSED(res);
-    GET_METRIC(tiflash_storage_s3_request_seconds, type_delete_object).Observe(sw.elapsedSeconds());
+    LOG_DEBUG(log, "rawListPrefix bucket={} prefix={} delimiter={} total_keys={} cost={:.2f}s", bucket, prefix, delimiter, num_keys, sw.elapsedSeconds());
 }
 
 } // namespace DB::S3

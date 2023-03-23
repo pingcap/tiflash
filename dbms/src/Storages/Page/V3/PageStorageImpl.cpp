@@ -268,7 +268,7 @@ void PageStorageImpl::traverseImpl(const std::function<void(const DB::Page & pag
 
 bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
-    return manager.gc(blob_store, *page_directory, write_limiter, read_limiter, log);
+    return manager.gc(blob_store, *page_directory, write_limiter, read_limiter, nullptr, log);
 }
 
 void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)

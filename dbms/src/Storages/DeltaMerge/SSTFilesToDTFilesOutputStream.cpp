@@ -13,13 +13,17 @@
 // limitations under the License.
 
 #include <Common/ProfileEvents.h>
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/SSTReader.h>
@@ -74,16 +78,22 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::writeSuffix()
     finalizeDTFileStream();
 
     const auto process_keys = child->getProcessKeys();
-    if (job_type == FileConvertJobType::ApplySnapshot)
+    switch (job_type)
+    {
+    case FileConvertJobType::ApplySnapshot:
     {
         GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode_sst2dt).Observe(watch.elapsedSeconds());
         // Note that number of keys in different cf will be aggregated into one metrics
         GET_METRIC(tiflash_raft_process_keys, type_apply_snapshot).Increment(process_keys.total());
+        break;
     }
-    else
+    case FileConvertJobType::IngestSST:
     {
+        GET_METRIC(tiflash_raft_command_duration_seconds, type_ingest_sst_sst2dt).Observe(watch.elapsedSeconds());
         // Note that number of keys in different cf will be aggregated into one metrics
         GET_METRIC(tiflash_raft_process_keys, type_ingest_sst).Increment(process_keys.total());
+        break;
+    }
     }
 
     LOG_INFO(
@@ -107,6 +117,33 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::writeSuffix()
                 ",");
             return fmt_buf.toString();
         }());
+
+    // We could create an async task once a DMFile is generated in `finalizeDTFileStream`
+    // to take more resources to shorten the time of IngestSST/ApplySnapshot.
+    auto remote_data_store = context.getSharedContextDisagg()->remote_data_store;
+    if (remote_data_store)
+    {
+        Stopwatch upload_watch;
+        const StoreID store_id = context.getTMTContext().getKVStore()->getStoreID();
+        const auto table_info = storage->getTableInfo();
+        // table_info.keyspace_id; // TODO support keyspace id
+        for (const auto & file : ingest_files)
+        {
+            Remote::DMFileOID oid{.store_id = store_id, .table_id = table_info.id, .file_id = file->fileId()};
+            remote_data_store->putDMFile(file, oid, /*remove_local*/ true);
+        }
+        const auto elapsed_seconds = upload_watch.elapsedSeconds();
+        LOG_INFO(log, "Upload snapshot DTFiles done, region={} store_id={} n_dt_files={} cost={:.3f}s", child->getRegion()->toString(true), store_id, ingest_files.size(), elapsed_seconds);
+        switch (job_type)
+        {
+        case FileConvertJobType::ApplySnapshot:
+            GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode_upload).Observe(elapsed_seconds);
+            break;
+        case FileConvertJobType::IngestSST:
+            GET_METRIC(tiflash_raft_command_duration_seconds, type_ingest_sst_upload).Observe(elapsed_seconds);
+            break;
+        }
+    }
 }
 
 template <typename ChildStream>
@@ -152,9 +189,16 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::finalizeDTFileStream()
     dt_stream->writeSuffix();
     auto dt_file = dt_stream->getFile();
     assert(!dt_file->canGC()); // The DTFile should not be able to gc until it is ingested.
-    // Add the DTFile to StoragePathPool so that we can restore it later
     const auto bytes_written = dt_file->getBytesOnDisk();
-    storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), bytes_written);
+    if (auto remote_data_store = context.getSharedContextDisagg()->remote_data_store;
+        !remote_data_store)
+    {
+        // Add the DTFile to StoragePathPool so that we can restore it later
+        storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), bytes_written);
+    }
+    // else when remote data store is enabled, the file will be removed from local
+    // do not need to pre-ingest it to disk delegator
+
     dt_stream.reset();
 
     LOG_INFO(
