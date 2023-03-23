@@ -111,27 +111,6 @@ public:
         }
     }
 
-    // TODO The following functions are for test, may need being changed or deleted
-
-    void setVersion(UInt32 version_) { version = version_; }
-    void setMetaGroupingID(UInt64 meta_grouping_id_) { meta_grouping_id = meta_grouping_id_;}
-    void setMetaGroupingIDs(const std::set<UInt64> meta_grouping_ids_) { meta_grouping_ids = meta_grouping_ids_; }
-
-    UInt32 getVersion() const
-    {
-        return version;
-    }
-
-    UInt64 getMetaGroupingID() const
-    {
-        return meta_grouping_id;
-    }
-
-    const std::set<UInt64> & getMetaGroupingIDs() const
-    {
-        return meta_grouping_ids;
-    }
-
 private:
     void processConstGroupingIDs(const ColumnConst * col_grouping_ids_const, ColumnPtr & col_res, size_t row_num) const
     {
@@ -277,6 +256,21 @@ private:
     {
         auto iter = meta_grouping_ids.find(grouping_id);
         return iter == meta_grouping_ids.end();
+    }
+
+    UInt32 getVersion() const
+    {
+        return version;
+    }
+
+    UInt64 getMetaGroupingID() const
+    {
+        return meta_grouping_id;
+    }
+
+    const std::set<UInt64> & getMetaGroupingIDs() const
+    {
+        return meta_grouping_ids;
     }
 
 private:
