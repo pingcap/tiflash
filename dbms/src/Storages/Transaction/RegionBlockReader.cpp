@@ -81,7 +81,20 @@ bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_
             return fmt_buf.toString();
         };
 
-        exc.addMessage(fmt::format("pk_type is {}, schema_snapshot->sorted_column_id_with_pos is {}, schema_snapshot->column_defines is {}, decoding_snapshot_epoch is {}, block schema is {}", schema_snapshot->pk_type, print_map(schema_snapshot->sorted_column_id_with_pos), print_column_defines(schema_snapshot->column_defines), schema_snapshot->decoding_schema_version, block.dumpJsonStructure()));
+        exc.addMessage(fmt::format("pk_type is {}, schema_snapshot->sorted_column_id_with_pos is {}, "
+                                   "schema_snapshot->column_defines is {}, "
+                                   "decoding_snapshot_epoch is {}, "
+                                   "block schema is {} ",
+                                   schema_snapshot->pk_type,
+                                   print_map(schema_snapshot->sorted_column_id_with_pos),
+                                   print_column_defines(schema_snapshot->column_defines),
+                                   schema_snapshot->decoding_schema_version,
+                                   block.dumpJsonStructure()));
+        exc.addMessage("TiKV value contains: ");
+        for (const auto & data : data_list)
+        {
+            exc.addMessage(fmt::format("{}, ", std::get<3>(data)->toDebugString()));
+        }
         exc.rethrow();
         return false;
     }
