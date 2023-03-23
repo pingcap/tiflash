@@ -16,6 +16,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingHashJoinBlockTransform.h>
+#include <DataStreams/HashJoinProbeExec.h>
 #include <Interpreters/Join.h>
 
 namespace DB
@@ -125,19 +126,15 @@ private:
     /// read them, so need to protect the multi-threads access
     std::mutex mutex;
     JoinPtr original_join;
-    JoinPtr join;
+    HashJoinProbeExecPtr probe_exec;
     const bool need_output_non_joined_data;
     size_t current_non_joined_stream_index;
-    BlockInputStreamPtr current_probe_stream;
     UInt64 max_block_size;
     ProbeProcessInfo probe_process_info;
-    BlockInputStreamPtr non_joined_stream;
-    BlockInputStreamPtr restore_build_stream;
-    BlockInputStreamPtr restore_probe_stream;
     ProbeStatus status{ProbeStatus::WAIT_BUILD_FINISH};
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;
-    std::list<JoinPtr> parents;
+    std::list<HashJoinProbeExecPtr> parents;
     std::list<std::tuple<size_t, Block>> probe_partition_blocks;
 };
 
