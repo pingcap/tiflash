@@ -25,7 +25,7 @@ void cut(Block & block, size_t limit)
 {
     if unlikely (!block)
         return;
-    if (block.rows() <= limit)
+    if (limit > 0 && block.rows() <= limit)
         return;
     size_t pop_back_cnt = block.rows() - limit;
     for (auto & col : block)
