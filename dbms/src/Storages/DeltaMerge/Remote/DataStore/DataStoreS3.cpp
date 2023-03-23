@@ -16,15 +16,16 @@
 #include <Common/Stopwatch.h>
 #include <IO/IOThreadPools.h>
 #include <Poco/File.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/Transaction/Types.h>
+#include <aws/core/utils/DateTime.h>
+#include <common/logger_useful.h>
 
 #include <future>
 #include <unordered_map>
-
-#include "Storages/DeltaMerge/Remote/DataStore/DataStore.h"
 
 namespace DB::DM::Remote
 {
@@ -129,6 +130,7 @@ std::unordered_map<String, IDataStore::DataFileInfo> DataStoreS3::getDataFileSiz
                     auto object_info = S3::tryGetObjectInfo(*s3_client, datafile_key);
                     if (object_info.exist && object_info.size >= 0)
                     {
+                        LOG_DEBUG(log, "key={} size={} mtime={}", lock_key, object_info.size, object_info.last_modification_time.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
                         return std::make_tuple(
                             lock_key,
                             DataFileInfo{

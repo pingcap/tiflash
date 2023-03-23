@@ -156,7 +156,7 @@ struct FileIdsToCompactGetter
         auto stats = uni_page_storage->getRemoteDataFilesStatCache();
         auto file_ids_to_compact = PS::V3::getRemoteFileIdsNeedCompact(stats, gc_threshold, remote_store, log);
         // update cache by the S3 result
-        uni_page_storage->updateRemoteFilesTotalSizes(stats);
+        uni_page_storage->updateRemoteFilesCache(stats);
         return file_ids_to_compact;
     }
 };
@@ -252,10 +252,10 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
 
     LOG_INFO(
         log,
-        "Upload checkpoint success, upload_sequence={} incremental_bytes={} rewrite_bytes={}",
+        "Upload checkpoint success, upload_sequence={} incremental_bytes={} compact_bytes={}",
         upload_info.upload_sequence,
         write_stats.incremental_data_bytes,
-        write_stats.rewrite_data_bytes);
+        write_stats.compact_data_bytes);
 
     // the checkpoint is uploaded to remote data store, remove local temp files
     Poco::File(local_dir).remove(true);

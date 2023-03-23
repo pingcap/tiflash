@@ -267,9 +267,7 @@ FailPointHelper::getFailPointVal(const String & fail_point_name)
 {
     if (auto iter = fail_point_val.find(fail_point_name); iter != fail_point_val.end())
     {
-        auto v = iter->second;
-        fail_point_val.erase(iter);
-        return v;
+        return iter->second;
     }
     return std::nullopt;
 }

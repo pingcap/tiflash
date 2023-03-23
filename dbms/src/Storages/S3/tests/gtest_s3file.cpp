@@ -44,6 +44,7 @@
 #include <fstream>
 
 #include "Common/FailPoint.h"
+#include "ext/scope_guard.h"
 
 using namespace std::chrono_literals;
 using namespace DB::DM;
@@ -503,6 +504,9 @@ try
             {s3_client->root() + df_keys[2], timepoint - 7200s},
             {s3_client->root() + df_keys[3], timepoint - 30s},
         });
+    SCOPE_EXIT({
+        FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime);
+    });
 
     auto file_sizes = data_store->getDataFileSizes(lock_keyset);
     ASSERT_EQ(file_sizes.size(), 5);

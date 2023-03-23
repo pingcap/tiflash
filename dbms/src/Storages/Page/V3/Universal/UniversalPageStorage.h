@@ -202,9 +202,9 @@ public:
         return remote_data_files_stat_cache.getCopy();
     }
 
-    void updateRemoteFilesTotalSizes(const PS::V3::CPDataFilesStatCache::CacheMap & updated_stat)
+    void updateRemoteFilesCache(const PS::V3::CPDataFilesStatCache::CacheMap & updated_stat)
     {
-        remote_data_files_stat_cache.updateTotalSize(updated_stat);
+        remote_data_files_stat_cache.updateCache(updated_stat);
     }
 
     PageIdU64 getMaxIdAfterRestart() const;

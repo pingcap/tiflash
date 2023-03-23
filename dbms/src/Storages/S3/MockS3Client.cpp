@@ -51,6 +51,9 @@
 #include <mutex>
 #include <string_view>
 
+#include "Common/Logger.h"
+#include "common/logger_useful.h"
+
 namespace DB::FailPoints
 {
 extern const char force_set_mocked_s3_object_mtime[];
@@ -255,9 +258,15 @@ Model::HeadObjectOutcome MockS3Client::HeadObject(const Model::HeadObjectRequest
             if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_mocked_s3_object_mtime); v)
             {
                 auto m = std::any_cast<std::map<String, Aws::Utils::DateTime>>(v.value());
-                if (auto iter_m = m.find(normalizedKey(request.GetKey())); iter_m != m.end())
+                const auto req_key = normalizedKey(request.GetKey());
+                if (auto iter_m = m.find(req_key); iter_m != m.end())
                 {
                     r.SetLastModified(iter_m->second);
+                    LOG_WARNING(Logger::get(), "failpoint set mtime, key={} mtime={}", req_key, iter_m->second.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
+                }
+                else
+                {
+                    LOG_WARNING(Logger::get(), "failpoint set mtime failed, key={}", req_key);
                 }
             }
         };

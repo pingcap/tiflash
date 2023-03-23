@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
+#include <fmt/chrono.h>
 
 #include <chrono>
 #include <unordered_set>
@@ -48,17 +49,18 @@ void CPDataFilesStatCache::updateValidSize(const RemoteFileValidSizes & valid_si
     }
 }
 
-void CPDataFilesStatCache::updateTotalSize(const CPDataFilesStatCache::CacheMap & total_sizes)
+void CPDataFilesStatCache::updateCache(const CPDataFilesStatCache::CacheMap & total_sizes)
 {
     std::lock_guard lock(mtx);
     for (const auto & [file_id, new_stat] : total_sizes)
     {
-        // Some file_ids may be erased before `updateTotalSize`, but it is
+        // Some file_ids may be erased before `updateCache`, but it is
         // safe to ignore them.
         // Ony update the file_ids that still valid is OK.
         if (auto iter = stats.find(file_id); iter != stats.end())
         {
             iter->second.total_size = new_stat.total_size;
+            iter->second.mtime = new_stat.mtime;
         }
     }
 }
@@ -86,8 +88,8 @@ std::unordered_set<String> getRemoteFileIdsNeedCompact(
             if (stat.total_size < 0)
                 file_ids.insert(file_id);
         }
-        auto files_info = remote_store->getDataFileSizes(file_ids);
-        for (auto & [file_id, info] : files_info)
+        const auto files_info = remote_store->getDataFileSizes(file_ids);
+        for (const auto & [file_id, info] : files_info)
         {
             // IO error or data file not exist, just skip it
             if (info.size < 0)
@@ -111,6 +113,7 @@ std::unordered_set<String> getRemoteFileIdsNeedCompact(
         if (stat.total_size <= 0)
             continue;
         auto age_seconds = std::chrono::duration_cast<std::chrono::milliseconds>(now_timepoint - stat.mtime).count() / 1000.0;
+        LOG_INFO(log, "key={} now={:%H:%M:%S} mtime={:%H:%M:%S} seconds={:.3f}", file_id, now_timepoint, stat.mtime, age_seconds);
         double valid_rate = 1.0 * stat.valid_size / stat.total_size;
         if (static_cast<Int64>(age_seconds) > gc_threshold.min_age_seconds
             && (valid_rate < gc_threshold.valid_rate || stat.total_size < static_cast<Int64>(gc_threshold.min_file_threshold)))
