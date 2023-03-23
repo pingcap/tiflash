@@ -430,6 +430,8 @@ private:
     /// Indicate if the right table has a all-key-null row.
     std::atomic<bool> right_has_all_key_null_row{false};
 
+    bool has_build_data_in_memory = false;
+
 private:
     Type type = Type::EMPTY;
 

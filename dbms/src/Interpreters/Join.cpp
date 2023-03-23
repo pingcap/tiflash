@@ -2775,6 +2775,15 @@ void Join::workAfterBuildFinish()
             trySpillBuildPartitions(true);
             tryMarkBuildSpillFinish();
         }
+        for (const auto & partition : partitions)
+        {
+            if (!partition->isSpill() && partition->hasBuildData())
+                has_build_data_in_memory = true;
+        }
+    }
+    else
+    {
+        has_build_data_in_memory = !original_blocks.empty();
     }
 }
 

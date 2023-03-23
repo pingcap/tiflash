@@ -132,22 +132,9 @@ Block NonJoinedBlockInputStream::readImpl()
     /// just return empty block for extra non joined block input stream read
     if (unlikely(index >= parent.getBuildConcurrency()))
         return Block();
-    if (!parent.isEnableSpill())
-    {
-        if (parent.blocks.empty())
-            return Block();
-    }
-    else
-    {
-        if (std::all_of(
-                std::begin(parent.partitions),
-                std::end(parent.partitions),
-                [](const std::unique_ptr<JoinPartition> & partition) { return !partition->hasBuildData(); }))
-        {
-            return Block();
-        }
-    }
-
+    if (!parent.has_build_data_in_memory)
+        /// no build data in memory, the non joined result must be empty
+        return Block();
 
     /// todo read data based on JoinPartition
     if (add_not_mapped_rows)
