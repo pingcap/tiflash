@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 
+#include <chrono>
 #include <unordered_set>
 
 namespace DB::PS::V3
@@ -65,6 +66,7 @@ void CPDataFilesStatCache::updateTotalSize(const CPDataFilesStatCache::CacheMap 
 struct FileInfo
 {
     String file_id;
+    double age_seconds;
     Int64 total_size;
     double valid_rate;
 };
@@ -84,19 +86,22 @@ std::unordered_set<String> getRemoteFileIdsNeedCompact(
             if (stat.total_size < 0)
                 file_ids.insert(file_id);
         }
-        std::unordered_map<String, Int64> file_sizes = remote_store->getDataFileSizes(file_ids);
-        for (auto & [file_id, actual_size] : file_sizes)
+        auto files_info = remote_store->getDataFileSizes(file_ids);
+        for (auto & [file_id, info] : files_info)
         {
             // IO error or data file not exist, just skip it
-            if (actual_size < 0)
+            if (info.size < 0)
             {
                 continue;
             }
             auto iter = stats.find(file_id);
             RUNTIME_CHECK_MSG(iter != stats.end(), "file_id={} stats={}", file_id, stats);
-            iter->second.total_size = actual_size;
+            iter->second.total_size = info.size;
+            iter->second.mtime = info.mtime;
         }
     }
+
+    const auto now_timepoint = std::chrono::system_clock::now();
 
     std::unordered_set<String> rewrite_files;
     std::vector<FileInfo> rewrite_files_info;
@@ -105,16 +110,17 @@ std::unordered_set<String> getRemoteFileIdsNeedCompact(
     {
         if (stat.total_size <= 0)
             continue;
+        auto age_seconds = std::chrono::duration_cast<std::chrono::milliseconds>(now_timepoint - stat.mtime).count() / 1000.0;
         double valid_rate = 1.0 * stat.valid_size / stat.total_size;
-        if (valid_rate < gc_threshold.valid_rate
-            || stat.total_size < static_cast<Int64>(gc_threshold.min_file_threshold))
+        if (static_cast<Int64>(age_seconds) > gc_threshold.min_age_seconds
+            && (valid_rate < gc_threshold.valid_rate || stat.total_size < static_cast<Int64>(gc_threshold.min_file_threshold)))
         {
             rewrite_files.insert(file_id);
-            rewrite_files_info.emplace_back(FileInfo{.file_id = file_id, .total_size = stat.total_size, .valid_rate = valid_rate});
+            rewrite_files_info.emplace_back(FileInfo{.file_id = file_id, .age_seconds = age_seconds, .total_size = stat.total_size, .valid_rate = valid_rate});
         }
         else
         {
-            remain_files_info.emplace_back(FileInfo{.file_id = file_id, .total_size = stat.total_size, .valid_rate = valid_rate});
+            remain_files_info.emplace_back(FileInfo{.file_id = file_id, .age_seconds = age_seconds, .total_size = stat.total_size, .valid_rate = valid_rate});
         }
     }
     LOG_IMPL(
@@ -136,6 +142,6 @@ struct fmt::formatter<DB::PS::V3::FileInfo>
     template <typename FormatContext>
     auto format(const DB::PS::V3::FileInfo & value, FormatContext & ctx) const -> decltype(ctx.out())
     {
-        return format_to(ctx.out(), "{{key={} size={} rate={:2.2f}%}}", value.file_id, value.total_size, value.valid_rate * 100);
+        return format_to(ctx.out(), "{{key={} age={:.3f} size={} rate={:2.2f}%}}", value.file_id, value.age_seconds, value.total_size, value.valid_rate * 100);
     }
 };

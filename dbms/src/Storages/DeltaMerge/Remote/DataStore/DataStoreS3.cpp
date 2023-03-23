@@ -24,6 +24,8 @@
 #include <future>
 #include <unordered_map>
 
+#include "Storages/DeltaMerge/Remote/DataStore/DataStore.h"
+
 namespace DB::DM::Remote
 {
 void DataStoreS3::putDMFile(DMFilePtr local_dmfile, const S3::DMFileOID & oid, bool remove_local)
@@ -111,14 +113,14 @@ bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_
     return true; // upload success
 }
 
-std::unordered_map<String, Int64> DataStoreS3::getDataFileSizes(const std::unordered_set<String> & lock_keys)
+std::unordered_map<String, IDataStore::DataFileInfo> DataStoreS3::getDataFileSizes(const std::unordered_set<String> & lock_keys)
 {
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
-    std::vector<std::future<std::tuple<String, Int64>>> actual_sizes;
+    std::vector<std::future<std::tuple<String, DataFileInfo>>> actual_sizes;
     for (const auto & lock_key : lock_keys)
     {
-        auto task = std::make_shared<std::packaged_task<std::tuple<String, Int64>()>>(
+        auto task = std::make_shared<std::packaged_task<std::tuple<String, DataFileInfo>()>>(
             [&s3_client, lock_key = lock_key, log = this->log]() noexcept {
                 auto key_view = S3::S3FilenameView::fromKey(lock_key);
                 auto datafile_key = key_view.asDataFile().toFullKey();
@@ -127,7 +129,12 @@ std::unordered_map<String, Int64> DataStoreS3::getDataFileSizes(const std::unord
                     auto object_info = S3::tryGetObjectInfo(*s3_client, datafile_key);
                     if (object_info.exist && object_info.size >= 0)
                     {
-                        return std::make_tuple(lock_key, object_info.size);
+                        return std::make_tuple(
+                            lock_key,
+                            DataFileInfo{
+                                .size = object_info.size,
+                                .mtime = object_info.last_modification_time.UnderlyingTimestamp(),
+                            });
                     }
                     // else fallback
                     LOG_WARNING(log, "failed to get S3 object size, key={} datafile={} exist={} size={}", lock_key, datafile_key, object_info.exist, object_info.size);
@@ -136,13 +143,13 @@ std::unordered_map<String, Int64> DataStoreS3::getDataFileSizes(const std::unord
                 {
                     tryLogCurrentException(log, fmt::format("failed to get S3 object size, key={} datafile={}", lock_key, datafile_key));
                 }
-                return std::make_tuple(lock_key, static_cast<Int64>(-1));
+                return std::make_tuple(lock_key, DataFileInfo{.size = -1, .mtime = {}});
             });
         actual_sizes.emplace_back(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task] { (*task)(); });
     }
 
-    std::unordered_map<String, Int64> res;
+    std::unordered_map<String, DataFileInfo> res;
     for (auto & f : actual_sizes)
     {
         const auto & [file_id, actual_size] = f.get();

@@ -221,6 +221,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
      */
     const auto & settings = global_context.getSettingsRef(); // TODO: make it dynamic reloadable
     auto gc_threshold = DM::Remote::RemoteGCThreshold{
+        .min_age_seconds = settings.remote_gc_min_age_seconds,
         .valid_rate = settings.remote_gc_ratio,
         .min_file_threshold = static_cast<size_t>(settings.remote_gc_small_size),
     };

@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/S3/S3Filename.h>
+#include <aws/core/utils/DateTime.h>
 
 #include <boost/core/noncopyable.hpp>
 
@@ -49,10 +50,13 @@ protected:
 
 struct RemoteGCThreshold
 {
+    // The file will NOT be compacted when the time difference between the last
+    // modification is less than `remote_gc_min_age_seconds`
+    Int64 min_age_seconds = 0;
     // The file with valid rate less than `valid_rate` will be compact
-    double valid_rate;
+    double valid_rate = 0.0;
     // The file size less than `min_file_threshold` will be compact
-    size_t min_file_threshold;
+    size_t min_file_threshold = 0;
 };
 
 class IDataStore : boost::noncopyable
@@ -94,7 +98,12 @@ public:
      */
     virtual bool putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) = 0;
 
-    virtual std::unordered_map<String, Int64> getDataFileSizes(const std::unordered_set<String> & lock_keys) = 0;
+    struct DataFileInfo
+    {
+        Int64 size = -1;
+        std::chrono::system_clock::time_point mtime; // last_modification_time
+    };
+    virtual std::unordered_map<String, DataFileInfo> getDataFileSizes(const std::unordered_set<String> & lock_keys) = 0;
 };
 
 
