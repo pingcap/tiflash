@@ -472,32 +472,49 @@ try
     UInt64 sequence = 200;
     data_store->putCheckpointFiles(checkpoint, store_id, sequence);
 
-    Strings keys;
-    std::unordered_set<String> keyset;
+    Strings df_keys;
+    Strings lock_keys;
+    std::unordered_set<String> lock_keyset;
     // ensure CheckpointDataFile, theirs lock file and CheckpointManifest are uploaded
     auto s3client = S3::ClientFactory::instance().sharedTiFlashClient();
     for (size_t idx = 0; idx < 4; ++idx)
     {
         auto cp_data = S3::S3Filename::newCheckpointData(store_id, sequence, idx);
         ASSERT_TRUE(S3::objectExists(*s3client, cp_data.toFullKey()));
+        df_keys.emplace_back(cp_data.toFullKey());
         ASSERT_TRUE(S3::objectExists(*s3client, cp_data.toView().getLockKey(store_id, sequence)));
-        keys.emplace_back(cp_data.toView().getLockKey(store_id, sequence));
-        keyset.insert(keys.back());
+        lock_keys.emplace_back(cp_data.toView().getLockKey(store_id, sequence));
+        lock_keyset.insert(lock_keys.back());
     }
     // manifest
     ASSERT_TRUE(S3::objectExists(*s3client, S3::S3Filename::newCheckpointManifest(store_id, sequence).toFullKey()));
 
     // add an not exist key for testing
-    keys.emplace_back(S3::S3Filename::newCheckpointData(store_id, sequence, 999).toView().getLockKey(store_id, sequence));
-    keyset.insert(keys.back());
+    lock_keys.emplace_back(S3::S3Filename::newCheckpointData(store_id, sequence, 999).toView().getLockKey(store_id, sequence));
+    lock_keyset.insert(lock_keys.back());
 
-    auto file_sizes = data_store->getDataFileSizes(keyset);
-    ASSERT_EQ(file_sizes.size(), 4);
-    ASSERT_EQ(file_sizes.at(keys[0]).size, 345 * 1024);
-    ASSERT_EQ(file_sizes.at(keys[1]).size, 156 * 1024);
-    ASSERT_EQ(file_sizes.at(keys[2]).size, 1234);
-    ASSERT_EQ(file_sizes.at(keys[3]).size, 1234);
-    ASSERT_EQ(file_sizes.at(keys[4]).size, -1); // not exist or exception happens
+    auto timepoint = std::chrono::system_clock::now();
+    using namespace std::chrono_literals;
+    FailPointHelper::enableFailPoint(
+        FailPoints::force_set_mocked_s3_object_mtime,
+        std::map<String, Aws::Utils::DateTime>{
+            {s3_client->root() + df_keys[0], timepoint - 7200s},
+            {s3_client->root() + df_keys[1], timepoint - 7200s},
+            {s3_client->root() + df_keys[2], timepoint - 7200s},
+            {s3_client->root() + df_keys[3], timepoint - 30s},
+        });
+
+    auto file_sizes = data_store->getDataFileSizes(lock_keyset);
+    ASSERT_EQ(file_sizes.size(), 5);
+    ASSERT_EQ(file_sizes.at(lock_keys[0]).size, 345 * 1024);
+    ASSERT_EQ(file_sizes.at(lock_keys[0]).mtime, timepoint - 7200s);
+    ASSERT_EQ(file_sizes.at(lock_keys[1]).size, 156 * 1024);
+    ASSERT_EQ(file_sizes.at(lock_keys[1]).mtime, timepoint - 7200s);
+    ASSERT_EQ(file_sizes.at(lock_keys[2]).size, 1234);
+    ASSERT_EQ(file_sizes.at(lock_keys[2]).mtime, timepoint - 7200s);
+    ASSERT_EQ(file_sizes.at(lock_keys[3]).size, 1234);
+    ASSERT_EQ(file_sizes.at(lock_keys[3]).mtime, timepoint - 30s);
+    ASSERT_EQ(file_sizes.at(lock_keys[4]).size, -1); // not exist or exception happens
 
     PS::V3::CPDataFilesStatCache cache;
     auto gc_threshold = DB::DM::Remote::RemoteGCThreshold{.min_age_seconds = 3600, .valid_rate = 0.2, .min_file_threshold = 128 * 1024};
@@ -511,27 +528,27 @@ try
     }
     {
         cache.updateValidSize(PS::V3::RemoteFileValidSizes{
-            {keys[0], 300 * 1024}, // big, valid rate is high
-            {keys[1], 16 * 1024}, // big, valid rate is low
-            {keys[2], 1234}, // small
+            {lock_keys[0], 300 * 1024}, // big, valid rate is high
+            {lock_keys[1], 16 * 1024}, // big, valid rate is low
+            {lock_keys[2], 1234}, // small
         });
         auto stats = cache.getCopy(); // valid size is collected
         // valid size are updated
-        EXPECT_EQ(stats.at(keys[0]).valid_size, 300 * 1024);
-        EXPECT_EQ(stats.at(keys[1]).valid_size, 16 * 1024);
-        EXPECT_EQ(stats.at(keys[2]).valid_size, 1234);
+        EXPECT_EQ(stats.at(lock_keys[0]).valid_size, 300 * 1024);
+        EXPECT_EQ(stats.at(lock_keys[1]).valid_size, 16 * 1024);
+        EXPECT_EQ(stats.at(lock_keys[2]).valid_size, 1234);
         auto files_to_compact = PS::V3::getRemoteFileIdsNeedCompact(stats, gc_threshold, data_store, log);
         ASSERT_EQ(files_to_compact.size(), 2) << fmt::format("{}", files_to_compact);
-        ASSERT_TRUE(files_to_compact.contains(keys[1])) << fmt::format("{}", files_to_compact);
-        ASSERT_TRUE(files_to_compact.contains(keys[2])) << fmt::format("{}", files_to_compact);
-        ASSERT_TRUE(!files_to_compact.contains(keys[0])) << fmt::format("{}", files_to_compact);
+        ASSERT_TRUE(files_to_compact.contains(lock_keys[1])) << fmt::format("{}", files_to_compact);
+        ASSERT_TRUE(files_to_compact.contains(lock_keys[2])) << fmt::format("{}", files_to_compact);
+        ASSERT_TRUE(!files_to_compact.contains(lock_keys[0])) << fmt::format("{}", files_to_compact);
         // total size are updated after `getRemoteFileIdsNeedCompact`
-        EXPECT_EQ(stats.at(keys[0]).total_size, 345 * 1024);
-        EXPECT_EQ(stats.at(keys[0]).valid_size, 300 * 1024);
-        EXPECT_EQ(stats.at(keys[1]).total_size, 156 * 1024);
-        EXPECT_EQ(stats.at(keys[1]).valid_size, 16 * 1024);
-        EXPECT_EQ(stats.at(keys[2]).total_size, 1234);
-        EXPECT_EQ(stats.at(keys[2]).valid_size, 1234);
+        EXPECT_EQ(stats.at(lock_keys[0]).total_size, 345 * 1024);
+        EXPECT_EQ(stats.at(lock_keys[0]).valid_size, 300 * 1024);
+        EXPECT_EQ(stats.at(lock_keys[1]).total_size, 156 * 1024);
+        EXPECT_EQ(stats.at(lock_keys[1]).valid_size, 16 * 1024);
+        EXPECT_EQ(stats.at(lock_keys[2]).total_size, 1234);
+        EXPECT_EQ(stats.at(lock_keys[2]).valid_size, 1234);
     }
 }
 CATCH
