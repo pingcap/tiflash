@@ -176,8 +176,9 @@ std::unordered_set<String> getRemoteFileIdsNeedCompact(
     LOG_IMPL(
         log,
         (compact_files.empty() ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION),
-        "CheckpointData stats {}",
-        remote_infos);
+        "CheckpointData stats {} {}",
+        remote_infos,
+        gc_threshold);
     return compact_files;
 }
 

@@ -107,3 +107,16 @@ public:
 
 
 } // namespace DB::DM::Remote
+
+
+template <>
+struct fmt::formatter<DB::DM::Remote::RemoteGCThreshold>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::DM::Remote::RemoteGCThreshold & v, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return format_to(ctx.out(), "RemoteGCThreshold{{min_age={} min_file_threshold={} valid_rate={:2.2f}%}}", v.min_age_seconds, v.min_file_threshold, v.valid_rate);
+    }
+};
