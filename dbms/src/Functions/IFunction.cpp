@@ -236,9 +236,9 @@ void IFunctionBuilder::checkNumberOfArguments(size_t number_of_arguments) const
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 }
 
-FunctionBasePtr IFunctionBuilder::build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator) const
+FunctionBasePtr IFunctionBuilder::build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator, const tipb::Expr * expr) const
 {
-    return buildImpl(arguments, getReturnType(arguments), collator);
+    return buildImpl(arguments, getReturnType(arguments), collator, expr);
 }
 
 DataTypePtr IFunctionBuilder::getReturnType(const ColumnsWithTypeAndName & arguments) const

@@ -610,7 +610,8 @@ ColumnWithTypeAndName executeFunction(
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    bool raw_function_test = false);
+    bool raw_function_test = false,
+    tipb::Expr * expr = nullptr);
 
 ColumnWithTypeAndName executeFunction(
     Context & context,
@@ -618,7 +619,8 @@ ColumnWithTypeAndName executeFunction(
     const ColumnNumbers & argument_column_numbers,
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    bool raw_function_test = false);
+    bool raw_function_test = false,
+    tipb::Expr * expr = nullptr);
 
 template <typename... Args>
 ColumnWithTypeAndName executeFunction(
@@ -636,7 +638,8 @@ DataTypePtr getReturnTypeForFunction(
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    bool raw_function_test = false);
+    bool raw_function_test = false,
+    tipb::Expr * expr = nullptr);
 
 template <typename T>
 ColumnWithTypeAndName createNullableColumn(
@@ -793,7 +796,8 @@ public:
         const String & func_name,
         const ColumnsWithTypeAndName & columns,
         const TiDB::TiDBCollatorPtr & collator = nullptr,
-        bool raw_function_test = false);
+        bool raw_function_test = false,
+        tipb::Expr * expr = nullptr);
 
     template <typename... Args>
     ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
@@ -807,7 +811,8 @@ public:
         const ColumnNumbers & argument_column_numbers,
         const ColumnsWithTypeAndName & columns,
         const TiDB::TiDBCollatorPtr & collator = nullptr,
-        bool raw_function_test = false);
+        bool raw_function_test = false,
+        tipb::Expr * expr = nullptr);
 
     template <typename... Args>
     ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnWithTypeAndName & first_column, const Args &... columns)

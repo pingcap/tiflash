@@ -462,13 +462,13 @@ void ExpressionActions::add(const ExpressionAction & action, Names & out_new_col
     addImpl(action, out_new_columns);
 }
 
-void ExpressionActions::add(const ExpressionAction & action)
+void ExpressionActions::add(const ExpressionAction & action, const tipb::Expr * expr)
 {
     Names new_names;
-    addImpl(action, new_names);
+    addImpl(action, new_names, expr);
 }
 
-void ExpressionActions::addImpl(ExpressionAction action, Names & new_names)
+void ExpressionActions::addImpl(ExpressionAction action, Names & new_names, const tipb::Expr * expr)
 {
     if (sample_block.has(action.result_name))
         return;
@@ -486,7 +486,7 @@ void ExpressionActions::addImpl(ExpressionAction action, Names & new_names)
             arguments[i] = sample_block.getByName(action.argument_names[i]);
         }
 
-        action.function = action.function_builder->build(arguments, action.collator);
+        action.function = action.function_builder->build(arguments, action.collator, expr);
         action.result_type = action.function->getReturnType();
     }
 

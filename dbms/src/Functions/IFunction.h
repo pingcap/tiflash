@@ -191,7 +191,7 @@ class IFunctionBuilder
 public:
     virtual ~IFunctionBuilder() = default;
 
-    FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator = nullptr) const;
+    FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, const TiDB::TiDBCollatorPtr & collator = nullptr, const tipb::Expr * expr = nullptr) const;
 
     DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments) const;
 
@@ -245,7 +245,8 @@ protected:
     virtual FunctionBasePtr buildImpl(
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr & return_type,
-        const TiDB::TiDBCollatorPtr & collator) const = 0;
+        const TiDB::TiDBCollatorPtr & collator,
+        const tipb::Expr * expr) const = 0;
 };
 
 using FunctionBuilderPtr = std::shared_ptr<IFunctionBuilder>;
@@ -396,9 +397,13 @@ public:
     FunctionBasePtr buildImpl(
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr & result_type,
-        const TiDB::TiDBCollatorPtr & collator) const override
+        const TiDB::TiDBCollatorPtr & collator,
+        const tipb::Expr * expr) const override
     {
         function->setCollator(collator);
+        if (expr != nullptr)
+            function->setMetaData(*expr);
+
         DataTypes data_types(arguments.size());
         for (size_t i = 0; i < arguments.size(); ++i)
             data_types[i] = arguments[i].type;

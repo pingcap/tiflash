@@ -406,9 +406,14 @@ String DAGExpressionAnalyzerHelper::buildGroupingFunction(
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions)
 {
-    auto result_name = DAGExpressionAnalyzerHelper::buildDefaultFunction(analyzer, expr, actions);
-    actions->setMetaData(expr);
-    return result_name;
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (const auto & child : expr.children())
+    {
+        String name = analyzer->getActions(child, actions);
+        argument_names.push_back(name);
+    }
+    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr), &expr);
 }
 
 String DAGExpressionAnalyzerHelper::buildDefaultFunction(

@@ -49,7 +49,8 @@ void registerFunctionsTiDBConversion(FunctionFactory & factory)
 FunctionBasePtr FunctionBuilderTiDBCast::buildImpl(
     const ColumnsWithTypeAndName & arguments,
     const DataTypePtr & return_type,
-    const TiDB::TiDBCollatorPtr &) const
+    const TiDB::TiDBCollatorPtr &,
+    const tipb::Expr *) const
 {
     DataTypes data_types(arguments.size());
 

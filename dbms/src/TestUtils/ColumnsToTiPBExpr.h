@@ -20,12 +20,14 @@
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
+#include <tipb/expression.pb.h>
 
 namespace DB
 {
 namespace tests
 {
-tipb::Expr columnsToTiPBExpr(
+void columnsToTiPBExpr(
+    tipb::Expr * expr,
     const String & func_name,
     const ColumnNumbers & argument_column_number,
     const ColumnsWithTypeAndName & columns,

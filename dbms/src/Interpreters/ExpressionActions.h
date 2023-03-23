@@ -116,7 +116,7 @@ public:
 
     std::string toString() const;
 
-    void setMetaData(const tipb::Expr & expr) { function->setMetaData(expr); }
+    void setMetaData(const tipb::Expr & expr) const { function->setMetaData(expr); }
 private:
     friend class ExpressionActions;
 
@@ -162,7 +162,7 @@ public:
     void addInput(const ColumnWithTypeAndName & column);
     void addInput(const NameAndTypePair & column);
 
-    void add(const ExpressionAction & action);
+    void add(const ExpressionAction & action, const tipb::Expr * expr = nullptr);
 
     /// Adds new column names to out_new_columns (formed as a result of the added action).
     void add(const ExpressionAction & action, Names & out_new_columns);
@@ -211,7 +211,7 @@ private:
     Actions actions;
     Block sample_block;
 
-    void addImpl(ExpressionAction action, Names & new_names);
+    void addImpl(ExpressionAction action, Names & new_names, const tipb::Expr * expr = nullptr);
 };
 
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;

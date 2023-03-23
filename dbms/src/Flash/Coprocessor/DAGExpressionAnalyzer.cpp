@@ -666,14 +666,15 @@ String DAGExpressionAnalyzer::applyFunction(
     const String & func_name,
     const Names & arg_names,
     const ExpressionActionsPtr & actions,
-    const TiDB::TiDBCollatorPtr & collator)
+    const TiDB::TiDBCollatorPtr & collator,
+    const tipb::Expr * expr)
 {
     String result_name = genFuncString(func_name, arg_names, {collator});
     if (actions->getSampleBlock().has(result_name))
         return result_name;
     const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, context);
     const ExpressionAction & action = ExpressionAction::applyFunction(function_builder, arg_names, result_name, collator);
-    actions->add(action);
+    actions->add(action, expr);
     return result_name;
 }
 

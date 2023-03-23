@@ -158,6 +158,9 @@ void columnsToTiPBExprForDateAddSub(
     if (collator != nullptr)
         expr->mutable_field_type()->set_collate(-collator->getCollatorId());
 }
+
+} // namespace
+
 void columnsToTiPBExpr(
     tipb::Expr * expr,
     const String & func_name,
@@ -191,18 +194,6 @@ void columnsToTiPBExpr(
         if (collator != nullptr)
             expr->mutable_field_type()->set_collate(-collator->getCollatorId());
     }
-}
-} // namespace
-
-tipb::Expr columnsToTiPBExpr(
-    const String & func_name,
-    const ColumnNumbers & argument_column_number,
-    const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator)
-{
-    tipb::Expr ret;
-    columnsToTiPBExpr(&ret, func_name, argument_column_number, columns, collator);
-    return ret;
 }
 } // namespace tests
 } // namespace DB

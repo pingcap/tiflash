@@ -304,7 +304,8 @@ private:
         const String & func_name,
         const Names & arg_names,
         const ExpressionActionsPtr & actions,
-        const TiDB::TiDBCollatorPtr & collator);
+        const TiDB::TiDBCollatorPtr & collator,
+        const tipb::Expr * expr = nullptr);
 
     String appendTimeZoneCast(
         const String & tz_col,
