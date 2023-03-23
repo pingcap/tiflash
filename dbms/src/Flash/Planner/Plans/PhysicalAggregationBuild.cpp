@@ -19,9 +19,6 @@
 #include <Interpreters/Context.h>
 #include <Operators/AggregateSinkOp.h>
 #include <Operators/ExpressionTransformOp.h>
-#include <Operators/OperatorProfileInfo.h>
-
-#include "Operators/Operator.h"
 
 namespace DB
 {
@@ -31,27 +28,24 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+
     if (!before_agg_actions->getActions().empty())
     {
         group_builder.transform(
             [&](auto & builder) {
                 builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_agg_actions));
-            },
-            context,
-            executor_id,
-            OperatorType::Transform);
+            });
+        executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
 
-    OperatorProfileInfoGroup profile_group;
-    profile_group.reserve(group_builder.concurrency);
     size_t build_index = 0;
     group_builder.transform(
         [&](auto & builder) {
             builder.setSinkOp(std::make_unique<AggregateSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
-        },
-        context,
-        executor_id,
-        OperatorType::Sink);
+        });
+    executor_profile.emplace_back(group_builder.getOperatorProfiles());
+
 
     Block before_agg_header = group_builder.getCurrentHeader();
     size_t concurrency = group_builder.concurrency;

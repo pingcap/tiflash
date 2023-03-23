@@ -191,13 +191,17 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
     if (dag_context->return_executor_id)
     {
         // fill in tree-based executors' execution summary
+        std::cout << "check the order: ";
         for (auto & p : profiles)
+        {
+            std::cout << "p id: " << p.first << std::endl;
             fillExecutionSummary(
                 response,
                 p.first,
                 p.second->getBaseRuntimeStatistics(),
                 p.second->processTimeForJoinBuild(),
                 dag_context->scan_context_map);
+        }
     }
     else
     {

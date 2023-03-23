@@ -20,6 +20,7 @@ namespace DB
 std::vector<TaskPtr> FineGrainedPipelineEvent::scheduleImpl()
 {
     std::vector<TaskPtr> tasks;
+    pipeline_exec->addWaitTime(stop_watch.elapsed());
     tasks.push_back(std::make_unique<PipelineTask>(mem_tracker, log->identifier(), exec_status, shared_from_this(), std::move(pipeline_exec)));
     return tasks;
 }

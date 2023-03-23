@@ -40,13 +40,13 @@ void PhysicalGetResultSink::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+
     auto this_shared_ptr = std::static_pointer_cast<PhysicalGetResultSink>(shared_from_this());
     group_builder.transform(
         [&](auto & builder) {
             builder.setSinkOp(std::make_unique<GetResultSinkOp>(exec_status, log->identifier(), this_shared_ptr));
-        },
-        context,
-        executor_id,
-        OperatorType::Sink);
+        });
+    executor_profile.emplace_back(group_builder.getOperatorProfiles());
 }
 } // namespace DB

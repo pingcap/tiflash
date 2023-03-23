@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
+#include <Common/Stopwatch.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <atomic>
@@ -47,7 +48,9 @@ public:
         : exec_status(exec_status_)
         , mem_tracker(std::move(mem_tracker_))
         , log(Logger::get(req_id))
-    {}
+    {
+        stop_watch.start();
+    }
     virtual ~Event() = default;
 
     void addInput(const EventPtr & input);
@@ -85,6 +88,8 @@ protected:
     MemoryTrackerPtr mem_tracker;
 
     LoggerPtr log;
+
+    Stopwatch stop_watch;
 
 private:
     Events outputs;

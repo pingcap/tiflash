@@ -32,7 +32,7 @@
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
-#include <Operators/OperatorProfileInfo.h>
+#include <Operators/OperatorProfile.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -66,10 +66,10 @@ using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 class ProcessListEntry;
 
 // a group of profile for same operator
-using OperatorProfileInfoGroup = std::vector<OperatorProfileInfoPtr>;
+using OperatorProfiles = std::vector<OperatorProfilePtr>;
 
 // a group of profile for same executor
-using ExecutorProfileInfo = std::vector<OperatorProfileInfoGroup>;
+using ExecutorProfile = std::vector<OperatorProfiles>;
 
 UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
 {
@@ -151,7 +151,7 @@ public:
     DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
 
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
-    std::unordered_map<String, ExecutorProfileInfo> & getPipelineProfilesMap();
+    std::unordered_map<String, ExecutorProfile> & getPipelineProfilesMap();
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
@@ -347,7 +347,7 @@ private:
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
 
     /// executor_id, ExecutorProfileInfo
-    std::unordered_map<String, ExecutorProfileInfo> pipeline_profiles_map;
+    std::unordered_map<String, ExecutorProfile> pipeline_profiles_map;
 
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
     std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;

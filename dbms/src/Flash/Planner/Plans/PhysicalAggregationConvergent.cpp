@@ -16,8 +16,6 @@
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/NullSourceOp.h>
 
-#include "Operators/Operator.h"
-
 namespace DB
 {
 
@@ -27,6 +25,7 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
     aggregate_context->initConvergent();
 
     if (unlikely(aggregate_context->useNullSource()))
@@ -38,10 +37,8 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
                     exec_status,
                     aggregate_context->getHeader(),
                     log->identifier()));
-            },
-            context,
-            executor_id,
-            OperatorType::Source);
+            });
+        executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
     else
     {
@@ -54,10 +51,8 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
                     aggregate_context,
                     index++,
                     log->identifier()));
-            },
-            context,
-            executor_id,
-            OperatorType::Source);
+            });
+        executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
 
     if (!expr_after_agg->getActions().empty())
@@ -65,10 +60,8 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
         group_builder.transform(
             [&](auto & builder) {
                 builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_after_agg));
-            },
-            context,
-            executor_id,
-            OperatorType::Transform);
+            });
+        executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
 }
 } // namespace DB

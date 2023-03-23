@@ -21,6 +21,7 @@
 #include <tipb/select.pb.h>
 
 #include <map>
+#include <unordered_map>
 
 namespace DB
 {
@@ -45,7 +46,7 @@ public:
 
     tipb::SelectResponse genExecutionSummaryResponse();
 
-    const std::map<String, ExecutorStatisticsPtr> & getProfiles() const { return profiles; }
+    const std::unordered_map<String, ExecutorStatisticsPtr> & getProfiles() const { return profiles; }
 
 private:
     void collectRuntimeDetails();
@@ -88,7 +89,7 @@ private:
 
 private:
     DAGContext * dag_context = nullptr;
-    std::map<String, ExecutorStatisticsPtr> profiles;
+    std::unordered_map<String, ExecutorStatisticsPtr> profiles;
     const LoggerPtr log;
     bool force_fill_executor_id; // for testing list based executors
     bool enable_pipeline;

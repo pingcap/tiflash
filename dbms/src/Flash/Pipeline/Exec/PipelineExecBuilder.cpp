@@ -16,19 +16,6 @@
 
 namespace DB
 {
-void registerProfileInfo(PipelineExecBuilder & builder, OperatorProfileInfoGroup & profile_group, OperatorType type)
-{
-    auto profile = std::make_shared<OperatorProfileInfo>();
-    if (type == OperatorType::Source)
-        builder.source_op->setProfileInfo(profile);
-    else if (type == OperatorType::Transform)
-        builder.transform_ops.back()->setProfileInfo(profile);
-    else if (type == OperatorType::Sink)
-        builder.sink_op->setProfileInfo(profile);
-
-    profile_group.emplace_back(profile);
-}
-
 void PipelineExecBuilder::setSourceOp(SourceOpPtr && source_op_)
 {
     assert(!source_op && source_op_);
@@ -60,6 +47,7 @@ PipelineExecPtr PipelineExecBuilder::build()
         std::move(sink_op));
 }
 
+
 Block PipelineExecBuilder::getCurrentHeader() const
 {
     if (sink_op)
@@ -70,6 +58,19 @@ Block PipelineExecBuilder::getCurrentHeader() const
     {
         assert(source_op);
         return source_op->getHeader();
+    }
+}
+
+OperatorProfilePtr PipelineExecBuilder::getOperatorProfile() const
+{
+    if (sink_op)
+        return sink_op->getProfile();
+    else if (!transform_ops.empty())
+        return transform_ops.back()->getProfile();
+    else
+    {
+        assert(source_op);
+        return source_op->getProfile();
     }
 }
 
@@ -94,5 +95,14 @@ Block PipelineExecGroupBuilder::getCurrentHeader()
 {
     assert(!group.empty());
     return group.back().getCurrentHeader();
+}
+
+OperatorProfiles PipelineExecGroupBuilder::getOperatorProfiles()
+{
+    assert(!group.empty());
+    OperatorProfiles operator_profiles;
+    for (auto & builder : group)
+        operator_profiles.push_back(builder.getOperatorProfile());
+    return operator_profiles;
 }
 } // namespace DB

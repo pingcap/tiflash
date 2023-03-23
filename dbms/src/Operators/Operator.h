@@ -16,7 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Core/Block.h>
-#include <Operators/OperatorProfileInfo.h>
+#include <Operators/OperatorProfile.h>
 
 #include <memory>
 
@@ -59,6 +59,7 @@ class Operator
 public:
     Operator(PipelineExecutorStatus & exec_status_, const String & req_id)
         : exec_status(exec_status_)
+        , profile(std::make_shared<OperatorProfile>())
         , log(Logger::get(req_id))
     {}
 
@@ -88,15 +89,15 @@ public:
         header = header_;
     }
 
-    void setProfileInfo(OperatorProfileInfoPtr profile_info_)
+    OperatorProfilePtr getProfile() const
     {
-        profile_info = profile_info_;
-        profile_info->start();
+        assert(profile);
+        return profile;
     }
 
 protected:
     PipelineExecutorStatus & exec_status;
-    OperatorProfileInfoPtr profile_info;
+    OperatorProfilePtr profile;
     const LoggerPtr log;
     Block header;
 };

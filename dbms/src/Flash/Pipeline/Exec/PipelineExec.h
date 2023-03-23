@@ -42,6 +42,12 @@ public:
 
     OperatorStatus await();
 
+    void addWaitTime(UInt64 time)
+    {
+        assert(source_op);
+        source_op->getProfile()->updateTime(time);
+    }
+
 private:
     OperatorStatus executeImpl();
 

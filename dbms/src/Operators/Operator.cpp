@@ -37,12 +37,12 @@ OperatorStatus Operator::await()
 {
     CHECK_IS_CANCELLED
     // TODO collect operator profile info here.
-    UInt64 start_time = profile_info->total_stopwatch.elapsed();
+    UInt64 start_time = profile->total_stopwatch.elapsed();
     auto op_status = awaitImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    profile_info->updateTime(profile_info->total_stopwatch.elapsed() - start_time);
+    profile->updateTime(profile->total_stopwatch.elapsed() - start_time);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -52,7 +52,7 @@ OperatorStatus SourceOp::read(Block & block)
     CHECK_IS_CANCELLED
     // TODO collect operator profile info here.
     assert(!block);
-    UInt64 start_time = profile_info->total_stopwatch.elapsed();
+    UInt64 start_time = profile->total_stopwatch.elapsed();
 
     auto op_status = readImpl(block);
 #ifndef NDEBUG
@@ -63,7 +63,7 @@ OperatorStatus SourceOp::read(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::HAS_OUTPUT});
 #endif
-    profile_info->update(block, profile_info->total_stopwatch.elapsed() - start_time);
+    profile->update(block, profile->total_stopwatch.elapsed() - start_time);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -72,7 +72,7 @@ OperatorStatus TransformOp::transform(Block & block)
 {
     CHECK_IS_CANCELLED
     // TODO collect operator profile info here.
-    UInt64 start_time = profile_info->total_stopwatch.elapsed();
+    UInt64 start_time = profile->total_stopwatch.elapsed();
     auto op_status = transformImpl(block);
 #ifndef NDEBUG
     if (block)
@@ -83,9 +83,9 @@ OperatorStatus TransformOp::transform(Block & block)
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
     if (op_status == OperatorStatus::HAS_OUTPUT)
-        profile_info->update(block, profile_info->total_stopwatch.elapsed() - start_time);
+        profile->update(block, profile->total_stopwatch.elapsed() - start_time);
     else
-        profile_info->updateTime(profile_info->total_stopwatch.elapsed() - start_time);
+        profile->updateTime(profile->total_stopwatch.elapsed() - start_time);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -94,7 +94,7 @@ OperatorStatus TransformOp::tryOutput(Block & block)
 {
     CHECK_IS_CANCELLED
     assert(!block);
-    // UInt64 start_time = profile_info->total_stopwatch.elapsed();
+    UInt64 start_time = profile->total_stopwatch.elapsed();
     auto op_status = tryOutputImpl(block);
 #ifndef NDEBUG
     if (block)
@@ -104,7 +104,7 @@ OperatorStatus TransformOp::tryOutput(Block & block)
     }
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    // profile_info->update(block, profile_info->total_stopwatch.elapsed() - start_time);
+    profile->update(block, profile->total_stopwatch.elapsed() - start_time);
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
@@ -114,12 +114,12 @@ OperatorStatus SinkOp::prepare()
 {
     CHECK_IS_CANCELLED
     // TODO collect operator profile info here.
-    UInt64 start_time = profile_info->total_stopwatch.elapsed();
+    UInt64 start_time = profile->total_stopwatch.elapsed();
     auto op_status = prepareImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
 #endif
-    profile_info->updateTime(profile_info->total_stopwatch.elapsed() - start_time);
+    profile->updateTime(profile->total_stopwatch.elapsed() - start_time);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -135,12 +135,12 @@ OperatorStatus SinkOp::write(Block && block)
     }
 #endif
     // TODO collect operator profile info here.
-    UInt64 start_time = profile_info->total_stopwatch.elapsed();
+    UInt64 start_time = profile->total_stopwatch.elapsed();
     auto op_status = writeImpl(std::move(block));
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif
-    profile_info->update(block, profile_info->total_stopwatch.elapsed() - start_time);
+    profile->update(block, profile->total_stopwatch.elapsed() - start_time);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }

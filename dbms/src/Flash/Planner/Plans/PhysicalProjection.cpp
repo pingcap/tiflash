@@ -152,15 +152,14 @@ void PhysicalProjection::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
     if (project_actions && !project_actions->getActions().empty())
     {
         group_builder.transform(
             [&](auto & builder) {
                 builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), project_actions));
-            },
-            context,
-            executor_id,
-            OperatorType::Transform);
+            });
+        executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
 }
 

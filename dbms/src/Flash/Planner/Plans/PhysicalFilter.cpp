@@ -64,14 +64,14 @@ void PhysicalFilter::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+
     auto input_header = group_builder.getCurrentHeader();
     group_builder.transform(
         [&](auto & builder) {
             builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_filter_actions, filter_column));
-        },
-        context,
-        executor_id,
-        OperatorType::Transform);
+        });
+    executor_profile.emplace_back(group_builder.getOperatorProfiles());
 }
 
 void PhysicalFilter::finalize(const Names & parent_require)

@@ -20,7 +20,7 @@
 namespace DB
 {
 /// Information for Operator profiling
-struct OperatorProfileInfo
+struct OperatorProfile
 {
     bool started = false;
     Stopwatch total_stopwatch{CLOCK_MONOTONIC_COARSE};
@@ -50,6 +50,6 @@ struct OperatorProfileInfo
     }
 };
 
-using OperatorProfileInfoPtr = std::shared_ptr<OperatorProfileInfo>;
+using OperatorProfilePtr = std::shared_ptr<OperatorProfile>;
 
 } // namespace DB

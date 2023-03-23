@@ -60,16 +60,15 @@ void PhysicalLimit::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
     auto input_header = group_builder.getCurrentHeader();
     auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);
 
     group_builder.transform(
         [&](auto & builder) {
             builder.appendTransformOp(std::make_unique<LimitTransformOp>(exec_status, log->identifier(), global_limit));
-        },
-        context,
-        executor_id,
-        OperatorType::Transform);
+        });
+    executor_profile.emplace_back(group_builder.getOperatorProfiles());
 }
 
 void PhysicalLimit::finalize(const Names & parent_require)

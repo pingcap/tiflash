@@ -24,8 +24,6 @@
 #include <Interpreters/Context.h>
 #include <Operators/ExchangeSenderSinkOp.h>
 
-#include "Operators/Operator.h"
-
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalExchangeSender::build(
@@ -95,6 +93,8 @@ void PhysicalExchangeSender::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+
     if (fine_grained_shuffle.enable())
     {
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_type));
@@ -119,10 +119,8 @@ void PhysicalExchangeSender::buildPipelineExecGroup(
                 log->identifier(),
                 /*is_async=*/true);
             builder.setSinkOp(std::make_unique<ExchangeSenderSinkOp>(exec_status, log->identifier(), std::move(response_writer)));
-        },
-        context,
-        executor_id,
-        OperatorType::Sink);
+        });
+    executor_profile.emplace_back(group_builder.getOperatorProfiles());
 }
 
 void PhysicalExchangeSender::finalize(const Names & parent_require)

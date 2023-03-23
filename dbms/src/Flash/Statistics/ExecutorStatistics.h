@@ -111,17 +111,17 @@ public:
     {
         const auto & pipeline_profiles_map = dag_context.getPipelineProfilesMap();
         auto it = pipeline_profiles_map.find(executor_id);
-
-        for (auto kv : pipeline_profiles_map)
-        {
-            std::cout << kv.first << std::endl;
-        }
-
+      
         if (it != pipeline_profiles_map.end())
         {
             // 1. Calculate time_processed_ns for operators before the last operator
             const auto & executor_profile = it->second;
             size_t profile_num = executor_profile.size();
+            if (profile_num == 0)
+            {
+                std::cout << "ywq test executor id: " << executor_id << std::endl;
+                return;
+            }
 
             for (size_t i = 0; i < profile_num - 1; ++i)
             {

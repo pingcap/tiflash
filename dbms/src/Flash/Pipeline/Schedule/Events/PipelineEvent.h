@@ -35,7 +35,7 @@ public:
     {}
 
 protected:
-    Context & context[[maybe_unused]];
-    size_t concurrency[[maybe_unused]];
+    Context & context [[maybe_unused]];
+    size_t concurrency [[maybe_unused]];
 };
 } // namespace DB

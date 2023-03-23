@@ -88,13 +88,11 @@ void PhysicalExpand::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
-    group_builder.transform(
-        [&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expand_actions));
-        },
-        context,
-        executor_id,
-        OperatorType::Transform);
+    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+    group_builder.transform([&](auto & builder) {
+        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expand_actions));
+    });
+    executor_profile.push_back(group_builder.getOperatorProfiles());
 }
 
 void PhysicalExpand::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)

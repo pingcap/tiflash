@@ -73,15 +73,15 @@ void PhysicalMockExchangeReceiver::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+
     group_builder.init(mock_streams.size());
     size_t i = 0;
     group_builder.transform(
         [&](auto & builder) {
             builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
-        },
-        context,
-        executor_id,
-        OperatorType::Source);
+        });
+    executor_profile.emplace_back(group_builder.getOperatorProfiles());
 }
 
 void PhysicalMockExchangeReceiver::finalize(const Names & parent_require)

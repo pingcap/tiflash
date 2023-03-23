@@ -75,23 +75,20 @@ void PhysicalTopN::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
     if (!before_sort_actions->getActions().empty())
     {
         group_builder.transform(
             [&](auto & builder) {
                 builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_sort_actions));
-            },
-            context,
-            executor_id,
-            OperatorType::Transform);
+            });
+        executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
     group_builder.transform(
         [&](auto & builder) {
             builder.appendTransformOp(std::make_unique<TopNTransformOp>(exec_status, log->identifier(), order_descr, limit, context.getSettingsRef().max_block_size));
-        },
-        context,
-        executor_id,
-        OperatorType::Transform);
+        });
+    executor_profile.emplace_back(group_builder.getOperatorProfiles());
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)

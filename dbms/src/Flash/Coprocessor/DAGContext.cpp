@@ -227,7 +227,7 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap
     return profile_streams_map;
 }
 
-std::unordered_map<String, ExecutorProfileInfo> & DAGContext::getPipelineProfilesMap()
+std::unordered_map<String, ExecutorProfile> & DAGContext::getPipelineProfilesMap()
 {
     return pipeline_profiles_map;
 }
