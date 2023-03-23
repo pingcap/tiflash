@@ -51,7 +51,7 @@ protected:
 struct RemoteGCThreshold
 {
     // The file will NOT be compacted when the time difference between the last
-    // modification is less than `remote_gc_min_age_seconds`
+    // modification is less than `min_age_seconds`
     Int64 min_age_seconds = 0;
     // The file with valid rate less than `valid_rate` will be compact
     double valid_rate = 0.0;
@@ -103,7 +103,7 @@ public:
         Int64 size = -1;
         std::chrono::system_clock::time_point mtime; // last_modification_time
     };
-    virtual std::unordered_map<String, DataFileInfo> getDataFileSizes(const std::unordered_set<String> & lock_keys) = 0;
+    virtual std::unordered_map<String, DataFileInfo> getDataFilesInfo(const std::unordered_set<String> & lock_keys) = 0;
 };
 
 

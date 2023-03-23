@@ -114,7 +114,7 @@ bool DataStoreS3::putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_
     return true; // upload success
 }
 
-std::unordered_map<String, IDataStore::DataFileInfo> DataStoreS3::getDataFileSizes(const std::unordered_set<String> & lock_keys)
+std::unordered_map<String, IDataStore::DataFileInfo> DataStoreS3::getDataFilesInfo(const std::unordered_set<String> & lock_keys)
 {
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
@@ -130,7 +130,6 @@ std::unordered_map<String, IDataStore::DataFileInfo> DataStoreS3::getDataFileSiz
                     auto object_info = S3::tryGetObjectInfo(*s3_client, datafile_key);
                     if (object_info.exist && object_info.size >= 0)
                     {
-                        LOG_DEBUG(log, "key={} size={} mtime={}", lock_key, object_info.size, object_info.last_modification_time.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
                         return std::make_tuple(
                             lock_key,
                             DataFileInfo{

@@ -88,7 +88,7 @@ std::unordered_set<String> getRemoteFileIdsNeedCompact(
             if (stat.total_size < 0)
                 file_ids.insert(file_id);
         }
-        const auto files_info = remote_store->getDataFileSizes(file_ids);
+        const auto files_info = remote_store->getDataFilesInfo(file_ids);
         for (const auto & [file_id, info] : files_info)
         {
             // IO error or data file not exist, just skip it
@@ -113,7 +113,6 @@ std::unordered_set<String> getRemoteFileIdsNeedCompact(
         if (stat.total_size <= 0)
             continue;
         auto age_seconds = std::chrono::duration_cast<std::chrono::milliseconds>(now_timepoint - stat.mtime).count() / 1000.0;
-        LOG_INFO(log, "key={} now={:%H:%M:%S} mtime={:%H:%M:%S} seconds={:.3f}", file_id, now_timepoint, stat.mtime, age_seconds);
         double valid_rate = 1.0 * stat.valid_size / stat.total_size;
         if (static_cast<Int64>(age_seconds) > gc_threshold.min_age_seconds
             && (valid_rate < gc_threshold.valid_rate || stat.total_size < static_cast<Int64>(gc_threshold.min_file_threshold)))
