@@ -60,15 +60,10 @@ OperatorStatus WindowTransformOp::transformImpl(Block & block)
 OperatorStatus WindowTransformOp::tryOutputImpl(Block & block)
 {
     assert(action);
+    block = action->tryGetOutputBlock();
     if unlikely (action->input_is_finished)
-    {
-        block = action->tryGetOutputBlock();
         return OperatorStatus::HAS_OUTPUT;
-    }
     else
-    {
-        block = action->tryGetOutputBlock();
         return block ? OperatorStatus::HAS_OUTPUT : OperatorStatus::NEED_INPUT;
-    }
 }
 } // namespace DB
