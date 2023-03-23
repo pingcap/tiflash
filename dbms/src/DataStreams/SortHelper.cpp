@@ -44,6 +44,15 @@ void removeConstantsFromSortDescription(const Block & header, SortDescription & 
         description.end());
 }
 
+bool isSortByConst(const Block & header, const SortDescription & description)
+{
+    return std::all_of(description.begin(), description.end(), [&](const SortColumnDescription & elem) {
+        return elem.column_name.empty()
+            ? header.safeGetByPosition(elem.column_number).column->isColumnConst()
+            : header.getByName(elem.column_name).column->isColumnConst();
+    });
+}
+
 void enrichBlockWithConstants(Block & block, const Block & header)
 {
     size_t rows = block.rows();

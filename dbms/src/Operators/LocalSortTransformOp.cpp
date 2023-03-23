@@ -19,29 +19,13 @@
 
 namespace DB
 {
-namespace
-{
-void cut(Block & block, size_t limit)
-{
-    if unlikely (!block)
-        return;
-    if (limit > 0 && block.rows() <= limit)
-        return;
-    size_t pop_back_cnt = block.rows() - limit;
-    for (auto & col : block)
-    {
-        auto mutate_col = (*std::move(col.column)).mutate();
-        mutate_col->popBack(pop_back_cnt);
-        col.column = std::move(mutate_col);
-    }
-}
-} // namespace
-
 void LocalSortTransformOp::operatePrefix()
 {
     header_without_constants = getHeader();
     SortHelper::removeConstantsFromBlock(header_without_constants);
     SortHelper::removeConstantsFromSortDescription(header, order_desc);
+    // For order by const, generate LimitOperator instead of SortOperator.
+    assert(!order_desc.empty());
 }
 
 Block LocalSortTransformOp::getMergeOutput()
@@ -59,12 +43,6 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
     {
     case LocalSortStatus::PARTIAL:
     {
-        /// If there were only const columns in sort description, then there is no need to sort, just cut block.
-        if (order_desc.empty())
-        {
-            cut(block, limit);
-            return OperatorStatus::HAS_OUTPUT;
-        }
         if unlikely (!block)
         {
             // convert to merge phase.

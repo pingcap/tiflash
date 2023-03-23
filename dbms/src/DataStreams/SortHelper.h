@@ -23,6 +23,8 @@ void removeConstantsFromBlock(Block & block);
 
 void removeConstantsFromSortDescription(const Block & header, SortDescription & description);
 
+bool isSortByConst(const Block & header, const SortDescription & description);
+
 /** Add into block, whose constant columns was removed by previous function,
   *  constant columns from header (which must have structure as before removal of constants from block).
   */
