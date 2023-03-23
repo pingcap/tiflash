@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 namespace DB
 {
 using MockServerConfig = tests::MockServerConfig;
+struct DecodedTiKVKey;
+using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 
 BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
 BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
@@ -26,7 +28,7 @@ std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGPro
 
 tipb::SelectResponse executeDAGRequest(
     Context & context,
-    const tipb::DAGRequest & dag_request,
+    tipb::DAGRequest & dag_request,
     RegionID region_id,
     UInt64 region_version,
     UInt64 region_conf_version,

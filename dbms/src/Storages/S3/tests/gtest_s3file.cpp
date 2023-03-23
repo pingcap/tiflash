@@ -164,7 +164,7 @@ protected:
     std::unordered_map<String, size_t> listFiles(const DMFileOID & oid)
     {
         auto dmfile_dir = DMFile::getPathByStatus(
-            S3::S3Filename::fromTableID(oid.store_id, oid.table_id).toFullKey(),
+            S3::S3Filename::fromTableID(oid.store_id, oid.keyspace_id, oid.table_id).toFullKey(),
             oid.file_id,
             DMFile::Status::READABLE);
         return S3::listPrefixWithSize(*s3_client, dmfile_dir + "/");
@@ -528,6 +528,53 @@ try
         EXPECT_EQ(stats.at(keys[1]).valid_size, 16 * 1024);
         EXPECT_EQ(stats.at(keys[2]).total_size, 1234);
         EXPECT_EQ(stats.at(keys[2]).valid_size, 1234);
+    }
+}
+CATCH
+
+TEST_F(S3FileTest, RetryWrapper)
+try
+{
+    // Always succ
+    {
+        Int32 retry = 0;
+        retryWrapper([&retry](Int32 max_retry_times, Int32 current_retry) {
+            UNUSED(max_retry_times);
+            retry = current_retry;
+            return true;
+        },
+                     3);
+        ASSERT_EQ(retry, 0);
+    }
+
+    // Always fail
+    {
+        Int32 retry = 0;
+        try
+        {
+            retryWrapper([&retry](Int32 max_retry_times, Int32 current_retry) {
+                retry = current_retry;
+                RUNTIME_CHECK(max_retry_times - 1 != current_retry);
+                return false;
+            },
+                         3);
+        }
+        catch (...)
+        {
+        }
+        ASSERT_EQ(retry, 2);
+    }
+
+    // Partial fail
+    {
+        Int32 retry = 0;
+        retryWrapper([&retry](Int32 max_retry_times, Int32 current_retry) {
+            UNUSED(max_retry_times);
+            retry = current_retry;
+            return current_retry > 0;
+        },
+                     3);
+        ASSERT_EQ(retry, 1);
     }
 }
 CATCH

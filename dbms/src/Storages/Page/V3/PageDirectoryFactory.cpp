@@ -169,9 +169,9 @@ void PageDirectoryFactory<Trait>::applyRecord(
     {
         // We only need page id under specific prefix after restart.
         // If you want to add other prefix here, make sure the page id allocation space is still enough after adding it.
-        if (r.page_id.hasPrefix(UniversalPageIdFormat::toSubPrefix(StorageType::Data))
-            || r.page_id.hasPrefix(UniversalPageIdFormat::toSubPrefix(StorageType::Log))
-            || r.page_id.hasPrefix(UniversalPageIdFormat::toSubPrefix(StorageType::Meta)))
+        if (UniversalPageIdFormat::isType(r.page_id, StorageType::Data)
+            || UniversalPageIdFormat::isType(r.page_id, StorageType::Log)
+            || UniversalPageIdFormat::isType(r.page_id, StorageType::Meta))
         {
             dir->max_page_id = std::max(dir->max_page_id, Trait::PageIdTrait::getU64ID(r.page_id));
         }

@@ -52,11 +52,11 @@ static constexpr UInt64 BLOBFILE_LIMIT_SIZE = 256 * MB;
 static constexpr UInt64 PAGE_META_ROLL_SIZE = 2 * MB;
 static constexpr UInt64 MAX_PERSISTED_LOG_FILES = 4;
 
-using NamespaceId = UInt64;
-static constexpr NamespaceId MAX_NAMESPACE_ID = UINT64_MAX;
+using NamespaceID = UInt64;
+static constexpr NamespaceID MAX_NAMESPACE_ID = UINT64_MAX;
 // KVStore stores it's data individually, so the actual `ns_id` value doesn't matter(just different from `MAX_NAMESPACE_ID` is enough)
-static constexpr NamespaceId KVSTORE_NAMESPACE_ID = 1000000UL;
+static constexpr NamespaceID KVSTORE_NAMESPACE_ID = 1000000UL;
 // just a random namespace id for test, the value doesn't matter
-static constexpr NamespaceId TEST_NAMESPACE_ID = 1000;
+static constexpr NamespaceID TEST_NAMESPACE_ID = 1000;
 
 } // namespace DB

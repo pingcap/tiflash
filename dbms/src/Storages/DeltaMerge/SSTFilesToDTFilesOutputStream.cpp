@@ -126,10 +126,9 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::writeSuffix()
         Stopwatch upload_watch;
         const StoreID store_id = context.getTMTContext().getKVStore()->getStoreID();
         const auto table_info = storage->getTableInfo();
-        // table_info.keyspace_id; // TODO support keyspace id
         for (const auto & file : ingest_files)
         {
-            Remote::DMFileOID oid{.store_id = store_id, .table_id = table_info.id, .file_id = file->fileId()};
+            Remote::DMFileOID oid{.store_id = store_id, .keyspace_id = table_info.keyspace_id, .table_id = table_info.id, .file_id = file->fileId()};
             remote_data_store->putDMFile(file, oid, /*remove_local*/ true);
         }
         const auto elapsed_seconds = upload_watch.elapsedSeconds();

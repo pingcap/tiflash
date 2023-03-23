@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/StoragePool_fwd.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage_fwd.h>
+#include <Storages/Transaction/Types.h>
 
 #include <atomic>
 #include <chrono>
@@ -87,13 +88,15 @@ public:
     using Timepoint = Clock::time_point;
     using Seconds = std::chrono::seconds;
 
-    StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & storage_path_pool_, const String & name = "");
+    StoragePool(Context & global_ctx, KeyspaceID keyspace_id_, NamespaceID ns_id_, StoragePathPool & storage_path_pool_, const String & name = "");
 
     PageStorageRunMode restore();
 
     ~StoragePool();
 
-    NamespaceId getNamespaceId() const { return ns_id; }
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
+
+    NamespaceID getNamespaceID() const { return ns_id; }
 
     PageStorageRunMode getPageStorageRunMode() const
     {
@@ -185,8 +188,10 @@ private:
 
     PageStorageRunMode run_mode;
 
+    const KeyspaceID keyspace_id;
+
     // whether the three storage instance is owned by this StoragePool
-    const NamespaceId ns_id;
+    const NamespaceID ns_id;
 
     StoragePathPool & storage_path_pool;
 

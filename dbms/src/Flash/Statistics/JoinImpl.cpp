@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,16 +21,11 @@ void JoinStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 {
     fmt_buffer.fmtAppend(
         R"("peak_build_bytes_usage":{},"build_side_child":"{}","is_spill_enabled":{},"is_spilled":{})"
-        R"("non_joined_outbound_rows":{},"non_joined_outbound_blocks":{},"non_joined_outbound_bytes":{},"non_joined_execution_time_ns":{},)"
         R"("join_build_inbound_rows":{},"join_build_inbound_blocks":{},"join_build_inbound_bytes":{},"join_build_execution_time_ns":{})",
         peak_build_bytes_usage,
         build_side_child,
         is_spill_enabled,
         is_spilled,
-        non_joined_base.rows,
-        non_joined_base.blocks,
-        non_joined_base.bytes,
-        non_joined_base.execution_time_ns,
         join_build_base.rows,
         join_build_base.blocks,
         join_build_base.bytes,
@@ -48,14 +43,6 @@ void JoinStatistics::collectExtraRuntimeDetail()
         build_side_child = join_execute_info.build_side_root_executor_id;
         is_spill_enabled = join_execute_info.join_ptr->isEnableSpill();
         is_spilled = join_execute_info.join_ptr->isSpilled();
-        for (const auto & non_joined_stream : join_execute_info.non_joined_streams)
-        {
-            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get()); p_stream)
-            {
-                const auto & profile_info = p_stream->getProfileInfo();
-                non_joined_base.append(profile_info);
-            }
-        }
         for (const auto & join_build_stream : join_execute_info.join_build_streams)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get()); p_stream)

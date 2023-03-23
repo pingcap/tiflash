@@ -175,7 +175,7 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(const DMContext & con
     return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id);
 }
 
-std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(const DMContext & context, ReadBuffer & buf, UniversalPageStoragePtr temp_ps, const BlockPtr & last_schema, TableID ns_id, WriteBatches & wbs)
+std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(const DMContext & context, ReadBuffer & buf, UniversalPageStoragePtr temp_ps, const BlockPtr & last_schema, WriteBatches & wbs)
 {
     auto schema = deserializeSchema(buf);
     if (!schema)
@@ -189,7 +189,7 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     readIntBinary(rows, buf);
     readIntBinary(bytes, buf);
     auto new_cf_id = context.storage_pool->newLogPageId();
-    auto remote_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(StorageType::Log, ns_id), data_page_id);
+    auto remote_page_id = UniversalPageIdFormat::toFullPageId(UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Log, context.physical_table_id), data_page_id);
     // The `data_file_id` in temp_ps is lock key, we need convert it to data key before write to local ps
     auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
     RUNTIME_CHECK(remote_data_location.has_value());

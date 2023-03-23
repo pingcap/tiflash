@@ -1279,8 +1279,8 @@ CATCH
 TEST_F(PageStorageTest, ConcurrencyAddExtCallbacks)
 try
 {
-    NamespaceId ns_id1 = TEST_NAMESPACE_ID;
-    NamespaceId ns_id2 = TEST_NAMESPACE_ID + 1;
+    NamespaceID ns_id1 = TEST_NAMESPACE_ID;
+    NamespaceID ns_id2 = TEST_NAMESPACE_ID + 1;
     {
         WriteBatch wb(ns_id1);
         wb.putExternal(20, 0);
@@ -1499,9 +1499,9 @@ CATCH
 TEST_F(PageStorageTest, GetMaxId)
 try
 {
-    NamespaceId small = 20;
-    NamespaceId medium = 50;
-    NamespaceId large = 100;
+    NamespaceID small = 20;
+    NamespaceID medium = 50;
+    NamespaceID large = 100;
 
     {
         WriteBatch batch{small};
