@@ -16,3 +16,4 @@
 set -ueox pipefail
 
 brew install python
+brew install llvm@15

@@ -20,7 +20,7 @@ CMAKE_VERSION=3.22.1
 GO_VERSION="1.20"
 ARCH=$(uname -m)
 GO_ARCH=$([[ "$ARCH" == "aarch64" ]] && echo "arm64" || echo "amd64")
-LLVM_VERSION="13.0.0"
+LLVM_VERSION="15.0.7"
 CCACHE_VERSION="4.5.1"
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SYSROOT="$SCRIPTPATH/sysroot"
@@ -42,7 +42,7 @@ function install_llvm() {
     cmake -DCMAKE_BUILD_TYPE=Release \
         -GNinja \
         -DLLVM_ENABLE_PROJECTS="clang;lld;polly;clang-tools-extra" \
-        -DLLVM_ENABLE_RUNTIMES="compiler-rt;libcxx;libcxxabi;libunwind;openmp" \
+        -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind;compiler-rt;openmp" \
         -DLLVM_TARGETS_TO_BUILD=Native \
         -DCOMPILER_RT_USE_BUILTINS_LIBRARY=ON \
         -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \

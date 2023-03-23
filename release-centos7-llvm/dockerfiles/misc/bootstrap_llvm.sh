@@ -17,7 +17,7 @@
 
 # Boostrap LLVM envriroment for CI/CD.
 # Require: git, ninja, cmake, compiler(devtoolset-10)
-# LLVM License: https://releases.llvm.org/13.0.0/LICENSE.TXT
+# LLVM License: https://releases.llvm.org/15.0.7/LICENSE.TXT
 
 function bootstrap_llvm() {
     # $1: llvm_version
@@ -45,7 +45,7 @@ function bootstrap_llvm() {
     cmake -DCMAKE_BUILD_TYPE=Release \
         -GNinja \
         -DLLVM_ENABLE_PROJECTS="clang;lld;polly;clang-tools-extra" \
-        -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;openmp;compiler-rt" \
+        -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;compiler-rt;openmp" \
         -DLLVM_TARGETS_TO_BUILD=Native \
         -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
         -DCLANG_DEFAULT_LINKER=lld \

@@ -37,7 +37,7 @@ And the following operating systems:
 The following packages are required:
 
 - CMake 3.21.0+
-- Clang 14.0.0+
+- Clang 15.0.0+
 - Rust
 - Python 3.0+
 - Ninja-Build or GNU Make
@@ -125,7 +125,7 @@ xcode-select --install
 brew install ninja cmake openssl@1.1 ccache
 ```
 
-If your MacOS is higher or equal to 13.0, it should work out of the box because by default Apple clang is 14.0.0. But if your MacOS is lower than 13.0, you should install llvm clang manually.
+Install LLVM 15.0.0+:
 
 ```shell
 brew install llvm@15
