@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/Logger.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/S3/MockS3Client.h>
 #include <aws/core/AmazonWebServiceRequest.h>
@@ -44,15 +45,13 @@
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/UploadPartRequest.h>
 #include <boost_wrapper/string_split.h>
+#include <common/logger_useful.h>
 #include <common/types.h>
 #include <fiu.h>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <mutex>
 #include <string_view>
-
-#include "Common/Logger.h"
-#include "common/logger_useful.h"
 
 namespace DB::FailPoints
 {

@@ -40,7 +40,7 @@ struct CPDataFileStat
     Int64 valid_size = 0;
     // total_size < 0 indicate this value is not inited
     Int64 total_size = -1;
-    // last_modification_time on S3
+    // last_modification_time on remote stor
     std::chrono::system_clock::time_point mtime;
 };
 

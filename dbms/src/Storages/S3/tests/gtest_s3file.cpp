@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Encryption/PosixWritableFile.h>
 #include <Interpreters/Context.h>
 #include <Poco/DigestStream.h>
@@ -41,10 +42,8 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <ext/scope_guard.h>
 #include <fstream>
-
-#include "Common/FailPoint.h"
-#include "ext/scope_guard.h"
 
 using namespace std::chrono_literals;
 using namespace DB::DM;

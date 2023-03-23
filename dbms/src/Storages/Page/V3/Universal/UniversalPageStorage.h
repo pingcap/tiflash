@@ -202,7 +202,7 @@ public:
         return remote_data_files_stat_cache.getCopy();
     }
 
-    void updateRemoteFilesCache(const PS::V3::CPDataFilesStatCache::CacheMap & updated_stat)
+    void updateRemoteFilesStatCache(const PS::V3::CPDataFilesStatCache::CacheMap & updated_stat)
     {
         remote_data_files_stat_cache.updateCache(updated_stat);
     }

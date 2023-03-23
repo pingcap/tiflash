@@ -18,7 +18,6 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/S3/S3Filename.h>
-#include <aws/core/utils/DateTime.h>
 
 #include <boost/core/noncopyable.hpp>
 
