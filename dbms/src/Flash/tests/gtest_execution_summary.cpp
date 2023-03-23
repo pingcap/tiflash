@@ -33,7 +33,9 @@ public:
         context.addExchangeReceiver("test_exchange",
                                     {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s1", {"banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana", "banana", {}, "banana"}),
-                                     toNullableVec<String>("s2", {"apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana"})});
+                                     toNullableVec<String>("s2", {"apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana", "apple", {}, "banana"})},
+                                    10,
+                                    {{"s1", TiDB::TP::TypeString}});
 
         context.addMockTable({"test_db", "empty_table"},
                              {{"s1", TiDB::TP::TypeString},
@@ -128,6 +130,22 @@ try
                            .topN("s2", true, 12)
                            .build(context, t);
         Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, not_check_concurrency}}, {"topn_2", {3, 1}}};
+        testForPipelineExecutionSummary(request, enable_planner, expect, expect);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .aggregation({}, {col("s2")})
+                           .project({col("s2")})
+                           .limit(2)
+                           .build(context);
+
+        Expect expect{{"table_scan_0", {12, concurrency}},
+                      {"aggregation_1", {3, not_check_concurrency}},
+                      {"project_2", {3, not_check_concurrency}}, // todo project no need..... 应该继承下游的
+                      {"limit_3", {2, not_check_concurrency}}};
+
         testForPipelineExecutionSummary(request, enable_planner, expect, expect);
     }
 
@@ -234,22 +252,6 @@ try
         testForPipelineExecutionSummary(request, enable_planner, expect_pipeline, expect);
     }
 
-    {
-        auto request = context
-                           .scan("test_db", "test_table")
-                           .aggregation({}, {col("s2")})
-                           .project({col("s2")})
-                           .limit(2)
-                           .build(context);
-
-        Expect expect{{"table_scan_0", {12, concurrency}},
-                      {"aggregation_1", {3, not_check_concurrency}},
-                      {"project_2", {not_check_rows, not_check_concurrency}}, // todo project no need..... 应该继承下游的
-                      {"limit_3", {2, not_check_concurrency}}};
-
-        testForPipelineExecutionSummary(request, enable_planner, expect, expect);
-    }
-
     WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END
 }
 CATCH
@@ -287,10 +289,26 @@ try
                            .scan("test_db", "test_table")
                            .aggregation({col("s2")}, {col("s2")})
                            .build(context, t);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, -1}}};
+        Expect expect{{"table_scan_0", {12, concurrency}}, {"aggregation_1", {3, not_check_concurrency}}};
         testForPipelineExecutionSummary(request, enable_planner, expect, expect);
     }
     WRAP_FOR_EXCUTION_SUMMARY_TEST_END
+}
+CATCH
+
+TEST_F(ExecutionSummaryTestRunner, fineGrainedShuffle)
+try
+{
+    WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_BEGIN
+    {
+        auto request = context
+                           .receive("test_exchange", concurrency)
+                           .aggregation({col("s2")}, {col("s2")})
+                           .build(context);
+        Expect expect{{"exchange_receiver_0", {12, concurrency}}, {"aggregation_1", {3, not_check_rows}}};
+        testForPipelineExecutionSummary(request, enable_planner, expect, expect);
+    }
+    WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END
 }
 CATCH
 

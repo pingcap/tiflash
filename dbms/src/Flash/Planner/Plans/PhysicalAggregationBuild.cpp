@@ -32,18 +32,16 @@ void PhysicalAggregationBuild::buildPipelineExecGroup(
 
     if (!before_agg_actions->getActions().empty())
     {
-        group_builder.transform(
-            [&](auto & builder) {
-                builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_agg_actions));
-            });
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), before_agg_actions));
+        });
         executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
 
     size_t build_index = 0;
-    group_builder.transform(
-        [&](auto & builder) {
-            builder.setSinkOp(std::make_unique<AggregateSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
-        });
+    group_builder.transform([&](auto & builder) {
+        builder.setSinkOp(std::make_unique<AggregateSinkOp>(exec_status, build_index++, aggregate_context, log->identifier()));
+    });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
 
 

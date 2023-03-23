@@ -67,10 +67,9 @@ void PhysicalFilter::buildPipelineExecGroup(
     auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
 
     auto input_header = group_builder.getCurrentHeader();
-    group_builder.transform(
-        [&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_filter_actions, filter_column));
-        });
+    group_builder.transform([&](auto & builder) {
+        builder.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_filter_actions, filter_column));
+    });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
 }
 

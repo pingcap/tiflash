@@ -16,8 +16,6 @@
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
 #include <Operators/GetResultSinkOp.h>
 
-#include "Operators/Operator.h"
-
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalGetResultSink::build(
@@ -43,10 +41,9 @@ void PhysicalGetResultSink::buildPipelineExecGroup(
     auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
 
     auto this_shared_ptr = std::static_pointer_cast<PhysicalGetResultSink>(shared_from_this());
-    group_builder.transform(
-        [&](auto & builder) {
-            builder.setSinkOp(std::make_unique<GetResultSinkOp>(exec_status, log->identifier(), this_shared_ptr));
-        });
+    group_builder.transform([&](auto & builder) {
+        builder.setSinkOp(std::make_unique<GetResultSinkOp>(exec_status, log->identifier(), this_shared_ptr));
+    });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
 }
 } // namespace DB

@@ -24,8 +24,6 @@
 #include <Flash/Statistics/JoinImpl.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Flash/Statistics/traverseExecutors.h>
-
-#include "tipb/select.pb.h"
 namespace DB
 {
 namespace
@@ -133,6 +131,20 @@ void ExecutorStatisticsCollector::fillTreeBasedExecutorsChildren()
     }
 }
 
+void ExecutorStatisticsCollector::fillEmptyExecutorSummary(const String & executor_id, tipb::SelectResponse & response)
+{
+    /// use last summary to fill
+    auto last_summary = response.execution_summaries(response.execution_summaries_size() - 1);
+    auto * execution_summary = response.add_execution_summaries();
+    execution_summary->set_executor_id(executor_id);
+    execution_summary->set_time_processed_ns(last_summary.time_processed_ns());
+    execution_summary->set_num_produced_rows(last_summary.num_produced_rows());
+    execution_summary->set_num_iterations(last_summary.num_iterations());
+    execution_summary->set_concurrency(last_summary.concurrency());
+    // merge detailed table scan profile
+    execution_summary->mutable_tiflash_scan_context()->CopyFrom(last_summary.tiflash_scan_context());
+}
+
 tipb::SelectResponse ExecutorStatisticsCollector::genExecutionSummaryResponse()
 {
     tipb::SelectResponse response;
@@ -144,16 +156,17 @@ void ExecutorStatisticsCollector::fillExecutionSummary(
     tipb::SelectResponse & response,
     const String & executor_id,
     const BaseRuntimeStatistics & statistic,
-    UInt64 join_build_time,
+    UInt64 & time_processed_before,
     const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const
 {
     ExecutionSummary current;
     current.fill(statistic);
-    current.time_processed_ns += join_build_time;
+    current.time_processed_ns += time_processed_before;
     // merge detailed table scan profile
     if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
         current.scan_context->merge(*(iter->second));
 
+    time_processed_before = current.time_processed_ns;
     current.time_processed_ns += dag_context->compile_time_ns;
     fillTiExecutionSummary(*dag_context, response.add_execution_summaries(), current, executor_id, force_fill_executor_id);
 }
@@ -171,7 +184,6 @@ void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & re
     else
     {
         collectRuntimeDetailsForPipeline();
-        // todo add execution time....
         fillLocalExecutionSummaries(response);
     }
 
@@ -188,6 +200,7 @@ void ExecutorStatisticsCollector::collectRuntimeDetails()
 
 void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectResponse & response)
 {
+    UInt64 time_processed_before = 0;
     if (dag_context->return_executor_id)
     {
         // fill in tree-based executors' execution summary
@@ -195,12 +208,24 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
         for (auto & p : profiles)
         {
             std::cout << "p id: " << p.first << std::endl;
-            fillExecutionSummary(
-                response,
-                p.first,
-                p.second->getBaseRuntimeStatistics(),
-                p.second->processTimeForJoinBuild(),
-                dag_context->scan_context_map);
+            /// only for pipeline model
+            if (p.second->getBaseRuntimeStatistics().concurrency == 0
+                && response.execution_summaries_size() >= 1 && enable_pipeline)
+            {
+                fillEmptyExecutorSummary(p.first, response);
+            }
+            else
+            {
+                if (!enable_pipeline)
+                    time_processed_before = p.second->processTimeForJoinBuild();
+                fillExecutionSummary(
+                    response,
+                    p.first,
+                    p.second->getBaseRuntimeStatistics(),
+                    time_processed_before,
+                    dag_context->scan_context_map);
+                std::cout << "time processed: " << time_processed_before << std::endl;
+            }
         }
     }
     else
@@ -210,13 +235,25 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
         for (const auto & executor_id : dag_context->list_based_executors_order)
         {
             auto it = profiles.find(executor_id);
-            RUNTIME_CHECK(it != profiles.end());
-            fillExecutionSummary(
-                response,
-                executor_id,
-                it->second->getBaseRuntimeStatistics(),
-                0, // No join executors in list-based executors
-                dag_context->scan_context_map);
+
+            /// only for pipeline model
+            if (it->second->getBaseRuntimeStatistics().concurrency == 0
+                && response.execution_summaries_size() >= 1 && enable_pipeline)
+            {
+                fillEmptyExecutorSummary(executor_id, response);
+            }
+            else
+            {
+                if (!enable_pipeline)
+                    time_processed_before = 0;
+                RUNTIME_CHECK(it != profiles.end());
+                fillExecutionSummary(
+                    response,
+                    executor_id,
+                    it->second->getBaseRuntimeStatistics(),
+                    time_processed_before, // No join executors in list-based executors
+                    dag_context->scan_context_map);
+            }
         }
     }
 }

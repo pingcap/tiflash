@@ -31,36 +31,33 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
     if (unlikely(aggregate_context->useNullSource()))
     {
         group_builder.init(1);
-        group_builder.transform(
-            [&](auto & builder) {
-                builder.setSourceOp(std::make_unique<NullSourceOp>(
-                    exec_status,
-                    aggregate_context->getHeader(),
-                    log->identifier()));
-            });
+        group_builder.transform([&](auto & builder) {
+            builder.setSourceOp(std::make_unique<NullSourceOp>(
+                exec_status,
+                aggregate_context->getHeader(),
+                log->identifier()));
+        });
         executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
     else
     {
         group_builder.init(aggregate_context->getConvergentConcurrency());
         size_t index = 0;
-        group_builder.transform(
-            [&](auto & builder) {
-                builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(
-                    exec_status,
-                    aggregate_context,
-                    index++,
-                    log->identifier()));
-            });
+        group_builder.transform([&](auto & builder) {
+            builder.setSourceOp(std::make_unique<AggregateConvergentSourceOp>(
+                exec_status,
+                aggregate_context,
+                index++,
+                log->identifier()));
+        });
         executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
 
     if (!expr_after_agg->getActions().empty())
     {
-        group_builder.transform(
-            [&](auto & builder) {
-                builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_after_agg));
-            });
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_after_agg));
+        });
         executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
 }

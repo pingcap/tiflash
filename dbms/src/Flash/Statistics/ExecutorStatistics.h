@@ -111,7 +111,7 @@ public:
     {
         const auto & pipeline_profiles_map = dag_context.getPipelineProfilesMap();
         auto it = pipeline_profiles_map.find(executor_id);
-      
+
         if (it != pipeline_profiles_map.end())
         {
             // 1. Calculate time_processed_ns for operators before the last operator

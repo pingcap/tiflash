@@ -61,12 +61,13 @@ private:
         tipb::SelectResponse & response,
         const String & executor_id,
         const BaseRuntimeStatistics & statistic,
-        UInt64 join_build_time,
+        UInt64 & time_processed_before,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
     void fillListBasedExecutorsChild();
     void fillTreeBasedExecutorsChildren();
 
+    void fillEmptyExecutorSummary(const String & executor_id, tipb::SelectResponse & response);
 
     template <typename T>
     bool appendImpl(const tipb::Executor * executor)

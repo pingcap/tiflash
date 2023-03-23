@@ -77,10 +77,9 @@ void PhysicalMockExchangeReceiver::buildPipelineExecGroup(
 
     group_builder.init(mock_streams.size());
     size_t i = 0;
-    group_builder.transform(
-        [&](auto & builder) {
-            builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
-        });
+    group_builder.transform([&](auto & builder) {
+        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
+    });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
 }
 

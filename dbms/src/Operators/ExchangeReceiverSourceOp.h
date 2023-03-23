@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Operators/Operator.h>
 
@@ -61,6 +62,8 @@ private:
     std::queue<Block> block_queue;
     std::optional<ReceiveResult> recv_res;
 
+    RemoteExecutionSummary remote_execution_summary;
+    // TODO add connection profile infos
     size_t stream_id;
 };
 } // namespace DB

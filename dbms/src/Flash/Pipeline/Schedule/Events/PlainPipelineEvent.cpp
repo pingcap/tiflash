@@ -25,8 +25,8 @@ std::vector<TaskPtr> PlainPipelineEvent::scheduleImpl()
     RUNTIME_CHECK(!pipeline_exec_group.empty());
     std::vector<TaskPtr> tasks;
     tasks.reserve(pipeline_exec_group.size());
-    
-    for (auto & pipeline_exec: pipeline_exec_group)
+
+    for (auto & pipeline_exec : pipeline_exec_group)
     {
         pipeline_exec->addWaitTime(stop_watch.elapsed());
     }
