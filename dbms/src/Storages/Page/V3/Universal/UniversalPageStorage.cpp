@@ -503,9 +503,9 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
 
     last_checkpoint_sequence = snap->sequence;
 
-    GET_METRIC(tiflash_storage_s3_request_seconds, type_dump_checkpoint_snapshot).Observe(dump_snapshot_seconds);
-    GET_METRIC(tiflash_storage_s3_request_seconds, type_dump_checkpoint_data).Observe(dump_data_seconds);
-    GET_METRIC(tiflash_storage_s3_request_seconds, type_upload_checkpoint).Observe(upload_seconds);
+    GET_METRIC(tiflash_storage_checkpoint_seconds, type_dump_checkpoint_snapshot).Observe(dump_snapshot_seconds);
+    GET_METRIC(tiflash_storage_checkpoint_seconds, type_dump_checkpoint_data).Observe(dump_data_seconds);
+    GET_METRIC(tiflash_storage_checkpoint_seconds, type_upload_checkpoint).Observe(upload_seconds);
     LOG_DEBUG(log,
               "Checkpoint result: files={}, dump_snapshot={:.2f}s, dump_data={:.2f}s, upload={:.2f}s, "
               "total={:.2f}s, upload_sequence={}, incremental_data_bytes={}, rewrite_data_bytes={}",
