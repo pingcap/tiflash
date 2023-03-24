@@ -447,7 +447,9 @@ private:
     struct Writer
     {
         PageEntriesEdit * edit;
-        bool done = false;
+        bool done = false; // The work has been performed by other thread
+        bool success = false; // The work complete successfully
+        std::unique_ptr<DB::Exception> exception;
         std::condition_variable cv;
     };
 

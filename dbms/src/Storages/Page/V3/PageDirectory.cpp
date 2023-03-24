@@ -1490,10 +1490,54 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wait_in_group).Observe(watch.elapsedSeconds());
     watch.restart();
     if (w.done)
+    {
+        if (unlikely(!w.success))
+        {
+            if (w.exception)
+            {
+                w.exception->rethrow();
+            }
+            else
+            {
+                throw Exception("Unknown exception");
+            }
+        }
+        // the `applied_data_files` will be returned by the write
+        // group owner, others just return an empty set.
         return {};
+    }
 
     auto * last_writer = buildWriteGroup(&w, apply_lock);
     apply_lock.unlock();
+
+    // `true` means the write process has completed without exception
+    bool success = false;
+    std::unique_ptr<DB::Exception> exception = nullptr;
+
+    SCOPE_EXIT({
+        apply_lock.lock();
+        while (true)
+        {
+            auto * ready = writers.front();
+            writers.pop_front();
+            if (ready != &w)
+            {
+                ready->done = true;
+                ready->success = success;
+                if (exception != nullptr)
+                {
+                    ready->exception = std::move(std::unique_ptr<DB::Exception>(exception->clone()));
+                }
+                ready->cv.notify_one();
+            }
+            if (ready == last_writer)
+                break;
+        }
+        if (!writers.empty())
+        {
+            writers.front()->cv.notify_one();
+        }
+    });
 
     UInt64 max_sequence = sequence.load();
     const auto edit_size = edit.size();
@@ -1569,6 +1613,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
             catch (DB::Exception & e)
             {
                 e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}] [edit_size={}]", magic_enum::enum_name(r.type), r.page_id, r.version, edit_size));
+                exception.reset(e.clone());
                 e.rethrow();
             }
         }
@@ -1577,23 +1622,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
         sequence.fetch_add(edit_size);
     }
 
-    apply_lock.lock();
-    while (true)
-    {
-        auto * ready = writers.front();
-        writers.pop_front();
-        if (ready != &w)
-        {
-            ready->done = true;
-            ready->cv.notify_one();
-        }
-        if (ready == last_writer)
-            break;
-    }
-    if (!writers.empty())
-    {
-        writers.front()->cv.notify_one();
-    }
+    success = true;
     return applied_data_files;
 }
 
