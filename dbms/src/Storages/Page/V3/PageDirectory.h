@@ -444,6 +444,16 @@ private:
         return std::static_pointer_cast<PageDirectorySnapshot>(ptr);
     }
 
+    struct Writer
+    {
+        PageEntriesEdit * edit;
+        bool done = false;
+        std::condition_variable cv;
+    };
+
+    // return the last writer in the group
+    Writer * buildWriteGroup(std::unique_lock<std::mutex> & /*lock*/);
+
 private:
     // max page id after restart(just used for table storage).
     // it may be for the whole instance or just for some specific prefix which is depending on the Trait passed.
@@ -453,7 +463,9 @@ private:
     std::atomic<UInt64> sequence;
 
     // Used for avoid concurrently apply edits to wal and mvcc_table_directory.
-    mutable std::shared_mutex apply_mutex;
+    mutable std::mutex apply_mutex;
+
+    std::deque<Writer *> writers;
 
     // Used to protect mvcc_table_directory between apply threads and read threads
     mutable std::shared_mutex table_rw_mutex;

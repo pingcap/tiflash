@@ -1453,6 +1453,23 @@ void PageDirectory<Trait>::applyRefEditRecord(
 }
 
 template <typename Trait>
+typename PageDirectory<Trait>::Writer * PageDirectory<Trait>::buildWriteGroup(std::unique_lock<std::mutex> & /*lock*/)
+{
+    RUNTIME_CHECK(!writers.empty());
+    auto * first = writers.front();
+    auto * last_writer = first;
+    auto iter = writers.begin();
+    iter++;
+    for (; iter != writers.end(); iter++)
+    {
+        auto * w = *iter;
+        first->edit->merge(std::move(*(w->edit)));
+        last_writer = w;
+    }
+    return last_writer;
+}
+
+template <typename Trait>
 std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     // We need to make sure there is only one apply thread to write wal and then increase `sequence`.
@@ -1462,12 +1479,24 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     // TODO: It is totally serialized by only 1 thread with IO waiting. Make this process a
     // pipeline so that we can batch the incoming edit when doing IO.
 
-    Stopwatch watch;
+    Writer w;
+    w.edit = &edit;
 
+    Stopwatch watch;
     std::unique_lock apply_lock(apply_mutex);
 
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_latch).Observe(watch.elapsedSeconds());
     watch.restart();
+
+    writers.push_back(&w);
+    w.cv.wait(apply_lock, [&] { return w.done || &w == writers.front(); });
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wait_in_group).Observe(watch.elapsedSeconds());
+    watch.restart();
+    if (w.done)
+        return {};
+
+    auto * last_writer = buildWriteGroup(apply_lock);
+    apply_lock.unlock();
 
     UInt64 max_sequence = sequence.load();
     const auto edit_size = edit.size();
@@ -1549,6 +1578,24 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
 
         // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
         sequence.fetch_add(edit_size);
+    }
+
+    apply_lock.lock();
+    while (true)
+    {
+        auto * ready = writers.front();
+        writers.pop_front();
+        if (ready != &w)
+        {
+            ready->done = true;
+            ready->cv.notify_one();
+        }
+        if (ready == last_writer)
+            break;
+    }
+    if (!writers.empty())
+    {
+        writers.front()->cv.notify_one();
     }
     return applied_data_files;
 }
