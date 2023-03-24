@@ -180,9 +180,9 @@ void executeLocalSort(
         // For order by const and limit != 0, we will generate LimitOperator directly.
         if (limit != 0)
         {
-            auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, limit);
+            auto local_limit = std::make_shared<LocalLimitTransformAction>(input_header, limit);
             group_builder.transform([&](auto & builder) {
-                builder.appendTransformOp(std::make_unique<LimitTransformOp>(exec_status, log->identifier(), global_limit));
+                builder.appendTransformOp(std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_status, log->identifier(), local_limit));
             });
         }
         // For order by const and limit == 0, do nothing here.
