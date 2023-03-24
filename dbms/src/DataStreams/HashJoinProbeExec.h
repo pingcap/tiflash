@@ -28,6 +28,45 @@ using HashJoinProbeExecPtr = std::shared_ptr<HashJoinProbeExec>;
 class HashJoinProbeExec
 {
 public:
+    HashJoinProbeExec(
+        const JoinPtr & join_,
+        const BlockInputStreamPtr & restore_build_stream_,
+        const BlockInputStreamPtr & probe_stream_,
+        bool need_output_non_joined_data_,
+        size_t non_joined_stream_index_,
+        const BlockInputStreamPtr & non_joined_stream_,
+        size_t max_block_size_);
+
+    void waitUntilAllBuildFinished();
+
+    void waitUntilAllProbeFinished();
+
+    std::optional<HashJoinProbeExecPtr> tryGetRestoreExec();
+
+    void cancel();
+
+    void meetError(const String & error_message);
+
+    void restoreBuild();
+
+    void onProbeStart();
+    // Returns empty block if probe finish.
+    Block probe();
+    // Returns true if the probe_exec ends.
+    // Returns false if the probe_exec continues to execute.
+    bool onProbeFinish();
+
+    bool needOutputNonJoinedData() { return need_output_non_joined_data; }
+    void onNonJoinedStart();
+    Block fetchNonJoined();
+    // Returns true if the probe_exec ends.
+    // Returns false if the probe_exec continues to execute.
+    bool onNonJoinedFinish();
+
+private:
+    std::tuple<size_t, Block> getProbeBlock();
+
+private:
     JoinPtr join;
 
     BlockInputStreamPtr restore_build_stream;
@@ -43,46 +82,6 @@ public:
     ProbeProcessInfo probe_process_info;
 
     std::list<std::tuple<size_t, Block>> probe_partition_blocks;
-
-public:
-    HashJoinProbeExec(
-        const JoinPtr & join_,
-        const BlockInputStreamPtr & restore_build_stream_,
-        const BlockInputStreamPtr & probe_stream_,
-        bool need_output_non_joined_data_,
-        size_t non_joined_stream_index_,
-        const BlockInputStreamPtr & non_joined_stream_,
-        size_t max_block_size_);
-
-    bool needOutputNonJoinedData() { return need_output_non_joined_data; }
-
-    void waitUntilAllBuildFinished();
-
-    void waitUntilAllProbeFinished();
-
-    void restoreBuild();
-
-    std::tuple<size_t, Block> getProbeBlock();
-
-    // Returns empty block if probe finish.
-    Block probe();
-
-    std::optional<HashJoinProbeExecPtr> tryGetRestoreExec();
-
-    void cancel();
-
-    void meetError(const String & error_message);
-
-    void onProbeStart();
-    // Returns true if the probe_exec ends.
-    // Returns false if the probe_exec continues to execute.
-    bool onProbeFinish();
-
-    void onNonJoinedStart();
-    Block fetchNonJoined();
-    // Returns true if the probe_exec ends.
-    // Returns false if the probe_exec continues to execute.
-    bool onNonJoinedFinish();
 };
 
 class HashJoinProbeExecHolder
