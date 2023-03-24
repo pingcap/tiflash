@@ -50,6 +50,7 @@ using SSTFilesToBlockInputStreamPtr = std::shared_ptr<SSTFilesToBlockInputStream
 class BoundedSSTFilesToBlockInputStream;
 using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBlockInputStream>;
 
+// Read blocks from TiKV's SSTFiles
 class SSTFilesToBlockInputStream final : public IBlockInputStream
 {
 public:
@@ -120,10 +121,10 @@ class BoundedSSTFilesToBlockInputStream final
 {
 public:
     BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child,
-                                      const ColId pk_column_id_,
+                                      ColId pk_column_id_,
                                       const DecodingStorageSchemaSnapshotConstPtr & schema_snap);
 
-    String getName() const { return "BoundedSSTFilesToBlockInputStream"; }
+    static String getName() { return "BoundedSSTFilesToBlockInputStream"; }
 
     void readPrefix();
 

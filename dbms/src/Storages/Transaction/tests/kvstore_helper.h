@@ -16,6 +16,7 @@
 #include <Common/Logger.h>
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
@@ -58,7 +59,6 @@ extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const Ti
 extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
 } // namespace RegionBench
 
-extern void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoList & data_list_read, bool lock_region = true);
 extern void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state);
 extern void ChangeRegionStateRange(RegionState & region_state, bool source_at_left, const RegionState & source_region_state);
 
@@ -79,7 +79,6 @@ public:
     {
         // clean data and create path pool instance
         path_pool = createCleanPathPool(test_path);
-
         reloadKVSFromDisk();
 
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
@@ -102,6 +101,8 @@ protected:
     {
         kvstore.reset();
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+        global_ctx.tryReleaseWriteNodePageStorageForTest();
+        global_ctx.initializeWriteNodePageStorageIfNeed(*path_pool);
         kvstore = std::make_unique<KVStore>(global_ctx);
         // only recreate kvstore and restore data from disk, don't recreate proxy instance
         kvstore->restore(*path_pool, proxy_helper.get());
@@ -124,7 +125,7 @@ protected:
         {
             // Maybe another test has already registed, ignore exception here.
         }
-        String path = TiFlashTestEnv::getContext().getPath();
+        String path = TiFlashTestEnv::getContext()->getPath();
         auto p = path + "/metadata/";
         TiFlashTestEnv::tryCreatePath(p);
         p = path + "/data/";

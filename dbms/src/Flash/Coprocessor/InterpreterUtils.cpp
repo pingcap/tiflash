@@ -16,13 +16,16 @@
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
+#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Interpreters/Context.h>
+#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
@@ -94,6 +97,20 @@ void executeExpression(
     }
 }
 
+void executeExpression(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const ExpressionActionsPtr & expr_actions,
+    const LoggerPtr & log)
+{
+    if (expr_actions && !expr_actions->getActions().empty())
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_actions));
+        });
+    }
+}
+
 void orderStreams(
     DAGPipeline & pipeline,
     size_t max_streams,
@@ -122,7 +139,7 @@ void orderStreams(
                 settings.max_block_size,
                 limit,
                 getAverageThreshold(settings.max_bytes_before_external_sort, pipeline.streams.size()),
-                SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_spilled_size_per_spill, context.getFileProvider()),
+                SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
                 log->identifier());
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
@@ -140,7 +157,7 @@ void orderStreams(
             limit,
             settings.max_bytes_before_external_sort,
             // todo use identifier_executor_id as the spill id
-            SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_spilled_size_per_spill, context.getFileProvider()),
+            SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
             log->identifier());
     }
 }
@@ -174,29 +191,27 @@ void executeCreatingSets(
 }
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-    const FilterConditions & filter_conditions,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
     DAGExpressionAnalyzer & analyzer)
 {
-    assert(filter_conditions.hasValue());
+    assert(!conditions.empty());
 
     ExpressionActionsChain chain;
     analyzer.initChain(chain);
-    String filter_column_name = analyzer.appendWhere(chain, filter_conditions.conditions);
+    String filter_column_name = analyzer.appendWhere(chain, conditions);
     ExpressionActionsPtr before_where = chain.getLastActions();
     chain.addStep();
 
     // remove useless tmp column and keep the schema of local streams and remote streams the same.
-    NamesWithAliases project_cols;
     for (const auto & col : analyzer.getCurrentInputColumns())
     {
         chain.getLastStep().required_output.push_back(col.name);
-        project_cols.emplace_back(col.name, col.name);
     }
-    chain.getLastActions()->add(ExpressionAction::project(project_cols));
     ExpressionActionsPtr project_after_where = chain.getLastActions();
     chain.finalize();
     chain.clear();
 
+    RUNTIME_CHECK(!project_after_where->getActions().empty());
     return {before_where, filter_column_name, project_after_where};
 }
 
@@ -207,7 +222,7 @@ void executePushedDownFilter(
     LoggerPtr log,
     DAGPipeline & pipeline)
 {
-    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions, analyzer);
+    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
 
     assert(remote_read_streams_start_index <= pipeline.streams.size());
     // for remote read, filter had been pushed down, don't need to execute again.
@@ -221,4 +236,22 @@ void executePushedDownFilter(
         stream->setExtraInfo("projection after push down filter");
     }
 }
+
+void executeGeneratedColumnPlaceholder(
+    size_t remote_read_streams_start_index,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
+    LoggerPtr log,
+    DAGPipeline & pipeline)
+{
+    if (generated_column_infos.empty())
+        return;
+    assert(remote_read_streams_start_index <= pipeline.streams.size());
+    for (size_t i = 0; i < remote_read_streams_start_index; ++i)
+    {
+        auto & stream = pipeline.streams[i];
+        stream = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(stream, generated_column_infos, log->identifier());
+        stream->setExtraInfo("generated column placeholder above table scan");
+    }
+}
+
 } // namespace DB

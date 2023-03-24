@@ -19,7 +19,7 @@
 #include <Debug/MockExecutor/WindowBinder.h>
 #include <Debug/MockStorage.h>
 #include <Debug/dbgQueryCompiler.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTFunction.h>
 #include <Storages/Transaction/Collator.h>
 #include <tipb/executor.pb.h>
@@ -30,14 +30,14 @@ namespace DB
 {
 namespace tests
 {
-using MockColumnInfo = std::pair<String, TiDB::TP>;
-using MockColumnInfoVec = std::vector<MockColumnInfo>;
 using MockTableName = std::pair<String, String>;
 using MockOrderByItem = std::pair<String, bool>;
 using MockOrderByItemVec = std::vector<MockOrderByItem>;
 using MockPartitionByItem = std::pair<String, bool>;
 using MockPartitionByItemVec = std::vector<MockPartitionByItem>;
 using MockColumnNameVec = std::vector<String>;
+using MockVecColumnNameVec = std::vector<MockColumnNameVec>; // for grouping set (every groupingExpr element inside is slice of column)
+using MockVVecColumnNameVec = std::vector<MockVecColumnNameVec>; // for grouping sets
 using MockAstVec = std::vector<ASTPtr>;
 using MockWindowFrame = mock::MockWindowFrame;
 
@@ -112,8 +112,7 @@ public:
     }
     DAGRequestBuilder & project(MockColumnNameVec col_names);
 
-
-    DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
+    DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type, MockColumnNameVec part_keys = {}, uint64_t fine_grained_shuffle_stream_count = 0);
 
     /// User should prefer using other simplified join buidler API instead of this one unless he/she have to test
     /// join conditional expressions and knows how TiDB translates sql's `join on` clause to conditional expressions.
@@ -127,7 +126,8 @@ public:
     /// @param other_conds other conditional expressions
     /// @param other_eq_conds_from_in equality expressions within in subquery whose join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
     /// @param fine_grained_shuffle_stream_count decide the generated tipb executor's find_grained_shuffle_stream_count
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds, MockAstVec right_conds, MockAstVec other_conds, MockAstVec other_eq_conds_from_in, uint64_t fine_grained_shuffle_stream_count = 0);
+    /// @param is_null_aware_semi_join indicates whether to use null-aware semi join and join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds, MockAstVec right_conds, MockAstVec other_conds, MockAstVec other_eq_conds_from_in, uint64_t fine_grained_shuffle_stream_count = 0, bool is_null_aware_semi_join = false);
     DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, uint64_t fine_grained_shuffle_stream_count = 0)
     {
         return join(right, tp, join_col_exprs, {}, {}, {}, {}, fine_grained_shuffle_stream_count);
@@ -144,6 +144,9 @@ public:
     DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
     DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
     DAGRequestBuilder & sort(MockOrderByItemVec order_by_vec, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
+
+    // expand
+    DAGRequestBuilder & expand(MockVVecColumnNameVec grouping_set_columns);
 
     void setCollation(Int32 collator_) { properties.collator = convertToTiDBCollation(collator_); }
     Int32 getCollation() const { return abs(properties.collator); }
@@ -164,10 +167,10 @@ private:
 class MockDAGRequestContext
 {
 public:
-    explicit MockDAGRequestContext(Context context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
+    explicit MockDAGRequestContext(ContextPtr context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
         : index(0)
         , context(context_)
-        , collation(-abs(collation_))
+        , collation(convertToTiDBCollation(collation_))
     {
     }
 
@@ -180,6 +183,7 @@ public:
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, size_t concurrency_hint = 0);
     void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
     void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns, size_t concurrency_hint = 0);
+
     void updateMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
     {
         addMockTableColumnData(db, table, columns);
@@ -225,7 +229,7 @@ public:
     // but we need it to contruct the TaskMeta.
     // In TiFlash, we use task_id to identify an Mpp Task.
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
-    Context context;
+    ContextPtr context;
     Int32 collation;
 };
 
@@ -256,6 +260,7 @@ MockWindowFrame buildDefaultRowsFrame();
 #define Min(expr) makeASTFunction("min", (expr))
 #define Count(expr) makeASTFunction("count", (expr))
 #define Sum(expr) makeASTFunction("sum", (expr))
+#define CountDistinct(expr) makeASTFunction("countDistinct", (expr))
 
 /// Window functions
 #define RowNumber() makeASTFunction("RowNumber")

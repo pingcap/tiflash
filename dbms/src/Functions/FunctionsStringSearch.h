@@ -16,13 +16,172 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
+#include <Columns/IColumn.h>
+#include <Common/Exception.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Common/UTF8Helpers.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
+#include <Functions/StringUtil.h>
+#include <common/defines.h>
+
+#include <cstring>
+#include <string_view>
 
 namespace DB
 {
+using Chars_t = ColumnString::Chars_t;
+using Offsets = ColumnString::Offsets;
+
+class IlikeLowerHelper
+{
+public:
+    static void convertCollatorToBin(TiDB::TiDBCollatorPtr & collator)
+    {
+        if (collator == nullptr)
+            return;
+
+        switch (collator->getCollatorType())
+        {
+        case TiDB::ITiDBCollator::CollatorType::UTF8_GENERAL_CI:
+        case TiDB::ITiDBCollator::CollatorType::UTF8_UNICODE_CI:
+            collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8_BIN);
+            break;
+        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_GENERAL_CI:
+        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_UNICODE_CI:
+            collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
+            break;
+        default:
+            break;
+        }
+    }
+
+    // Only lower 'A', 'B', 'C'... 'Z', excluding the escape char
+    static void lowerAlphaASCII(Block & block, const ColumnNumbers & arguments)
+    {
+        MutableColumnPtr column_expr = block.getByPosition(arguments[0]).column->assumeMutable();
+        MutableColumnPtr column_pat = block.getByPosition(arguments[1]).column->assumeMutable();
+        const ColumnPtr & column_escape = block.getByPosition(arguments[2]).column;
+
+        auto * col_haystack_const = typeid_cast<ColumnConst *>(&*column_expr);
+        auto * col_needle_const = typeid_cast<ColumnConst *>(&*column_pat);
+
+        if (col_haystack_const != nullptr)
+            lowerColumnConst(col_haystack_const, nullptr);
+        else
+            lowerColumnString(column_expr, nullptr);
+
+        if (col_needle_const != nullptr)
+            lowerColumnConst(col_needle_const, column_escape);
+        else
+            lowerColumnString(column_pat, column_escape);
+    }
+
+private:
+    static void lowerStrings(Chars_t & chars)
+    {
+        size_t size = chars.size();
+        for (size_t i = 0; i < size; ++i)
+        {
+            if (isUpperAlphaASCII(chars[i]))
+            {
+                chars[i] = toLowerIfAlphaASCII(chars[i]);
+            }
+            else
+            {
+                size_t utf8_len = UTF8::seqLength(chars[i]);
+                i += utf8_len - 1;
+            }
+        }
+    }
+
+    // When escape_char is a lower char, we need to convert it to the capital char
+    // Because: when lowering "ABC" with escape 'a', after lower, "ABC" -> "abc",
+    // then 'a' will be an escape char and it is not expected.
+    // Morever, when escape char is uppered we need to tell it to the caller.
+    static void lowerStringsExcludeEscapeChar(Chars_t & chars, char escape_char)
+    {
+        if (!isAlphaASCII(escape_char))
+        {
+            lowerStrings(chars);
+            return;
+        }
+
+        size_t size = chars.size();
+        bool escaped = false;
+        char actual_escape_char = isLowerAplhaASCII(escape_char) ? toUpperIfAlphaASCII(escape_char) : escape_char;
+
+        for (size_t i = 0; i < size; ++i)
+        {
+            char char_to_lower = chars[i];
+            if (isUpperAlphaASCII(char_to_lower))
+            {
+                // Do not lower the escape char, however when a char is equal to
+                // an escape char and it's after an escape char, we still lower it
+                // For example: "AA" (escape 'A'), -> "Aa"
+                if (char_to_lower != escape_char || escaped)
+                {
+                    chars[i] = toLowerIfAlphaASCII(char_to_lower);
+                }
+                else
+                {
+                    escaped = true;
+                    continue;
+                }
+            }
+            else
+            {
+                if ((chars[i] == static_cast<unsigned char>(escape_char)) && !escaped)
+                {
+                    escaped = true;
+
+                    // It should be `chars[i] = toUpperIfAlphaASCII(chars[i])`,
+                    // but 'actual_escape_char' is always equal to 'toUpperIfAlphaASCII(str[i])'
+                    chars[i] = actual_escape_char;
+                    continue;
+                }
+                size_t utf8_len = UTF8::seqLength(char_to_lower);
+                i += utf8_len - 1;
+            }
+            escaped = false;
+        }
+    }
+
+    static void lowerColumnConst(ColumnConst * lowered_col_const, const ColumnPtr & column_escape)
+    {
+        auto * col_data = typeid_cast<ColumnString *>(&lowered_col_const->getDataColumn());
+        RUNTIME_ASSERT(col_data != nullptr, "Invalid column type, should be ColumnString");
+
+        lowerColumnStringImpl(col_data, column_escape);
+    }
+
+    static void lowerColumnString(MutableColumnPtr & col, const ColumnPtr & column_escape)
+    {
+        auto * col_vector = typeid_cast<ColumnString *>(&*col);
+        RUNTIME_ASSERT(col_vector != nullptr, "Invalid column type, should be ColumnString");
+
+        lowerColumnStringImpl(col_vector, column_escape);
+    }
+
+    static void lowerColumnStringImpl(ColumnString * lowered_col_data, const ColumnPtr & column_escape)
+    {
+        if (column_escape == nullptr)
+        {
+            lowerStrings(lowered_col_data->getChars());
+            return;
+        }
+
+        const auto * col_escape_const = typeid_cast<const ColumnConst *>(&*column_escape);
+        RUNTIME_CHECK_MSG(col_escape_const != nullptr, "escape char column should be constant");
+        char escape_char = static_cast<Int32>(col_escape_const->getValue<Int32>());
+
+        lowerStringsExcludeEscapeChar(lowered_col_data->getChars(), escape_char);
+    }
+};
+
 /** Search and replace functions in strings:
   *
   * position(haystack, needle)     - the normal search for a substring in a string, returns the position (in bytes) of the found substring starting with 1, or 0 if no substring is found.
@@ -56,6 +215,11 @@ extern const int ILLEGAL_COLUMN;
 }
 
 static const UInt8 CH_ESCAPE_CHAR = '\\';
+
+struct NameIlike3Args
+{
+    static constexpr auto name = "ilike3Args";
+};
 
 template <typename Impl, typename Name>
 class FunctionsStringSearch : public IFunction
@@ -116,8 +280,18 @@ public:
         return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
     }
 
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    void executeImpl(Block & result_block, const ColumnNumbers & arguments, size_t result) const override
     {
+        auto block = result_block;
+        if constexpr (name == std::string_view(NameIlike3Args::name))
+        {
+            block.getByPosition(arguments[0]).column = (*std::move(result_block.getByPosition(arguments[0]).column)).mutate();
+            block.getByPosition(arguments[1]).column = (*std::move(result_block.getByPosition(arguments[1]).column)).mutate();
+
+            IlikeLowerHelper::lowerAlphaASCII(block, arguments);
+            IlikeLowerHelper::convertCollatorToBin(collator);
+        }
+
         using ResultType = typename Impl::ResultType;
 
         const ColumnPtr & column_haystack = block.getByPosition(arguments[0]).column;
@@ -147,6 +321,9 @@ public:
                 else
                 {
                     escape_char = static_cast<UInt8>(c);
+                    if constexpr (name == std::string_view(NameIlike3Args::name))
+                        if (isLowerAplhaASCII(escape_char))
+                            escape_char = toUpperIfAlphaASCII(escape_char);
                 }
             }
             if (!valid_args)
@@ -170,7 +347,7 @@ public:
             ResultType res{};
             auto needle_string = col_needle_const->getValue<String>();
             Impl::constantConstant(col_haystack_const->getValue<String>(), needle_string, escape_char, match_type, collator, res);
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
+            result_block.getByPosition(result).column = result_block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
             return;
         }
 
@@ -210,11 +387,11 @@ public:
                                 + getName(),
                             ErrorCodes::ILLEGAL_COLUMN);
 
-        block.getByPosition(result).column = std::move(col_res);
+        result_block.getByPosition(result).column = std::move(col_res);
     }
 
 private:
-    TiDB::TiDBCollatorPtr collator = nullptr;
+    mutable TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
 

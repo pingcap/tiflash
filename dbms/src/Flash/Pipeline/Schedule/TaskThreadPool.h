@@ -34,14 +34,14 @@ public:
 
     void waitForStop();
 
-    void submit(TaskPtr && task);
+    void submit(TaskPtr && task) noexcept;
 
-    void submit(std::vector<TaskPtr> & tasks);
+    void submit(std::vector<TaskPtr> & tasks) noexcept;
 
 private:
     void loop(size_t thread_no) noexcept;
 
-    void handleTask(TaskPtr & task, const LoggerPtr & log);
+    void handleTask(TaskPtr & task, const LoggerPtr & log) noexcept;
 
 private:
     TaskQueuePtr task_queue;

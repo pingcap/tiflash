@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <fmt/core.h>
 #include <grpcpp/completion_queue.h>
 
 #include <cassert>
@@ -129,7 +130,7 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
 
 void checkLocalTunnel(const MPPTunnelPtr & tunnel, const String & err_msg)
 {
-    RUNTIME_CHECK_MSG(tunnel != nullptr, err_msg);
+    RUNTIME_CHECK_MSG(tunnel != nullptr, fmt::runtime(err_msg));
     RUNTIME_CHECK_MSG(tunnel->isLocal(), "EstablishMPPConnectionLocal into a remote channel!");
 }
 
@@ -170,13 +171,13 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
 
 void GRPCReceiverContext::sendMPPTaskToTiFlashStorageNode(
     LoggerPtr log,
-    const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs)
+    const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs)
 {
     if (disaggregated_dispatch_reqs.empty())
         throw Exception("unexpected disaggregated_dispatch_reqs, it's empty.");
 
     std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
-    for (const StorageDisaggregated::RequestAndRegionIDs & dispatch_req : disaggregated_dispatch_reqs)
+    for (const RequestAndRegionIDs & dispatch_req : disaggregated_dispatch_reqs)
     {
         LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", std::get<0>(dispatch_req)->DebugString());
         thread_manager->schedule(/*propagate_memory_tracker=*/false, "", [&dispatch_req, this] {

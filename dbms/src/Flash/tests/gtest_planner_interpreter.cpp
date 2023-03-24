@@ -499,5 +499,30 @@ try
 }
 CATCH
 
+
+TEST_F(PlannerInterpreterExecuteTest, ExpandPlan)
+try
+{
+    {
+        auto request = context
+                           .receive("sender_1")
+                           .aggregation({Count(col("s1"))}, {col("s2")})
+                           .expand(MockVVecColumnNameVec{
+                               MockVecColumnNameVec{
+                                   MockColumnNameVec{"count(s1)"},
+                               },
+                               MockVecColumnNameVec{
+                                   MockColumnNameVec{"s2"},
+                               },
+                           })
+                           .join(context.scan("test_db", "test_table").project({"s2"}), tipb::JoinType::TypeInnerJoin, {col("s2")})
+                           .project({"count(s1)", "groupingID"})
+                           .topN({{"groupingID", true}}, 2)
+                           .build(context);
+        runAndAssert(request, 10);
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

@@ -13,10 +13,12 @@
 // limitations under the License.
 
 #pragma once
+
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/UnifiedLogFormatter.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/MockKeyManager.h>
+#include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
@@ -86,8 +88,7 @@ class ImitativeEnv
     DB::ContextPtr createImitativeContext(const std::string & workdir, bool encryption = false)
     {
         // set itself as global context
-        global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
-        global_context->setGlobalContext(*global_context);
+        global_context = DB::Context::createGlobal();
         global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
 
         global_context->initializeTiFlashMetrics();

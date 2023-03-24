@@ -40,12 +40,12 @@ function bake_llvm_base_amd64() {
 
     # OpenSSL
     source $SCRIPTPATH/install_openssl.sh
-    install_openssl "1_1_1l"
+    install_openssl "1_1_1t"
     export OPENSSL_ROOT_DIR="/usr/local/opt/openssl"
 
     # Go
     source $SCRIPTPATH/install_go.sh
-    install_go "1.17" "amd64"
+    install_go "1.20" "amd64"
     export PATH="$PATH:/usr/local/go/bin"
 
     # Rust

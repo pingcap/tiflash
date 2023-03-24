@@ -14,24 +14,34 @@
 
 #include <Common/FailPoint.h>
 #include <Core/ColumnWithTypeAndName.h>
+#include <Encryption/PosixRandomAccessFile.h>
+#include <Encryption/PosixWritableFile.h>
 #include <Interpreters/Context.h>
+#include <Poco/DirectoryIterator.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <Storages/FormatVersion.h>
+#include <Storages/PathPool.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <common/types.h>
 
 #include <algorithm>
+#include <magic_enum.hpp>
 #include <vector>
-
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int CORRUPTED_DATA;
+}
 namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
@@ -45,24 +55,31 @@ namespace tests
 enum class DMFileMode
 {
     DirectoryLegacy,
-    DirectoryChecksum
+    DirectoryChecksum,
+    DirectoryMetaV2,
 };
 
 String paramToString(const ::testing::TestParamInfo<DMFileMode> & info)
 {
-    const auto mode = info.param;
+    return String{magic_enum::enum_name(info.param)};
+}
 
-    String name;
+static inline std::optional<DMChecksumConfig> createConfiguration(DMFileMode mode)
+{
+    return (mode != DMFileMode::DirectoryLegacy ? std::make_optional<DMChecksumConfig>() : std::nullopt);
+}
+
+inline static DMFileFormat::Version modeToVersion(DMFileMode mode)
+{
     switch (mode)
     {
     case DMFileMode::DirectoryLegacy:
-        name = "folder";
-        break;
+        return DMFileFormat::V1;
     case DMFileMode::DirectoryChecksum:
-        name = "folder_checksum";
-        break;
+        return DMFileFormat::V2;
+    case DMFileMode::DirectoryMetaV2:
+        return DMFileFormat::V3;
     }
-    return name;
 }
 
 using DMFileBlockOutputStreamPtr = std::shared_ptr<DMFileBlockOutputStream>;
@@ -84,12 +101,11 @@ public:
         TiFlashStorageTestBasic::SetUp();
 
         auto mode = GetParam();
-        auto configuration = (mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt);
-
+        auto configuration = createConfiguration(mode);
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
-        path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFileTest", false));
-        storage_pool = std::make_unique<StoragePool>(*db_context, /*ns_id*/ 100, *path_pool, "test.t1");
-        dm_file = DMFile::create(1, parent_path, std::move(configuration));
+        path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFileTest", false));
+        storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, /*ns_id*/ 100, *path_pool, "test.t1");
+        dm_file = DMFile::create(1, parent_path, std::move(configuration), modeToVersion(mode));
         table_columns = std::make_shared<ColumnDefines>();
         column_cache = std::make_shared<ColumnCache>();
 
@@ -105,10 +121,11 @@ public:
         *path_pool = db_context->getPathPool().withTable("test", "t1", false);
         dm_context = std::make_unique<DMContext>( //
             *db_context,
-            *path_pool,
-            *storage_pool,
+            path_pool,
+            storage_pool,
             /*min_version_*/ 0,
-            settings.not_compress_columns,
+            NullspaceID,
+            /*physical_table_id*/ 100,
             false,
             1,
             db_context->getSettingsRef());
@@ -131,8 +148,8 @@ public:
 private:
     std::unique_ptr<DMContext> dm_context{};
     /// all these var live as ref in dm_context
-    std::unique_ptr<StoragePathPool> path_pool{};
-    std::unique_ptr<StoragePool> storage_pool{};
+    std::shared_ptr<StoragePathPool> path_pool{};
+    std::shared_ptr<StoragePool> storage_pool{};
     ColumnDefinesPtr table_columns;
     DeltaMergeStore::Settings settings;
 
@@ -146,7 +163,7 @@ protected:
 TEST_P(DMFileTest, WriteRead)
 try
 {
-    auto cols = DMTestEnv::getDefaultColumns();
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
 
     const size_t num_rows_write = 128;
 
@@ -164,9 +181,9 @@ try
     {
         // Prepare for write
         // Block 1: [0, 64)
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
+        Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
         // Block 2: [64, 128)
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
         stream->writePrefix();
         stream->write(block1, block_property1);
@@ -222,6 +239,354 @@ try
 }
 CATCH
 
+TEST_P(DMFileTest, MetaV2)
+try
+{
+    auto check_pack_stats = [](const DMFilePtr & dmfile1, const DMFilePtr & dmfile2) {
+        const auto & pack_stats1 = dmfile1->getPackStats();
+        const auto & pack_stats2 = dmfile2->getPackStats();
+        ASSERT_EQ(pack_stats1.size(), pack_stats2.size());
+        for (size_t i = 0; i < pack_stats1.size(); ++i)
+        {
+            const auto & stat1 = pack_stats1[i];
+            const auto & stat2 = pack_stats2[i];
+            ASSERT_EQ(stat1.toDebugString(), stat2.toDebugString());
+        }
+    };
+
+    auto check_pack_properties = [](const DMFilePtr & dmfile1, const DMFilePtr & dmfile2) {
+        const auto & properties1 = dmfile1->getPackProperties();
+        const auto & properties2 = dmfile2->getPackProperties();
+        ASSERT_EQ(properties1.property_size(), properties2.property_size());
+        for (int i = 0; i < properties1.property_size(); ++i)
+        {
+            const auto & p1 = properties1.property(i);
+            const auto & p2 = properties2.property(i);
+            ASSERT_EQ(p1.ShortDebugString(), p2.ShortDebugString());
+        }
+    };
+
+    auto check_column_stats = [](const DMFilePtr & dmfile1, const DMFilePtr & dmfile2) {
+        const auto & col_defs = dmfile1->getColumnDefines();
+        for (const auto & col_def : col_defs)
+        {
+            const auto & col_stat1 = dmfile1->getColumnStat(col_def.id);
+            const auto & col_stat2 = dmfile2->getColumnStat(col_def.id);
+            ASSERT_DOUBLE_EQ(col_stat1.avg_size, col_stat2.avg_size);
+            ASSERT_EQ(col_stat1.col_id, col_stat2.col_id);
+            ASSERT_EQ(col_stat1.type->getName(), col_stat2.type->getName());
+            ASSERT_EQ(col_stat1.serialized_bytes, col_stat2.serialized_bytes);
+
+            ASSERT_EQ(col_stat2.serialized_bytes,
+                      col_stat2.data_bytes + col_stat2.mark_bytes + col_stat2.nullmap_data_bytes + col_stat2.nullmap_mark_bytes + col_stat2.index_bytes)
+                << fmt::format("data_bytes={} mark_bytes={} nullmap_data_bytes={} nullmap_mark_bytes={} index_bytes={} col_id={} type={}",
+                               col_stat2.data_bytes,
+                               col_stat2.mark_bytes,
+                               col_stat2.nullmap_data_bytes,
+                               col_stat2.nullmap_mark_bytes,
+                               col_stat2.index_bytes,
+                               col_stat2.col_id,
+                               col_stat2.type->getName());
+
+            ASSERT_EQ(dmfile1->colDataSize(col_def.id, false), dmfile2->colDataSize(col_def.id, false));
+            ASSERT_EQ(dmfile1->isColIndexExist(col_def.id), dmfile2->isColIndexExist(col_def.id));
+            if (dmfile1->isColIndexExist(col_def.id))
+            {
+                ASSERT_EQ(dmfile1->colIndexSize(col_def.id), dmfile2->colIndexSize(col_def.id));
+            }
+            if (col_def.type->isNullable())
+            {
+                ASSERT_EQ(dmfile1->colDataSize(col_def.id, true), dmfile2->colDataSize(col_def.id, true));
+            }
+        }
+    };
+
+    auto check_merged_file = [&](const DMFilePtr & dmfile, const String & merged_filename, const std::set<String> & small_fnames) {
+        ASSERT_EQ(small_fnames.size(), dmfile->merged_sub_file_infos.size()) << fmt::format("{} vs {}", small_fnames.size(), dmfile->merged_sub_file_infos.size());
+        auto file = PosixRandomAccessFile::create(merged_filename);
+        for (const auto & fname : small_fnames)
+        {
+            auto itr = dmfile->merged_sub_file_infos.find(fname);
+            ASSERT_NE(itr, dmfile->merged_sub_file_infos.end());
+
+            String merged_data;
+            merged_data.resize(itr->second.size);
+            auto n = file->pread(merged_data.data(), itr->second.size, itr->second.offset);
+            ASSERT_EQ(n, itr->second.size);
+
+            auto sub_path = fmt::format("{}/{}", dmfile->path(), fname);
+            auto sub_fsize = std::filesystem::file_size(sub_path);
+            ASSERT_EQ(sub_fsize, itr->second.size);
+            auto sub_file = PosixRandomAccessFile::create(sub_path);
+            String sub_data;
+            sub_data.resize(sub_fsize);
+            n = sub_file->pread(sub_data.data(), sub_fsize, 0);
+            ASSERT_EQ(n, sub_fsize);
+            ASSERT_EQ(merged_data, sub_data);
+        }
+    };
+
+    auto check_files = [&](const DMFilePtr & dmfile1, const DMFilePtr & dmfile2) {
+        try
+        {
+            auto fnames = dmfile1->listFilesForUpload();
+            FAIL() << "Shouldn't come here.";
+        }
+        catch (...)
+        {
+        }
+
+        ASSERT_TRUE(S3::ClientFactory::instance().isEnabled()) << "S3 should be enabled is gtests";
+        auto fnames = dmfile2->listFilesForUpload();
+        auto dir = dmfile2->path();
+
+        std::set<String> small_files;
+        Poco::DirectoryIterator end;
+        for (Poco::DirectoryIterator itr(dir); itr != end; ++itr)
+        {
+            auto file_itr = std::find_if(fnames.begin(), fnames.end(), [&](const auto & file_with_size) { return file_with_size.first == itr.name(); });
+            if (file_itr == fnames.end() && itr.name() != "NGC")
+            {
+                small_files.insert(itr.name());
+            }
+        }
+
+        for (const auto & [number, size] : dmfile2->merged_files)
+        {
+            auto merged_filename = dmfile2->mergedPath(number);
+            check_merged_file(dmfile2, merged_filename, small_files);
+        }
+    };
+
+    auto check_meta = [&](const DMFilePtr & dmfile1, const DMFilePtr & dmfile2) {
+        ASSERT_FALSE(dmfile1->useMetaV2());
+        ASSERT_TRUE(dmfile2->useMetaV2());
+        check_pack_stats(dmfile1, dmfile2);
+        check_pack_properties(dmfile1, dmfile2);
+        check_column_stats(dmfile1, dmfile2);
+        check_files(dmfile1, dmfile2);
+    };
+
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+
+    const size_t num_rows_write = 128;
+
+    DMFileBlockOutputStream::BlockProperty block_property1;
+    block_property1.effective_num_rows = 1;
+    block_property1.gc_hint_version = 1;
+    block_property1.deleted_rows = 1;
+    DMFileBlockOutputStream::BlockProperty block_property2;
+    block_property2.effective_num_rows = 2;
+    block_property2.gc_hint_version = 2;
+    block_property2.deleted_rows = 2;
+    std::vector<DMFileBlockOutputStream::BlockProperty> block_propertys;
+    block_propertys.push_back(block_property1);
+    block_propertys.push_back(block_property2);
+    DMFilePtr dmfile1, dmfile2;
+    {
+        Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
+        auto mode = DMFileMode::DirectoryChecksum;
+        auto configuration = createConfiguration(mode);
+        dmfile1 = DMFile::create(1, parent_path, std::move(configuration), DMFileFormat::V2);
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile1, *cols);
+        stream->writePrefix();
+        stream->write(block1, block_property1);
+        stream->write(block2, block_property2);
+        stream->writeSuffix();
+    }
+    {
+        Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
+        auto mode = DMFileMode::DirectoryMetaV2;
+        auto configuration = createConfiguration(mode);
+        dmfile2 = DMFile::create(2, parent_path, std::move(configuration), DMFileFormat::V3);
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile2, *cols);
+        stream->writePrefix();
+        stream->write(block1, block_property1);
+        stream->write(block2, block_property2);
+        stream->writeSuffix();
+    }
+
+    LOG_DEBUG(Logger::get(), "check dmfile1 dmfile2");
+    check_meta(dmfile1, dmfile2);
+
+    // Restore MetaV2
+    auto file_provider = dbContext().getFileProvider();
+    auto dmfile3 = DMFile::restore(file_provider, dmfile2->fileId(), dmfile2->pageId(), dmfile2->parentPath(), DMFile::ReadMetaMode::all());
+    LOG_DEBUG(Logger::get(), "check dmfile1 dmfile3");
+    check_meta(dmfile1, dmfile3);
+
+    {
+        // Test read
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder
+                          .setColumnCache(column_cache)
+                          .build(dmfile2, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+        Block block;
+        while ((block = stream->read())) {}
+    }
+}
+CATCH
+
+void checkMergedFile(const DMFilePtr & dmfile, UInt64 merged_number, const std::set<String> & not_uploaded_files, std::set<String> & checked_fnames)
+{
+    auto merged_filename = dmfile->mergedPath(merged_number);
+    auto merged_file = PosixRandomAccessFile::create(merged_filename);
+
+    for (const auto & fname : not_uploaded_files)
+    {
+        auto itr = dmfile->merged_sub_file_infos.find(fname);
+        ASSERT_NE(itr, dmfile->merged_sub_file_infos.end());
+        if (itr->second.number != merged_number)
+        {
+            continue;
+        }
+        checked_fnames.insert(fname);
+
+        String merged_data;
+        {
+            merged_data.resize(itr->second.size);
+            auto n = merged_file->pread(merged_data.data(), itr->second.size, itr->second.offset);
+            ASSERT_EQ(n, itr->second.size);
+        }
+
+        String sub_data;
+        {
+            auto sub_path = fmt::format("{}/{}", dmfile->path(), fname);
+            auto sub_fsize = std::filesystem::file_size(sub_path);
+            ASSERT_EQ(sub_fsize, itr->second.size);
+            auto sub_file = PosixRandomAccessFile::create(sub_path);
+            sub_data.resize(sub_fsize);
+            auto n = sub_file->pread(sub_data.data(), sub_fsize, 0);
+            ASSERT_EQ(n, sub_fsize);
+        }
+        ASSERT_EQ(merged_data, sub_data);
+    }
+}
+
+void checkMergedFiles(DMFilePtr dmfile)
+{
+    ASSERT_TRUE(S3::ClientFactory::instance().isEnabled()) << "S3 should be enabled is gtests";
+    auto uploaded_files = dmfile->listFilesForUpload();
+    auto dir = dmfile->path();
+    std::set<String> not_uploaded_files;
+    Poco::DirectoryIterator end;
+    for (Poco::DirectoryIterator itr(dir); itr != end; ++itr)
+    {
+        auto uploaded_file_itr = std::find_if(
+            uploaded_files.begin(),
+            uploaded_files.end(),
+            [&](const auto & file_with_size) {
+                return file_with_size.first == itr.name();
+            });
+        // File not be uploaded and not `NGC`.
+        if (uploaded_file_itr == uploaded_files.end() && itr.name() != "NGC")
+        {
+            not_uploaded_files.insert(itr.name());
+        }
+    }
+    ASSERT_EQ(not_uploaded_files.size(), dmfile->merged_sub_file_infos.size())
+        << fmt::format("{} vs {} => {}", not_uploaded_files.size(), dmfile->merged_sub_file_infos.size(), not_uploaded_files);
+
+    std::set<String> checked_fnames;
+    for (const auto & [number, size] : dmfile->merged_files)
+    {
+        checkMergedFile(dmfile, number, not_uploaded_files, checked_fnames);
+    }
+    ASSERT_EQ(checked_fnames, not_uploaded_files) << fmt::format("{} vs {}", checked_fnames, not_uploaded_files);
+}
+
+TEST_P(DMFileTest, MoreMegedFile)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+
+    const size_t num_rows_write = 1280;
+
+    DMFileBlockOutputStream::BlockProperty block_property1;
+    block_property1.effective_num_rows = 1;
+    block_property1.gc_hint_version = 1;
+    block_property1.deleted_rows = 1;
+    DMFileBlockOutputStream::BlockProperty block_property2;
+    block_property2.effective_num_rows = 2;
+    block_property2.gc_hint_version = 2;
+    block_property2.deleted_rows = 2;
+    std::vector<DMFileBlockOutputStream::BlockProperty> block_propertys;
+    block_propertys.push_back(block_property1);
+    block_propertys.push_back(block_property2);
+
+    Settings settings;
+    settings.set("dt_merged_file_max_size", "1024");
+    DMFile::updateMergeFileConfig(settings);
+    ASSERT_EQ(DMFile::merged_file_max_size, 1024);
+    Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
+    Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
+    auto mode = DMFileMode::DirectoryMetaV2;
+    auto configuration = createConfiguration(mode);
+    auto dmfile = DMFile::create(2, parent_path, std::move(configuration), DMFileFormat::V3);
+    auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
+    stream->writePrefix();
+    stream->write(block1, block_property1);
+    stream->write(block2, block_property2);
+    stream->writeSuffix();
+
+    ASSERT_GT(dmfile->merged_files.size(), 1);
+    checkMergedFiles(dmfile);
+}
+CATCH
+
+TEST_P(DMFileTest, MetaV2Broken)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+
+    const size_t num_rows_write = 128;
+
+    DMFileBlockOutputStream::BlockProperty block_property1;
+    block_property1.effective_num_rows = 1;
+    block_property1.gc_hint_version = 1;
+    block_property1.deleted_rows = 1;
+    DMFileBlockOutputStream::BlockProperty block_property2;
+    block_property2.effective_num_rows = 2;
+    block_property2.gc_hint_version = 2;
+    block_property2.deleted_rows = 2;
+    std::vector<DMFileBlockOutputStream::BlockProperty> block_propertys;
+    block_propertys.push_back(block_property1);
+    block_propertys.push_back(block_property2);
+    DMFilePtr dmfile;
+
+    Block block1 = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows_write / 2);
+    Block block2 = DMTestEnv::prepareSimpleWriteBlockWithNullable(num_rows_write / 2, num_rows_write);
+    auto mode = DMFileMode::DirectoryChecksum;
+    auto configuration = createConfiguration(mode);
+    dmfile = DMFile::create(1, parent_path, std::move(configuration), DMFileFormat::V3);
+    auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dmfile, *cols);
+    stream->writePrefix();
+    stream->write(block1, block_property1);
+    stream->write(block2, block_property2);
+    stream->writeSuffix();
+
+    {
+        PosixWritableFile file(dmfile->metav2Path(), false, -1, 0666);
+        String s = "hello";
+        auto n = file.pwrite(s.data(), s.size(), 0);
+        ASSERT_EQ(n, s.size());
+    }
+
+    try
+    {
+        auto file_provider = dbContext().getFileProvider();
+        auto t = DMFile::restore(file_provider, dmfile->fileId(), dmfile->pageId(), dmfile->parentPath(), DMFile::ReadMetaMode::all());
+        FAIL(); // Should not come here.
+    }
+    catch (const DB::Exception & e)
+    {
+        ASSERT_EQ(e.code(), ErrorCodes::CORRUPTED_DATA) << e.message();
+    }
+}
+CATCH
+
 TEST_P(DMFileTest, GcFlag)
 try
 {
@@ -232,9 +597,9 @@ try
     dm_file.reset();
 
     auto mode = GetParam();
-    auto configuration = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt;
+    auto configuration = createConfiguration(mode);
 
-    dm_file = DMFile::create(id, parent_path, std::move(configuration));
+    dm_file = DMFile::create(id, parent_path, std::move(configuration), modeToVersion(mode));
     // Right after created, the fil is not abled to GC and it is ignored by `listAllInPath`
     EXPECT_FALSE(dm_file->canGC());
     DMFile::ListOptions options;
@@ -882,7 +1247,7 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(DTFileMode, //
                         DMFileTest,
-                        testing::Values(DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
+                        testing::Values(DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum, DMFileMode::DirectoryMetaV2),
                         paramToString);
 
 
@@ -902,11 +1267,11 @@ public:
         path = TiFlashStorageTestBasic::getTemporaryPath();
 
         auto mode = GetParam();
-        auto configuration = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt;
+        auto configuration = createConfiguration(mode);
 
-        path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
-        storage_pool = std::make_unique<StoragePool>(*db_context, table_id, *path_pool, "test.t1");
-        dm_file = DMFile::create(0, path, std::move(configuration));
+        path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
+        storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, table_id, *path_pool, "test.t1");
+        dm_file = DMFile::create(0, path, std::move(configuration), modeToVersion(mode));
         table_columns = std::make_shared<ColumnDefines>();
         column_cache = std::make_shared<ColumnCache>();
 
@@ -924,10 +1289,11 @@ public:
 
         dm_context = std::make_unique<DMContext>( //
             *db_context,
-            *path_pool,
-            *storage_pool,
+            path_pool,
+            storage_pool,
             /*min_version_*/ 0,
-            settings.not_compress_columns,
+            NullspaceID,
+            /*physical_table_id*/ 100,
             is_common_handle,
             rowkey_column_size,
             db_context->getSettingsRef());
@@ -942,8 +1308,8 @@ private:
     String path;
     std::unique_ptr<DMContext> dm_context{};
     /// all these var live as ref in dm_context
-    std::unique_ptr<StoragePathPool> path_pool{};
-    std::unique_ptr<StoragePool> storage_pool{};
+    std::shared_ptr<StoragePathPool> path_pool{};
+    std::shared_ptr<StoragePool> storage_pool{};
     ColumnDefinesPtr table_columns;
     DeltaMergeStore::Settings settings;
 
@@ -1104,6 +1470,11 @@ try
     }
 }
 CATCH
+
+INSTANTIATE_TEST_CASE_P(DTFileMode, //
+                        DMFileClusteredIndexTest,
+                        testing::Values(DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum, DMFileMode::DirectoryMetaV2),
+                        paramToString);
 
 /// DDL test cases
 class DMFileDDLTest : public DMFileTest
@@ -1311,7 +1682,7 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(DTFileMode, //
                         DMFileDDLTest,
-                        testing::Values(DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum),
+                        testing::Values(DMFileMode::DirectoryLegacy, DMFileMode::DirectoryChecksum, DMFileMode::DirectoryMetaV2),
                         paramToString);
 
 } // namespace tests

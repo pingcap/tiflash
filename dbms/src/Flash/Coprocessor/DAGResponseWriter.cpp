@@ -32,7 +32,7 @@ DAGResponseWriter::DAGResponseWriter(
         && dag_context.encode_type != tipb::EncodeType::TypeDefault)
     {
         throw TiFlashException(
-            "Only Default/Arrow/CHBlock encode type is supported in DAGBlockOutputStream.",
+            "Only Default/Arrow/CHBlock encode type is supported in DAGResponseWriter.",
             Errors::Coprocessor::Unimplemented);
     }
 }

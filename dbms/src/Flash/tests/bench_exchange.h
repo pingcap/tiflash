@@ -23,7 +23,6 @@
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/tests/WindowTestUtil.h>

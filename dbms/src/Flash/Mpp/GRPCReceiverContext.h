@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 #include <Flash/Mpp/LocalRequestHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
-#include <Storages/StorageDisaggregated.h>
 #include <common/types.h>
 #include <grpcpp/completion_queue.h>
 #include <kvproto/mpp.pb.h>
@@ -34,6 +33,8 @@ namespace DB
 using MPPDataPacket = mpp::MPPDataPacket;
 using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
 using TrackedMPPDataPacketPtrs = std::vector<TrackedMppDataPacketPtr>;
+using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
+
 
 class ExchangePacketReader
 {
@@ -111,7 +112,7 @@ public:
     // Only for tiflash_compute mode, make sure disaggregated_dispatch_reqs is not empty.
     void sendMPPTaskToTiFlashStorageNode(
         LoggerPtr log,
-        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs);
+        const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs);
 
     // Normally cancel will be sent by TiDB to all MPPTasks, so ExchangeReceiver no need to cancel.
     // But in disaggregated mode, TableScan in tiflash_compute node will be converted to ExchangeReceiver(executed in tiflash_compute node),

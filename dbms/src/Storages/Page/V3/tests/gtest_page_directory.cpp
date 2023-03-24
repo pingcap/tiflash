@@ -28,8 +28,8 @@
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
@@ -51,7 +51,7 @@ using u128::PageEntriesEdit;
 
 TEST(ExternalIdsByNamespaceTest, Simple)
 {
-    NamespaceId ns_id = 100;
+    NamespaceID ns_id = 100;
     ExternalIdsByNamespace<typename u128::PageIdTrait> external_ids_by_ns;
 
     {
@@ -117,8 +117,7 @@ public:
     static u128::PageDirectoryPtr restoreFromDisk()
     {
         auto path = getTemporaryPath();
-        auto ctx = DB::tests::TiFlashTestEnv::getContext();
-        FileProviderPtr provider = ctx.getFileProvider();
+        auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;
         return factory.create("PageDirectoryTest", provider, delegator, WALConfig());
@@ -569,7 +568,7 @@ TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
         PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
-        dir->gcInMemEntries(); // clean in memory
+        dir->gcInMemEntries({}); // clean in memory
         auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
         ASSERT_TRUE(alive_ids.has_value());
         EXPECT_EQ(alive_ids->size(), 0);
@@ -643,7 +642,7 @@ try
 {
     {
         PageEntriesEdit edit;
-        edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 1));
+        edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 1), PageEntryV3{});
         dir->apply(std::move(edit));
     }
     {
@@ -811,7 +810,7 @@ try
             visible_page_ids.erase(x);
 
         if (gc_or_not)
-            dir->gcInMemEntries(/*return_removed_entries=*/false);
+            dir->gcInMemEntries({.need_removed_entries = false});
         auto snap = dir->createSnapshot();
         for (const auto & cur_id : visible_page_ids)
         {
@@ -913,7 +912,7 @@ try
 
         if (gc_or_not)
         {
-            dir->gcInMemEntries(/*return_removed_entries=*/false);
+            dir->gcInMemEntries({.need_removed_entries = false});
             const auto all_ids = dir->getAllPageIds();
             for (const auto & cur_id : visible_page_ids)
             {
@@ -1097,7 +1096,7 @@ try
      *   }
      *   snapshot remain: [v3,v5]
      */
-    auto del_entries = dir->gcInMemEntries();
+    auto del_entries = dir->gcInMemEntries({});
     // v1, v2 have been removed.
     ASSERT_EQ(del_entries.size(), 2);
 
@@ -1108,7 +1107,7 @@ try
     // all versions get compacted.
     snapshot3.reset();
     snapshot5.reset();
-    del_entries = dir->gcInMemEntries();
+    del_entries = dir->gcInMemEntries({});
     ASSERT_EQ(del_entries.size(), 2);
 
     auto snapshot_after_gc = dir->createSnapshot();
@@ -1150,7 +1149,7 @@ try
          *   }
          *   snapshot remain: [v3, v5]
          */
-        const auto & del_entries = dir->gcInMemEntries();
+        const auto & del_entries = dir->gcInMemEntries({});
         // page_id: []; another_page_id: v1 have been removed.
         EXPECT_EQ(del_entries.size(), 1);
     }
@@ -1164,7 +1163,7 @@ try
          *   }
          *   snapshot remain: [v5]
          */
-        const auto & del_entries = dir->gcInMemEntries();
+        const auto & del_entries = dir->gcInMemEntries({});
         // page_id: v2; another_page_id: v3 have been removed.
         EXPECT_EQ(del_entries.size(), 2);
     }
@@ -1178,7 +1177,7 @@ try
          *   }
          *   snapshot remain: []
          */
-        const auto & del_entries = dir->gcInMemEntries();
+        const auto & del_entries = dir->gcInMemEntries({});
         // page_id: v5; another_page_id: v6,v7,v8 have been removed.
         EXPECT_EQ(del_entries.size(), 5);
     }
@@ -1224,7 +1223,7 @@ try
          *   }
          *   snapshot remain: [v1,v3,v5,v10]
          */
-        auto removed_entries = dir->gcInMemEntries(); // The GC on page_id=50 is blocked by previous `snapshot1`
+        auto removed_entries = dir->gcInMemEntries({}); // The GC on page_id=50 is blocked by previous `snapshot1`
         EXPECT_EQ(removed_entries.size(), 0);
         EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
@@ -1245,7 +1244,7 @@ try
         snapshot3.reset();
         snapshot5.reset();
         snapshot10.reset();
-        auto removed_entries = dir->gcInMemEntries();
+        auto removed_entries = dir->gcInMemEntries({});
         EXPECT_EQ(removed_entries.size(), 0);
         EXPECT_ENTRY_EQ(entry_v1, dir, another_page_id, snapshot1);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot1);
@@ -1260,7 +1259,7 @@ try
          *   snapshot remain: []
          */
         snapshot1.reset();
-        auto removed_entries = dir->gcInMemEntries(); // this will compact all versions
+        auto removed_entries = dir->gcInMemEntries({}); // this will compact all versions
         // page_id: v3,v5; another_page_id: v1,v2,v4,v6,v7,v8 get removed
         EXPECT_EQ(removed_entries.size(), 8);
 
@@ -1317,7 +1316,7 @@ try
          *   }
          *   snapshot remain: [v5,v8,v9]
          */
-        auto del_entries = dir->gcInMemEntries();
+        auto del_entries = dir->gcInMemEntries({});
         // page_id: v3; another_page_id: v1,v2 have been removed.
         EXPECT_EQ(del_entries.size(), 3);
         ASSERT_EQ(dir->numPages(), 2);
@@ -1335,7 +1334,7 @@ try
         EXPECT_ENTRY_EQ(entry_v8, dir, another_page_id, snapshot8);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
         EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
-        auto del_entries = dir->gcInMemEntries();
+        auto del_entries = dir->gcInMemEntries({});
         // page_id: v5; another_page_id: v4,v6,v7 have been removed.
         EXPECT_EQ(del_entries.size(), 4);
         ASSERT_EQ(dir->numPages(), 1); // page_id should be removed.
@@ -1351,7 +1350,7 @@ try
         snapshot8.reset();
         EXPECT_ENTRY_NOT_EXIST(dir, page_id, snapshot9);
         EXPECT_ENTRY_EQ(entry_v9, dir, another_page_id, snapshot9);
-        auto del_entries = dir->gcInMemEntries();
+        auto del_entries = dir->gcInMemEntries({});
         // another_page_id: v8 have been removed.
         EXPECT_EQ(del_entries.size(), 1);
     }
@@ -1362,7 +1361,7 @@ try
          *   snapshot remain: []
          */
         snapshot9.reset();
-        auto del_entries = dir->gcInMemEntries();
+        auto del_entries = dir->gcInMemEntries({});
         // another_page_id: v9 have been removed.
         EXPECT_EQ(del_entries.size(), 1);
         ASSERT_EQ(dir->numPages(), 0); // all should be removed.
@@ -1450,7 +1449,7 @@ try
     EXPECT_EQ(candidate_entries_2_3.first.empty(), true);
 
     // B.1 Execute GC
-    dir->gcInMemEntries();
+    dir->gcInMemEntries({});
     // `page_id` get removed
     EXPECT_EQ(dir->numPages(), 1);
 
@@ -1499,7 +1498,7 @@ try
     }
     // entry1 should not be removed
     {
-        auto outdated_entries = dir->gcInMemEntries();
+        auto outdated_entries = dir->gcInMemEntries({});
         EXPECT_TRUE(outdated_entries.empty());
     }
 
@@ -1511,7 +1510,7 @@ try
     }
     // entry1 get removed
     {
-        auto outdated_entries = dir->gcInMemEntries();
+        auto outdated_entries = dir->gcInMemEntries({});
         EXPECT_EQ(1, outdated_entries.size());
         EXPECT_SAME_ENTRY(entry1, *outdated_entries.begin());
     }
@@ -1541,7 +1540,7 @@ try
     }
     // entry1 should not be removed
     {
-        auto outdated_entries = dir->gcInMemEntries();
+        auto outdated_entries = dir->gcInMemEntries({});
         EXPECT_TRUE(outdated_entries.empty());
     }
 
@@ -1554,7 +1553,7 @@ try
     }
     // entry1 get removed
     {
-        auto outdated_entries = dir->gcInMemEntries();
+        auto outdated_entries = dir->gcInMemEntries({});
         EXPECT_EQ(1, outdated_entries.size());
         EXPECT_SAME_ENTRY(entry1, *outdated_entries.begin());
     }
@@ -1584,7 +1583,7 @@ try
     }
     // entry1 should not be removed
     {
-        auto outdated_entries = dir->gcInMemEntries();
+        auto outdated_entries = dir->gcInMemEntries({});
         EXPECT_TRUE(outdated_entries.empty());
     }
 
@@ -1600,8 +1599,7 @@ try
         ASSERT_EQ(std::get<0>(ids[0]), buildV3Id(TEST_NAMESPACE_ID, 11));
         ASSERT_EQ(std::get<0>(ids[1]), buildV3Id(TEST_NAMESPACE_ID, 12));
 
-        // upsert 11->entry2
-        // upsert 12->entry3
+        // Mock full gc happen in BlobStore. upsert 11->entry2, upsert 12->entry3
         PageEntriesEdit edit;
         edit.upsertPage(std::get<0>(ids[0]), std::get<1>(ids[0]), entry2);
         edit.upsertPage(std::get<0>(ids[1]), std::get<1>(ids[1]), entry3);
@@ -1610,7 +1608,7 @@ try
     }
 
     // page 10 get removed
-    auto removed_entries = dir->gcInMemEntries();
+    auto removed_entries = dir->gcInMemEntries({});
     ASSERT_EQ(removed_entries.size(), 1);
     EXPECT_SAME_ENTRY(removed_entries[0], entry1);
 
@@ -1627,7 +1625,7 @@ try
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 11));
         dir->apply(std::move(edit));
         // entry2 get removed
-        auto outdated_entries = dir->gcInMemEntries();
+        auto outdated_entries = dir->gcInMemEntries({});
         ASSERT_EQ(1, outdated_entries.size());
         EXPECT_SAME_ENTRY(entry2, outdated_entries[0]);
     }
@@ -1637,12 +1635,110 @@ try
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 12));
         dir->apply(std::move(edit));
         // entry3 get removed
-        auto outdated_entries = dir->gcInMemEntries();
+        auto outdated_entries = dir->gcInMemEntries({});
         ASSERT_EQ(1, outdated_entries.size());
         EXPECT_SAME_ENTRY(entry3, outdated_entries[0]);
     }
 
     ASSERT_EQ(dir->getAllPageIds().empty(), true);
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, RewriteRefedIdToExternalPage)
+try
+{
+    // 10->entry1, 11->10, 12->10
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        u128::PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry1);
+        dir->apply(std::move(edit));
+    }
+    {
+        u128::PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 11), buildV3Id(TEST_NAMESPACE_ID, 10));
+        dir->apply(std::move(edit));
+    }
+    {
+        u128::PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 12), buildV3Id(TEST_NAMESPACE_ID, 10));
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 10));
+        dir->apply(std::move(edit));
+    }
+    // 50->ext_id, 51->50
+    {
+        u128::PageEntriesEdit edit;
+        edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 50));
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 51), buildV3Id(TEST_NAMESPACE_ID, 50));
+        dir->apply(std::move(edit));
+    }
+    // entry1 should not be removed
+    {
+        auto outdated_entries = dir->gcInMemEntries({});
+        EXPECT_TRUE(outdated_entries.empty());
+    }
+
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry3{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123 + 1024, .checksum = 0x4567};
+    {
+        // this will return ref page 11 and 12 that need to be rewritten
+        // to new blob file.
+        auto full_gc_entries = dir->getEntriesByBlobIds({1});
+        ASSERT_EQ(full_gc_entries.first.size(), 1);
+        auto ids = full_gc_entries.first.at(1);
+        ASSERT_EQ(ids.size(), 2);
+        ASSERT_EQ(std::get<0>(ids[0]), buildV3Id(TEST_NAMESPACE_ID, 11));
+        ASSERT_EQ(std::get<0>(ids[1]), buildV3Id(TEST_NAMESPACE_ID, 12));
+
+        // Mock full gc happen in BlobStore. upsert 11->entry2, upsert 12->entry3
+        u128::PageEntriesEdit edit;
+        edit.upsertPage(std::get<0>(ids[0]), std::get<1>(ids[0]), entry2);
+        edit.upsertPage(std::get<0>(ids[1]), std::get<1>(ids[1]), entry3);
+        // this will rewrite ref page 11, 12 to normal page
+        dir->gcApply(std::move(edit));
+    }
+
+    // page 10 get removed
+    auto removed_entries = dir->gcInMemEntries({});
+    ASSERT_EQ(removed_entries.size(), 1);
+    EXPECT_SAME_ENTRY(removed_entries[0], entry1);
+
+    {
+        auto snap = dir->createSnapshot();
+        EXPECT_ENTRY_EQ(entry2, dir, 11, snap);
+        EXPECT_ENTRY_EQ(entry3, dir, 12, snap);
+        EXPECT_ENTRY_NOT_EXIST(dir, 10, snap);
+        auto external_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        ASSERT_GT(external_ids->count(50), 0);
+    }
+
+    // del 11->entry2
+    {
+        u128::PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 11));
+        dir->apply(std::move(edit));
+        // entry2 get removed
+        auto outdated_entries = dir->gcInMemEntries({});
+        ASSERT_EQ(1, outdated_entries.size());
+        EXPECT_SAME_ENTRY(entry2, outdated_entries[0]);
+    }
+    // del 12->entry3
+    {
+        u128::PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 12));
+        dir->apply(std::move(edit));
+        // entry3 get removed
+        auto outdated_entries = dir->gcInMemEntries({});
+        ASSERT_EQ(1, outdated_entries.size());
+        EXPECT_SAME_ENTRY(entry3, outdated_entries[0]);
+    }
+
+    auto external_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+    ASSERT_GT(external_ids->count(50), 0);
+    auto all_page_ids = dir->getAllPageIds();
+    ASSERT_EQ(all_page_ids.size(), 2);
+    ASSERT_GT(all_page_ids.count(buildV3Id(TEST_NAMESPACE_ID, 50)), 0);
+    ASSERT_GT(all_page_ids.count(buildV3Id(TEST_NAMESPACE_ID, 51)), 0);
 }
 CATCH
 
@@ -1669,7 +1765,7 @@ try
     }
     // entry1 should not be removed
     {
-        auto outdated_entries = dir->gcInMemEntries();
+        auto outdated_entries = dir->gcInMemEntries({});
         EXPECT_TRUE(outdated_entries.empty());
     }
 
@@ -1703,7 +1799,7 @@ try
     }
 
     // page 10,11,12 get removed
-    auto removed_entries = dir->gcInMemEntries();
+    auto removed_entries = dir->gcInMemEntries({});
     ASSERT_EQ(removed_entries.size(), 3);
     EXPECT_SAME_ENTRY(removed_entries[0], entry1);
     EXPECT_SAME_ENTRY(removed_entries[1], entry2);
@@ -1737,7 +1833,7 @@ try
     }
     // entry1 should not be removed
     {
-        auto outdated_entries = dir->gcInMemEntries();
+        auto outdated_entries = dir->gcInMemEntries({});
         EXPECT_TRUE(outdated_entries.empty());
         auto alive_ex_id = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
         ASSERT_TRUE(alive_ex_id.has_value());
@@ -1753,7 +1849,7 @@ try
     }
     // entry1 get removed
     {
-        auto outdated_entries = dir->gcInMemEntries();
+        auto outdated_entries = dir->gcInMemEntries({});
         EXPECT_EQ(0, outdated_entries.size());
         auto alive_ex_id = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
         ASSERT_TRUE(alive_ex_id.has_value());
@@ -1803,7 +1899,7 @@ try
         auto normal_id = getNormalPageIdU64(dir, 357, snap);
         EXPECT_EQ(normal_id, 352);
     }
-    dir->gcInMemEntries();
+    dir->gcInMemEntries({});
     {
         auto snap = dir->createSnapshot();
         auto normal_id = getNormalPageIdU64(dir, 357, snap);
@@ -1813,9 +1909,8 @@ try
     auto s0 = dir->createSnapshot();
     auto edit = dir->dumpSnapshotToEdit(s0);
     auto restore_from_edit = [](const PageEntriesEdit & edit) {
-        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
-        auto ctx = DB::tests::TiFlashTestEnv::getContext();
-        auto provider = ctx.getFileProvider();
+        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit), nullptr);
+        auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;
@@ -1836,9 +1931,8 @@ TEST_F(PageDirectoryGCTest, DumpAndRestore)
 try
 {
     auto restore_from_edit = [](const PageEntriesEdit & edit) {
-        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
-        auto ctx = DB::tests::TiFlashTestEnv::getContext();
-        auto provider = ctx.getFileProvider();
+        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit), nullptr);
+        auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;
@@ -2062,8 +2156,7 @@ try
     }
 
     auto restore_from_edit = [](PageEntriesEdit & edit, BlobStats & stats) {
-        auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
-        auto provider = ctx.getFileProvider();
+        auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;
@@ -2106,8 +2199,7 @@ try
     PageEntryV3 entry_50_2{.file_id = 2, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
 
     auto restore_from_edit = [](PageEntriesEdit & edit) {
-        auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
-        auto provider = ctx.getFileProvider();
+        auto provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory<u128::FactoryTrait> factory;

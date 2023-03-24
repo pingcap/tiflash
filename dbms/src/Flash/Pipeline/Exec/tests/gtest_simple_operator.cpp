@@ -17,6 +17,7 @@
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/Plans/PhysicalGetResultSink.h>
+#include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -29,7 +30,7 @@ public:
     {
         ExecutorTest::initializeContext();
 
-        context.context.setExecutorTest();
+        context.context->setExecutorTest();
 
         context.addMockTable({"test_db", "test_table"},
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
@@ -47,28 +48,28 @@ public:
                                      toNullableVec<Int64>("s4", {1, 1, {}})});
     }
 
-    std::pair<PhysicalPlanNodePtr, PipelineExecPtr> build(
+    PipelineExecPtr build(
         const std::shared_ptr<tipb::DAGRequest> & request,
         ResultHandler result_handler,
         PipelineExecutorStatus & exec_status)
     {
         DAGContext dag_context(*request, "operator_test", /*concurrency=*/1);
-        context.context.setDAGContext(&dag_context);
-        context.context.setMockStorage(context.mockStorage());
+        context.context->setDAGContext(&dag_context);
+        context.context->setMockStorage(context.mockStorage());
 
-        PhysicalPlan physical_plan{context.context, ""};
+        PhysicalPlan physical_plan{*context.context, ""};
         physical_plan.build(request.get());
         assert(!result_handler.isIgnored());
-        auto plan_tree = PhysicalGetResultSink::build(result_handler, physical_plan.outputAndOptimize());
+        auto plan_tree = PhysicalGetResultSink::build(std::move(result_handler), Logger::get(), physical_plan.outputAndOptimize());
 
-        PipelineExecGroupBuilder group_builder{exec_status};
+        PipelineExecGroupBuilder group_builder;
         PhysicalPlanVisitor::visitPostOrder(plan_tree, [&](const PhysicalPlanNodePtr & plan) {
             assert(plan);
-            plan->buildPipelineExec(group_builder, context.context, /*concurrency=*/1);
+            plan->buildPipelineExecGroup(exec_status, group_builder, *context.context, /*concurrency=*/1);
         });
         auto result = group_builder.build();
         assert(result.size() == 1);
-        return {std::move(plan_tree), std::move(result.back())};
+        return std::move(result.back());
     }
 
     void executeAndAssert(
@@ -80,11 +81,11 @@ public:
             blocks.push_back(block);
         }};
         PipelineExecutorStatus exec_status;
-        auto [plan, op_pipeline] = build(request, result_handler, exec_status);
+        auto op_pipeline = build(request, result_handler, exec_status);
         while (op_pipeline->execute() != OperatorStatus::FINISHED)
         {
         }
-        ASSERT_COLUMNS_EQ_UR(expect_columns, mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName());
+        ASSERT_COLUMNS_EQ_UR(expect_columns, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName());
     }
 };
 
@@ -100,7 +101,7 @@ try
     ResultHandler result_handler{[](const Block &) {
     }};
     PipelineExecutorStatus exec_status;
-    auto [_, op_pipeline] = build(request, result_handler, exec_status);
+    auto op_pipeline = build(request, result_handler, exec_status);
     exec_status.cancel();
     ASSERT_EQ(op_pipeline->execute(), OperatorStatus::CANCELLED);
 }

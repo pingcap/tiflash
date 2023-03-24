@@ -17,10 +17,12 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
+#include <Operators/TopNTransformOp.h>
 
 namespace DB
 {
@@ -48,6 +50,7 @@ PhysicalPlanNodePtr PhysicalTopN::build(
     auto physical_top_n = std::make_shared<PhysicalTopN>(
         executor_id,
         child->getSchema(),
+        child->getFineGrainedShuffle(),
         log->identifier(),
         child,
         order_descr,
@@ -63,6 +66,18 @@ void PhysicalTopN::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & c
     executeExpression(pipeline, before_sort_actions, log, "before TopN");
 
     orderStreams(pipeline, max_streams, order_descr, limit, false, context, log);
+}
+
+void PhysicalTopN::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t /*concurrency*/)
+{
+    executeExpression(exec_status, group_builder, before_sort_actions, log);
+    group_builder.transform([&](auto & builder) {
+        builder.appendTransformOp(std::make_unique<TopNTransformOp>(exec_status, log->identifier(), order_descr, limit, context.getSettingsRef().max_block_size));
+    });
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)

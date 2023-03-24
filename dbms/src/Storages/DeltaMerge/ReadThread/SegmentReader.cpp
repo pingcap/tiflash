@@ -44,9 +44,8 @@ public:
 
     ~SegmentReader()
     {
-        LOG_DEBUG(log, "Stop begin");
         t.join();
-        LOG_DEBUG(log, "Stop end");
+        LOG_DEBUG(log, "Stopped");
     }
 
     std::thread::id getId() const
@@ -210,18 +209,19 @@ SegmentReaderPoolManager::SegmentReaderPoolManager()
 
 SegmentReaderPoolManager::~SegmentReaderPoolManager() = default;
 
-void SegmentReaderPoolManager::init(const ServerInfo & server_info)
+void SegmentReaderPoolManager::init(UInt32 logical_cpu_cores, double read_thread_count_scale)
 {
+    double total_thread_count = logical_cpu_cores * read_thread_count_scale;
     auto numa_nodes = getNumaNodes(log);
-    LOG_INFO(log, "numa_nodes {} => {}", numa_nodes.size(), numa_nodes);
+    RUNTIME_CHECK(!numa_nodes.empty());
+    UInt32 thread_count_per_node = std::ceil(total_thread_count / numa_nodes.size());
     for (const auto & node : numa_nodes)
     {
-        int thread_count = node.empty() ? server_info.cpu_info.logical_cores : node.size();
-        reader_pools.push_back(std::make_unique<SegmentReaderPool>(thread_count, node));
+        reader_pools.push_back(std::make_unique<SegmentReaderPool>(thread_count_per_node, node));
         auto ids = reader_pools.back()->getReaderIds();
         reader_ids.insert(ids.begin(), ids.end());
     }
-    LOG_INFO(log, "num_readers={}", reader_ids.size());
+    LOG_INFO(log, "numa_nodes={} number_of_readers={}", numa_nodes, reader_ids.size());
 }
 
 void SegmentReaderPoolManager::addTask(MergedTaskPtr && task)

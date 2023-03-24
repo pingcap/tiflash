@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #include <Common/UnifiedLogFormatter.h>
+#include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
@@ -22,14 +24,18 @@
 #include <Server/RaftConfigParser.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <aws/s3/S3Client.h>
+#include <aws/s3/model/CreateBucketRequest.h>
+#include <aws/s3/model/DeleteBucketRequest.h>
 
 #include <memory>
 
 namespace DB::tests
 {
-std::vector<std::shared_ptr<Context>> TiFlashTestEnv::global_contexts = {};
+std::vector<ContextPtr> TiFlashTestEnv::global_contexts = {};
 
 String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool get_abs)
 {
@@ -87,15 +93,14 @@ void TiFlashTestEnv::tryRemovePath(const std::string & path, bool recreate)
 
 void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
 {
-    addGlobalContext(testdata_path, ps_run_mode, bg_thread_count);
+    addGlobalContext(DB::Settings(), testdata_path, ps_run_mode, bg_thread_count);
 }
 
-void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
+void TiFlashTestEnv::addGlobalContext(const DB::Settings & settings_, Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
 {
     // set itself as global context
-    auto global_context = std::make_shared<DB::Context>(DB::Context::createGlobal());
+    auto global_context = std::shared_ptr<Context>(DB::Context::createGlobal());
     global_contexts.push_back(global_context);
-    global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
     global_context->setTemporaryPath(getTemporaryPath());
 
@@ -104,6 +109,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     global_context->initializeFileProvider(key_manager, false);
 
     // initialize background & blockable background thread pool
+    global_context->setSettings(settings_);
     Settings & settings = global_context->getSettingsRef();
     global_context->initializeBackgroundPool(bg_thread_count == 0 ? settings.background_pool_size.get() : bg_thread_count);
     global_context->initializeBlockableBackgroundPool(bg_thread_count == 0 ? settings.background_pool_size.get() : bg_thread_count);
@@ -138,6 +144,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
 
     global_context->setPageStorageRunMode(ps_run_mode);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
+    global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
     LOG_INFO(Logger::get(), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     TiFlashRaftConfig raft_config;
@@ -152,10 +159,15 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     auto & path_pool = global_context->getPathPool();
     global_context->getTMTContext().restore(path_pool);
 
-    global_context->initializeSharedBlockSchemas();
+    global_context->initializeSharedBlockSchemas(10000);
 }
 
-Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
+ContextPtr TiFlashTestEnv::getContext()
+{
+    return getContext({});
+}
+
+ContextPtr TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
 {
     Context context = *global_contexts[0];
     context.setGlobalContext(*global_contexts[0]);
@@ -172,8 +184,15 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     auto paths = getPathPool(testdata_path);
     context.setPathPool(paths.first, paths.second, Strings{}, context.getPathCapacity(), context.getFileProvider());
     global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
+    global_contexts[0]->tryReleaseWriteNodePageStorageForTest();
+    global_contexts[0]->initializeWriteNodePageStorageIfNeed(context.getPathPool());
     context.getSettingsRef() = settings;
-    return context;
+    return std::make_shared<Context>(context);
+}
+
+FileProviderPtr TiFlashTestEnv::getDefaultFileProvider()
+{
+    return global_contexts[0]->getFileProvider();
 }
 
 void TiFlashTestEnv::shutdown()
@@ -213,4 +232,39 @@ void TiFlashTestEnv::setUpTestContext(Context & context, DAGContext * dag_contex
     /// collation sensitive group by setting `group_by_collation_sensitive` to true
     context.setSetting("group_by_collation_sensitive", Field(static_cast<UInt64>(1)));
 }
+
+FileProviderPtr TiFlashTestEnv::getMockFileProvider()
+{
+    bool encryption_enabled = false;
+    return std::make_shared<FileProvider>(std::make_shared<MockKeyManager>(encryption_enabled), encryption_enabled);
+}
+
+bool TiFlashTestEnv::createBucketIfNotExist(::DB::S3::TiFlashS3Client & s3_client)
+{
+    Aws::S3::Model::CreateBucketRequest request;
+    request.SetBucket(s3_client.bucket());
+    auto outcome = s3_client.CreateBucket(request);
+    if (outcome.IsSuccess())
+    {
+        LOG_DEBUG(s3_client.log, "Created bucket {}", s3_client.bucket());
+    }
+    else if (outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou")
+    {
+        LOG_DEBUG(s3_client.log, "Bucket {} already exist", s3_client.bucket());
+    }
+    else
+    {
+        const auto & err = outcome.GetError();
+        LOG_ERROR(s3_client.log, "CreateBucket: {}:{}", err.GetExceptionName(), err.GetMessage());
+    }
+    return outcome.IsSuccess() || outcome.GetError().GetExceptionName() == "BucketAlreadyOwnedByYou";
+}
+
+void TiFlashTestEnv::deleteBucket(::DB::S3::TiFlashS3Client & s3_client)
+{
+    Aws::S3::Model::DeleteBucketRequest request;
+    request.SetBucket(s3_client.bucket());
+    s3_client.DeleteBucket(request);
+}
+
 } // namespace DB::tests

@@ -16,6 +16,6 @@
 
 namespace DB
 {
-template struct ExternalPageCallbacksT<NamespaceId>;
+template struct ExternalPageCallbacksT<NamespaceID>;
 template struct ExternalPageCallbacksT<String>;
 } // namespace DB

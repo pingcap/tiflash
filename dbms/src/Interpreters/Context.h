@@ -18,9 +18,12 @@
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
+#include <Encryption/FileProvider_fwd.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
+#include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
 #include <common/MultiVersion.h>
@@ -89,8 +92,6 @@ class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class KeyManager;
 using KeyManagerPtr = std::shared_ptr<KeyManager>;
-class FileProvider;
-using FileProviderPtr = std::shared_ptr<FileProvider>;
 struct TiFlashRaftConfig;
 class DAGContext;
 class IORateLimiter;
@@ -122,6 +123,9 @@ using Dependencies = std::vector<DatabaseAndTableName>;
 
 using TableAndCreateAST = std::pair<StoragePtr, ASTPtr>;
 using TableAndCreateASTs = std::map<String, TableAndCreateAST>;
+
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
 /** A set of known objects that can be used in the query.
   * Consists of a shared part (always common to all sessions and queries)
@@ -158,8 +162,6 @@ private:
     UInt64 session_close_cycle = 0;
     bool session_is_used = false;
 
-    bool use_l0_opt = true;
-
     enum TestMode
     {
         non_test,
@@ -184,8 +186,8 @@ private:
 
 public:
     /// Create initial Context with ContextShared and etc.
-    static Context createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
-    static Context createGlobal();
+    static std::unique_ptr<Context> createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
+    static std::unique_ptr<Context> createGlobal();
 
     ~Context();
 
@@ -365,8 +367,6 @@ public:
     /// Execute inner functions, debug only.
     DBGInvoker & getDBGInvoker() const;
 
-    TMTContext & getTMTContext() const;
-
     /// Create a cache of marks of specified size. This can be done only once.
     void setMarkCache(size_t cache_size_in_bytes);
     std::shared_ptr<MarkCache> getMarkCache() const;
@@ -388,9 +388,6 @@ public:
       */
     void dropCaches() const;
 
-    void setUseL0Opt(bool use_l0_opt);
-    bool useL0Opt() const;
-
     BackgroundProcessingPool & initializeBackgroundPool(UInt16 pool_size);
     BackgroundProcessingPool & getBackgroundPool();
     BackgroundProcessingPool & initializeBlockableBackgroundPool(UInt16 pool_size);
@@ -398,6 +395,8 @@ public:
     BackgroundProcessingPool & getPSBackgroundPool();
 
     void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
+    bool isTMTContextInited() const;
+    TMTContext & getTMTContext() const;
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
@@ -407,7 +406,9 @@ public:
         const Strings & main_data_paths,
         const std::vector<size_t> & main_capacity_quota,
         const Strings & latest_data_paths,
-        const std::vector<size_t> & latest_capacity_quota);
+        const std::vector<size_t> & latest_capacity_quota,
+        const String & remote_cache_data_path = "",
+        size_t remote_cache_capacity = 0);
     PathCapacityMetricsPtr getPathCapacity() const;
 
     void initializeTiFlashMetrics() const;
@@ -426,15 +427,18 @@ public:
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 
+    void initializeWriteNodePageStorageIfNeed(const PathPool & path_pool);
+    UniversalPageStoragePtr getWriteNodePageStorage() const;
+    UniversalPageStoragePtr tryGetWriteNodePageStorage() const;
+    void tryReleaseWriteNodePageStorageForTest();
+
+    SharedContextDisaggPtr getSharedContextDisagg() const;
+
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
 
     /// Nullptr if the query log is not ready for this moment.
     QueryLog * getQueryLog();
-
-    /// Prevents DROP TABLE if its size is greater than max_size (50GB by default, max_size=0 turn off this check)
-    void setMaxTableSizeToDrop(size_t max_size);
-    void checkTableCanBeDropped(const String & database, const String & table, size_t table_size);
 
     /// Get the server uptime in seconds.
     time_t getUptimeSeconds() const;
@@ -497,31 +501,8 @@ public:
     MockMPPServerInfo mockMPPServerInfo() const;
     void setMockMPPServerInfo(MockMPPServerInfo & info);
 
-    void setDisaggregatedMode(DisaggregatedMode mode)
-    {
-        disaggregated_mode = mode;
-    }
-    bool isDisaggregatedComputeMode() const
-    {
-        return disaggregated_mode == DisaggregatedMode::Compute;
-    }
-    bool isDisaggregatedStorageMode() const
-    {
-        return disaggregated_mode == DisaggregatedMode::Storage;
-    }
-
     const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
-    void initializeSharedBlockSchemas();
-
-    // todo: remove after AutoScaler is stable.
-    void setUseAutoScaler(bool use)
-    {
-        use_autoscaler = use;
-    }
-    bool useAutoScaler() const
-    {
-        return use_autoscaler;
-    }
+    void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
 
 private:
     /** Check if the current client has access to the specified database.
@@ -540,11 +521,7 @@ private:
     void checkIsConfigLoaded() const;
 
     bool is_config_loaded = false; /// Is configuration loaded from toml file.
-    DisaggregatedMode disaggregated_mode = DisaggregatedMode::None;
-    bool use_autoscaler = true; /// todo: remove this after AutoScaler is stable. Only meaningfule in DisaggregatedComputeMode.
 };
-
-using ContextPtr = std::shared_ptr<Context>;
 
 
 /// Puts an element into the map, erases it in the destructor.

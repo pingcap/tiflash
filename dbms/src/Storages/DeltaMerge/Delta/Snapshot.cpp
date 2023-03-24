@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
@@ -36,12 +37,14 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
 
     auto snap = std::make_shared<DeltaValueSnapshot>(type);
     snap->is_update = for_update;
-    snap->_delta = this->shared_from_this();
+    snap->delta = this->shared_from_this();
 
-    auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), context.tracing_id, /*snapshot_read*/ true);
-    snap->persisted_files_snap = persisted_file_set->createSnapshot(storage_snap);
+    auto storage_snap = std::make_shared<StorageSnapshot>(*context.storage_pool, context.getReadLimiter(), context.tracing_id, /*snapshot_read*/ true);
+    auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
+    snap->persisted_files_snap = persisted_file_set->createSnapshot(data_from_storage_snap);
+    snap->mem_table_snap = mem_table_set->createSnapshot(data_from_storage_snap, for_update);
     snap->shared_delta_index = delta_index;
-    snap->mem_table_snap = mem_table_set->createSnapshot(storage_snap, for_update);
+    snap->delta_index_epoch = delta_index_epoch;
 
     return snap;
 }
@@ -73,7 +76,7 @@ DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & n
 {
     auto * new_reader = new DeltaValueReader();
     new_reader->delta_snap = delta_snap;
-    new_reader->_compacted_delta_index = _compacted_delta_index;
+    new_reader->compacted_delta_index = compacted_delta_index;
     new_reader->persisted_files_reader = persisted_files_reader->createNewReader(new_col_defs);
     new_reader->mem_table_reader = mem_table_reader->createNewReader(new_col_defs);
     new_reader->col_defs = new_col_defs;

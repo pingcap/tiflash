@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,15 +20,15 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/Utils.h>
-#include <Flash/Statistics/traverseExecutors.h>
 #include <Flash/executeQuery.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
@@ -107,6 +107,11 @@ MPPTask::~MPPTask()
     LOG_DEBUG(log, "finish MPPTask: {}", id.toString());
 }
 
+bool MPPTask::isRootMPPTask() const
+{
+    return dag_context->isRootMPPTask();
+}
+
 void MPPTask::abortTunnels(const String & message, bool wait_sender_finish)
 {
     {
@@ -140,10 +145,7 @@ void MPPTask::finishWrite()
 {
     RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
     if (dag_context->collect_execution_summaries)
-    {
-        ExecutionSummaryCollector summary_collector(*dag_context);
-        tunnel_set->sendExecutionSummary(summary_collector.genExecutionSummaryResponse());
-    }
+        tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
     tunnel_set->finishWrite();
 }
 
@@ -154,9 +156,9 @@ void MPPTask::run()
 
 void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
-    auto tunnel_set_local = std::make_shared<MPPTunnelSet>(*dag_context, log->identifier());
+    auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
-    const auto & exchange_sender = dag_req.root_executor().exchange_sender();
+    const auto & exchange_sender = dag_context->dag_request.rootExecutor().exchange_sender();
 
     for (int i = 0; i < exchange_sender.encoded_task_meta_size(); ++i)
     {
@@ -189,7 +191,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 void MPPTask::initExchangeReceivers()
 {
     auto receiver_set_local = std::make_shared<MPPReceiverSet>(log->identifier());
-    traverseExecutors(&dag_req, [&](const tipb::Executor & executor) {
+    dag_context->dag_request.traverse([&](const tipb::Executor & executor) {
         if (executor.tp() == tipb::ExecType::TypeExchangeReceiver)
         {
             assert(executor.has_executor_id());
@@ -408,21 +410,22 @@ void MPPTask::runImpl()
             // finish MPPTunnel
             finishWrite();
         }
-        else
-        {
-            err_msg = result.err_msg;
-        }
         auto ru = query_executor_holder->collectRequestUnit();
         LOG_INFO(log, "mpp finish with request unit: {}", ru);
         GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(ru);
 
-        const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
+        mpp_task_statistics.collectRuntimeStatistics();
+
+        auto runtime_statistics = query_executor_holder->getRuntimeStatistics();
         LOG_DEBUG(
             log,
-            "finish with {} rows, {} blocks, {} bytes",
-            return_statistics.rows,
-            return_statistics.blocks,
-            return_statistics.bytes);
+            "finish with {} seconds, {} rows, {} blocks, {} bytes",
+            runtime_statistics.execution_time_ns / static_cast<double>(1000000000),
+            runtime_statistics.rows,
+            runtime_statistics.blocks,
+            runtime_statistics.bytes);
+
+        result.verify();
     }
     catch (...)
     {

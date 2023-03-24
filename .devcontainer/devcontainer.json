@@ -1,0 +1,44 @@
+// For format details, see https://aka.ms/devcontainer.json.
+{
+  "name": "TiFlash",
+  "dockerComposeFile": [
+    "docker-compose.yml",
+    "docker-compose.vscode.yml"
+  ],
+  "service": "shell",
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "llvm-vs-code-extensions.vscode-clangd", // C++ Code Completion
+        "jeff-hykin.better-cpp-syntax", // C++ Syntax
+        "matepek.vscode-catch2-test-adapter", // Run gtests in UI
+        "twxs.cmake",
+        "wayou.vscode-todo-highlight", // Highlight TODO keywords
+        "ms-vscode.cmake-tools", // CMake actions in UI
+        "bungcip.better-toml", // TOML Syntax highlighting
+        "eamodio.gitlens", // Enable more git features
+      ],
+      "settings": {
+        "git.detectSubmodulesLimit": 40,
+        "cmake.buildDirectory": "${workspaceFolder}/cmake-build-${buildType}",
+        "cmake.statusbar.visibility": "compact",
+        "cmake.statusbar.advanced": {
+          "ctest": { // We don't use ctest at all
+            "visibility": "hidden"
+          },
+          "kit": { // We rarely change the kit
+            "visibility": "icon"
+          }
+        },
+        "clangd.arguments": [
+          "--compile-commands-dir=cmake-build-Debug"
+        ],
+        "cmake.generator": "Ninja",
+        "cmake.configureOnOpen": true,
+        "testMate.cpp.test.executables": "cmake-build-*/**/gtests_*",
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  }
+}

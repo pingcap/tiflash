@@ -211,7 +211,7 @@ try
 }
 CATCH
 
-TEST_F(FilterExecutorTestRunner, convertBool)
+TEST_F(FilterExecutorTestRunner, convert_bool)
 try
 {
     {
@@ -282,9 +282,10 @@ try
 {
     context.mockStorage()->setUseDeltaMerge(true);
     context.addMockDeltaMerge({"test_db", "test_table1"},
-                              {{"i1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeString}},
+                              {{"i1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeString}, {"b3", TiDB::TP::TypeTiny}},
                               {toVec<Int64>("i1", {1, 2, 3}),
-                               toNullableVec<String>("s2", {"apple", {}, "banana"})});
+                               toNullableVec<String>("s2", {"apple", {}, "banana"}),
+                               toVec<Int8>("b3", {true, false, true})});
 
     // Do not support push down filter test for DAGQueryBlockInterpreter
     enablePlanner(true);
@@ -294,19 +295,22 @@ try
                        .filter(lt(col("i1"), lit(Field(static_cast<Int64>(2)))))
                        .build(context);
 
-    {
-        String expected = R"(
-Expression: <final projection>
- Expression: <projection after push down filter>
-  Filter: <push down filter>
-   DeltaMergeSegmentThread)";
-        executeInterpreterWithDeltaMerge(expected, request, 10);
-    }
     executeAndAssertColumnsEqual(
         request,
         {toNullableVec<Int64>({1}),
-         toNullableVec<String>({"apple"})});
+         toNullableVec<String>({"apple"}),
+         toNullableVec<Int8>({true})});
 
+    request = context
+                  .scan("test_db", "test_table1")
+                  .filter(col("b3"))
+                  .build(context);
+
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<Int64>({1, 3}),
+         toNullableVec<String>({"apple", "banana"}),
+         toNullableVec<Int8>({true, true})});
 
     request = context
                   .scan("test_db", "test_table1")
@@ -316,7 +320,8 @@ Expression: <final projection>
     executeAndAssertColumnsEqual(
         request,
         {toNullableVec<Int64>({1, 2}),
-         toNullableVec<String>({"apple", {}})});
+         toNullableVec<String>({"apple", {}}),
+         toNullableVec<Int8>({true, false})});
 
     for (size_t i = 4; i < 10; ++i)
     {
@@ -328,7 +333,8 @@ Expression: <final projection>
         executeAndAssertColumnsEqual(
             request,
             {toNullableVec<Int64>({1, 2, 3}),
-             toNullableVec<String>({"apple", {}, "banana"})});
+             toNullableVec<String>({"apple", {}, "banana"}),
+             toNullableVec<Int8>({true, false, true})});
     }
 
     for (size_t i = 0; i < 10; ++i)
@@ -341,7 +347,8 @@ Expression: <final projection>
         executeAndAssertColumnsEqual(
             request,
             {toNullableVec<Int64>({1, 2, 3}),
-             toNullableVec<String>({"apple", {}, "banana"})});
+             toNullableVec<String>({"apple", {}, "banana"}),
+             toNullableVec<Int8>({true, false, true})});
     }
 
     for (size_t i = 0; i < 10; ++i)

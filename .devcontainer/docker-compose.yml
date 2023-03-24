@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+
+  shell:
+
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    volumes:
+      # The project's source code
+      - ..:/workspace:cached
+      # Cache Cargo downloaded deps
+      - cargo-registry:/root/.cargo/registry
+      - cargo-git:/root/.cargo/git
+      # Cache Rust toolchain
+      # We have to cache the entire directory due to https://github.com/rust-lang/rustup/issues/1239
+      - rustup:/root/.rustup
+      # Cache ccache results
+      - ccache:/root/.cache/ccache
+      # Persist GitHub CLI Config locally in the repository
+      - .local_persist/gh:/root/.config/gh
+
+    working_dir: /workspace
+
+    # Enable using a ptrace-based debugger like C++, Go, and Rust.
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  rustup:
+  ccache:

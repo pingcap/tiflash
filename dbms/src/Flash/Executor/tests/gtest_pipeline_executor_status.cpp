@@ -34,10 +34,10 @@ try
         status.waitFor(timeout);
         GTEST_FAIL();
     }
-    catch (Exception & e)
+    catch (DB::Exception & e)
     {
         GTEST_ASSERT_EQ(e.message(), PipelineExecutorStatus::timeout_err_msg);
-        auto err_msg = status.getErrMsg();
+        auto err_msg = status.getExceptionMsg();
         ASSERT_EQ(err_msg, PipelineExecutorStatus::timeout_err_msg);
     }
 }
@@ -51,8 +51,9 @@ try
     auto thread_manager = newThreadManager();
     thread_manager->schedule(false, "run", [&status]() mutable { status.onEventFinish(); });
     status.wait();
-    auto err_msg = status.getErrMsg();
-    ASSERT_TRUE(err_msg.empty()) << err_msg;
+    auto exception_ptr = status.getExceptionPtr();
+    auto err_msg = status.getExceptionMsg();
+    ASSERT_TRUE(!exception_ptr) << err_msg;
     thread_manager->wait();
 }
 CATCH
@@ -61,18 +62,18 @@ TEST_F(PipelineExecutorStatusTestRunner, to_err)
 try
 {
     auto test = [](std::string && err_msg) {
-        auto expect_err_msg = err_msg.empty() ? PipelineExecutorStatus::empty_err_msg : err_msg;
+        auto expect_err_msg = err_msg;
         PipelineExecutorStatus status;
         status.onEventSchedule();
         auto thread_manager = newThreadManager();
         thread_manager->schedule(false, "err", [&status, &err_msg]() mutable {
-            status.onErrorOccurred(std::move(err_msg));
+            status.onErrorOccurred(err_msg);
             status.onEventFinish();
         });
         status.wait();
         status.onErrorOccurred("unexpect exception");
-        auto actual_err_msg = status.getErrMsg();
-        ASSERT_TRUE(!actual_err_msg.empty());
+        ASSERT_TRUE(status.getExceptionPtr());
+        auto actual_err_msg = status.getExceptionMsg();
         ASSERT_EQ(actual_err_msg, expect_err_msg);
         thread_manager->wait();
     };

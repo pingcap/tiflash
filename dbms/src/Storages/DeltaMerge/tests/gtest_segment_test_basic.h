@@ -17,8 +17,11 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <random>
@@ -97,7 +100,12 @@ public:
     ColumnPtr getSegmentHandle(PageIdU64 segment_id, const RowKeyRanges & ranges);
     void writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end);
     RowKeyValue buildRowKeyValue(Int64 key);
-    RowKeyRange buildRowKeyRange(Int64 begin, Int64 end);
+    static RowKeyRange buildRowKeyRange(Int64 begin, Int64 end);
+
+    size_t getPageNumAfterGC(StorageType type, NamespaceID ns_id) const;
+
+    std::set<PageIdU64> getAliveExternalPageIdsWithoutGC(NamespaceID ns_id) const;
+    std::set<PageIdU64> getAliveExternalPageIdsAfterGC(NamespaceID ns_id) const;
 
 protected:
     std::mt19937 random;
@@ -127,8 +135,8 @@ protected:
     inline static constexpr PageIdU64 NAMESPACE_ID = 100;
 
     /// all these var lives as ref in dm_context
-    std::unique_ptr<StoragePathPool> storage_path_pool;
-    std::unique_ptr<StoragePool> storage_pool;
+    std::shared_ptr<StoragePathPool> storage_path_pool;
+    std::shared_ptr<StoragePool> storage_pool;
     /// dm_context
     std::unique_ptr<DMContext> dm_context;
     ColumnDefinesPtr table_columns;

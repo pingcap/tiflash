@@ -16,9 +16,11 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/RateLimiter.h>
+#include <Poco/Message.h>
 #include <Storages/Page/V3/GCDefines.h>
 #include <fmt/format.h>
 
+#include <type_traits>
 
 namespace DB
 {
@@ -28,6 +30,23 @@ extern const char force_ps_wal_compact[];
 }
 namespace PS::V3
 {
+
+Poco::Message::Priority GCTimeStatistics::getLoggingLevel() const
+{
+    switch (stage)
+    {
+    case GCStageType::FullGC:
+    case GCStageType::FullGCNothingMoved:
+        return Poco::Message::PRIO_INFORMATION;
+    case GCStageType::OnlyInMem:
+        if (compact_wal_happen)
+            return Poco::Message::PRIO_INFORMATION;
+        return Poco::Message::PRIO_DEBUG;
+    case GCStageType::Unknown:
+        return Poco::Message::PRIO_DEBUG;
+    }
+}
+
 String GCTimeStatistics::toLogging() const
 {
     const std::string_view stage_suffix = [this]() {
@@ -93,7 +112,7 @@ void ExternalPageCallbacksManager<Trait>::registerExternalPagesCallbacks(const E
     {
         assert(callbacks.prefix != "");
     }
-    // NamespaceId(TableID) should not be reuse
+    // NamespaceID(TableID) should not be reuse
     RUNTIME_CHECK_MSG(
         callbacks_container.count(callbacks.prefix) == 0,
         "Try to create callbacks for duplicated prefix {}",
@@ -115,6 +134,7 @@ bool ExternalPageCallbacksManager<Trait>::gc(
     typename Trait::PageDirectory & page_directory,
     const WriteLimiterPtr & write_limiter,
     const ReadLimiterPtr & read_limiter,
+    RemoteFileValidSizes * remote_valid_sizes,
     LoggerPtr log)
 {
     // If another thread is running gc, just return;
@@ -122,9 +142,9 @@ bool ExternalPageCallbacksManager<Trait>::gc(
     if (!gc_is_running.compare_exchange_strong(v, true))
         return false;
 
-    const GCTimeStatistics statistics = doGC(blob_store, page_directory, write_limiter, read_limiter);
+    const GCTimeStatistics statistics = doGC(blob_store, page_directory, write_limiter, read_limiter, remote_valid_sizes);
     assert(statistics.stage != GCStageType::Unknown); // `doGC` must set the stage
-    LOG_DEBUG(log, statistics.toLogging());
+    LOG_IMPL(log, statistics.getLoggingLevel(), statistics.toLogging());
 
     return statistics.executeNextImmediately();
 }
@@ -197,7 +217,8 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     typename Trait::BlobStore & blob_store,
     typename Trait::PageDirectory & page_directory,
     const WriteLimiterPtr & write_limiter,
-    const ReadLimiterPtr & read_limiter)
+    const ReadLimiterPtr & read_limiter,
+    RemoteFileValidSizes * remote_valid_sizes)
 {
     Stopwatch gc_watch;
     SCOPE_EXIT({
@@ -215,14 +236,21 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
 
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    if (page_directory.tryDumpSnapshot(read_limiter, write_limiter, force_wal_compact))
+    statistics.compact_wal_happen = page_directory.tryDumpSnapshot(read_limiter, write_limiter, force_wal_compact);
+    if (statistics.compact_wal_happen)
     {
         GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
     }
     statistics.compact_wal_ms = gc_watch.elapsedMillisecondsFromLastTime();
     GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_wal).Observe(statistics.compact_wal_ms / 1000.0);
 
-    const auto & del_entries = page_directory.gcInMemEntries();
+    typename Trait::PageDirectory::InMemGCOption options;
+    if constexpr (std::is_same_v<Trait, universal::ExternalPageCallbacksManagerTrait>)
+    {
+        assert(remote_valid_sizes != nullptr);
+        options.remote_valid_sizes = remote_valid_sizes;
+    }
+    const auto & del_entries = page_directory.gcInMemEntries(options);
     statistics.compact_directory_ms = gc_watch.elapsedMillisecondsFromLastTime();
     GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_directory).Observe(statistics.compact_directory_ms / 1000.0);
 
@@ -236,7 +264,7 @@ GCTimeStatistics ExternalPageCallbacksManager<Trait>::doGC(
     GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_spacemap).Observe(statistics.compact_spacemap_ms / 1000.0);
 
     // Note that if full GC is not executed, below metrics won't be shown on grafana but it should
-    // only take few ms to fininsh these in-memory operations. Check them out by the logs if
+    // only take few ms to finish these in-memory operations. Check them out by the logs if
     // the total time cost not match.
 
     // 3. Check whether there are BlobFiles that need to do `full GC`.

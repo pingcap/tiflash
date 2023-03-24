@@ -52,6 +52,13 @@ inline String getNormalizedPath(const String & s)
     return removeTrailingSlash(Poco::Path{s}.toString());
 }
 
+const String PathPool::log_path_prefix = "log";
+const String PathPool::data_path_prefix = "data";
+const String PathPool::meta_path_prefix = "meta";
+const String PathPool::kvstore_path_prefix = "kvstore";
+const String PathPool::write_uni_path_prefix = "write";
+const String PathPool::read_node_cache_path_prefix = "read_cache";
+
 // Constructor to be used during initialization
 PathPool::PathPool(
     const Strings & main_data_paths_,
@@ -64,7 +71,7 @@ PathPool::PathPool(
     , kvstore_paths(kvstore_paths_)
     , global_capacity(global_capacity_)
     , file_provider(file_provider_)
-    , log(Logger::get("PathPool"))
+    , log(Logger::get())
 {
     if (kvstore_paths.empty())
     {
@@ -72,7 +79,7 @@ PathPool::PathPool(
         for (const auto & s : latest_data_paths)
         {
             // Get a normalized path without trailing '/'
-            auto p = getNormalizedPath(s + "/kvstore");
+            auto p = getNormalizedPath(s + "/" + PathPool::kvstore_path_prefix);
             kvstore_paths.emplace_back(std::move(p));
         }
     }
@@ -117,6 +124,11 @@ PSDiskDelegatorPtr PathPool::getPSDiskDelegatorGlobalSingle(const String & prefi
     return std::make_shared<PSDiskDelegatorGlobalSingle>(*this, prefix);
 }
 
+PSDiskDelegatorPtr PathPool::getPSDiskDelegatorFixedDirectory(const String & dir) const
+{
+    return std::make_shared<PSDiskDelegatorFixedDirectory>(*this, dir);
+}
+
 //==========================================================================================
 // StoragePathPool
 //==========================================================================================
@@ -135,7 +147,7 @@ StoragePathPool::StoragePathPool( //
     , shutdown_called(false)
     , global_capacity(std::move(global_capacity_))
     , file_provider(std::move(file_provider_))
-    , log(Logger::get("StoragePathPool"))
+    , log(Logger::get())
 {
     RUNTIME_CHECK_MSG(!database.empty() && !table.empty(), "Can NOT create StoragePathPool [database={}] [table={}]", database, table);
 
@@ -163,6 +175,8 @@ StoragePathPool::StoragePathPool(StoragePathPool && rhs) noexcept
     , shutdown_called(rhs.shutdown_called.load())
     , global_capacity(std::move(rhs.global_capacity))
     , file_provider(std::move(rhs.file_provider))
+    , s3_stable_path(std::move(rhs.s3_stable_path))
+    , s3_file_ids(std::move(rhs.s3_file_ids))
     , log(std::move(rhs.log))
 {}
 
@@ -179,6 +193,8 @@ StoragePathPool & StoragePathPool::operator=(StoragePathPool && rhs)
         shutdown_called = rhs.shutdown_called.load();
         global_capacity.swap(rhs.global_capacity);
         file_provider.swap(rhs.file_provider);
+        s3_stable_path.swap(rhs.s3_stable_path);
+        s3_file_ids.swap(rhs.s3_file_ids);
         log.swap(rhs.log);
     }
     return *this;
@@ -504,6 +520,27 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
     pool.global_capacity->addUsedSize(path, file_size);
 }
 
+bool StableDiskDelegator::updateDTFileSize(UInt64 file_id, size_t file_size)
+{
+    std::lock_guard lock{pool.mutex};
+    auto iter = pool.dt_file_path_map.find(file_id);
+    if (iter == pool.dt_file_path_map.end())
+    {
+        return false;
+    }
+    auto index = iter->second;
+    auto it = pool.main_path_infos[index].file_size_map.find(file_id);
+    if (it == pool.main_path_infos[index].file_size_map.end())
+    {
+        return false;
+    }
+    const auto origin_file_size = it->second;
+    it->second = file_size;
+    // update global used size
+    pool.global_capacity->addUsedSize(pool.main_path_infos[index].path, file_size - origin_file_size);
+    return true;
+}
+
 void StableDiskDelegator::removeDTFile(UInt64 file_id)
 {
     std::lock_guard lock{pool.mutex};
@@ -517,6 +554,25 @@ void StableDiskDelegator::removeDTFile(UInt64 file_id)
     pool.global_capacity->freeUsedSize(pool.main_path_infos[index].path, file_size);
 }
 
+void StableDiskDelegator::addS3DTFiles(const String & s3_stable_path_, std::set<UInt64> && file_ids_)
+{
+    RUNTIME_CHECK(!s3_stable_path_.empty(), s3_stable_path_);
+    RUNTIME_CHECK(pool.s3_stable_path.empty() && pool.s3_file_ids.empty(), pool.s3_stable_path); // Can only `addS3DTFiles` one time.
+    pool.s3_stable_path = s3_stable_path_;
+    pool.s3_file_ids = std::move(file_ids_);
+}
+
+String StableDiskDelegator::getS3DTFile(UInt64 file_id)
+{
+    auto iter = pool.s3_file_ids.find(file_id);
+    RUNTIME_CHECK_MSG(iter != pool.s3_file_ids.end(), "file_id={} is not a DMFile in S3", file_id);
+    return pool.s3_stable_path;
+}
+
+void StableDiskDelegator::addS3DTFileSize(UInt64 /*file_id*/, size_t /*size*/)
+{
+    // TODO: support S3.
+}
 //==========================================================================================
 // Delta data
 //==========================================================================================
@@ -1022,6 +1078,73 @@ void PSDiskDelegatorGlobalSingle::removePageFile(const PageFileIdAndLevel & id_l
 {
     pool.global_capacity->freeUsedSize(pool.listGlobalPagePaths()[0], file_size);
 
+    page_path_map.eraseIfExist(id_lvl);
+}
+
+//==========================================================================================
+// Choose PS file path in a fixed directory.
+//==========================================================================================
+PSDiskDelegatorFixedDirectory::PSDiskDelegatorFixedDirectory(const PathPool & pool_, const String & path_)
+    : path(path_)
+    , pool(pool_)
+{
+}
+
+bool PSDiskDelegatorFixedDirectory::fileExist(const PageFileIdAndLevel & id_lvl) const
+{
+    return page_path_map.exist(id_lvl);
+}
+
+size_t PSDiskDelegatorFixedDirectory::numPaths() const
+{
+    return 1;
+}
+
+String PSDiskDelegatorFixedDirectory::defaultPath() const
+{
+    return path;
+}
+
+Strings PSDiskDelegatorFixedDirectory::listPaths() const
+{
+    return {path};
+}
+
+String PSDiskDelegatorFixedDirectory::choosePath(const PageFileIdAndLevel &)
+{
+    return path;
+}
+
+size_t PSDiskDelegatorFixedDirectory::addPageFileUsedSize(
+    const PageFileIdAndLevel & id_lvl,
+    size_t size_to_add,
+    const String & pf_parent_path,
+    bool need_insert_location)
+{
+    // We need a map for id_lvl -> path_index for function `fileExist`
+    if (need_insert_location)
+        page_path_map.setIndex(id_lvl, 0);
+
+    pool.global_capacity->addUsedSize(pf_parent_path, size_to_add);
+    return 0;
+}
+
+void PSDiskDelegatorFixedDirectory::freePageFileUsedSize(
+    const PageFileIdAndLevel &,
+    size_t size_to_free,
+    const String & pf_parent_path)
+{
+    pool.global_capacity->freeUsedSize(pf_parent_path, size_to_free);
+}
+
+String PSDiskDelegatorFixedDirectory::getPageFilePath(const PageFileIdAndLevel &) const
+{
+    return path;
+}
+
+void PSDiskDelegatorFixedDirectory::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool, bool)
+{
+    pool.global_capacity->freeUsedSize(path, file_size);
     page_path_map.eraseIfExist(id_lvl);
 }
 

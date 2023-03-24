@@ -20,6 +20,8 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
@@ -70,7 +72,8 @@ private:
         const SelectQueryInfo & query_info,
         const RegionException & e,
         int num_allow_retry);
-    void buildLocalStreamsForPhysicalTable(
+    DM::Remote::DisaggPhysicalTableReadSnapshotPtr
+    buildLocalStreamsForPhysicalTable(
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         DAGPipeline & pipeline,
@@ -134,6 +137,8 @@ private:
     ManageableStoragePtr storage_for_logical_table;
     Names required_columns;
     NamesAndTypes source_columns;
+    // For generated column, just need a placeholder, and TiDB will fill this column.
+    std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
 };
 
 } // namespace DB

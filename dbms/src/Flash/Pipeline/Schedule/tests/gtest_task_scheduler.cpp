@@ -55,8 +55,7 @@ class SimpleTask : public Task
 {
 public:
     explicit SimpleTask(Waiter & waiter_)
-        : Task(nullptr)
-        , waiter(waiter_)
+        : waiter(waiter_)
     {}
 
     ~SimpleTask()
@@ -65,7 +64,7 @@ public:
     }
 
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         while ((--loop_count) > 0)
             return ExecTaskStatus::RUNNING;
@@ -81,8 +80,7 @@ class SimpleWaitingTask : public Task
 {
 public:
     explicit SimpleWaitingTask(Waiter & waiter_)
-        : Task(nullptr)
-        , waiter(waiter_)
+        : waiter(waiter_)
     {}
 
     ~SimpleWaitingTask()
@@ -91,7 +89,7 @@ public:
     }
 
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         if (loop_count > 0)
         {
@@ -106,7 +104,7 @@ protected:
         return ExecTaskStatus::FINISHED;
     }
 
-    ExecTaskStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() noexcept override
     {
         if (loop_count > 0)
         {
@@ -136,7 +134,7 @@ class MemoryTraceTask : public Task
 {
 public:
     MemoryTraceTask(MemoryTrackerPtr mem_tracker_, Waiter & waiter_)
-        : Task(std::move(mem_tracker_))
+        : Task(std::move(mem_tracker_), "")
         , waiter(waiter_)
     {}
 
@@ -149,7 +147,7 @@ public:
     static constexpr Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 1024 * 1024; // 1 MiB
 
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         switch (status)
         {
@@ -167,7 +165,7 @@ protected:
         }
     }
 
-    ExecTaskStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() noexcept override
     {
         if (status == TraceTaskStatus::waiting)
             CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD - 10);
@@ -181,18 +179,13 @@ private:
 
 class DeadLoopTask : public Task
 {
-public:
-    DeadLoopTask()
-        : Task(nullptr)
-    {}
-
 protected:
-    ExecTaskStatus executeImpl() override
+    ExecTaskStatus executeImpl() noexcept override
     {
         return ExecTaskStatus::WAITING;
     }
 
-    ExecTaskStatus awaitImpl() override
+    ExecTaskStatus awaitImpl() noexcept override
     {
         return ExecTaskStatus::RUNNING;
     }

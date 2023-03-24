@@ -17,7 +17,6 @@
 #include <Common/MemoryTrackerSetter.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
-#include <common/ThreadPool.h>
 
 #include <thread>
 
@@ -39,7 +38,7 @@ public:
         if (propagate_memory_tracker)
             CurrentMemoryTracker::submitLocalDeltaMemory();
         auto * memory_tracker = current_memory_tracker;
-        auto wrapped_func = [propagate_memory_tracker, memory_tracker, thread_name = std::move(thread_name), f = std::move(f)](auto &&... args) {
+        auto wrapped_func = [propagate_memory_tracker, memory_tracker, thread_name = std::move(thread_name), f = std::forward<F>(f)](auto &&... args) {
             UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_raw, type_max_threads_of_raw);
             MemoryTrackerSetter setter(propagate_memory_tracker, memory_tracker);
             if (!thread_name.empty())

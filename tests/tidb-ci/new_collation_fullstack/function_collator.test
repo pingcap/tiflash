@@ -23,7 +23,11 @@ mysql> insert into test.t2 values('abc','b');
 func> wait_table test t1
 func> wait_table test t2
 
-mysql> set session tidb_enforce_mpp=1; select * from test.t1 where t1.col_varchar_20_key_signed not in (select col_char_20_key_signed from test.t2 where t1.col_varchar_20_key_signed not in (  t1.col_varbinary_20_key_signed,  t1.col_varbinary_20_undef_signed,col_varchar_20_undef_signed,col_char_20_key_signed));
+mysql> set session tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=on; select * from test.t1 where t1.col_varchar_20_key_signed not in (select col_char_20_key_signed from test.t2 where t1.col_varchar_20_key_signed not in (  t1.col_varbinary_20_key_signed,  t1.col_varbinary_20_undef_signed,col_varchar_20_undef_signed,col_char_20_key_signed));
+# empty
+
+mysql> set session tidb_enforce_mpp=1; set tidb_enable_null_aware_anti_join=off; select * from test.t1 where t1.col_varchar_20_key_signed not in (select col_char_20_key_signed from test.t2 where t1.col_varchar_20_key_signed not in (  t1.col_varbinary_20_key_signed,  t1.col_varbinary_20_undef_signed,col_varchar_20_undef_signed,col_char_20_key_signed));
+# empty
 
 mysql> drop table if exists test.t1;
 mysql> drop table if exists test.t2;

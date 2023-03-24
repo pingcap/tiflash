@@ -65,6 +65,6 @@ String MyDuration::toString() const
     }
     auto fmt_str = fmt::format("{}{}{}", "{}{:02}:{:02}:{:02}.{:.", fsp, "}");
     auto frac_str = fmt::format("{:06}", microsecond);
-    return FmtBuffer().fmtAppend(fmt_str, sign > 0 ? "" : "-", hour, minute, second, frac_str).toString();
+    return FmtBuffer().fmtAppend(fmt::runtime(fmt_str), sign > 0 ? "" : "-", hour, minute, second, frac_str).toString();
 }
 } // namespace DB

@@ -19,6 +19,8 @@
 
 namespace DB
 {
+using FilterPtr = IColumn::Filter *;
+
 /** Implements WHERE, HAVING operations.
   * A stream of blocks and an expression, which adds to the block one ColumnUInt8 column containing the filtering conditions, are passed as input.
   * The expression is evaluated and a stream of blocks is returned, which contains only the filtered rows.
@@ -38,11 +40,18 @@ public:
         const String & req_id);
 
     String getName() const override { return NAME; }
-    Block getTotals() override;
     Block getHeader() const override;
 
 protected:
-    Block readImpl() override;
+    Block readImpl() override
+    {
+        FilterPtr filter_ignored;
+        return readImpl(filter_ignored, false);
+    }
+
+    // Note: When return_filter is true, res_filter will be point to the filter column of the returned block.
+    // If res_filter is nullptr, it means the filter conditions are always true.
+    Block readImpl(FilterPtr & res_filter, bool return_filter) override;
 
 private:
     FilterTransformAction filter_transform_action;

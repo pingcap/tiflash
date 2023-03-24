@@ -111,12 +111,12 @@ void WaitReactor::waitForStop()
     LOG_INFO(logger, "wait reactor is stopped");
 }
 
-void WaitReactor::submit(TaskPtr && task)
+void WaitReactor::submit(TaskPtr && task) noexcept
 {
     waiting_task_list.submit(std::move(task));
 }
 
-void WaitReactor::submit(std::list<TaskPtr> & tasks)
+void WaitReactor::submit(std::list<TaskPtr> & tasks) noexcept
 {
     waiting_task_list.submit(tasks);
 }

@@ -424,12 +424,13 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::InetNtoa, "IPv4NumToString"},
     {tipb::ScalarFuncSig::Inet6Aton, "tiDBIPv6StringToNum"},
     {tipb::ScalarFuncSig::Inet6Ntoa, "tiDBIPv6NumToString"},
-    //{tipb::ScalarFuncSig::IsIPv4, "cast"},
+    {tipb::ScalarFuncSig::IsIPv4, "tiDBIsIPv4"},
     //{tipb::ScalarFuncSig::IsIPv4Compat, "cast"},
     //{tipb::ScalarFuncSig::IsIPv4Mapped, "cast"},
-    //{tipb::ScalarFuncSig::IsIPv6, "cast"},
+    {tipb::ScalarFuncSig::IsIPv6, "tiDBIsIPv6"},
     //{tipb::ScalarFuncSig::UUID, "cast"},
 
+    {tipb::ScalarFuncSig::IlikeSig, "ilike3Args"},
     {tipb::ScalarFuncSig::LikeSig, "like3Args"},
     {tipb::ScalarFuncSig::RegexpSig, "regexp"},
     {tipb::ScalarFuncSig::RegexpUTF8Sig, "regexp"},
@@ -1138,6 +1139,24 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
         throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
     }
     return input_col[column_index].name;
+}
+
+void getColumnNamesFromExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col, std::unordered_set<String> & col_name_set)
+{
+    if (expr.children_size() == 0)
+    {
+        if (isColumnExpr(expr))
+        {
+            col_name_set.insert(getColumnNameForColumnExpr(expr, input_col));
+        }
+    }
+    else
+    {
+        for (const auto & child : expr.children())
+        {
+            getColumnNamesFromExpr(child, input_col, col_name_set);
+        }
+    }
 }
 
 NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)

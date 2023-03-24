@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,28 +14,18 @@
 
 #pragma once
 
-#include <common/types.h>
-
-#include <memory>
+#include <Flash/Statistics/BaseRuntimeStatistics.h>
 
 namespace DB
 {
-struct BlockStreamProfileInfo;
-struct BaseRuntimeStatistics
-{
-    size_t rows = 0;
-    size_t blocks = 0;
-    size_t bytes = 0;
-
-    UInt64 execution_time_ns = 0;
-
-    void append(const BlockStreamProfileInfo &);
-};
-
 class ExecutorStatisticsBase
 {
 public:
     virtual String toJson() const = 0;
+
+    virtual void setChild(const String & child_id) = 0;
+
+    virtual void setChildren(const std::vector<String> & children) = 0;
 
     virtual void collectRuntimeDetail() = 0;
 
@@ -43,8 +33,11 @@ public:
 
     const BaseRuntimeStatistics & getBaseRuntimeStatistics() const { return base; }
 
+    UInt64 processTimeForJoinBuild() const { return process_time_for_join_build; }
+
 protected:
     BaseRuntimeStatistics base;
+    UInt64 process_time_for_join_build = 0;
 };
 
 using ExecutorStatisticsPtr = std::shared_ptr<ExecutorStatisticsBase>;

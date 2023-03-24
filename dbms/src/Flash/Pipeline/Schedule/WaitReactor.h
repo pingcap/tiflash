@@ -34,9 +34,9 @@ public:
 
     void waitForStop();
 
-    void submit(TaskPtr && task);
+    void submit(TaskPtr && task) noexcept;
 
-    void submit(std::list<TaskPtr> & tasks);
+    void submit(std::list<TaskPtr> & tasks) noexcept;
 
 private:
     void loop() noexcept;

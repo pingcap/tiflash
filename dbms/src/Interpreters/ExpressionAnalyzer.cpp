@@ -32,6 +32,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsMiscellaneous.h>
 #include <Functions/IFunction.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -2143,78 +2144,18 @@ void ExpressionAnalyzer::addJoinAction(ExpressionActionsPtr & actions, bool only
                 actions->add(ExpressionAction::ordinaryJoin(subquery_for_set.second.join, columns_added_by_join));
 }
 
-bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_types)
+bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain &, bool)
 {
     assertSelect();
 
     if (!select_query->join())
         return false;
 
-    initChain(chain, source_columns);
-    ExpressionActionsChain::Step & step = chain.steps.back();
-
-    const auto & join_element = static_cast<const ASTTablesInSelectQueryElement &>(*select_query->join());
-    const auto & join_params = static_cast<const ASTTableJoin &>(*join_element.table_join);
-    const auto & table_to_join = static_cast<const ASTTableExpression &>(*join_element.table_expression);
-
-    if (join_params.using_expression_list)
-        getRootActions(join_params.using_expression_list, only_types, false, step.actions);
-
-    /// Two JOINs are not supported with the same subquery, but different USINGs.
-    auto join_hash = join_element.getTreeHash();
-
-    SubqueryForSet & subquery_for_set = subqueries_for_sets[toString(join_hash.first) + "_" + toString(join_hash.second)];
-
-    /// Special case - if table name is specified on the right of JOIN, then the table has the type Join (the previously prepared mapping).
-    /// TODO This syntax does not support specifying a database name.
-    if (table_to_join.database_and_table_name)
-    {
-        auto database_table = getDatabaseAndTableNameFromIdentifier(static_cast<const ASTIdentifier &>(*table_to_join.database_and_table_name));
-        StoragePtr table = context.tryGetTable(database_table.first, database_table.second);
-    }
-
-    if (!subquery_for_set.join)
-    {
-        JoinPtr join = std::make_shared<Join>(
-            join_key_names_left,
-            join_key_names_right,
-            join_params.kind,
-            join_params.strictness,
-            "" /*req_id=*/,
-            false /*enable_fine_grained_shuffle_*/,
-            0 /*fine_grained_shuffle_count_*/);
-
-        Names required_joined_columns(join_key_names_right.begin(), join_key_names_right.end());
-        for (const auto & name_type : columns_added_by_join)
-            required_joined_columns.push_back(name_type.name);
-
-        /** For GLOBAL JOINs (in the case, for example, of the push method for executing GLOBAL subqueries), the following occurs
-          * - in the addExternalStorage function, the JOIN (SELECT ...) subquery is replaced with JOIN _data1,
-          *   in the subquery_for_set object this subquery is exposed as source and the temporary table _data1 as the `table`.
-          * - this function shows the expression JOIN _data1.
-          */
-        if (!subquery_for_set.source)
-        {
-            ASTPtr table;
-            if (table_to_join.database_and_table_name)
-                table = table_to_join.database_and_table_name;
-            else
-                table = table_to_join.subquery;
-
-            auto interpreter = interpretSubquery(table, context, subquery_depth, required_joined_columns);
-            subquery_for_set.source = std::make_shared<LazyBlockInputStream>(
-                interpreter->getSampleBlock(),
-                [interpreter]() mutable { return interpreter->execute().in; });
-        }
-
-        /// TODO You do not need to set this up when JOIN is only needed on remote servers.
-        subquery_for_set.join = join;
-        subquery_for_set.join->init(subquery_for_set.source->getHeader());
-    }
-
-    addJoinAction(step.actions, false);
-
-    return true;
+    /// after https://github.com/pingcap/tiflash/pull/6650, join from TiFlash client
+    /// is no longer supported because the "waiting build finish" step has been moved
+    /// from Join::joinBlock() to HashJoinProbeInputStream::readImpl, so before support
+    /// HashJoinProbeInputStream in `ExpressionAnalyzer::appendJoin`, join is disabled.
+    throw Exception("Join is not supported");
 }
 
 

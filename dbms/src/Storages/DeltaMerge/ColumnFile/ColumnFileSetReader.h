@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
+#include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB
 {
@@ -67,7 +68,7 @@ public:
                      size_t placed_rows);
 };
 
-class ColumnFileSetInputStream : public IBlockInputStream
+class ColumnFileSetInputStream : public SkippableBlockInputStream
 {
 private:
     ColumnFileSetReader reader;
@@ -89,6 +90,34 @@ public:
 
     String getName() const override { return "ColumnFileSet"; }
     Block getHeader() const override { return toEmptyBlock(*(reader.col_defs)); }
+
+    bool getSkippedRows(size_t &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
+
+    size_t skipNextBlock() override
+    {
+        while (cur_column_file_reader || next_file_index < column_files_count)
+        {
+            if (!cur_column_file_reader)
+            {
+                if (column_files[next_file_index]->isDeleteRange())
+                {
+                    ++next_file_index;
+                    continue;
+                }
+                else
+                {
+                    cur_column_file_reader = reader.column_file_readers[next_file_index];
+                    ++next_file_index;
+                }
+            }
+            size_t skipped_rows = cur_column_file_reader->skipNextBlock();
+            if (skipped_rows > 0)
+                return skipped_rows;
+            else
+                cur_column_file_reader = {};
+        }
+        return 0;
+    }
 
     Block read() override
     {
@@ -115,6 +144,8 @@ public:
         }
         return {};
     }
+
+    Block readWithFilter(const IColumn::Filter &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
 };
 } // namespace DM
 } // namespace DB

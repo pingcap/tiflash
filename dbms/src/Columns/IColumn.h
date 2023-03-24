@@ -137,6 +137,12 @@ public:
     /// Could be used to concatenate columns.
     virtual void insertRangeFrom(const IColumn & src, size_t start, size_t length) = 0;
 
+    /// Appends one element from other column with the same type multiple times.
+    virtual void insertManyFrom(const IColumn & src, size_t position, size_t length) = 0;
+
+    /// Appends disjunctive elements from other column with the same type.
+    virtual void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) = 0;
+
     /// Appends data located in specified memory chunk if it is possible (throws an exception if it cannot be implemented).
     /// Is used to optimize some computations (in aggregation, for example).
     /// Parameter length could be ignored if column values have fixed size.
@@ -163,6 +169,9 @@ public:
     /// Is used when there are need to increase column size, but inserting value doesn't make sense.
     /// For example, ColumnNullable(Nested) absolutely ignores values of nested column if it is marked as NULL.
     virtual void insertDefault() = 0;
+
+    /// Appends "default value" multiple times.
+    virtual void insertManyDefaults(size_t length) = 0;
 
     /** Removes last n elements.
       * Is used to support exeption-safety of several operations.
@@ -192,6 +201,8 @@ public:
       * 2. The input parameter `collator` does not work well for complex columns(column tuple),
       *     but it is only used by TiDB , which does not support complex columns, so just ignore
       *     the complex column will be ok.
+      * 3. Even if the restored column will be discarded, deserializeAndInsertFromArena still need to
+      *     insert the data because when spill happens, this column will be used during the merge agg stage.
       */
     virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) = 0;
     const char * deserializeAndInsertFromArena(const char * pos) { return deserializeAndInsertFromArena(pos, nullptr); }
@@ -246,7 +257,7 @@ public:
 
     /** Returns a permutation that sorts elements of this column,
       *  i.e. perm[i]-th element of source column should be i-th element of sorted column.
-      * reverse - reverse ordering (acsending).
+      * reverse - reverse ordering (ascending).
       * limit - if isn't 0, then only first limit elements of the result column could be sorted.
       * nan_direction_hint - see above.
       */
@@ -315,6 +326,9 @@ public:
 
     /// Size of column data in memory (may be approximate) - for profiling. Zero, if could not be determined.
     virtual size_t byteSize() const = 0;
+
+    /// Size of the column if it is spilled, the same as byteSize() except for ColumnAggregateFunction
+    virtual size_t estimateByteSizeForSpill() const { return byteSize(); }
 
     /// Size of column data between [offset, offset+limit) in memory (may be approximate) - for profiling.
     /// This method throws NOT_IMPLEMENTED exception if it is called with unimplemented subclass.

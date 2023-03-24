@@ -19,25 +19,12 @@
 
 namespace DB
 {
-template <bool enable_fine_grained_shuffle>
-bool ReceiverChannelWriter::write(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet)
-{
-    const mpp::Error * error_ptr = getErrorPtr(tracked_packet->packet);
-    const String * resp_ptr = getRespPtr(tracked_packet->packet);
-
-    bool success;
-    if constexpr (enable_fine_grained_shuffle)
-        success = writeFineGrain(source_index, tracked_packet, error_ptr, resp_ptr);
-    else
-        success = writeNonFineGrain(source_index, tracked_packet, error_ptr, resp_ptr);
-
-    if (likely(success))
-        ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
-    LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels->size(), success, enable_fine_grained_shuffle);
-    return success;
-}
-
-bool ReceiverChannelWriter::writeFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr)
+bool ReceiverChannelWriter::writeFineGrain(
+    WriteToChannelFunc write_func,
+    size_t source_index,
+    const TrackedMppDataPacketPtr & tracked_packet,
+    const mpp::Error * error_ptr,
+    const String * resp_ptr)
 {
     bool success = true;
     auto & packet = tracked_packet->packet;
@@ -52,16 +39,17 @@ bool ReceiverChannelWriter::writeFineGrain(size_t source_index, const TrackedMpp
         if (resp_ptr == nullptr && error_ptr == nullptr && chunks[i].empty())
             continue;
 
-        std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
+        auto recv_msg = std::make_shared<ReceivedMessage>(
             source_index,
             req_info,
             tracked_packet,
             error_ptr,
             resp_ptr,
             std::move(chunks[i]));
+        success = (write_func(i, std::move(recv_msg)) == MPMCQueueResult::OK);
 
         success = (*msg_channels)[i]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
-        injectFailPointReceiverPushFail(success, mode);
+        ReceiverChannel::injectFailPointReceiverPushFail(success, mode);
 
         // Only the first ExchangeReceiverInputStream need to handle resp.
         resp_ptr = nullptr;
@@ -69,7 +57,12 @@ bool ReceiverChannelWriter::writeFineGrain(size_t source_index, const TrackedMpp
     return success;
 }
 
-bool ReceiverChannelWriter::writeNonFineGrain(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet, const mpp::Error * error_ptr, const String * resp_ptr)
+bool ReceiverChannelWriter::writeNonFineGrain(
+    WriteToChannelFunc write_func,
+    size_t source_index,
+    const TrackedMppDataPacketPtr & tracked_packet,
+    const mpp::Error * error_ptr,
+    const String * resp_ptr)
 {
     bool success = true;
     auto & packet = tracked_packet->packet;
@@ -80,7 +73,7 @@ bool ReceiverChannelWriter::writeNonFineGrain(size_t source_index, const Tracked
 
     if (!(resp_ptr == nullptr && error_ptr == nullptr && chunks.empty()))
     {
-        std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
+        auto recv_msg = std::make_shared<ReceivedMessage>(
             source_index,
             req_info,
             tracked_packet,
@@ -88,12 +81,19 @@ bool ReceiverChannelWriter::writeNonFineGrain(size_t source_index, const Tracked
             resp_ptr,
             std::move(chunks));
 
-        success = (*msg_channels)[0]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
-        injectFailPointReceiverPushFail(success, mode);
+        success = write_func(0, std::move(recv_msg)) == MPMCQueueResult::OK;
+        ReceiverChannel::injectFailPointReceiverPushFail(success, mode);
     }
     return success;
 }
 
-template bool ReceiverChannelWriter::write<true>(size_t, const TrackedMppDataPacketPtr &);
-template bool ReceiverChannelWriter::write<false>(size_t, const TrackedMppDataPacketPtr &);
+bool ReceiverChannelWriter::isReadyForWrite() const
+{
+    for (const auto & msg_channel : *msg_channels)
+    {
+        if (msg_channel->isFull())
+            return false;
+    }
+    return true;
+}
 } // namespace DB

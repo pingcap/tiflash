@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 
 #include <deque>
@@ -25,13 +24,13 @@ namespace DB
 class FIFOTaskQueue : public TaskQueue
 {
 public:
-    void submit(TaskPtr && task) override;
+    void submit(TaskPtr && task) noexcept override;
 
-    void submit(std::vector<TaskPtr> & tasks) override;
+    void submit(std::vector<TaskPtr> & tasks) noexcept override;
 
-    bool take(TaskPtr & task) override;
+    bool take(TaskPtr & task) noexcept override;
 
-    bool empty() override;
+    bool empty() noexcept override;
 
     void close() override;
 
@@ -40,7 +39,5 @@ private:
     std::condition_variable cv;
     bool is_closed = false;
     std::deque<TaskPtr> task_queue;
-
-    LoggerPtr logger = Logger::get();
 };
 } // namespace DB

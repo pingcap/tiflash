@@ -341,7 +341,7 @@ struct PositionImpl
 };
 
 /// Is the LIKE expression reduced to finding a substring in a string?
-inline bool likePatternIsStrstr(const String & pattern, String & res)
+bool likePatternIsStrstr(const String & pattern, String & res)
 {
     res = "";
 
@@ -1514,7 +1514,6 @@ struct NameMatch
 {
     static constexpr auto name = "match";
 };
-
 struct NameLike3Args
 {
     static constexpr auto name = "like3Args";
@@ -1545,6 +1544,7 @@ using FunctionPositionCaseInsensitiveUTF8
 using FunctionMatch = FunctionsStringSearch<MatchImpl<false>, NameMatch>;
 using FunctionLike = FunctionsStringSearch<MatchImpl<true>, NameLike>;
 using FunctionLike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameLike3Args>;
+using FunctionIlike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameIlike3Args>;
 using FunctionNotLike = FunctionsStringSearch<MatchImpl<true, true>, NameNotLike>;
 using FunctionExtract = FunctionsStringSearchToString<ExtractImpl, NameExtract>;
 using FunctionReplaceOne = FunctionStringReplace<ReplaceStringImpl<true>, NameReplaceOne>;
@@ -1561,6 +1561,7 @@ void registerFunctionsStringSearch(FunctionFactory & factory)
     factory.registerFunction<FunctionMatch>();
     factory.registerFunction<FunctionLike>();
     factory.registerFunction<FunctionLike3Args>();
+    factory.registerFunction<FunctionIlike3Args>();
     factory.registerFunction<FunctionNotLike>();
     factory.registerFunction<FunctionExtract>();
 }

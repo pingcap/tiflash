@@ -37,10 +37,11 @@ And the following operating systems:
 The following packages are required:
 
 - CMake 3.21.0+
-- Clang 13.0.0+
+- Clang 14.0.0+
 - Rust
 - Python 3.0+
 - Ninja-Build or GNU Make
+- Ccache (not necessary but highly recommended to reduce rebuild time)
 
 Detailed steps for each platform are listed below.
 
@@ -55,13 +56,13 @@ curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
 source $HOME/.cargo/env
 
 # Install LLVM, see https://apt.llvm.org for details
-# Clang will be available as /usr/bin/clang++-14
+# Clang will be available as /usr/bin/clang++-15
 wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
-sudo ./llvm.sh 14 all
+sudo ./llvm.sh 15 all
 
 # Install other dependencies
-sudo apt install -y cmake ninja-build zlib1g-dev libcurl4-openssl-dev
+sudo apt install -y cmake ninja-build zlib1g-dev libcurl4-openssl-dev ccache
 ```
 
 **Note for Ubuntu 18.04 and Ubuntu 20.04:**
@@ -97,7 +98,7 @@ curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
 source $HOME/.cargo/env
 
 # Install compilers and dependencies
-sudo pacman -S clang lld libc++ libc++abi compiler-rt openmp lcov cmake ninja curl openssl zlib
+sudo pacman -S clang lld libc++ libc++abi compiler-rt openmp lcov cmake ninja curl openssl zlib llvm ccache
 ```
 
 </details>
@@ -121,7 +122,16 @@ source $HOME/.cargo/env
 xcode-select --install
 
 # Install other dependencies
-brew install ninja cmake openssl@1.1
+brew install ninja cmake openssl@1.1 ccache
+```
+
+If your MacOS is higher or equal to 13.0, it should work out of the box because by default Apple clang is 14.0.0. But if your MacOS is lower than 13.0, you should install llvm clang manually.
+
+```shell
+brew install llvm@15
+
+# check llvm version
+clang --version # should be 15.0.0 or higher
 ```
 
 </details>
@@ -154,6 +164,20 @@ Note: In Linux, usually you need to explicitly specify to use LLVM.
 cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG \
   -DCMAKE_C_COMPILER=/usr/bin/clang-14 \
   -DCMAKE_CXX_COMPILER=/usr/bin/clang++-14
+```
+
+In MacOS, if you install llvm clang, you need to explicitly specify to use llvm clang.
+
+Add the following lines to your shell environment, e.g. `~/.bash_profile`.
+```shell
+export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+export CC="/opt/homebrew/opt/llvm/bin/clang"
+export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+```
+
+Or use `CMAKE_C_COMPILER` and `CMAKE_CXX_COMPILER` to specify the compiler, like this:
+```shell
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++
 ```
 
 After building, you can get TiFlash binary in `dbms/src/Server/tiflash` in the `cmake-build-debug` directory.
@@ -227,6 +251,17 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
   There is another option to append extra paths for CMake to find system libraries:
 
   - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, seperated by `;`
+
+  </details>
+
+- **Build for AMD64 Architecture**:
+
+  <details>
+  <summary>Click to expand instructions</summary>
+
+  To deploy TiFlash under the Linux AMD64 architecture, the CPU must support the `AVX2` instruction set. Ensure that `cat /proc/cpuinfo | grep avx2` has output.
+
+  If need to build TiFlash for AMD64 architecture without such instruction set, please use cmake option `-DNO_AVX_OR_HIGHER=ON`.
 
   </details>
 

@@ -971,7 +971,7 @@ TEST_F(RegionKVStoreTest, KVStore)
     {
         auto region_id = 19;
         auto region = makeRegion(region_id, RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60));
-        auto region_id_str = std::to_string(19);
+        auto region_id_str = std::to_string(region_id);
         auto & mmp = MockSSTReader::getMockSSTData();
         MockSSTReader::getMockSSTData().clear();
         MockSSTReader::Data default_kv_list;
@@ -995,7 +995,7 @@ TEST_F(RegionKVStoreTest, KVStore)
                 8,
                 5,
                 ctx.getTMTContext());
-            ASSERT_EQ(kvs.getRegion(19)->checkIndex(8), true);
+            ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(8), true);
             try
             {
                 kvs.handleApplySnapshot(
@@ -1009,7 +1009,7 @@ TEST_F(RegionKVStoreTest, KVStore)
             }
             catch (Exception & e)
             {
-                ASSERT_EQ(e.message(), "[region 19] already has newer apply-index 8 than 6, should not happen");
+                ASSERT_EQ(e.message(), fmt::format("[region {}] already has newer apply-index 8 than 6, should not happen", region_id));
             }
         }
 
@@ -1091,7 +1091,7 @@ TEST_F(RegionKVStoreTest, KVStore)
 
     {
         auto region_id = 19;
-        auto region_id_str = std::to_string(19);
+        auto region_id_str = std::to_string(region_id);
         auto & mmp = MockSSTReader::getMockSSTData();
         MockSSTReader::getMockSSTData().clear();
         MockSSTReader::Data default_kv_list;
@@ -1119,7 +1119,7 @@ TEST_F(RegionKVStoreTest, KVStore)
                 100,
                 1,
                 ctx.getTMTContext());
-            ASSERT_EQ(kvs.getRegion(19)->checkIndex(100), true);
+            ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(100), true);
         }
     }
 
@@ -1203,7 +1203,7 @@ try
     }
     SCOPE_EXIT({
         storage->drop();
-        ctx.getTMTContext().getStorages().remove(table_id);
+        ctx.getTMTContext().getStorages().remove(NullspaceID, table_id);
     });
     // Initially region_19 range is [0, 10000)
     {

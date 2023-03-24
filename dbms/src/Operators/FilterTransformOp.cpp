@@ -25,7 +25,7 @@ OperatorStatus FilterTransformOp::transformImpl(Block & block)
     }
 
     if (likely(block))
-        return filter_transform_action.transform(block, /*child_filter=*/nullptr)
+        return filter_transform_action.transform(block, /*res_filter=*/filter_ignored, /*return_filter=*/false)
             ? OperatorStatus::HAS_OUTPUT
             : OperatorStatus::NEED_INPUT;
 

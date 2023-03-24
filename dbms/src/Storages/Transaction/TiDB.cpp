@@ -525,10 +525,40 @@ try
 
     auto defs_json = json->getArray("definitions");
     definitions.clear();
+    std::unordered_set<TableID> part_id_set;
     for (size_t i = 0; i < defs_json->size(); i++)
     {
         PartitionDefinition definition(defs_json->getObject(i));
         definitions.emplace_back(definition);
+        part_id_set.emplace(definition.id);
+    }
+
+    auto add_defs_json = json->getArray("adding_definitions");
+    if (!add_defs_json.isNull())
+    {
+        for (size_t i = 0; i < add_defs_json->size(); i++)
+        {
+            PartitionDefinition definition(add_defs_json->getObject(i));
+            if (part_id_set.count(definition.id) == 0)
+            {
+                definitions.emplace_back(definition);
+                part_id_set.emplace(definition.id);
+            }
+        }
+    }
+
+    auto drop_defs_json = json->getArray("dropping_definitions");
+    if (!drop_defs_json.isNull())
+    {
+        for (size_t i = 0; i < drop_defs_json->size(); i++)
+        {
+            PartitionDefinition definition(drop_defs_json->getObject(i));
+            if (part_id_set.count(definition.id) == 0)
+            {
+                definitions.emplace_back(definition);
+                part_id_set.emplace(definition.id);
+            }
+        }
     }
 
     num = json->getValue<UInt64>("num");
@@ -588,6 +618,7 @@ try
 
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);
+    json->set("keyspace_id", keyspace_id);
     Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
     name_json->set("O", name);
     name_json->set("L", name);
@@ -616,6 +647,10 @@ try
     Poco::Dynamic::Var result = parser.parse(json_str);
     auto obj = result.extract<Poco::JSON::Object::Ptr>();
     id = obj->getValue<DatabaseID>("id");
+    if (obj->has("keyspace_id"))
+    {
+        keyspace_id = obj->getValue<KeyspaceID>("keyspace_id");
+    }
     name = obj->get("db_name").extract<Poco::JSON::Object::Ptr>()->get("L").convert<String>();
     charset = obj->get("charset").convert<String>();
     collate = obj->get("collate").convert<String>();
@@ -777,14 +812,23 @@ catch (const Poco::Exception & e)
 ///////////////////////
 ////// TableInfo //////
 ///////////////////////
-TableInfo::TableInfo(Poco::JSON::Object::Ptr json)
+TableInfo::TableInfo(Poco::JSON::Object::Ptr json, KeyspaceID keyspace_id_)
 {
     deserialize(json);
+    if (keyspace_id == NullspaceID)
+    {
+        keyspace_id = keyspace_id_;
+    }
 }
 
-TableInfo::TableInfo(const String & table_info_json)
+TableInfo::TableInfo(const String & table_info_json, KeyspaceID keyspace_id_)
 {
     deserialize(table_info_json);
+    // If the table_info_json has no keyspace id, we use the keyspace_id_ as the default value.
+    if (keyspace_id == NullspaceID)
+    {
+        keyspace_id = keyspace_id_;
+    }
 }
 
 String TableInfo::serialize() const
@@ -794,6 +838,7 @@ try
 
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);
+    json->set("keyspace_id", keyspace_id);
     Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
     name_json->set("O", name);
     name_json->set("L", name);
@@ -864,6 +909,10 @@ void TableInfo::deserialize(Poco::JSON::Object::Ptr obj)
 try
 {
     id = obj->getValue<TableID>("id");
+    if (obj->has("keyspace_id"))
+    {
+        keyspace_id = obj->getValue<KeyspaceID>("keyspace_id");
+    }
     name = obj->getObject("name")->getValue<String>("L");
 
     auto cols_arr = obj->getArray("cols");

@@ -12,155 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/CurrentMetrics.h>
-#include <Common/FailPoint.h>
 #include <Common/Logger.h>
-#include <Common/PODArray.h>
-#include <Common/SyncPoint/Ctl.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
+#include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
-#include <gtest/gtest.h>
-
-#include <boost/algorithm/string.hpp>
 
 using namespace std::chrono_literals;
 using namespace DB::tests;
 
 namespace DB::DM::tests
 {
-template <typename E, typename A>
-::testing::AssertionResult sequenceEqual(const E * expected, const A * actual, size_t size)
-{
-    for (size_t i = 0; i < size; i++)
-    {
-        if (expected[i] != actual[i])
-        {
-            return ::testing::AssertionFailure()
-                << fmt::format("Value at index {} mismatch: expected {} vs actual {}. expected => {} actual => {}",
-                               i,
-                               expected[i],
-                               actual[i],
-                               std::vector<E>(expected, expected + size),
-                               std::vector<A>(actual, actual + size));
-        }
-    }
-    return ::testing::AssertionSuccess();
-}
-
-template <typename T>
-std::vector<T> genSequence(T begin, T end)
-{
-    auto size = end - begin;
-    std::vector<T> v(size);
-    std::iota(v.begin(), v.end(), begin);
-    return v;
-}
-
-template <typename T>
-std::vector<T> genSequence(const std::vector<std::pair<T, T>> & ranges)
-{
-    std::vector<T> res;
-    for (auto [begin, end] : ranges)
-    {
-        auto v = genSequence(begin, end);
-        res.insert(res.end(), v.begin(), v.end());
-    }
-    return res;
-}
-
-// "[a, b)" => std::pair{a, b}
-template <typename T>
-std::pair<T, T> parseRange(String & str_range)
-{
-    boost::algorithm::trim(str_range);
-    RUNTIME_CHECK(str_range.front() == '[' && str_range.back() == ')', str_range);
-    std::vector<String> values;
-    str_range = str_range.substr(1, str_range.size() - 2);
-    boost::split(values, str_range, boost::is_any_of(","));
-    RUNTIME_CHECK(values.size() == 2, str_range);
-    return {static_cast<T>(std::stol(values[0])), static_cast<T>(std::stol(values[1]))};
-}
-
-// "[a, b)|[c, d)" => [std::pair{a, b}, std::pair{c, d}]
-template <typename T>
-std::vector<std::pair<T, T>> parseRanges(std::string_view str_ranges)
-{
-    std::vector<String> ranges;
-    boost::split(ranges, str_ranges, boost::is_any_of("|"));
-    RUNTIME_CHECK(!ranges.empty(), str_ranges);
-    std::vector<std::pair<T, T>> vector_ranges;
-    for (auto & r : ranges)
-    {
-        vector_ranges.emplace_back(parseRange<T>(r));
-    }
-    return vector_ranges;
-}
-
-template <typename T>
-std::vector<T> genSequence(std::string_view str_ranges)
-{
-    auto vector_ranges = parseRanges<T>(str_ranges);
-    return genSequence(vector_ranges);
-}
-
-struct SegDataUnit
-{
-    String type;
-    std::pair<Int64, Int64> range;
-};
-
-// "type:[a, b)" => SegDataUnit
-SegDataUnit parseSegDataUnit(String & s)
-{
-    boost::algorithm::trim(s);
-    std::vector<String> values;
-    boost::split(values, s, boost::is_any_of(":"));
-    RUNTIME_CHECK(values.size() == 2, s);
-    return SegDataUnit{boost::algorithm::trim_copy(values[0]), parseRange<Int64>(values[1])};
-}
-
-void check(const std::vector<SegDataUnit> & seg_data_units)
-{
-    RUNTIME_CHECK(!seg_data_units.empty());
-    std::vector<size_t> stable_units;
-    std::vector<size_t> mem_units;
-    for (size_t i = 0; i < seg_data_units.size(); i++)
-    {
-        const auto & type = seg_data_units[i].type;
-        if (type == "s")
-        {
-            stable_units.emplace_back(i);
-        }
-        else if (type == "d_mem" || type == "d_mem_del")
-        {
-            mem_units.emplace_back(i);
-        }
-        auto [begin, end] = seg_data_units[i].range;
-        RUNTIME_CHECK(begin < end, begin, end);
-    }
-    RUNTIME_CHECK(stable_units.empty() || (stable_units.size() == 1 && stable_units[0] == 0));
-    std::vector<size_t> expected_mem_units(mem_units.size());
-    std::iota(expected_mem_units.begin(), expected_mem_units.end(), seg_data_units.size() - mem_units.size());
-    RUNTIME_CHECK(mem_units == expected_mem_units, expected_mem_units, mem_units);
-}
-
-std::vector<SegDataUnit> parseSegData(std::string_view seg_data)
-{
-    std::vector<String> str_seg_data_units;
-    boost::split(str_seg_data_units, seg_data, boost::is_any_of("|"));
-    RUNTIME_CHECK(!str_seg_data_units.empty(), seg_data);
-    std::vector<SegDataUnit> seg_data_units;
-    for (auto & s : str_seg_data_units)
-    {
-        seg_data_units.emplace_back(parseSegDataUnit(s));
-    }
-    check(seg_data_units);
-    return seg_data_units;
-}
 
 class SegmentBitmapFilterTest : public SegmentTestBasic
 {
@@ -287,7 +152,7 @@ protected:
     }
 };
 
-TEST_F(SegmentBitmapFilterTest, InMemory_1)
+TEST_F(SegmentBitmapFilterTest, InMemory1)
 try
 {
     runTestCase(TestCase(
@@ -298,7 +163,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory_2)
+TEST_F(SegmentBitmapFilterTest, InMemory2)
 try
 {
     runTestCase(TestCase{
@@ -309,7 +174,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory_3)
+TEST_F(SegmentBitmapFilterTest, InMemory3)
 try
 {
     runTestCase(TestCase{
@@ -320,7 +185,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory_4)
+TEST_F(SegmentBitmapFilterTest, InMemory4)
 try
 {
     runTestCase(TestCase{
@@ -331,7 +196,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory_5)
+TEST_F(SegmentBitmapFilterTest, InMemory5)
 try
 {
     runTestCase(TestCase{
@@ -342,7 +207,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory_6)
+TEST_F(SegmentBitmapFilterTest, InMemory6)
 try
 {
     runTestCase(TestCase{
@@ -353,7 +218,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory_7)
+TEST_F(SegmentBitmapFilterTest, InMemory7)
 try
 {
     runTestCase(TestCase{
@@ -364,7 +229,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, Tiny_1)
+TEST_F(SegmentBitmapFilterTest, Tiny1)
 try
 {
     runTestCase(TestCase{
@@ -375,7 +240,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, TinyDel_1)
+TEST_F(SegmentBitmapFilterTest, TinyDel1)
 try
 {
     runTestCase(TestCase{
@@ -408,7 +273,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, Stable_1)
+TEST_F(SegmentBitmapFilterTest, Stable1)
 try
 {
     runTestCase(TestCase{
@@ -419,7 +284,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, Stable_2)
+TEST_F(SegmentBitmapFilterTest, Stable2)
 try
 {
     runTestCase(TestCase{
@@ -431,7 +296,7 @@ try
 CATCH
 
 
-TEST_F(SegmentBitmapFilterTest, Stable_3)
+TEST_F(SegmentBitmapFilterTest, Stable3)
 try
 {
     runTestCase(TestCase{
@@ -509,22 +374,22 @@ CATCH
 
 TEST_F(SegmentBitmapFilterTest, CleanStable)
 {
-    writeSegment("d_mem:[0, 10000)|d_mem:[20000, 25000)");
+    writeSegment("d_mem:[0, 20000)|d_mem:[30000, 35000)");
     mergeSegmentDelta(SEG_ID, true);
     auto [seg, snap] = getSegmentForRead(SEG_ID);
     ASSERT_EQ(seg->getDelta()->getRows(), 0);
     ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
-    ASSERT_EQ(seg->getStable()->getRows(), 15000);
+    ASSERT_EQ(seg->getStable()->getRows(), 25000);
     auto bitmap_filter = seg->buildBitmapFilterStableOnly(
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
-        EMPTY_FILTER,
+        EMPTY_RS_OPERATOR,
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_NE(bitmap_filter, nullptr);
     std::string expect_result;
-    expect_result.append(std::string(15000, '1'));
+    expect_result.append(std::string(25000, '1'));
     ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
 }
 
@@ -541,7 +406,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
-            EMPTY_FILTER,
+            EMPTY_RS_OPERATOR,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         ASSERT_NE(bitmap_filter, nullptr);
@@ -561,7 +426,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
-            EMPTY_FILTER,
+            EMPTY_RS_OPERATOR,
             1,
             DEFAULT_BLOCK_SIZE);
         ASSERT_NE(bitmap_filter, nullptr);
@@ -589,7 +454,7 @@ TEST_F(SegmentBitmapFilterTest, StableRange)
         *dm_context,
         snap,
         {buildRowKeyRange(10000, 50000)}, // [10000, 50000)
-        EMPTY_FILTER,
+        EMPTY_RS_OPERATOR,
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_NE(bitmap_filter, nullptr);
@@ -640,4 +505,5 @@ try
     ASSERT_TRUE(sequenceEqual(expected_right_row_id.data(), right_r->data(), right_r->size()));
 }
 CATCH
+
 } // namespace DB::DM::tests

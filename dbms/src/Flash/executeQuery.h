@@ -21,8 +21,5 @@ namespace DB
 {
 class Context;
 
-// Use BlockInputStream-based pull model directly.
-BlockIO executeAsBlockIO(Context & context, bool internal = false);
-
 QueryExecutorPtr queryExecute(Context & context, bool internal = false);
 } // namespace DB

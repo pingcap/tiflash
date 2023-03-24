@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 #include <Flash/Mpp/AsyncRequestHandler.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
-#include <Interpreters/Context.h>
 
 #include <future>
 #include <memory>
@@ -85,6 +84,19 @@ enum class ExchangeReceiverState
     CLOSED,
 };
 
+enum class ReceiveStatus
+{
+    empty,
+    ok,
+    eof,
+};
+
+struct ReceiveResult
+{
+    ReceiveStatus recv_status;
+    std::shared_ptr<ReceivedMessage> recv_msg;
+};
+
 template <typename RPCContext>
 class ExchangeReceiverBase
 {
@@ -101,12 +113,21 @@ public:
         const String & executor_id,
         uint64_t fine_grained_shuffle_stream_count,
         Int32 local_tunnel_version_,
-        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
+        const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
 
     ~ExchangeReceiverBase();
 
     void cancel();
     void close();
+
+    ReceiveResult receive(size_t stream_id);
+    ReceiveResult nonBlockingReceive(size_t stream_id);
+
+    ExchangeReceiverResult toExchangeReceiveResult(
+        ReceiveResult & recv_result,
+        std::queue<Block> & block_queue,
+        const Block & header,
+        std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     ExchangeReceiverResult nextResult(
         std::queue<Block> & block_queue,
@@ -160,6 +181,10 @@ private:
         const Block & header,
         const std::shared_ptr<ReceivedMessage> & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
+
+    ReceiveResult receive(
+        size_t stream_id,
+        std::function<MPMCQueueResult(size_t, std::shared_ptr<ReceivedMessage> &)> recv_func);
 
 private:
     void prepareMsgChannels();
@@ -220,7 +245,7 @@ private:
     std::atomic<Int64> data_size_in_queue;
 
     // For tiflash_compute node, need to send MPPTask to tiflash_storage node.
-    std::vector<StorageDisaggregated::RequestAndRegionIDs> disaggregated_dispatch_reqs;
+    std::vector<RequestAndRegionIDs> disaggregated_dispatch_reqs;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

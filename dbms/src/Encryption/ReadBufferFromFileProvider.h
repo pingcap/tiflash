@@ -14,24 +14,21 @@
 
 #pragma once
 
-#include <Common/CurrentMetrics.h>
-#include <Encryption/FileProvider.h>
-#include <IO/ReadBuffer.h>
-#include <IO/ReadBufferFromFileBase.h>
-#include <IO/ReadBufferFromFileDescriptor.h>
-
-namespace CurrentMetrics
-{
-extern const Metric OpenFileForRead;
-}
+#include <Encryption/EncryptionPath.h>
+#include <Encryption/FileProvider_fwd.h>
+#include <IO/ReadBufferFromRandomAccessFile.h>
 
 namespace DB
 {
-class ReadBufferFromFileProvider : public ReadBufferFromFileDescriptor
-{
-protected:
-    bool nextImpl() override;
 
+class ReadLimiter;
+using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+
+/**
+ * Note: This class maybe removed in the future, use ReadBufferFromRandomAccessFile instead if possible
+ */
+class ReadBufferFromFileProvider : public ReadBufferFromRandomAccessFile
+{
 public:
     ReadBufferFromFileProvider(
         const FileProviderPtr & file_provider_,
@@ -42,21 +39,5 @@ public:
         int flags = -1,
         char * existing_memory = nullptr,
         size_t alignment = 0);
-
-    ReadBufferFromFileProvider(ReadBufferFromFileProvider &&) = default;
-
-    ~ReadBufferFromFileProvider() override;
-
-    void close();
-
-    std::string getFileName() const override { return file->getFileName(); }
-
-    int getFD() const override { return file->getFd(); }
-
-private:
-    off_t doSeekInFile(off_t offset, int whence) override;
-
-private:
-    RandomAccessFilePtr file;
 };
 } // namespace DB

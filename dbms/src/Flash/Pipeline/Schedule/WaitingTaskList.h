@@ -26,13 +26,13 @@ class WaitingTaskList
 public:
     /// return false if the waiting task list had been closed.
     // this function will wait until `!waiting_tasks.empty()`
-    bool take(std::list<TaskPtr> & local_waiting_tasks);
+    bool take(std::list<TaskPtr> & local_waiting_tasks) noexcept;
     // this function will return immediately.
-    bool tryTake(std::list<TaskPtr> & local_waiting_tasks);
+    bool tryTake(std::list<TaskPtr> & local_waiting_tasks) noexcept;
 
-    void submit(TaskPtr && task);
+    void submit(TaskPtr && task) noexcept;
 
-    void submit(std::list<TaskPtr> & tasks);
+    void submit(std::list<TaskPtr> & tasks) noexcept;
 
     void close();
 

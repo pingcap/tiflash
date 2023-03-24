@@ -14,9 +14,11 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Flash/Executor/ExecutionResult.h>
 
 #include <atomic>
+#include <exception>
 #include <mutex>
 
 namespace DB
@@ -24,20 +26,29 @@ namespace DB
 class PipelineExecutorStatus : private boost::noncopyable
 {
 public:
-    static constexpr auto empty_err_msg = "error without err msg";
     static constexpr auto timeout_err_msg = "error with timeout";
 
-    ExecutionResult toExecutionResult();
+    PipelineExecutorStatus()
+        : log(Logger::get())
+    {}
 
-    String getErrMsg();
+    explicit PipelineExecutorStatus(const String & req_id)
+        : log(Logger::get(req_id))
+    {}
 
-    void onEventSchedule();
+    ExecutionResult toExecutionResult() noexcept;
 
-    void onEventFinish();
+    std::exception_ptr getExceptionPtr() noexcept;
+    String getExceptionMsg() noexcept;
 
-    void onErrorOccurred(String && err_msg_);
+    void onEventSchedule() noexcept;
 
-    void wait();
+    void onEventFinish() noexcept;
+
+    void onErrorOccurred(const String & err_msg) noexcept;
+    void onErrorOccurred(const std::exception_ptr & exception_ptr_) noexcept;
+
+    void wait() noexcept;
 
     template <typename Duration>
     void waitFor(const Duration & timeout_duration)
@@ -49,22 +60,29 @@ public:
         }
         if (is_timeout)
         {
+            LOG_WARNING(log, "wait timeout");
             onErrorOccurred(timeout_err_msg);
             throw Exception(timeout_err_msg);
         }
+        LOG_DEBUG(log, "query finished and wait done");
     }
 
-    void cancel();
+    void cancel() noexcept;
 
-    bool isCancelled()
+    bool isCancelled() noexcept
     {
         return is_cancelled.load(std::memory_order_acquire);
     }
 
 private:
+    bool setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept;
+
+private:
+    LoggerPtr log;
+
     std::mutex mu;
     std::condition_variable cv;
-    String err_msg;
+    std::exception_ptr exception_ptr;
     UInt32 active_event_count{0};
 
     std::atomic_bool is_cancelled{false};

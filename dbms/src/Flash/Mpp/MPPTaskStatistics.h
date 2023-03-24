@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,8 +44,7 @@ public:
 
     void initializeExecutorDAG(DAGContext * dag_context);
 
-    /// return exchange sender runtime statistics
-    const BaseRuntimeStatistics & collectRuntimeStatistics();
+    void collectRuntimeStatistics();
 
     void logTracingJson();
 
@@ -53,10 +52,16 @@ public:
 
     void setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp);
 
+    tipb::SelectResponse genExecutionSummaryResponse();
+
 private:
     void recordInputBytes(DAGContext & dag_context);
 
-    const LoggerPtr logger;
+    const LoggerPtr log;
+
+    DAGContext * dag_context = nullptr;
+
+    ExecutorStatisticsCollector executor_statistics_collector;
 
     // common
     const MPPTaskId id;
@@ -78,7 +83,6 @@ private:
     // executor dag
     bool is_root = false;
     String sender_executor_id;
-    ExecutorStatisticsCollector executor_statistics_collector;
 
     // resource
     Int64 working_time = 0;

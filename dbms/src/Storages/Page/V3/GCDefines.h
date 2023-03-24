@@ -15,8 +15,10 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
+#include <Poco/Message.h>
 #include <Storages/Page/ExternalPageCallbacks.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/CheckpointFile/CPDataFileStat.h>
 #include <Storages/Page/V3/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
@@ -34,6 +36,10 @@ struct GCTimeStatistics
 {
     GCStageType stage = GCStageType::Unknown;
     bool executeNextImmediately() const { return stage == GCStageType::FullGC; };
+
+    bool compact_wal_happen = false;
+
+    Poco::Message::Priority getLoggingLevel() const;
 
     UInt64 total_cost_ms = 0;
 
@@ -85,6 +91,7 @@ public:
         typename Trait::PageDirectory & page_directory,
         const WriteLimiterPtr & write_limiter,
         const ReadLimiterPtr & read_limiter,
+        RemoteFileValidSizes * remote_valid_sizes,
         LoggerPtr log);
 
 private:
@@ -94,7 +101,8 @@ private:
         typename Trait::BlobStore & blob_store,
         typename Trait::PageDirectory & page_directory,
         const WriteLimiterPtr & write_limiter,
-        const ReadLimiterPtr & read_limiter);
+        const ReadLimiterPtr & read_limiter,
+        RemoteFileValidSizes * remote_valid_sizes);
 
 private:
     std::atomic<bool> gc_is_running = false;
@@ -110,7 +118,7 @@ namespace u128
 struct ExternalPageCallbacksManagerTrait
 {
     using PageId = PageIdV3Internal;
-    using Prefix = NamespaceId;
+    using Prefix = NamespaceID;
     using ExternalPageCallbacks = DB::ExternalPageCallbacks;
     using PageDirectory = PageDirectoryType;
     using BlobStore = BlobStoreType;

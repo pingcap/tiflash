@@ -69,7 +69,11 @@ public:
 
     String appendWhere(
         ExpressionActionsChain & chain,
-        const std::vector<const tipb::Expr *> & conditions);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
+
+    GroupingSets buildExpandGroupingColumns(const tipb::Expand & expand, const ExpressionActionsPtr & actions);
+
+    ExpressionActionsPtr appendExpand(const tipb::Expand & expand, ExpressionActionsChain & chain);
 
     NamesAndTypes buildWindowOrderColumns(const tipb::Sort & window_sort) const;
 
@@ -153,10 +157,17 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const JoinKeyTypes & join_key_types,
         Names & key_names,
+        Names & original_key_names,
         bool left,
         bool is_right_out_join,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
+
+    String appendNullAwareSemiJoinEqColumn(
+        ExpressionActionsChain & chain,
+        const Names & probe_key_names,
+        const Names & build_key_names,
+        const TiDB::TiDBCollators & collators);
 
     void appendSourceColumnsToRequireOutput(ExpressionActionsChain::Step & step) const;
 
@@ -171,7 +182,7 @@ public:
 
     String buildFilterColumn(
         const ExpressionActionsPtr & actions,
-        const std::vector<const tipb::Expr *> & conditions);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions);
 
     void buildAggFuncs(
         const tipb::Aggregation & aggregation,
@@ -192,6 +203,11 @@ public:
     void appendCastAfterAgg(
         const ExpressionActionsPtr & actions,
         const tipb::Aggregation & agg);
+
+    std::pair<bool, std::vector<String>> buildExtraCastsAfterTS(
+        const ExpressionActionsPtr & actions,
+        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+        const ColumnInfos & table_scan_columns);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -274,12 +290,10 @@ private:
         const String & expr_name,
         bool force_uint8);
 
-    bool buildExtraCastsAfterTS(
-        const ExpressionActionsPtr & actions,
-        const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const ColumnInfos & table_scan_columns);
-
-    std::pair<bool, Names> buildJoinKey(
+    /// @ret: if some new expression actions are added.
+    /// @key_names: column names of keys.
+    /// @original_key_names: original column names of keys.(only used for null-aware semi join)
+    std::tuple<bool, Names, Names> buildJoinKey(
         const ExpressionActionsPtr & actions,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const JoinKeyTypes & join_key_types,

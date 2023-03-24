@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
@@ -67,6 +68,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     assert(!schema.empty());
     assert(!mock_streams.empty());
 
+    // Ignore handling GeneratedColumnPlaceholderBlockInputStream for now, because we don't support generated column in test framework.
     return {std::move(schema), std::move(mock_streams)};
 }
 } // namespace
@@ -78,7 +80,7 @@ PhysicalMockTableScan::PhysicalMockTableScan(
     const Block & sample_block_,
     const BlockInputStreams & mock_streams_,
     Int64 table_id_)
-    : PhysicalLeaf(executor_id_, PlanType::MockTableScan, schema_, req_id)
+    : PhysicalLeaf(executor_id_, PlanType::MockTableScan, schema_, FineGrainedShuffle{}, req_id)
     , sample_block(sample_block_)
     , mock_streams(mock_streams_)
     , table_id(table_id_)
@@ -109,13 +111,29 @@ void PhysicalMockTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Co
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/)
+void PhysicalMockTableScan::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t concurrency)
 {
-    group_builder.init(mock_streams.size());
-    size_t i = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(group_builder.exec_status, mock_streams[i++]));
-    });
+    if (context.mockStorage()->useDeltaMerge())
+    {
+        auto source_ops = context.mockStorage()->getSourceOpsFromDeltaMerge(exec_status, context, table_id, concurrency);
+        group_builder.init(source_ops.size());
+        size_t i = 0;
+        group_builder.transform([&](auto & builder) {
+            builder.setSourceOp(std::move(source_ops[i++]));
+        });
+    }
+    else
+    {
+        group_builder.init(mock_streams.size());
+        size_t i = 0;
+        group_builder.transform([&](auto & builder) {
+            builder.setSourceOp(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), mock_streams[i++]));
+        });
+    }
 }
 
 void PhysicalMockTableScan::finalize(const Names & parent_require)

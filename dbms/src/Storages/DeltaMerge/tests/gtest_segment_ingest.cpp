@@ -67,9 +67,7 @@ try
     ASSERT_EQ(20, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
     ASSERT_EQ(22, getSegmentRowNum(*right_seg));
 
-    ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr);
-    storage_pool->data_storage_v3->gc(/* not_skip */ true);
-    auto stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
+    auto stable_page_ids = getAliveExternalPageIdsAfterGC(NAMESPACE_ID);
     ASSERT_EQ(1, stable_page_ids.size());
 
     // Current segments: [-∞, 30), [30, +∞)
@@ -79,8 +77,7 @@ try
     ASSERT_EQ(15, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
     ASSERT_EQ(22, getSegmentRowNum(*right_seg));
 
-    storage_pool->data_storage_v3->gc(/* not_skip */ true);
-    stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
+    stable_page_ids = getAliveExternalPageIdsAfterGC(NAMESPACE_ID);
     ASSERT_EQ(2, stable_page_ids.size());
 }
 CATCH
@@ -148,9 +145,7 @@ try
     auto right_seg = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 200, Segment::SplitMode::Logical);
     ASSERT_EQ(0, getSegmentRowNum(*right_seg));
 
-    ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr);
-    storage_pool->data_storage_v3->gc(/* not_skip */ true);
-    auto stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
+    auto stable_page_ids = getAliveExternalPageIdsAfterGC(NAMESPACE_ID);
     ASSERT_EQ(1, stable_page_ids.size());
 
     ASSERT_PROFILE_EVENT(ProfileEvents::DMSegmentIngestDataByReplace, +1, {
@@ -160,8 +155,7 @@ try
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
     // After ingestion, we should have 2 stables.
-    storage_pool->data_storage_v3->gc(/* not_skip */ true);
-    stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
+    stable_page_ids = getAliveExternalPageIdsAfterGC(NAMESPACE_ID);
     ASSERT_EQ(2, stable_page_ids.size());
 }
 CATCH

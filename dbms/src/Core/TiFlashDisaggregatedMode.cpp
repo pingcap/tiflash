@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Core/TiFlashDisaggregatedMode.h>
+#include <Poco/Util/LayeredConfiguration.h>
 
 namespace DB
 {
@@ -24,9 +25,11 @@ DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & 
     if (config.has(config_key))
     {
         std::string mode_str = config.getString(config_key);
-        RUNTIME_ASSERT(mode_str == DISAGGREGATED_MODE_STORAGE || mode_str == DISAGGREGATED_MODE_COMPUTE,
+        RUNTIME_ASSERT(mode_str == DISAGGREGATED_MODE_WRITE
+                           || mode_str == DISAGGREGATED_MODE_STORAGE // backward compatibility
+                           || mode_str == DISAGGREGATED_MODE_COMPUTE,
                        "Expect disaggregated_mode is {} or {}, got: {}",
-                       DISAGGREGATED_MODE_STORAGE,
+                       DISAGGREGATED_MODE_WRITE,
                        DISAGGREGATED_MODE_COMPUTE,
                        mode_str);
         if (mode_str == DISAGGREGATED_MODE_COMPUTE)
@@ -41,14 +44,26 @@ DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & 
     return mode;
 }
 
-// todo: remove this after AutoScaler is stable.
 bool useAutoScaler(const Poco::Util::LayeredConfiguration & config)
 {
     static const std::string autoscaler_config_key = "flash.use_autoscaler";
-    bool use_autoscaler = true;
+    bool use_autoscaler = false;
     if (config.has(autoscaler_config_key))
         use_autoscaler = config.getBool(autoscaler_config_key);
     return use_autoscaler;
+}
+
+// Use auto scaler without S3 disagg // TODO: remove it after S3 disagg is stable
+bool useAutoScalerWithoutS3(const Poco::Util::LayeredConfiguration & config)
+{
+    // Keep the behavior running disagg without S3 when auto scaler is enable.
+    // This is a special config that is only effecive when `flash.use_autoscaler`
+    // is true. Will be removed soon.
+    static const std::string autoscaler_config_key = "flash.use_autoscaler_without_s3";
+    bool use_autoscaler_without_s3 = false;
+    if (config.has(autoscaler_config_key))
+        use_autoscaler_without_s3 = config.getBool(autoscaler_config_key);
+    return use_autoscaler_without_s3;
 }
 
 std::string getProxyLabelByDisaggregatedMode(DisaggregatedMode mode)

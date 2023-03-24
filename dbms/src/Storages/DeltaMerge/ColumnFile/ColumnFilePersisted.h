@@ -14,12 +14,16 @@
 
 #pragma once
 
+#include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 
 namespace DB
 {
+class UniversalPageStorage;
+using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 namespace DM
 {
+struct WriteBatches;
 class ColumnFilePersisted;
 using ColumnFilePersistedPtr = std::shared_ptr<ColumnFilePersisted>;
 using ColumnFilePersisteds = std::vector<ColumnFilePersistedPtr>;
@@ -38,13 +42,20 @@ public:
 void serializeSchema(WriteBuffer & buf, const Block & schema);
 BlockPtr deserializeSchema(ReadBuffer & buf);
 
-void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level);
-void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows);
+void serializeColumn(WriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, CompressionMethod compression_method, Int64 compression_level);
+void deserializeColumn(IColumn & column, const DataTypePtr & type, std::string_view data_buf, size_t rows);
 
 /// Serialize those column files' metadata into buf.
 void serializeSavedColumnFiles(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
 /// Recreate column file instances from buf.
 ColumnFilePersisteds deserializeSavedColumnFiles(const DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
+
+ColumnFilePersisteds createColumnFilesFromCheckpoint( //
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf,
+    UniversalPageStoragePtr temp_ps,
+    WriteBatches & wbs);
 
 void serializeSavedColumnFilesInV2Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
 ColumnFilePersisteds deserializeSavedColumnFilesInV2Format(const DMContext & context, ReadBuffer & buf, UInt64 version);
@@ -52,5 +63,11 @@ ColumnFilePersisteds deserializeSavedColumnFilesInV2Format(const DMContext & con
 void serializeSavedColumnFilesInV3Format(WriteBuffer & buf, const ColumnFilePersisteds & column_files);
 ColumnFilePersisteds deserializeSavedColumnFilesInV3Format(const DMContext & context, const RowKeyRange & segment_range, ReadBuffer & buf);
 
+ColumnFilePersisteds createColumnFilesInV3FormatFromCheckpoint( //
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    ReadBuffer & buf,
+    UniversalPageStoragePtr temp_ps,
+    WriteBatches & wbs);
 } // namespace DM
 } // namespace DB

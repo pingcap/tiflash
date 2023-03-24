@@ -40,11 +40,22 @@ using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
 
 class PipelineExecutorStatus;
 
+struct PipelineEvents
+{
+    Events events;
+    bool is_fine_grained;
+
+    PipelineEvents(Events && events_, bool is_fine_grained_);
+
+    void mapInputs(const PipelineEvents & inputs);
+};
+
 class Pipeline : public std::enable_shared_from_this<Pipeline>
 {
 public:
-    explicit Pipeline(UInt32 id_)
+    Pipeline(UInt32 id_, const String & req_id)
         : id(id_)
+        , log(Logger::get(req_id, id_))
     {}
 
     void addPlanNode(const PhysicalPlanNodePtr & plan_node);
@@ -53,8 +64,8 @@ public:
 
     void toTreeString(FmtBuffer & buffer, size_t level = 0) const;
 
-    // only used for test to get the result blocks.
-    void addGetResultSink(ResultHandler result_handler);
+    // used for getting the result blocks.
+    void addGetResultSink(ResultHandler && result_handler);
 
     PipelineExecGroup buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
 
@@ -62,13 +73,19 @@ public:
 
     static bool isSupported(const tipb::DAGRequest & dag_request);
 
+    Block getSampleBlock() const;
+
+    bool isFineGrainedMode() const;
+
 private:
     void toSelfString(FmtBuffer & buffer, size_t level) const;
 
-    EventPtr toEvent(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events);
+    PipelineEvents toSelfEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency);
+    PipelineEvents doToEvents(PipelineExecutorStatus & status, Context & context, size_t concurrency, Events & all_events);
 
 private:
     const UInt32 id;
+    LoggerPtr log;
 
     // data flow: plan_nodes.begin() --> plan_nodes.end()
     std::deque<PhysicalPlanNodePtr> plan_nodes;

@@ -94,7 +94,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::MergingAggregatedMemoryEfficie
     /** Create threads that will request and read data from remote servers.
       */
     if (reading_threads > 1)
-        reading_pool = std::make_unique<ThreadPool>(reading_threads);
+        reading_pool = std::make_unique<legacy::ThreadPool>(reading_threads);
 
     /** Create threads. Each of them will pull next set of blocks to merge in a loop,
       *  then merge them and place result in a queue (in fact, ordered map), from where we will read ready result blocks.
@@ -223,7 +223,7 @@ Block MergingAggregatedMemoryEfficientBlockInputStream::readImpl()
         BlocksToMerge blocks_to_merge = getNextBlocksToMerge();
         if (blocks_to_merge && !blocks_to_merge->empty())
         {
-            current_result = aggregator.mergeBlocks(*blocks_to_merge, final);
+            current_result = aggregator.vstackBlocks(*blocks_to_merge, final);
             auto block = popBlocksListFront(current_result);
             assert(block);
             return block;
@@ -380,7 +380,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
             }
 
             /// At this point, several merge threads may work in parallel.
-            BlocksList res = aggregator.mergeBlocks(*blocks_to_merge, final);
+            BlocksList res = aggregator.vstackBlocks(*blocks_to_merge, final);
             assert(!res.empty());
 
             {

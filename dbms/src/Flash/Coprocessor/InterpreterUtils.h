@@ -25,6 +25,9 @@ namespace DB
 {
 class Context;
 
+class PipelineExecutorStatus;
+struct PipelineExecGroupBuilder;
+
 void restoreConcurrency(
     DAGPipeline & pipeline,
     size_t concurrency,
@@ -53,6 +56,12 @@ void executeExpression(
     const LoggerPtr & log,
     const String & extra_info = "");
 
+void executeExpression(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const ExpressionActionsPtr & expr_actions,
+    const LoggerPtr & log);
+
 void orderStreams(
     DAGPipeline & pipeline,
     size_t max_streams,
@@ -69,7 +78,7 @@ void executeCreatingSets(
     const LoggerPtr & log);
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-    const FilterConditions & filter_conditions,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
     DAGExpressionAnalyzer & analyzer);
 
 void executePushedDownFilter(
@@ -78,4 +87,11 @@ void executePushedDownFilter(
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log,
     DAGPipeline & pipeline);
+
+void executeGeneratedColumnPlaceholder(
+    size_t remote_read_streams_start_index,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
+    LoggerPtr log,
+    DAGPipeline & pipeline);
+
 } // namespace DB

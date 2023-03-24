@@ -23,7 +23,7 @@ namespace DB
 // The executor for push model operator.
 // A pipeline will generate multiple pipeline_execs.
 // data flow: source --> transform --> .. --> transform --> sink
-class PipelineExec
+class PipelineExec : private boost::noncopyable
 {
 public:
     PipelineExec(
@@ -34,6 +34,9 @@ public:
         , transform_ops(std::move(transform_ops_))
         , sink_op(std::move(sink_op_))
     {}
+
+    void executePrefix();
+    void executeSuffix();
 
     OperatorStatus execute();
 

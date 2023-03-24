@@ -18,8 +18,6 @@
 
 namespace DB
 {
-class PipelineExecutorStatus;
-
 struct PipelineExecBuilder
 {
     SourceOpPtr source_op;
@@ -40,12 +38,6 @@ struct PipelineExecGroupBuilder
     // A Group generates a set of pipeline_execs running in parallel.
     using BuilderGroup = std::vector<PipelineExecBuilder>;
     BuilderGroup group;
-
-    explicit PipelineExecGroupBuilder(PipelineExecutorStatus & exec_status_)
-        : exec_status(exec_status_)
-    {}
-
-    PipelineExecutorStatus & exec_status;
 
     size_t concurrency = 0;
 

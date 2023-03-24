@@ -18,7 +18,7 @@
 
 namespace DB
 {
-bool FIFOTaskQueue::take(TaskPtr & task)
+bool FIFOTaskQueue::take(TaskPtr & task) noexcept
 {
     assert(!task);
     {
@@ -39,7 +39,7 @@ bool FIFOTaskQueue::take(TaskPtr & task)
     return true;
 }
 
-bool FIFOTaskQueue::empty()
+bool FIFOTaskQueue::empty() noexcept
 {
     std::lock_guard lock(mu);
     return task_queue.empty();
@@ -54,7 +54,7 @@ void FIFOTaskQueue::close()
     cv.notify_all();
 }
 
-void FIFOTaskQueue::submit(TaskPtr && task)
+void FIFOTaskQueue::submit(TaskPtr && task) noexcept
 {
     assert(task);
     {
@@ -64,7 +64,7 @@ void FIFOTaskQueue::submit(TaskPtr && task)
     cv.notify_one();
 }
 
-void FIFOTaskQueue::submit(std::vector<TaskPtr> & tasks)
+void FIFOTaskQueue::submit(std::vector<TaskPtr> & tasks) noexcept
 {
     if (tasks.empty())
         return;

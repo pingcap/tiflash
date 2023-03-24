@@ -18,8 +18,8 @@
 #include <Flash/executeQuery.h>
 #include <Poco/File.h>
 #include <Poco/FileStream.h>
+#include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/InterpreterTestUtils.h>
-#include <TestUtils/executorSerializer.h>
 
 #include <string>
 
@@ -137,9 +137,9 @@ void InterpreterTestUtils::runAndAssert(
         *request,
         "interpreter_test",
         concurrency);
-    TiFlashTestEnv::setUpTestContext(context.context, &dag_context, context.mockStorage(), TestType::INTERPRETER_TEST);
+    TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::INTERPRETER_TEST);
     // Don't care regions information in interpreter tests.
-    auto query_executor = queryExecute(context.context, /*internal=*/true);
+    auto query_executor = queryExecute(*context.context, /*internal=*/true);
     auto compare_result = fmt::format("~result:\n{}", Poco::trim(query_executor->toString()));
     auto cur_result_index = expect_result_index++;
 

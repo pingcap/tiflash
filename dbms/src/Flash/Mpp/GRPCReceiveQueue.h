@@ -16,7 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/MPMCQueue.h>
+#include <Common/ConcurrentIOQueue.h>
 #include <Common/grpcpp.h>
 #include <common/logger_useful.h>
 
@@ -123,7 +123,7 @@ template <typename T>
 class GRPCReceiveQueue
 {
 private:
-    using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<T>>>;
+    using MsgChannelPtr = std::shared_ptr<ConcurrentIOQueue<std::shared_ptr<T>>>;
 
 public:
     GRPCReceiveQueue(MsgChannelPtr recv_queue_, AsyncRequestHandlerWaitQueuePtr conn_wait_queue_, const LoggerPtr & log_)

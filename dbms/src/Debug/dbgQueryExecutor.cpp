@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,11 @@
 
 #include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Debug/dbgQueryExecutor.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/CoprocessorHandler.h>
+#include <Flash/Mpp/MPPTask.h>
+#include <Interpreters/Context.h>
 #include <Server/MockComputeClient.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -181,7 +184,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
                 for (const auto & partition : table_info->partition.definitions)
                 {
                     const auto partition_id = partition.id;
-                    auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(partition_id);
+                    auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(NullspaceID, partition_id);
                     for (size_t i = 0; i < regions.size(); ++i)
                     {
                         if ((current_region_size + i) % properties.mpp_partition_num != static_cast<size_t>(task.partition_id))
@@ -202,7 +205,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
             }
             else
             {
-                auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
+                auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(NullspaceID, table_id);
                 if (regions.size() < static_cast<size_t>(properties.mpp_partition_num))
                     throw Exception("Not supported: table region num less than mpp partition num");
                 for (size_t i = 0; i < regions.size(); ++i)
@@ -215,7 +218,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
         }
 
         pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
-        context.getTMTContext().getCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
+        context.getTMTContext().getKVCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
         if (call.getResp()->has_error())
             throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
     }
@@ -229,7 +232,7 @@ BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, co
     RegionPtr region;
     if (region_id == InvalidRegionID)
     {
-        auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
+        auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(NullspaceID, table_id);
         if (regions.empty())
             throw Exception("No region for table", ErrorCodes::BAD_ARGUMENTS);
         region = regions[0].second;
@@ -297,7 +300,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
     }
 }
 
-tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
+tipb::SelectResponse executeDAGRequest(Context & context, tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
 {
     static auto log = Logger::get();
     LOG_DEBUG(log, "Handling DAG request: {}", dag_request.DebugString());
@@ -307,7 +310,7 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
 
     table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
 
-    DAGContext dag_context(dag_request, std::move(tables_regions_info), "", false, log);
+    DAGContext dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", false, log);
     context.setDAGContext(&dag_context);
 
     DAGDriver driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
@@ -335,7 +338,7 @@ bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Re
     auto & table_regions_info = tables_regions_info.getSingleTableRegions();
     table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
 
-    DAGContext dag_context(dag_request, std::move(tables_regions_info), "", false, log);
+    DAGContext dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", false, log);
     context.setDAGContext(&dag_context);
     DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();

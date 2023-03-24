@@ -17,7 +17,6 @@
 #include <Common/Stopwatch.h>
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
-#include <common/ThreadPool.h>
 #include <gtest/gtest.h>
 
 #include <atomic>

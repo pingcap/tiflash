@@ -68,7 +68,27 @@ public:
     void insertData(const char * pos, size_t length) override;
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src_, size_t n) override;
+
+    void insertManyFrom(const IColumn & src_, size_t n, size_t length) override
+    {
+        for (size_t i = 0; i < length; ++i)
+            insertFrom(src_, n);
+    }
+
+    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override
+    {
+        for (auto position : position_vec)
+            insertFrom(src_, position);
+    }
+
     void insertDefault() override;
+
+    void insertManyDefaults(size_t length) override
+    {
+        for (size_t i = 0; i < length; ++i)
+            insertDefault();
+    }
+
     void popBack(size_t n) override;
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr &, String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;

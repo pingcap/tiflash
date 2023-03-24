@@ -17,8 +17,8 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
+#include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/executorSerializer.h>
 #include <TestUtils/mockExecutor.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 
@@ -63,13 +63,13 @@ public:
 
     virtual void initializeContext();
 
-    void initializeClientInfo();
+    void initializeClientInfo() const;
 
     DAGContext & getDAGContext();
 
-    void enablePlanner(bool is_enable);
+    void enablePlanner(bool is_enable) const;
 
-    void enablePipeline(bool is_enable);
+    void enablePipeline(bool is_enable) const;
 
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
@@ -78,6 +78,17 @@ public:
 
     ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency = 1);
     void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
+
+    // To check the output column with index = column_index sorted.
+    struct SortInfo
+    {
+        size_t column_index;
+        bool desc;
+    };
+    using SortInfos = std::vector<SortInfo>;
+
+    // check whether the column in each output block sorted.
+    void executeAndAssertSortedBlocks(const std::shared_ptr<tipb::DAGRequest> & request, const SortInfos & sort_infos);
     void executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows);
 
     enum SourceType
@@ -102,7 +113,7 @@ public:
         }
     }
 
-    ColumnsWithTypeAndName executeStreams(DAGContext * dag_context, bool enalbe_memory_tracker = false);
+    ColumnsWithTypeAndName executeStreams(DAGContext * dag_context, bool enable_memory_tracker = false);
 
     ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
@@ -114,10 +125,28 @@ public:
         size_t concurrency = 1,
         bool enable_memory_tracker = false);
 
+    /// test execution summary
+    // <rows, concurrency>
+    using ProfileInfo = std::pair<int, size_t>;
+    using Expect = std::unordered_map<String, ProfileInfo>;
+    static constexpr int not_check_rows = -1;
+    static constexpr UInt64 not_check_concurrency = -1;
+
+
+    void testForExecutionSummary(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const Expect & expect,
+        size_t concurrency = 10);
+
 private:
     void executeExecutor(
         const std::shared_ptr<tipb::DAGRequest> & request,
         std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func);
+
+    void checkBlockSorted(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const SortInfos & sort_infos,
+        std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &, const ColumnsWithTypeAndName &)> assert_func);
 
 protected:
     MockDAGRequestContext context;

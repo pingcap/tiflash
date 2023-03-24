@@ -47,6 +47,12 @@ public:
     MutableColumnPtr cloneResized(size_t s_) const override { return cloneDummy(s_); }
     size_t size() const override { return s; }
     void insertDefault() override { ++s; }
+
+    void insertManyDefaults(size_t length) override
+    {
+        s += length;
+    }
+
     void popBack(size_t n) override { s -= n; }
     size_t byteSize() const override { return 0; }
     size_t allocatedBytes() const override { return 0; }
@@ -93,6 +99,16 @@ public:
         override
     {
         ++s;
+    }
+
+    void insertManyFrom(const IColumn &, size_t, size_t length) override
+    {
+        s += length;
+    }
+
+    void insertDisjunctFrom(const IColumn &, const std::vector<size_t> & position_vec) override
+    {
+        s += position_vec.size();
     }
 
     void insertRangeFrom(const IColumn & /*src*/, size_t /*start*/, size_t length) override

@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/FailPoint.h>
-#include <Common/MPMCQueue.h>
+#include <Common/ConcurrentIOQueue.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
@@ -38,6 +38,8 @@ enum class ReceiverMode
     Async
 };
 
+namespace ReceiverChannel
+{
 inline void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], ReceiverMode mode)
 {
     switch (mode)
@@ -64,6 +66,7 @@ inline void updateResult(GRPCReceiveQueueRes & dst, GRPCReceiveQueueRes & src)
     if (likely(!(dst == GRPCReceiveQueueRes::FULL && src == GRPCReceiveQueueRes::OK)))
         dst = src;
 }
+} // namespace ReceiverChannel
 
 namespace ExchangeReceiverMetric
 {
@@ -125,7 +128,8 @@ struct ReceivedMessage
     }
 };
 
-using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<ReceivedMessage>>>;
+using ReceivedMessagePtr = std::shared_ptr<ReceivedMessage>;
+using MsgChannelPtr = std::shared_ptr<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>;
 
 class ReceiverChannelBase
 {

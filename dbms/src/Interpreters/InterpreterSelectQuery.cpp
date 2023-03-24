@@ -30,13 +30,11 @@
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
-#include <DataStreams/MergingAggregatedBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
-#include <DataStreams/TotalsHavingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Encryption/FileProvider.h>
@@ -227,7 +225,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     const String qualified_name = database_name + "." + table_name;
 
     /// Get current schema version in schema syncer for a chance to shortcut.
-    const auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
+    const auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion(NullspaceID);
 
     /// Lambda for get storage, then align schema version under the read lock.
     auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<StoragePtr, TableLockHolder, Int64, bool> {
@@ -298,7 +296,10 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     {
         log_schema_version("not OK, syncing schemas.");
         auto start_time = Clock::now();
-        context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
+        // Since InterpreterSelectQuery will only be trigger while using ClickHouse client,
+        // and we do not support keyspace feature for ClickHouse interface,
+        // we could use nullspace id here safely.
+        context.getTMTContext().getSchemaSyncer()->syncSchemas(context, NullspaceID);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(log, "Table {} schema sync cost {}ms.", qualified_name, schema_sync_cost);
 
@@ -496,7 +497,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
         /// Now we will compose block streams that perform the necessary actions.
 
         /// Do I need to immediately finalize the aggregate functions after the aggregation?
-        bool aggregate_final = expressions.need_aggregate && to_stage > QueryProcessingStage::WithMergeableState && !query.group_by_with_totals;
+        bool aggregate_final = expressions.need_aggregate && to_stage > QueryProcessingStage::WithMergeableState;
 
         if (expressions.first_stage)
         {
@@ -554,9 +555,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                 if (!expressions.first_stage)
                     executeMergeAggregated(pipeline, aggregate_final);
 
-                if (!aggregate_final)
-                    executeTotalsAndHaving(pipeline, expressions.has_having, expressions.before_having);
-                else if (expressions.has_having)
+                if (aggregate_final && expressions.has_having)
                     executeHaving(pipeline, expressions.before_having);
 
                 executeExpression(pipeline, expressions.before_order_and_select);
@@ -567,9 +566,6 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
             else
             {
                 need_second_distinct_pass = query.distinct && pipeline.hasMoreThanOneStream();
-
-                if (query.group_by_with_totals && !aggregate_final)
-                    executeTotalsAndHaving(pipeline, false, nullptr);
             }
 
             if (expressions.has_order_by)
@@ -578,7 +574,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                   *  but there is no aggregation, then on the remote servers ORDER BY was made
                   *  - therefore, we merge the sorted streams from remote servers.
                   */
-                if (!expressions.first_stage && !expressions.need_aggregate && !(query.group_by_with_totals && !aggregate_final))
+                if (!expressions.first_stage && !expressions.need_aggregate)
                     executeMergeSorted(pipeline);
                 else /// Otherwise, just sort.
                     executeOrder(pipeline);
@@ -703,10 +699,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
             required_columns,
             QueryProcessingStage::Complete,
             subquery_depth + 1);
-
-        /// If there is an aggregation in the outer query, WITH TOTALS is ignored in the subquery.
-        if (query_analyzer->hasAggregation())
-            interpreter_subquery->ignoreWithTotals();
     }
 
     const Settings & settings = context.getSettingsRef();
@@ -919,7 +911,13 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
       */
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
 
-    SpillConfig spill_config(context.getTemporaryPath(), "aggregation", settings.max_spilled_size_per_spill, context.getFileProvider());
+    SpillConfig spill_config(
+        context.getTemporaryPath(),
+        "aggregation",
+        settings.max_cached_data_bytes_in_spiller,
+        settings.max_spilled_rows_per_file,
+        settings.max_spilled_bytes_per_file,
+        context.getFileProvider());
     Aggregator::Params params(header, keys, aggregates, allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0), allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0), settings.max_bytes_before_external_group_by, false, spill_config, settings.max_block_size);
 
     /// If there are several sources, then we perform parallel aggregation
@@ -990,7 +988,7 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool fi
 
     const Settings & settings = context.getSettingsRef();
 
-    Aggregator::Params params(header, keys, aggregates, SpillConfig(context.getTemporaryPath(), "aggregation", settings.max_spilled_size_per_spill, context.getFileProvider()), settings.max_block_size);
+    Aggregator::Params params(header, keys, aggregates, SpillConfig(context.getTemporaryPath(), "aggregation", settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()), settings.max_block_size);
 
     pipeline.firstStream() = std::make_shared<MergingAggregatedMemoryEfficientBlockInputStream>(
         pipeline.streams,
@@ -1010,21 +1008,6 @@ void InterpreterSelectQuery::executeHaving(Pipeline & pipeline, const Expression
         stream = std::make_shared<FilterBlockInputStream>(stream, expression, query.having_expression->getColumnName(), /*req_id=*/"");
     });
 }
-
-
-void InterpreterSelectQuery::executeTotalsAndHaving(Pipeline & pipeline, bool has_having, const ExpressionActionsPtr & expression)
-{
-    executeUnion(pipeline);
-
-    const Settings & settings = context.getSettingsRef();
-
-    pipeline.firstStream() = std::make_shared<TotalsHavingBlockInputStream>(
-        pipeline.firstStream(),
-        expression,
-        has_having ? query.having_expression->getColumnName() : "",
-        settings.totals_mode);
-}
-
 
 void InterpreterSelectQuery::executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expression) // NOLINT
 {
@@ -1090,7 +1073,7 @@ void InterpreterSelectQuery::executeOrder(Pipeline & pipeline)
         settings.max_block_size,
         limit,
         settings.max_bytes_before_external_sort,
-        SpillConfig(context.getTemporaryPath(), "sort", settings.max_spilled_size_per_spill, context.getFileProvider()),
+        SpillConfig(context.getTemporaryPath(), "sort", settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
         /*req_id=*/"");
 }
 
@@ -1204,32 +1187,6 @@ void InterpreterSelectQuery::executePreLimit(Pipeline & pipeline)
     }
 }
 
-
-bool hasWithTotalsInAnySubqueryInFromClause(const ASTSelectQuery & query)
-{
-    if (query.group_by_with_totals)
-        return true;
-
-    /** NOTE You can also check that the table in the subquery is distributed, and that it only looks at one shard.
-      * In other cases, totals will be computed on the initiating server of the query, and it is not necessary to read the data to the end.
-      */
-
-    auto query_table = query.table();
-    if (query_table)
-    {
-        const auto * ast_union = typeid_cast<const ASTSelectWithUnionQuery *>(query_table.get());
-        if (ast_union)
-        {
-            for (const auto & elem : ast_union->list_of_selects->children)
-                if (hasWithTotalsInAnySubqueryInFromClause(typeid_cast<const ASTSelectQuery &>(*elem)))
-                    return true;
-        }
-    }
-
-    return false;
-}
-
-
 void InterpreterSelectQuery::executeLimit(Pipeline & pipeline)
 {
     size_t limit_length = 0;
@@ -1270,13 +1227,6 @@ void InterpreterSelectQuery::executeSubqueriesInSetsAndJoins(Pipeline & pipeline
         SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
         /*req_id=*/"");
 }
-
-
-void InterpreterSelectQuery::ignoreWithTotals()
-{
-    query.group_by_with_totals = false;
-}
-
 
 void InterpreterSelectQuery::initSettings()
 {

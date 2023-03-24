@@ -111,6 +111,8 @@ public:
     /// Approximate number of bytes in memory - for profiling and limits.
     size_t bytes() const;
 
+    size_t estimateBytesForSpill() const;
+
     /// Approximate number of bytes between [offset, offset+limit) in memory - for profiling and limits.
     size_t bytes(size_t offset, size_t limit) const;
 
@@ -170,7 +172,22 @@ using Blocks = std::vector<Block>;
 using BlocksList = std::list<Block>;
 using BucketBlocksListMap = std::map<Int32, BlocksList>;
 
-Block mergeBlocks(Blocks && blocks);
+/// Join blocks by columns
+/// The schema of the output block is the same as the header block.
+/// The columns not in the header block will be ignored.
+/// For example:
+/// header: (a UInt32, b UInt32, c UInt32, d UInt32)
+/// block1: (a UInt32, b UInt32, c UInt32, e UInt32), rows: 3
+/// block2: (d UInt32), rows: 3
+/// result: (a UInt32, b UInt32, c UInt32, d UInt32), rows: 3
+Block hstackBlocks(Blocks && blocks, const Block & header);
+
+/// Join blocks by rows
+/// For example:
+/// block1: (a UInt32, b UInt32, c UInt32), rows: 2
+/// block2: (a UInt32, b UInt32, c UInt32), rows: 3
+/// result: (a UInt32, b UInt32, c UInt32), rows: 5
+Block vstackBlocks(Blocks && blocks);
 
 Block popBlocksListFront(BlocksList & blocks);
 

@@ -60,7 +60,7 @@ void SquashingHashJoinBlockTransform::appendBlock(Block & block)
 
 Block SquashingHashJoinBlockTransform::getFinalOutputBlock()
 {
-    Block final_block = mergeBlocks(std::move(blocks));
+    Block final_block = vstackBlocks(std::move(blocks));
     reset();
     handleOverLimitBlock();
     return final_block;

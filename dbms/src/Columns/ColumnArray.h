@@ -85,7 +85,24 @@ public:
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src_, size_t n) override;
+    void insertManyFrom(const IColumn & src_, size_t n, size_t length) override
+    {
+        for (size_t i = 0; i < length; ++i)
+            insertFrom(src_, n);
+    }
+
+    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override
+    {
+        for (auto position : position_vec)
+            insertFrom(src_, position);
+    }
+
     void insertDefault() override;
+    void insertManyDefaults(size_t length) override
+    {
+        for (size_t i = 0; i < length; ++i)
+            insertDefault();
+    }
     void popBack(size_t n) override;
     /// TODO: If result_size_hint < 0, makes reserve() using size of filtered column, not source column to avoid some OOM issues.
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;

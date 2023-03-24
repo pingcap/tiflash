@@ -15,12 +15,12 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/V2/PageStorage.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/WriteBatchImpl.h>
 
 #include <boost/core/noncopyable.hpp>
 #include <tuple>

@@ -56,17 +56,18 @@ struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
             current = reinterpret_cast<const typename Mapped::Base_t *>(next_element_in_row_list);
         for (; rows_added < max_row_added && current != nullptr; current = current->next)
         {
-            for (size_t j = 0; j < num_columns_left; ++j)
-                /// should fill the key column with key columns from right block
-                /// but we don't care about the key column now so just insert a default value is ok.
-                /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
-                /// for detailed explanation
-                columns_left[j]->insertDefault();
-
+            /// handle left columns later to utilize insertManyDefaults
             for (size_t j = 0; j < num_columns_right; ++j)
                 columns_right[j]->insertFrom(*current->block->getByPosition(key_num + j).column.get(), current->row_num);
             ++rows_added;
         }
+        for (size_t j = 0; j < num_columns_left; ++j)
+            /// should fill the key column with key columns from right block
+            /// but we don't care about the key column now so just insert a default value is ok.
+            /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+            /// for detailed explanation
+            columns_left[j]->insertManyDefaults(rows_added);
+
         next_element_in_row_list = current;
         return rows_added;
     }
@@ -101,7 +102,6 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
 
     column_indices_left.reserve(num_columns_left);
     column_indices_right.reserve(num_columns_right);
-    BoolVec is_key_column_in_left_block(num_columns_left, false);
 
     for (size_t i = 0; i < num_columns_left; ++i)
     {
@@ -132,9 +132,11 @@ Block NonJoinedBlockInputStream::readImpl()
     /// just return empty block for extra non joined block input stream read
     if (unlikely(index >= parent.getBuildConcurrency()))
         return Block();
-    if (parent.blocks.empty())
+    if (!parent.has_build_data_in_memory)
+        /// no build data in memory, the non joined result must be empty
         return Block();
 
+    /// todo read data based on JoinPartition
     if (add_not_mapped_rows)
     {
         setNextCurrentNotMappedRow();
@@ -153,7 +155,7 @@ void NonJoinedBlockInputStream::setNextCurrentNotMappedRow()
 {
     while (current_not_mapped_row == nullptr && next_index < parent.rows_not_inserted_to_map.size())
     {
-        current_not_mapped_row = parent.rows_not_inserted_to_map[next_index]->next;
+        current_not_mapped_row = parent.rows_not_inserted_to_map[next_index].head.next;
         next_index += step;
     }
 }
@@ -217,13 +219,7 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
     while (current_not_mapped_row != nullptr)
     {
         ++rows_added;
-        for (size_t j = 0; j < num_columns_left; ++j)
-            /// should fill the key column with key columns from right block
-            /// but we don't care about the key column now so just insert a default value is ok.
-            /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
-            /// for detailed explanation
-            mutable_columns_left[j]->insertDefault();
-
+        /// handle left columns later to utilize insertManyDefaults
         for (size_t j = 0; j < num_columns_right; ++j)
             mutable_columns_right[j]->insertFrom(*current_not_mapped_row->block->getByPosition(key_num + j).column.get(),
                                                  current_not_mapped_row->row_num);
@@ -231,42 +227,68 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
         current_not_mapped_row = current_not_mapped_row->next;
         setNextCurrentNotMappedRow();
         if (rows_added == max_block_size)
-        {
-            return rows_added;
-        }
+            break;
     }
+    /// Fill left columns with defaults
+    for (size_t j = 0; j < num_columns_left; ++j)
+        /// should fill the key column with key columns from right block
+        /// but we don't care about the key column now so just insert a default value is ok.
+        /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
+        /// for detailed explanation
+        mutable_columns_left[j]->insertManyDefaults(rows_added);
+
+    if (rows_added == max_block_size)
+        return rows_added;
 
     /// then add rows that in hash table, but not joined
     if (!position)
     {
         current_segment = index;
+
+        while (parent.partitions[current_segment]->isSpill())
+        {
+            current_segment += step;
+            if (current_segment >= map.getSegmentSize())
+            {
+                return rows_added;
+            }
+        }
+
         position = decltype(position)(
             static_cast<void *>(new typename Map::SegmentType::HashTable::const_iterator(map.getSegmentTable(current_segment).begin())),
             [](void * ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
     }
 
+    if (current_segment >= map.getSegmentSize())
+    {
+        return rows_added;
+    }
     /// use pointer instead of reference because `it` need to be re-assigned latter
     auto it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
     auto end = map.getSegmentTable(current_segment).end();
 
     for (; *it != end || current_segment + step < map.getSegmentSize();)
     {
-        if (*it == end)
+        if (*it == end || parent.partitions[current_segment]->isSpill())
         {
-            // move to next internal hash table
-            do
+            current_segment += step;
+            while (parent.partitions[current_segment]->isSpill())
             {
                 current_segment += step;
-                position = decltype(position)(
-                    static_cast<void *>(new typename Map::SegmentType::HashTable::const_iterator(
-                        map.getSegmentTable(current_segment).begin())),
-                    [](void * ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
-                it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
-                end = map.getSegmentTable(current_segment).end();
-            } while (*it == end && current_segment + step < map.getSegmentSize());
-            if (*it == end)
-                break;
+                if (current_segment >= map.getSegmentSize())
+                {
+                    return rows_added;
+                }
+            }
+            position = decltype(position)(
+                static_cast<void *>(new typename Map::SegmentType::HashTable::const_iterator(
+                    map.getSegmentTable(current_segment).begin())),
+                [](void * ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
+            it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
+            end = map.getSegmentTable(current_segment).end();
+            continue;
         }
+
         if ((*it)->getMapped().getUsed())
         {
             ++(*it);

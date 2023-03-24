@@ -36,14 +36,14 @@ struct FilterConditions
 
     FilterConditions(
         const String & executor_id_,
-        const std::vector<const tipb::Expr *> & conditions_);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions_);
 
     bool hasValue() const { return !conditions.empty(); }
 
     tipb::Executor * constructSelectionForRemoteRead(tipb::Executor * mutable_executor) const;
 
     String executor_id;
-    std::vector<const tipb::Expr *> conditions;
+    google::protobuf::RepeatedPtrField<tipb::Expr> conditions;
 };
 
 } // namespace DB

@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -177,7 +180,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     // that callbacks is called after the `DeltaMergeStore` shutdown or dropped,
     // we must make the callbacks safe.
     ExternalPageCallbacks callbacks;
-    callbacks.prefix = storage_pool->getNamespaceId();
+    callbacks.prefix = storage_pool->getNamespaceID();
     callbacks.scanner = LocalDMFileGcScanner(std::weak_ptr<StoragePathPool>(path_pool), global_context.getFileProvider());
     callbacks.remover = LocalDMFileGcRemover(std::weak_ptr<StoragePathPool>(path_pool), global_context.getFileProvider(), log);
     // remember to unregister it when shutdown

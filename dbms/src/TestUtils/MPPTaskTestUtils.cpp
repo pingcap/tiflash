@@ -17,7 +17,9 @@
 #include <Server/FlashGrpcServerHolder.h>
 #include <Server/MockComputeClient.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 #include <TestUtils/MPPTaskTestUtils.h>
+#include <fmt/core.h>
 
 namespace DB::tests
 {
@@ -62,7 +64,7 @@ void MPPTaskTestUtils::startServers(size_t server_num_)
     {
         MockComputeServerManager::instance().addServer(MockServerAddrGenerator::instance().nextAddr());
         // Currently, we simply add a context and don't care about destruct it.
-        TiFlashTestEnv::addGlobalContext();
+        TiFlashTestEnv::addGlobalContext(context.context->getSettings());
         TiFlashTestEnv::getGlobalContext(i + test_meta.context_idx).setMPPTest();
     }
 
@@ -99,7 +101,7 @@ ColumnsWithTypeAndName extractColumns(Context & context, const std::shared_ptr<t
     auto schema = getSelectSchema(context);
     for (const auto & chunk : dag_response->chunks())
         blocks.emplace_back(codec->decode(chunk.rows_data(), schema));
-    return mergeBlocks(std::move(blocks)).getColumnsWithTypeAndName();
+    return vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName();
 }
 
 ColumnsWithTypeAndName MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request)
@@ -110,7 +112,7 @@ ColumnsWithTypeAndName MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<
     auto * data = req->mutable_data();
     dag_request->AppendToString(data);
 
-    DAGContext dag_context(*dag_request, {}, "", false, Logger::get());
+    DAGContext dag_context(*dag_request, {}, NullspaceID, "", false, Logger::get());
 
     TiFlashTestEnv::getGlobalContext(test_meta.context_idx).setDAGContext(&dag_context);
     TiFlashTestEnv::getGlobalContext(test_meta.context_idx).setCopTest();
@@ -136,7 +138,7 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
 {
     FmtBuffer buf;
     buf.fmtAppend("server id: {}, tasks: ", server_id);
-    buf.fmtAppend(TiFlashTestEnv::getGlobalContext(server_id).getTMTContext().getMPPTaskManager()->toString());
+    buf.fmtAppend(fmt::runtime(TiFlashTestEnv::getGlobalContext(server_id).getTMTContext().getMPPTaskManager()->toString()));
     return buf.toString();
 }
 

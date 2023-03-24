@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,11 @@
 #include <Common/setThreadName.h>
 #include <Debug/MockStorage.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/RequestUtils.h>
+#include <Flash/Disaggregated/S3LockService.h>
+#include <Flash/Disaggregated/WNEstablishDisaggTaskHandler.h>
+#include <Flash/Disaggregated/WNFetchPagesStreamWriter.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
 #include <Flash/Management/ManualCompact.h>
@@ -30,11 +35,19 @@
 #include <Flash/Mpp/Utils.h>
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Server/IServer.h>
+#include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
+#include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/S3/S3Common.h>
+#include <Storages/Transaction/LockException.h>
+#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
+#include <grpcpp/support/status.h>
 #include <grpcpp/support/status_code_enum.h>
+#include <kvproto/disaggregated.pb.h>
 
 #include <ext/scope_guard.h>
 
@@ -43,7 +56,9 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
-}
+extern const int UNKNOWN_EXCEPTION;
+extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
+} // namespace ErrorCodes
 
 #define CATCH_FLASHSERVICE_EXCEPTION                                                                                                        \
     catch (Exception & e)                                                                                                                   \
@@ -74,6 +89,10 @@ void FlashService::init(Context & context_)
         context->getGlobalContext(),
         context->getGlobalContext().getSettingsRef());
 
+    // Only when the s3 storage is enabled on write node, provide the lock service interfaces
+    if (!context->getSharedContextDisagg()->isDisaggregatedComputeMode() && S3::ClientFactory::instance().isEnabled())
+        s3_lock_service = std::make_unique<S3::S3LockService>(*context);
+
     auto settings = context->getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
@@ -82,18 +101,20 @@ void FlashService::init(Context & context_)
     auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with {} threads to handle cop requests.", cop_pool_size);
-    cop_pool = std::make_unique<ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
+    cop_pool = std::make_unique<legacy::ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
 
     auto batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
-    batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
+    batch_cop_pool = std::make_unique<legacy::ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
 }
 
 FlashService::~FlashService() = default;
 
+namespace
+{
 // Use executeInThreadPool to submit job to thread pool which return grpc::Status.
-grpc::Status executeInThreadPool(ThreadPool & pool, std::function<grpc::Status()> job)
+grpc::Status executeInThreadPool(legacy::ThreadPool & pool, std::function<grpc::Status()> job)
 {
     std::packaged_task<grpc::Status()> task(job);
     std::future<grpc::Status> future = task.get_future();
@@ -108,6 +129,26 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
 
     return default_val;
 }
+
+void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr & context, Poco::Logger * log)
+{
+    const static std::vector<std::pair<String, String>> tidb_varname_to_tiflash_varname = {
+        std::make_pair("tidb_max_tiflash_threads", "max_threads"),
+        std::make_pair("tidb_max_bytes_before_tiflash_external_join", "max_bytes_before_external_join"),
+        std::make_pair("tidb_max_bytes_before_tiflash_external_group_by", "max_bytes_before_external_group_by"),
+        std::make_pair("tidb_max_bytes_before_tiflash_external_sort", "max_bytes_before_external_sort"),
+    };
+    for (const auto & names : tidb_varname_to_tiflash_varname)
+    {
+        String value_from_tidb = getClientMetaVarWithDefault(grpc_context, names.first, "");
+        if (!value_from_tidb.empty())
+        {
+            context->setSetting(names.second, value_from_tidb);
+            LOG_DEBUG(log, "set context setting {} to {}", names.second, value_from_tidb);
+        }
+    }
+}
+} // namespace
 
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context,
@@ -473,7 +514,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
 grpc::Status FlashService::checkGrpcContext(const grpc::ServerContext * grpc_context) const
 {
     // For coprocessor/mpp test, we don't care about security config.
-    if likely (!context->isMPPTest() && !context->isCopTest())
+    if (likely(!context->isMPPTest() && !context->isCopTest()))
     {
         if (!context->getSecurityConfig()->checkGrpcContext(grpc_context))
         {
@@ -524,12 +565,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
             tmp_context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
         }
 
-        String max_threads = getClientMetaVarWithDefault(grpc_context, "tidb_max_tiflash_threads", "");
-        if (!max_threads.empty())
-        {
-            tmp_context->setSetting("max_threads", max_threads);
-            LOG_INFO(log, "set context setting max_threads to {}", max_threads);
-        }
+        updateSettingsFromTiDB(grpc_context, tmp_context, log);
 
         tmp_context->setSetting("enable_async_server", is_async ? "true" : "false");
         tmp_context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
@@ -547,6 +583,247 @@ grpc::Status FlashService::Compact(grpc::ServerContext * grpc_context, const kvr
         return check_result;
 
     return manual_compact_manager->handleRequest(request, response);
+}
+
+grpc::Status FlashService::tryAddLock(grpc::ServerContext * grpc_context, const disaggregated::TryAddLockRequest * request, disaggregated::TryAddLockResponse * response)
+{
+    if (!s3_lock_service)
+    {
+        return grpc::Status(::grpc::StatusCode::INTERNAL,
+                            fmt::format(
+                                "can not handle tryAddLock, s3enabled={} compute_node={}",
+                                S3::ClientFactory::instance().isEnabled(),
+                                context->getSharedContextDisagg()->isDisaggregatedComputeMode()));
+    }
+
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    return s3_lock_service->tryAddLock(request, response);
+}
+
+grpc::Status FlashService::tryMarkDelete(grpc::ServerContext * grpc_context, const disaggregated::TryMarkDeleteRequest * request, disaggregated::TryMarkDeleteResponse * response)
+{
+    if (!s3_lock_service)
+    {
+        return grpc::Status(::grpc::StatusCode::INTERNAL,
+                            fmt::format(
+                                "can not handle tryMarkDelete, s3enabled={} compute_node={}",
+                                S3::ClientFactory::instance().isEnabled(),
+                                context->getSharedContextDisagg()->isDisaggregatedComputeMode()));
+    }
+
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    return s3_lock_service->tryMarkDelete(request, response);
+}
+
+grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_context, const disaggregated::EstablishDisaggTaskRequest * request, disaggregated::EstablishDisaggTaskResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    LOG_DEBUG(log, "Handling EstablishDisaggTask request: {}", request->ShortDebugString());
+    if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
+        return check_result;
+    // TODO metrics
+    auto [db_context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+        return status;
+    db_context->setMockStorage(mock_storage);
+    db_context->setMockMPPServerInfo(mpp_test_info);
+
+    RUNTIME_CHECK_MSG(context->getSharedContextDisagg()->isDisaggregatedStorageMode(), "EstablishDisaggTask should only be called on write node");
+
+    const auto & meta = request->meta();
+    DM::DisaggTaskId task_id(meta);
+    auto logger = Logger::get(task_id);
+
+    auto handler = std::make_shared<WNEstablishDisaggTaskHandler>(db_context, task_id);
+    SCOPE_EXIT({
+        current_memory_tracker = nullptr;
+    });
+
+    auto record_error = [&](int flash_err_code, const String & err_msg) {
+        // Note: We intentinally do not remove the snapshot from the SnapshotManager
+        // when this request is failed. Consider this case:
+        // EstablishDisagg for A: ---------------- Failed --------------------------------------------- Cleanup Snapshot for A
+        // EstablishDisagg for B: - Failed - RN retry EstablishDisagg for A+B -- InsertSnapshot for A+B ----- FetchPages (Boom!)
+        auto * err = response->mutable_error();
+        err->set_code(flash_err_code);
+        err->set_msg(err_msg);
+    };
+
+    try
+    {
+        handler->prepare(request);
+        handler->execute(response);
+    }
+    catch (const RegionException & e)
+    {
+        for (const auto & region_id : e.unavailable_region)
+        {
+            auto * retry_region = response->add_retry_regions();
+            retry_region->set_id(region_id);
+            // Note: retry_region's version and epoch is not set, because we miss these information
+            // from the exception.
+        }
+        LOG_INFO(logger, "EstablishDisaggTask meet RegionException {} (retryable), regions={}", e.message(), e.unavailable_region);
+        record_error(
+            ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR,
+            fmt::format("Retryable error: {}", e.message()));
+    }
+    catch (const LockException & e)
+    {
+        auto * retry_region = response->add_retry_regions();
+        retry_region->set_id(e.region_id);
+        // Note: retry_region's version and epoch is not set, because we miss these information
+        // from the exception.
+
+        LOG_INFO(logger, "EstablishDisaggTask meet LockException (retryable), region_id={}", e.region_id);
+        // TODO: We may need to send this error back to TiDB? Otherwise TiDB
+        // may not resolve lock in time.
+        record_error(
+            ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR,
+            fmt::format("Retryable error: {}", e.message()));
+    }
+    catch (Exception & e)
+    {
+        LOG_ERROR(logger, "EstablishDisaggTask meet exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        record_error(e.code(), e.message());
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(logger, "EstablishDisaggTask meet KV Client Exception: {}", e.message());
+        record_error(e.code(), e.message());
+    }
+    catch (std::exception & e)
+    {
+        LOG_ERROR(logger, "EstablishDisaggTask meet std::exception: {}", e.what());
+        record_error(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(logger, "EstablishDisaggTask meet unknown exception");
+        record_error(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
+    }
+
+    LOG_DEBUG(
+        logger,
+        "Handle EstablishDisaggTask request done, resp_err={}",
+        response->has_error() ? response->error().ShortDebugString() : "(null)");
+
+    // The response is send back to TiFlash. Always assign gRPC::Status::OK, so that TiFlash response
+    // handlers can deal with the embedded error correctly.
+    return grpc::Status::OK;
+}
+
+grpc::Status FlashService::FetchDisaggPages(
+    grpc::ServerContext * grpc_context,
+    const disaggregated::FetchDisaggPagesRequest * request,
+    grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    LOG_DEBUG(log, "Handling FetchDisaggPages request: {}", request->ShortDebugString());
+    if (auto check_result = checkGrpcContext(grpc_context); !check_result.ok())
+        return check_result;
+
+    auto record_error = [&](grpc::StatusCode err_code, const String & err_msg) {
+        disaggregated::PagesPacket err_response;
+        auto * err = err_response.mutable_error();
+        err->set_code(ErrorCodes::UNKNOWN_EXCEPTION);
+        err->set_msg(err_msg);
+        sync_writer->Write(err_response);
+        return grpc::Status(err_code, err_msg);
+    };
+
+    RUNTIME_CHECK_MSG(context->getSharedContextDisagg()->isDisaggregatedStorageMode(), "FetchDisaggPages should only be called on write node");
+
+    auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
+    const DM::DisaggTaskId task_id(request->snapshot_id());
+    // get the keyspace from meta, it is now used for debugging
+    const auto keyspace_id = RequestUtils::deriveKeyspaceID(request->snapshot_id());
+    auto logger = Logger::get(task_id);
+
+    LOG_DEBUG(logger, "Fetching pages, keyspace_id={} table_id={} segment_id={}", keyspace_id, request->table_id(), request->segment_id());
+
+    SCOPE_EXIT({
+        // The snapshot is created in the 1st request (Establish), and will be destroyed when all FetchPages are finished.
+        snaps->unregisterSnapshotIfEmpty(task_id);
+    });
+
+    try
+    {
+        auto snap = snaps->getSnapshot(task_id);
+        RUNTIME_CHECK_MSG(snap != nullptr, "Can not find disaggregated task, task_id={}", task_id);
+        auto task = snap->popSegTask(request->table_id(), request->segment_id());
+        RUNTIME_CHECK(task.isValid(), task.err_msg);
+
+        PageIdU64s read_ids;
+        read_ids.reserve(request->page_ids_size());
+        for (auto page_id : request->page_ids())
+            read_ids.emplace_back(page_id);
+
+        auto stream_writer = WNFetchPagesStreamWriter::build(task, read_ids);
+        stream_writer->pipeTo(sync_writer);
+        stream_writer.reset();
+
+        LOG_DEBUG(logger, "FetchDisaggPages respond finished, task_id={}", task_id);
+        return grpc::Status::OK;
+    }
+    catch (const TiFlashException & e)
+    {
+        LOG_ERROR(logger, "FetchDisaggPages meet TiFlashException: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        return record_error(grpc::StatusCode::INTERNAL, e.standardText());
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(logger, "FetchDisaggPages meet exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        return record_error(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(logger, "FetchDisaggPages meet KV Client Exception: {}", e.message());
+        return record_error(grpc::StatusCode::INTERNAL, e.message());
+    }
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(logger, "FetchDisaggPages meet std::exception: {}", e.what());
+        return record_error(grpc::StatusCode::INTERNAL, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(logger, "FetchDisaggPages meet unknown exception");
+        return record_error(grpc::StatusCode::INTERNAL, "other exception");
+    }
+}
+
+grpc::Status FlashService::GetDisaggConfig(grpc::ServerContext * grpc_context, const disaggregated::GetDisaggConfigRequest *, disaggregated::GetDisaggConfigResponse * response)
+{
+    if (!context->getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        return grpc::Status(
+            grpc::StatusCode::UNIMPLEMENTED,
+            fmt::format(
+                "can not handle GetDisaggConfig with mode={}",
+                magic_enum::enum_name(context->getSharedContextDisagg()->disaggregated_mode)));
+    }
+
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    const auto local_s3config = S3::ClientFactory::instance().getConfigCopy();
+    auto * s3_config = response->mutable_s3_config();
+    s3_config->set_endpoint(local_s3config.endpoint);
+    s3_config->set_bucket(local_s3config.bucket);
+    s3_config->set_root(local_s3config.root);
+
+    return grpc::Status::OK;
 }
 
 void FlashService::setMockStorage(MockStorage * mock_storage_)
