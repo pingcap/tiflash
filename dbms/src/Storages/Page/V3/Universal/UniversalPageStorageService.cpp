@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
+#include <Common/TiFlashMetrics.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
@@ -248,7 +249,10 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
             .log = log,
         },
     };
+
     const auto write_stats = uni_page_storage->dumpIncrementalCheckpoint(opts);
+    GET_METRIC(tiflash_storage_checkpoint_flow, type_incremental).Increment(write_stats.incremental_data_bytes);
+    GET_METRIC(tiflash_storage_checkpoint_flow, type_compaction).Increment(write_stats.compact_data_bytes);
 
     LOG_INFO(
         log,
