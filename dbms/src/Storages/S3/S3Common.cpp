@@ -468,7 +468,7 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
         }
         else
         {
-            LOG_ERROR(client.log, "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
+            LOG_ERROR(client.log, "S3 PutObject failed: {}, local_fname={} bucket={} root={} key={}", result.GetError().GetMessage(), local_fname, client.bucket(), client.root(), remote_fname);
             return false;
         }
     }

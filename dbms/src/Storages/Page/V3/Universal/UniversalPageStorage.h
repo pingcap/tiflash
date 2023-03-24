@@ -193,6 +193,8 @@ public:
         /**
          */
         const std::function<std::unordered_set<String>()> compact_getter = nullptr;
+
+        UInt64 max_data_file_size = 256 * 1024 * 1024; // 256MB
     };
 
     PS::V3::CPDataWriteStats dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
