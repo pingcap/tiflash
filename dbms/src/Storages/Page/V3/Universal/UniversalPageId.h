@@ -70,7 +70,13 @@ public:
 
     friend bool operator==(const String & lhs, const UniversalPageId & rhs);
 
+    bool isRaftData() const
+    {
+        return !id.empty() && id[0] == raft_prefix;
+    }
+
 private:
+    static constexpr char raft_prefix = 0x01;
     String id;
 };
 

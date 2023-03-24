@@ -14,6 +14,7 @@
 
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
+#include <fmt/core.h>
 
 #include <unordered_map>
 
@@ -22,10 +23,10 @@ namespace DB::PS::V3
 
 CPFilesWriter::CPFilesWriter(CPFilesWriter::Options options)
     : manifest_file_id(options.manifest_file_id)
-    , data_writer(CPDataFileWriter::create({
-          .file_path = options.data_file_path,
-          .file_id = options.data_file_id,
-      }))
+    , data_file_id_pattern(options.data_file_id_pattern)
+    , data_file_path_pattern(options.data_file_path_pattern)
+    , sequence(options.sequence)
+    , max_data_file_size(options.max_data_file_size)
     , manifest_writer(CPManifestFileWriter::create({
           .file_path = options.manifest_file_path,
       }))
@@ -41,14 +42,13 @@ void CPFilesWriter::writePrefix(const CPFilesWriter::PrefixInfo & info)
 
     auto create_at_ms = Poco::Timestamp().epochMicroseconds() / 1000;
 
-    CheckpointProto::DataFilePrefix data_prefix;
+    // Init the common fields of DataPrefix.
     data_prefix.set_file_format(1);
     data_prefix.set_local_sequence(info.sequence);
-    data_prefix.set_create_at_ms(create_at_ms);
     data_prefix.mutable_writer_info()->CopyFrom(info.writer);
     data_prefix.set_manifest_file_id(manifest_file_id);
-    data_prefix.set_sub_file_index(0);
-    data_writer->writePrefix(data_prefix);
+    // Create data_writer.
+    newDataWriter();
 
     CheckpointProto::ManifestFilePrefix manifest_prefix;
     manifest_prefix.set_file_format(1);
@@ -73,6 +73,7 @@ CPDataWriteStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
 
     CPDataWriteStats write_down_stats;
     std::unordered_map<String, size_t> rewrite_stats;
+    bool last_page_is_raft_data = true;
 
     // 1. Iterate all edits, find these entry edits without the checkpoint info
     //    and collect the lock files from applied entries.
@@ -111,6 +112,15 @@ CPDataWriteStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
             rewrite_stats.try_emplace(file_id, 0).first->second += rec_edit.entry.size;
         }
 
+        bool current_page_is_raft_data = rec_edit.page_id.isRaftData();
+        if (current_write_size > 0 // If current_write_size is 0, data_writer is a empty file, not need to create a new one.
+            && (current_page_is_raft_data != last_page_is_raft_data // Data type changed
+                || (max_data_file_size != 0 && current_write_size >= max_data_file_size))) // or reach size limit.
+        {
+            newDataWriter();
+        }
+        last_page_is_raft_data = current_page_is_raft_data;
+
         // 2. For entry edits without the checkpoint info, write them to the data file,
         // and assign a new checkpoint info.
         auto page = data_source->read({rec_edit.page_id, rec_edit.entry});
@@ -120,6 +130,7 @@ CPDataWriteStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
             rec_edit.version,
             page.data.begin(),
             page.data.size());
+        current_write_size += data_location.size_in_file;
         RUNTIME_CHECK(page.data.size() == rec_edit.entry.size, page.data.size(), rec_edit.entry.size);
         bool is_local_data_reclaimed = rec_edit.entry.checkpoint_info.has_value() && rec_edit.entry.checkpoint_info.is_local_data_reclaimed;
         rec_edit.entry.checkpoint_info = OptionalCheckpointInfo{
@@ -143,11 +154,11 @@ CPDataWriteStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
     // 3. Write down everything to the manifest.
     manifest_writer->writeEdits(edits);
 
-    write_down_stats.has_new_data = data_writer->writtenRecords() > 0;
+    write_down_stats.has_new_data = total_written_records + data_writer->writtenRecords() > 0;
     return write_down_stats;
 }
 
-void CPFilesWriter::writeSuffix()
+std::vector<String> CPFilesWriter::writeSuffix()
 {
     RUNTIME_CHECK_MSG(write_stage == WriteStage::WritingEdits, "unexpected write stage {}", magic_enum::enum_name(write_stage));
 
@@ -156,9 +167,32 @@ void CPFilesWriter::writeSuffix()
     manifest_writer->writeLocksFinish();
 
     data_writer->writeSuffix();
+    data_writer->flush();
     manifest_writer->writeSuffix();
+    manifest_writer->flush();
 
     write_stage = WriteStage::WritingFinished;
+    return data_file_paths;
+}
+
+void CPFilesWriter::newDataWriter()
+{
+    if (data_writer != nullptr)
+    {
+        total_written_records += data_writer->writtenRecords();
+        data_writer->writeSuffix();
+        data_writer->flush();
+    }
+    current_write_size = 0;
+    data_file_paths.push_back(fmt::format(fmt::runtime(data_file_path_pattern), fmt::arg("seq", sequence), fmt::arg("index", data_file_index)));
+    data_writer = CPDataFileWriter::create({
+        .file_path = data_file_paths.back(),
+        .file_id = fmt::format(fmt::runtime(data_file_id_pattern), fmt::arg("seq", sequence), fmt::arg("index", data_file_index)),
+    });
+    data_prefix.set_create_at_ms(Poco::Timestamp().epochMicroseconds() / 1000);
+    data_prefix.set_sub_file_index(data_file_index);
+    data_writer->writePrefix(data_prefix);
+    ++data_file_index;
 }
 
 } // namespace DB::PS::V3

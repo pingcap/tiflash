@@ -322,7 +322,11 @@ namespace DB
         F(type_complete_multi_part_upload, {{"type", "complete_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                     \
         F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
         F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
-        F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))
+        F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))                                                                   \
+    M(tiflash_storage_checkpoint_seconds, "PageStorage checkpoint elapsed time", Histogram,                                                         \
+        F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets{0.001, 2, 20}),                                         \
+        F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets{0.001, 2, 20}),                                                 \
+        F(type_upload_checkpoint, {{"type", "upload_checkpoint"}}, ExpBuckets{0.001, 2, 20}))
 
 // clang-format on
 

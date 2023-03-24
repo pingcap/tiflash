@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
+#include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <IO/IOThreadPool.h>
@@ -216,17 +217,24 @@ UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & 
 
     // read page data from blob_store
     auto local_page_map = blob_store->read(local_read_infos, read_limiter);
-    auto [page_map_for_update_cache, remote_page_map] = remote_reader->read(remote_read_infos);
-    UniversalWriteBatch wb;
-    for (const auto & [page_id, page] : page_map_for_update_cache)
+
+    if (!remote_read_infos.empty())
     {
-        auto buf = std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size());
-        wb.updateRemotePage(page_id, buf, page.data.size());
-    }
-    tryUpdateLocalCacheForRemotePages(wb, snapshot);
-    for (const auto & [page_id, page] : remote_page_map)
-    {
-        local_page_map.emplace(page_id, page);
+        auto [page_map_for_update_cache, remote_page_map] = remote_reader->read(remote_read_infos);
+        if (!page_map_for_update_cache.empty())
+        {
+            UniversalWriteBatch wb;
+            for (const auto & [page_id, page] : page_map_for_update_cache)
+            {
+                auto buf = std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size());
+                wb.updateRemotePage(page_id, buf, page.data.size());
+            }
+            tryUpdateLocalCacheForRemotePages(wb, snapshot);
+        }
+        for (const auto & [page_id, page] : remote_page_map)
+        {
+            local_page_map.emplace(page_id, page);
+        }
     }
     for (const auto & page_id_not_found : page_ids_not_found)
     {
@@ -415,7 +423,7 @@ bool UniversalPageStorage::canSkipCheckpoint() const
 PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
 {
     std::scoped_lock lock(checkpoint_mu);
-
+    Stopwatch sw;
     // Let's keep this snapshot until all finished, so that blob data will not be GCed.
     auto snap = page_directory->createSnapshot(/*tracing_id*/ "dumpIncrementalCheckpoint");
 
@@ -423,21 +431,13 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
         return {.has_new_data = false};
 
     auto edit_from_mem = page_directory->dumpSnapshotToEdit(snap);
+    auto dump_snapshot_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
     // As a checkpoint, we write both entries (in manifest) and its data.
     // Some entries' data may be already written by a previous checkpoint. These data will not be written again.
     UInt64 sequence = snap->sequence;
     if (options.override_sequence)
         sequence = options.override_sequence.value();
-
-    auto data_file_id = fmt::format(
-        fmt::runtime(options.data_file_id_pattern),
-        fmt::arg("seq", sequence),
-        fmt::arg("index", 0));
-    auto data_file_path = fmt::format(
-        fmt::runtime(options.data_file_path_pattern),
-        fmt::arg("seq", sequence),
-        fmt::arg("index", 0));
 
     auto manifest_file_id = fmt::format(
         fmt::runtime(options.manifest_file_id_pattern),
@@ -446,18 +446,15 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
         fmt::runtime(options.manifest_file_path_pattern),
         fmt::arg("seq", sequence));
 
-    RUNTIME_CHECK(
-        data_file_path != manifest_file_path,
-        data_file_path,
-        manifest_file_path);
-
     auto writer = PS::V3::CPFilesWriter::create({
-        .data_file_path = data_file_path,
-        .data_file_id = data_file_id,
+        .data_file_path_pattern = options.data_file_path_pattern,
+        .data_file_id_pattern = options.data_file_id_pattern,
         .manifest_file_path = manifest_file_path,
         .manifest_file_id = manifest_file_id,
         .data_source = PS::V3::CPWriteDataSourceBlobStore::create(*blob_store),
         .must_locked_files = options.must_locked_files,
+        .sequence = sequence,
+        .max_data_file_size = options.max_data_file_size,
     });
 
     writer->writePrefix({
@@ -472,8 +469,9 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
     }
     // get the remote file ids that need to be compacted
     auto write_stats = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
-    writer->writeSuffix();
+    auto data_file_paths = writer->writeSuffix();
     writer.reset();
+    auto dump_data_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
     // Persist the checkpoint to remote store.
     // If not persisted or exception throw, then we can not apply the checkpoint
@@ -481,7 +479,7 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
     try
     {
         auto checkpoint = PS::V3::LocalCheckpointFiles{
-            .data_files = {data_file_path},
+            .data_files = data_file_paths,
             .manifest_file = {manifest_file_path},
         };
         bool persist_done = options.persist_checkpoint(checkpoint);
@@ -496,6 +494,7 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
         tryLogCurrentException(log, "failed to persist checkpoint");
         return {.has_new_data = false}; // TODO: maybe return has_new_data=true but upload_success=false?
     }
+    auto upload_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
     SYNC_FOR("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
 
@@ -510,6 +509,21 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
     }
 
     last_checkpoint_sequence = snap->sequence;
+
+    GET_METRIC(tiflash_storage_checkpoint_seconds, type_dump_checkpoint_snapshot).Observe(dump_snapshot_seconds);
+    GET_METRIC(tiflash_storage_checkpoint_seconds, type_dump_checkpoint_data).Observe(dump_data_seconds);
+    GET_METRIC(tiflash_storage_checkpoint_seconds, type_upload_checkpoint).Observe(upload_seconds);
+    LOG_DEBUG(log,
+              "Checkpoint result: files={}, dump_snapshot={:.3f}s, dump_data={:.3f}s, upload={:.3f}s, "
+              "total={:.3f}s, sequence={}, incremental_data_bytes={}, rewrite_data_bytes={}",
+              data_file_paths,
+              dump_snapshot_seconds,
+              dump_data_seconds,
+              upload_seconds,
+              sw.elapsedSeconds(),
+              sequence,
+              write_stats.incremental_data_bytes,
+              write_stats.rewrite_data_bytes);
     return write_stats;
 }
 
