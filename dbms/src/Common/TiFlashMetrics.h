@@ -312,6 +312,11 @@ namespace DB
         F(type_still_used_when_evict, {{"type", "still_used_when_evict"}}),                                                                         \
         F(type_miss_count, {{"type", "miss_count"}}),                                                                                               \
         F(type_hit_count, {{"type", "hit_count"}}))                                                                                                 \
+    M(tiflash_storage_remote_stats, "The file stats on remote store", Gauge,                                                                        \
+        F(type_total_size, {"type", "total_size"}), F(type_valid_size, {"type", "valid_size"}),                                                     \
+        F(type_num_files, {"type", "num_files"}))                                                                                                   \
+    M(tiflash_storage_checkpoint_flow, "The bytes flow cause by remote checkpoint", Counter,                                                        \
+        F(type_incremental, {"type", "incremental"}), F(type_compaction, {"type", "compaction"}))                                                   \
     M(tiflash_storage_s3_request_seconds, "S3 request duration in seconds", Histogram,                                                              \
         F(type_put_object, {{"type", "put_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_copy_object, {{"type", "copy_object"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
@@ -321,7 +326,11 @@ namespace DB
         F(type_complete_multi_part_upload, {{"type", "complete_multi_part_upload"}}, ExpBuckets{0.001, 2, 20}),                                     \
         F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
         F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
-        F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))
+        F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))                                                                   \
+    M(tiflash_storage_checkpoint_seconds, "PageStorage checkpoint elapsed time", Histogram,                                                         \
+        F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets{0.001, 2, 20}),                                         \
+        F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets{0.001, 2, 20}),                                                 \
+        F(type_upload_checkpoint, {{"type", "upload_checkpoint"}}, ExpBuckets{0.001, 2, 20}))
 
 // clang-format on
 

@@ -30,7 +30,7 @@ struct CPDataWriteStats
 {
     bool has_new_data = false;
     size_t incremental_data_bytes = 0;
-    size_t rewrite_data_bytes = 0;
+    size_t compact_data_bytes = 0;
 };
 
 using RemoteFileValidSizes = std::unordered_map<String, size_t>;
@@ -40,6 +40,8 @@ struct CPDataFileStat
     Int64 valid_size = 0;
     // total_size < 0 indicate this value is not inited
     Int64 total_size = -1;
+    // last_modification_time on remote store
+    std::chrono::system_clock::time_point mtime;
 };
 
 class CPDataFilesStatCache
@@ -62,7 +64,7 @@ public:
     /**
      * Update the total size field in the cache. Thread safe.
      */
-    void updateTotalSize(const CacheMap & total_sizes);
+    void updateCache(const CacheMap & total_sizes);
 
     CacheMap getCopy() const
     {

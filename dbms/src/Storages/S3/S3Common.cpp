@@ -468,7 +468,7 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
         }
         else
         {
-            LOG_ERROR(client.log, "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
+            LOG_ERROR(client.log, "S3 PutObject failed: {}, local_fname={} bucket={} root={} key={}", result.GetError().GetMessage(), local_fname, client.bucket(), client.root(), remote_fname);
             return false;
         }
     }
@@ -787,7 +787,7 @@ ObjectInfo tryGetObjectInfo(
         {
             return ObjectInfo{.exist = false, .size = 0, .last_modification_time = {}};
         }
-        throw fromS3Error(o.GetError(), "Failed to check existence of object, bucket={} key={}", client.bucket(), key);
+        throw fromS3Error(o.GetError(), "Failed to check existence of object, bucket={} root={} key={}", client.bucket(), client.root(), key);
     }
     // Else the object still exist
     const auto & res = o.GetResult();
