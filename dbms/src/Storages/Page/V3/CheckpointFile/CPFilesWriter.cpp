@@ -114,8 +114,8 @@ CPDataWriteStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
 
         bool current_page_is_raft_data = rec_edit.page_id.isRaftData();
         if (current_write_size > 0 // If current_write_size is 0, data_writer is a empty file, not need to create a new one.
-            && (current_page_is_raft_data != last_page_is_raft_data                          // Data type changed
-                || (max_data_file_size != 0 && current_write_size >= max_data_file_size)))   // or reach size limit.
+            && (current_page_is_raft_data != last_page_is_raft_data // Data type changed
+                || (max_data_file_size != 0 && current_write_size >= max_data_file_size))) // or reach size limit.
         {
             newDataWriter();
         }
