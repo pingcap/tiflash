@@ -16,6 +16,8 @@
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/NonJoinedBlockInputStream.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
@@ -49,11 +51,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     probe_exec.set(std::move(cur_probe_exec));
 }
 
-void HashJoinProbeBlockInputStream::readPrefix()
-{
-}
-
-void HashJoinProbeBlockInputStream::readSuffix()
+void HashJoinProbeBlockInputStream::readSuffixImpl()
 {
     LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, non joined rows {}", joined_rows + non_joined_rows, joined_rows, non_joined_rows);
 }
@@ -90,27 +88,23 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
 
 Block HashJoinProbeBlockInputStream::readImpl()
 {
-    try
-    {
-        Block ret = getOutputBlock();
-        return ret;
-    }
-    catch (...)
-    {
-        auto error_message = getCurrentExceptionMessage(false, true);
-        probe_exec->meetError(error_message);
-        throw Exception(error_message);
-    }
+    return getOutputBlock();
+}
+
+void HashJoinProbeBlockInputStream::switchStatus(ProbeStatus to)
+{
+    LOG_TRACE(log, fmt::format("{} -> {}", magic_enum::enum_name(status), magic_enum::enum_name(to)));
+    status = to;
 }
 
 void HashJoinProbeBlockInputStream::onCurrentProbeDone()
 {
-    status = probe_exec->onProbeFinish() ? ProbeStatus::FINISHED : ProbeStatus::WAIT_PROBE_FINISH;
+    switchStatus(probe_exec->onProbeFinish() ? ProbeStatus::FINISHED : ProbeStatus::WAIT_PROBE_FINISH);
 }
 
 void HashJoinProbeBlockInputStream::onCurrentReadNonJoinedDataDone()
 {
-    status = probe_exec->onNonJoinedFinish() ? ProbeStatus::FINISHED : ProbeStatus::GET_RESTORE_JOIN;
+    switchStatus(probe_exec->onNonJoinedFinish() ? ProbeStatus::FINISHED : ProbeStatus::GET_RESTORE_JOIN);
 }
 
 void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
@@ -120,7 +114,7 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
     {
         if (isCancelledOrThrowIfKilled())
         {
-            status = ProbeStatus::FINISHED;
+            switchStatus(ProbeStatus::FINISHED);
             return;
         }
 
@@ -130,28 +124,20 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
         {
             parents.push_back(std::move(cur_probe_exec));
             probe_exec.set(std::move(*restore_probe_exec));
-            status = ProbeStatus::RESTORE_BUILD;
+            switchStatus(ProbeStatus::RESTORE_BUILD);
             return;
         }
         /// current join has no more partition to restore, so check if previous join still has partition to restore
         if (!parents.empty())
         {
             /// replace current join with previous join
-            if (isCancelledOrThrowIfKilled())
-            {
-                status = ProbeStatus::FINISHED;
-                return;
-            }
-            else
-            {
-                probe_exec.set(std::move(parents.back()));
-                parents.pop_back();
-            }
+            probe_exec.set(std::move(parents.back()));
+            parents.pop_back();
         }
         else
         {
             /// no previous join, set status to FINISHED
-            status = ProbeStatus::FINISHED;
+            switchStatus(ProbeStatus::FINISHED);
             return;
         }
     }
@@ -162,12 +148,12 @@ void HashJoinProbeBlockInputStream::onAllProbeDone()
     if (probe_exec->need_output_non_joined_data)
     {
         assert(probe_exec->non_joined_stream != nullptr);
-        status = ProbeStatus::READ_NON_JOINED_DATA;
         probe_exec->non_joined_stream->readPrefix();
+        switchStatus(ProbeStatus::READ_NON_JOINED_DATA);
     }
     else
     {
-        status = ProbeStatus::GET_RESTORE_JOIN;
+        switchStatus(ProbeStatus::GET_RESTORE_JOIN);
     }
 }
 
@@ -183,7 +169,7 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
                 probe_exec->join->waitUntilAllBuildFinished();
                 /// after Build finish, always go to Probe stage
                 probe_exec->onProbeStart();
-                status = ProbeStatus::PROBE;
+                switchStatus(ProbeStatus::PROBE);
                 break;
             case ProbeStatus::PROBE:
             {
@@ -229,7 +215,7 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
             {
                 probe_process_info.all_rows_joined_finish = true;
                 probe_exec->restoreBuild();
-                status = ProbeStatus::WAIT_BUILD_FINISH;
+                switchStatus(ProbeStatus::WAIT_BUILD_FINISH);
                 break;
             }
             case ProbeStatus::FINISHED:
@@ -239,9 +225,10 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
     }
     catch (...)
     {
-        /// set status to finish if any exception happens
-        status = ProbeStatus::FINISHED;
-        throw;
+        auto error_message = getCurrentExceptionMessage(true, true);
+        probe_exec->meetError(error_message);
+        switchStatus(ProbeStatus::FINISHED);
+        throw Exception(error_message);
     }
 }
 

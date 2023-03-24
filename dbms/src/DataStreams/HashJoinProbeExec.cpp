@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <DataStreams/HashJoinProbeExec.h>
-#include <DataStreams/NonJoinedBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/NonJoinedBlockInputStream.h>
 
 namespace DB
 {
@@ -80,32 +80,32 @@ std::tuple<size_t, Block> HashJoinProbeExec::getProbeBlock()
 
 std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::tryGetRestoreExec()
 {
-        assert(join->isEnableSpill());
-        /// first check if current join has a partition to restore
-        if (join->hasPartitionSpilledWithLock())
+    assert(join->isEnableSpill());
+    /// first check if current join has a partition to restore
+    if (join->hasPartitionSpilledWithLock())
+    {
+        auto restore_info = join->getOneRestoreStream(max_block_size);
+        /// get a restore join
+        if (restore_info.join)
         {
-            auto restore_info = join->getOneRestoreStream(max_block_size);
-            /// get a restore join
-            if (restore_info.join)
-            {
-                /// restored join should always enable spill
-                assert(restore_info.join->isEnableSpill());
-                size_t non_joined_stream_index = 0;
-                if (need_output_non_joined_data)
-                    non_joined_stream_index = dynamic_cast<NonJoinedBlockInputStream *>(restore_info.non_joined_stream.get())->getNonJoinedIndex();
-                auto restore_probe_exec = std::make_shared<HashJoinProbeExec>(
-                    restore_info.join, 
-                    restore_info.build_stream, 
-                    restore_info.probe_stream, 
-                    need_output_non_joined_data,
-                    non_joined_stream_index,
-                    restore_info.non_joined_stream,
-                    max_block_size);
-                return {std::move(restore_probe_exec)};
-            }
-            assert(join->hasPartitionSpilledWithLock() == false);
+            /// restored join should always enable spill
+            assert(restore_info.join->isEnableSpill());
+            size_t non_joined_stream_index = 0;
+            if (need_output_non_joined_data)
+                non_joined_stream_index = dynamic_cast<NonJoinedBlockInputStream *>(restore_info.non_joined_stream.get())->getNonJoinedIndex();
+            auto restore_probe_exec = std::make_shared<HashJoinProbeExec>(
+                restore_info.join,
+                restore_info.build_stream,
+                restore_info.probe_stream,
+                need_output_non_joined_data,
+                non_joined_stream_index,
+                restore_info.non_joined_stream,
+                max_block_size);
+            return {std::move(restore_probe_exec)};
         }
-        return {};
+        assert(join->hasPartitionSpilledWithLock() == false);
+    }
+    return {};
 }
 
 void HashJoinProbeExec::cancel()
@@ -138,12 +138,14 @@ void HashJoinProbeExec::meetError(const String & error_message)
 
 void HashJoinProbeExec::onProbeStart()
 {
-    probe_stream->readPrefix();
+    if (join->isRestoreJoin())
+        probe_stream->readPrefix();
 }
 
 bool HashJoinProbeExec::onProbeFinish()
 {
-    probe_stream->readSuffix();
+    if (join->isRestoreJoin())
+        probe_stream->readSuffix();
     join->finishOneProbe();
     return !need_output_non_joined_data && !join->isEnableSpill();
 }

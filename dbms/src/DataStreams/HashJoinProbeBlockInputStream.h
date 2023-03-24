@@ -49,9 +49,7 @@ public:
 protected:
     Block readImpl() override;
 
-    // Override readPrefix and readSuffix so that children's readPrefix and readSuffix are not called and are called by probe_exec.
-    void readPrefix() override;
-    void readSuffix() override;
+    void readSuffixImpl() override;
 
 private:
     /*
@@ -117,6 +115,7 @@ private:
         FINISHED, /// the final state
     };
 
+    void switchStatus(ProbeStatus to);
     Block getOutputBlock();
     std::tuple<size_t, Block> getOneProbeBlock();
     void onCurrentProbeDone();
