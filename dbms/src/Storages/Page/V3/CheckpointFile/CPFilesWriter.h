@@ -46,7 +46,7 @@ public:
          * lock files from `writeEditsAndApplyCheckpointInfo`.
          */
         const std::unordered_set<String> & must_locked_files = {};
-        UInt64 upload_sequence;
+        UInt64 sequence;
         UInt64 max_data_file_size;
     };
 
@@ -105,8 +105,8 @@ public:
     const String manifest_file_id;
     const String data_file_id_pattern;
     const String data_file_path_pattern;
-    UInt64 upload_sequence;
-    UInt64 max_data_file_size;
+    const UInt64 sequence;
+    const UInt64 max_data_file_size;
     Int32 data_file_index = 0;
     CPDataFileWriterPtr data_writer;
     const CPManifestFileWriterPtr manifest_writer;

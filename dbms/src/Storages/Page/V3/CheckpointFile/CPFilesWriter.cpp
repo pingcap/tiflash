@@ -25,7 +25,7 @@ CPFilesWriter::CPFilesWriter(CPFilesWriter::Options options)
     : manifest_file_id(options.manifest_file_id)
     , data_file_id_pattern(options.data_file_id_pattern)
     , data_file_path_pattern(options.data_file_path_pattern)
-    , upload_sequence(options.upload_sequence)
+    , sequence(options.sequence)
     , max_data_file_size(options.max_data_file_size)
     , manifest_writer(CPManifestFileWriter::create({
           .file_path = options.manifest_file_path,
@@ -184,10 +184,10 @@ void CPFilesWriter::newDataWriter()
         data_writer->flush();
     }
     current_write_size = 0;
-    data_file_paths.push_back(fmt::format(fmt::runtime(data_file_path_pattern), fmt::arg("seq", upload_sequence), fmt::arg("index", data_file_index)));
+    data_file_paths.push_back(fmt::format(fmt::runtime(data_file_path_pattern), fmt::arg("seq", sequence), fmt::arg("index", data_file_index)));
     data_writer = CPDataFileWriter::create({
         .file_path = data_file_paths.back(),
-        .file_id = fmt::format(fmt::runtime(data_file_id_pattern), fmt::arg("seq", upload_sequence), fmt::arg("index", data_file_index)),
+        .file_id = fmt::format(fmt::runtime(data_file_id_pattern), fmt::arg("seq", sequence), fmt::arg("index", data_file_index)),
     });
     data_prefix.set_create_at_ms(Poco::Timestamp().epochMicroseconds() / 1000);
     data_prefix.set_sub_file_index(data_file_index);

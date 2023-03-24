@@ -424,7 +424,7 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
         return {.has_new_data = false};
 
     auto edit_from_mem = page_directory->dumpSnapshotToEdit(snap);
-    auto dump_snapshot_seconds = sw.elapsedSeconds();
+    auto dump_snapshot_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
     // As a checkpoint, we write both entries (in manifest) and its data.
     // Some entries' data may be already written by a previous checkpoint. These data will not be written again.
@@ -446,7 +446,7 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
         .manifest_file_id = manifest_file_id,
         .data_source = PS::V3::CPWriteDataSourceBlobStore::create(*blob_store),
         .must_locked_files = options.must_locked_files,
-        .upload_sequence = sequence,
+        .sequence = sequence,
         .max_data_file_size = options.max_data_file_size,
     });
 
@@ -464,7 +464,7 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
     auto write_stats = writer->writeEditsAndApplyCheckpointInfo(edit_from_mem, file_ids_to_compact);
     auto data_file_paths = writer->writeSuffix();
     writer.reset();
-    auto dump_data_seconds = sw.elapsedSeconds() - dump_snapshot_seconds;
+    auto dump_data_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
     // Persist the checkpoint to remote store.
     // If not persisted or exception throw, then we can not apply the checkpoint
@@ -487,7 +487,7 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
         tryLogCurrentException(log, "failed to persist checkpoint");
         return {.has_new_data = false}; // TODO: maybe return has_new_data=true but upload_success=false?
     }
-    auto upload_seconds = sw.elapsedSeconds() - dump_snapshot_seconds - dump_data_seconds;
+    auto upload_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
     SYNC_FOR("before_PageStorage::dumpIncrementalCheckpoint_copyInfo");
 
@@ -507,8 +507,8 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
     GET_METRIC(tiflash_storage_checkpoint_seconds, type_dump_checkpoint_data).Observe(dump_data_seconds);
     GET_METRIC(tiflash_storage_checkpoint_seconds, type_upload_checkpoint).Observe(upload_seconds);
     LOG_DEBUG(log,
-              "Checkpoint result: files={}, dump_snapshot={:.2f}s, dump_data={:.2f}s, upload={:.2f}s, "
-              "total={:.2f}s, upload_sequence={}, incremental_data_bytes={}, rewrite_data_bytes={}",
+              "Checkpoint result: files={}, dump_snapshot={:.3f}s, dump_data={:.3f}s, upload={:.3f}s, "
+              "total={:.3f}s, sequence={}, incremental_data_bytes={}, rewrite_data_bytes={}",
               data_file_paths,
               dump_snapshot_seconds,
               dump_data_seconds,
