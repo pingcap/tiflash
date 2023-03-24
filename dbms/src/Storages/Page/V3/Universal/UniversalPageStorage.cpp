@@ -515,7 +515,7 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
     GET_METRIC(tiflash_storage_checkpoint_seconds, type_upload_checkpoint).Observe(upload_seconds);
     LOG_DEBUG(log,
               "Checkpoint result: files={}, dump_snapshot={:.3f}s, dump_data={:.3f}s, upload={:.3f}s, "
-              "total={:.3f}s, sequence={}, incremental_data_bytes={}, rewrite_data_bytes={}",
+              "total={:.3f}s, sequence={}, incremental_data_bytes={}, compact_data_bytes={}",
               data_file_paths,
               dump_snapshot_seconds,
               dump_data_seconds,
@@ -523,7 +523,7 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
               sw.elapsedSeconds(),
               sequence,
               write_stats.incremental_data_bytes,
-              write_stats.rewrite_data_bytes);
+              write_stats.compact_data_bytes);
     return write_stats;
 }
 
