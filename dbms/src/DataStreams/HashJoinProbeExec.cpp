@@ -33,7 +33,18 @@ HashJoinProbeExec::HashJoinProbeExec(
     , non_joined_stream_index(non_joined_stream_index_)
     , non_joined_stream(non_joined_stream_)
     , max_block_size(max_block_size_)
+    , probe_process_info(max_block_size_)
 {}
+
+void HashJoinProbeExec::waitUntilAllBuildFinished()
+{
+    join->waitUntilAllBuildFinished();
+}
+
+void HashJoinProbeExec::waitUntilAllProbeFinished()
+{
+    join->waitUntilAllProbeFinished();
+}
 
 void HashJoinProbeExec::restoreBuild()
 {
@@ -76,6 +87,24 @@ std::tuple<size_t, Block> HashJoinProbeExec::getProbeBlock()
         }
     }
     return {partition_index, block};
+}
+
+Block HashJoinProbeExec::probe()
+{
+    if (probe_process_info.all_rows_joined_finish)
+    {
+        auto [partition_index, block] = getProbeBlock();
+        if (!block)
+        {
+            return {};
+        }
+        else
+        {
+            join->checkTypes(block);
+            probe_process_info.resetBlock(std::move(block), partition_index);
+        }
+    }
+    return join->joinBlock(probe_process_info);
 }
 
 std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::tryGetRestoreExec()
@@ -148,6 +177,18 @@ bool HashJoinProbeExec::onProbeFinish()
         probe_stream->readSuffix();
     join->finishOneProbe();
     return !need_output_non_joined_data && !join->isEnableSpill();
+}
+
+void HashJoinProbeExec::onNonJoinedStart()
+{
+    assert(non_joined_stream != nullptr);
+    non_joined_stream->readPrefix();
+}
+
+Block HashJoinProbeExec::fetchNonJoined()
+{
+    assert(non_joined_stream != nullptr);
+    return non_joined_stream->read();
 }
 
 bool HashJoinProbeExec::onNonJoinedFinish()

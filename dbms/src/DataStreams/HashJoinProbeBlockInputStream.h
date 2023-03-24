@@ -128,7 +128,6 @@ private:
     /// although read/write to those are almost only in 1 thread, but an exception is cancel thread will
     /// read them, so need to protect the multi-threads access
     HashJoinProbeExecHolder probe_exec;
-    ProbeProcessInfo probe_process_info;
     ProbeStatus status{ProbeStatus::WAIT_BUILD_FINISH};
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;

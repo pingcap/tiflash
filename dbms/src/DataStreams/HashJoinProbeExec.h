@@ -40,6 +40,8 @@ public:
 
     size_t max_block_size;
 
+    ProbeProcessInfo probe_process_info;
+
     std::list<std::tuple<size_t, Block>> probe_partition_blocks;
 
 public:
@@ -52,9 +54,18 @@ public:
         const BlockInputStreamPtr & non_joined_stream_,
         size_t max_block_size_);
 
+    bool needOutputNonJoinedData() { return need_output_non_joined_data; }
+
+    void waitUntilAllBuildFinished();
+
+    void waitUntilAllProbeFinished();
+
     void restoreBuild();
 
     std::tuple<size_t, Block> getProbeBlock();
+
+    // Returns empty block if probe finish.
+    Block probe();
 
     std::optional<HashJoinProbeExecPtr> tryGetRestoreExec();
 
@@ -67,6 +78,8 @@ public:
     // Returns false if the probe_exec continues to execute.
     bool onProbeFinish();
 
+    void onNonJoinedStart();
+    Block fetchNonJoined();
     // Returns true if the probe_exec ends.
     // Returns false if the probe_exec continues to execute.
     bool onNonJoinedFinish();

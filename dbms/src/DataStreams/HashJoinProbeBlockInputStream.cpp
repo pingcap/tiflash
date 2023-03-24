@@ -28,7 +28,6 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     UInt64 max_block_size_)
     : log(Logger::get(req_id))
     , original_join(join_)
-    , probe_process_info(max_block_size_)
 {
     children.push_back(input);
 
@@ -145,10 +144,9 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
 
 void HashJoinProbeBlockInputStream::onAllProbeDone()
 {
-    if (probe_exec->need_output_non_joined_data)
+    if (probe_exec->needOutputNonJoinedData())
     {
-        assert(probe_exec->non_joined_stream != nullptr);
-        probe_exec->non_joined_stream->readPrefix();
+        probe_exec->onNonJoinedStart();
         switchStatus(ProbeStatus::READ_NON_JOINED_DATA);
     }
     else
@@ -166,38 +164,32 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
             switch (status)
             {
             case ProbeStatus::WAIT_BUILD_FINISH:
-                probe_exec->join->waitUntilAllBuildFinished();
+                probe_exec->waitUntilAllBuildFinished();
                 /// after Build finish, always go to Probe stage
                 probe_exec->onProbeStart();
                 switchStatus(ProbeStatus::PROBE);
                 break;
             case ProbeStatus::PROBE:
             {
-                if (probe_process_info.all_rows_joined_finish)
+                auto ret = probe_exec->probe();
+                if (!ret)
                 {
-                    auto [partition_index, block] = probe_exec->getProbeBlock();
-                    if (!block)
-                    {
-                        onCurrentProbeDone();
-                        break;
-                    }
-                    else
-                    {
-                        probe_exec->join->checkTypes(block);
-                        probe_process_info.resetBlock(std::move(block), partition_index);
-                    }
+                    onCurrentProbeDone();
+                    break;
                 }
-                auto ret = probe_exec->join->joinBlock(probe_process_info);
-                joined_rows += ret.rows();
-                return ret;
+                else
+                {
+                    joined_rows += ret.rows();
+                    return ret;
+                }
             }
             case ProbeStatus::WAIT_PROBE_FINISH:
-                probe_exec->join->waitUntilAllProbeFinished();
+                probe_exec->waitUntilAllProbeFinished();
                 onAllProbeDone();
                 break;
             case ProbeStatus::READ_NON_JOINED_DATA:
             {
-                auto block = probe_exec->non_joined_stream->read();
+                auto block = probe_exec->fetchNonJoined();
                 non_joined_rows += block.rows();
                 if (!block)
                 {
@@ -213,7 +205,6 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
             }
             case ProbeStatus::RESTORE_BUILD:
             {
-                probe_process_info.all_rows_joined_finish = true;
                 probe_exec->restoreBuild();
                 switchStatus(ProbeStatus::WAIT_BUILD_FINISH);
                 break;
