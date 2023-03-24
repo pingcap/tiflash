@@ -1453,10 +1453,10 @@ void PageDirectory<Trait>::applyRefEditRecord(
 }
 
 template <typename Trait>
-typename PageDirectory<Trait>::Writer * PageDirectory<Trait>::buildWriteGroup(std::unique_lock<std::mutex> & /*lock*/)
+typename PageDirectory<Trait>::Writer * PageDirectory<Trait>::buildWriteGroup(Writer * first, std::unique_lock<std::mutex> & /*lock*/)
 {
     RUNTIME_CHECK(!writers.empty());
-    auto * first = writers.front();
+    RUNTIME_CHECK(first == writers.front());
     auto * last_writer = first;
     auto iter = writers.begin();
     iter++;
@@ -1475,9 +1475,6 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     // We need to make sure there is only one apply thread to write wal and then increase `sequence`.
     // Note that, as read threads use current `sequence` as read_seq, we cannot increase `sequence`
     // before applying edit to `mvcc_table_directory`.
-    //
-    // TODO: It is totally serialized by only 1 thread with IO waiting. Make this process a
-    // pipeline so that we can batch the incoming edit when doing IO.
 
     Writer w;
     w.edit = &edit;
@@ -1495,7 +1492,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     if (w.done)
         return {};
 
-    auto * last_writer = buildWriteGroup(apply_lock);
+    auto * last_writer = buildWriteGroup(&w, apply_lock);
     apply_lock.unlock();
 
     UInt64 max_sequence = sequence.load();
