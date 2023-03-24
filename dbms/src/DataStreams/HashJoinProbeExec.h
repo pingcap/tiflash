@@ -25,9 +25,15 @@ namespace DB
 class HashJoinProbeExec;
 using HashJoinProbeExecPtr = std::shared_ptr<HashJoinProbeExec>;
 
-class HashJoinProbeExec
+class HashJoinProbeExec : public std::enable_shared_from_this<HashJoinProbeExec>
 {
 public:
+    static HashJoinProbeExecPtr build(
+        const JoinPtr & join,
+        const BlockInputStreamPtr & probe_stream,
+        size_t non_joined_stream_index,
+        size_t max_block_size);
+
     HashJoinProbeExec(
         const JoinPtr & join_,
         const BlockInputStreamPtr & restore_build_stream_,
@@ -41,7 +47,7 @@ public:
 
     void waitUntilAllProbeFinished();
 
-    std::optional<HashJoinProbeExecPtr> tryGetRestoreExec();
+    std::optional<HashJoinProbeExecPtr> tryGetRestoreExec(std::function<bool()> && is_cancelled);
 
     void cancel();
 
@@ -66,6 +72,8 @@ public:
 private:
     std::tuple<size_t, Block> getProbeBlock();
 
+    std::optional<HashJoinProbeExecPtr> doTryGetRestoreExec();
+
 private:
     JoinPtr join;
 
@@ -80,8 +88,9 @@ private:
     size_t max_block_size;
 
     ProbeProcessInfo probe_process_info;
-
     std::list<std::tuple<size_t, Block>> probe_partition_blocks;
+
+    std::optional<HashJoinProbeExecPtr> parent;
 };
 
 class HashJoinProbeExecHolder

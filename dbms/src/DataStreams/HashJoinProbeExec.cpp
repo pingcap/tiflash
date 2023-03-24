@@ -18,6 +18,27 @@
 
 namespace DB
 {
+HashJoinProbeExecPtr HashJoinProbeExec::build(
+    const JoinPtr & join,
+    const BlockInputStreamPtr & probe_stream,
+    size_t non_joined_stream_index,
+    size_t max_block_size)
+{
+    bool need_output_non_joined_data = join->needReturnNonJoinedData();
+    BlockInputStreamPtr non_joined_stream = nullptr;
+    if (need_output_non_joined_data)
+        non_joined_stream = join->createStreamWithNonJoinedRows(probe_stream->getHeader(), non_joined_stream_index, join->getProbeConcurrency(), max_block_size);
+
+    return std::make_shared<HashJoinProbeExec>(
+        join,
+        nullptr,
+        probe_stream,
+        need_output_non_joined_data,
+        non_joined_stream_index,
+        non_joined_stream,
+        max_block_size);
+}
+
 HashJoinProbeExec::HashJoinProbeExec(
     const JoinPtr & join_,
     const BlockInputStreamPtr & restore_build_stream_,
@@ -107,7 +128,28 @@ Block HashJoinProbeExec::probe()
     return join->joinBlock(probe_process_info);
 }
 
-std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::tryGetRestoreExec()
+std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::tryGetRestoreExec(std::function<bool()> && is_cancelled)
+{
+    /// find restore exec in DFS way
+    if (is_cancelled())
+        return {};
+
+    auto ret = doTryGetRestoreExec();
+    if (ret.has_value())
+        return ret;
+
+    /// current join has no more partition to restore, so check if previous join still has partition to restore
+    if (parent.has_value())
+    {
+        return (*parent)->tryGetRestoreExec(std::move(is_cancelled));
+    }
+    else
+    {
+        return {};
+    }
+}
+
+std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::doTryGetRestoreExec()
 {
     assert(join->isEnableSpill());
     /// first check if current join has a partition to restore
@@ -130,6 +172,7 @@ std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::tryGetRestoreExec()
                 non_joined_stream_index,
                 restore_info.non_joined_stream,
                 max_block_size);
+            restore_probe_exec->parent = shared_from_this();
             return {std::move(restore_probe_exec)};
         }
         assert(join->hasPartitionSpilledWithLock() == false);
@@ -139,6 +182,18 @@ std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::tryGetRestoreExec()
 
 void HashJoinProbeExec::cancel()
 {
+    /// Cancel join just wake up all the threads waiting in Join::waitUntilAllBuildFinished/Join::waitUntilAllProbeFinished,
+    /// the ongoing join process will not be interrupted
+    /// There is a little bit hack here because cancel will be called in two cases:
+    /// 1. the query is cancelled by the caller or meet error: in this case, wake up all waiting threads is safe
+    /// 2. the query is executed normally, and one of the data stream has read an empty block, the the data stream and all its children
+    ///    will call `cancel(false)`, in this case, there is two sub-cases
+    ///    a. the data stream read an empty block because of EOF, then it means there must be no threads waiting in Join, so cancel the join is safe
+    ///    b. the data stream read an empty block because of early exit of some executor(like limit), in this case, just wake the waiting
+    ///       threads is not 100% safe because if the probe thread is wake up when build is not finished yet, it may produce wrong results, for now
+    ///       it is safe because when any of the data stream read empty block because of early exit, the execution framework ensures that no further
+    ///       data will be used.
+
     join->cancel();
     if (non_joined_stream != nullptr)
     {

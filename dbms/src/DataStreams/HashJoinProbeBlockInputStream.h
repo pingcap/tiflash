@@ -122,11 +122,14 @@ private:
     void onAllProbeDone();
     void onCurrentReadNonJoinedDataDone();
     void tryGetRestoreJoin();
+
+private:
     const LoggerPtr log;
     JoinPtr original_join;
-    /// join/non_joined_stream/restore_build_stream/restore_probe_stream can be modified during the runtime
-    /// although read/write to those are almost only in 1 thread, but an exception is cancel thread will
-    /// read them, so need to protect the multi-threads access
+    /// probe_exec can be modified during the runtime,
+    /// although read/write to those are almost only in 1 thread,
+    /// but an exception is cancel thread will read them,
+    /// so need to use HashJoinProbeExecHolder protect the multi-threads access.
     HashJoinProbeExecHolder probe_exec;
     ProbeStatus status{ProbeStatus::WAIT_BUILD_FINISH};
     size_t joined_rows = 0;
