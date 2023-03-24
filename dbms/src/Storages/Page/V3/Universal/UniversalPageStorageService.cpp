@@ -14,8 +14,8 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Interpreters/Context.h>
 #include <Common/TiFlashMetrics.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
