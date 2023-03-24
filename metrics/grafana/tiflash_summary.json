@@ -11334,7 +11334,7 @@
               "hide": false,
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "disk_size-{{instance}}",
+              "legendFormat": "remote_size-{{instance}}",
               "refId": "A"
             },
             {
