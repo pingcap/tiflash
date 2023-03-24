@@ -313,6 +313,11 @@ namespace DB
         F(type_still_used_when_evict, {{"type", "still_used_when_evict"}}),                                                                         \
         F(type_miss_count, {{"type", "miss_count"}}),                                                                                               \
         F(type_hit_count, {{"type", "hit_count"}}))                                                                                                 \
+    M(tiflash_storage_remote_stats, "The file stats on remote store", Gauge,                                                                        \
+        F(type_total_size, {"type", "total_size"}), F(type_valid_size, {"type", "valid_size"}),                                                     \
+        F(type_num_files, {"type", "num_files"}))                                                                                                   \
+    M(tiflash_storage_checkpoint_flow, "The bytes flow cause by remote checkpoint", Counter,                                                        \
+        F(type_incremental, {"type", "incremental"}), F(type_compaction, {"type", "compaction"}))                                                   \
     M(tiflash_storage_s3_request_seconds, "S3 request duration in seconds", Histogram,                                                              \
         F(type_put_object, {{"type", "put_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_copy_object, {{"type", "copy_object"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
