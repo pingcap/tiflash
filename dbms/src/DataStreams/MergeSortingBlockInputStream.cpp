@@ -150,7 +150,7 @@ Block MergeSortingBlockInputStream::readImpl()
         {
             /// If spill happens
 
-            LOG_INFO(log, "Begin external merge sort.");
+            LOG_INFO(log, "Begin restore data from disk for merge sort.");
 
             /// Create sorted streams to merge.
             spiller->finishSpill();
