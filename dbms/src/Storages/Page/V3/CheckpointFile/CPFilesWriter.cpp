@@ -73,6 +73,7 @@ CPDataWriteStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
 
     CPDataWriteStats write_down_stats;
     std::unordered_map<String, size_t> rewrite_stats;
+    bool last_page_is_raft_data = true;
 
     // 1. Iterate all edits, find these entry edits without the checkpoint info
     //    and collect the lock files from applied entries.
@@ -111,10 +112,14 @@ CPDataWriteStats CPFilesWriter::writeEditsAndApplyCheckpointInfo(
             rewrite_stats.try_emplace(file_id, 0).first->second += rec_edit.entry.size;
         }
 
-        if (max_data_file_size != 0 && current_write_size >= max_data_file_size)
+        bool current_page_is_raft_data = rec_edit.page_id.isRaftData();
+        if (current_write_size > 0 // If current_write_size is 0, data_writer is a empty file, not need to create a new one.
+            && (current_page_is_raft_data != last_page_is_raft_data                          // Data type changed
+                || (max_data_file_size != 0 && current_write_size >= max_data_file_size)))   // or reach size limit.
         {
             newDataWriter();
         }
+        last_page_is_raft_data = current_page_is_raft_data;
 
         // 2. For entry edits without the checkpoint info, write them to the data file,
         // and assign a new checkpoint info.
