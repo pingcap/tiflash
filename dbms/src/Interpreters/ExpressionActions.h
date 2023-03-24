@@ -17,10 +17,10 @@
 #include <Core/Block.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/Names.h>
+#include <Functions/IFunction.h>
 #include <Interpreters/Expand.h>
 #include <Storages/Transaction/Collator.h>
 #include <tipb/expression.pb.h>
-#include <Functions/IFunction.h>
 
 #include <unordered_map>
 #include <unordered_set>
@@ -117,6 +117,7 @@ public:
     std::string toString() const;
 
     void setMetaData(const tipb::Expr & expr) const { function->setMetaData(expr); }
+
 private:
     friend class ExpressionActions;
 

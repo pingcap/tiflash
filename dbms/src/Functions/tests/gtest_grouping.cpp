@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Functions/FunctionFactory.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <Functions/FunctionFactory.h>
+#include <gtest/gtest.h>
 #include <tipb/expression.pb.h>
 
 namespace DB
@@ -68,9 +69,10 @@ try
         size_t case_num = grouping_id.size();
         for (size_t i = 0; i < case_num; ++i)
         {
+            meta_data.grouping_id = meta_grouping_id[i];
             tipb::Expr expr = buildTiPBExpr(meta_data);
             ASSERT_COLUMN_EQ(
-                createConstColumn<UInt64>(1, expect[i]),
+                createConstColumn<UInt8>(1, expect[i]),
                 executeFunction(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
@@ -84,15 +86,14 @@ try
     {
         std::vector<UInt64> grouping_id{1, 4};
         std::vector<UInt64> meta_grouping_id{1, 2, 3, 4, 5, 6, 7};
-        std::vector<std::vector<UInt64>> expects {
+        std::vector<std::vector<UInt64>> expects{
             {1, 0},
             {0, 0},
             {1, 0},
             {0, 1},
-            {1, 0},
+            {1, 1},
             {0, 1},
-            {1, 1}
-        };
+            {1, 1}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
@@ -102,7 +103,7 @@ try
                 createColumn<UInt8>(expects[i]),
                 executeFunction(
                     func_name,
-                    std::vector<ColumnWithTypeAndName>{createColumn<UInt8>(grouping_id)},
+                    std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
                     nullptr,
                     false,
                     &expr));
@@ -113,15 +114,14 @@ try
     {
         std::vector<std::optional<UInt64>> grouping_id{1, 4, {}};
         std::vector<UInt64> meta_grouping_id{1, 2, 3, 4, 5, 6, 7};
-        std::vector<std::vector<std::optional<UInt64>>> expects {
+        std::vector<std::vector<std::optional<UInt64>>> expects{
             {1, 0, {}},
             {0, 0, {}},
             {1, 0, {}},
             {0, 1, {}},
-            {1, 0, {}},
+            {1, 1, {}},
             {0, 1, {}},
-            {1, 1, {}}
-        };
+            {1, 1, {}}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
@@ -131,7 +131,7 @@ try
                 createColumn<Nullable<UInt8>>(expects[i]),
                 executeFunction(
                     func_name,
-                    std::vector<ColumnWithTypeAndName>{createColumn<Nullable<UInt8>>(grouping_id)},
+                    std::vector<ColumnWithTypeAndName>{createColumn<Nullable<UInt64>>(grouping_id)},
                     nullptr,
                     false,
                     &expr));
@@ -156,9 +156,10 @@ try
         size_t case_num = grouping_id.size();
         for (size_t i = 0; i < case_num; ++i)
         {
+            meta_data.grouping_id = meta_grouping_id[i];
             tipb::Expr expr = buildTiPBExpr(meta_data);
             ASSERT_COLUMN_EQ(
-                createConstColumn<UInt64>(1, expect[i]),
+                createConstColumn<UInt8>(1, expect[i]),
                 executeFunction(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
@@ -172,15 +173,14 @@ try
     {
         std::vector<UInt64> grouping_id{2, 4};
         std::vector<UInt64> meta_grouping_id{1, 2, 3, 4, 5, 6, 7};
-        std::vector<std::vector<UInt64>> expects {
+        std::vector<std::vector<UInt64>> expects{
             {1, 1},
             {0, 1},
             {0, 1},
             {0, 0},
             {0, 0},
             {0, 0},
-            {0, 0}
-        };
+            {0, 0}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
@@ -190,7 +190,7 @@ try
                 createColumn<UInt8>(expects[i]),
                 executeFunction(
                     func_name,
-                    std::vector<ColumnWithTypeAndName>{createColumn<UInt8>(grouping_id)},
+                    std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
                     nullptr,
                     false,
                     &expr));
@@ -201,15 +201,14 @@ try
     {
         std::vector<std::optional<UInt64>> grouping_id{2, 4, {}};
         std::vector<UInt64> meta_grouping_id{1, 2, 3, 4, 5, 6, 7};
-        std::vector<std::vector<std::optional<UInt64>>> expects {
+        std::vector<std::vector<std::optional<UInt64>>> expects{
             {1, 1, {}},
             {0, 1, {}},
             {0, 1, {}},
             {0, 0, {}},
             {0, 0, {}},
             {0, 0, {}},
-            {0, 0, {}}
-        };
+            {0, 0, {}}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
@@ -219,7 +218,7 @@ try
                 createColumn<Nullable<UInt8>>(expects[i]),
                 executeFunction(
                     func_name,
-                    std::vector<ColumnWithTypeAndName>{createColumn<Nullable<UInt8>>(grouping_id)},
+                    std::vector<ColumnWithTypeAndName>{createColumn<Nullable<UInt64>>(grouping_id)},
                     nullptr,
                     false,
                     &expr));
@@ -244,9 +243,10 @@ try
         size_t case_num = grouping_id.size();
         for (size_t i = 0; i < case_num; ++i)
         {
+            meta_data.grouping_ids = meta_grouping_ids[i];
             tipb::Expr expr = buildTiPBExpr(meta_data);
             ASSERT_COLUMN_EQ(
-                createConstColumn<UInt64>(1, expect[i]),
+                createConstColumn<UInt8>(1, expect[i]),
                 executeFunction(
                     func_name,
                     std::vector<ColumnWithTypeAndName>{createConstColumn<UInt64>(1, grouping_id[i])},
@@ -260,12 +260,11 @@ try
     {
         std::vector<UInt64> grouping_id{1, 2, 3, 4};
         std::vector<std::set<UInt64>> meta_grouping_id{{2}, {3}, {2, 3}, {1, 3}};
-        std::vector<std::vector<UInt64>> expects {
-            {1, 1, 1, 0},
-            {0, 1, 0, 1},
-            {0, 1, 1, 1},
-            {0, 0, 0, 0}
-        };
+        std::vector<std::vector<UInt64>> expects{
+            {1, 0, 1, 1},
+            {1, 1, 0, 1},
+            {1, 0, 0, 1},
+            {0, 1, 0, 1}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
@@ -275,7 +274,7 @@ try
                 createColumn<UInt8>(expects[i]),
                 executeFunction(
                     func_name,
-                    std::vector<ColumnWithTypeAndName>{createColumn<UInt8>(grouping_id)},
+                    std::vector<ColumnWithTypeAndName>{createColumn<UInt64>(grouping_id)},
                     nullptr,
                     false,
                     &expr));
@@ -286,12 +285,11 @@ try
     {
         std::vector<std::optional<UInt64>> grouping_id{1, 2, 3, 4, {}};
         std::vector<std::set<UInt64>> meta_grouping_id{{2}, {3}, {2, 3}, {1, 3}};
-        std::vector<std::vector<std::optional<UInt64>>> expects {
-            {1, 1, 1, 0, {}},
-            {0, 1, 0, 1, {}},
-            {0, 1, 1, 1, {}},
-            {0, 0, 0, 0, {}}
-        };
+        std::vector<std::vector<std::optional<UInt64>>> expects{
+            {1, 0, 1, 1, {}},
+            {1, 1, 0, 1, {}},
+            {1, 0, 0, 1, {}},
+            {0, 1, 0, 1, {}}};
 
         for (size_t i = 0; i < expects.size(); ++i)
         {
@@ -301,19 +299,12 @@ try
                 createColumn<Nullable<UInt8>>(expects[i]),
                 executeFunction(
                     func_name,
-                    std::vector<ColumnWithTypeAndName>{createColumn<Nullable<UInt8>>(grouping_id)},
+                    std::vector<ColumnWithTypeAndName>{createColumn<Nullable<UInt64>>(grouping_id)},
                     nullptr,
                     false,
                     &expr));
         }
     }
-}
-CATCH
-
-TEST_F(TestGrouping, IllegalCases)
-try
-{
-
 }
 CATCH
 

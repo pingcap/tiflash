@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <Common/typeid_cast.h>
 #include <Core/ColumnNumbers.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
+
 #include "Columns/ColumnNullable.h"
 #include "common/types.h"
 
@@ -171,7 +172,7 @@ private:
         const auto & grouping_nested_col_data = col_grouping_ids.getNestedColumnPtr();
         const auto * grouping_col_vec = checkAndGetColumn<ColumnVector<ArgType>>(&(*grouping_nested_col_data));
         if (grouping_col_vec == nullptr)
-            throw Exception(fmt::format("Arg's data type should be UInt64 in grouping function, but get {}.", typeid(&(*grouping_nested_col_data)).name()));
+            throw Exception("Arg's data type should be UInt64 in grouping function.");
         const typename ColumnVector<ArgType>::Container & grouping_container = grouping_col_vec->getData();
         const auto & grouping_null_map = col_grouping_ids.getNullMapData();
 
@@ -207,7 +208,8 @@ private:
         // get arg's data container
         const auto * grouping_col_vec = checkAndGetColumn<ColumnVector<ArgType>>(&(*col_grouping_ids));
         if (grouping_col_vec == nullptr)
-            throw Exception(fmt::format("Arg's data type should be UInt64 in grouping function, but get {}.", typeid(&(*col_grouping_ids)).name()));
+            throw Exception("Arg's data type should be UInt64 in grouping function.");
+
         const typename ColumnVector<ArgType>::Container & grouping_container = grouping_col_vec->getData();
 
         // get result's data container
