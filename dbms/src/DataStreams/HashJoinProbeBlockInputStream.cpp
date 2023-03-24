@@ -26,20 +26,36 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     UInt64 max_block_size_)
     : log(Logger::get(req_id))
     , original_join(join_)
-    , probe_exec(std::make_shared<HashJoinProbeExec>())
-    , need_output_non_joined_data(join_->needReturnNonJoinedData())
-    , current_non_joined_stream_index(non_joined_stream_index)
-    , max_block_size(max_block_size_)
     , probe_process_info(max_block_size_)
 {
     children.push_back(input);
-    probe_exec->probe_stream = children.back();
 
-    probe_exec->join = original_join;
-    RUNTIME_CHECK_MSG(probe_exec->join != nullptr, "join ptr should not be null.");
-    RUNTIME_CHECK_MSG(probe_exec->join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
+    RUNTIME_CHECK_MSG(original_join != nullptr, "join ptr should not be null.");
+    RUNTIME_CHECK_MSG(original_join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
+
+    bool need_output_non_joined_data = original_join->needReturnNonJoinedData();
+    BlockInputStreamPtr non_joined_stream = nullptr;
     if (need_output_non_joined_data)
-        probe_exec->non_joined_stream = probe_exec->join->createStreamWithNonJoinedRows(input->getHeader(), current_non_joined_stream_index, probe_exec->join->getProbeConcurrency(), max_block_size);
+        non_joined_stream = original_join->createStreamWithNonJoinedRows(input->getHeader(), non_joined_stream_index, original_join->getProbeConcurrency(), max_block_size_);
+
+    auto cur_probe_exec = std::make_shared<HashJoinProbeExec>(
+        original_join,
+        nullptr,
+        input,
+        need_output_non_joined_data,
+        non_joined_stream_index,
+        non_joined_stream,
+        max_block_size_);
+    probe_exec.set(std::move(cur_probe_exec));
+}
+
+void HashJoinProbeBlockInputStream::readPrefix()
+{
+}
+
+void HashJoinProbeBlockInputStream::readSuffix()
+{
+    LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, non joined rows {}", joined_rows + non_joined_rows, joined_rows, non_joined_rows);
 }
 
 Block HashJoinProbeBlockInputStream::getHeader() const
@@ -58,15 +74,6 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
     /// When the probe stream quits probe by cancelling instead of normal finish, the Join operator might still produce meaningless blocks
     /// and expects these meaningless blocks won't be used to produce meaningful result.
 
-    JoinPtr current_join;
-    RestoreInfo restore_info;
-    {
-        std::lock_guard lock(mutex);
-        current_join = probe_exec->join;
-        restore_info.non_joined_stream = probe_exec->non_joined_stream;
-        restore_info.build_stream = probe_exec->restore_build_stream;
-        restore_info.probe_stream = probe_exec->probe_stream;
-    }
     /// Cancel join just wake up all the threads waiting in Join::waitUntilAllBuildFinished/Join::waitUntilAllProbeFinished,
     /// the ongoing join process will not be interrupted
     /// There is a little bit hack here because cancel will be called in two cases:
@@ -78,25 +85,7 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
     ///       threads is not 100% safe because if the probe thread is wake up when build is not finished yet, it may produce wrong results, for now
     ///       it is safe because when any of the data stream read empty block because of early exit, the execution framework ensures that no further
     ///       data will be used.
-    current_join->cancel();
-    if (restore_info.non_joined_stream != nullptr)
-    {
-        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_info.non_joined_stream.get());
-        if (p_stream != nullptr)
-            p_stream->cancel(kill);
-    }
-    if (restore_info.probe_stream != nullptr)
-    {
-        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_info.probe_stream.get());
-        if (p_stream != nullptr)
-            p_stream->cancel(kill);
-    }
-    if (restore_info.build_stream != nullptr)
-    {
-        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_info.build_stream.get());
-        if (p_stream != nullptr)
-            p_stream->cancel(kill);
-    }
+    probe_exec->cancel();
 }
 
 Block HashJoinProbeBlockInputStream::readImpl()
@@ -109,43 +98,19 @@ Block HashJoinProbeBlockInputStream::readImpl()
     catch (...)
     {
         auto error_message = getCurrentExceptionMessage(false, true);
-        probe_exec->join->meetError(error_message);
+        probe_exec->meetError(error_message);
         throw Exception(error_message);
     }
 }
 
-void HashJoinProbeBlockInputStream::readSuffixImpl()
-{
-    LOG_DEBUG(log, "Finish join probe, total output rows {}, joined rows {}, non joined rows {}", joined_rows + non_joined_rows, joined_rows, non_joined_rows);
-}
-
 void HashJoinProbeBlockInputStream::onCurrentProbeDone()
 {
-    if (probe_exec->join->isRestoreJoin())
-        probe_exec->probe_stream->readSuffix();
-    probe_exec->join->finishOneProbe();
-    if (need_output_non_joined_data || probe_exec->join->isEnableSpill())
-    {
-        status = ProbeStatus::WAIT_PROBE_FINISH;
-    }
-    else
-    {
-        status = ProbeStatus::FINISHED;
-    }
+    status = probe_exec->onProbeFinish() ? ProbeStatus::FINISHED : ProbeStatus::WAIT_PROBE_FINISH;
 }
 
 void HashJoinProbeBlockInputStream::onCurrentReadNonJoinedDataDone()
 {
-    probe_exec->non_joined_stream->readSuffix();
-    if (!probe_exec->join->isEnableSpill())
-    {
-        status = ProbeStatus::FINISHED;
-    }
-    else
-    {
-        probe_exec->join->finishOneNonJoin(current_non_joined_stream_index);
-        status = ProbeStatus::GET_RESTORE_JOIN;
-    }
+    status = probe_exec->onNonJoinedFinish() ? ProbeStatus::FINISHED : ProbeStatus::GET_RESTORE_JOIN;
 }
 
 void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
@@ -153,42 +118,25 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
     /// find restore join in DFS way
     while (true)
     {
-        assert(probe_exec->join->isEnableSpill());
-        /// first check if current join has a partition to restore
-        if (probe_exec->join->hasPartitionSpilledWithLock())
+        if (isCancelledOrThrowIfKilled())
         {
-            auto restore_info = probe_exec->join->getOneRestoreStream(max_block_size);
-            /// get a restore join
-            if (restore_info.join)
-            {
-                /// restored join should always enable spill
-                assert(restore_info.join->isEnableSpill());
-                parents.push_back(probe_exec);
-                {
-                    std::lock_guard lock(mutex);
-                    if (isCancelledOrThrowIfKilled())
-                    {
-                        status = ProbeStatus::FINISHED;
-                        return;
-                    }
-                    probe_exec = std::make_shared<HashJoinProbeExec>();
-                    probe_exec->join = restore_info.join;
-                    probe_exec->restore_build_stream = restore_info.build_stream;
-                    probe_exec->probe_stream = restore_info.probe_stream;
-                    probe_exec->non_joined_stream = restore_info.non_joined_stream;
-                    if (probe_exec->non_joined_stream != nullptr)
-                        current_non_joined_stream_index = dynamic_cast<NonJoinedBlockInputStream *>(probe_exec->non_joined_stream.get())->getNonJoinedIndex();
-                }
-                status = ProbeStatus::RESTORE_BUILD;
-                return;
-            }
-            assert(probe_exec->join->hasPartitionSpilledWithLock() == false);
+            status = ProbeStatus::FINISHED;
+            return;
+        }
+
+        auto cur_probe_exec = *probe_exec;
+        auto restore_probe_exec = cur_probe_exec->tryGetRestoreExec();
+        if (restore_probe_exec.has_value())
+        {
+            parents.push_back(std::move(cur_probe_exec));
+            probe_exec.set(std::move(*restore_probe_exec));
+            status = ProbeStatus::RESTORE_BUILD;
+            return;
         }
         /// current join has no more partition to restore, so check if previous join still has partition to restore
         if (!parents.empty())
         {
             /// replace current join with previous join
-            std::lock_guard lock(mutex);
             if (isCancelledOrThrowIfKilled())
             {
                 status = ProbeStatus::FINISHED;
@@ -196,7 +144,7 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
             }
             else
             {
-                probe_exec = parents.back();
+                probe_exec.set(std::move(parents.back()));
                 parents.pop_back();
             }
         }
@@ -211,7 +159,7 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
 
 void HashJoinProbeBlockInputStream::onAllProbeDone()
 {
-    if (need_output_non_joined_data)
+    if (probe_exec->need_output_non_joined_data)
     {
         assert(probe_exec->non_joined_stream != nullptr);
         status = ProbeStatus::READ_NON_JOINED_DATA;
@@ -234,16 +182,14 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
             case ProbeStatus::WAIT_BUILD_FINISH:
                 probe_exec->join->waitUntilAllBuildFinished();
                 /// after Build finish, always go to Probe stage
-                if (probe_exec->join->isRestoreJoin())
-                    probe_exec->probe_stream->readSuffix();
+                probe_exec->onProbeStart();
                 status = ProbeStatus::PROBE;
                 break;
             case ProbeStatus::PROBE:
             {
-                assert(probe_exec->probe_stream != nullptr);
                 if (probe_process_info.all_rows_joined_finish)
                 {
-                    auto [partition_index, block] = getOneProbeBlock();
+                    auto [partition_index, block] = probe_exec->getProbeBlock();
                     if (!block)
                     {
                         onCurrentProbeDone();
@@ -282,9 +228,7 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
             case ProbeStatus::RESTORE_BUILD:
             {
                 probe_process_info.all_rows_joined_finish = true;
-                probe_exec->restore_build_stream->readPrefix();
-                while (probe_exec->restore_build_stream->read()) {};
-                probe_exec->restore_build_stream->readSuffix();
+                probe_exec->restoreBuild();
                 status = ProbeStatus::WAIT_BUILD_FINISH;
                 break;
             }
@@ -299,42 +243,6 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
         status = ProbeStatus::FINISHED;
         throw;
     }
-}
-
-std::tuple<size_t, Block> HashJoinProbeBlockInputStream::getOneProbeBlock()
-{
-    size_t partition_index = 0;
-    Block block;
-
-    /// Even if spill is enabled, if spill is not triggered during build,
-    /// there is no need to dispatch probe block
-    if (!probe_exec->join->isSpilled())
-    {
-        block = probe_exec->probe_stream->read();
-    }
-    else
-    {
-        while (true)
-        {
-            if (!probe_partition_blocks.empty())
-            {
-                auto partition_block = probe_partition_blocks.front();
-                probe_partition_blocks.pop_front();
-                partition_index = std::get<0>(partition_block);
-                block = std::get<1>(partition_block);
-                break;
-            }
-            else
-            {
-                auto new_block = probe_exec->probe_stream->read();
-                if (new_block)
-                    probe_exec->join->dispatchProbeBlock(new_block, probe_partition_blocks);
-                else
-                    break;
-            }
-        }
-    }
-    return {partition_index, block};
 }
 
 } // namespace DB

@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <DataStreams/HashJoinProbeExec.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingHashJoinBlockTransform.h>
-#include <DataStreams/HashJoinProbeExec.h>
 #include <Interpreters/Join.h>
 
 namespace DB
@@ -48,6 +48,10 @@ public:
 
 protected:
     Block readImpl() override;
+
+    // Override readPrefix and readSuffix so that children's readPrefix and readSuffix are not called and are called by probe_exec.
+    void readPrefix() override;
+    void readSuffix() override;
 
 private:
     /*
@@ -119,23 +123,17 @@ private:
     void onAllProbeDone();
     void onCurrentReadNonJoinedDataDone();
     void tryGetRestoreJoin();
-    void readSuffixImpl() override;
     const LoggerPtr log;
+    JoinPtr original_join;
     /// join/non_joined_stream/restore_build_stream/restore_probe_stream can be modified during the runtime
     /// although read/write to those are almost only in 1 thread, but an exception is cancel thread will
     /// read them, so need to protect the multi-threads access
-    std::mutex mutex;
-    JoinPtr original_join;
-    HashJoinProbeExecPtr probe_exec;
-    const bool need_output_non_joined_data;
-    size_t current_non_joined_stream_index;
-    UInt64 max_block_size;
+    HashJoinProbeExecHolder probe_exec;
     ProbeProcessInfo probe_process_info;
     ProbeStatus status{ProbeStatus::WAIT_BUILD_FINISH};
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;
     std::list<HashJoinProbeExecPtr> parents;
-    std::list<std::tuple<size_t, Block>> probe_partition_blocks;
 };
 
 } // namespace DB

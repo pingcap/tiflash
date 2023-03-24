@@ -34,6 +34,70 @@ public:
 
     BlockInputStreamPtr probe_stream;
 
+    bool need_output_non_joined_data;
+    size_t non_joined_stream_index;
     BlockInputStreamPtr non_joined_stream;
+
+    size_t max_block_size;
+
+    std::list<std::tuple<size_t, Block>> probe_partition_blocks;
+
+public:
+    HashJoinProbeExec(
+        const JoinPtr & join_,
+        const BlockInputStreamPtr & restore_build_stream_,
+        const BlockInputStreamPtr & probe_stream_,
+        bool need_output_non_joined_data_,
+        size_t non_joined_stream_index_,
+        const BlockInputStreamPtr & non_joined_stream_,
+        size_t max_block_size_);
+
+    void restoreBuild();
+
+    std::tuple<size_t, Block> getProbeBlock();
+
+    std::optional<HashJoinProbeExecPtr> tryGetRestoreExec();
+
+    void cancel();
+
+    void meetError(const String & error_message);
+
+    void onProbeStart();
+    // Returns true if the probe_exec ends.
+    // Returns false if the probe_exec continues to execute.
+    bool onProbeFinish();
+
+    // Returns true if the probe_exec ends.
+    // Returns false if the probe_exec continues to execute.
+    bool onNonJoinedFinish();
+};
+
+class HashJoinProbeExecHolder
+{
+public:
+    const HashJoinProbeExecPtr & operator->()
+    {
+        std::lock_guard lock(mu);
+        assert(exec);
+        return exec;
+    }
+
+    const HashJoinProbeExecPtr & operator*()
+    {
+        std::lock_guard lock(mu);
+        assert(exec);
+        return exec;
+    }
+
+    void set(HashJoinProbeExecPtr && new_one)
+    {
+        assert(new_one);
+        std::lock_guard lock(mu);
+        exec = new_one;
+    }
+
+private:
+    std::mutex mu;
+    HashJoinProbeExecPtr exec;
 };
 } // namespace DB
