@@ -216,17 +216,24 @@ UniversalPageMap UniversalPageStorage::read(const std::vector<PageReadFields> & 
 
     // read page data from blob_store
     auto local_page_map = blob_store->read(local_read_infos, read_limiter);
-    auto [page_map_for_update_cache, remote_page_map] = remote_reader->read(remote_read_infos);
-    UniversalWriteBatch wb;
-    for (const auto & [page_id, page] : page_map_for_update_cache)
+
+    if (!remote_read_infos.empty())
     {
-        auto buf = std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size());
-        wb.updateRemotePage(page_id, buf, page.data.size());
-    }
-    tryUpdateLocalCacheForRemotePages(wb, snapshot);
-    for (const auto & [page_id, page] : remote_page_map)
-    {
-        local_page_map.emplace(page_id, page);
+        auto [page_map_for_update_cache, remote_page_map] = remote_reader->read(remote_read_infos);
+        if (!page_map_for_update_cache.empty())
+        {
+            UniversalWriteBatch wb;
+            for (const auto & [page_id, page] : page_map_for_update_cache)
+            {
+                auto buf = std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size());
+                wb.updateRemotePage(page_id, buf, page.data.size());
+            }
+            tryUpdateLocalCacheForRemotePages(wb, snapshot);
+        }
+        for (const auto & [page_id, page] : remote_page_map)
+        {
+            local_page_map.emplace(page_id, page);
+        }
     }
     for (const auto & page_id_not_found : page_ids_not_found)
     {

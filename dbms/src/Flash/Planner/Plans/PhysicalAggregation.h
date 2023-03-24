@@ -55,6 +55,12 @@ public:
 
     void buildPipeline(PipelineBuilder & builder) override;
 
+    void buildPipelineExecGroup(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        Context & context,
+        size_t /*concurrency*/) override;
+
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
