@@ -182,6 +182,7 @@ bool ClientFactory::isEnabled() const
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     config = config_;
+    RUNTIME_CHECK(!config.root.starts_with("//"), config.root);
     config.root = normalizedRoot(config.root);
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
@@ -379,12 +380,18 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 {
     bool lifecycle_rule_has_been_set = false;
     Aws::Vector<Aws::S3::Model::LifecycleRule> old_rules;
-    {
+    do {
         Aws::S3::Model::GetBucketLifecycleConfigurationRequest req;
         req.SetBucket(client.bucket());
         auto outcome = client.GetBucketLifecycleConfiguration(req);
         if (!outcome.IsSuccess())
         {
+            const auto & error = outcome.GetError();
+            // The life cycle is not added at all
+            if (error.GetExceptionName() == "NoSuchLifecycleConfiguration")
+            {
+                break;
+            }
             throw fromS3Error(outcome.GetError(), "GetBucketLifecycle fail");
         }
 
@@ -413,7 +420,7 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
                 break;
             }
         }
-    }
+    } while (false);
 
     if (lifecycle_rule_has_been_set)
     {
@@ -471,11 +478,13 @@ void listPrefix(
 {
     Stopwatch sw;
     Aws::S3::Model::ListObjectsV2Request req;
-    req.WithBucket(client.bucket()).WithPrefix(client.root() + prefix);
+    bool is_root_single_slash = client.root() == "/";
+    // If the `root == '/'`, don't prepend the root to the prefix, otherwise S3 list doesn't work.
+    req.WithBucket(client.bucket()).WithPrefix(is_root_single_slash ? prefix : client.root() + prefix);
 
     // If the `root == '/'`, then the return result will cut it off
     // else we need to cut the root in the following codes
-    bool need_cut = client.root() != "/";
+    bool need_cut = !is_root_single_slash;
     size_t cut_size = client.root().size();
 
     bool done = false;
@@ -534,7 +543,9 @@ void listPrefixWithDelimiter(
 {
     Stopwatch sw;
     Aws::S3::Model::ListObjectsV2Request req;
-    req.WithBucket(client.bucket()).WithPrefix(client.root() + prefix);
+    bool is_root_single_slash = client.root() == "/";
+    // If the `root == '/'`, don't prepend the root to the prefix, otherwise S3 list doesn't work.
+    req.WithBucket(client.bucket()).WithPrefix(is_root_single_slash ? prefix : client.root() + prefix);
     if (!delimiter.empty())
     {
         req.SetDelimiter(String(delimiter));
@@ -542,7 +553,7 @@ void listPrefixWithDelimiter(
 
     // If the `root == '/'`, then the return result will cut it off
     // else we need to cut the root in the following codes
-    bool need_cut = client.root() != "/";
+    bool need_cut = !is_root_single_slash;
     size_t cut_size = client.root().size();
 
     bool done = false;
