@@ -365,7 +365,9 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     }
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
-        Aws::STS::STSClient sts_client(cfg);
+        Aws::Client::ClientConfiguration sts_cfg;
+        sts_cfg.verifySSL = false;
+        Aws::STS::STSClient sts_client(sts_cfg);
         Aws::STS::Model::GetCallerIdentityRequest req;
         auto get_identity_outcome = sts_client.GetCallerIdentity(req);
         if (!get_identity_outcome.IsSuccess())
