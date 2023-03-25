@@ -30,12 +30,7 @@ extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
 
 ConstantFilterDescription::ConstantFilterDescription(const IColumn & column)
 {
-    if (column.onlyNull())
-    {
-        always_false = true;
-        return;
-    }
-
+    // todo make always_false compatible with MPP
     if (column.isColumnConst())
     {
         const auto & column_const = static_cast<const ColumnConst &>(column);
@@ -54,8 +49,6 @@ ConstantFilterDescription::ConstantFilterDescription(const IColumn & column)
 
         if (column_const.getValue<UInt64>())
             always_true = true;
-        else
-            always_false = true;
         return;
     }
 }
