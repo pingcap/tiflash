@@ -55,7 +55,28 @@ Block LateMaterializationBlockInputStream::readImpl()
         // If filter is nullptr, it means that these push down filters are always true.
         if (!filter)
         {
-            Block rest_column_block = rest_column_stream->read();
+            IColumn::Filter filter;
+            filter.resize(filter_column_block.rows());
+            Block rest_column_block;
+            if (bitmap_filter->get(filter, filter_column_block.startOffset(), filter_column_block.rows()))
+            {
+                rest_column_block = rest_column_stream->read();
+            }
+            else
+            {
+                rest_column_block = rest_column_stream->read();
+                size_t passed_count = countBytesInFilter(filter);
+                for (auto & col : rest_column_block)
+                {
+                    col.column = col.column->filter(filter, passed_count);
+                }
+                for (auto & col : filter_column_block)
+                {
+                    if (col.name == filter_column_name)
+                        continue;
+                    col.column = col.column->filter(filter, passed_count);
+                }
+            }
             return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
         }
 
@@ -66,7 +87,7 @@ Block LateMaterializationBlockInputStream::readImpl()
         if (size_t passed_count = countBytesInFilter(*filter); passed_count == 0)
         {
             // if all rows are filtered, skip the next block of rest_column_stream
-            if (rest_column_stream->skipNextBlock() == 0)
+            if (size_t skipped_rows = rest_column_stream->skipNextBlock(); skipped_rows == 0)
             {
                 // if we fail to skip, we need to call read() of rest_column_stream, but ignore the result
                 // NOTE: skipNextBlock() return 0 only if failed to skip or meets the end of stream,
@@ -77,6 +98,7 @@ Block LateMaterializationBlockInputStream::readImpl()
             }
             else
             {
+                RUNTIME_CHECK(skipped_rows == rows);
                 LOG_DEBUG(log, "Late materialization skip read block at start_offset: {}, rows: {}", filter_column_block.startOffset(), filter_column_block.rows());
             }
         }

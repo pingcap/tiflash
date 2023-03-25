@@ -295,6 +295,7 @@ size_t DMFileReader::skipNextBlock()
 
     scan_context->total_dmfile_skipped_rows += read_rows;
     next_row_offset += read_rows;
+    last_read_skipped = true;
     return read_rows;
 }
 
@@ -396,6 +397,8 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
     // merge blocks
     Block res = vstackBlocks(std::move(blocks));
     res.setStartOffset(start_row_offset);
+
+    last_read_skipped = false;
     return res;
 }
 
@@ -639,6 +642,8 @@ Block DMFileReader::read()
             e.rethrow();
         }
     }
+
+    last_read_skipped = false;
     return res;
 }
 
@@ -654,7 +659,7 @@ void DMFileReader::readFromDisk(
     if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
     {
         auto & top_stream = iter->second;
-        bool should_seek = force_seek || shouldSeek(start_pack_id) || skip_packs > 0;
+        bool should_seek = force_seek || shouldSeek(start_pack_id) || skip_packs > 0 || last_read_skipped;
 
         auto data_type = dmfile->getColumnStat(column_define.id).type;
         data_type->deserializeBinaryBulkWithMultipleStreams( //

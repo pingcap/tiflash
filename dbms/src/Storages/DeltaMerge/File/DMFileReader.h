@@ -180,6 +180,9 @@ private:
 
     std::unique_ptr<ColumnSharingCacheMap> col_data_cache{};
     std::unordered_map<ColId, bool> last_read_from_cache{};
+
+    /// call skipNextBlock() before read()
+    bool last_read_skipped{false};
 };
 
 } // namespace DM
