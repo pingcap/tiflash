@@ -55,26 +55,24 @@ Block LateMaterializationBlockInputStream::readImpl()
         // If filter is nullptr, it means that these push down filters are always true.
         if (!filter)
         {
-            IColumn::Filter filter;
-            filter.resize(filter_column_block.rows());
+            IColumn::Filter col_filter;
+            col_filter.resize(filter_column_block.rows());
             Block rest_column_block;
-            if (bitmap_filter->get(filter, filter_column_block.startOffset(), filter_column_block.rows()))
+            if (bitmap_filter->get(col_filter, filter_column_block.startOffset(), filter_column_block.rows()))
             {
                 rest_column_block = rest_column_stream->read();
             }
             else
             {
                 rest_column_block = rest_column_stream->read();
-                size_t passed_count = countBytesInFilter(filter);
+                size_t passed_count = countBytesInFilter(col_filter);
                 for (auto & col : rest_column_block)
                 {
-                    col.column = col.column->filter(filter, passed_count);
+                    col.column = col.column->filter(col_filter, passed_count);
                 }
                 for (auto & col : filter_column_block)
                 {
-                    if (col.name == filter_column_name)
-                        continue;
-                    col.column = col.column->filter(filter, passed_count);
+                    col.column = col.column->filter(col_filter, passed_count);
                 }
             }
             return hstackBlocks({std::move(filter_column_block), std::move(rest_column_block)}, header);
