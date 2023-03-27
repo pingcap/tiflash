@@ -11,11 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <Operators/AggregateSinkOp.h>
+
+#include <Operators/AggregateBuildSinkOp.h>
 
 namespace DB
 {
-OperatorStatus AggregateSinkOp::writeImpl(Block && block)
+OperatorStatus AggregateBuildSinkOp::writeImpl(Block && block)
 {
     if (unlikely(!block))
     {
@@ -27,9 +28,9 @@ OperatorStatus AggregateSinkOp::writeImpl(Block && block)
     return OperatorStatus::NEED_INPUT;
 }
 
-void AggregateSinkOp::operateSuffix()
+void AggregateBuildSinkOp::operateSuffix()
 {
-    LOG_DEBUG(log, "finish write with {} rows", total_rows);
+    LOG_DEBUG(log, "finish build with {} rows", total_rows);
 }
 
 } // namespace DB

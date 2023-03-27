@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Poco/File.h>
@@ -156,7 +157,7 @@ struct FileIdsToCompactGetter
         auto stats = uni_page_storage->getRemoteDataFilesStatCache();
         auto file_ids_to_compact = PS::V3::getRemoteFileIdsNeedCompact(stats, gc_threshold, remote_store, log);
         // update cache by the S3 result
-        uni_page_storage->updateRemoteFilesTotalSizes(stats);
+        uni_page_storage->updateRemoteFilesStatCache(stats);
         return file_ids_to_compact;
     }
 };
@@ -221,6 +222,7 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
      */
     const auto & settings = global_context.getSettingsRef(); // TODO: make it dynamic reloadable
     auto gc_threshold = DM::Remote::RemoteGCThreshold{
+        .min_age_seconds = settings.remote_gc_min_age_seconds,
         .valid_rate = settings.remote_gc_ratio,
         .min_file_threshold = static_cast<size_t>(settings.remote_gc_small_size),
     };
@@ -247,14 +249,17 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
             .log = log,
         },
     };
+
     const auto write_stats = uni_page_storage->dumpIncrementalCheckpoint(opts);
+    GET_METRIC(tiflash_storage_checkpoint_flow, type_incremental).Increment(write_stats.incremental_data_bytes);
+    GET_METRIC(tiflash_storage_checkpoint_flow, type_compaction).Increment(write_stats.compact_data_bytes);
 
     LOG_INFO(
         log,
-        "Upload checkpoint success, upload_sequence={} incremental_bytes={} rewrite_bytes={}",
+        "Upload checkpoint success, upload_sequence={} incremental_bytes={} compact_bytes={}",
         upload_info.upload_sequence,
         write_stats.incremental_data_bytes,
-        write_stats.rewrite_data_bytes);
+        write_stats.compact_data_bytes);
 
     // the checkpoint is uploaded to remote data store, remove local temp files
     Poco::File(local_dir).remove(true);
