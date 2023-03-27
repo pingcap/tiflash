@@ -222,11 +222,14 @@ namespace DB
         F(type_delete, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}))                                                                              \
     M(tiflash_disaggregated_read_tasks_count, "Total number of storage engine disaggregated read tasks", Counter)                                   \
     M(tiflash_disaggregated_breakdown_duration_seconds, "", Histogram,                                                                              \
-        F(type_establish, {{"type", "establish"}}, ExpBuckets{0.001, 2, 20}),                                                                       \
-        F(type_build_task, {{"type", "build_task"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
-        F(type_fetch_page, {{"type", "fetch_page"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
-        F(type_pop_ready_tasks, {{"type", "pop_ready_tasks"}}, ExpBuckets{0.001, 2, 20}),                                                           \
-        F(type_build_stream, {{"type", "build_stream"}}, ExpBuckets{0.001, 2, 20}))                                                                 \
+        F(type_rpc_establish, {{"type", "rpc_establish"}}, ExpBuckets{0.01, 2, 20}),                                                                \
+        F(type_total_establish_backoff, {{"type", "total_establish_backoff"}}, ExpBuckets{0.01, 2, 20}),                                            \
+        F(type_resolve_lock, {{"type", "resolve_lock"}}, ExpBuckets{0.01, 2, 20}),                                                                  \
+        F(type_rpc_fetch_page, {{"type", "rpc_fetch_page"}}, ExpBuckets{0.01, 2, 20}),                                                              \
+        F(type_cache_occupy, {{"type", "cache_occupy"}}, ExpBuckets{0.01, 2, 20}),                                                                  \
+        F(type_build_read_task, {{"type", "build_read_task"}}, ExpBuckets{0.01, 2, 20}),                                                            \
+        F(type_seg_next_task, {{"type", "seg_next_task"}}, ExpBuckets{0.01, 2, 20}),                                                                \
+        F(type_seg_build_stream, {{"type", "seg_build_stream"}}, ExpBuckets{0.01, 2, 20}))                                                          \
     M(tiflash_disaggregated_details, "", Counter,                                                                                                   \
         F(type_cftiny_read, {{"type", "cftiny_read"}}),                                                                                             \
         F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                                           \

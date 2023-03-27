@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
+#include <Common/TiFlashMetrics.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
@@ -94,6 +95,11 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
 
     DM::RNRemoteReadTaskPtr remote_read_tasks;
 
+    double total_backoff_seconds = 0.0;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_total_establish_backoff).Observe(total_backoff_seconds);
+    });
+
     kv::Backoffer bo(kv::copNextMaxBackoff);
     while (true)
     {
@@ -117,8 +123,13 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
             if (e.code() != ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
                 throw;
 
-            bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
+            Stopwatch w_backoff;
+            SCOPE_EXIT({
+                total_backoff_seconds += w_backoff.elapsedSeconds();
+            });
+
             LOG_INFO(log, "Meets retryable error: {}, retry to build remote read tasks", e.message());
+            bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
     }
 
@@ -161,6 +172,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggTasks(
     return std::make_shared<DM::RNRemoteReadTask>(std::move(build_results));
 }
 
+/// Note: This function runs concurrently when there are multiple Write Nodes.
 void StorageDisaggregated::buildDisaggTask(
     const Context & db_context,
     const pingcap::coprocessor::BatchCopTask & batch_cop_task,
@@ -186,7 +198,7 @@ void StorageDisaggregated::buildDisaggTask(
         batch_cop_task.store_addr,
         resp->tables_size());
 
-    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_establish).Observe(watch.elapsedSeconds());
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_establish).Observe(watch.elapsedSeconds());
     watch.restart();
 
     if (resp->has_error())
@@ -236,6 +248,8 @@ void StorageDisaggregated::buildDisaggTask(
                 error.msg(),
                 batch_cop_task.store_addr);
 
+            Stopwatch w_resolve_lock;
+
             // Try to resolve all locks.
             kv::Backoffer bo(kv::copNextMaxBackoff);
             std::vector<uint64_t> pushed;
@@ -245,7 +259,9 @@ void StorageDisaggregated::buildDisaggTask(
             auto before_expired = cluster->lock_resolver->resolveLocks(bo, sender_target_mpp_task_id.query_id.start_ts, locks, pushed);
 
             // TODO: Use `pushed` to bypass large txn.
-            LOG_DEBUG(log, "Finished resolve locks, n_locks={} pushed.size={} before_expired={}", locks.size(), pushed.size(), before_expired);
+            LOG_DEBUG(log, "Finished resolve locks, elapsed={}s n_locks={} pushed.size={} before_expired={}", w_resolve_lock.elapsedSeconds(), locks.size(), pushed.size(), before_expired);
+
+            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_resolve_lock).Observe(w_resolve_lock.elapsedSeconds());
 
             throw Exception(
                 error.msg(),
@@ -278,7 +294,7 @@ void StorageDisaggregated::buildDisaggTask(
         auto parse_ok = table.ParseFromString(physical_table);
         RUNTIME_CHECK_MSG(parse_ok, "Failed to deserialize RemotePhysicalTable from response");
 
-        Stopwatch watch_table;
+        Stopwatch w_build_table_task;
 
         const auto task = DM::RNRemoteTableReadTask::buildFrom(
             db_context,
@@ -295,13 +311,13 @@ void StorageDisaggregated::buildDisaggTask(
         LOG_DEBUG(
             log,
             "Build RNRemoteTableReadTask finished, elapsed={:.3f}s store={} addr={} segments={}",
-            watch_table.elapsedSeconds(),
+            w_build_table_task.elapsedSeconds(),
             resp->store_id(),
             batch_cop_task.store_addr,
             table.segments().size());
     }
 
-    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_task).Observe(watch.elapsedSeconds());
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_read_task).Observe(watch.elapsedSeconds());
 }
 
 /**
