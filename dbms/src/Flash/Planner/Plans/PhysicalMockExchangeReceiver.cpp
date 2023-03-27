@@ -23,8 +23,6 @@
 #include <Interpreters/Context.h>
 #include <Operators/BlockInputStreamSourceOp.h>
 
-#include "Operators/Operator.h"
-
 namespace DB
 {
 PhysicalMockExchangeReceiver::PhysicalMockExchangeReceiver(

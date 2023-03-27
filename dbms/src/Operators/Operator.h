@@ -43,15 +43,6 @@ enum class OperatorStatus
     HAS_OUTPUT,
 };
 
-enum class OperatorType
-{
-    Source,
-    Transform,
-    Sink,
-};
-
-// TODO support operator profile info like `BlockStreamProfileInfo`.
-
 class PipelineExecutorStatus;
 
 class Operator

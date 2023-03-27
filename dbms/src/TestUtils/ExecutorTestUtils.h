@@ -139,7 +139,7 @@ public:
         bool enable_pipeline = false,
         size_t concurrency = 10);
 
-    void testForPipelineExecutionSummary(const std::shared_ptr<tipb::DAGRequest> & request,
+    void testForExecutionSummary(const std::shared_ptr<tipb::DAGRequest> & request,
                                          bool enable_planner,
                                          const Expect & expect_pipeline,
                                          const Expect & expect_pull)

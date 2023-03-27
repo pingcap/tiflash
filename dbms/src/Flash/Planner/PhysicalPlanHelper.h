@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/ExpressionActions.h>
+
 namespace DB::PhysicalPlanHelper
 {
 ExpressionActionsPtr newActions(const Block & input_block);

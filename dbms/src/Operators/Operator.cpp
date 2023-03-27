@@ -36,7 +36,6 @@ extern const char random_pipeline_model_cancel_failpoint[];
 OperatorStatus Operator::await()
 {
     CHECK_IS_CANCELLED
-    // TODO collect operator profile info here.
     UInt64 start_time = profile->total_stopwatch.elapsed();
     auto op_status = awaitImpl();
 #ifndef NDEBUG
@@ -50,7 +49,6 @@ OperatorStatus Operator::await()
 OperatorStatus SourceOp::read(Block & block)
 {
     CHECK_IS_CANCELLED
-    // TODO collect operator profile info here.
     assert(!block);
     UInt64 start_time = profile->total_stopwatch.elapsed();
 
@@ -71,7 +69,6 @@ OperatorStatus SourceOp::read(Block & block)
 OperatorStatus TransformOp::transform(Block & block)
 {
     CHECK_IS_CANCELLED
-    // TODO collect operator profile info here.
     UInt64 start_time = profile->total_stopwatch.elapsed();
     auto op_status = transformImpl(block);
 #ifndef NDEBUG
@@ -113,7 +110,6 @@ OperatorStatus TransformOp::tryOutput(Block & block)
 OperatorStatus SinkOp::prepare()
 {
     CHECK_IS_CANCELLED
-    // TODO collect operator profile info here.
     UInt64 start_time = profile->total_stopwatch.elapsed();
     auto op_status = prepareImpl();
 #ifndef NDEBUG
@@ -134,7 +130,6 @@ OperatorStatus SinkOp::write(Block && block)
         assertBlocksHaveEqualStructure(block, header, getName());
     }
 #endif
-    // TODO collect operator profile info here.
     UInt64 start_time = profile->total_stopwatch.elapsed();
     auto op_status = writeImpl(std::move(block));
 #ifndef NDEBUG

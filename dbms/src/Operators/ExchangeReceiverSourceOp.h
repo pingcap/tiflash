@@ -64,16 +64,14 @@ private:
     Block popFromBlockQueue();
 
 private:
-    // TODO support ConnectionProfileInfo.
     std::vector<ConnectionProfileInfo> connection_profile_infos;
+    RemoteExecutionSummary remote_execution_summary;
+
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
     std::unique_ptr<CHBlockChunkDecodeAndSquash> decoder_ptr;
     uint64_t total_rows{};
     std::queue<Block> block_queue;
     std::optional<ReceiveResult> recv_res;
-
-    RemoteExecutionSummary remote_execution_summary;
-    // TODO add connection profile infos
     size_t stream_id;
 };
 } // namespace DB
