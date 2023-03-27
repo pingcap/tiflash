@@ -413,6 +413,11 @@ public:
         return u;
     }
 
+    size_t getWritersQueueSizeForTest()
+    {
+        return writers.size();
+    }
+
     // No copying and no moving
     DISALLOW_COPY_AND_MOVE(PageDirectory);
 

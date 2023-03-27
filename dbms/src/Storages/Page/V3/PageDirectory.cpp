@@ -1486,6 +1486,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     watch.restart();
 
     writers.push_back(&w);
+    SYNC_FOR("after_PageDirectory::enter_write_group");
     w.cv.wait(apply_lock, [&] { return w.done || &w == writers.front(); });
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wait_in_group).Observe(watch.elapsedSeconds());
     watch.restart();
@@ -1509,6 +1510,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
 
     auto * last_writer = buildWriteGroup(&w, apply_lock);
     apply_lock.unlock();
+    SYNC_FOR("before_PageDirectory::leader_apply");
 
     // `true` means the write process has completed without exception
     bool success = false;
