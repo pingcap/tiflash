@@ -32,7 +32,7 @@ public:
     struct Options
     {
         const std::string & file_path;
-        UInt64 max_edit_records_per_part = 0;
+        UInt64 max_edit_records_per_part = 100000;
     };
 
     static CPManifestFileWriterPtr create(Options options)
