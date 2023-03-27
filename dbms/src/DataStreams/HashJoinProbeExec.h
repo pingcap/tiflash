@@ -34,6 +34,8 @@ public:
         size_t non_joined_stream_index,
         size_t max_block_size);
 
+    using CancellationHook = std::function<bool()>;
+
     HashJoinProbeExec(
         const JoinPtr & join_,
         const BlockInputStreamPtr & restore_build_stream_,
@@ -47,7 +49,7 @@ public:
 
     void waitUntilAllProbeFinished();
 
-    std::optional<HashJoinProbeExecPtr> tryGetRestoreExec(std::function<bool()> && is_cancelled);
+    std::optional<HashJoinProbeExecPtr> tryGetRestoreExec();
 
     void cancel();
 
@@ -69,23 +71,32 @@ public:
     // Returns false if the probe_exec continues to execute.
     bool onNonJoinedFinish();
 
+    void setCancellationHook(CancellationHook cancellation_hook)
+    {
+        is_cancelled = std::move(cancellation_hook);
+    }
+
 private:
     std::tuple<size_t, Block> getProbeBlock();
 
     std::optional<HashJoinProbeExecPtr> doTryGetRestoreExec();
 
 private:
-    JoinPtr join;
+    const JoinPtr join;
 
-    BlockInputStreamPtr restore_build_stream;
+    const BlockInputStreamPtr restore_build_stream;
 
-    BlockInputStreamPtr probe_stream;
+    const BlockInputStreamPtr probe_stream;
 
-    bool need_output_non_joined_data;
-    size_t non_joined_stream_index;
-    BlockInputStreamPtr non_joined_stream;
+    const bool need_output_non_joined_data;
+    const size_t non_joined_stream_index;
+    const BlockInputStreamPtr non_joined_stream;
 
-    size_t max_block_size;
+    const size_t max_block_size;
+
+    CancellationHook is_cancelled{[]() {
+        return false;
+    }};
 
     ProbeProcessInfo probe_process_info;
     std::list<std::tuple<size_t, Block>> probe_partition_blocks;
@@ -96,14 +107,14 @@ private:
 class HashJoinProbeExecHolder
 {
 public:
-    const HashJoinProbeExecPtr & operator->()
+    HashJoinProbeExecPtr operator->()
     {
         std::lock_guard lock(mu);
         assert(exec);
         return exec;
     }
 
-    const HashJoinProbeExecPtr & operator*()
+    HashJoinProbeExecPtr operator*()
     {
         std::lock_guard lock(mu);
         assert(exec);

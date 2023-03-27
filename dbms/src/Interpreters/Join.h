@@ -155,7 +155,7 @@ public:
 
     bool isSpilled() const { return is_spilled; }
 
-    RestoreInfo getOneRestoreStream(size_t max_block_size);
+    std::optional<RestoreInfo> getOneRestoreStream(size_t max_block_size);
 
     void dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>> & partition_blocks_list);
 

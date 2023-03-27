@@ -35,6 +35,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     RUNTIME_CHECK_MSG(original_join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
 
     probe_exec.set(HashJoinProbeExec::build(original_join, input, non_joined_stream_index, max_block_size_));
+    probe_exec->setCancellationHook([&]() { return isCancelledOrThrowIfKilled(); });
 }
 
 void HashJoinProbeBlockInputStream::readSuffixImpl()
@@ -85,7 +86,7 @@ void HashJoinProbeBlockInputStream::onCurrentReadNonJoinedDataDone()
 void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
 {
     auto cur_probe_exec = *probe_exec;
-    auto restore_probe_exec = cur_probe_exec->tryGetRestoreExec([&]() { return isCancelledOrThrowIfKilled(); });
+    auto restore_probe_exec = cur_probe_exec->tryGetRestoreExec();
     if (restore_probe_exec.has_value() && !isCancelledOrThrowIfKilled())
     {
         probe_exec.set(std::move(*restore_probe_exec));
@@ -99,7 +100,7 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
 
 void HashJoinProbeBlockInputStream::onAllProbeDone()
 {
-    const auto & cur_probe_exec = *probe_exec;
+    auto cur_probe_exec = *probe_exec;
     if (cur_probe_exec->needOutputNonJoinedData())
     {
         cur_probe_exec->onNonJoinedStart();
@@ -117,11 +118,14 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
     {
         while (true)
         {
+            if unlikely (isCancelledOrThrowIfKilled())
+                return {};
+
             switch (status)
             {
             case ProbeStatus::WAIT_BUILD_FINISH:
             {
-                const auto & cur_probe_exec = *probe_exec;
+                auto cur_probe_exec = *probe_exec;
                 cur_probe_exec->waitUntilAllBuildFinished();
                 /// after Build finish, always go to Probe stage
                 cur_probe_exec->onProbeStart();

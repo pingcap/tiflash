@@ -3118,7 +3118,7 @@ bool Join::hasPartitionSpilled()
     return !spilled_partition_indexes.empty();
 }
 
-RestoreInfo Join::getOneRestoreStream(size_t max_block_size)
+std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size)
 {
     std::unique_lock lock(build_probe_mutex);
     if (meet_error)
@@ -3141,7 +3141,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size)
             {
                 spilled_partition_indexes.pop_front();
             }
-            return {restore_join, non_joined_data_stream, build_stream, probe_stream};
+            return RestoreInfo{restore_join, non_joined_data_stream, build_stream, probe_stream};
         }
         if (spilled_partition_indexes.empty())
         {
@@ -3179,7 +3179,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size)
                 restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size);
         }
         auto non_joined_data_stream = get_back_stream(restore_non_joined_data_streams);
-        return {restore_join, non_joined_data_stream, build_stream, probe_stream};
+        return RestoreInfo{restore_join, non_joined_data_stream, build_stream, probe_stream};
     }
     catch (...)
     {

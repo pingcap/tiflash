@@ -70,7 +70,13 @@ void HashJoinProbeExec::waitUntilAllProbeFinished()
 void HashJoinProbeExec::restoreBuild()
 {
     restore_build_stream->readPrefix();
-    while (restore_build_stream->read()) {};
+    if unlikely (is_cancelled())
+        return;
+    while (restore_build_stream->read())
+    {
+        if unlikely (is_cancelled())
+            return;
+    }
     restore_build_stream->readSuffix();
 }
 
@@ -89,6 +95,9 @@ std::tuple<size_t, Block> HashJoinProbeExec::getProbeBlock()
     {
         while (true)
         {
+            if unlikely (is_cancelled())
+                return {0, {}};
+
             if (!probe_partition_blocks.empty())
             {
                 auto partition_block = probe_partition_blocks.front();
@@ -128,12 +137,12 @@ Block HashJoinProbeExec::probe()
     return join->joinBlock(probe_process_info);
 }
 
-std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::tryGetRestoreExec(std::function<bool()> && is_cancelled)
+std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::tryGetRestoreExec()
 {
-    /// find restore exec in DFS way
-    if (is_cancelled())
+    if unlikely (is_cancelled())
         return {};
 
+    /// find restore exec in DFS way
     auto ret = doTryGetRestoreExec();
     if (ret.has_value())
         return ret;
@@ -141,7 +150,7 @@ std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::tryGetRestoreExec(std::fu
     /// current join has no more partition to restore, so check if previous join still has partition to restore
     if (parent.has_value())
     {
-        return (*parent)->tryGetRestoreExec(std::move(is_cancelled));
+        return (*parent)->tryGetRestoreExec();
     }
     else
     {
@@ -155,24 +164,27 @@ std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::doTryGetRestoreExec()
     /// first check if current join has a partition to restore
     if (join->hasPartitionSpilledWithLock())
     {
-        auto restore_info = join->getOneRestoreStream(max_block_size);
         /// get a restore join
-        if (restore_info.join)
+        if (auto restore_info = join->getOneRestoreStream(max_block_size); restore_info)
         {
             /// restored join should always enable spill
-            assert(restore_info.join->isEnableSpill());
+            assert(restore_info->join && restore_info->join->isEnableSpill());
             size_t non_joined_stream_index = 0;
             if (need_output_non_joined_data)
-                non_joined_stream_index = dynamic_cast<NonJoinedBlockInputStream *>(restore_info.non_joined_stream.get())->getNonJoinedIndex();
+            {
+                assert(restore_info->non_joined_stream);
+                non_joined_stream_index = dynamic_cast<NonJoinedBlockInputStream *>(restore_info->non_joined_stream.get())->getNonJoinedIndex();
+            }
             auto restore_probe_exec = std::make_shared<HashJoinProbeExec>(
-                restore_info.join,
-                restore_info.build_stream,
-                restore_info.probe_stream,
+                restore_info->join,
+                restore_info->build_stream,
+                restore_info->probe_stream,
                 need_output_non_joined_data,
                 non_joined_stream_index,
-                restore_info.non_joined_stream,
+                restore_info->non_joined_stream,
                 max_block_size);
             restore_probe_exec->parent = shared_from_this();
+            restore_probe_exec->setCancellationHook(is_cancelled);
             return {std::move(restore_probe_exec)};
         }
         assert(join->hasPartitionSpilledWithLock() == false);
@@ -197,20 +209,17 @@ void HashJoinProbeExec::cancel()
     join->cancel();
     if (non_joined_stream != nullptr)
     {
-        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get());
-        if (p_stream != nullptr)
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(non_joined_stream.get()); p_stream != nullptr)
             p_stream->cancel(false);
     }
     if (probe_stream != nullptr)
     {
-        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(probe_stream.get());
-        if (p_stream != nullptr)
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(probe_stream.get()); p_stream != nullptr)
             p_stream->cancel(false);
     }
     if (restore_build_stream != nullptr)
     {
-        auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_build_stream.get());
-        if (p_stream != nullptr)
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_build_stream.get()); p_stream != nullptr)
             p_stream->cancel(false);
     }
 }
