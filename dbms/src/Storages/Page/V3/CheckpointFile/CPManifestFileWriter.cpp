@@ -43,12 +43,25 @@ void CPManifestFileWriter::writeEdits(const universal::PageEntriesEdit & edit)
     if (edit.empty())
         return;
 
+    for (UInt64 start = 0; start < edit.getRecords().size();)
+    {
+        UInt64 limit = std::min(max_edit_records_per_part, edit.getRecords().size() - start);
+        writeEditsPart(edit, start, limit);
+        start += limit;
+    }
+}
+
+void CPManifestFileWriter::writeEditsPart(const universal::PageEntriesEdit & edit, UInt64 start, UInt64 limit)
+{
+    const auto & records = edit.getRecords();
     CheckpointProto::ManifestFileEditsPart part;
+    // In `CPManifestFileReader::readEdits` if `has_more` is false, it will return std::nullopt directly,
+    // so we must set `has_more` to be true here and `writeEditsFinish` will write a empty part and set `has_more` to be false.
     part.set_has_more(true);
-    for (const auto & edit_record : edit.getRecords())
+    for (UInt64 i = 0; i < limit; ++i)
     {
         auto * out_record = part.add_edits();
-        *out_record = edit_record.toProto();
+        *out_record = records[start + i].toProto();
     }
     details::writeMessageWithLength(*compressed_writer, part);
 }
