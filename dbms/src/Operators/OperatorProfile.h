@@ -39,7 +39,15 @@ struct OperatorProfile
         execution_time += time;
     }
 
-    void updateTime(UInt64 time)
+    void update(size_t rows_, size_t bytes_, UInt64 time)
+    {
+        ++blocks;
+        rows += rows_;
+        bytes += bytes_;
+        execution_time += time;
+    }
+
+    void update(UInt64 time)
     {
         execution_time += time;
     }

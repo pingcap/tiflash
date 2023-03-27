@@ -101,7 +101,7 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
 {
     auto & dag_context = *context.getDAGContext();
     auto & executor_profile = dag_context.getPipelineProfilesMap()[executor_id];
-    auto & exchange_receiver_io_source_ops = dag_context.getInBoundIOSourcesMap()[executor_id];
+    auto & exchange_receiver_io_source_ops = dag_context.getIOSourcesMap()[executor_id];
 
     if (fine_grained_shuffle.enable())
         concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);

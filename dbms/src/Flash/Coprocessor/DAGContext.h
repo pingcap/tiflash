@@ -159,7 +159,7 @@ public:
 
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
-    std::unordered_map<String, SourceOpPtrs> & getInBoundIOSourcesMap();
+    std::unordered_map<String, SourceOpPtrs> & getIOSourcesMap();
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
@@ -353,8 +353,8 @@ private:
     /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
     std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;
 
-    /// inbound_io_source_ops_map is a map that maps from executor_id (table_scan / exchange_receiver) to SourceOps.
-    std::unordered_map<String, SourceOpPtrs> inbound_io_source_ops_map;
+    /// io_source_ops_map is a map that maps from executor_id (table_scan / exchange_receiver) to SourceOps.
+    std::unordered_map<String, SourceOpPtrs> io_source_ops_map;
 
     UInt64 flags;
     UInt64 sql_mode;

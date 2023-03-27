@@ -45,7 +45,7 @@ public:
     void addWaitTime(UInt64 time)
     {
         assert(source_op);
-        source_op->getProfile()->updateTime(time);
+        source_op->getProfile()->update(time);
     }
 
 private:

@@ -229,9 +229,9 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStr
     return inbound_io_input_streams_map;
 }
 
-std::unordered_map<String, SourceOpPtrs> & DAGContext::getInBoundIOSourcesMap()
+std::unordered_map<String, SourceOpPtrs> & DAGContext::getIOSourcesMap()
 {
-    return inbound_io_source_ops_map;
+    return io_source_ops_map;
 }
 
 void DAGContext::handleTruncateError(const String & msg)

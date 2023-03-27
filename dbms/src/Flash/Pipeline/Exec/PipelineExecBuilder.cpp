@@ -47,7 +47,6 @@ PipelineExecPtr PipelineExecBuilder::build()
         std::move(sink_op));
 }
 
-
 Block PipelineExecBuilder::getCurrentHeader() const
 {
     if (sink_op)

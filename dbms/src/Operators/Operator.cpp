@@ -18,8 +18,6 @@
 #include <Operators/Operator.h>
 #include <Operators/OperatorHelper.h>
 
-#include "common/types.h"
-
 namespace DB
 {
 namespace FailPoints
@@ -41,7 +39,7 @@ OperatorStatus Operator::await()
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
-    profile->updateTime(profile->total_stopwatch.elapsed() - start_time);
+    profile->update(profile->total_stopwatch.elapsed() - start_time);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -82,7 +80,7 @@ OperatorStatus TransformOp::transform(Block & block)
     if (op_status == OperatorStatus::HAS_OUTPUT)
         profile->update(block, profile->total_stopwatch.elapsed() - start_time);
     else
-        profile->updateTime(profile->total_stopwatch.elapsed() - start_time);
+        profile->update(profile->total_stopwatch.elapsed() - start_time);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -115,7 +113,7 @@ OperatorStatus SinkOp::prepare()
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
 #endif
-    profile->updateTime(profile->total_stopwatch.elapsed() - start_time);
+    profile->update(profile->total_stopwatch.elapsed() - start_time);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
@@ -131,11 +129,13 @@ OperatorStatus SinkOp::write(Block && block)
     }
 #endif
     UInt64 start_time = profile->total_stopwatch.elapsed();
+    size_t rows = block.rows();
+    size_t bytes = block.bytes();
     auto op_status = writeImpl(std::move(block));
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::NEED_INPUT});
 #endif
-    profile->update(block, profile->total_stopwatch.elapsed() - start_time);
+    profile->update(rows, bytes, profile->total_stopwatch.elapsed() - start_time);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);
     return op_status;
 }
