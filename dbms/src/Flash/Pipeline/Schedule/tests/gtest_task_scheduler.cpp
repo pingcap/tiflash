@@ -319,7 +319,7 @@ TEST_F(TaskSchedulerTestRunner, shutdown)
 try
 {
     auto do_test = [](size_t task_thread_pool_size, size_t task_num) {
-        TaskSchedulerConfig config{task_thread_pool_size};
+        TaskSchedulerConfig config{task_thread_pool_size, task_thread_pool_size};
         TaskScheduler task_scheduler{config};
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
