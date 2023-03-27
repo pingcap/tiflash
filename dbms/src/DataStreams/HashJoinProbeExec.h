@@ -77,7 +77,7 @@ public:
     }
 
 private:
-    std::tuple<size_t, Block> getProbeBlock();
+    PartitionBlock getProbeBlock();
 
     std::optional<HashJoinProbeExecPtr> doTryGetRestoreExec();
 
@@ -99,7 +99,7 @@ private:
     }};
 
     ProbeProcessInfo probe_process_info;
-    std::list<std::tuple<size_t, Block>> probe_partition_blocks;
+    PartitionBlocks probe_partition_blocks;
 
     std::optional<HashJoinProbeExecPtr> parent;
 };

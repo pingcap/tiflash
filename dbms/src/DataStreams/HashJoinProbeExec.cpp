@@ -80,31 +80,26 @@ void HashJoinProbeExec::restoreBuild()
     restore_build_stream->readSuffix();
 }
 
-std::tuple<size_t, Block> HashJoinProbeExec::getProbeBlock()
+PartitionBlock HashJoinProbeExec::getProbeBlock()
 {
-    size_t partition_index = 0;
-    Block block;
-
     /// Even if spill is enabled, if spill is not triggered during build,
     /// there is no need to dispatch probe block
     if (!join->isSpilled())
     {
-        block = probe_stream->read();
+        return PartitionBlock{probe_stream->read()};
     }
     else
     {
         while (true)
         {
             if unlikely (is_cancelled())
-                return {0, {}};
+                return {};
 
             if (!probe_partition_blocks.empty())
             {
-                auto partition_block = probe_partition_blocks.front();
+                auto partition_block = std::move(probe_partition_blocks.front());
                 probe_partition_blocks.pop_front();
-                partition_index = std::get<0>(partition_block);
-                block = std::get<1>(partition_block);
-                break;
+                return partition_block;
             }
             else
             {
@@ -112,26 +107,25 @@ std::tuple<size_t, Block> HashJoinProbeExec::getProbeBlock()
                 if (new_block)
                     join->dispatchProbeBlock(new_block, probe_partition_blocks);
                 else
-                    break;
+                    return {};
             }
         }
     }
-    return {partition_index, block};
 }
 
 Block HashJoinProbeExec::probe()
 {
     if (probe_process_info.all_rows_joined_finish)
     {
-        auto [partition_index, block] = getProbeBlock();
-        if (!block)
+        auto partition_block = getProbeBlock();
+        if (partition_block)
         {
-            return {};
+            join->checkTypes(partition_block.block);
+            probe_process_info.resetBlock(std::move(partition_block.block), partition_block.partition_index);
         }
         else
         {
-            join->checkTypes(block);
-            probe_process_info.resetBlock(std::move(block), partition_index);
+            return {};
         }
     }
     return join->joinBlock(probe_process_info);
