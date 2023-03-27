@@ -14,14 +14,46 @@
 
 #pragma once
 
+#include <Flash/Pipeline/Schedule/TaskQueues/FiFOTaskQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 namespace DB
 {
 struct CPUImpl
 {
-    static constexpr auto NAME = "cpu";
+    static constexpr auto NAME = "cpu intensive";
 
     static constexpr auto TargetStatus = ExecTaskStatus::RUNNING;
+
+    static ExecTaskStatus exec(TaskPtr & task)
+    {
+        return task->execute();
+    }
+
+    using QueueType = std::unique_ptr<FIFOTaskQueue>;
+
+    static QueueType newTaskQueue()
+    {
+        return std::make_unique<FIFOTaskQueue>();
+    }
+};
+
+struct IOImpl
+{
+    static constexpr auto NAME = "io intensive";
+
+    static constexpr auto TargetStatus = ExecTaskStatus::BLOCKED;
+
+    static ExecTaskStatus exec(TaskPtr & task)
+    {
+        return task->block();
+    }
+
+    using QueueType = std::unique_ptr<FIFOTaskQueue>;
+
+    static QueueType newTaskQueue()
+    {
+        return std::make_unique<FIFOTaskQueue>();
+    }
 };
 } // namespace DB

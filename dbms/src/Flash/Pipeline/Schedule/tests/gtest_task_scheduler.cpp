@@ -187,6 +187,11 @@ protected:
 
     ExecTaskStatus awaitImpl() noexcept override
     {
+        return ExecTaskStatus::BLOCKED;
+    }
+
+    ExecTaskStatus blockImpl() noexcept override
+    {
         return ExecTaskStatus::RUNNING;
     }
 };

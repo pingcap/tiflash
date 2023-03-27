@@ -45,6 +45,9 @@ public:
         case ExecTaskStatus::RUNNING:
             running_tasks.push_back(std::move(task));
             return true;
+        case ExecTaskStatus::BLOCKED:
+            blocked_tasks.push_back(std::move(task));
+            return true;
         case ExecTaskStatus::WAITING:
             return false;
         case FINISH_STATUS:
@@ -58,11 +61,15 @@ public:
     // return false if there are no ready task to submit.
     bool submitReadyTasks()
     {
-        if (running_tasks.empty())
+        if (running_tasks.empty() && blocked_tasks.empty())
             return false;
 
-        task_scheduler.submitToTaskThreadPool(running_tasks);
+        task_scheduler.submitToCPUTaskThreadPool(running_tasks);
         running_tasks.clear();
+
+        task_scheduler.submitToIOTaskThreadPool(blocked_tasks);
+        blocked_tasks.clear();
+
         spin_count = 0;
         return true;
     }
@@ -91,6 +98,7 @@ private:
     int16_t spin_count = 0;
 
     std::vector<TaskPtr> running_tasks;
+    std::vector<TaskPtr> blocked_tasks;
 };
 } // namespace
 

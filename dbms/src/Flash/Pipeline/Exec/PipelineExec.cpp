@@ -64,9 +64,13 @@ OperatorStatus PipelineExec::executeImpl()
         const auto & transform_op = transform_ops[transform_op_index];
         op_status = transform_op->transform(block);
         if (op_status != OperatorStatus::HAS_OUTPUT)
+        {
+            setBlockingOpIfNeeded(op_status, transform_op);
             return op_status;
+        }
     }
     op_status = sink_op->write(std::move(block));
+    setBlockingOpIfNeeded(op_status, sink_op);
     return op_status;
 }
 
@@ -77,7 +81,10 @@ OperatorStatus PipelineExec::fetchBlock(
 {
     auto op_status = sink_op->prepare();
     if (op_status != OperatorStatus::NEED_INPUT)
+    {
+        setBlockingOpIfNeeded(op_status, sink_op);
         return op_status;
+    }
     for (int64_t index = transform_ops.size() - 1; index >= 0; --index)
     {
         const auto & transform_op = transform_ops[index];
@@ -86,11 +93,33 @@ OperatorStatus PipelineExec::fetchBlock(
         {
             // Once the transform op tryOutput has succeeded, execution will begin with the next transform op.
             start_transform_op_index = index + 1;
+            setBlockingOpIfNeeded(op_status, transform_op);
             return op_status;
         }
     }
     start_transform_op_index = 0;
     op_status = source_op->read(block);
+    setBlockingOpIfNeeded(op_status, source_op);
+    return op_status;
+}
+
+OperatorStatus PipelineExec::block()
+{
+    auto op_status = blockImpl();
+#ifndef NDEBUG
+    // `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`.
+    // `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`.
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::HAS_OUTPUT, OperatorStatus::NEED_INPUT});
+#endif
+    return op_status;
+}
+OperatorStatus PipelineExec::blockImpl()
+{
+    assert(blocking_op);
+    assert(*blocking_op);
+    auto op_status = (*blocking_op)->block();
+    if (op_status != OperatorStatus::BLOCKED)
+        blocking_op.reset();
     return op_status;
 }
 
@@ -107,16 +136,23 @@ OperatorStatus PipelineExec::awaitImpl()
 {
     auto op_status = sink_op->await();
     if (op_status != OperatorStatus::NEED_INPUT)
+    {
+        setBlockingOpIfNeeded(op_status, sink_op);
         return op_status;
+    }
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
     {
         // If the transform_op returns `NEED_INPUT`,
         // we need to call the upstream transform_op until a transform_op returns something other than `NEED_INPUT`.
         op_status = (*it)->await();
         if (op_status != OperatorStatus::NEED_INPUT)
+        {
+            setBlockingOpIfNeeded(op_status, (*it));
             return op_status;
+        }
     }
     op_status = source_op->await();
+    setBlockingOpIfNeeded(op_status, source_op);
     return op_status;
 }
 } // namespace DB

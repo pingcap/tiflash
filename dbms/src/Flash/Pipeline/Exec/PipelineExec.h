@@ -40,10 +40,14 @@ public:
 
     OperatorStatus execute();
 
+    OperatorStatus block();
+
     OperatorStatus await();
 
 private:
     OperatorStatus executeImpl();
+
+    OperatorStatus blockImpl();
 
     OperatorStatus awaitImpl();
 
@@ -51,10 +55,24 @@ private:
         Block & block,
         size_t & start_transform_op_index);
 
+    template <typename Op>
+    void setBlockingOpIfNeeded(OperatorStatus op_status, const Op & op)
+    {
+        assert(op);
+        if (op_status == OperatorStatus::BLOCKED)
+        {
+            assert(!blocking_op);
+            blocking_op.emplace(op.get());
+        }
+    }
+
 private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
+
+    // hold the operator which is ready for blocking.
+    std::optional<Operator *> blocking_op;
 };
 using PipelineExecPtr = std::unique_ptr<PipelineExec>;
 // a set of pipeline_execs running in parallel.

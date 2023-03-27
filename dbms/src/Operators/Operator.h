@@ -35,6 +35,8 @@ enum class OperatorStatus
     CANCELLED,
     /// waiting status
     WAITING,
+    // blocked status
+    BLOCKED,
     /// running status
     // means that TransformOp/SinkOp needs to input a block to do the calculation,
     NEED_INPUT,
@@ -55,10 +57,13 @@ public:
     {}
 
     virtual ~Operator() = default;
-    // running status may return are
-    // - `NEED_INPUT` means that the data that the operator is waiting for has been prepared.
+    // running status may return are NEED_INPUT and HAS_OUTPUT here.
     OperatorStatus await();
     virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
+
+    // running status may return are NEED_INPUT and HAS_OUTPUT here.
+    OperatorStatus block();
+    virtual OperatorStatus blockImpl() { throw Exception("Unsupport"); }
 
     // These two methods are used to set state, log and etc, and should not perform calculation logic.
     virtual void operatePrefix() {}

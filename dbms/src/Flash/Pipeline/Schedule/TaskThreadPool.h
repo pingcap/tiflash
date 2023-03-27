@@ -25,7 +25,7 @@ namespace DB
 {
 class TaskScheduler;
 
-template<typename Impl>
+template <typename Impl>
 class TaskThreadPool
 {
 public:
@@ -45,7 +45,7 @@ private:
     void handleTask(TaskPtr & task, const LoggerPtr & log) noexcept;
 
 private:
-    TaskQueuePtr task_queue;
+    typename Impl::QueueType task_queue;
 
     LoggerPtr logger = Logger::get(Impl::NAME);
 
