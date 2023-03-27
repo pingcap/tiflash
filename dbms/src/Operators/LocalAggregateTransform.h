@@ -19,33 +19,37 @@
 
 namespace DB
 {
-class AggregateSinkOp : public SinkOp
+enum class LocalAggStatus
+{
+    build,
+    convert,
+};
+
+/// Only do build and convert at the current operator, no sharing of objects with other operators.
+class LocalAggregateTransform : public TransformOp
 {
 public:
-    AggregateSinkOp(
+    LocalAggregateTransform(
         PipelineExecutorStatus & exec_status_,
-        size_t index_,
-        AggregateContextPtr agg_context_,
-        const String & req_id)
-        : SinkOp(exec_status_, req_id)
-        , index(index_)
-        , agg_context(agg_context_)
-    {
-    }
+        const String & req_id,
+        const Aggregator::Params & params_);
 
     String getName() const override
     {
-        return "AggregateSinkOp";
+        return "LocalAggregateTransform";
     }
 
-    void operateSuffix() override;
-
 protected:
-    OperatorStatus writeImpl(Block && block) override;
+    OperatorStatus transformImpl(Block & block) override;
+
+    OperatorStatus tryOutputImpl(Block & block) override;
+
+    void transformHeaderImpl(Block & header_) override;
 
 private:
-    size_t index{};
-    uint64_t total_rows{};
-    AggregateContextPtr agg_context;
+    Aggregator::Params params;
+    AggregateContext agg_context;
+
+    LocalAggStatus status{LocalAggStatus::build};
 };
 } // namespace DB

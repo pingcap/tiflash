@@ -44,6 +44,10 @@
 #include <aws/s3/model/PutBucketLifecycleConfigurationRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/TaggingDirective.h>
+#include <aws/sts/STSClient.h>
+#include <aws/sts/STSServiceClientModel.h>
+#include <aws/sts/model/GetCallerIdentityRequest.h>
+#include <aws/sts/model/GetCallerIdentityResult.h>
 #include <common/logger_useful.h>
 #include <kvproto/disaggregated.pb.h>
 #include <pingcap/kv/Cluster.h>
@@ -335,7 +339,7 @@ ClientFactory & ClientFactory::instance()
 
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create() const
 {
-    return create(config);
+    return create(config, log);
 }
 
 std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
@@ -346,7 +350,7 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
     return initClientFromWriteNode();
 }
 
-std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_)
+std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {
     Aws::Client::ClientConfiguration cfg;
     cfg.maxConnections = config_.max_connections;
@@ -361,6 +365,22 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     }
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
+        Aws::Client::ClientConfiguration sts_cfg;
+        sts_cfg.verifySSL = false;
+        Aws::STS::STSClient sts_client(sts_cfg);
+        Aws::STS::Model::GetCallerIdentityRequest req;
+        auto get_identity_outcome = sts_client.GetCallerIdentity(req);
+        if (!get_identity_outcome.IsSuccess())
+        {
+            const auto & error = get_identity_outcome.GetError();
+            LOG_WARNING(log, "get CallerIdentity failed, exception={} message={}", error.GetExceptionName(), error.GetMessage());
+        }
+        else
+        {
+            const auto & result = get_identity_outcome.GetResult();
+            LOG_INFO(log, "CallerIdentity{{UserId:{}, Account:{}, Arn:{}}}", result.GetUserId(), result.GetAccount(), result.GetArn());
+        }
+
         // Request that does not require authentication.
         // Such as the EC2 access permission to the S3 bucket is configured.
         // If the empty access_key_id and secret_access_key are passed to S3Client,
@@ -468,7 +488,7 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
         }
         else
         {
-            LOG_ERROR(client.log, "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
+            LOG_ERROR(client.log, "S3 PutObject failed: {}, local_fname={} bucket={} root={} key={}", result.GetError().GetMessage(), local_fname, client.bucket(), client.root(), remote_fname);
             return false;
         }
     }
@@ -787,7 +807,7 @@ ObjectInfo tryGetObjectInfo(
         {
             return ObjectInfo{.exist = false, .size = 0, .last_modification_time = {}};
         }
-        throw fromS3Error(o.GetError(), "Failed to check existence of object, bucket={} key={}", client.bucket(), key);
+        throw fromS3Error(o.GetError(), "Failed to check existence of object, bucket={} root={} key={}", client.bucket(), client.root(), key);
     }
     // Else the object still exist
     const auto & res = o.GetResult();
