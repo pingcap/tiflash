@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/TaskThreadPool.h>
+#include <Flash/Pipeline/Schedule/TaskThreadPoolImpl.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/WaitReactor.h>
 
@@ -53,16 +54,20 @@ public:
 
     void submit(std::vector<TaskPtr> & tasks) noexcept;
 
+    void submitToWaitReactor(TaskPtr && task);
+    void submitToTaskThreadPool(TaskPtr && task);
+    void submitToTaskThreadPool(std::vector<TaskPtr> & tasks);
+
     static std::unique_ptr<TaskScheduler> instance;
 
 private:
-    TaskThreadPool task_thread_pool;
+    TaskThreadPool<CPUImpl> task_thread_pool;
 
     WaitReactor wait_reactor;
 
     LoggerPtr logger = Logger::get();
 
-    friend class TaskThreadPool;
+    friend class TaskThreadPool<CPUImpl>;
     friend class WaitReactor;
 };
 } // namespace DB

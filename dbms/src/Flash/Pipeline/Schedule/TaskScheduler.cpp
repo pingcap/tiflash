@@ -70,5 +70,20 @@ void TaskScheduler::submit(std::vector<TaskPtr> & tasks) noexcept
     wait_reactor.submit(waiting_tasks);
 }
 
+void TaskScheduler::submitToWaitReactor(TaskPtr && task)
+{
+    wait_reactor.submit(std::move(task));
+}
+
+void TaskScheduler::submitToTaskThreadPool(TaskPtr && task)
+{
+    task_thread_pool.submit(std::move(task));
+}
+
+void TaskScheduler::submitToTaskThreadPool(std::vector<TaskPtr> & tasks)
+{
+    task_thread_pool.submit(tasks);
+}
+
 std::unique_ptr<TaskScheduler> TaskScheduler::instance;
 } // namespace DB

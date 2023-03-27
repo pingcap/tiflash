@@ -18,13 +18,15 @@
 #include <Flash/Pipeline/Schedule/TaskQueues/FiFOTaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/TaskThreadPool.h>
+#include <Flash/Pipeline/Schedule/TaskThreadPoolImpl.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
-TaskThreadPool::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
+template<typename Impl>
+TaskThreadPool<Impl>::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
     : task_queue(std::make_unique<FIFOTaskQueue>())
     , scheduler(scheduler_)
 {
@@ -34,19 +36,22 @@ TaskThreadPool::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
         threads.emplace_back(&TaskThreadPool::loop, this, i);
 }
 
-void TaskThreadPool::close()
+template<typename Impl>
+void TaskThreadPool<Impl>::close()
 {
     task_queue->close();
 }
 
-void TaskThreadPool::waitForStop()
+template<typename Impl>
+void TaskThreadPool<Impl>::waitForStop()
 {
     for (auto & thread : threads)
         thread.join();
     LOG_INFO(logger, "task thread pool is stopped");
 }
 
-void TaskThreadPool::loop(size_t thread_no) noexcept
+template<typename Impl>
+void TaskThreadPool<Impl>::loop(size_t thread_no) noexcept
 {
     auto thread_no_str = fmt::format("thread_no={}", thread_no);
     auto thread_logger = logger->getChild(thread_no_str);
@@ -65,7 +70,8 @@ void TaskThreadPool::loop(size_t thread_no) noexcept
     LOG_INFO(thread_logger, "loop finished");
 }
 
-void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
+template<typename Impl>
+void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
 {
     assert(task);
     TRACE_MEMORY(task);
@@ -76,17 +82,17 @@ void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
     {
         status = task->execute();
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (status != ExecTaskStatus::RUNNING || stopwatch.elapsed() >= YIELD_MAX_TIME_SPENT_NS)
+        if (status != Impl::TargetStatus || stopwatch.elapsed() >= YIELD_MAX_TIME_SPENT_NS)
             break;
     }
 
     switch (status)
     {
     case ExecTaskStatus::RUNNING:
-        submit(std::move(task));
+        scheduler.submitToWaitReactor(std::move(task));
         break;
     case ExecTaskStatus::WAITING:
-        scheduler.wait_reactor.submit(std::move(task));
+        scheduler.submitToTaskThreadPool(std::move(task));
         break;
     case FINISH_STATUS:
         task.reset();
@@ -96,13 +102,18 @@ void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
     }
 }
 
-void TaskThreadPool::submit(TaskPtr && task) noexcept
+template<typename Impl>
+void TaskThreadPool<Impl>::submit(TaskPtr && task) noexcept
 {
     task_queue->submit(std::move(task));
 }
 
-void TaskThreadPool::submit(std::vector<TaskPtr> & tasks) noexcept
+template<typename Impl>
+void TaskThreadPool<Impl>::submit(std::vector<TaskPtr> & tasks) noexcept
 {
     task_queue->submit(tasks);
 }
+
+template class TaskThreadPool<CPUImpl>;
+
 } // namespace DB

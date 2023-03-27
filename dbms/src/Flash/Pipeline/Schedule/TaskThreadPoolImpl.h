@@ -14,43 +14,14 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-
-#include <thread>
-#include <vector>
 
 namespace DB
 {
-class TaskScheduler;
-
-template<typename Impl>
-class TaskThreadPool
+struct CPUImpl
 {
-public:
-    TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num);
+    static constexpr auto NAME = "cpu";
 
-    void close();
-
-    void waitForStop();
-
-    void submit(TaskPtr && task) noexcept;
-
-    void submit(std::vector<TaskPtr> & tasks) noexcept;
-
-private:
-    void loop(size_t thread_no) noexcept;
-
-    void handleTask(TaskPtr & task, const LoggerPtr & log) noexcept;
-
-private:
-    TaskQueuePtr task_queue;
-
-    LoggerPtr logger = Logger::get(Impl::NAME);
-
-    TaskScheduler & scheduler;
-
-    std::vector<std::thread> threads;
+    static constexpr auto TargetStatus = ExecTaskStatus::RUNNING;
 };
 } // namespace DB

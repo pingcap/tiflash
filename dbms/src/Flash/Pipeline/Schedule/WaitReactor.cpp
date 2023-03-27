@@ -29,8 +29,8 @@ namespace
 class Spinner
 {
 public:
-    Spinner(TaskThreadPool & task_thread_pool_, const LoggerPtr & logger_)
-        : task_thread_pool(task_thread_pool_)
+    Spinner(TaskScheduler & task_scheduler_, const LoggerPtr & logger_)
+        : task_scheduler(task_scheduler_)
         , logger(logger_->getChild("Spinner"))
     {}
 
@@ -61,7 +61,7 @@ public:
         if (running_tasks.empty())
             return false;
 
-        task_thread_pool.submit(running_tasks);
+        task_scheduler.submitToTaskThreadPool(running_tasks);
         running_tasks.clear();
         spin_count = 0;
         return true;
@@ -84,7 +84,7 @@ public:
     }
 
 private:
-    TaskThreadPool & task_thread_pool;
+    TaskScheduler & task_scheduler;
 
     LoggerPtr logger;
 
@@ -127,7 +127,7 @@ void WaitReactor::loop() noexcept
     LOG_INFO(logger, "start wait reactor loop");
     ASSERT_MEMORY_TRACKER
 
-    Spinner spinner{scheduler.task_thread_pool, logger};
+    Spinner spinner{scheduler, logger};
     std::list<TaskPtr> local_waiting_tasks;
     // Get the incremental tasks from waiting_task_list.
     // return false if waiting_task_list has been closed.
