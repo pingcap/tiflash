@@ -64,10 +64,8 @@ private:
         UInt64 & time_processed_before,
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
-    void fillListBasedExecutorsChild();
-    void fillTreeBasedExecutorsChildren();
-
     void fillEmptyExecutorSummary(const String & executor_id, tipb::SelectResponse & response);
+    void fillChildren();
 
     template <typename T>
     bool appendImpl(const tipb::Executor * executor)
@@ -83,8 +81,8 @@ private:
     template <typename... Ts>
     bool append(const tipb::Executor * executor)
     {
-        RUNTIME_CHECK(executor->has_executor_id());
-        RUNTIME_CHECK(profiles.find(executor->executor_id()) == profiles.end());
+        assert(executor->has_executor_id());
+        assert(profiles.find(executor->executor_id()) == profiles.end());
         return (appendImpl<Ts>(executor) || ...);
     }
 

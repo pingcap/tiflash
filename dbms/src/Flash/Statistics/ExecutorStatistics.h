@@ -20,7 +20,6 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutorStatisticsBase.h>
-#include <Flash/Statistics/traverseExecutors.h>
 #include <common/types.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -40,7 +39,7 @@ public:
     ExecutorStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
         : dag_context(dag_context_)
     {
-        RUNTIME_CHECK(executor->has_executor_id());
+        assert(executor->has_executor_id());
         executor_id = executor->executor_id();
 
         type = ExecutorImpl::type;

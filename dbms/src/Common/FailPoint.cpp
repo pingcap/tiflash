@@ -267,9 +267,7 @@ FailPointHelper::getFailPointVal(const String & fail_point_name)
 {
     if (auto iter = fail_point_val.find(fail_point_name); iter != fail_point_val.end())
     {
-        auto v = iter->second;
-        fail_point_val.erase(iter);
-        return v;
+        return iter->second;
     }
     return std::nullopt;
 }
@@ -282,8 +280,8 @@ void FailPointHelper::disableFailPoint(const String & fail_point_name)
         /// if someone wait on this, the deconstruct will never be called.
         iter->second->notifyAll();
         fail_point_wait_channels.erase(iter);
-        fail_point_val.erase(fail_point_name);
     }
+    fail_point_val.erase(fail_point_name);
     fiu_disable(fail_point_name.c_str());
 }
 

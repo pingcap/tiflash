@@ -11,9 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/Plans/PhysicalAggregationConvergent.h>
 #include <Operators/AggregateConvergentSourceOp.h>
-#include <Operators/ExpressionTransformOp.h>
 #include <Operators/NullSourceOp.h>
 
 namespace DB
@@ -25,6 +25,9 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
     Context & context,
     size_t /*concurrency*/)
 {
+    // For fine grained shuffle, PhysicalAggregation will not be broken into AggregateBuild and AggregateConvergent.
+    // So only non fine grained shuffle is considered here.
+    assert(!fine_grained_shuffle.enable());
     auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
     aggregate_context->initConvergent();
 
@@ -53,12 +56,6 @@ void PhysicalAggregationConvergent::buildPipelineExecGroup(
         executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
 
-    if (!expr_after_agg->getActions().empty())
-    {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_after_agg));
-        });
-        executor_profile.emplace_back(group_builder.getOperatorProfiles());
-    }
+    executeExpression(exec_status, group_builder, executor_profile, expr_after_agg, log);
 }
 } // namespace DB

@@ -23,7 +23,6 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalProjection.h>
 #include <Interpreters/Context.h>
-#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
@@ -153,13 +152,7 @@ void PhysicalProjection::buildPipelineExecGroup(
     size_t /*concurrency*/)
 {
     auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
-    if (project_actions && !project_actions->getActions().empty())
-    {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), project_actions));
-        });
-        executor_profile.emplace_back(group_builder.getOperatorProfiles());
-    }
+    executeExpression(exec_status, group_builder, executor_profile, project_actions,log);
 }
 
 void PhysicalProjection::finalize(const Names & parent_require)

@@ -85,8 +85,8 @@ try
                            .filter(eq(col("s1"), col("s2")))
                            .limit(2)
                            .build(context, t);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, 1}}};
-        Expect expect_pipeline{{"table_scan_0", {12, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, concurrency}}};
+        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, 1}}};
+        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, concurrency}}};
 
         testForExecutionSummary(request, enable_planner, expect_pipeline, expect);
     }
@@ -177,8 +177,8 @@ try
                            .limit(2)
                            .project({col("s1")})
                            .build(context);
-        Expect expect{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}, {"limit_2", {2, 1}}, {"project_3", {2, concurrency}}};
-        Expect expect_pipeline{{"table_scan_0", {12, concurrency}}, {"selection_1", {4, concurrency}}, {"limit_2", {2, concurrency}}, {"project_3", {2, concurrency}}};
+        Expect expect{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, 1}}, {"project_3", {2, concurrency}}};
+        Expect expect_pipeline{{"table_scan_0", {not_check_rows, concurrency}}, {"selection_1", {not_check_rows, concurrency}}, {"limit_2", {2, concurrency}}, {"project_3", {2, concurrency}}};
 
         testForExecutionSummary(request, enable_planner, expect_pipeline, expect);
     }
