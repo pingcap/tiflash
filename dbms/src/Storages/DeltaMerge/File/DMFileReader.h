@@ -160,6 +160,7 @@ private:
 #ifdef DBMS_PUBLIC_GTEST
 public:
     DMFilePackFilter pack_filter;
+
 private:
 #else
     DMFilePackFilter pack_filter;

@@ -300,9 +300,9 @@ size_t DMFileReader::skipNextBlock()
     scan_context->total_dmfile_skipped_rows += read_rows;
     next_row_offset += read_rows;
 
-    // When we read dmfile, if the previous pack is not read, 
+    // When we read dmfile, if the previous pack is not read,
     // then we should seek to the right offset of dmfile.
-    // So if skip some packs successfully, 
+    // So if skip some packs successfully,
     // then we set the last pack to false to indicate that we should seek before read.
     if (likely(read_rows > 0))
         use_packs[next_pack_id - 1] = false;
