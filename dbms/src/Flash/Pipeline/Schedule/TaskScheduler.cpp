@@ -23,8 +23,8 @@
 namespace DB
 {
 TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
-    : cpu_task_thread_pool(*this, config.task_thread_pool_size)
-    , io_task_thread_pool(*this, config.task_thread_pool_size)
+    : cpu_task_thread_pool(*this, config.cpu_task_thread_pool_size)
+    , io_task_thread_pool(*this, config.io_task_thread_pool_size)
     , wait_reactor(*this)
 {
 }

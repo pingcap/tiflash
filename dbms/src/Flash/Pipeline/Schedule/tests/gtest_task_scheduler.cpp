@@ -124,10 +124,59 @@ private:
     Waiter & waiter;
 };
 
+class SimpleBlockedTask : public Task
+{
+public:
+    explicit SimpleBlockedTask(Waiter & waiter_)
+        : waiter(waiter_)
+    {}
+
+    ~SimpleBlockedTask()
+    {
+        waiter.notify();
+    }
+
+protected:
+    ExecTaskStatus executeImpl() noexcept override
+    {
+        if (loop_count > 0)
+        {
+            if ((loop_count % 2) == 0)
+                return ExecTaskStatus::BLOCKED;
+            else
+            {
+                --loop_count;
+                return ExecTaskStatus::RUNNING;
+            }
+        }
+        return ExecTaskStatus::FINISHED;
+    }
+
+    ExecTaskStatus blockImpl() noexcept override
+    {
+        if (loop_count > 0)
+        {
+            if ((loop_count % 2) == 0)
+            {
+                --loop_count;
+                return ExecTaskStatus::BLOCKED;
+            }
+            else
+                return ExecTaskStatus::RUNNING;
+        }
+        return ExecTaskStatus::FINISHED;
+    }
+
+private:
+    int loop_count = 10 + random() % 10;
+    Waiter & waiter;
+};
+
 enum class TraceTaskStatus
 {
     initing,
     running,
+    blocked,
     waiting,
 };
 class MemoryTraceTask : public Task
@@ -152,6 +201,9 @@ protected:
         switch (status)
         {
         case TraceTaskStatus::initing:
+            status = TraceTaskStatus::blocked;
+            return ExecTaskStatus::BLOCKED;
+        case TraceTaskStatus::blocked:
             status = TraceTaskStatus::waiting;
             return ExecTaskStatus::WAITING;
         case TraceTaskStatus::waiting:
@@ -163,6 +215,13 @@ protected:
         default:
             __builtin_unreachable();
         }
+    }
+
+    ExecTaskStatus blockImpl() noexcept override
+    {
+        assert(status == TraceTaskStatus::blocked);
+        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD + 10);
+        return ExecTaskStatus::RUNNING;
     }
 
     ExecTaskStatus awaitImpl() noexcept override
@@ -204,7 +263,7 @@ public:
 
     void submitAndWait(std::vector<TaskPtr> & tasks, Waiter & waiter)
     {
-        TaskSchedulerConfig config{thread_num};
+        TaskSchedulerConfig config{thread_num, thread_num};
         TaskScheduler task_scheduler{config};
         task_scheduler.submit(tasks);
         waiter.wait();

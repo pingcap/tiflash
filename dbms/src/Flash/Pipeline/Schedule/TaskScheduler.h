@@ -24,7 +24,8 @@ namespace DB
 {
 struct TaskSchedulerConfig
 {
-    size_t task_thread_pool_size;
+    size_t cpu_task_thread_pool_size;
+    size_t io_task_thread_pool_size;
 };
 
 /**
