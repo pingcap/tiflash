@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Disaggregated/RNPageReceiverContext.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
@@ -131,7 +132,11 @@ FetchPagesRequest::FetchPagesRequest(DM::RNRemoteSegmentReadTaskPtr seg_task_)
         // FetchPagesRequest into multiples in future, then we need to change
         // the moment of calling `occupySpace`.
         auto page_cache = seg_task->dm_context->db_context.getSharedContextDisagg()->rn_page_cache;
+
+        Stopwatch w_occupy;
         auto occupy_result = page_cache->occupySpace(cf_tiny_oids, seg_task->delta_tinycf_page_sizes);
+        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_cache_occupy).Observe(w_occupy.elapsedSeconds());
+
         for (auto page_id : occupy_result.pages_not_in_cache)
             req->add_page_ids(page_id.page_id);
 

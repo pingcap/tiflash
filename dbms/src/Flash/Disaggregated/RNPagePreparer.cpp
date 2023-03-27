@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Disaggregated/RNPagePreparer.h>
 #include <Flash/Disaggregated/RNPageReceiver.h>
@@ -176,8 +175,6 @@ void RNPagePreparer::downloadDone(bool meet_error, const String & local_err_msg,
             copy_persister_msg = err_msg;
         }
         remote_read_tasks->allDataReceive(copy_persister_msg);
-
-        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_fetch_page).Observe(watch.elapsedSeconds());
     }
 }
 

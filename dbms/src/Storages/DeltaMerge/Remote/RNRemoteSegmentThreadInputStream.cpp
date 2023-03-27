@@ -84,8 +84,8 @@ RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
     , extra_table_id_index(extra_table_id_index_)
     , keyspace_id(NullspaceID)
     , physical_table_id(-1)
-    , seconds_pop(0.0)
-    , seconds_build(0.0)
+    , seconds_next_task(0.0)
+    , seconds_build_stream(0.0)
     , cur_segment_id(0)
     , log(Logger::get(String(req_id)))
 {
@@ -99,9 +99,9 @@ RNRemoteSegmentThreadInputStream::RNRemoteSegmentThreadInputStream(
 
 RNRemoteSegmentThreadInputStream::~RNRemoteSegmentThreadInputStream()
 {
-    LOG_DEBUG(log, "RNRemoteSegmentThreadInputStream done, time blocked in pop task: {:.3f}sec, build task: {:.3f}sec", seconds_pop, seconds_build);
-    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_pop_ready_tasks).Observe(seconds_pop);
-    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_stream).Observe(seconds_build);
+    LOG_DEBUG(log, "RNRemoteSegmentThreadInputStream done, total_next_task={:.3f}sec, total_build_stream={:.3f}sec", seconds_next_task, seconds_build_stream);
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_seg_next_task).Observe(seconds_next_task);
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_seg_build_stream).Observe(seconds_build_stream);
 }
 
 Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
@@ -114,7 +114,7 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
         {
             watch.restart();
             cur_read_task = read_tasks->nextReadyTask();
-            seconds_pop += watch.elapsedSeconds();
+            seconds_next_task += watch.elapsedSeconds();
             watch.restart();
             if (!cur_read_task)
             {
@@ -139,7 +139,7 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
                 max_version,
                 filter,
                 expected_block_size);
-            seconds_build += watch.elapsedSeconds();
+            seconds_build_stream += watch.elapsedSeconds();
             LOG_TRACE(log, "Read blocks from remote segment begin, segment_id={} state={}", cur_segment_id, magic_enum::enum_name(cur_read_task->state));
         }
 
