@@ -277,6 +277,11 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStr
     return inbound_io_input_streams_map;
 }
 
+std::unordered_map<String, SourceOpPtrs> & DAGContext::getInBoundIOSourcesMap()
+{
+    return inbound_io_source_ops_map;
+}
+
 void DAGContext::handleTruncateError(const String & msg)
 {
     if (!(flags & TiDBSQLFlags::IGNORE_TRUNCATE || flags & TiDBSQLFlags::TRUNCATE_AS_WARNING))

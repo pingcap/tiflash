@@ -246,7 +246,7 @@ try
                       {"aggregation_1", {3, not_check_concurrency}},
                       {"project_2", {3, concurrency}}};
         Expect expect_pipeline{{"table_scan_0", {12, concurrency}},
-                               {"aggregation_1", {3, not_check_concurrency}},
+                               {"aggregation_1", {3, 1}},
                                {"project_2", {3, 1}}};
 
         testForPipelineExecutionSummary(request, enable_planner, expect_pipeline, expect);

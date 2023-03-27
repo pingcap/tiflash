@@ -45,6 +45,16 @@ public:
 
     void operateSuffix() override;
 
+    RemoteExecutionSummary getRemoteExecutionSummary()
+    {
+        return remote_execution_summary;
+    }
+
+    const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const
+    {
+        return connection_profile_infos;
+    }
+
 protected:
     OperatorStatus readImpl(Block & block) override;
 
@@ -55,7 +65,7 @@ private:
 
 private:
     // TODO support ConnectionProfileInfo.
-    // TODO support RemoteExecutionSummary.
+    std::vector<ConnectionProfileInfo> connection_profile_infos;
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
     std::unique_ptr<CHBlockChunkDecodeAndSquash> decoder_ptr;
     uint64_t total_rows{};

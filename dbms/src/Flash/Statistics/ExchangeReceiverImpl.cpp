@@ -40,6 +40,7 @@ void ExchangeReceiverStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
     fmt_buffer.append("]");
 }
 
+/// TODO: collectExtraRuntimeDetail for Pipeline model
 void ExchangeReceiverStatistics::collectExtraRuntimeDetail()
 {
     const auto & io_stream_map = dag_context.getInBoundIOInputStreamsMap();

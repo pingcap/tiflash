@@ -35,4 +35,18 @@ void fillTiExecutionSummary(
     if (dag_context.return_executor_id || force_fill_executor_id)
         execution_summary->set_executor_id(executor_id);
 }
+
+void copyExecutionSummary(const String & executor_id, tipb::SelectResponse & response)
+{
+    /// use last summary to fill
+    auto last_summary = response.execution_summaries(response.execution_summaries_size() - 1);
+    auto * execution_summary = response.add_execution_summaries();
+    execution_summary->set_executor_id(executor_id);
+    execution_summary->set_time_processed_ns(last_summary.time_processed_ns());
+    execution_summary->set_num_produced_rows(last_summary.num_produced_rows());
+    execution_summary->set_num_iterations(last_summary.num_iterations());
+    execution_summary->set_concurrency(last_summary.concurrency());
+    // merge detailed table scan profile
+    execution_summary->mutable_tiflash_scan_context()->CopyFrom(last_summary.tiflash_scan_context());
+}
 } // namespace DB

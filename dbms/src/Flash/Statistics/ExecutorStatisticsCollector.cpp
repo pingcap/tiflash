@@ -24,22 +24,28 @@
 #include <Flash/Statistics/JoinImpl.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <Operators/ExchangeReceiverSourceOp.h>
 namespace DB
 {
 namespace
 {
-RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context)
+RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context, bool enable_pipeline)
 {
     RemoteExecutionSummary exchange_execution_summary;
-    for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
+
+    if (enable_pipeline)
     {
-        for (const auto & stream_ptr : map_entry.second)
-        {
-            if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()); exchange_receiver_stream_ptr)
-            {
-                exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
-            }
-        }
+        for (const auto & map_entry : dag_context.getInBoundIOSourcesMap())
+            for (const auto & source_op_ptr : map_entry.second)
+                if (auto * exchange_receiver_source_op_ptr = dynamic_cast<ExchangeReceiverSourceOp *>(source_op_ptr); exchange_receiver_source_op_ptr)
+                    exchange_execution_summary.merge(exchange_receiver_source_op_ptr->getRemoteExecutionSummary());
+    }
+    else
+    {
+        for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
+            for (const auto & stream_ptr : map_entry.second)
+                if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()); exchange_receiver_stream_ptr)
+                    exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
     }
     return exchange_execution_summary;
 }
@@ -131,20 +137,6 @@ void ExecutorStatisticsCollector::fillTreeBasedExecutorsChildren()
     }
 }
 
-void ExecutorStatisticsCollector::fillEmptyExecutorSummary(const String & executor_id, tipb::SelectResponse & response)
-{
-    /// use last summary to fill
-    auto last_summary = response.execution_summaries(response.execution_summaries_size() - 1);
-    auto * execution_summary = response.add_execution_summaries();
-    execution_summary->set_executor_id(executor_id);
-    execution_summary->set_time_processed_ns(last_summary.time_processed_ns());
-    execution_summary->set_num_produced_rows(last_summary.num_produced_rows());
-    execution_summary->set_num_iterations(last_summary.num_iterations());
-    execution_summary->set_concurrency(last_summary.concurrency());
-    // merge detailed table scan profile
-    execution_summary->mutable_tiflash_scan_context()->CopyFrom(last_summary.tiflash_scan_context());
-}
-
 tipb::SelectResponse ExecutorStatisticsCollector::genExecutionSummaryResponse()
 {
     tipb::SelectResponse response;
@@ -179,14 +171,12 @@ void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & re
     if (!enable_pipeline)
     {
         collectRuntimeDetails();
-        fillLocalExecutionSummaries(response);
     }
     else
     {
         collectRuntimeDetailsForPipeline();
-        fillLocalExecutionSummaries(response);
     }
-
+    fillLocalExecutionSummaries(response);
     // TODO: remove filling remote execution summaries
     fillRemoteExecutionSummaries(response);
 }
@@ -204,15 +194,14 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
     if (dag_context->return_executor_id)
     {
         // fill in tree-based executors' execution summary
-        std::cout << "check the order: ";
         for (auto & p : profiles)
         {
-            std::cout << "p id: " << p.first << std::endl;
-            /// only for pipeline model
+            /// only for pipeline model, if one executor has no operator
+            /// just inherit last execution summary
             if (p.second->getBaseRuntimeStatistics().concurrency == 0
                 && response.execution_summaries_size() >= 1 && enable_pipeline)
             {
-                fillEmptyExecutorSummary(p.first, response);
+                copyExecutionSummary(p.first, response);
             }
             else
             {
@@ -224,7 +213,6 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                     p.second->getBaseRuntimeStatistics(),
                     time_processed_before,
                     dag_context->scan_context_map);
-                std::cout << "time processed: " << time_processed_before << std::endl;
             }
         }
     }
@@ -236,11 +224,12 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
         {
             auto it = profiles.find(executor_id);
 
-            /// only for pipeline model
+            /// only for pipeline model, if one executor has no operator
+            /// just inherit last execution summary
             if (it->second->getBaseRuntimeStatistics().concurrency == 0
                 && response.execution_summaries_size() >= 1 && enable_pipeline)
             {
-                fillEmptyExecutorSummary(executor_id, response);
+                copyExecutionSummary(executor_id, response);
             }
             else
             {
@@ -261,7 +250,7 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
 void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectResponse & response)
 {
     // TODO: support cop remote read and disaggregated mode.
-    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context);
+    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context, enable_pipeline);
 
     // fill execution_summaries from remote executor received by exchange.
     for (auto & p : exchange_execution_summary.execution_summaries)

@@ -27,8 +27,6 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <fmt/format.h>
 
-#include "Operators/Operator.h"
-
 namespace DB
 {
 PhysicalExchangeReceiver::PhysicalExchangeReceiver(
@@ -101,7 +99,9 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
     Context & context,
     size_t concurrency)
 {
-    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
+    auto & dag_context = *context.getDAGContext();
+    auto & executor_profile = dag_context.getPipelineProfilesMap()[executor_id];
+    auto & exchange_receiver_io_source_ops = dag_context.getInBoundIOSourcesMap()[executor_id];
 
     if (fine_grained_shuffle.enable())
         concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
@@ -109,11 +109,13 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
     group_builder.init(concurrency);
     size_t partition_id = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::make_unique<ExchangeReceiverSourceOp>(
+        auto source_op = std::make_unique<ExchangeReceiverSourceOp>(
             exec_status,
             log->identifier(),
             mpp_exchange_receiver,
-            /*stream_id=*/fine_grained_shuffle.enable() ? partition_id++ : 0));
+            /*stream_id=*/fine_grained_shuffle.enable() ? partition_id++ : 0);
+        builder.setSourceOp(std::move(source_op));
+        exchange_receiver_io_source_ops.push_back(source_op.get());
     });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
 }

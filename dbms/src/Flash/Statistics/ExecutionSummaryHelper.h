@@ -26,4 +26,8 @@ void fillTiExecutionSummary(
     ExecutionSummary & current,
     const String & executor_id,
     bool force_fill_executor_id);
+
+void copyExecutionSummary(
+    const String & executor_id,
+    tipb::SelectResponse & response);
 } // namespace DB

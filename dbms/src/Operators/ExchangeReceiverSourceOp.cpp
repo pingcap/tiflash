@@ -72,7 +72,12 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
             if (result.resp != nullptr)
                 remote_execution_summary.add(*result.resp);
 
+            size_t index = result.call_index;
             const auto & decode_detail = result.decode_detail;
+            auto & connection_profile_info = connection_profile_infos[index];
+            connection_profile_info.packets += decode_detail.packets;
+            connection_profile_info.bytes += decode_detail.packet_bytes;
+
             total_rows += decode_detail.rows;
             LOG_TRACE(
                 log,

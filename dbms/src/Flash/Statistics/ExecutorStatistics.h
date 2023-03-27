@@ -119,7 +119,6 @@ public:
             size_t profile_num = executor_profile.size();
             if (profile_num == 0)
             {
-                std::cout << "ywq test executor id: " << executor_id << std::endl;
                 return;
             }
 
@@ -145,7 +144,6 @@ public:
             }
             base.execution_time_ns += time_processed_ns;
         }
-        std::cout << "executor_id: " << executor_id << ", rows: " << base.rows << std::endl;
     }
 
     static bool isMatch(const tipb::Executor * executor)

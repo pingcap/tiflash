@@ -35,6 +35,7 @@ void TableScanStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
         remote_table_scan_detail.toJson());
 }
 
+/// TODO: collectExtraRuntimeDetail for Pipeline model
 void TableScanStatistics::collectExtraRuntimeDetail()
 {
     const auto & io_stream_map = dag_context.getInBoundIOInputStreamsMap();

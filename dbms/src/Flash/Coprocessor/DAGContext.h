@@ -65,6 +65,9 @@ using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 class ProcessListEntry;
 
+class SourceOp;
+using SourceOpPtrs = std::vector<SourceOp *>;
+
 // a group of profile for same operator
 using OperatorProfiles = std::vector<OperatorProfilePtr>;
 
@@ -157,6 +160,7 @@ public:
 
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
+    std::unordered_map<String, SourceOpPtrs> & getInBoundIOSourcesMap();
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
@@ -354,9 +358,13 @@ private:
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
     /// DAGResponseWriter / JoinStatistics gets JoinExecuteInfo through it.
     std::unordered_map<std::string, JoinExecuteInfo> join_execute_info_map;
-    /// profile_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
+    /// inbound_io_input_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
     /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
     std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;
+
+    /// inbound_io_source_ops_map is a map that maps from executor_id (table_scan / exchange_receiver) to SourceOps.
+    std::unordered_map<String, SourceOpPtrs> inbound_io_source_ops_map;
+
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
