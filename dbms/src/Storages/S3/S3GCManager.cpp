@@ -39,12 +39,12 @@
 #include <pingcap/pd/IClient.h>
 
 #include <chrono>
+#include <ext/scope_guard.h>
 #include <limits>
+#include <magic_enum.hpp>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
-
-#include "ext/scope_guard.h"
 
 namespace DB::ErrorCodes
 {
@@ -305,6 +305,7 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     // delete S3 lock file
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     deleteObject(*client, lock_key);
+    const auto elapsed_remove_lock = watch.elapsedMillisecondsFromLastTime() / 1000.0;
 
     // TODO: If `lock_key` is the only lock to datafile and GCManager crashes
     //       after the lock deleted but before delmark uploaded, then the
@@ -312,6 +313,9 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     //       Need another logic to cover this corner case.
 
     const auto delmark_object_info = S3::tryGetObjectInfo(*client, unlocked_datafile_delmark_key);
+    const auto elapsed_try_get_delmark = watch.elapsedMillisecondsFromLastTime() / 1000.0;
+    double elapsed_try_mark_delete = 0.0;
+    double elapsed_lifecycle_mark_delete = 0.0;
     if (!delmark_object_info.exist)
     {
         bool ok;
@@ -320,6 +324,7 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
         {
             // delmark not exist, lets try create a delmark through S3LockService
             std::tie(ok, err_msg) = lock_client->sendTryMarkDeleteRequest(unlocked_datafile_key, config.mark_delete_timeout_seconds);
+            elapsed_try_mark_delete = watch.elapsedMillisecondsFromLastTime() / 1000.0;
         }
         catch (DB::Exception & e)
         {
@@ -348,6 +353,16 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
                 // 1 day, we consider it is long enough for no other write node try
                 // access to the data file.
                 lifecycleMarkDataFileDeleted(unlocked_datafile_key);
+                elapsed_lifecycle_mark_delete = watch.elapsedMillisecondsFromLastTime() / 1000.0;
+                LOG_INFO(
+                    log,
+                    "cleanOneLock done, method={} key={} remove_lock={:.3f} get_delmark={:.3f} mark_delete={:.3f} lifecycle_mark_delete={:.3f}",
+                    magic_enum::enum_name(config.method),
+                    unlocked_datafile_key,
+                    elapsed_remove_lock,
+                    elapsed_try_get_delmark,
+                    elapsed_try_mark_delete,
+                    elapsed_lifecycle_mark_delete);
                 return;
             }
             case S3GCMethod::ScanThenDelete:
@@ -356,7 +371,16 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
         }
         else
         {
-            LOG_INFO(log, "delmark create failed, key={} reason={}", unlocked_datafile_key, err_msg);
+            LOG_INFO(
+                log,
+                "delmark create failed, method={} key={} reason={} remove_lock={:.3f} get_delmark={:.3f} mark_delete={:.3f} lifecycle_mark_delete={:.3f}",
+                magic_enum::enum_name(config.method),
+                unlocked_datafile_key,
+                err_msg,
+                elapsed_remove_lock,
+                elapsed_try_get_delmark,
+                elapsed_try_mark_delete,
+                elapsed_lifecycle_mark_delete);
         }
         // no matter delmark create success or not, leave it to later GC round.
         return;
@@ -371,8 +395,18 @@ void S3GCManager::cleanOneLock(const String & lock_key, const S3FilenameView & l
     }
     case S3GCMethod::ScanThenDelete:
     {
+        const auto elapsed_scan_try_remove_datafile = watch.elapsedMillisecondsFromLastTime() / 1000.0;
         // delmark exist, check whether we need to physical remove the datafile
         removeDataFileIfDelmarkExpired(unlocked_datafile_key, unlocked_datafile_delmark_key, timepoint, delmark_object_info.last_modification_time);
+        LOG_INFO(
+            log,
+            "cleanOneLock done, method={} key={} remove_lock={:.3f} get_delmark={:.3f} mark_delete={:.3f} scan_try_physical_remove={:.3f}",
+            magic_enum::enum_name(config.method),
+            unlocked_datafile_key,
+            elapsed_remove_lock,
+            elapsed_try_get_delmark,
+            elapsed_try_mark_delete,
+            elapsed_scan_try_remove_datafile);
         return;
     }
     }
