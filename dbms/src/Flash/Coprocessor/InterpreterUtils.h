@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Operators/OperatorProfile.h>
 
 namespace DB
 {
@@ -27,6 +28,8 @@ class Context;
 
 class PipelineExecutorStatus;
 struct PipelineExecGroupBuilder;
+using OperatorProfiles = std::vector<OperatorProfilePtr>;
+using ExecutorProfile = std::vector<OperatorProfiles>;
 
 void restoreConcurrency(
     DAGPipeline & pipeline,
@@ -59,6 +62,7 @@ void executeExpression(
 void executeExpression(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
+    ExecutorProfile & executor_profile,
     const ExpressionActionsPtr & expr_actions,
     const LoggerPtr & log);
 

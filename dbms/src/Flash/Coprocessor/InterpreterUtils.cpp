@@ -100,6 +100,7 @@ void executeExpression(
 void executeExpression(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
+    ExecutorProfile & executor_profile,
     const ExpressionActionsPtr & expr_actions,
     const LoggerPtr & log)
 {
@@ -108,6 +109,7 @@ void executeExpression(
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_actions));
         });
+        executor_profile.push_back(group_builder.getOperatorProfiles());
     }
 }
 
