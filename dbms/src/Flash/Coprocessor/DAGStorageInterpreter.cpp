@@ -559,12 +559,23 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (const LockException & e)
         {
+            // When this is a disaggregated read task on WN issued by RN, we need RN
+            // to take care of retrying.
+            if (context.getDAGContext()->is_disaggregated_task)
+                throw;
+
             // We can also use current thread to resolve lock, but it will block next process.
             // So, force this region retry in another thread in CoprocessorBlockInputStream.
-            force_retry.emplace(e.region_id);
+            for (const auto & lock : e.locks)
+                force_retry.emplace(lock.first);
         }
         catch (const RegionException & e)
         {
+            // When this is a disaggregated read task on WN issued by RN, we need RN
+            // to take care of retrying.
+            if (context.getDAGContext()->is_disaggregated_task)
+                throw;
+
             if (tmt.checkShuttingDown())
                 throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
             // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.

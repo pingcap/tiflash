@@ -143,7 +143,7 @@ grpc::Status CoprocessorHandler::execute()
         LOG_WARNING(log, "LockException: region {}, message: {}", cop_request->context().region_id(), e.message());
         cop_response->Clear();
         GET_METRIC(tiflash_coprocessor_request_error, reason_meet_lock).Increment();
-        cop_response->set_allocated_locked(e.lock_info.release());
+        cop_response->set_allocated_locked(e.locks[0].second.release());
         // return ok so TiDB has the chance to see the LockException
         return grpc::Status::OK;
     }
