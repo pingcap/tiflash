@@ -455,6 +455,7 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
         .must_locked_files = options.must_locked_files,
         .sequence = sequence,
         .max_data_file_size = options.max_data_file_size,
+        .max_edit_records_per_part = options.max_edit_records_per_part,
     });
 
     writer->writePrefix({

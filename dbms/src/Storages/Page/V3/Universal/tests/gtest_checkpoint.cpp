@@ -34,6 +34,7 @@
 #include <aws/s3/model/CreateBucketRequest.h>
 
 #include <future>
+#include <limits>
 
 namespace DB::FailPoints
 {
@@ -91,7 +92,11 @@ public:
         return ret;
     }
 
-    void dumpCheckpoint(bool upload_success = true, std::unordered_set<String> file_ids_to_compact = {}, UInt64 max_data_file_size = 0)
+    void dumpCheckpoint(
+        bool upload_success = true,
+        std::unordered_set<String> file_ids_to_compact = {},
+        UInt64 max_data_file_size = 256 * 1024 * 1024,
+        UInt64 max_edit_records_per_part = std::numeric_limits<UInt64>::max())
     {
         page_storage->dumpIncrementalCheckpoint(UniversalPageStorage::DumpCheckpointOptions{
             .data_file_id_pattern = "{seq}_{index}.data",
@@ -103,6 +108,7 @@ public:
             .persist_checkpoint = [upload_success](const PS::V3::LocalCheckpointFiles &) { return upload_success; },
             .compact_getter = [=] { return file_ids_to_compact; },
             .max_data_file_size = max_data_file_size,
+            .max_edit_records_per_part = max_edit_records_per_part,
         });
     }
 
@@ -865,6 +871,96 @@ try
     ASSERT_EQ(EditRecordType::VAR_EXTERNAL, iter->type);
     ASSERT_EQ("9", iter->page_id);
     ASSERT_EQ("dt file path", *iter->entry.checkpoint_info.data_location.data_file_id);
+}
+CATCH
+
+TEST_F(PSCheckpointTest, ManifestRecordParts)
+try
+{
+    {
+        UniversalWriteBatch batch;
+        batch.putPage("5", tag, "The flower carriage rocked");
+        batch.putPage("3", tag, "Said she just dreamed a dream");
+        page_storage->write(std::move(batch));
+    }
+    {
+        UniversalWriteBatch batch;
+        batch.disableRemoteLock();
+        batch.delPage("1");
+        batch.putRefPage("2", "5");
+        batch.putPage("10", tag, "Nahida opened her eyes");
+        batch.delPage("3");
+        PS::V3::CheckpointLocation data_location{
+            .data_file_id = std::make_shared<String>("dt file path"),
+            .offset_in_file = 0,
+            .size_in_file = 0,
+        };
+        batch.putRemoteExternal("9", data_location);
+        page_storage->write(std::move(batch));
+    }
+    dumpCheckpoint(/*upload_success*/ true, /*file_ids_to_compact*/ {}, /*max_data_file_size*/ 1, /*max_edit_records_per_part*/ 1);
+
+
+    ASSERT_TRUE(Poco::File(dir + "7.manifest").exists());
+    auto manifest_file = PosixRandomAccessFile::create(dir + "7.manifest");
+    auto reader = CPManifestFileReader::create({
+        .plain_file = manifest_file,
+    });
+    auto im = CheckpointProto::StringsInternMap{};
+    auto prefix = reader->readPrefix();
+    UInt64 record_count = 0;
+    while (true)
+    {
+        auto edits = reader->readEdits(im);
+        if (!edits)
+        {
+            break;
+        }
+        const auto & records = edits->getRecords();
+        record_count += records.size();
+        ASSERT_EQ(records.size(), 1);
+
+        auto iter = records.begin();
+        switch (record_count)
+        {
+        case 1:
+            ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+            ASSERT_EQ("10", iter->page_id);
+            ASSERT_EQ("7_0.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+            ASSERT_EQ("Nahida opened her eyes", readData(iter->entry.checkpoint_info.data_location));
+            break;
+        case 2:
+            ASSERT_EQ(EditRecordType::VAR_REF, iter->type);
+            ASSERT_EQ("2", iter->page_id);
+            break;
+        case 3:
+            ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+            ASSERT_EQ("3", iter->page_id);
+            ASSERT_TRUE(iter->entry.checkpoint_info.has_value());
+            ASSERT_EQ("7_1.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+            ASSERT_EQ("Said she just dreamed a dream", readData(iter->entry.checkpoint_info.data_location));
+            break;
+        case 4:
+            ASSERT_EQ(EditRecordType::VAR_DELETE, iter->type);
+            ASSERT_EQ("3", iter->page_id);
+            break;
+        case 5:
+            ASSERT_EQ(EditRecordType::VAR_ENTRY, iter->type);
+            ASSERT_EQ("5", iter->page_id);
+            ASSERT_EQ("7_2.data", *iter->entry.checkpoint_info.data_location.data_file_id);
+            ASSERT_EQ("The flower carriage rocked", readData(iter->entry.checkpoint_info.data_location));
+            break;
+        case 6:
+            ASSERT_EQ(EditRecordType::VAR_EXTERNAL, iter->type);
+            ASSERT_EQ("9", iter->page_id);
+            ASSERT_EQ("dt file path", *iter->entry.checkpoint_info.data_location.data_file_id);
+            break;
+        default:
+            FAIL();
+            break;
+        }
+    }
+    ASSERT_EQ(6, record_count);
 }
 CATCH
 
