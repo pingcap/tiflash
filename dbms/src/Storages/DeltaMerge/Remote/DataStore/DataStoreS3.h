@@ -53,6 +53,7 @@ public:
 
     std::unordered_map<String, DataFileInfo> getDataFilesInfo(const std::unordered_set<String> & lock_keys) override;
 
+    void setTaggingsForKeys(const std::vector<String> & keys, std::string_view tagging) override;
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else

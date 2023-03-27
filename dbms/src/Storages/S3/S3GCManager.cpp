@@ -18,6 +18,8 @@
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Flash/Disaggregated/S3LockClient.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
@@ -53,10 +55,12 @@ S3GCManager::S3GCManager(
     pingcap::pd::ClientPtr pd_client_,
     OwnerManagerPtr gc_owner_manager_,
     S3LockClientPtr lock_client_,
+    DM::Remote::IDataStorePtr remote_data_store_,
     S3GCConfig config_)
     : pd_client(std::move(pd_client_))
     , gc_owner_manager(std::move(gc_owner_manager_))
     , lock_client(std::move(lock_client_))
+    , remote_data_store(std::move(remote_data_store_))
     , shutdown_called(false)
     , config(config_)
     , log(Logger::get())
@@ -439,13 +443,22 @@ void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
         // scanning only the sub objects of given key of this DMFile
         // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
         //       sub file for DMFile, try clean them later.
-        S3::listPrefix(*client, datafile_key + "/", [&client, &datafile_key, &sub_logger](const Aws::S3::Model::Object & object) {
-            const auto & sub_key = object.GetKey();
-            rewriteObjectWithTagging(*client, sub_key, String(TaggingObjectIsDeleted));
-            LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging, sub_key={}", datafile_key, sub_key);
+        std::vector<String> sub_keys;
+        S3::listPrefix(*client, datafile_key + "/", [&sub_keys](const Aws::S3::Model::Object & object) {
+            sub_keys.emplace_back(object.GetKey());
             return PageResult{.num_keys = 1, .more = true};
         });
-        LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging, all sub keys are deleted", datafile_key);
+        // set tagging for all subkeys in parallel
+        remote_data_store->setTaggingsForKeys(sub_keys, TaggingObjectIsDeleted);
+        for (const auto & sub_key : sub_keys)
+        {
+            LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging, sub_key={}", datafile_key, sub_key);
+        }
+        LOG_INFO(
+            sub_logger,
+            "datafile deleted by lifecycle tagging, all sub keys are deleted, n_sub_keys={}",
+            datafile_key,
+            sub_keys.size());
     }
 }
 
@@ -577,7 +590,12 @@ S3GCManagerService::S3GCManagerService(
     const S3GCConfig & config)
     : global_ctx(context.getGlobalContext())
 {
-    manager = std::make_unique<S3GCManager>(std::move(pd_client), std::move(gc_owner_manager_), std::move(lock_client), config);
+    manager = std::make_unique<S3GCManager>(
+        std::move(pd_client),
+        std::move(gc_owner_manager_),
+        std::move(lock_client),
+        context.getSharedContextDisagg()->remote_data_store,
+        config);
 
     timer = global_ctx.getBackgroundPool().addTask(
         [this]() {
