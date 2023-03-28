@@ -18,6 +18,9 @@ namespace DB
 {
 OperatorStatus GetResultSinkOp::writeImpl(Block && block)
 {
+    if (!block)
+        return OperatorStatus::FINISHED;
+
     assert(!t_block);
     auto ret = result_queue->tryPush(std::move(block));
     switch (ret)

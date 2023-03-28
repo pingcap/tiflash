@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Core/Block.h>
 #include <Common/MPMCQueue.h>
+#include <Core/Block.h>
 
 #include <mutex>
 
