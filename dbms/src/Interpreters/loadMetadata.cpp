@@ -39,11 +39,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int CANNOT_SCHEDULE_TASK;
-} // namespace ErrorCodes
-
 static void executeCreateQuery(const String & query,
                                Context & context,
                                const String & database,
@@ -158,7 +153,7 @@ void loadMetadata(Context & context)
         executeCreateQuery(database_attach_query, context, database, database_metadata_file, thread_pool, force_restore_data);
     };
 
-    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency()) * context.getSettingsRef().io_thread_count_scale * 10;
+    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency()) * 50;
     auto load_database_thread_num = std::min(default_num_threads, databases.size());
 
     auto load_databases_thread_pool = ThreadPool(load_database_thread_num, load_database_thread_num / 2, load_database_thread_num * 2);
@@ -173,30 +168,15 @@ void loadMetadata(Context & context)
             load_database(context, db_name, meta_file, &load_tables_thread_pool, has_force_restore_data_flag);
         };
 
-        bool wait_scheduled = true;
-        while (wait_scheduled)
+        try
         {
-            try
-            {
-                load_databases_thread_pool.scheduleOrThrowOnError(task);
-                wait_scheduled = false;
-            }
-            catch (const Exception & e)
-            {
-                if (e.code() == ErrorCodes::CANNOT_SCHEDULE_TASK)
-                {
-                    // If we cannot schedule task, we will run it in current thread.
-                    // This is to avoid the case that we cannot load any database.
-                    const int wait_seconds = 2;
-                    LOG_ERROR(log, "scheduleOrThrowOnError failed with error code = {}, e.displayText() = {}, and we will sleep for {} seconds and try again", e.code(), e.displayText(), wait_seconds);
-                    ::sleep(wait_seconds);
-                }
-                else
-                    LOG_ERROR(log, "scheduleOrThrowOnError failed, error code = {}, e.displayText() = {}", e.code(), e.displayText());
-                // wait before throw, to avoid core dump
-                load_databases_thread_pool.wait();
-                throw;
-            }
+            load_databases_thread_pool.scheduleOrThrowOnError(task);
+        }
+        catch (const Exception & e)
+        {
+            LOG_ERROR(log, "scheduleOrThrowOnError failed with error code = {}, e.displayText() = {}", e.code(), e.displayText());
+            load_databases_thread_pool.wait();
+            throw;
         }
     }
 
