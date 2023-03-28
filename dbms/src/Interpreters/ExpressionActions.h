@@ -37,7 +37,6 @@ using NamesWithAliasesVec = std::vector<NamesWithAliases>;
 
 class Join;
 class Expand;
-class Expand2;
 
 class IFunctionBase;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;

@@ -78,6 +78,7 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
     auto physical_expand = std::make_shared<PhysicalExpand2>(
         executor_id,
         schema,
+        child->getFineGrainedShuffle(),
         log->identifier(),
         child,
         expand2);
@@ -96,10 +97,14 @@ void PhysicalExpand2::expandTransform(DAGPipeline & child_pipeline)
 }
 
 // Pipeline execution transform.
-void PhysicalExpand2::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context &, size_t)
+void PhysicalExpand2::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & /*context*/,
+    size_t /*concurrency*/)
 {
     group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<Expand2TransformOp>(group_builder.exec_status, log->identifier(), sample_block, shared_expand));
+        builder.appendTransformOp(std::make_unique<Expand2TransformOp>(exec_status, log->identifier(), sample_block, shared_expand));
     });
 }
 

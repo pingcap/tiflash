@@ -18,6 +18,7 @@
 
 namespace DB
 {
+class Expand2;
 using ExpressionActionsPtrVec = std::vector<ExpressionActionsPtr>;
 using Expand2Ptr = std::shared_ptr<Expand2>;
 

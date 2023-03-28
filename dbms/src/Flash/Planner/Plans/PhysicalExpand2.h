@@ -34,10 +34,11 @@ public:
     PhysicalExpand2(
         const String & executor_id_,
         const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
         const Expand2Ptr & shared_expand)
-        : PhysicalUnary(executor_id_, PlanType::Expand, schema_, req_id, child_)
+        : PhysicalUnary(executor_id_, PlanType::Filter, schema_, fine_grained_shuffle_, req_id, child_)
         , shared_expand(shared_expand)
     {
         sample_block = Block(schema_);
@@ -49,7 +50,11 @@ public:
 
     const Block & getSampleBlock() const override;
 
-    void buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & /*context*/, size_t /*concurrency*/) override;
+    void buildPipelineExecGroup(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        Context & /*context*/,
+        size_t /*concurrency*/) override;
 
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;

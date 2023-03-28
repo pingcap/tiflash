@@ -22,7 +22,6 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
-#include <Interpreters/Expand2.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TiDB.h>
@@ -41,7 +40,9 @@ class ExchangeReceiver;
 class DAGExpressionAnalyzer;
 struct SubqueryForSet;
 class Join;
+class Expand2;
 using JoinPtr = std::shared_ptr<Join>;
+using Expand2Ptr = std::shared_ptr<Expand2>;
 
 /** build ch plan from dag request: dag executors -> ch plan
   */
