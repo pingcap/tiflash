@@ -33,6 +33,7 @@
 #include <Storages/Transaction/TiDB.h>
 
 #include <queue>
+#include "Common/UniThreadPool.h"
 
 namespace DB
 {
@@ -251,7 +252,8 @@ public:
                     const ColumnDefine & handle,
                     bool is_common_handle_,
                     size_t rowkey_column_size_,
-                    const Settings & settings_ = EMPTY_SETTINGS);
+                    const Settings & settings_ = EMPTY_SETTINGS,
+                    ThreadPool * thread_pool = nullptr);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);

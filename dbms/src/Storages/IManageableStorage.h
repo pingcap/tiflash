@@ -23,6 +23,7 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
+#include "Common/UniThreadPool.h"
 
 
 namespace TiDB
@@ -85,7 +86,7 @@ public:
     virtual UInt64 onSyncGc(Int64 /*limit*/, const DM::GCOptions &) { throw Exception("Unsupported"); }
 
     /// Return true is data dir exist
-    virtual bool initStoreIfDataDirExist() { throw Exception("Unsupported"); }
+    virtual bool initStoreIfDataDirExist(ThreadPool * /*thread_pool*/) { throw Exception("Unsupported"); }
 
     virtual ::TiDB::StorageEngine engineType() const = 0;
 

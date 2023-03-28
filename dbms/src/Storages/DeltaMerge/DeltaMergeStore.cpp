@@ -180,6 +180,7 @@ ColumnDefinesPtr generateStoreColumns(const ColumnDefines & table_columns, bool 
     }
     return columns;
 }
+
 } // namespace
 
 DeltaMergeStore::Settings DeltaMergeStore::EMPTY_SETTINGS = DeltaMergeStore::Settings{.not_compress_columns = NotCompress{}};
@@ -195,7 +196,8 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  const ColumnDefine & handle,
                                  bool is_common_handle_,
                                  size_t rowkey_column_size_,
-                                 const Settings & settings_)
+                                 const Settings & settings_,
+                                 ThreadPool * thread_pool)
     : global_context(db_context.getGlobalContext())
     , path_pool(std::make_shared<StoragePathPool>(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name)))
     , settings(settings_)
@@ -275,14 +277,44 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
         }
         else
         {
+            // 在这里做 segment level 的并行
             auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-            while (segment_id)
-            {
-                auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
-                segments.emplace(segment->getRowKeyRange().getEnd(), segment);
-                id_to_segment.emplace(segment_id, segment);
+            
+            if (thread_pool){
+                auto segment_ids = Segment::getAllSegmentIds(*dm_context, segment_id);
+                std::mutex mutex;
+                for (auto & segment_id : segment_ids)
+                {
+                    auto task = [this, dm_context, segment_id, &mutex]()
+                    {
+                        auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
+                        std::lock_guard lock(mutex);
+                        segments.emplace(segment->getRowKeyRange().getEnd(), segment);
+                        id_to_segment.emplace(segment_id, segment);
+                    };
+                    try
+                    {
+                        thread_pool->scheduleOrThrowOnError(task);
+                    }
+                    catch (const Exception & e)
+                    {
+                        LOG_ERROR(log, "scheduleOrThrowOnError failed, error code = {}, e.displayText() = {}", e.code(), e.displayText());
+                        // wait before throw, to avoid core dump
+                        thread_pool->wait();
+                        throw;
+                    }
+                }
 
-                segment_id = segment->nextSegmentId();
+                thread_pool->wait();
+            } else {
+                while (segment_id)
+                {
+                    auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
+                    segments.emplace(segment->getRowKeyRange().getEnd(), segment);
+                    id_to_segment.emplace(segment_id, segment);
+
+                    segment_id = segment->nextSegmentId();
+                }
             }
         }
     }

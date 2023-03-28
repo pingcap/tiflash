@@ -57,6 +57,7 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
+#include "Storages/Page/PageDefinesBase.h"
 
 namespace ProfileEvents
 {
@@ -316,6 +317,23 @@ inline void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & seg
     readIntBinary(segment_info.next_segment_id, buf);
     readIntBinary(segment_info.delta_id, buf);
     readIntBinary(segment_info.stable_id, buf);
+}
+
+
+std::vector<PageIdU64> Segment::getAllSegmentIds(const DMContext & context, PageIdU64 segment_id)
+{
+    std::vector<PageIdU64> segment_ids = {};
+    PageIdU64 current_segment_id = segment_id;
+    while (current_segment_id){
+        segment_ids.push_back(current_segment_id);
+        Page page = context.storage_pool->metaReader()->read(current_segment_id); // not limit restore
+
+        ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+        Segment::SegmentMetaInfo segment_info;
+        readSegmentMetaInfo(buf, segment_info);
+        current_segment_id = segment_info.next_segment_id;
+    }
+    return segment_ids;
 }
 
 SegmentPtr Segment::restoreSegment( //
