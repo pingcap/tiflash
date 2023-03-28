@@ -14,35 +14,48 @@
 
 #pragma once
 
+#include <Core/Block.h>
+#include <Common/MPMCQueue.h>
 #include <Common/Exception.h>
 #include <common/types.h>
 
 #include <exception>
+#include <memory>
+#include <mutex>
 
 namespace DB
 {
-class ExecutionResult
+class ExecutionFuture
 {
 public:
-    void verify()
+    void finish()
     {
-        if (unlikely(!is_success))
-            std::rethrow_exception(exception);
+        result.finish();
     }
 
-    static ExecutionResult success()
+    bool push(Block && block)
     {
-        return {true, nullptr};
+        return result.push(std::move(block)) == MPMCQueueResult::OK;
     }
 
-    static ExecutionResult fail(const std::exception_ptr & exception)
+    Block next()
     {
-        RUNTIME_CHECK(exception != nullptr);
-        return {false, exception};
+        Block ret;
+        auto pop_ret = result.pop(ret);
+        if (pop_ret != MPMCQueueResult::OK)
+        {
+            std::lock_guard lock(exception_mu);
+            if (exception != nullptr)
+
+        }
+        return ret;
     }
 
 private:
-    bool is_success;
+    MPMCQueue<Block> result;
+    std::mutex exception_mu;
     std::exception_ptr exception;
 };
+using ExecutionFuturePtr = std::shared_ptr<ExecutionFuture>;
+
 } // namespace DB
