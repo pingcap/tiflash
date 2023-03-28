@@ -17,15 +17,20 @@
 
 namespace DB
 {
-OperatorStatus LimitTransformOp::transformImpl(Block & block)
+template <typename LimitActionPtr>
+OperatorStatus LimitTransformOp<LimitActionPtr>::transformImpl(Block & block)
 {
     if (!action->transform(block))
         block = {};
     return OperatorStatus::HAS_OUTPUT;
 }
 
-void LimitTransformOp::transformHeaderImpl(Block & header_)
+template <typename LimitActionPtr>
+void LimitTransformOp<LimitActionPtr>::transformHeaderImpl(Block & header_)
 {
     header_ = action->getHeader();
 }
+
+template class LimitTransformOp<GlobalLimitPtr>;
+template class LimitTransformOp<LocalLimitPtr>;
 } // namespace DB

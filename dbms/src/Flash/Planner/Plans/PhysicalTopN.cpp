@@ -22,7 +22,7 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
-#include <Operators/TopNTransformOp.h>
+#include <Operators/LocalSortTransformOp.h>
 
 namespace DB
 {
@@ -76,10 +76,8 @@ void PhysicalTopN::buildPipelineExecGroup(
 {
     auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
     executeExpression(exec_status, group_builder, executor_profile, before_sort_actions, log);
-    group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<TopNTransformOp>(exec_status, log->identifier(), order_descr, limit, context.getSettingsRef().max_block_size));
-    });
-    executor_profile.emplace_back(group_builder.getOperatorProfiles());
+
+    executeLocalSort(exec_status, group_builder, executor_profile, order_descr, limit, context, log);
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)
