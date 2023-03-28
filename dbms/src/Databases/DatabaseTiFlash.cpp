@@ -212,7 +212,16 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
     {
         for (auto & f : futures)
         {
-            f.get();
+            try
+            {
+                f.get();
+            }
+            catch (const Exception & e)
+            {
+                LOG_ERROR(log, "future get failed with error code = {}, e.displayText() = {}", e.code(), e.displayText());
+                thread_pool->wait();
+                throw;
+            }
         }
     }
 
