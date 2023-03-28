@@ -75,7 +75,7 @@ bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_
             fmt_buf.append(" [map info : ");
             for (auto const & pair : map)
             {
-                fmt_buf.fmtAppend("(pair.first is {}, pair.second is {}) ", pair.first, pair.second);
+                fmt_buf.fmtAppend("(column_id={}, pos={}) ", pair.first, pair.second);
             }
             fmt_buf.append(" ];");
             return fmt_buf.toString();
