@@ -158,10 +158,8 @@ void loadMetadata(Context & context)
         executeCreateQuery(database_attach_query, context, database, database_metadata_file, thread_pool, force_restore_data);
     };
 
-    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency()) * context.getSettingsRef().io_thread_count_scale * 20 ;
+    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency()) * context.getSettingsRef().io_thread_count_scale * 10 ;
     auto load_database_thread_num = std::min(default_num_threads, databases.size());
-    
-    LOG_INFO(log, "hyy thread_num for load database is {}, default is {}", load_database_thread_num, default_num_threads);
 
     auto load_databases_thread_pool = ThreadPool(load_database_thread_num, load_database_thread_num / 2, load_database_thread_num * 2);
     auto load_tables_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);

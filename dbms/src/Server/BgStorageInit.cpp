@@ -71,7 +71,7 @@ void BgStorageInitHolder::start(Context & global_context, const LoggerPtr & log,
             }
         };
 
-        size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency()) * global_context.getSettingsRef().io_thread_count_scale * 5 ;
+        size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency()) * global_context.getSettingsRef().io_thread_count_scale * 10;
         auto init_storages_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
 
         for (auto & iter : storages)
@@ -81,7 +81,27 @@ void BgStorageInitHolder::start(Context & global_context, const LoggerPtr & log,
             auto task = [&init_stores_function, &ks_table_id, &storage] {
                 init_stores_function(ks_table_id, storage);
             };
-            init_storages_thread_pool.scheduleOrThrowOnError(task);
+
+            bool wait_scheduled = true;
+            while (wait_scheduled){
+                try {
+                    init_storages_thread_pool.scheduleOrThrowOnError(task);
+                    wait_scheduled = false;
+                } catch (const Exception & e) {
+                    // Q: should we use this for backup？
+                    if (e.code() == ErrorCodes::CANNOT_SCHEDULE_TASK)
+                    {
+                        const int wait_seconds = 2;
+                        LOG_ERROR(log, "scheduleOrThrowOnError failed with error code = {}, e.displayText() = {}, and we will sleep for {} seconds and try again", e.code(), e.displayText(), wait_seconds);
+                        ::sleep(wait_seconds);
+                    }
+                    else
+                        LOG_ERROR(log, "scheduleOrThrowOnError failed, error code = {}, e.displayText() = {}", e.code(), e.displayText());
+                        // wait before throw, to avoid core dump
+                        init_storages_thread_pool.wait();
+                        throw;
+                }
+            }
         }
 
         init_storages_thread_pool.wait();

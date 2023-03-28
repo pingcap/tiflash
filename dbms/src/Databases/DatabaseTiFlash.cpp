@@ -107,7 +107,7 @@ String DatabaseTiFlash::getDataPath() const
 
 static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
 static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
-static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 20;
+static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
 
 void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag)
 {
