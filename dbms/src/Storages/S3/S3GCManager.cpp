@@ -532,7 +532,7 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
     {
         // CheckpointDataFile is a single object, remove it.
         deleteObject(*client, datafile_key);
-        LOG_INFO(sub_logger, "datafile deleted, key={}", datafile_key);
+        LOG_INFO(sub_logger, "datafile deleted");
     }
     else
     {
@@ -541,13 +541,14 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key)
         // only the sub objects of given key of this DMFile.
         // TODO: If GCManager unexpectedly exit in the middle, it will leave some broken
         //       sub file for DMFile, try clean them later.
-        S3::listPrefix(*client, datafile_key + "/", [&client, &datafile_key, &sub_logger](const Aws::S3::Model::Object & object) {
+        std::vector<String> sub_keys;
+        S3::listPrefix(*client, datafile_key + "/", [&client, &sub_logger](const Aws::S3::Model::Object & object) {
             const auto & sub_key = object.GetKey();
             deleteObject(*client, sub_key);
-            LOG_INFO(sub_logger, "datafile deleted, sub_key={}", datafile_key, sub_key);
+            LOG_INFO(sub_logger, "datafile deleted, sub_key={}", sub_key);
             return PageResult{.num_keys = 1, .more = true};
         });
-        LOG_INFO(sub_logger, "datafile deleted, all sub keys are deleted", datafile_key);
+        LOG_INFO(sub_logger, "datafile deleted, all sub keys are deleted");
     }
 }
 
