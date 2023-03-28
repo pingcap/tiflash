@@ -7939,7 +7939,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "S3 Request  Duration",
+          "title": "S3 Request Duration",
           "tooltip": {
             "shared": true,
             "sort": 2,
