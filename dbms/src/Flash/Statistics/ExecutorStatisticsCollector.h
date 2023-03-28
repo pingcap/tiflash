@@ -65,6 +65,7 @@ private:
         const std::unordered_map<String, DM::ScanContextPtr> & scan_context_map) const;
 
     void fillEmptyExecutorSummary(const String & executor_id, tipb::SelectResponse & response);
+    
     void fillChildren();
 
     template <typename T>

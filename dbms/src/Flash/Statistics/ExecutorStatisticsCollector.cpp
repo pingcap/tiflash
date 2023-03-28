@@ -158,13 +158,10 @@ void ExecutorStatisticsCollector::fillExecuteSummaries(tipb::SelectResponse & re
         return;
 
     if (!enable_pipeline)
-    {
         collectRuntimeDetails();
-    }
     else
-    {
         collectRuntimeDetailsForPipeline();
-    }
+
     fillLocalExecutionSummaries(response);
     // TODO: remove filling remote execution summaries
     fillRemoteExecutionSummaries(response);
@@ -185,8 +182,8 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
         // fill in tree-based executors' execution summary
         for (auto & p : profiles)
         {
-            /// only for pipeline model, if one executor has no operator
-            /// just inherit last execution summary
+            // (only for pipeline model)
+            // if one executor has no operator, just inherit last execution summary.
             if (p.second->getBaseRuntimeStatistics().concurrency == 0
                 && response.execution_summaries_size() >= 1 && enable_pipeline)
             {
@@ -194,6 +191,7 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
             }
             else
             {
+                // For pipeline model, no need to add join build time.
                 if (!enable_pipeline)
                     time_processed_before = p.second->processTimeForJoinBuild();
                 fillExecutionSummary(
@@ -213,8 +211,8 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
         {
             auto it = profiles.find(executor_id);
 
-            /// only for pipeline model, if one executor has no operator
-            /// just inherit last execution summary
+            // (only for pipeline model)
+            // if one executor has no operator, just inherit last execution summary.
             if (it->second->getBaseRuntimeStatistics().concurrency == 0
                 && response.execution_summaries_size() >= 1 && enable_pipeline)
             {
@@ -251,7 +249,7 @@ void ExecutorStatisticsCollector::collectRuntimeDetailsForPipeline()
 {
     assert(dag_context);
     for (const auto & entry : profiles)
-        entry.second->collectRuntimeDetailPipeline();
+        entry.second->collectRuntimeDetailForPipeline();
 }
 
 

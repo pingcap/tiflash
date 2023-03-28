@@ -106,7 +106,7 @@ public:
         collectJoinBuildTime();
     }
 
-    void collectRuntimeDetailPipeline() override
+    void collectRuntimeDetailForPipeline() override
     {
         const auto & pipeline_profiles_map = dag_context.getPipelineProfilesMap();
         auto it = pipeline_profiles_map.find(executor_id);
@@ -116,10 +116,10 @@ public:
             // 1. Calculate time_processed_ns for operators before the last operator
             const auto & executor_profile = it->second;
             size_t profile_num = executor_profile.size();
+
+            // some executors have no operator, just skip it
             if (profile_num == 0)
-            {
                 return;
-            }
 
             for (size_t i = 0; i < profile_num - 1; ++i)
             {
@@ -131,7 +131,7 @@ public:
                 base.execution_time_ns += time_processed_ns;
             }
 
-            // 2. Only output the last operator's num_produced_rows, num_iterations and concurrency
+            // 2. Currently, only record the last operator's num_produced_rows, num_iterations and concurrency
             auto && operator_profile_group = executor_profile[profile_num - 1];
             UInt64 time_processed_ns = 0;
             base.concurrency = operator_profile_group.size();

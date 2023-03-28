@@ -29,7 +29,7 @@ public:
 
     virtual void collectRuntimeDetail() = 0;
 
-    virtual void collectRuntimeDetailPipeline() = 0;
+    virtual void collectRuntimeDetailForPipeline() = 0;
 
     virtual ~ExecutorStatisticsBase() = default;
 
