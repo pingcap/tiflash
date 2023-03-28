@@ -159,37 +159,6 @@ try
 }
 CATCH
 
-TEST_F(BlockExpand, Expand2Logic)
-try
-{
-    {
-        // test basic block expand operation. (two grouping set)
-        const ColumnsWithTypeAndName
-            ori_col
-            = {
-                toVec<Int64>(col_name[0], ColumnWithInt64{1, 0, -1}),
-                toVec<String>(col_name[1], ColumnWithString{"1   ", "1  ", "1 "}),
-                toVec<String>(col_name[2], ColumnWithString{"1", "2", "3"}),
-                toVec<UInt64>(col_name[3], ColumnWithUInt64{1, 1, 0}),
-            };
-        //
-        //    ;
-        //
-        //    // columns.push_back(createColumn<UInt64>({0, 0, 0, 0}));
-        //    auto res =
-        ////    const auto *nullable_col = static_cast<const ColumnNullable *>(res.column->convertToFullColumnIfConst().get());
-        ////    std::cout<<nullable_col->getNullMapColumn().getUInt(1);
-        ////    std::cout<<nullable_col->getNullMapColumn().getUInt(2);
-        ////    std::cout<<nullable_col->getNullMapColumn().getUInt(3);
-        //
-        //    ASSERT_COLUMN_EQ(
-        //        res,
-        //
-        //        );
-    }
-}
-CATCH
-
 TEST_F(BlockExpand, ExpandLogic)
 try
 {
