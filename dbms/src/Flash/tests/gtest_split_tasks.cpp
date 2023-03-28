@@ -46,11 +46,11 @@ try
     std::vector<String> executors = {
         "exchange_sender_7 | type:Hash, {<0, String>, <1, String>, <2, String>}\n"
         " aggregation_6 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, String>)}\n"
-        "  selection_1 | equals(<1, String>, <2, String>)}\n"
+        "  selection_1 | equals(<1, String>, <2, String>)\n"
         "   table_scan_0 | {<0, String>, <1, String>, <2, String>}",
         "exchange_sender_5 | type:PassThrough, {<0, String>, <1, String>, <2, String>}\n"
         " topn_4 | order_by: {(<1, String>, desc: false)}, limit: 10\n"
-        "  selection_3 | equals(<1, String>, <2, String>)}\n"
+        "  selection_3 | equals(<1, String>, <2, String>)\n"
         "   aggregation_2 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, String>)}\n"
         "    exchange_receiver_8 | type:PassThrough, {<0, String>, <1, String>, <2, String>}"};
     for (size_t i = 0; i < task_size; ++i)

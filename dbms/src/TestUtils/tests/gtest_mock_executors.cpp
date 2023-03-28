@@ -57,7 +57,7 @@ try
 {
     auto request = context.scan("test_db", "test_table").filter(eq(col("s1"), col("s2"))).build(context);
     {
-        String expected = "selection_1 | equals(<0, String>, <1, String>)}\n"
+        String expected = "selection_1 | equals(<0, String>, <1, String>)\n"
                           " table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
@@ -66,7 +66,7 @@ try
                   .filter(And(eq(col("s1"), col("s2")), lt(col("s2"), col("s2")))) // type in lt must be same
                   .build(context);
     {
-        String expected = "selection_1 | equals(<0, Long>, <1, String>) and less(<1, String>, <1, String>)}\n"
+        String expected = "selection_1 | equals(<0, Long>, <1, String>) and less(<1, String>, <1, String>)\n"
                           " table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
@@ -75,7 +75,7 @@ try
                   .filter(And(eq(col("test_table_1.s1"), col("test_table_1.s2")), lt(col("test_table_1.s2"), col("test_table_1.s2"))))
                   .build(context);
     {
-        String expected = "selection_1 | equals(<0, Long>, <1, String>) and less(<1, String>, <1, String>)}\n"
+        String expected = "selection_1 | equals(<0, Long>, <1, String>) and less(<1, String>, <1, String>)\n"
                           " table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
@@ -257,7 +257,7 @@ try
                               "  topn_4 | order_by: {(<2, String>, desc: false)}, limit: 10\n"
                               "   aggregation_3 | group_by: {<2, String>, <1, String>}, agg_func: {max(<0, Long>)}\n"
                               "    project_2 | {<0, Long>, <1, String>, <2, String>}\n"
-                              "     selection_1 | equals(<0, Long>, <1, String>) and equals(<0, Long>, <1, String>)}\n"
+                              "     selection_1 | equals(<0, Long>, <1, String>) and equals(<0, Long>, <1, String>)\n"
                               "      table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
             ASSERT_DAGREQUEST_EQAUL(expected, request);
         }
@@ -390,7 +390,7 @@ try
 Limit | 10
  Selection | equals(<1, String>, <-5692549928996306944, String>)}
   Aggregation | group_by: {<1, String>}, agg_func: {max(<0, String>)}
-   Selection | equals(<0, String>, <1, String>)}
+   Selection | equals(<0, String>, <1, String>)
     TableScan | {<0, String>, <1, String>})";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
@@ -407,7 +407,7 @@ Limit | 10
 TopN | order_by: {(<1, String>, desc: false)}, limit: 10
  Selection | equals(<1, String>, <-5692549928996306944, String>)}
   Aggregation | group_by: {<1, String>}, agg_func: {max(<0, String>)}
-   Selection | equals(<0, String>, <1, String>)}
+   Selection | equals(<0, String>, <1, String>)
     TableScan | {<0, String>, <1, String>})";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
