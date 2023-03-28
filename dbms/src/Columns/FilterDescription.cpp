@@ -49,6 +49,9 @@ ConstantFilterDescription::ConstantFilterDescription(const IColumn & column)
 
         if (column_const.getValue<UInt64>())
             always_true = true;
+        // always_false = true is not compatible with MPP, because when always_false is true, TiFlash will return an empty block immediately,
+        // if the task is finished before other task is setting up the exchange tunnel, other mpp task will meet "can not find task" error,
+        // during the compiling stage, and TiDB will get this error and think the query is failed.
         return;
     }
 }
