@@ -149,6 +149,14 @@ ExpressionAction ExpressionAction::expandSource(GroupingSets grouping_sets_)
     return a;
 }
 
+ExpressionAction ExpressionAction::addNullable(const std::string & col_name)
+{
+    ExpressionAction a;
+    a.type = CHANGE_NULLABLE;
+    a.col_to_nullable = col_name;
+    return a;
+}
+
 void ExpressionAction::prepare(Block & sample_block)
 {
     /** Constant expressions should be evaluated, and put the result in sample_block.
@@ -257,6 +265,12 @@ void ExpressionAction::prepare(Block & sample_block)
         sample_block.insert({nullptr, expand->grouping_identifier_column_type, expand->grouping_identifier_column_name});
         break;
     }
+    case CHANGE_NULLABLE:
+    {
+        if (!sample_block.getByName(col_to_nullable).type->isNullable())
+            convertColumnToNullable(sample_block.getByName(col_to_nullable));
+        break;
+    }
 
     case PROJECT:
     {
@@ -346,6 +360,13 @@ void ExpressionAction::execute(Block & block) const
     case EXPAND:
     {
         expand->replicateAndFillNull(block);
+        break;
+    }
+
+    case CHANGE_NULLABLE:
+    {
+        if (!block.getByName(col_to_nullable).column->isColumnNullable())
+            convertColumnToNullable(block.getByName(col_to_nullable));
         break;
     }
 
@@ -439,7 +460,10 @@ String ExpressionAction::toString() const
                 ss << " AS " << projections[i].second;
         }
         break;
-
+    case CHANGE_NULLABLE:
+        ss << "CHANGE_NULLABLE(";
+        ss << col_to_nullable << ")";
+        break;
     default:
         throw Exception("Unexpected Action type", ErrorCodes::LOGICAL_ERROR);
     }
