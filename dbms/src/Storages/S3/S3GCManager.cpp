@@ -493,7 +493,7 @@ void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
     {
         // CheckpointDataFile is a single object, add tagging for it and update its mtime
         rewriteObjectWithTagging(*client, datafile_key, String(TaggingObjectIsDeleted));
-        LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging", datafile_key);
+        LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging");
     }
     else
     {
@@ -511,12 +511,11 @@ void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key)
         remote_data_store->setTaggingsForKeys(sub_keys, TaggingObjectIsDeleted);
         for (const auto & sub_key : sub_keys)
         {
-            LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging, sub_key={}", datafile_key, sub_key);
+            LOG_INFO(sub_logger, "datafile deleted by lifecycle tagging, sub_key={}", sub_key);
         }
         LOG_INFO(
             sub_logger,
             "datafile deleted by lifecycle tagging, all sub keys are deleted, n_sub_keys={}",
-            datafile_key,
             sub_keys.size());
     }
 }
