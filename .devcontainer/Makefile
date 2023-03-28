@@ -30,7 +30,7 @@ dev-in-container:
 				-DCMAKE_C_COMPILER=clang \
 				-DCMAKE_CXX_COMPILER=clang++ \
 		&& cmake --build . --target tiflash \
-		&& cmake --install . --target tiflash --prefix=artifacts
+		&& cmake --install . --component=tiflash-release --prefix=artifacts
 
 .PHONY: dev
 dev: rebuild-docker dev-in-container
@@ -44,7 +44,7 @@ release-in-container:
 			-DCMAKE_C_COMPILER=clang \
 			-DCMAKE_CXX_COMPILER=clang++ \
 	&& cmake --build . --target tiflash \
-	&& cmake --install . --target tiflash --prefix=artifacts
+	&& cmake --install . --component=tiflash-release --prefix=artifacts
 
 .PHONY: release
 release: rebuild-docker release-in-container

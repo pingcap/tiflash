@@ -91,7 +91,7 @@ public:
 
 enum class S3GCMethod
 {
-    Lifecycle,
+    Lifecycle = 1,
     ScanThenDelete,
 };
 
@@ -129,7 +129,7 @@ private:
     DISALLOW_COPY_AND_MOVE(ClientFactory);
     std::unique_ptr<Aws::S3::S3Client> create() const;
 
-    static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & config_);
+    static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & config_, const LoggerPtr & log);
     static Aws::Http::Scheme parseScheme(std::string_view endpoint);
 
     std::shared_ptr<TiFlashS3Client> initClientFromWriteNode();

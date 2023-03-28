@@ -47,7 +47,8 @@ public:
          */
         const std::unordered_set<String> & must_locked_files = {};
         UInt64 sequence;
-        UInt64 max_data_file_size;
+        UInt64 max_data_file_size = 256 * 1024 * 1024;
+        UInt64 max_edit_records_per_part = 100000;
     };
 
     static CPFilesWriterPtr create(Options options)
