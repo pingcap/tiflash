@@ -94,7 +94,19 @@ public:
      */
     virtual bool putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) = 0;
 
+<<<<<<< HEAD
     virtual std::unordered_map<String, Int64> getDataFileSizes(const std::unordered_set<String> & lock_keys) = 0;
+=======
+    struct DataFileInfo
+    {
+        Int64 size = -1;
+        std::chrono::system_clock::time_point mtime; // last_modification_time
+    };
+    virtual std::unordered_map<String, DataFileInfo> getDataFilesInfo(const std::unordered_set<String> & lock_keys) = 0;
+
+    // Attach tagging to the keys on remote store
+    virtual void setTaggingsForKeys(const std::vector<String> & keys, std::string_view tagging) = 0;
+>>>>>>> 197bdcd0dd (Fix S3GC is broken on AWS (#7168))
 };
 
 

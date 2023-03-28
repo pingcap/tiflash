@@ -85,7 +85,7 @@ public:
 
 enum class S3GCMethod
 {
-    Lifecycle,
+    Lifecycle = 1,
     ScanThenDelete,
 };
 
