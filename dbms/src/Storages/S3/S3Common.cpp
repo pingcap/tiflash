@@ -41,6 +41,7 @@
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/ListObjectsV2Result.h>
+#include <aws/s3/model/MetadataDirective.h>
 #include <aws/s3/model/PutBucketLifecycleConfigurationRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/TaggingDirective.h>
@@ -531,7 +532,9 @@ void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key
     // The copy_source format is "${source_bucket}/${source_key}"
     auto copy_source = client.bucket() + "/" + (client.root() == "/" ? "" : client.root()) + key;
     client.setBucketAndKeyWithRoot(req, key);
+    // metadata directive and tagging directive must be set to `REPLACE`
     req.WithCopySource(copy_source) //
+        .WithMetadataDirective(Aws::S3::Model::MetadataDirective::REPLACE)
         .WithTagging(tagging)
         .WithTaggingDirective(Aws::S3::Model::TaggingDirective::REPLACE);
     ProfileEvents::increment(ProfileEvents::S3CopyObject);
