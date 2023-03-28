@@ -49,6 +49,7 @@ extern const int LOGICAL_ERROR;
 extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 extern const int SYNTAX_ERROR;
 extern const int TIDB_TABLE_ALREADY_EXISTS;
+extern const int CANNOT_SCHEDULE_TASK;
 } // namespace ErrorCodes
 
 namespace FailPoints
@@ -106,7 +107,7 @@ String DatabaseTiFlash::getDataPath() const
 
 static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
 static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
-static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
+static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 20;
 
 void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag)
 {
@@ -190,8 +191,26 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
 
         if (thread_pool)
         {
+            // TODO: 我们应该如何来处理异常呢？
             futures.emplace_back(task->get_future());
-            thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
+            try {
+                thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
+            } catch (const Exception & e) {
+                // Q: should we use this for backup？
+                if (e.code() == ErrorCodes::CANNOT_SCHEDULE_TASK)
+                {
+                    futures.pop_back();
+                    // If we cannot schedule task, we will run it in current thread.
+                    // This is to avoid the case that we cannot load any table.
+                    LOG_ERROR(log, "scheduleOrThrowOnError failed and we try to run it in current thread, error code = {}, e.displayText() = {}", e.code(), e.displayText());
+                    (*task)();
+                }
+                else
+                    LOG_ERROR(log, "scheduleOrThrowOnError failed, error code = {}, e.displayText() = {}", e.code(), e.displayText());
+                    // wait before throw, to avoid core dump
+                    thread_pool->wait();
+                    throw; // 那我这边 throw 出去，还是会 core，所以我应该在这里 wait ？
+            }
         }
         else
             (*task)();
