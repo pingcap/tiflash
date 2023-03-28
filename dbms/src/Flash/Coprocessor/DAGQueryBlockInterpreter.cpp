@@ -548,7 +548,7 @@ void DAGQueryBlockInterpreter::handleExpand2(DAGPipeline & pipeline, const tipb:
     NamesWithAliasesVec project_cols_vec;
     UniqueNameGenerator unique_name_generator;
     ExpressionActionsPtrVec expression_actions_ptr_vec;
-    auto input_col_size = dag_analyzer.source_columns.size();
+    auto input_col_size = dag_analyzer.getCurrentInputColumns().size();
     /// since every expr in one project level is quite different from the other in the same position of different level.
     /// eg: [#col1, null, 1]
     ///     [null, col#2, 2]
@@ -579,7 +579,7 @@ void DAGQueryBlockInterpreter::handleExpand2(DAGPipeline & pipeline, const tipb:
 
             const auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
             // link the current projected block column name with source output column name.
-            auto output_name = static_cast<size_t>(j) < input_col_size ? dag_analyzer.source_columns[j].name : expand2.generated_output_names()[j - input_col_size];
+            auto output_name = static_cast<size_t>(j) < input_col_size ? dag_analyzer.getCurrentInputColumns()[j].name : expand2.generated_output_names()[j - input_col_size];
             project_cols.emplace_back(col.name, output_name);
             if (i == 0)
             {
