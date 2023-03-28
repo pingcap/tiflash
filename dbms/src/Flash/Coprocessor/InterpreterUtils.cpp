@@ -190,7 +190,12 @@ void executeLocalSort(
     else
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<LocalSortTransformOp>(exec_status, log->identifier(), order_descr, *limit, context.getSettingsRef().max_block_size));
+            builder.appendTransformOp(std::make_unique<LocalSortTransformOp>(
+                exec_status,
+                log->identifier(),
+                order_descr,
+                limit.value_or(0), // 0 means that no limit in LocalSortTransformOp.
+                context.getSettingsRef().max_block_size));
         });
     }
 }
