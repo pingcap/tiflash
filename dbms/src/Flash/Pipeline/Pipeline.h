@@ -40,6 +40,9 @@ using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
 
 class PipelineExecutorStatus;
 
+class ResultQueue;
+using ResultQueuePtr = std::shared_ptr<ResultQueue>;
+
 struct PipelineEvents
 {
     Events events;
@@ -65,7 +68,7 @@ public:
     void toTreeString(FmtBuffer & buffer, size_t level = 0) const;
 
     // used for getting the result blocks.
-    void addGetResultSink(ResultHandler && result_handler);
+    void addGetResultSink(const ResultQueuePtr & result_queue);
 
     PipelineExecGroup buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
 

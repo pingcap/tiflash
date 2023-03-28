@@ -96,11 +96,26 @@ void PipelineExecutorStatus::onEventFinish() noexcept
     assert(active_event_count > 0);
     --active_event_count;
     if (0 == active_event_count)
+    {
         cv.notify_all();
+
+        if (auto ret = result_queue_holder.tryGet(); ret)
+            (*ret)->finish();
+    }
 }
 
 void PipelineExecutorStatus::cancel() noexcept
 {
     is_cancelled.store(true, std::memory_order_release);
+
+    if (auto ret = result_queue_holder.tryGet(); ret)
+        (*ret)->cancel();
+}
+
+void PipelineExecutorStatus::add(const ResultQueuePtr & result_queue_) noexcept
+{
+    result_queue_holder.set(result_queue_);
+    if unlikely (is_cancelled)
+        result_queue_holder->cancel();
 }
 } // namespace DB

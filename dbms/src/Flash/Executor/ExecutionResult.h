@@ -21,9 +21,11 @@
 
 namespace DB
 {
-class ExecutionResult
+struct ExecutionResult
 {
-public:
+    bool is_success;
+    std::exception_ptr exception;
+
     void verify()
     {
         if (unlikely(!is_success))
@@ -40,9 +42,5 @@ public:
         RUNTIME_CHECK(exception != nullptr);
         return {false, exception};
     }
-
-private:
-    bool is_success;
-    std::exception_ptr exception;
 };
 } // namespace DB

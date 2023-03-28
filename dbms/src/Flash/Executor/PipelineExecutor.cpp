@@ -31,35 +31,50 @@ PipelineExecutor::PipelineExecutor(
     assert(root_pipeline);
 }
 
-ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
+void PipelineExecutor::scheduleEvents()
 {
     assert(root_pipeline);
-    // for !result_handler.isIgnored(), the sink plan of root_pipeline must be nullptr.
-    // TODO Now the result handler for batch cop introduces io blocking, we should find a better implementation of get result sink.
-    if (unlikely(!result_handler.isIgnored()))
-        root_pipeline->addGetResultSink(std::move(result_handler));
-
+    auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
+    Events without_input_events;
+    for (const auto & event : events)
     {
-        auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
-        Events without_input_events;
-        for (const auto & event : events)
-        {
-            if (event->withoutInput())
-                without_input_events.push_back(event);
-        }
-        for (const auto & event : without_input_events)
-            event->schedule();
+        if (event->withoutInput())
+            without_input_events.push_back(event);
     }
+    for (const auto & event : without_input_events)
+        event->schedule();
+}
 
+void PipelineExecutor::wait()
+{
     if (unlikely(context.isTest()))
     {
         // In test mode, a single query should take no more than 15 seconds to execute.
-        std::chrono::seconds timeout(15);
+        static std::chrono::seconds timeout(15);
         status.waitFor(timeout);
     }
     else
     {
         status.wait();
+    }
+}
+
+ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
+{
+    if (result_handler.isIgnored())
+    {
+        scheduleEvents();
+        wait();
+    }
+    else
+    {
+        auto result_queue = std::make_shared<ResultQueue>(context.getMaxStreams(), context.isTest());
+        status.add(result_queue);
+        root_pipeline->addGetResultSink(result_queue);
+        scheduleEvents();
+        Block ret;
+        while (result_queue->pop(ret) == MPMCQueueResult::OK)
+            result_handler(ret);
     }
     return status.toExecutionResult();
 }

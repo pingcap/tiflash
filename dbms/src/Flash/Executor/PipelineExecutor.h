@@ -70,6 +70,11 @@ protected:
     ExecutionResult execute(ResultHandler && result_handler) override;
 
 private:
+    void scheduleEvents();
+
+    void wait();
+
+private:
     PipelinePtr root_pipeline;
 
     PipelineExecutorStatus status;

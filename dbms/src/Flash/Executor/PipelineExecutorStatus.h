@@ -15,7 +15,10 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/MPMCQueue.h>
+#include <Core/Block.h>
 #include <Flash/Executor/ExecutionResult.h>
+#include <Flash/Executor/ResultQueue.h>
 
 #include <atomic>
 #include <exception>
@@ -74,6 +77,8 @@ public:
         return is_cancelled.load(std::memory_order_acquire);
     }
 
+    void add(const ResultQueuePtr & result_queue_) noexcept;
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept;
 
@@ -86,5 +91,7 @@ private:
     UInt32 active_event_count{0};
 
     std::atomic_bool is_cancelled{false};
+
+    ResultQueueHolder result_queue_holder;
 };
 } // namespace DB
