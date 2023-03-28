@@ -175,21 +175,26 @@ void loadMetadata(Context & context)
             load_database(context, db_name, meta_file, &load_tables_thread_pool, has_force_restore_data_flag);
         };
 
-        try {
-            load_databases_thread_pool.scheduleOrThrowOnError(task);
-        } catch (const Exception & e) {
-            if (e.code() == ErrorCodes::CANNOT_SCHEDULE_TASK)
-            {
-                // If we cannot schedule task, we will run it in current thread.
-                // This is to avoid the case that we cannot load any database.
-                LOG_ERROR(log, "scheduleOrThrowOnError failed and we try to run it in current thread, error code = {}, e.displayText() = {}", e.code(), e.displayText());
-                task();
+        bool wait_scheduled = true;
+        while (wait_scheduled){
+            try {
+                load_databases_thread_pool.scheduleOrThrowOnError(task);
+                wait_scheduled = false;
+            } catch (const Exception & e) {
+                if (e.code() == ErrorCodes::CANNOT_SCHEDULE_TASK)
+                {
+                    // If we cannot schedule task, we will run it in current thread.
+                    // This is to avoid the case that we cannot load any database.
+                    const int wait_seconds = 2;
+                    LOG_ERROR(log, "scheduleOrThrowOnError failed with error code = {}, e.displayText() = {}, and we will sleep for {} seconds and try again", e.code(), e.displayText(), wait_seconds);
+                    ::sleep(wait_seconds);
+                }
+                else
+                    LOG_ERROR(log, "scheduleOrThrowOnError failed, error code = {}, e.displayText() = {}", e.code(), e.displayText());
+                    // wait before throw, to avoid core dump
+                    load_databases_thread_pool.wait(); 
+                    throw;
             }
-            else
-                LOG_ERROR(log, "scheduleOrThrowOnError failed, error code = {}, e.displayText() = {}", e.code(), e.displayText());
-                // wait before throw, to avoid core dump
-                load_databases_thread_pool.wait(); 
-                throw;
         }
     }
 

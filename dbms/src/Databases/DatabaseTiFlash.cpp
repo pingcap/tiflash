@@ -193,24 +193,27 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
         {
             // TODO: 我们应该如何来处理异常呢？
             futures.emplace_back(task->get_future());
-            try {
-                thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
-            } catch (const Exception & e) {
-                // Q: should we use this for backup？
-                if (e.code() == ErrorCodes::CANNOT_SCHEDULE_TASK)
-                {
-                    futures.pop_back();
-                    // If we cannot schedule task, we will run it in current thread.
-                    // This is to avoid the case that we cannot load any table.
-                    LOG_ERROR(log, "scheduleOrThrowOnError failed and we try to run it in current thread, error code = {}, e.displayText() = {}", e.code(), e.displayText());
-                    (*task)();
+            bool wait_scheduled = true;
+            while (wait_scheduled){
+                try {
+                    thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
+                    wait_scheduled = false;
+                } catch (const Exception & e) {
+                    // Q: should we use this for backup？
+                    if (e.code() == ErrorCodes::CANNOT_SCHEDULE_TASK)
+                    {
+                        const int wait_seconds = 2;
+                        LOG_ERROR(log, "scheduleOrThrowOnError failed with error code = {}, e.displayText() = {}, and we will sleep for {} seconds and try again", e.code(), e.displayText(), wait_seconds);
+                        ::sleep(wait_seconds);
+                    }
+                    else
+                        LOG_ERROR(log, "scheduleOrThrowOnError failed, error code = {}, e.displayText() = {}", e.code(), e.displayText());
+                        // wait before throw, to avoid core dump
+                        thread_pool->wait();
+                        throw; // 那我这边 throw 出去，还是会 core，所以我应该在这里 wait ？
                 }
-                else
-                    LOG_ERROR(log, "scheduleOrThrowOnError failed, error code = {}, e.displayText() = {}", e.code(), e.displayText());
-                    // wait before throw, to avoid core dump
-                    thread_pool->wait();
-                    throw; // 那我这边 throw 出去，还是会 core，所以我应该在这里 wait ？
             }
+            
         }
         else
             (*task)();
