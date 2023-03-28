@@ -103,6 +103,9 @@ public:
         std::chrono::system_clock::time_point mtime; // last_modification_time
     };
     virtual std::unordered_map<String, DataFileInfo> getDataFilesInfo(const std::unordered_set<String> & lock_keys) = 0;
+
+    // Attach tagging to the keys on remote store
+    virtual void setTaggingsForKeys(const std::vector<String> & keys, std::string_view tagging) = 0;
 };
 
 
