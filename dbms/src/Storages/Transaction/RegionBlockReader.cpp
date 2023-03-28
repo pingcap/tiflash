@@ -64,7 +64,7 @@ bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_
             fmt_buf.append(" [column define : ");
             for (auto const & column_define : *column_defines)
             {
-                fmt_buf.fmtAppend("(id is {}, name is {}, type is {}) ", column_define.id, column_define.name, column_define.type->getName());
+                fmt_buf.fmtAppend("(id={}, name={}, type={}) ", column_define.id, column_define.name, column_define.type->getName());
             }
             fmt_buf.append(" ];");
             return fmt_buf.toString();
