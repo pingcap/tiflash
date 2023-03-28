@@ -53,7 +53,9 @@
 // Including read index / wait index / generate segments snapshots.
 static constexpr UInt64 DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC = 10;
 // Timeout for how long one disagg task is valid in the TiFlash write node.
-static constexpr UInt64 DEFAULT_DISAGG_TASK_TIMEOUT_SEC = 3600;
+// It is now a short period to avoid long stale snapshots causing system
+// instable.
+static constexpr UInt64 DEFAULT_DISAGG_TASK_TIMEOUT_SEC = 5 * 60;
 
 #define DEFAULT_DAG_RECORDS_PER_CHUNK 1024L
 #define DEFAULT_BATCH_SEND_MIN_LIMIT (-1)

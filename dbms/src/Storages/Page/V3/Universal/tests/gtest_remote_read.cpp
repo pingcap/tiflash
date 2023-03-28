@@ -52,7 +52,11 @@ public:
     {
         TiFlashStorageTestBasic::SetUp();
         auto path = getTemporaryPath();
-        remote_dir = path;
+        dir_ = path;
+        data_file_path_pattern = dir_ + "/data_{index}";
+        data_file_id_pattern = "data_{index}";
+        manifest_file_path = dir_ + "/manifest_foo";
+        manifest_file_id = "manifest_foo";
         createIfNotExist(path);
         file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
@@ -80,9 +84,9 @@ public:
         return storage;
     }
 
-    void uploadFile(const String & dir, const String & f_name)
+    void uploadFile(const String & full_path)
     {
-        const String & full_path = dir + "/" + f_name;
+        String f_name = std::filesystem::path(full_path).filename();
         ReadBufferPtr src_buf = std::make_shared<ReadBufferFromFile>(full_path);
         S3::WriteSettings write_setting;
         WritableFilePtr dst_file = std::make_shared<S3::S3WritableFile>(s3_client, f_name, write_setting);
@@ -101,7 +105,7 @@ protected:
 
 protected:
     StoreID test_store_id = 1234;
-    String remote_dir;
+    String dir_;
     FileProviderPtr file_provider;
     PSDiskDelegatorPtr delegator;
     std::shared_ptr<S3::TiFlashS3Client> s3_client;
@@ -109,16 +113,21 @@ protected:
     std::shared_ptr<UniversalPageStorage> page_storage;
 
     LoggerPtr log;
+
+    String data_file_id_pattern;
+    String data_file_path_pattern;
+    String manifest_file_id;
+    String manifest_file_path;
 };
 
 TEST_F(UniPageStorageRemoteReadTest, WriteRead)
 try
 {
     auto writer = PS::V3::CPFilesWriter::create({
-        .data_file_path = remote_dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = remote_dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = PS::V3::CPWriteDataSourceFixture::create({{10, "nahida opened her eyes"}}),
     });
 
@@ -133,12 +142,15 @@ try
         edits.appendRecord({.type = PS::V3::EditRecordType::VAR_REF, .page_id = "aaabbb2", .ori_page_id = "aaabbb"});
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
     writer.reset();
-    uploadFile(remote_dir, "data_1");
-    uploadFile(remote_dir, "manifest_foo");
+    for (const auto & data_path : data_paths)
+    {
+        uploadFile(data_path);
+    }
+    uploadFile(manifest_file_path);
 
-    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -190,10 +202,10 @@ TEST_F(UniPageStorageRemoteReadTest, WriteReadWithRestart)
 try
 {
     auto writer = PS::V3::CPFilesWriter::create({
-        .data_file_path = remote_dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = remote_dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = PS::V3::CPWriteDataSourceFixture::create({{10, "nahida opened her eyes"}}),
     });
 
@@ -207,12 +219,15 @@ try
         edits.appendRecord({.type = PS::V3::EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
     writer.reset();
-    uploadFile(remote_dir, "data_1");
-    uploadFile(remote_dir, "manifest_foo");
+    for (const auto & data_path : data_paths)
+    {
+        uploadFile(data_path);
+    }
+    uploadFile(manifest_file_path);
 
-    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -255,10 +270,10 @@ TEST_F(UniPageStorageRemoteReadTest, WriteReadWithRef)
 try
 {
     auto writer = PS::V3::CPFilesWriter::create({
-        .data_file_path = remote_dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = remote_dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = PS::V3::CPWriteDataSourceFixture::create({{10, "nahida opened her eyes"}}),
     });
 
@@ -272,12 +287,15 @@ try
         edits.appendRecord({.type = PS::V3::EditRecordType::VAR_ENTRY, .page_id = "aaabbb", .entry = {.size = 22, .offset = 10}});
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
     writer.reset();
-    uploadFile(remote_dir, "data_1");
-    uploadFile(remote_dir, "manifest_foo");
+    for (const auto & data_path : data_paths)
+    {
+        uploadFile(data_path);
+    }
+    uploadFile(manifest_file_path);
 
-    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -334,10 +352,10 @@ TEST_F(UniPageStorageRemoteReadTest, WriteReadMultiple)
 try
 {
     auto writer = PS::V3::CPFilesWriter::create({
-        .data_file_path = remote_dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = remote_dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = PS::V3::CPWriteDataSourceFixture::create({{5, "Said she just dreamed a dream"},
                                                                  {10, "nahida opened her eyes"}}),
     });
@@ -355,12 +373,15 @@ try
         edits.appendRecord({.type = PS::V3::EditRecordType::VAR_ENTRY, .page_id = page_id2, .entry = {.size = 22, .offset = 10}});
         writer->writeEditsAndApplyCheckpointInfo(edits);
     }
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
     writer.reset();
-    uploadFile(remote_dir, "data_1");
-    uploadFile(remote_dir, "manifest_foo");
+    for (const auto & data_path : data_paths)
+    {
+        uploadFile(data_path);
+    }
+    uploadFile(manifest_file_path);
 
-    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
         .plain_file = manifest_file,
     });
@@ -419,10 +440,10 @@ try
     }
 
     auto writer = PS::V3::CPFilesWriter::create({
-        .data_file_path = remote_dir + "/data_1",
-        .data_file_id = "data_1",
-        .manifest_file_path = remote_dir + "/manifest_foo",
-        .manifest_file_id = "manifest_foo",
+        .data_file_path_pattern = data_file_path_pattern,
+        .data_file_id_pattern = data_file_id_pattern,
+        .manifest_file_path = manifest_file_path,
+        .manifest_file_id = manifest_file_id,
         .data_source = PS::V3::CPWriteDataSourceBlobStore::create(blob_store),
     });
     writer->writePrefix({
@@ -431,12 +452,15 @@ try
         .last_sequence = 3,
     });
     writer->writeEditsAndApplyCheckpointInfo(edits);
-    writer->writeSuffix();
+    auto data_paths = writer->writeSuffix();
     writer.reset();
-    uploadFile(remote_dir, "data_1");
-    uploadFile(remote_dir, "manifest_foo");
+    for (const auto & data_path : data_paths)
+    {
+        uploadFile(data_path);
+    }
+    uploadFile(manifest_file_path);
 
-    auto manifest_file = PosixRandomAccessFile::create(remote_dir + "/manifest_foo");
+    auto manifest_file = PosixRandomAccessFile::create(manifest_file_path);
     auto manifest_reader = PS::V3::CPManifestFileReader::create({
         .plain_file = manifest_file,
     });

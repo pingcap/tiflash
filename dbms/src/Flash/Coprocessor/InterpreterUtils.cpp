@@ -23,8 +23,9 @@
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Interpreters/Context.h>
-
+#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
@@ -92,6 +93,20 @@ void executeExpression(
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<ExpressionBlockInputStream>(stream, expr_actions, log->identifier());
             stream->setExtraInfo(extra_info);
+        });
+    }
+}
+
+void executeExpression(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const ExpressionActionsPtr & expr_actions,
+    const LoggerPtr & log)
+{
+    if (expr_actions && !expr_actions->getActions().empty())
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_actions));
         });
     }
 }

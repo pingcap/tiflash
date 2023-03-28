@@ -29,14 +29,18 @@ extern const int REGION_LOCKED;
 class LockException : public Exception
 {
 public:
-    explicit LockException(RegionID region_id_, LockInfoPtr lock_info)
-        : Exception("Region is locked", ErrorCodes::REGION_LOCKED)
-        , region_id(region_id_)
-        , lock_info(std::move(lock_info))
-    {}
+    explicit LockException(std::vector<std::pair<RegionID, LockInfoPtr>> && locks_)
+        : Exception("Key is locked", ErrorCodes::REGION_LOCKED)
+        , locks(std::move(locks_))
+    {
+        std::set<RegionID> locked_regions;
+        for (const auto & lock : locks)
+            locked_regions.insert(lock.first);
 
-    RegionID region_id;
-    LockInfoPtr lock_info;
+        this->message(fmt::format("Key is locked ({} locks in region {})", locks.size(), locked_regions));
+    }
+
+    std::vector<std::pair<RegionID, LockInfoPtr>> locks;
 };
 
 } // namespace DB
