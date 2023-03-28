@@ -24,8 +24,14 @@ void LocalSortTransformOp::operatePrefix()
     header_without_constants = getHeader();
     SortHelper::removeConstantsFromBlock(header_without_constants);
     SortHelper::removeConstantsFromSortDescription(header, order_desc);
-    // For order by const, generate LimitOperator instead of SortOperator.
+    // For order by constants, generate LimitOperator instead of SortOperator.
     assert(!order_desc.empty());
+}
+
+void LocalSortTransformOp::operateSuffix()
+{
+    if likely (merge_impl)
+        merge_impl->readSuffix();
 }
 
 Block LocalSortTransformOp::getMergeOutput()
@@ -49,12 +55,15 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
             status = LocalSortStatus::MERGE;
             if likely (!sorted_blocks.empty())
             {
+                // In merge phase, the MergeSortingBlocksBlockInputStream of pull model is used to do merge sort.
+                // TODO refine MergeSortingBlocksBlockInputStream and use a more common class to do merge sort in both push model and pull model.
                 merge_impl = std::make_unique<MergeSortingBlocksBlockInputStream>(
                     sorted_blocks,
                     order_desc,
                     log->identifier(),
                     max_block_size,
                     limit);
+                merge_impl->readPrefix();
                 block = getMergeOutput();
             }
             return OperatorStatus::HAS_OUTPUT;

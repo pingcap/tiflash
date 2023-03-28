@@ -75,7 +75,7 @@ void executeLocalSort(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     const SortDescription & order_descr,
-    size_t limit,
+    std::optional<size_t> limit,
     const Context & context,
     const LoggerPtr & log);
 

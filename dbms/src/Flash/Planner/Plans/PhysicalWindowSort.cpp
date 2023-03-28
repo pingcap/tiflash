@@ -67,7 +67,7 @@ void PhysicalWindowSort::buildPipelineExecGroup(
 {
     // TODO support non fine grained shuffle.
     assert(fine_grained_shuffle.enable());
-    executeLocalSort(exec_status, group_builder, order_descr, 0, context, log);
+    executeLocalSort(exec_status, group_builder, order_descr, {}, context, log);
 }
 
 void PhysicalWindowSort::finalize(const Names & parent_require)

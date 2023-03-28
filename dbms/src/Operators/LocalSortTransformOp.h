@@ -48,6 +48,7 @@ public:
     }
 
     void operatePrefix() override;
+    void operateSuffix() override;
 
 protected:
     OperatorStatus transformImpl(Block & block) override;

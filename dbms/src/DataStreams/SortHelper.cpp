@@ -44,7 +44,7 @@ void removeConstantsFromSortDescription(const Block & header, SortDescription & 
         description.end());
 }
 
-bool isSortByConst(const Block & header, const SortDescription & description)
+bool isSortByConstants(const Block & header, const SortDescription & description)
 {
     return std::all_of(description.begin(), description.end(), [&](const SortColumnDescription & elem) {
         if (!elem.column_name.empty())

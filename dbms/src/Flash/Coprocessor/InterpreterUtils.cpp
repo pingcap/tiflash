@@ -170,27 +170,27 @@ void executeLocalSort(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
     const SortDescription & order_descr,
-    size_t limit,
+    std::optional<size_t> limit,
     const Context & context,
     const LoggerPtr & log)
 {
     auto input_header = group_builder.getCurrentHeader();
-    if (SortHelper::isSortByConst(input_header, order_descr))
+    if (SortHelper::isSortByConstants(input_header, order_descr))
     {
-        // For order by const and limit != 0, we will generate LimitOperator directly.
-        if (limit != 0)
+        // For order by const col and has limit, we will generate LimitOperator directly.
+        if (limit)
         {
-            auto local_limit = std::make_shared<LocalLimitTransformAction>(input_header, limit);
+            auto local_limit = std::make_shared<LocalLimitTransformAction>(input_header, *limit);
             group_builder.transform([&](auto & builder) {
                 builder.appendTransformOp(std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_status, log->identifier(), local_limit));
             });
         }
-        // For order by const and limit == 0, do nothing here.
+        // For order by const and doesn't has limit, do nothing here.
     }
     else
     {
         group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<LocalSortTransformOp>(exec_status, log->identifier(), order_descr, limit, context.getSettingsRef().max_block_size));
+            builder.appendTransformOp(std::make_unique<LocalSortTransformOp>(exec_status, log->identifier(), order_descr, *limit, context.getSettingsRef().max_block_size));
         });
     }
 }

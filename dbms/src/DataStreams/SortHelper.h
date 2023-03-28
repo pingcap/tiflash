@@ -21,9 +21,13 @@ namespace DB::SortHelper
   */
 void removeConstantsFromBlock(Block & block);
 
+/** Remove constant columns from description.
+  */
 void removeConstantsFromSortDescription(const Block & header, SortDescription & description);
 
-bool isSortByConst(const Block & header, const SortDescription & description);
+/** Returns true if the columns in description are all constants.
+  */
+bool isSortByConstants(const Block & header, const SortDescription & description);
 
 /** Add into block, whose constant columns was removed by previous function,
   *  constant columns from header (which must have structure as before removal of constants from block).
