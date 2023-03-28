@@ -25,6 +25,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int CANNOT_SCHEDULE_TASK;
+} // namespace ErrorCodes
+
 void BgStorageInitHolder::waitUntilFinish()
 {
     if (need_join)
@@ -83,11 +88,15 @@ void BgStorageInitHolder::start(Context & global_context, const LoggerPtr & log,
             };
 
             bool wait_scheduled = true;
-            while (wait_scheduled){
-                try {
+            while (wait_scheduled)
+            {
+                try
+                {
                     init_storages_thread_pool.scheduleOrThrowOnError(task);
                     wait_scheduled = false;
-                } catch (const Exception & e) {
+                }
+                catch (const Exception & e)
+                {
                     // Q: should we use this for backup？
                     if (e.code() == ErrorCodes::CANNOT_SCHEDULE_TASK)
                     {
@@ -97,9 +106,9 @@ void BgStorageInitHolder::start(Context & global_context, const LoggerPtr & log,
                     }
                     else
                         LOG_ERROR(log, "scheduleOrThrowOnError failed, error code = {}, e.displayText() = {}", e.code(), e.displayText());
-                        // wait before throw, to avoid core dump
-                        init_storages_thread_pool.wait();
-                        throw;
+                    // wait before throw, to avoid core dump
+                    init_storages_thread_pool.wait();
+                    throw;
                 }
             }
         }

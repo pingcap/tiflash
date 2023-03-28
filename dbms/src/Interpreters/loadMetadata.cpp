@@ -158,7 +158,7 @@ void loadMetadata(Context & context)
         executeCreateQuery(database_attach_query, context, database, database_metadata_file, thread_pool, force_restore_data);
     };
 
-    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency()) * context.getSettingsRef().io_thread_count_scale * 10 ;
+    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency()) * context.getSettingsRef().io_thread_count_scale * 10;
     auto load_database_thread_num = std::min(default_num_threads, databases.size());
 
     auto load_databases_thread_pool = ThreadPool(load_database_thread_num, load_database_thread_num / 2, load_database_thread_num * 2);
@@ -174,11 +174,15 @@ void loadMetadata(Context & context)
         };
 
         bool wait_scheduled = true;
-        while (wait_scheduled){
-            try {
+        while (wait_scheduled)
+        {
+            try
+            {
                 load_databases_thread_pool.scheduleOrThrowOnError(task);
                 wait_scheduled = false;
-            } catch (const Exception & e) {
+            }
+            catch (const Exception & e)
+            {
                 if (e.code() == ErrorCodes::CANNOT_SCHEDULE_TASK)
                 {
                     // If we cannot schedule task, we will run it in current thread.
@@ -189,9 +193,9 @@ void loadMetadata(Context & context)
                 }
                 else
                     LOG_ERROR(log, "scheduleOrThrowOnError failed, error code = {}, e.displayText() = {}", e.code(), e.displayText());
-                    // wait before throw, to avoid core dump
-                    load_databases_thread_pool.wait(); 
-                    throw;
+                // wait before throw, to avoid core dump
+                load_databases_thread_pool.wait();
+                throw;
             }
         }
     }
