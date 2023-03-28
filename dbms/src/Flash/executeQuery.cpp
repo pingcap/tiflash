@@ -119,7 +119,10 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     RUNTIME_ASSERT(logger);
 
     if (!TaskScheduler::instance || !Pipeline::isSupported(*dag_context.dag_request))
+    {
+        LOG_DEBUG(logger, "Can't run by pipeline model, fallback to block inputstream model");
         return {};
+    }
 
     prepareForExecute(context);
 
