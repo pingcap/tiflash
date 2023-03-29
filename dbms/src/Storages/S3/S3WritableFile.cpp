@@ -224,14 +224,15 @@ void S3WritableFile::completeMultipartUpload()
             const auto & e = outcome.GetError();
             LOG_INFO(
                 log,
-                "Multipart upload failed and need retry: bucket={} root={} key={} upload_id={} parts={} error={} message={}",
+                "Multipart upload failed and need retry: bucket={} root={} key={} upload_id={} parts={} error={} message={} request_id={}",
                 client_ptr->bucket(),
                 client_ptr->root(),
                 remote_fname,
                 multipart_upload_id,
                 part_tags.size(),
                 magic_enum::enum_name(e.GetErrorType()),
-                e.GetMessage());
+                e.GetMessage(),
+                e.GetRequestId());
         }
         else
         {
@@ -286,7 +287,15 @@ void S3WritableFile::processPutRequest(const PutObjectTask & task)
         if (i + 1 < max_retry)
         {
             const auto & e = outcome.GetError();
-            LOG_INFO(log, "Single part upload failed: bucket={} root={} key={} error={} message={}", client_ptr->bucket(), client_ptr->root(), remote_fname, magic_enum::enum_name(e.GetErrorType()), e.GetMessage());
+            LOG_INFO(
+                log,
+                "Single part upload failed: bucket={} root={} key={} error={} message={} request_id={}",
+                client_ptr->bucket(),
+                client_ptr->root(),
+                remote_fname,
+                magic_enum::enum_name(e.GetErrorType()),
+                e.GetMessage(),
+                e.GetRequestId());
         }
         else
         {
