@@ -18,7 +18,7 @@
 
 namespace DB
 {
-template<typename Ptr>
+template <typename Ptr>
 class PtrHolder
 {
 public:
