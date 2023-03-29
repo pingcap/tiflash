@@ -14,34 +14,34 @@
 
 #pragma once
 
-#include <Common/Logger.h>
+#include <DataStreams/WindowBlockInputStream.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
-template <typename LimitActionPtr>
-class LimitTransformOp : public TransformOp
+class WindowTransformOp : public TransformOp
 {
 public:
-    LimitTransformOp(
+    WindowTransformOp(
         PipelineExecutorStatus & exec_status_,
-        const String & req_id,
-        const LimitActionPtr & action_)
-        : TransformOp(exec_status_, req_id)
-        , action(action_)
-    {}
+        const String & req_id_,
+        const WindowDescription & window_description_);
 
     String getName() const override
     {
-        return "LimitTransformOp";
+        return "WindowTransformOp";
     }
+
+    void operateSuffix() override;
 
 protected:
     OperatorStatus transformImpl(Block & block) override;
+    OperatorStatus tryOutputImpl(Block & block) override;
 
     void transformHeaderImpl(Block & header_) override;
 
 private:
-    LimitActionPtr action;
+    WindowDescription window_description;
+    std::unique_ptr<WindowTransformAction> action;
 };
 } // namespace DB
