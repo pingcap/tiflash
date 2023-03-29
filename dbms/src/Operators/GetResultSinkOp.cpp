@@ -29,7 +29,7 @@ OperatorStatus GetResultSinkOp::writeImpl(Block && block)
         return OperatorStatus::NEED_INPUT;
     case MPMCQueueResult::FULL:
         // If returning Full, the block was not actually moved.
-        assert(block);
+        assert(block); // NOLINT(bugprone-use-after-move)
         t_block.emplace(std::move(block)); // NOLINT(bugprone-use-after-move)
         return OperatorStatus::WAITING;
     default:
