@@ -279,14 +279,14 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
         {
             // 在这里做 segment level 的并行
             auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-            
-            if (thread_pool){
+
+            if (thread_pool)
+            {
                 auto segment_ids = Segment::getAllSegmentIds(*dm_context, segment_id);
                 std::mutex mutex;
                 for (auto & segment_id : segment_ids)
                 {
-                    auto task = [this, dm_context, segment_id, &mutex]()
-                    {
+                    auto task = [this, dm_context, segment_id, &mutex]() {
                         auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
                         std::lock_guard lock(mutex);
                         segments.emplace(segment->getRowKeyRange().getEnd(), segment);
@@ -306,7 +306,9 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                 }
 
                 thread_pool->wait();
-            } else {
+            }
+            else
+            {
                 while (segment_id)
                 {
                     auto segment = Segment::restoreSegment(log, *dm_context, segment_id);

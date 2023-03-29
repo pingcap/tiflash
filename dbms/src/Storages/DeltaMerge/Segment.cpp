@@ -57,6 +57,7 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
+
 #include "Storages/Page/PageDefinesBase.h"
 
 namespace ProfileEvents
@@ -324,7 +325,8 @@ std::vector<PageIdU64> Segment::getAllSegmentIds(const DMContext & context, Page
 {
     std::vector<PageIdU64> segment_ids = {};
     PageIdU64 current_segment_id = segment_id;
-    while (current_segment_id){
+    while (current_segment_id)
+    {
         segment_ids.push_back(current_segment_id);
         Page page = context.storage_pool->metaReader()->read(current_segment_id); // not limit restore
 

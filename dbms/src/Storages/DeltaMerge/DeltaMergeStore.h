@@ -33,6 +33,7 @@
 #include <Storages/Transaction/TiDB.h>
 
 #include <queue>
+
 #include "Common/UniThreadPool.h"
 
 namespace DB
