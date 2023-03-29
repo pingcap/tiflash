@@ -808,6 +808,12 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
         /*max_threads*/ default_num_threads * 20,
         /*max_free_threads*/ default_num_threads,
         /*queue_size*/ default_num_threads * 8);
+    GlobalThreadPool::instance().setMetrics({
+        .queue_duration = &GET_METRIC(tiflash_uni_thread_queue_duration_seconds, type_global),
+        .n_queued = &GET_METRIC(tiflash_uni_thread_queued, type_global),
+        .n_capacity = &GET_METRIC(tiflash_uni_thread_capacity, type_global),
+        .n_pending = &GET_METRIC(tiflash_uni_thread_pending, type_global),
+    });
 
     auto disaggregated_mode = getDisaggregatedMode(config);
     if (disaggregated_mode == DisaggregatedMode::Compute)
@@ -816,10 +822,22 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
             /*max_threads*/ default_num_threads,
             /*max_free_threads*/ default_num_threads / 2,
             /*queue_size*/ default_num_threads * 2);
+        RNPagePreparerPool::get().setMetrics({
+            .queue_duration = &GET_METRIC(tiflash_uni_thread_queue_duration_seconds, type_disagg_page_preparer),
+            .n_queued = &GET_METRIC(tiflash_uni_thread_queued, type_disagg_page_preparer),
+            .n_capacity = &GET_METRIC(tiflash_uni_thread_capacity, type_disagg_page_preparer),
+            .n_pending = &GET_METRIC(tiflash_uni_thread_pending, type_disagg_page_preparer),
+        });
         RNRemoteReadTaskPool::initialize(
             /*max_threads*/ default_num_threads,
             /*max_free_threads*/ default_num_threads / 2,
             /*queue_size*/ default_num_threads * 2);
+        RNRemoteReadTaskPool::get().setMetrics({
+            .queue_duration = &GET_METRIC(tiflash_uni_thread_queue_duration_seconds, type_disagg_read_task),
+            .n_queued = &GET_METRIC(tiflash_uni_thread_queued, type_disagg_read_task),
+            .n_capacity = &GET_METRIC(tiflash_uni_thread_capacity, type_disagg_read_task),
+            .n_pending = &GET_METRIC(tiflash_uni_thread_pending, type_disagg_read_task),
+        });
     }
 
     if (disaggregated_mode == DisaggregatedMode::Compute || disaggregated_mode == DisaggregatedMode::Storage)
@@ -948,6 +966,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerWindowFunctions();
     registerTableFunctions();
     registerStorages();
+
+    /// Initialize the labels of tiflash compute node.
+    /// It must be done before any components referencing the metrics.
+    ComputeLabelHolder::instance().init(config());
 
     // Later we may create thread pool from GlobalThreadPool
     // init it before other components
@@ -1270,9 +1292,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
-
-    /// Initialize the labels of tiflash compute node.
-    ComputeLabelHolder::instance().init(config());
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();

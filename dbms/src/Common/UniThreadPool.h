@@ -16,6 +16,7 @@
 
 #include <Poco/Event.h>
 #include <boost_wrapper/priority_queue.h>
+#include <prometheus/histogram.h>
 
 #include <atomic>
 #include <boost/noncopyable.hpp>
@@ -45,6 +46,17 @@ template <typename Thread>
 class ThreadPoolImpl
 {
 public:
+    struct Metrics
+    {
+        /// Queue job doesn't mean the job will run immediately. It may be put in the queue.
+        prometheus::Histogram * queue_duration = nullptr;
+        prometheus::Gauge * n_queued = nullptr;
+        prometheus::Gauge * n_capacity = nullptr;
+        prometheus::Gauge * n_pending = nullptr;
+
+        // (queued + pending) / capacity = saturation (saturation may be > 100%)
+    };
+
     using Job = std::function<void()>;
 
     /// Maximum number of threads is based on the number of physical cores.
@@ -54,6 +66,8 @@ public:
 
     /// queue_size - maximum number of running plus scheduled jobs. It can be greater than max_threads. Zero means unlimited.
     ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_ = true);
+
+    void setMetrics(const Metrics & m);
 
     /// Add new job. Locks until number of scheduled jobs is less than maximum or exception in one of threads was thrown.
     /// If any thread was throw an exception, first exception will be rethrown from this method,
@@ -95,6 +109,9 @@ public:
 
 private:
     mutable std::mutex mutex;
+
+    Metrics metrics;
+
     std::condition_variable job_finished;
     std::condition_variable new_job_or_shutdown;
 

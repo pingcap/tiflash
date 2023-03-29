@@ -94,6 +94,12 @@ RNPageReceiverBase<RPCContext>::RNPageReceiverBase(
     try
     {
         msg_channel = std::make_unique<MPMCQueue<PageReceivedMessagePtr>>(max_buffer_size);
+        msg_channel->setMetrics({
+            .push_duration = &GET_METRIC(tiflash_queue_push_duration_seconds, type_disagg_page_receiver),
+            .n_active = &GET_METRIC(tiflash_queue_active, type_disagg_page_receiver),
+            .n_capacity = &GET_METRIC(tiflash_queue_capacity, type_disagg_page_receiver),
+            .n_pending_push = &GET_METRIC(tiflash_queue_pending_push, type_disagg_page_receiver),
+        });
         // setup fetch threads to fetch pages/blocks from write nodes
         setUpConnection();
     }

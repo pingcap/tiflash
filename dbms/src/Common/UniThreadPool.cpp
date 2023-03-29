@@ -14,13 +14,14 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Common/UniThreadPool.h>
 #include <Common/setThreadName.h>
-#include <IO/IOThreadPool.h>
 #include <Poco/Util/Application.h>
 #include <Poco/Util/LayeredConfiguration.h>
 
 #include <cassert>
+#include <ext/scope_guard.h>
 #include <iostream>
 #include <type_traits>
 
@@ -56,6 +57,18 @@ ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_, size_t max_free_thre
 }
 
 template <typename Thread>
+void ThreadPoolImpl<Thread>::setMetrics(const Metrics & m)
+{
+    std::unique_lock lock(mutex);
+    metrics = m;
+
+    if (metrics.n_capacity)
+        metrics.n_capacity->Set(max_threads);
+    if (metrics.n_queued)
+        metrics.n_queued->Set(scheduled_jobs);
+}
+
+template <typename Thread>
 void ThreadPoolImpl<Thread>::setMaxThreads(size_t value)
 {
     std::lock_guard lock(mutex);
@@ -63,6 +76,9 @@ void ThreadPoolImpl<Thread>::setMaxThreads(size_t value)
     /// We have to also adjust queue size, because it limits the number of scheduled and already running jobs in total.
     queue_size = std::max(queue_size, max_threads);
     jobs.reserve(queue_size);
+
+    if (metrics.n_capacity)
+        metrics.n_capacity->Set(max_threads);
 }
 
 template <typename Thread>
@@ -121,13 +137,25 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, ssize_t priority, std::
             return !queue_size || scheduled_jobs < queue_size || shutdown;
         };
 
-        if (wait_microseconds) /// Check for optional. Condition is true if the optional is set and the value is zero.
         {
-            if (!job_finished.wait_for(lock, std::chrono::microseconds(*wait_microseconds), pred))
-                return on_error(fmt::format("no free thread (timeout={})", *wait_microseconds));
+            Stopwatch watch(CLOCK_MONOTONIC_COARSE);
+            if (metrics.n_pending)
+                metrics.n_pending->Increment();
+            SCOPE_EXIT({
+                if (metrics.n_pending)
+                    metrics.n_pending->Decrement();
+                if (metrics.queue_duration)
+                    metrics.queue_duration->Observe(watch.elapsedSeconds());
+            });
+
+            if (wait_microseconds) /// Check for optional. Condition is true if the optional is set and the value is zero.
+            {
+                if (!job_finished.wait_for(lock, std::chrono::microseconds(*wait_microseconds), pred))
+                    return on_error(fmt::format("no free thread (timeout={})", *wait_microseconds));
+            }
+            else
+                job_finished.wait(lock, pred);
         }
-        else
-            job_finished.wait(lock, pred);
 
         if (shutdown)
             return on_error("shutdown");
@@ -163,6 +191,8 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, ssize_t priority, std::
                      priority);
 
         ++scheduled_jobs;
+        if (metrics.n_queued)
+            metrics.n_queued->Set(scheduled_jobs);
     }
 
     new_job_or_shutdown.notify_one();
@@ -312,6 +342,8 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
                     if (shutdown_on_exception)
                         shutdown = true;
                     --scheduled_jobs;
+                    if (metrics.n_queued)
+                        metrics.n_queued->Set(scheduled_jobs);
                 }
 
                 job_finished.notify_all();
@@ -323,6 +355,8 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
         {
             std::lock_guard lock(mutex);
             --scheduled_jobs;
+            if (metrics.n_queued)
+                metrics.n_queued->Set(scheduled_jobs);
 
             if (threads.size() > scheduled_jobs + max_free_threads)
             {
