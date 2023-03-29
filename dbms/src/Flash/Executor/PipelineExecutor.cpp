@@ -91,6 +91,7 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
 
         // The queue size is same as UnionBlockInputStream = concurrency * 5.
         auto result_queue = status.registerResultQueue(/*queue_size=*/context.getMaxStreams() * 5);
+        assert(root_pipeline);
         root_pipeline->addGetResultSink(result_queue);
         scheduleEvents();
         consume(result_queue, std::move(result_handler));
