@@ -524,7 +524,6 @@ void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request
             --connection_uncreated_num;
         }
     }
-
 }
 
 template <typename RPCContext>

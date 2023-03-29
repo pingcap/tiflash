@@ -17,11 +17,11 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/MPPTunnel.h>
+#include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
 
 #include <magic_enum.hpp>
-#include "Flash/Mpp/PacketWriter.h"
 
 namespace DB
 {
