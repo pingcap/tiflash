@@ -406,8 +406,8 @@ void MPPTask::runImpl()
         if (likely(result.is_success))
         {
             /// Need to finish writing before closing the receiver.
-            /// For example, for the limit. Finishing writing first ensures that the limit on the TiDB side can end normally,
-            /// rather than causing other MPPTasks to fail because the receiver is closed, causing an error and passing the error to TiDB.
+            /// For example, for the query with limit, calling `finishWrite` first to ensure that the limit executor on the TiDB side can end normally,
+            /// otherwise the upstream MPPTasks will fail because of the closed receiver and then passing the error to TiDB.
             ///
             ///               ┌──tiflash(limit)◄─┬─tiflash(no limit)
             /// tidb(limit)◄──┼──tiflash(limit)◄─┼─tiflash(no limit)
