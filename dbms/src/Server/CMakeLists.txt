@@ -40,8 +40,6 @@ add_library (tiflash-server-lib
     MetricsTransmitter.cpp
     MetricsPrometheus.cpp
     NotFoundHandler.cpp
-    PingRequestHandler.cpp
-    RootRequestHandler.cpp
     ServerInfo.cpp
     Server.cpp
     StatusFile.cpp

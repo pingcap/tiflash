@@ -76,7 +76,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
     const TiDB::TableInfo table_info(table_info_json, NullspaceID);
 
     QueryTasks query_tasks;
-    std::tie(query_tasks, std::ignore) = compileQuery(
+    std::tie(query_tasks, std::ignore) = (
         *ctx,
         query,
         [&](const String &, const String &) {

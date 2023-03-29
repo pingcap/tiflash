@@ -51,6 +51,12 @@
 
 #include <ext/scope_guard.h>
 
+#include "Common/Exception.h"
+#include "Flash/Coprocessor/UnaryDAGResponseWriter.h"
+#include "IO/MemoryReadWriteBuffer.h"
+// #include "Core/QueryProcessingStage.h"
+#include <Interpreters/executeQuery.h>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -84,7 +90,7 @@ FlashService::FlashService() = default;
 void FlashService::init(Context & context_)
 {
     context = &context_;
-    log = &Poco::Logger::get("FlashService");
+    log = Logger::get("FlashService");
     manual_compact_manager = std::make_unique<Management::ManualCompactManager>(
         context->getGlobalContext(),
         context->getGlobalContext().getSettingsRef());
@@ -130,7 +136,7 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
     return default_val;
 }
 
-void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr & context, Poco::Logger * log)
+void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr & context, LoggerPtr log)
 {
     const static std::vector<std::pair<String, String>> tidb_varname_to_tiflash_varname = {
         std::make_pair("tidb_max_tiflash_threads", "max_threads"),
@@ -813,6 +819,59 @@ grpc::Status FlashService::GetDisaggConfig(grpc::ServerContext * grpc_context, c
     s3_config->set_bucket(local_s3config.bucket);
     s3_config->set_root(local_s3config.root);
 
+    return grpc::Status::OK;
+}
+
+grpc::Status FlashService::GetTiFlashSystemTable(
+    grpc::ServerContext * grpc_context,
+    const kvrpcpb::TiFlashSystemTableRequest * request,
+    kvrpcpb::TiFlashSystemTableResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    try
+    {
+        ContextPtr ctx;
+        std::tie(ctx, std::ignore) = createDBContext(grpc_context);
+        ctx->setDefaultFormat("JSONCompact");
+        ReadBufferFromString in_buf(request->sql());
+        MemoryWriteBuffer out_buf;
+        executeQuery(in_buf, out_buf, false, *ctx, nullptr);
+        auto data_size = out_buf.count();
+        auto buf = out_buf.tryGetReadBuffer();
+        String data;
+        data.resize(data_size);
+        buf->readStrict(&data[0], data_size);
+        response->set_data(data);
+    }
+    catch (const TiFlashException & e)
+    {
+        LOG_ERROR(log, "TiFlash Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.standardText());
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        return grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(log, "KV Client Exception: {}", e.message());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.message());
+    }
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(log, "std exception: {}", e.what());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "other exception");
+        return grpc::Status(grpc::StatusCode::INTERNAL, "other exception");
+    }
     return grpc::Status::OK;
 }
 

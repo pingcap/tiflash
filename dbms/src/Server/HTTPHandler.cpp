@@ -196,7 +196,7 @@ void HTTPHandler::processQuery(
     Poco::Net::HTTPServerResponse & response,
     Output & used_output)
 {
-    LOG_TRACE(log, "Request URI: {}", request.getURI());
+    LOG_DEBUG(log, "Request URI: {}", request.getURI());
 
     std::istream & istr = request.stream();
 
