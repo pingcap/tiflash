@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,29 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Common/FmtUtils.h>
-#include <Flash/Statistics/traverseExecutors.h>
-#include <TestUtils/TiFlashTestException.h>
+#include <Operators/AggregateBuildSinkOp.h>
 
 namespace DB
 {
-namespace tests
+OperatorStatus AggregateBuildSinkOp::writeImpl(Block && block)
 {
-class ExecutorSerializer
+    if (unlikely(!block))
+    {
+        return OperatorStatus::FINISHED;
+    }
+    agg_context->buildOnBlock(index, block);
+    total_rows += block.rows();
+    block.clear();
+    return OperatorStatus::NEED_INPUT;
+}
+
+void AggregateBuildSinkOp::operateSuffix()
 {
-public:
-    String serialize(const tipb::DAGRequest * dag_request);
-
-private:
-    void serializeListStruct(const tipb::DAGRequest * dag_request);
-    void serializeTreeStruct(const tipb::Executor & root_executor, size_t level);
-    void addPrefix(size_t level) { buf.append(String(level, ' ')); }
-
-private:
-    FmtBuffer buf;
-};
-} // namespace tests
+    LOG_DEBUG(log, "finish build with {} rows", total_rows);
+}
 
 } // namespace DB

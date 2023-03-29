@@ -200,7 +200,7 @@ void TCPHandler::runImpl()
         catch (LockException & e)
         {
             state.io.onException();
-            lock_info = std::move(e.lock_info);
+            lock_info = std::move(e.locks[0].second);
         }
         catch (RegionException & e)
         {

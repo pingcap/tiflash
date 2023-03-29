@@ -53,6 +53,7 @@ public:
             global_context.getFileProvider());
         storage_pool = std::make_unique<DM::StoragePool>(
             global_context,
+            NullspaceID,
             TEST_NAMESPACE_ID,
             *storage_path_pool_v2,
             "test.t1");
@@ -131,7 +132,7 @@ try
     }
 
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(1, tag, buff, buf_sz);
         buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
@@ -147,7 +148,7 @@ try
     }
 
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         const size_t buf_sz2 = 2048;
         char c_buff2[buf_sz2] = {0};
 
@@ -160,7 +161,7 @@ try
     }
 
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         batch.delPage(3);
         storage_pool->logWriter()->write(std::move(batch), nullptr);
         ASSERT_ANY_THROW(storage_pool->logReader()->read(3));
@@ -180,7 +181,7 @@ try
     }
 
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(1, tag, buff, buf_sz);
         buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
@@ -190,7 +191,7 @@ try
     const size_t buf_sz2 = 2048;
     char c_buff2[buf_sz2] = {0};
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, sizeof(c_buff2));
         batch.putPage(3, tag, buff2, buf_sz2);
         storage_pool->logWriter()->write(std::move(batch), nullptr);
@@ -209,7 +210,7 @@ try
     }
 
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         batch.delPage(3);
         ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, sizeof(c_buff2));
         batch.putPage(4, tag, buff2, buf_sz2);
@@ -228,7 +229,7 @@ TEST_F(UniPageStorageStoragePoolTest, PutExt)
 try
 {
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         batch.putExternal(1, 0);
         batch.putExternal(2, 0);
         batch.putExternal(3, 0);
@@ -236,7 +237,7 @@ try
     }
 
     auto uni_ps = storage_pool->global_context.getWriteNodePageStorage();
-    auto external_ids = uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID));
+    auto external_ids = uni_ps->page_directory->getAliveExternalIds(UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID));
     ASSERT_EQ((*external_ids).size(), 3);
     ASSERT_TRUE((*external_ids).find(1) != (*external_ids).end());
     ASSERT_TRUE((*external_ids).find(2) != (*external_ids).end());
@@ -251,7 +252,7 @@ try
     char c_buff[buf_sz] = {0};
 
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(7, 0, buff, buf_sz);
         buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
@@ -265,7 +266,7 @@ try
     }
 
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         batch.putRefPage(9, 7);
         storage_pool->logWriter()->write(std::move(batch), nullptr);
         ASSERT_EQ(storage_pool->logReader()->getNormalPageId(9), 7);
@@ -274,7 +275,7 @@ try
     }
 
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         batch.delPage(7);
         storage_pool->logWriter()->write(std::move(batch), nullptr);
         ASSERT_EQ(storage_pool->logReader()->getNormalPageId(9), 7);
@@ -283,7 +284,7 @@ try
     }
 
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         batch.putRefPage(10, 8);
 
         ASSERT_NO_THROW(storage_pool->logWriter()->write(std::move(batch), nullptr));
@@ -318,7 +319,7 @@ try
     char c_buff[buf_sz] = {0};
 
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(7, 0, buff, buf_sz);
         buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
@@ -332,7 +333,7 @@ try
     }
 
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         batch.putRefPage(9, 7);
         storage_pool->logWriter()->write(std::move(batch), nullptr);
         ASSERT_EQ(storage_pool->logReader()->getNormalPageId(9), 7);
@@ -343,7 +344,7 @@ try
     auto snapshot = storage_pool->logReader()->getSnapshot("ReadWithSnapshotTest");
 
     {
-        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(StorageType::Log, TEST_NAMESPACE_ID)};
+        WriteBatchWrapper batch{PageStorageRunMode::UNI_PS, UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Log, TEST_NAMESPACE_ID)};
         batch.delPage(7);
         batch.delPage(9);
         storage_pool->logWriter()->write(std::move(batch), nullptr);

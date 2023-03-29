@@ -51,7 +51,7 @@ using u128::PageEntriesEdit;
 
 TEST(ExternalIdsByNamespaceTest, Simple)
 {
-    NamespaceId ns_id = 100;
+    NamespaceID ns_id = 100;
     ExternalIdsByNamespace<typename u128::PageIdTrait> external_ids_by_ns;
 
     {
@@ -319,6 +319,15 @@ try
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry_updated2);
         ASSERT_ANY_THROW(dir->apply(std::move(edit)));
     }
+
+    // Write a new entry to make sure apply works normally after exception throw
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry1);
+        dir->apply(std::move(edit));
+    }
+    auto snap2 = dir->createSnapshot();
+    EXPECT_ENTRY_EQ(entry1, dir, 10, snap2);
 }
 CATCH
 

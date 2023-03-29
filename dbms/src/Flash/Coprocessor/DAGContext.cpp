@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <kvproto/disaggregated.pb.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
@@ -37,7 +39,7 @@ bool strictSqlMode(UInt64 sql_mode)
 }
 
 // for non-mpp(cop/batchCop)
-DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_)
+DAGContext::DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_)
     : dag_request(&dag_request_)
     , dummy_query_string(dag_request->DebugString())
     , dummy_ast(makeDummyQuery())
@@ -55,23 +57,15 @@ DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo 
     , warning_count(0)
     , keyspace_id(keyspace_id_)
 {
-    RUNTIME_CHECK((dag_request->executors_size() > 0) != dag_request->has_root_executor());
-    const auto & root_executor = dag_request->has_root_executor()
-        ? dag_request->root_executor()
-        : dag_request->executors(dag_request->executors_size() - 1);
-    return_executor_id = root_executor.has_executor_id();
-    if (return_executor_id)
-        root_executor_id = root_executor.executor_id();
     initOutputInfo();
 }
 
 // for mpp
-DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
+DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
     : dag_request(&dag_request_)
     , dummy_query_string(dag_request->DebugString())
     , dummy_ast(makeDummyQuery())
     , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
-    , return_executor_id(true)
     , is_mpp_task(true)
     , is_root_mpp_task(is_root_mpp_task_)
     , flags(dag_request->flags())
@@ -83,14 +77,13 @@ DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMet
     , warning_count(0)
     , keyspace_id(RequestUtils::deriveKeyspaceID(meta_))
 {
-    RUNTIME_CHECK(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
-    root_executor_id = dag_request->root_executor().executor_id();
     // only mpp task has join executor.
     initExecutorIdToJoinIdMap();
     initOutputInfo();
 }
 
-DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_)
+// for disaggregated task on write node
+DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const disaggregated::DisaggTaskMeta & task_meta_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_)
     : dag_request(&dag_request_)
     , dummy_query_string(dag_request->DebugString())
     , dummy_ast(makeDummyQuery())
@@ -104,14 +97,12 @@ DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggTa
     , log(std::move(log_))
     , flags(dag_request->flags())
     , sql_mode(dag_request->sql_mode())
-    , disaggregated_id(std::make_unique<DM::DisaggTaskId>(task_id_))
+    , disaggregated_id(std::make_unique<DM::DisaggTaskId>(task_meta_))
     , max_recorded_error_count(getMaxErrorCount(*dag_request))
     , warnings(max_recorded_error_count)
     , warning_count(0)
+    , keyspace_id(RequestUtils::deriveKeyspaceID(task_meta_))
 {
-    RUNTIME_CHECK(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
-    return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
-
     initOutputInfo();
 }
 
@@ -130,7 +121,7 @@ DAGContext::DAGContext(UInt64 max_error_count_)
 {}
 
 // for tests need to run query tasks.
-DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency)
+DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency)
     : dag_request(&dag_request_)
     , dummy_query_string(dag_request->DebugString())
     , dummy_ast(makeDummyQuery())
@@ -145,13 +136,6 @@ DAGContext::DAGContext(const tipb::DAGRequest & dag_request_, String log_identif
     , warnings(max_recorded_error_count)
     , warning_count(0)
 {
-    RUNTIME_CHECK((dag_request->executors_size() > 0) != dag_request->has_root_executor());
-    const auto & root_executor = dag_request->has_root_executor()
-        ? dag_request->root_executor()
-        : dag_request->executors(dag_request->executors_size() - 1);
-    return_executor_id = root_executor.has_executor_id();
-    if (return_executor_id)
-        root_executor_id = root_executor.executor_id();
     initOutputInfo();
 }
 
@@ -171,16 +155,6 @@ void DAGContext::initOutputInfo()
     }
     encode_type = analyzeDAGEncodeType(*this);
     keep_session_timezone_info = encode_type == tipb::EncodeType::TypeChunk || encode_type == tipb::EncodeType::TypeCHBlock;
-}
-
-String DAGContext::getRootExecutorId()
-{
-    // If return_executor_id is false, we can get the generated executor_id from list_based_executors_order.
-    return return_executor_id
-        ? root_executor_id
-        : (list_based_executors_order.empty()
-               ? ""
-               : list_based_executors_order.back());
 }
 
 bool DAGContext::allowZeroInDate() const
@@ -218,7 +192,7 @@ void DAGContext::initExecutorIdToJoinIdMap()
         return;
 
     executor_id_to_join_id_map.clear();
-    traverseExecutorsReverse(dag_request, [&](const tipb::Executor & executor) {
+    dag_request.traverseReverse([&](const tipb::Executor & executor) {
         std::vector<String> all_join_id;
         // for mpp, dag_request.has_root_executor() == true, can call `getChildren` directly.
         getChildren(executor).forEach([&](const tipb::Executor & child) {

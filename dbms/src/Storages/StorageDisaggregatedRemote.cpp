@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
+#include <Common/TiFlashMetrics.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
@@ -45,7 +46,9 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 #include <kvproto/disaggregated.pb.h>
+#include <kvproto/kvrpcpb.pb.h>
 #include <pingcap/coprocessor/Client.h>
+#include <pingcap/kv/Backoff.h>
 #include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/RegionCache.h>
 #include <tipb/executor.pb.h>
@@ -62,7 +65,9 @@ struct RpcTypeTraits<disaggregated::EstablishDisaggTaskRequest>
 {
     using RequestType = disaggregated::EstablishDisaggTaskRequest;
     using ResultType = disaggregated::EstablishDisaggTaskResponse;
+
     static const char * err_msg() { return "EstablishDisaggTask Failed"; } // NOLINT(readability-identifier-naming)
+
     static ::grpc::Status doRPCCall(
         grpc::ClientContext * context,
         std::shared_ptr<KvConnClient> client,
@@ -86,9 +91,16 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
     const Context & db_context,
     unsigned num_streams)
 {
+    using namespace pingcap;
+
     DM::RNRemoteReadTaskPtr remote_read_tasks;
 
-    pingcap::kv::Backoffer bo(pingcap::kv::scanMaxBackoff);
+    double total_backoff_seconds = 0.0;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_total_establish_backoff).Observe(total_backoff_seconds);
+    });
+
+    kv::Backoffer bo(kv::copNextMaxBackoff);
     while (true)
     {
         // TODO: We could only retry failed stores.
@@ -102,7 +114,7 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
             RUNTIME_CHECK(!batch_cop_tasks.empty());
 
             // Fetch the remote segment read tasks from write nodes
-            remote_read_tasks = buildDisaggregatedTask(db_context, batch_cop_tasks);
+            remote_read_tasks = buildDisaggTasks(db_context, batch_cop_tasks);
 
             break;
         }
@@ -111,8 +123,13 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
             if (e.code() != ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
                 throw;
 
-            bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
+            Stopwatch w_backoff;
+            SCOPE_EXIT({
+                total_backoff_seconds += w_backoff.elapsedSeconds();
+            });
+
             LOG_INFO(log, "Meets retryable error: {}, retry to build remote read tasks", e.message());
+            bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
     }
 
@@ -124,150 +141,183 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
     return pipeline.streams;
 }
 
-struct DisaggregatedExecutionSummary
-{
-    size_t establish_rpc_ms{0};
-    size_t build_remote_task_ms{0};
-};
 
-DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
+DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggTasks(
     const Context & db_context,
     const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks)
 {
     size_t tasks_n = batch_cop_tasks.size();
 
-    // Collect the response from write nodes and build the remote tasks
-    std::vector<DM::RNRemoteTableReadTaskPtr> remote_tasks_from_wns(tasks_n, nullptr);
-    // The execution summaries
-    std::vector<DisaggregatedExecutionSummary> summaries(tasks_n);
+    std::mutex build_results_lock;
+    std::vector<DM::RNRemoteTableReadTaskPtr> build_results;
+    build_results.reserve(tasks_n);
 
     auto thread_manager = newThreadManager();
-    auto * cluster = context.getTMTContext().getKVCluster();
     const auto & executor_id = table_scan.getTableScanExecutorID();
     const DM::DisaggTaskId task_id(context.getDAGContext()->getMPPTaskId(), executor_id);
 
-    for (size_t idx = 0; idx < tasks_n; ++idx)
+    for (const auto & cop_task : batch_cop_tasks)
     {
         thread_manager->schedule(
             true,
-            "EstablishDisaggregated",
-            [&, idx] {
-                Stopwatch watch;
-
-                const auto & batch_cop_task = batch_cop_tasks[idx];
-                auto req = buildDisaggregatedTaskForNode(db_context, batch_cop_task);
-
-                auto call = pingcap::kv::RpcCall<disaggregated::EstablishDisaggTaskRequest>(req);
-                cluster->rpc_client->sendRequest(req->address(), call, DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC);
-                const auto resp = call.getResp();
-
-                if (resp->has_error())
-                {
-                    if (resp->error().code() == ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
-                    {
-                        // Refresh region cache and throw an exception for retrying.
-                        // Note: retry_region's region epoch is not set. We need to recover from the request.
-
-                        std::unordered_set<RegionID> retry_regions;
-                        for (const auto & retry_region : resp->retry_regions())
-                            retry_regions.insert(retry_region.id());
-
-                        LOG_INFO(
-                            log,
-                            "Received EstablishDisaggregated response with retryable error: {}, addr={} retry_regions={}",
-                            resp->error().msg(),
-                            batch_cop_task.store_addr,
-                            retry_regions);
-
-                        for (const auto & region : req->regions())
-                        {
-                            if (retry_regions.contains(region.region_id()))
-                            {
-                                auto region_ver_id = pingcap::kv::RegionVerID(
-                                    region.region_id(),
-                                    region.region_epoch().conf_ver(),
-                                    region.region_epoch().version());
-                                cluster->region_cache->dropRegion(region_ver_id);
-                            }
-                        }
-                        throw Exception(
-                            resp->error().msg(),
-                            ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
-                    }
-                    else
-                    {
-                        LOG_WARNING(
-                            log,
-                            "Received EstablishDisaggregated response with error, addr={} err={}",
-                            batch_cop_task.store_addr,
-                            resp->error().msg());
-
-                        // Meet other errors... May be not retryable?
-                        throw Exception(
-                            resp->error().code(),
-                            "EstablishDisaggregatedTask failed: {}, addr={}",
-                            resp->error().msg(),
-                            batch_cop_task.store_addr);
-                    }
-                }
-
-                const DM::DisaggTaskId snapshot_id(resp->snapshot_id());
-                LOG_DEBUG(
-                    log,
-                    "Received EstablishDisaggregated response, store={} snap_id={} addr={} resp.num_tables={}",
-                    resp->store_id(),
-                    snapshot_id,
-                    batch_cop_task.store_addr,
-                    resp->tables_size());
-
-                auto this_elapse_ms = watch.elapsedMillisecondsFromLastTime();
-                auto & summary = summaries[idx];
-                summary.establish_rpc_ms += this_elapse_ms;
-                GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_establish).Observe(this_elapse_ms / 1000.0);
-
-                // Parse the resp and gen tasks on read node
-                // The number of tasks is equal to number of write nodes
-                for (const auto & physical_table : resp->tables())
-                {
-                    DB::DM::RemotePb::RemotePhysicalTable table;
-                    auto parse_ok = table.ParseFromString(physical_table);
-                    RUNTIME_CHECK_MSG(parse_ok, "failed to deserialize RemotePhysicalTable from response");
-
-                    Stopwatch watch_table;
-
-                    remote_tasks_from_wns[idx] = DM::RNRemoteTableReadTask::buildFrom(
-                        db_context,
-                        resp->store_id(),
-                        batch_cop_task.store_addr,
-                        snapshot_id,
-                        table,
-                        log);
-
-                    LOG_DEBUG(
-                        log,
-                        "Build RNRemoteTableReadTask finished, elapsed={:.3f}s store={} addr={} segments={} task_id={}",
-                        watch_table.elapsedSeconds(),
-                        resp->store_id(),
-                        batch_cop_task.store_addr,
-                        table.segments().size(),
-                        task_id);
-                }
-
-                this_elapse_ms = watch.elapsedMillisecondsFromLastTime();
-                summary.build_remote_task_ms += this_elapse_ms;
-                GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_task).Observe(this_elapse_ms / 1000.0);
+            "BuildDisaggTask",
+            [&] {
+                buildDisaggTask(db_context, cop_task, build_results, build_results_lock);
             });
     }
+
+    // The first exception will be thrown out.
     thread_manager->wait();
 
-    // collect all remote tables read tasks into one read task
-    auto read_task = std::make_shared<DM::RNRemoteReadTask>(std::move(remote_tasks_from_wns));
+    return std::make_shared<DM::RNRemoteReadTask>(std::move(build_results));
+}
 
-    const auto avg_establish_rpc_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.establish_rpc_ms; }) / summaries.size();
-    const auto avg_build_remote_task_ms = std::accumulate(summaries.begin(), summaries.end(), 0.0, [](double lhs, const DisaggregatedExecutionSummary & rhs) -> double { return lhs + rhs.build_remote_task_ms; }) / summaries.size();
-    LOG_INFO(log, "Establish disaggregated task finished, avg_rpc_elapsed={:.2f}ms, avg_build_task_elapsed={:.2f}ms", avg_establish_rpc_ms, avg_build_remote_task_ms);
+/// Note: This function runs concurrently when there are multiple Write Nodes.
+void StorageDisaggregated::buildDisaggTask(
+    const Context & db_context,
+    const pingcap::coprocessor::BatchCopTask & batch_cop_task,
+    std::vector<DM::RNRemoteTableReadTaskPtr> & build_results,
+    std::mutex & build_results_lock)
+{
+    Stopwatch watch;
 
-    return read_task;
+    auto req = buildDisaggTaskForNode(db_context, batch_cop_task);
+
+    auto * cluster = context.getTMTContext().getKVCluster();
+    auto call = pingcap::kv::RpcCall<disaggregated::EstablishDisaggTaskRequest>(req);
+    cluster->rpc_client->sendRequest(req->address(), call, DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC);
+    const auto resp = call.getResp();
+
+    const DM::DisaggTaskId snapshot_id(resp->snapshot_id());
+    LOG_DEBUG(
+        log,
+        "Received EstablishDisaggregated response, error={} store={} snap_id={} addr={} resp.num_tables={}",
+        resp->has_error(),
+        resp->store_id(),
+        snapshot_id,
+        batch_cop_task.store_addr,
+        resp->tables_size());
+
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_establish).Observe(watch.elapsedSeconds());
+    watch.restart();
+
+    if (resp->has_error())
+    {
+        // We meet error in the EstablishDisaggTask response.
+        if (resp->error().has_error_region())
+        {
+            const auto & error = resp->error().error_region();
+            // Refresh region cache and throw an exception for retrying.
+            // Note: retry_region's region epoch is not set. We need to recover from the request.
+
+            std::unordered_set<RegionID> retry_regions;
+            for (const auto & region_id : error.region_ids())
+                retry_regions.insert(region_id);
+
+            LOG_INFO(
+                log,
+                "Received EstablishDisaggregated response with retryable error: {}, addr={} retry_regions={}",
+                error.msg(),
+                batch_cop_task.store_addr,
+                retry_regions);
+
+            for (const auto & region : req->regions())
+            {
+                if (retry_regions.contains(region.region_id()))
+                {
+                    auto region_ver_id = pingcap::kv::RegionVerID(
+                        region.region_id(),
+                        region.region_epoch().conf_ver(),
+                        region.region_epoch().version());
+                    cluster->region_cache->dropRegion(region_ver_id);
+                }
+            }
+            throw Exception(
+                error.msg(),
+                ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
+        }
+        else if (resp->error().has_error_locked())
+        {
+            using namespace pingcap;
+
+            const auto & error = resp->error().error_locked();
+
+            LOG_INFO(
+                log,
+                "Received EstablishDisaggregated response with retryable error: {}, addr={}",
+                error.msg(),
+                batch_cop_task.store_addr);
+
+            Stopwatch w_resolve_lock;
+
+            // Try to resolve all locks.
+            kv::Backoffer bo(kv::copNextMaxBackoff);
+            std::vector<uint64_t> pushed;
+            std::vector<kv::LockPtr> locks{};
+            for (const auto & lock_info : error.locked())
+                locks.emplace_back(std::make_shared<kv::Lock>(lock_info));
+            auto before_expired = cluster->lock_resolver->resolveLocks(bo, sender_target_mpp_task_id.query_id.start_ts, locks, pushed);
+
+            // TODO: Use `pushed` to bypass large txn.
+            LOG_DEBUG(log, "Finished resolve locks, elapsed={}s n_locks={} pushed.size={} before_expired={}", w_resolve_lock.elapsedSeconds(), locks.size(), pushed.size(), before_expired);
+
+            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_resolve_lock).Observe(w_resolve_lock.elapsedSeconds());
+
+            throw Exception(
+                error.msg(),
+                ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
+        }
+        else
+        {
+            const auto & error = resp->error().error_other();
+
+            LOG_WARNING(
+                log,
+                "Received EstablishDisaggregated response with error, addr={} err={}",
+                batch_cop_task.store_addr,
+                error.msg());
+
+            // Meet other errors... May be not retryable?
+            throw Exception(
+                error.code(),
+                "EstablishDisaggregatedTask failed: {}, addr={}",
+                error.msg(),
+                batch_cop_task.store_addr);
+        }
+    }
+
+    // Parse the resp and gen tasks on read node
+    // The number of tasks is equal to number of write nodes
+    for (const auto & physical_table : resp->tables())
+    {
+        DB::DM::RemotePb::RemotePhysicalTable table;
+        auto parse_ok = table.ParseFromString(physical_table);
+        RUNTIME_CHECK_MSG(parse_ok, "Failed to deserialize RemotePhysicalTable from response");
+
+        Stopwatch w_build_table_task;
+
+        const auto task = DM::RNRemoteTableReadTask::buildFrom(
+            db_context,
+            resp->store_id(),
+            batch_cop_task.store_addr,
+            snapshot_id,
+            table,
+            log);
+        {
+            std::unique_lock lock(build_results_lock);
+            build_results.push_back(task);
+        }
+
+        LOG_DEBUG(
+            log,
+            "Build RNRemoteTableReadTask finished, elapsed={:.3f}s store={} addr={} segments={}",
+            w_build_table_task.elapsedSeconds(),
+            resp->store_id(),
+            batch_cop_task.store_addr,
+            table.segments().size());
+    }
+
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_read_task).Observe(watch.elapsedSeconds());
 }
 
 /**
@@ -279,14 +329,14 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggregatedTask(
  * Similar to `StorageDisaggregated::buildDispatchMPPTaskRequest`
  */
 std::shared_ptr<disaggregated::EstablishDisaggTaskRequest>
-StorageDisaggregated::buildDisaggregatedTaskForNode(
+StorageDisaggregated::buildDisaggTaskForNode(
     const Context & db_context,
     const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
     const auto & settings = db_context.getSettingsRef();
     auto establish_req = std::make_shared<disaggregated::EstablishDisaggTaskRequest>();
     {
-        auto * meta = establish_req->mutable_meta();
+        disaggregated::DisaggTaskMeta * meta = establish_req->mutable_meta();
         meta->set_start_ts(sender_target_mpp_task_id.query_id.start_ts);
         meta->set_query_ts(sender_target_mpp_task_id.query_id.query_ts);
         meta->set_server_id(sender_target_mpp_task_id.query_id.server_id);
@@ -294,6 +344,9 @@ StorageDisaggregated::buildDisaggregatedTaskForNode(
         auto * dag_context = db_context.getDAGContext();
         meta->set_task_id(dag_context->getMPPTaskId().task_id);
         meta->set_executor_id(table_scan.getTableScanExecutorID());
+        const auto keyspace_id = dag_context->getKeyspaceID();
+        meta->set_keyspace_id(keyspace_id);
+        meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
     }
     // how long the task is valid on the write node
     establish_req->set_timeout_s(DEFAULT_DISAGG_TASK_TIMEOUT_SEC);
@@ -304,7 +357,7 @@ StorageDisaggregated::buildDisaggregatedTaskForNode(
 
     {
         // Setup the encoded plan
-        const auto * dag_req = context.getDAGContext()->dag_request;
+        const auto * dag_req = context.getDAGContext()->dag_request();
         tipb::DAGRequest table_scan_req;
         table_scan_req.set_time_zone_name(dag_req->time_zone_name());
         table_scan_req.set_time_zone_offset(dag_req->time_zone_offset());

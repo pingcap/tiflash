@@ -28,7 +28,7 @@ Page ColumnFileDataProviderRNLocalPageCache::readTinyData(
 
     auto oid = Remote::PageOID{
         .store_id = store_id,
-        .table_id = table_id,
+        .ks_table_id = ks_table_id,
         .page_id = page_id,
     };
     return page_cache->getPage(oid, *fields);

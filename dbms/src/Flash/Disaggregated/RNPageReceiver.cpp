@@ -296,6 +296,11 @@ std::tuple<bool, String> RNPageReceiverBase<RPCContext>::taskReadLoop(const Fetc
     LoggerPtr log = exc_log->getChild(req_info);
     for (int i = 0; i < max_retry_times; ++i)
     {
+        Stopwatch w_fetch_page;
+        SCOPE_EXIT({
+            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_fetch_page).Observe(w_fetch_page.elapsedSeconds());
+        });
+
         auto resp_reader = rpc_context->doRequest(req);
         bool has_data = false;
         // Keep reading packets and push the packet

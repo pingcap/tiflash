@@ -92,11 +92,12 @@ private:
     const size_t expected_block_size;
     const ReadMode read_mode;
     const int extra_table_id_index;
+    KeyspaceID keyspace_id;
     TableID physical_table_id;
 
     Stopwatch watch;
-    double seconds_pop;
-    double seconds_build;
+    double seconds_next_task;
+    double seconds_build_stream;
 
     size_t total_rows = 0;
     bool done = false;

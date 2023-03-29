@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Interpreters/Context.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTOrderByElement.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -249,6 +252,60 @@ try
                            .build(context);
         SortInfos sort_infos{{i, false}};
         executeAndAssertSortedBlocks(request, sort_infos);
+    }
+}
+CATCH
+
+TEST_F(TopNExecutorTestRunner, SortByConst)
+try
+{
+    // case1: order by key, 1 limit 50
+    auto order_by_items = std::make_shared<ASTExpressionList>();
+    {
+        ASTPtr locale_node;
+        auto order_by_item = std::make_shared<ASTOrderByElement>(-1, -1, false, locale_node);
+        order_by_item->children.push_back(std::make_shared<ASTIdentifier>("key"));
+        order_by_items->children.push_back(order_by_item);
+    }
+    {
+        ASTPtr locale_node;
+        auto order_by_item = std::make_shared<ASTOrderByElement>(-1, -1, false, locale_node);
+        order_by_item->children.push_back(lit(Field(static_cast<UInt64>(1))));
+        order_by_items->children.push_back(order_by_item);
+    }
+    auto request = context
+                       .scan("test_db", "big_table_2")
+                       .topN(order_by_items, lit(Field(static_cast<UInt64>(50))))
+                       .build(context);
+    SortInfos sort_infos{{0, true}};
+    executeAndAssertSortedBlocks(request, sort_infos);
+
+    // case2: order by 1 limit 10
+    order_by_items = std::make_shared<ASTExpressionList>();
+    {
+        ASTPtr locale_node;
+        auto order_by_item = std::make_shared<ASTOrderByElement>(-1, -1, false, locale_node);
+        order_by_item->children.push_back(lit(Field(static_cast<UInt64>(1))));
+        order_by_items->children.push_back(order_by_item);
+    }
+    request = context
+                  .scan("test_db", "big_table_2")
+                  .topN(order_by_items, lit(Field(static_cast<UInt64>(10))))
+                  .build(context);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(35)));
+    std::vector<size_t> concurrencies{1, 5, 10};
+    for (auto concurrency : concurrencies)
+    {
+        size_t total_rows = 0;
+        auto result = getExecuteStreamsReturnBlocks(request, concurrency);
+        for (const auto & block : result)
+        {
+            // Every block is cut by the limit of topn.
+            ASSERT_TRUE(block.rows() <= 10);
+            total_rows += block.rows();
+        }
+        // The total number of rows must >= the limit of topn, because the table rows > the limit of topn.
+        ASSERT_TRUE(total_rows >= 10);
     }
 }
 CATCH

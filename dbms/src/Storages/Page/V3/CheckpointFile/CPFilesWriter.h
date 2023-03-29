@@ -33,10 +33,10 @@ class CPFilesWriter : private boost::noncopyable
 public:
     struct Options
     {
-        const std::string & data_file_path;
-        const std::string & data_file_id;
-        const std::string & manifest_file_path;
-        const std::string & manifest_file_id;
+        const String & data_file_path_pattern;
+        const String & data_file_id_pattern;
+        const String & manifest_file_path;
+        const String & manifest_file_id;
         const CPWriteDataSourcePtr data_source;
 
         /**
@@ -46,6 +46,9 @@ public:
          * lock files from `writeEditsAndApplyCheckpointInfo`.
          */
         const std::unordered_set<String> & must_locked_files = {};
+        UInt64 sequence;
+        UInt64 max_data_file_size = 256 * 1024 * 1024;
+        UInt64 max_edit_records_per_part = 100000;
     };
 
     static CPFilesWriterPtr create(Options options)
@@ -84,20 +87,13 @@ public:
     /**
      * This function must be called, and must be called last, after other `writeXxx`.
      */
-    void writeSuffix();
+    [[nodiscard]] std::vector<String> writeSuffix();
 
-    void flush()
-    {
-        data_writer->flush();
-        manifest_writer->flush();
-    }
-
-    ~CPFilesWriter()
-    {
-        flush();
-    }
-
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     enum class WriteStage
     {
         WritingPrefix,
@@ -105,14 +101,24 @@ private:
         WritingFinished,
     };
 
-    const std::string manifest_file_id;
-    const CPDataFileWriterPtr data_writer;
+    void newDataWriter();
+
+    const String manifest_file_id;
+    const String data_file_id_pattern;
+    const String data_file_path_pattern;
+    const UInt64 sequence;
+    const UInt64 max_data_file_size;
+    Int32 data_file_index = 0;
+    CPDataFileWriterPtr data_writer;
     const CPManifestFileWriterPtr manifest_writer;
     const CPWriteDataSourcePtr data_source;
 
     std::unordered_set<String> locked_files;
     WriteStage write_stage = WriteStage::WritingPrefix;
-
+    std::vector<String> data_file_paths;
+    CheckpointProto::DataFilePrefix data_prefix;
+    UInt64 current_write_size = 0;
+    UInt64 total_written_records = 0;
     LoggerPtr log;
 };
 

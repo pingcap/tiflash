@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <Common/setThreadName.h>
 #include <Debug/MockStorage.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/RequestUtils.h>
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Flash/Disaggregated/WNEstablishDisaggTaskHandler.h>
 #include <Flash/Disaggregated/WNFetchPagesStreamWriter.h>
@@ -43,7 +45,9 @@
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
+#include <grpcpp/support/status.h>
 #include <grpcpp/support/status_code_enum.h>
+#include <kvproto/disaggregated.pb.h>
 
 #include <ext/scope_guard.h>
 
@@ -643,12 +647,12 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
         current_memory_tracker = nullptr;
     });
 
-    auto record_error = [&](int flash_err_code, const String & err_msg) {
+    auto record_other_error = [&](int flash_err_code, const String & err_msg) {
         // Note: We intentinally do not remove the snapshot from the SnapshotManager
         // when this request is failed. Consider this case:
         // EstablishDisagg for A: ---------------- Failed --------------------------------------------- Cleanup Snapshot for A
         // EstablishDisagg for B: - Failed - RN retry EstablishDisagg for A+B -- InsertSnapshot for A+B ----- FetchPages (Boom!)
-        auto * err = response->mutable_error();
+        auto * err = response->mutable_error()->mutable_error_other();
         err->set_code(flash_err_code);
         err->set_msg(err_msg);
     };
@@ -660,51 +664,41 @@ grpc::Status FlashService::EstablishDisaggTask(grpc::ServerContext * grpc_contex
     }
     catch (const RegionException & e)
     {
-        for (const auto & region_id : e.unavailable_region)
-        {
-            auto * retry_region = response->add_retry_regions();
-            retry_region->set_id(region_id);
-            // Note: retry_region's version and epoch is not set, because we miss these information
-            // from the exception.
-        }
         LOG_INFO(logger, "EstablishDisaggTask meet RegionException {} (retryable), regions={}", e.message(), e.unavailable_region);
-        record_error(
-            ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR,
-            fmt::format("Retryable error: {}", e.message()));
+
+        auto * error = response->mutable_error()->mutable_error_region();
+        error->set_msg(e.message());
+        for (const auto & region_id : e.unavailable_region)
+            error->add_region_ids(region_id);
     }
     catch (const LockException & e)
     {
-        auto * retry_region = response->add_retry_regions();
-        retry_region->set_id(e.region_id);
-        // Note: retry_region's version and epoch is not set, because we miss these information
-        // from the exception.
+        LOG_INFO(logger, "EstablishDisaggTask meet LockException: {} (retryable)", e.message());
 
-        LOG_INFO(logger, "EstablishDisaggTask meet LockException (retryable), region_id={}", e.region_id);
-        // TODO: We may need to send this error back to TiDB? Otherwise TiDB
-        // may not resolve lock in time.
-        record_error(
-            ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR,
-            fmt::format("Retryable error: {}", e.message()));
+        auto * error = response->mutable_error()->mutable_error_locked();
+        error->set_msg(e.message());
+        for (const auto & lock : e.locks)
+            error->add_locked()->CopyFrom(*lock.second);
     }
     catch (Exception & e)
     {
         LOG_ERROR(logger, "EstablishDisaggTask meet exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
-        record_error(e.code(), e.message());
+        record_other_error(e.code(), e.message());
     }
     catch (const pingcap::Exception & e)
     {
         LOG_ERROR(logger, "EstablishDisaggTask meet KV Client Exception: {}", e.message());
-        record_error(e.code(), e.message());
+        record_other_error(e.code(), e.message());
     }
     catch (std::exception & e)
     {
         LOG_ERROR(logger, "EstablishDisaggTask meet std::exception: {}", e.what());
-        record_error(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
+        record_other_error(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
     }
     catch (...)
     {
         LOG_ERROR(logger, "EstablishDisaggTask meet unknown exception");
-        record_error(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
+        record_other_error(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
     }
 
     LOG_DEBUG(
@@ -740,9 +734,11 @@ grpc::Status FlashService::FetchDisaggPages(
 
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const DM::DisaggTaskId task_id(request->snapshot_id());
+    // get the keyspace from meta, it is now used for debugging
+    const auto keyspace_id = RequestUtils::deriveKeyspaceID(request->snapshot_id());
     auto logger = Logger::get(task_id);
 
-    LOG_DEBUG(logger, "Fetching pages, table_id={} segment_id={}", task_id, request->table_id(), request->segment_id());
+    LOG_DEBUG(logger, "Fetching pages, keyspace_id={} table_id={} segment_id={}", keyspace_id, request->table_id(), request->segment_id());
 
     SCOPE_EXIT({
         // The snapshot is created in the 1st request (Establish), and will be destroyed when all FetchPages are finished.
@@ -793,6 +789,31 @@ grpc::Status FlashService::FetchDisaggPages(
         LOG_ERROR(logger, "FetchDisaggPages meet unknown exception");
         return record_error(grpc::StatusCode::INTERNAL, "other exception");
     }
+}
+
+grpc::Status FlashService::GetDisaggConfig(grpc::ServerContext * grpc_context, const disaggregated::GetDisaggConfigRequest *, disaggregated::GetDisaggConfigResponse * response)
+{
+    if (!context->getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        return grpc::Status(
+            grpc::StatusCode::UNIMPLEMENTED,
+            fmt::format(
+                "can not handle GetDisaggConfig with mode={}",
+                magic_enum::enum_name(context->getSharedContextDisagg()->disaggregated_mode)));
+    }
+
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    const auto local_s3config = S3::ClientFactory::instance().getConfigCopy();
+    auto * s3_config = response->mutable_s3_config();
+    s3_config->set_endpoint(local_s3config.endpoint);
+    s3_config->set_bucket(local_s3config.bucket);
+    s3_config->set_root(local_s3config.root);
+
+    return grpc::Status::OK;
 }
 
 void FlashService::setMockStorage(MockStorage * mock_storage_)

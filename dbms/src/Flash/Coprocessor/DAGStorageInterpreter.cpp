@@ -378,7 +378,7 @@ void DAGStorageInterpreter::prepare()
 
     // Do learner read
     const DAGContext & dag_context = *context.getDAGContext();
-    if (dag_context.isBatchCop() || dag_context.isMPPTask())
+    if (dag_context.isBatchCop() || dag_context.isMPPTask() || dag_context.is_disaggregated_task)
         learner_read_snapshot = doBatchCopLearnerRead();
     else
         learner_read_snapshot = doCopLearnerRead();
@@ -559,12 +559,23 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (const LockException & e)
         {
+            // When this is a disaggregated read task on WN issued by RN, we need RN
+            // to take care of retrying.
+            if (context.getDAGContext()->is_disaggregated_task)
+                throw;
+
             // We can also use current thread to resolve lock, but it will block next process.
             // So, force this region retry in another thread in CoprocessorBlockInputStream.
-            force_retry.emplace(e.region_id);
+            for (const auto & lock : e.locks)
+                force_retry.emplace(lock.first);
         }
         catch (const RegionException & e)
         {
+            // When this is a disaggregated read task on WN issued by RN, we need RN
+            // to take care of retrying.
+            if (context.getDAGContext()->is_disaggregated_task)
+                throw;
+
             if (tmt.checkShuttingDown())
                 throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
             // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
@@ -819,7 +830,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
 
 std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAGStorageInterpreter::getAndLockStorages(Int64 query_schema_version)
 {
-    auto keyspace_id = context.getDAGContext()->getKeyspaceID();
+    const auto keyspace_id = context.getDAGContext()->getKeyspaceID();
     std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> storages_with_lock;
     if (unlikely(query_schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
     {
