@@ -275,6 +275,7 @@ private:
     GRPCSendQueue<TrackedMppDataPacketPtr> queue;
 };
 
+// local_only means ExhangeReceiver receives data only from local
 template <bool enable_fine_grained_shuffle, bool local_only>
 class LocalTunnelSenderV2 : public TunnelSender
 {
@@ -344,6 +345,10 @@ private:
         // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
         data->switchMemTracker(local_request_handler.recv_mem_tracker);
 
+        // When ExchangeReceiver receives data from local and remote tiflash, number of local tunnel threads
+        // is very large and causes the time of transfering data by grpc threads becomes longer, because
+        // grpc thread is hard to get chance to push data into MPMCQueue in ExchangeReceiver.
+        // So, we need to control the concurrency of local tunnel threads by the lock.
         if constexpr (local_only)
             return local_request_handler.write<enable_fine_grained_shuffle, non_blocking>(source_index, data);
         else
