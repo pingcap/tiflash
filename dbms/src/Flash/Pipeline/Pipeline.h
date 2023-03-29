@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Executor/ResultHandler.h>
+#include <Flash/Executor/ResultQueue.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 
 #include <deque>
@@ -39,9 +40,6 @@ class PhysicalPlanNode;
 using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
 
 class PipelineExecutorStatus;
-
-class ResultQueue;
-using ResultQueuePtr = std::shared_ptr<ResultQueue>;
 
 struct PipelineEvents
 {

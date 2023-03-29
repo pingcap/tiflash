@@ -59,6 +59,23 @@ void PipelineExecutor::wait()
     }
 }
 
+void PipelineExecutor::consume(const ResultQueuePtr & result_queue, ResultHandler && result_handler)
+{
+    Block ret;
+    if (unlikely(context.isTest()))
+    {
+        // In test mode, a single query should take no more than 15 seconds to execute.
+        static std::chrono::seconds timeout(15);
+        while (result_queue->popTimeout(ret, timeout) == MPMCQueueResult::OK)
+            result_handler(ret);
+    }
+    else
+    {
+        while (result_queue->pop(ret) == MPMCQueueResult::OK)
+            result_handler(ret);
+    }
+}
+
 ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
 {
     if (result_handler.isIgnored())
@@ -73,13 +90,10 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
         ///                                 └──get_result_sink
 
         // The queue size is same as UnionBlockInputStream = concurrency * 5.
-        auto result_queue = std::make_shared<ResultQueue>(context.getMaxStreams() * 5, context.isTest());
-        status.add(result_queue);
+        auto result_queue = status.registerResultQueue(/*queue_size=*/context.getMaxStreams() * 5);
         root_pipeline->addGetResultSink(result_queue);
         scheduleEvents();
-        Block ret;
-        while (result_queue->pop(ret) == MPMCQueueResult::OK)
-            result_handler(ret);
+        consume(result_queue, std::move(result_handler));
     }
     return status.toExecutionResult();
 }

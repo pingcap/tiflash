@@ -92,13 +92,19 @@ void PipelineExecutorStatus::onEventSchedule() noexcept
 
 void PipelineExecutorStatus::onEventFinish() noexcept
 {
-    std::lock_guard lock(mu);
-    assert(active_event_count > 0);
-    --active_event_count;
-    if (0 == active_event_count)
+    bool query_finished = false;
     {
-        cv.notify_all();
-
+        std::lock_guard lock(mu);
+        assert(active_event_count > 0);
+        --active_event_count;
+        if (0 == active_event_count)
+        {
+            cv.notify_all();
+            query_finished = true;
+        }
+    }
+    if (query_finished)
+    {
         if (auto ret = result_queue_holder.tryGet(); ret)
             (*ret)->finish();
     }
@@ -112,10 +118,13 @@ void PipelineExecutorStatus::cancel() noexcept
         (*ret)->cancel();
 }
 
-void PipelineExecutorStatus::add(const ResultQueuePtr & result_queue_) noexcept
+ResultQueuePtr PipelineExecutorStatus::registerResultQueue(size_t queue_size) noexcept
 {
-    result_queue_holder.set(result_queue_);
+    auto result_queue = std::make_shared<ResultQueue>(queue_size);
+    ResultQueuePtr tmp = result_queue;
+    result_queue_holder.set(std::move(tmp));
     if unlikely (is_cancelled)
         result_queue_holder->cancel();
+    return result_queue;
 }
 } // namespace DB

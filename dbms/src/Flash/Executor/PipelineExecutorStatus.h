@@ -77,7 +77,7 @@ public:
         return is_cancelled.load(std::memory_order_acquire);
     }
 
-    void add(const ResultQueuePtr & result_queue_) noexcept;
+    ResultQueuePtr registerResultQueue(size_t queue_size) noexcept;
 
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept;
