@@ -965,7 +965,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
         auto const & ci = table_scan.getColumns()[i];
         ColumnID cid = ci.column_id();
 
-        if (ci.hasGeneratedColumnFlag())
+        if (ci.has_flag() && ((ci.flag() & TiDB::ColumnFlagGeneratedColumn) != 0))
         {
             LOG_DEBUG(log, "got column({}) with generated column flag", i);
             const auto & data_type = getDataTypeByColumnInfoForComputingLayer(ci);

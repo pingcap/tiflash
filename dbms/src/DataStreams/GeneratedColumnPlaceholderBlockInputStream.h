@@ -54,11 +54,11 @@ public:
 protected:
     void readPrefix() override
     {
-        RUNTIME_CHECK(!generated_column_infos.empty());
+        RUNTIME_CHECK(!generated_column_infos.empty(), Exception, "generated_column_infos cannot be empty");
         // Validation check.
         for (size_t i = 1; i < generated_column_infos.size(); ++i)
         {
-            RUNTIME_CHECK(std::get<0>(generated_column_infos[i]) > std::get<0>(generated_column_infos[i - 1]));
+            RUNTIME_CHECK(std::get<0>(generated_column_infos[i]) > std::get<0>(generated_column_infos[i - 1]), Exception, "generated column index should be ordered");
         }
     }
 
