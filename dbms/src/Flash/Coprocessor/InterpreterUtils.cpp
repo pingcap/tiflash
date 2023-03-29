@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -92,5 +93,21 @@ ExpressionActionsPtr generateProjectExpressionActions(
     ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
     project->add(ExpressionAction::project(project_cols));
     return project;
+}
+
+void executeGeneratedColumnPlaceholder(
+    size_t remote_read_streams_start_index,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
+    LoggerPtr log,
+    DAGPipeline & pipeline)
+{
+    if (generated_column_infos.empty())
+        return;
+    assert(remote_read_streams_start_index <= pipeline.streams.size());
+    for (size_t i = 0; i < remote_read_streams_start_index; ++i)
+    {
+        auto & stream = pipeline.streams[i];
+        stream = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(stream, generated_column_infos, log->identifier());
+    }
 }
 } // namespace DB
