@@ -24,7 +24,6 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalExpand.h>
 #include <Interpreters/Context.h>
-#include <Operators/FilterTransformOp.h>
 #include <fmt/format.h>
 
 namespace DB

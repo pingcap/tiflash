@@ -233,7 +233,7 @@ namespace DB
     M(tiflash_disaggregated_details, "", Counter,                                                                                                   \
         F(type_cftiny_read, {{"type", "cftiny_read"}}),                                                                                             \
         F(type_cftiny_fetch, {{"type", "cftiny_fetch"}}))                                                                                           \
-    M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                             \
+    M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot and ingest SST",                              \
         Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                              \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                                      \
         F(type_ingest_sst_sst2dt, {{"type", "ingest_sst_sst2dt"}}, ExpBuckets{0.05, 2, 10}),                                                        \
@@ -331,6 +331,15 @@ namespace DB
         F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
         F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
         F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))                                                                   \
+    M(tiflash_storage_s3_gc_seconds, "S3 GC subprocess duration in seconds",                                                                        \
+        Histogram,  /* these command usually cost several seconds, increase the start bucket to 500ms */                                            \
+        F(type_total, {{"type", "total"}}, ExpBuckets{0.5, 2, 20}),                                                                                 \
+        F(type_one_store, {{"type", "one_store"}}, ExpBuckets{0.5, 2, 20}),                                                                         \
+        F(type_read_locks, {{"type", "read_locks"}}, ExpBuckets{0.5, 2, 20}),                                                                       \
+        F(type_clean_locks, {{"type", "clean_locks"}}, ExpBuckets{0.5, 2, 20}),                                                                     \
+        F(type_clean_manifests, {{"type", "clean_manifests"}}, ExpBuckets{0.5, 2, 20}),                                                             \
+        F(type_scan_then_clean_data_files, {{"type", "scan_then_clean_data_files"}}, ExpBuckets{0.5, 2, 20}),                                       \
+        F(type_clean_one_lock, {{"type", "clean_one_lock"}}, ExpBuckets{0.5, 2, 20}))                                                               \
     M(tiflash_storage_checkpoint_seconds, "PageStorage checkpoint elapsed time", Histogram,                                                         \
         F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets{0.001, 2, 20}),                                         \
         F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets{0.001, 2, 20}),                                                 \
