@@ -177,6 +177,7 @@ public:
         throw Exception(fmt::format("Function {} has no information about its monotonicity.", getName()), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    // Set meta data for functions that need meta data.
     virtual void setMetaData(const tipb::Expr & /*expr*/)
     {
         throw Exception(fmt::format("Function {} doesn't override setMetaData", getName()), ErrorCodes::NOT_IMPLEMENTED);
