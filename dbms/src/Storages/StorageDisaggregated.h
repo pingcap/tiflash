@@ -92,9 +92,11 @@ private:
         unsigned num_streams);
     DM::RNRemoteReadTaskPtr buildDisaggTasks(
         const Context & db_context,
+        const DM::ScanContextPtr & scan_context,
         const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
     void buildDisaggTask(
         const Context & db_context,
+        const DM::ScanContextPtr & scan_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task,
         std::vector<DM::RNRemoteTableReadTaskPtr> & build_results,
         std::mutex & build_results_lock);

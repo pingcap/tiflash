@@ -93,6 +93,9 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
 {
     using namespace pingcap;
 
+    auto scan_context = std::make_shared<DM::ScanContext>();
+    context.getDAGContext()->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+
     DM::RNRemoteReadTaskPtr remote_read_tasks;
 
     double total_backoff_seconds = 0.0;
@@ -114,7 +117,10 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
             RUNTIME_CHECK(!batch_cop_tasks.empty());
 
             // Fetch the remote segment read tasks from write nodes
-            remote_read_tasks = buildDisaggTasks(db_context, batch_cop_tasks);
+            remote_read_tasks = buildDisaggTasks(
+                db_context,
+                scan_context,
+                batch_cop_tasks);
 
             break;
         }
@@ -144,6 +150,7 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
 
 DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggTasks(
     const Context & db_context,
+    const DM::ScanContextPtr & scan_context,
     const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks)
 {
     size_t tasks_n = batch_cop_tasks.size();
@@ -162,7 +169,12 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggTasks(
             true,
             "BuildDisaggTask",
             [&] {
-                buildDisaggTask(db_context, cop_task, build_results, build_results_lock);
+                buildDisaggTask(
+                    db_context,
+                    scan_context,
+                    cop_task,
+                    build_results,
+                    build_results_lock);
             });
     }
 
@@ -175,6 +187,7 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggTasks(
 /// Note: This function runs concurrently when there are multiple Write Nodes.
 void StorageDisaggregated::buildDisaggTask(
     const Context & db_context,
+    const DM::ScanContextPtr & scan_context,
     const pingcap::coprocessor::BatchCopTask & batch_cop_task,
     std::vector<DM::RNRemoteTableReadTaskPtr> & build_results,
     std::mutex & build_results_lock)
@@ -298,6 +311,7 @@ void StorageDisaggregated::buildDisaggTask(
 
         const auto task = DM::RNRemoteTableReadTask::buildFrom(
             db_context,
+            scan_context,
             resp->store_id(),
             batch_cop_task.store_addr,
             snapshot_id,
