@@ -403,6 +403,21 @@ void MPPTask::runImpl()
         mpp_task_statistics.start();
 
         auto result = query_executor_holder->execute();
+        if (likely(result.is_success))
+        {
+            /// Need to finish writing before closing the receiver.
+            /// For example, for the limit. Finishing writing first ensures that the limit on the TiDB side can end normally,
+            /// rather than causing other MPPTasks to fail because the receiver is closed, causing an error and passing the error to TiDB.
+            ///
+            ///               ┌──tiflash(limit)◄─┬─tiflash(no limit)
+            /// tidb(limit)◄──┼──tiflash(limit)◄─┼─tiflash(no limit)
+            ///               └──tiflash(limit)◄─┴─tiflash(no limit)
+
+            // finish MPPTunnel
+            finishWrite();
+            // finish receiver
+            receiver_set->close();
+        }
         auto ru = query_executor_holder->collectRequestUnit();
         LOG_INFO(log, "mpp finish with request unit: {}", ru);
         GET_METRIC(tiflash_compute_request_unit, type_mpp).Increment(ru);
@@ -428,19 +443,6 @@ void MPPTask::runImpl()
 
     if (err_msg.empty())
     {
-        /// Need to finish writing before closing the receiver.
-        /// For example, for the limit. Finishing writing first ensures that the limit on the TiDB side can end normally,
-        /// rather than causing other MPPTasks to fail because the receiver is closed, causing an error and passing the error to TiDB.
-        ///
-        ///               ┌──tiflash(limit)◄─┬─tiflash(no limit)
-        /// tidb(limit)◄──┼──tiflash(limit)◄─┼─tiflash(no limit)
-        ///               └──tiflash(limit)◄─┴─tiflash(no limit)
-
-        // finish MPPTunnel
-        finishWrite();
-        // finish receiver
-        receiver_set->close();
-
         if (switchStatus(RUNNING, FINISHED))
             LOG_INFO(log, "finish task");
         else
