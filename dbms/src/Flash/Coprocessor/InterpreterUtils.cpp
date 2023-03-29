@@ -171,6 +171,7 @@ void orderStreams(
 void executeLocalSort(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
+    ExecutorProfile & executor_profile,
     const SortDescription & order_descr,
     std::optional<size_t> limit,
     const Context & context,
@@ -186,6 +187,7 @@ void executeLocalSort(
             group_builder.transform([&](auto & builder) {
                 builder.appendTransformOp(std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_status, log->identifier(), local_limit));
             });
+            executor_profile.push_back(group_builder.getOperatorProfiles());
         }
         // For order by const and doesn't has limit, do nothing here.
     }
@@ -199,6 +201,7 @@ void executeLocalSort(
                 limit.value_or(0), // 0 means that no limit in LocalSortTransformOp.
                 context.getSettingsRef().max_block_size));
         });
+        executor_profile.push_back(group_builder.getOperatorProfiles());
     }
 }
 

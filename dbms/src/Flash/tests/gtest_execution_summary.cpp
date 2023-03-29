@@ -312,6 +312,47 @@ try
 }
 CATCH
 
+// ywq todo test more...
+TEST_F(ExecutionSummaryTestRunner, window)
+try
+{
+    WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_BEGIN
+    {
+        DB::MockColumnInfoVec column_infos{{"partition", TiDB::TP::TypeLong}, {"order", TiDB::TP::TypeLong}};
+        DB::MockColumnInfoVec partition_column_infos{{"partition", TiDB::TP::TypeLong}};
+        std::vector<Int64> concurrencies{1, 3, 5, 10};
+        for (auto concurrency : concurrencies)
+        {
+            context.addExchangeReceiver(fmt::format("exchange_receiver_{}", concurrency),
+                                        column_infos,
+                                        {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+                                         toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})},
+                                        concurrency,
+                                        partition_column_infos);
+        }
+
+        auto gen_request = [&](size_t exchange_concurrency) {
+            return context
+                .receive(fmt::format("exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency)
+                .sort({{"partition", false}, {"order", false}}, true, exchange_concurrency)
+                .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame(), exchange_concurrency)
+                .build(context);
+        };
+        for (auto concurrency : concurrencies)
+        {
+            Expect expect{{"table_scan_0", {12, concurrency}},
+                          {"aggregation_1", {3, not_check_concurrency}},
+                          {"project_2", {3, concurrency}}};
+            Expect expect_pipeline{{"table_scan_0", {12, concurrency}},
+                                   {"aggregation_1", {3, 1}},
+                                   {"project_2", {3, 1}}};
+        }
+        gen_request(1);
+    }
+    WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END
+}
+CATCH
+
 
 #undef WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN
 #undef WRAP_FOR_EXCUTION_SUMMARY_TEST_END

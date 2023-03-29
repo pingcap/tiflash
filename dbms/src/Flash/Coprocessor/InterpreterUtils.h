@@ -78,6 +78,7 @@ void orderStreams(
 void executeLocalSort(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
+    ExecutorProfile & executor_profile,
     const SortDescription & order_descr,
     std::optional<size_t> limit,
     const Context & context,
