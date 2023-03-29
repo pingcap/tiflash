@@ -199,7 +199,7 @@ public:
                 },
                 []() {},
                 ReceiverChannelWriter(&msg_channels, "", log, &data_size_in_queue, ReceiverMode::Local));
-            tunnel->connectLocalV2(0, local_request_handler, false);
+            tunnel->connectLocalV2(0, local_request_handler, false, false);
         }
     }
 
@@ -281,10 +281,14 @@ public:
     static void setTunnelFinished(MPPTunnelPtr tunnel)
     {
         tunnel->status = MPPTunnel::TunnelStatus::Finished;
-        if (tunnel->local_tunnel_sender_v2)
-            tunnel->local_tunnel_sender_v2->is_done.store(true);
-        else if (tunnel->local_tunnel_fine_grained_sender_v2)
-            tunnel->local_tunnel_fine_grained_sender_v2->is_done.store(true);
+        if (tunnel->local_tunnel_v2)
+            tunnel->local_tunnel_v2->is_done.store(true);
+        else if (tunnel->local_tunnel_fine_grained_v2)
+            tunnel->local_tunnel_fine_grained_v2->is_done.store(true);
+        else if (tunnel->local_tunnel_local_only_v2)
+            tunnel->local_tunnel_local_only_v2->is_done.store(true);
+        else if (tunnel->local_tunnel_fine_grained_local_only_v2)
+            tunnel->local_tunnel_fine_grained_local_only_v2->is_done.store(true);
     }
 
     static bool getTunnelConnectedFlag(MPPTunnelPtr tunnel)
@@ -588,7 +592,7 @@ try
     std::vector<std::thread> threads;
     for (size_t i = 0; i < tunnels.size(); ++i)
     {
-        auto run_tunnel = [sender_tunnel = tunnels[i]->getLocalTunnelSender(), send_data_packet_num]() {
+        auto run_tunnel = [sender_tunnel = tunnels[i]->getLocalTunnelSenderV1(), send_data_packet_num]() {
             for (size_t i = 0; i < send_data_packet_num; ++i)
                 sender_tunnel->push(newDataPacket("111"));
             sender_tunnel->finish();
@@ -632,7 +636,7 @@ try
 
     tunnels[0]->write(newDataPacket("First"));
     tunnels[0]->write(newDataPacket("Second"));
-    tunnels[0]->getLocalTunnelSender()->consumerFinish("");
+    tunnels[0]->getLocalTunnelSenderV1()->consumerFinish("");
     GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(tunnels[0]->getTunnelSender()), true);
 
     t.join();
@@ -655,7 +659,7 @@ try
         []() {},
         []() {},
         ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
-    tunnels[0]->connectLocalV2(0, local_req_handler, false);
+    tunnels[0]->connectLocalV2(0, local_req_handler, false, false);
     GTEST_FAIL();
 }
 catch (Exception & e)
@@ -674,7 +678,7 @@ try
         []() {},
         []() {},
         ReceiverChannelWriter(nullptr, "", Logger::get(), nullptr, ReceiverMode::Local));
-    tunnels[0]->connectLocalV2(0, local_req_handler, false);
+    tunnels[0]->connectLocalV2(0, local_req_handler, false, false);
     GTEST_FAIL();
 }
 catch (Exception & e)

@@ -32,6 +32,7 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
+#include <type_traits>
 
 namespace DB
 {
@@ -447,49 +448,29 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
     mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     std::vector<Request> async_requests;
+    std::vector<Request> local_requests;
+    bool has_remote_conn = false;
 
     for (size_t index = 0; index < source_num; ++index)
     {
         auto req = rpc_context->makeRequest(index);
         if (rpc_context->supportAsync(req))
+        {
             async_requests.push_back(std::move(req));
+            has_remote_conn = true;
+        }
         else if (req.is_local)
         {
-            if (local_tunnel_version == 1)
-            {
-                setUpConnectionWithReadLoop(std::move(req));
-            }
-            else
-            {
-                LOG_INFO(exc_log, "refined local tunnel is enabled");
-                String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
-
-                LocalRequestHandler local_request_handler(
-                    getMemoryTracker(),
-                    [this](bool meet_error, const String & local_err_msg) {
-                        this->connectionDone(meet_error, local_err_msg, exc_log);
-                    },
-                    [this]() {
-                        this->connectionLocalDone();
-                    },
-                    [this]() {
-                        this->addLocalConnectionNum();
-                    },
-                    ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
-
-                rpc_context->establishMPPConnectionLocalV2(
-                    req,
-                    req.source_index,
-                    local_request_handler,
-                    enable_fine_grained_shuffle_flag);
-                --connection_uncreated_num;
-            }
+            local_requests.push_back(req);
         }
         else
         {
             setUpConnectionWithReadLoop(std::move(req));
+            has_remote_conn = true;
         }
     }
+
+    setUpLocalConnections(local_requests, has_remote_conn);
 
     // TODO: reduce this thread in the future.
     if (!async_requests.empty())
@@ -505,6 +486,45 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
         ++thread_count;
         connection_uncreated_num -= async_conn_num;
     }
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::setUpLocalConnections(std::vector<Request> & requests, bool has_remote_conn)
+{
+    for (auto & req : requests)
+    {
+        if (local_tunnel_version == 1)
+        {
+            setUpConnectionWithReadLoop(std::move(req));
+        }
+        else
+        {
+            LOG_INFO(exc_log, "refined local tunnel is enabled");
+            String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
+
+            LocalRequestHandler local_request_handler(
+                getMemoryTracker(),
+                [this](bool meet_error, const String & local_err_msg) {
+                    this->connectionDone(meet_error, local_err_msg, exc_log);
+                },
+                [this]() {
+                    this->connectionLocalDone();
+                },
+                [this]() {
+                    this->addLocalConnectionNum();
+                },
+                ReceiverChannelWriter(&(getMsgChannels()), req_info, exc_log, getDataSizeInQueue(), ReceiverMode::Local));
+
+            rpc_context->establishMPPConnectionLocalV2(
+                req,
+                req.source_index,
+                local_request_handler,
+                enable_fine_grained_shuffle_flag,
+                has_remote_conn);
+            --connection_uncreated_num;
+        }
+    }
+
 }
 
 template <typename RPCContext>

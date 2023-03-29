@@ -338,12 +338,12 @@ private:
     {
         if (unlikely(checkPacketErr(data)))
             return false;
-        
+
         // receiver_mem_tracker pointer will always be valid because ExchangeReceiverBase won't be destructed
         // before all local tunnels are destructed so that the MPPTask which contains ExchangeReceiverBase and
         // is responsible for deleting receiver_mem_tracker must be destroyed after these local tunnels.
         data->switchMemTracker(local_request_handler.recv_mem_tracker);
-        
+
         if constexpr (local_only)
             return local_request_handler.write<enable_fine_grained_shuffle, non_blocking>(source_index, data);
         else
@@ -509,7 +509,11 @@ public:
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connectSync(PacketWriter * writer);
 
-    void connectLocalV2(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained);
+    void connectLocalV2(
+        size_t source_index,
+        LocalRequestHandler & local_request_handler,
+        bool is_fine_grained,
+        bool has_remote_conn);
 
     // like `connect` but it's intended to connect async grpc.
     void connectAsync(IAsyncCallData * data);
@@ -588,8 +592,7 @@ private:
     SyncTunnelSenderPtr sync_tunnel_sender;
     AsyncTunnelSenderPtr async_tunnel_sender;
     LocalTunnelSenderV1Ptr local_tunnel_sender_v1;
-    // LocalTunnelSenderV2Ptr local_tunnel_sender_v2;
-    // LocalTunnelFineGrainedSenderV2Ptr local_tunnel_fine_grained_sender_v2;
+
     LocalTunnelSenderV2Ptr local_tunnel_v2;
     LocalTunnelFineGrainedSenderV2Ptr local_tunnel_fine_grained_v2;
     LocalTunnelSenderLocalOnlyV2Ptr local_tunnel_local_only_v2;

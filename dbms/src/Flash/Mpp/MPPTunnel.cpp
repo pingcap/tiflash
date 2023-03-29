@@ -21,6 +21,7 @@
 #include <fmt/core.h>
 
 #include <magic_enum.hpp>
+#include "Flash/Mpp/PacketWriter.h"
 
 namespace DB
 {
@@ -225,7 +226,7 @@ void MPPTunnel::connectSync(PacketWriter * writer)
     LOG_DEBUG(log, "Sync tunnel connected");
 }
 
-void MPPTunnel::connectLocalV2(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained)
+void MPPTunnel::connectLocalV2(size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained, bool has_remote_conn)
 {
     {
         std::unique_lock lk(mu);
@@ -235,13 +236,29 @@ void MPPTunnel::connectLocalV2(size_t source_index, LocalRequestHandler & local_
         LOG_TRACE(log, "ready to connect local tunnel version 2");
         if (is_fine_grained)
         {
-            local_tunnel_fine_grained_sender_v2 = std::make_shared<LocalTunnelSenderV2<true>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
-            tunnel_sender = local_tunnel_fine_grained_sender_v2;
+            if (has_remote_conn)
+            {
+                local_tunnel_fine_grained_v2 = std::make_shared<LocalTunnelSenderV2<true, false>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
+                tunnel_sender = local_tunnel_fine_grained_v2;
+            }
+            else
+            {
+                local_tunnel_fine_grained_local_only_v2 = std::make_shared<LocalTunnelSenderV2<true, true>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
+                tunnel_sender = local_tunnel_fine_grained_local_only_v2;
+            }
         }
         else
         {
-            local_tunnel_sender_v2 = std::make_shared<LocalTunnelSenderV2<false>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
-            tunnel_sender = local_tunnel_sender_v2;
+            if (has_remote_conn)
+            {
+                local_tunnel_v2 = std::make_shared<LocalTunnelSenderV2<false, false>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
+                tunnel_sender = local_tunnel_v2;
+            }
+            else
+            {
+                local_tunnel_local_only_v2 = std::make_shared<LocalTunnelSenderV2<false, true>>(source_index, local_request_handler, log, mem_tracker, tunnel_id);
+                tunnel_sender = local_tunnel_local_only_v2;
+            }
         }
 
         status = TunnelStatus::Connected;
