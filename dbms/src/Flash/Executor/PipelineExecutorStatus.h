@@ -72,7 +72,7 @@ public:
 
     void cancel() noexcept;
 
-    bool isCancelled() noexcept
+    ALWAYS_INLINE bool isCancelled() noexcept
     {
         return is_cancelled.load(std::memory_order_acquire);
     }

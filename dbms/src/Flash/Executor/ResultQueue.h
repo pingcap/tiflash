@@ -29,12 +29,12 @@ public:
         , is_test(is_test_)
     {}
 
-    MPMCQueueResult tryPush(Block && block)
+    ALWAYS_INLINE MPMCQueueResult tryPush(Block && block)
     {
         return queue.tryPush(std::move(block));
     }
 
-    MPMCQueueResult pop(Block & block)
+    ALWAYS_INLINE MPMCQueueResult pop(Block & block)
     {
         // In test mode, a single query should take no more than 15 seconds to execute.
         static std::chrono::seconds timeout(15);
@@ -44,12 +44,12 @@ public:
             return queue.pop(block);
     }
 
-    void finish()
+    ALWAYS_INLINE void finish()
     {
         queue.finish();
     }
 
-    void cancel()
+    ALWAYS_INLINE void cancel()
     {
         queue.cancel();
     }

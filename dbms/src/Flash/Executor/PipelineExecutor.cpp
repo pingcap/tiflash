@@ -68,7 +68,8 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
     }
     else
     {
-        auto result_queue = std::make_shared<ResultQueue>(context.getMaxStreams(), context.isTest());
+        // The queue size is same as UnionBlockInputStream = concurrency * 5.
+        auto result_queue = std::make_shared<ResultQueue>(context.getMaxStreams() * 5, context.isTest());
         status.add(result_queue);
         root_pipeline->addGetResultSink(result_queue);
         scheduleEvents();
