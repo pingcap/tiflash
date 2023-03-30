@@ -149,14 +149,20 @@ void RNRemoteReadTask::updateTaskState(const RNRemoteSegmentReadTaskPtr & seg_ta
     cv_ready_tasks.notify_one();
 }
 
-void RNRemoteReadTask::allDataReceive(const String & end_err_msg)
+void RNRemoteReadTask::setError(const String & msg)
+{
+    if (msg.empty())
+        return;
+    std::unique_lock ready_lock(mtx_ready_tasks);
+    if (!err_msg.empty())
+        return;
+    err_msg = msg;
+}
+
+void RNRemoteReadTask::allDataReceive()
 {
     {
         std::unique_lock ready_lock(mtx_ready_tasks);
-        // set up the error message
-        if (err_msg.empty() && !end_err_msg.empty())
-            err_msg = end_err_msg;
-
         for (auto iter = ready_segment_tasks.begin(); iter != ready_segment_tasks.end(); /* empty */)
         {
             const auto state = iter->first;

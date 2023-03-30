@@ -116,14 +116,17 @@ Block RNRemoteSegmentThreadInputStream::readImpl(FilterPtr & res_filter, bool re
             cur_read_task = read_tasks->nextReadyTask();
             seconds_next_task += watch.elapsedSeconds();
             watch.restart();
+
+            if (!read_tasks->getErrorMessage().empty())
+            {
+                done = true;
+                throw Exception(read_tasks->getErrorMessage(), ErrorCodes::LOGICAL_ERROR);
+            }
             if (!cur_read_task)
             {
                 // There is no task left or error happen
                 done = true;
-                if (!read_tasks->getErrorMessage().empty())
-                {
-                    throw Exception(read_tasks->getErrorMessage(), ErrorCodes::LOGICAL_ERROR);
-                }
+
                 LOG_DEBUG(log, "Read from remote segment done");
                 return {};
             }

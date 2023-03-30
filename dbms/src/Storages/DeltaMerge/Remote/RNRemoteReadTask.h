@@ -87,7 +87,9 @@ public:
         SegmentReadTaskState target_state,
         bool meet_error);
 
-    void allDataReceive(const String & end_err_msg);
+    void allDataReceive();
+
+    void setError(const String & msg);
 
     // Return a segment read task that is ready for some preparation
     // to speed up later reading

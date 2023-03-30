@@ -65,7 +65,6 @@ private:
     std::mutex mu;
     Int32 live_persisters;
     PageReceiverState state;
-    String err_msg;
 
     std::atomic<size_t> total_rows;
     std::atomic<size_t> total_pages;

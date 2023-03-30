@@ -93,7 +93,6 @@ void RNPagePreparer::prepareLoop(size_t idx)
 {
     LoggerPtr log = exc_log->getChild(fmt::format("PagePrepareThread#{}", idx));
 
-
     bool meet_error = false;
     String local_err_msg;
 
@@ -149,8 +148,7 @@ void RNPagePreparer::downloadDone(bool meet_error, const String & local_err_msg,
         {
             if (state == PageReceiverState::NORMAL)
                 state = PageReceiverState::ERROR;
-            if (err_msg.empty())
-                err_msg = local_err_msg;
+            remote_read_tasks->setError(local_err_msg);
         }
         copy_persister_num = --live_persisters;
     }
@@ -169,12 +167,7 @@ void RNPagePreparer::downloadDone(bool meet_error, const String & local_err_msg,
     else if (copy_persister_num == 0)
     {
         LOG_DEBUG(log, "All persist threads end in RNPageReceiver");
-        String copy_persister_msg;
-        {
-            std::unique_lock lock(mu);
-            copy_persister_msg = err_msg;
-        }
-        remote_read_tasks->allDataReceive(copy_persister_msg);
+        remote_read_tasks->allDataReceive();
     }
 }
 
@@ -183,12 +176,12 @@ bool RNPagePreparer::consumeOneResult(const LoggerPtr & log)
     auto result = receiver->nextResult(decoder_ptr);
     if (result.eof())
     {
-        LOG_DEBUG(log, "fetch reader meets eof");
+        LOG_DEBUG(log, "RNPagePreparer::consumeOneResult meets eof");
         return false;
     }
     if (!result.ok())
     {
-        LOG_WARNING(log, "fetch reader meets error: {}", result.error_msg);
+        LOG_WARNING(log, "RNPagePreparer::consumeOneResult meets error: {}", result.error_msg);
         throw Exception(result.error_msg);
     }
 
