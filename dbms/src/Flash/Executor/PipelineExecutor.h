@@ -28,19 +28,22 @@ using Pipelines = std::vector<PipelinePtr>;
 /**
  * PipelineExecutor is the implementation of the pipeline-based execution model.
  * 
- *                                            ┌─────────────────────┐
- *                                            │  task scheduler     │
- *           generate          submit tasks   │                     │
- *  pipeline ────────►  event1 ─────────────► │                     │
- *                                            │ ┌────────────────┐  │
- *                        │ trigger           │ │task thread pool│  │
- *                        ▼                   │ └──────▲──┬──────┘  │
- *                             submit tasks   │        │  │         │
- *                      event2 ─────────────► │   ┌────┴──▼────┐    │
- *                                            │   │wait reactor│    │
- *                                            │   └────────────┘    │
- *                                            │                     │
- *                                            └─────────────────────┘
+ *                                            ┌────────────────────────────┐
+ *                                            │      task scheduler        │
+ *           generate          submit tasks   │                            │
+ *  pipeline ────────►  event1 ─────────────► │    ┌───────────────────┐   │
+ *                                            │ ┌──┤io task thread pool◄─┐ │
+ *                        │ trigger           │ │  └──────▲──┬─────────┘ │ │
+ *                        ▼                   │ │         │  │           │ │
+ *                             submit tasks   │ │ ┌───────┴──▼─────────┐ │ │
+ *                      event2 ─────────────► │ │ │cpu task thread pool│ │ │
+ *                                            │ │ └───────▲──┬─────────┘ │ │
+ *                        │ trigger           │ │         │  │           │ │
+ *                        ▼                   │ │    ┌────┴──▼────┐      │ │
+ *                             submit tasks   │ └────►wait reactor├──────┘ │
+ *                      event3 ─────────────► │      └────────────┘        │
+ *                                            │                            │
+ *                                            └────────────────────────────┘
  * 
  * As shown above, the pipeline generates a number of events, which are executed in dependency order, 
  * and the events generate a number of tasks that will be submitted to the TaskScheduler for execution.
