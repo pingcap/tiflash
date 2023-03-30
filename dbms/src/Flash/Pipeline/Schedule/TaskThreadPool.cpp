@@ -90,7 +90,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noe
     case ExecTaskStatus::RUNNING:
         scheduler.submitToCPUTaskThreadPool(std::move(task));
         break;
-    case ExecTaskStatus::BLOCKED:
+    case ExecTaskStatus::IO:
         scheduler.submitToIOTaskThreadPool(std::move(task));
         break;
     case ExecTaskStatus::WAITING:

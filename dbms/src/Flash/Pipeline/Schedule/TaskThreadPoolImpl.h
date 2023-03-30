@@ -42,11 +42,11 @@ struct IOImpl
 {
     static constexpr auto NAME = "io intensive";
 
-    static constexpr auto TargetStatus = ExecTaskStatus::BLOCKED;
+    static constexpr auto TargetStatus = ExecTaskStatus::IO;
 
     static ExecTaskStatus exec(TaskPtr & task)
     {
-        return task->block();
+        return task->executeIO();
     }
 
     using QueueType = std::unique_ptr<FIFOTaskQueue>;

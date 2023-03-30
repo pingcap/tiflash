@@ -25,10 +25,10 @@ void assertOperatorStatus(
 {
     switch (status)
     {
-    // cancel status, waiting and blocked status can be returned in all method of operator.
+    // cancel status, waiting and io status can be returned in all method of operator.
     case OperatorStatus::CANCELLED:
     case OperatorStatus::WAITING:
-    case OperatorStatus::BLOCKED:
+    case OperatorStatus::IO:
         return;
     default:
     {

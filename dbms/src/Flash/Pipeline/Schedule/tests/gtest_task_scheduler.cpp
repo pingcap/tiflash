@@ -142,7 +142,7 @@ protected:
         if (loop_count > 0)
         {
             if ((loop_count % 2) == 0)
-                return ExecTaskStatus::BLOCKED;
+                return ExecTaskStatus::IO;
             else
             {
                 --loop_count;
@@ -152,14 +152,14 @@ protected:
         return ExecTaskStatus::FINISHED;
     }
 
-    ExecTaskStatus blockImpl() noexcept override
+    ExecTaskStatus executeIOImpl() noexcept override
     {
         if (loop_count > 0)
         {
             if ((loop_count % 2) == 0)
             {
                 --loop_count;
-                return ExecTaskStatus::BLOCKED;
+                return ExecTaskStatus::IO;
             }
             else
                 return ExecTaskStatus::RUNNING;
@@ -176,7 +176,7 @@ enum class TraceTaskStatus
 {
     initing,
     running,
-    blocked,
+    io,
     waiting,
 };
 class MemoryTraceTask : public Task
@@ -201,9 +201,9 @@ protected:
         switch (status)
         {
         case TraceTaskStatus::initing:
-            status = TraceTaskStatus::blocked;
-            return ExecTaskStatus::BLOCKED;
-        case TraceTaskStatus::blocked:
+            status = TraceTaskStatus::io;
+            return ExecTaskStatus::IO;
+        case TraceTaskStatus::io:
             status = TraceTaskStatus::waiting;
             return ExecTaskStatus::WAITING;
         case TraceTaskStatus::waiting:
@@ -217,9 +217,9 @@ protected:
         }
     }
 
-    ExecTaskStatus blockImpl() noexcept override
+    ExecTaskStatus executeIOImpl() noexcept override
     {
-        assert(status == TraceTaskStatus::blocked);
+        assert(status == TraceTaskStatus::io);
         CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD + 10);
         return ExecTaskStatus::RUNNING;
     }
@@ -246,10 +246,10 @@ protected:
 
     ExecTaskStatus awaitImpl() noexcept override
     {
-        return ExecTaskStatus::BLOCKED;
+        return ExecTaskStatus::IO;
     }
 
-    ExecTaskStatus blockImpl() noexcept override
+    ExecTaskStatus executeIOImpl() noexcept override
     {
         return ExecTaskStatus::RUNNING;
     }

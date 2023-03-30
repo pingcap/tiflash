@@ -24,7 +24,7 @@ namespace DB
 /**
  * All interfaces of the operator may return the following state.
  * - finish status will only be returned by sink op, because only sink can tell if the pipeline has actually finished.
- * - cancel status, waiting status and blocked status can be returned in all method of operator.
+ * - cancel status, waiting status and io status can be returned in all method of operator.
  * - operator may return a different running status depending on the method.
 */
 enum class OperatorStatus
@@ -35,8 +35,8 @@ enum class OperatorStatus
     CANCELLED,
     /// waiting status
     WAITING,
-    /// blocked status
-    BLOCKED,
+    /// io status
+    IO,
     /// running status
     // means that TransformOp/SinkOp needs to input a block to do the calculation,
     NEED_INPUT,
@@ -62,8 +62,8 @@ public:
     virtual OperatorStatus awaitImpl() { throw Exception("Unsupport"); }
 
     // running status may return are NEED_INPUT and HAS_OUTPUT here.
-    OperatorStatus block();
-    virtual OperatorStatus blockImpl() { throw Exception("Unsupport"); }
+    OperatorStatus executeIO();
+    virtual OperatorStatus executeIOImpl() { throw Exception("Unsupport"); }
 
     // These two methods are used to set state, log and etc, and should not perform calculation logic.
     virtual void operatePrefix() {}

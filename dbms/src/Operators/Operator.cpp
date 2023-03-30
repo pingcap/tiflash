@@ -43,11 +43,11 @@ OperatorStatus Operator::await()
     return op_status;
 }
 
-OperatorStatus Operator::block()
+OperatorStatus Operator::executeIO()
 {
     CHECK_IS_CANCELLED
     // TODO collect operator profile info here.
-    auto op_status = blockImpl();
+    auto op_status = executeIOImpl();
 #ifndef NDEBUG
     assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::HAS_OUTPUT});
 #endif
