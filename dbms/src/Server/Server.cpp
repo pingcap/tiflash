@@ -838,11 +838,10 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 {
     // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
     size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
-
     // Note: Global Thread Pool must be larger than sub thread pools.
-    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 20);
+    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 400);
     GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count);
-    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 40);
+    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 800);
 
     if (RNPagePreparerPool::instance)
     {
