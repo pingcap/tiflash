@@ -51,7 +51,7 @@ public:
     using Self = AsyncRequestHandler<RPCContext, enable_fine_grained_shuffle>;
 
     AsyncRequestHandler(
-        std::vector<GRPCReceiveQueue<ReceivedMessage>> & grpc_recv_queues_,
+        std::vector<GRPCReceiveQueue<RecvMsgPtr>> & grpc_recv_queues_,
         AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue_,
         const std::shared_ptr<RPCContext> & context,
         Request && req,
@@ -330,7 +330,7 @@ private:
     std::mutex mu;
 
     // Do not use any variable in AsyncRequestHandler after close_conn is called,
-    // because AsyncRequestHandler may have been destructed by ExchangeReceiver at that time.
+    // because AsyncRequestHandler may have been destructed by ExchangeReceiver after close_conn is called.
     std::function<void(bool, const String &, const LoggerPtr &)> close_conn;
 };
 } // namespace DB

@@ -19,6 +19,24 @@
 
 namespace DB
 {
+namespace
+{
+inline void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], ReceiverMode mode)
+{
+    switch (mode)
+    {
+    case ReceiverMode::Local:
+        fiu_do_on(FailPoints::random_receiver_local_msg_push_failure_failpoint, push_succeed = false);
+        break;
+    case ReceiverMode::Sync:
+        fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false);
+        break;
+    default:
+        throw Exception(fmt::format("Invalid ReceiverMode: {}", magic_enum::enum_name(mode)));
+    }
+}
+} // namespace
+
 bool ReceiverChannelWriter::writeFineGrain(
     WriteToChannelFunc write_func,
     size_t source_index,
@@ -48,7 +66,7 @@ bool ReceiverChannelWriter::writeFineGrain(
             std::move(chunks[i]));
         success = (write_func(i, std::move(recv_msg)) == MPMCQueueResult::OK);
 
-        ReceiverChannel::injectFailPointReceiverPushFail(success, mode);
+        injectFailPointReceiverPushFail(success, mode);
 
         // Only the first ExchangeReceiverInputStream need to handle resp.
         resp_ptr = nullptr;
@@ -81,7 +99,7 @@ bool ReceiverChannelWriter::writeNonFineGrain(
             std::move(chunks));
 
         success = write_func(0, std::move(recv_msg)) == MPMCQueueResult::OK;
-        ReceiverChannel::injectFailPointReceiverPushFail(success, mode);
+        injectFailPointReceiverPushFail(success, mode);
     }
     return success;
 }

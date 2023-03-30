@@ -123,7 +123,7 @@ template <typename T>
 class GRPCReceiveQueue
 {
 private:
-    using MsgChannelPtr = std::shared_ptr<ConcurrentIOQueue<std::shared_ptr<T>>>;
+    using MsgChannelPtr = std::shared_ptr<ConcurrentIOQueue<T>>;
 
 public:
     GRPCReceiveQueue(MsgChannelPtr recv_queue_, AsyncRequestHandlerWaitQueuePtr conn_wait_queue_, const LoggerPtr & log_)
@@ -182,7 +182,7 @@ public:
     template <typename U>
     GRPCReceiveQueueRes push(U && data)
     {
-        MPMCQueueResult res = recv_queue->tryPush(data);
+        MPMCQueueResult res = recv_queue->tryPush(std::forward<U>(data));
         switch (res)
         {
         case MPMCQueueResult::OK:

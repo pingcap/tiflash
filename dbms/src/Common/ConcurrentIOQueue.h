@@ -48,10 +48,9 @@ public:
 
     /// blocking function.
     /// Just like MPMCQueue::push.
-    template <typename U>
-    MPMCQueueResult push(U && data)
+    MPMCQueueResult push(T && data)
     {
-        return mpmc_queue.push(std::forward<U>(data));
+        return mpmc_queue.push(std::move(data));
     }
 
     /// Just like MPMCQueue::tryPush.

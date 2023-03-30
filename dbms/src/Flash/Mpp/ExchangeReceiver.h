@@ -222,7 +222,7 @@ private:
     DAGSchema schema;
 
     std::vector<MsgChannelPtr> msg_channels;
-    std::vector<GRPCReceiveQueue<ReceivedMessage>> grpc_recv_queue;
+    std::vector<GRPCReceiveQueue<RecvMsgPtr>> grpc_recv_queue;
     AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
 
     std::vector<AsyncRequestHandler<RPCContext, true> *> async_handler_fine_grained_ptrs;

@@ -38,36 +38,6 @@ enum class ReceiverMode
     Async
 };
 
-namespace ReceiverChannel
-{
-inline void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]], ReceiverMode mode)
-{
-    switch (mode)
-    {
-    case ReceiverMode::Local:
-        fiu_do_on(FailPoints::random_receiver_local_msg_push_failure_failpoint, push_succeed = false);
-        break;
-    case ReceiverMode::Sync:
-        fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false);
-        break;
-    default:
-        throw Exception(fmt::format("Invalid ReceiverMode: {}", magic_enum::enum_name(mode)));
-    }
-}
-
-inline bool loopJudge(GRPCReceiveQueueRes res)
-{
-    return (res == GRPCReceiveQueueRes::OK || res == GRPCReceiveQueueRes::FULL);
-}
-
-// result can not be changed from FULL to OK
-inline void updateResult(GRPCReceiveQueueRes & dst, GRPCReceiveQueueRes & src)
-{
-    if (likely(!(dst == GRPCReceiveQueueRes::FULL && src == GRPCReceiveQueueRes::OK)))
-        dst = src;
-}
-} // namespace ReceiverChannel
-
 namespace ExchangeReceiverMetric
 {
 inline void addDataSizeMetric(std::atomic<Int64> & data_size_in_queue, size_t size)
