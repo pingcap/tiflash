@@ -322,11 +322,20 @@ public:
     }
      
     void schedule(std::shared_ptr<std::packaged_task<void()>> task) {
-        thread_pool->scheduleOrThrowOnError([task]{(*task)();});
-        futures.emplace_back(task->get_future());
+        try {
+            thread_pool->scheduleOrThrowOnError([task]{(*task)();});
+            futures.emplace_back(task->get_future());
+        } catch (...) {
+            LOG_ERROR(&Poco::Logger::get("hyy"), " schedule error here");
+            wait();
+        }
+
     }
 
     void wait() {
+        if (consumed) return;
+        consumed = true;
+        
         std::exception_ptr first_exception;
         for (auto & future : futures)
         {
@@ -358,5 +367,6 @@ public:
 private:
     std::vector<std::future<void>> futures;
     ThreadPool * thread_pool;
+    bool consumed = false;
 };
 } // namespace DB
