@@ -103,6 +103,8 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
     std::atomic<size_t> tables_processed{0};
 
     std::vector<std::future<void>> futures;
+    ThreadPoolWaitGroup<ThreadPool> wait_group(thread_pool);
+
     std::mutex failed_tables_mutex;
     Tables tables_failed_to_startup;
 
@@ -161,26 +163,13 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
 
         if (thread_pool)
         {
-            try
-            {
-                thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
-                futures.emplace_back(task->get_future());
-            }
-            catch (Exception & e)
-            {
-                waitTasks(futures);
-                e.addMessage(e.getStackTrace().toString());
-                e.rethrow();
-            }
+            wait_group.schedule(task);
         }
         else
             (*task)();
     }
 
-    if (thread_pool)
-    {
-        waitTasks(futures);
-    }
+    wait_group.wait();
 
     DatabaseLoading::cleanupTables(*this, name, tables_failed_to_startup, log);
 }

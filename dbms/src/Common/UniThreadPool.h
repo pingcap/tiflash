@@ -30,6 +30,7 @@
 #include <optional>
 #include <queue>
 #include <thread>
+
 #include "Common/Exception.h"
 
 namespace DB
@@ -286,6 +287,69 @@ protected:
         return static_cast<bool>(state);
     }
 };
+
+/// ThreadPoolWaitGroup is used to wait all the task launched here to finish
+/// ThreadPoolWaitGroup guarantee the exception safty of TheadPool.
+template <typename ThreadPool>
+class ThreadPoolWaitGroup
+{
+public:
+    explicit ThreadPoolWaitGroup(ThreadPool * thread_pool_)
+        : thread_pool(thread_pool_)
+    {}
+    ThreadPoolWaitGroup(const ThreadPoolWaitGroup &) = delete;
+    ~ThreadPoolWaitGroup()
+    {
+        wait();
+    }
+
+    void schedule(std::shared_ptr<std::packaged_task<void()>> task)
+    {
+        thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
+        futures.emplace_back(task->get_future());
+    }
+
+    void wait()
+    {
+        if (consumed)
+            return;
+        consumed = true;
+
+        std::exception_ptr first_exception;
+        for (auto & future : futures)
+        {
+            // ensure all futures finished
+            try
+            {
+                future.get();
+            }
+            catch (...)
+            {
+                if (!first_exception)
+                    first_exception = std::current_exception();
+            }
+        }
+
+        if (first_exception)
+        {
+            try
+            {
+                std::rethrow_exception(first_exception);
+            }
+            catch (Exception & exc)
+            {
+                exc.addMessage(exc.getStackTrace().toString());
+                exc.rethrow();
+            }
+        }
+    }
+
+private:
+    std::vector<std::future<void>> futures;
+    ThreadPool * thread_pool;
+    bool consumed = false;
+};
+
 /// Schedule jobs/tasks on global thread pool without implicit passing tracing context on current thread to underlying worker as parent tracing context.
 ///
 /// If you implement your own job/task scheduling upon global thread pool or schedules a long time running job in a infinite loop way,
@@ -311,62 +375,4 @@ using ThreadFromGlobalPool = ThreadFromGlobalPoolImpl<true>;
 /// To make sure the tracing context is correctly propagated, we explicitly disable context propagation(including initialization and de-initialization) at underlying worker level.
 ///
 using ThreadPool = ThreadPoolImpl<ThreadFromGlobalPoolNoTracingContextPropagation>;
-
-class ThreadPoolWaitGroup 
-{
-public:
-    explicit ThreadPoolWaitGroup(ThreadPool * thread_pool_) : thread_pool(thread_pool_) {}
-    ThreadPoolWaitGroup(const ThreadPoolWaitGroup &) = delete;
-    ~ThreadPoolWaitGroup() {
-        wait();
-    }
-     
-    void schedule(std::shared_ptr<std::packaged_task<void()>> task) {
-        try {
-            thread_pool->scheduleOrThrowOnError([task]{(*task)();});
-            futures.emplace_back(task->get_future());
-        } catch (...) {
-            LOG_ERROR(&Poco::Logger::get("hyy"), " schedule error here");
-            wait();
-        }
-
-    }
-
-    void wait() {
-        if (consumed) return;
-        consumed = true;
-        
-        std::exception_ptr first_exception;
-        for (auto & future : futures)
-        {
-            // ensure all futures finished
-            try
-            {
-                future.get();
-            }
-            catch (...)
-            {
-                if (!first_exception)
-                    first_exception = std::current_exception();
-            }
-        }
-        
-        if (first_exception)
-        {
-            try
-            {
-                std::rethrow_exception(first_exception);
-            }
-            catch (Exception & exc)
-            {
-                exc.addMessage(exc.getStackTrace().toString());
-                exc.rethrow();
-            }
-        }
-    }
-private:
-    std::vector<std::future<void>> futures;
-    ThreadPool * thread_pool;
-    bool consumed = false;
-};
 } // namespace DB

@@ -158,6 +158,8 @@ void loadMetadata(Context & context)
     auto load_database_thread_num = std::min(default_num_threads, databases.size());
 
     auto load_databases_thread_pool = ThreadPool(load_database_thread_num, load_database_thread_num / 2, load_database_thread_num * 2);
+    ThreadPoolWaitGroup<ThreadPool> load_databases_wait_group(&load_databases_thread_pool);
+
     auto load_tables_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
 
     for (const auto & database : databases)
@@ -165,23 +167,14 @@ void loadMetadata(Context & context)
         const auto & db_name = database.first;
         const auto & meta_file = database.second;
 
-        auto task = [&load_database, &context, &db_name, &meta_file, has_force_restore_data_flag, &load_tables_thread_pool] {
+        auto task = std::make_shared<std::packaged_task<void()>>([&load_database, &context, &db_name, &meta_file, has_force_restore_data_flag, &load_tables_thread_pool] {
             load_database(context, db_name, meta_file, &load_tables_thread_pool, has_force_restore_data_flag);
-        };
+        });
 
-        try
-        {
-            load_databases_thread_pool.scheduleOrThrowOnError(task);
-        }
-        catch (Exception & e)
-        {
-            load_databases_thread_pool.wait();
-            e.addMessage(e.getStackTrace().toString());
-            e.rethrow();
-        }
+        load_databases_wait_group.schedule(task);
     }
 
-    load_databases_thread_pool.wait();
+    load_databases_wait_group.wait();
 
     if (has_force_restore_data_flag)
         force_restore_data_flag_file.remove();
