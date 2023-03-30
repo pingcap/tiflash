@@ -49,7 +49,6 @@ extern const int LOGICAL_ERROR;
 extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 extern const int SYNTAX_ERROR;
 extern const int TIDB_TABLE_ALREADY_EXISTS;
-extern const int CANNOT_SCHEDULE_TASK;
 } // namespace ErrorCodes
 
 namespace FailPoints
@@ -112,7 +111,8 @@ static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
 
 void waitTaskFinish(std::vector<std::future<void>>::iterator begin, std::vector<std::future<void>>::iterator end)
 {
-    while (begin != end){
+    while (begin != end)
+    {
         try
         {
             (*begin).get();
