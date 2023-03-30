@@ -109,6 +109,26 @@ static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
 static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
 static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
 
+
+void waitTaskFinish(std::vector<std::future<void>>::iterator begin, std::vector<std::future<void>>::iterator end)
+{
+    while (begin != end){
+        try
+        {
+            (*begin).get();
+            ++begin;
+        }
+        catch (const Exception & e)
+        {
+            //LOG_ERROR(log, "future get failed with error code = {}, e.displayText() = {}", e.code(), e.displayText());
+            ++begin;
+            waitTaskFinish(begin, end);
+            throw;
+        }
+    }
+}
+
+
 void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag)
 {
     using FileNames = std::vector<std::string>;
@@ -191,16 +211,15 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
 
         if (thread_pool)
         {
-            futures.emplace_back(task->get_future());
             try
             {
                 thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
+                futures.emplace_back(task->get_future()); // 我可以认为 get_future 不抛异常嘛
             }
             catch (const Exception & e)
             {
-                LOG_ERROR(log, "scheduleOrThrowOnError failed with error code = {}, e.displayText() = {}", e.code(), e.displayText());
-                // wait before throw, to avoid core dump
-                thread_pool->wait();
+                // LOG_ERROR(log, "scheduleOrThrowOnError failed with error code = {}, e.displayText() = {}", e.code(), e.displayText());
+                waitTaskFinish(futures.begin(), futures.end());
                 throw;
             }
         }
@@ -210,19 +229,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
 
     if (thread_pool)
     {
-        for (auto & f : futures)
-        {
-            try
-            {
-                f.get();
-            }
-            catch (const Exception & e)
-            {
-                LOG_ERROR(log, "future get failed with error code = {}, e.displayText() = {}", e.code(), e.displayText());
-                thread_pool->wait();
-                throw;
-            }
-        }
+        waitTaskFinish(futures.begin(), futures.end());
     }
 
     DatabaseLoading::cleanupTables(*this, name, tables_failed_to_startup, log);
