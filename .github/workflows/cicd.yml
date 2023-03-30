@@ -72,12 +72,15 @@ jobs:
     needs: ["multi-arch"]
     if: ${{ inputs.gcr_target == 'tiflash' }}
     steps:
-      - name: create-manifest
+      - name: remove-old-manifest
+        run: |
+          docker manifest rm xexplorersun/tiflash:v6.6.0
+      - name: create-new-manifest
         run: |
           docker manifest create xexplorersun/tiflash:v6.6.0 \
-          --amend xexplorersun/tiflash:cse-${{ github.sha }}-amd64 \
-          --amend xexplorersun/tiflash:cse-${{ github.sha }}-arm64
-      - name: push-manifest
+          xexplorersun/tiflash:cse-${{ github.sha }}-amd64 \
+          xexplorersun/tiflash:cse-${{ github.sha }}-arm64
+      - name: push-new-manifest
         run: |
           docker manifest push xexplorersun/tiflash:v6.6.0
 
@@ -87,11 +90,14 @@ jobs:
     needs: ["multi-arch"]
     if: ${{ inputs.gcr_target == 'tiflash-compute' }}
     steps:
-      - name: create-manifest
+      - name: remove-old-manifest
+        run: |
+          docker manifest rm xexplorersun/tiflash-compute:v6.6.0
+      - name: create-new-manifest
         run: |
           docker manifest create xexplorersun/tiflash-compute:v6.6.0 \
-          --amend xexplorersun/tiflash:cse-${{ github.sha }}-amd64 \
-          --amend xexplorersun/tiflash:cse-${{ github.sha }}-arm64
+          xexplorersun/tiflash:cse-${{ github.sha }}-amd64 \
+          xexplorersun/tiflash:cse-${{ github.sha }}-arm64
       - name: push-manifest
         run: |
           docker manifest push xexplorersun/tiflash-compute:v6.6.0
