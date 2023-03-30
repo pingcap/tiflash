@@ -80,11 +80,11 @@ void BgStorageInitHolder::start(Context & global_context, const LoggerPtr & log,
             const auto & ks_table_id = iter.first;
             auto & storage = iter.second;
 
-            auto task = std::make_shared<std::packaged_task<void()>>([&init_stores_function, &ks_table_id, &storage] {
+            std::function<void()> func = [&init_stores_function, &ks_table_id, &storage] {
                 init_stores_function(ks_table_id, storage);
-            });
+            };
 
-            init_storages_wait_group.schedule(task);
+            init_storages_wait_group.schedule(func);
         }
 
         init_storages_wait_group.wait();

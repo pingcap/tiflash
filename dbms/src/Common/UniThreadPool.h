@@ -299,13 +299,22 @@ public:
     ThreadPoolWaitGroup(const ThreadPoolWaitGroup &) = delete;
     ~ThreadPoolWaitGroup()
     {
-        wait();
+        try
+        {
+            wait();
+        }
+        catch (const Exception & exc)
+        {
+            LOG_ERROR(&Poco::Logger::get("ThreadPoolWaitGroup"), "Exception error code = {}, message = {}", exc.code(), exc.displayText());
+        }
     }
 
-    void schedule(std::shared_ptr<std::packaged_task<void()>> task)
+    void schedule(std::function<void()> & func)
     {
-        thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
-        futures.emplace_back(task->get_future());
+        std::packaged_task<void()> task(std::move(func));
+        auto future = task.get_future();
+        thread_pool->scheduleOrThrowOnError([&task] { task(); });
+        futures.emplace_back(std::move(future));
     }
 
     void wait()

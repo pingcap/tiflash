@@ -167,11 +167,11 @@ void loadMetadata(Context & context)
         const auto & db_name = database.first;
         const auto & meta_file = database.second;
 
-        auto task = std::make_shared<std::packaged_task<void()>>([&load_database, &context, &db_name, &meta_file, has_force_restore_data_flag, &load_tables_thread_pool] {
+        std::function<void()> func = [&load_database, &context, &db_name, &meta_file, has_force_restore_data_flag, &load_tables_thread_pool] {
             load_database(context, db_name, meta_file, &load_tables_thread_pool, has_force_restore_data_flag);
-        });
+        };
 
-        load_databases_wait_group.schedule(task);
+        load_databases_wait_group.schedule(func);
     }
 
     load_databases_wait_group.wait();
