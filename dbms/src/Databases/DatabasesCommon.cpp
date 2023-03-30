@@ -27,9 +27,7 @@
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 
-#include <future>
 #include <sstream>
-
 
 namespace DB
 {

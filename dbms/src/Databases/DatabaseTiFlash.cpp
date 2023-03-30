@@ -34,8 +34,6 @@
 #include <Storages/Transaction/TMTStorages.h>
 #include <common/logger_useful.h>
 
-#include <future>
-
 namespace DB
 {
 namespace ErrorCodes

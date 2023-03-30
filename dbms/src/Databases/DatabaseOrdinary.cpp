@@ -33,8 +33,6 @@
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 
-#include <future>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -163,8 +161,17 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
 
         if (thread_pool)
         {
-            futures.emplace_back(task->get_future());
-            thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
+            try
+            {
+                thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
+                futures.emplace_back(task->get_future());
+            }
+            catch (Exception & e)
+            {
+                waitTasks(futures);
+                e.addMessage(e.getStackTrace().toString());
+                e.rethrow();
+            }
         }
         else
             (*task)();
@@ -172,10 +179,7 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
 
     if (thread_pool)
     {
-        for (auto & f : futures)
-        {
-            f.get();
-        }
+        waitTasks(futures);
     }
 
     DatabaseLoading::cleanupTables(*this, name, tables_failed_to_startup, log);
