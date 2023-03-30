@@ -868,7 +868,7 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
         size_t max_s3_thread_count = std::ceil(settings.s3_thread_count_scale * logical_cores);
         LOG_INFO(
             Logger::get(),
-            "s3_thread_count_scale={}, logical_cores={}, max_io_thread_count={}",
+            "s3_thread_count_scale={}, logical_cores={}, max_s3_thread_count={}",
             settings.s3_thread_count_scale,
             logical_cores,
             max_s3_thread_count);
