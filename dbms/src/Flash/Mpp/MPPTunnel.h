@@ -328,7 +328,13 @@ public:
 
     bool isReadyForWrite() const override
     {
-        return local_request_handler.isReadyForWrite();
+        if constexpr (local_only)
+            return local_request_handler.isReadyForWrite();
+        else
+        {
+            std::lock_guard lock(mu);
+            return local_request_handler.isReadyForWrite();
+        }
     }
 
 private:
@@ -348,7 +354,8 @@ private:
         // When ExchangeReceiver receives data from local and remote tiflash, number of local tunnel threads
         // is very large and causes the time of transfering data by grpc threads becomes longer, because
         // grpc thread is hard to get chance to push data into MPMCQueue in ExchangeReceiver.
-        // So, we need to control the concurrency of local tunnel threads by the lock.
+        // Adding a lock ensures that there is only one other thread competing with async reactor,
+        // so the probability of async reactor getting the lock is 1/2.
         if constexpr (local_only)
             return local_request_handler.write<enable_fine_grained_shuffle, non_blocking>(source_index, data);
         else
