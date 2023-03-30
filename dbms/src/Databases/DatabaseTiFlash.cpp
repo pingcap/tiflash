@@ -183,16 +183,16 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
         auto begin = table_files.begin() + i * bunch_size;
         auto end = (i + 1 == num_bunches) ? table_files.end() : (table_files.begin() + (i + 1) * bunch_size);
 
-        std::function<void()> func = [&task_function, begin, end] {
+        auto task = std::make_shared<std::packaged_task<void()>>([&task_function, begin, end] {
             task_function(begin, end);
-        };
+        });
 
         if (thread_pool)
         {
-            wait_group.schedule(func);
+            wait_group.schedule(task);
         }
         else
-            func();
+            (*task)();
     }
 
     wait_group.wait();

@@ -156,16 +156,16 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
         auto begin = file_names.begin() + i * bunch_size;
         auto end = (i + 1 == num_bunches) ? file_names.end() : (file_names.begin() + (i + 1) * bunch_size);
 
-        std::function<void()> func = [&task_function, begin, end] {
+        auto task = std::make_shared<std::packaged_task<void()>>([&task_function, begin, end] {
             task_function(begin, end);
-        };
+        });
 
         if (thread_pool)
         {
-            wait_group.schedule(func);
+            wait_group.schedule(task);
         }
         else
-            func();
+            (*task)();
     }
 
     wait_group.wait();
