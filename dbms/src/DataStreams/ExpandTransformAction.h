@@ -24,7 +24,7 @@ struct ExpandTransformAction
 public:
     ExpandTransformAction(
         const Block & header_,
-        const Expand2Ptr & expression_);
+        const Expand2Ptr & expand_);
 
     void transform(Block & block);
     bool try_output(Block & block);
