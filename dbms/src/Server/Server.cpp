@@ -839,6 +839,12 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 {
     // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
     size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
+    LOG_INFO(
+        Logger::get(),
+        "io_thread_count_scale={}, logical_cores={}, max_io_thread_count={}",
+        settings.io_thread_count_scale,
+        logical_cores,
+        max_io_thread_count);
 
     // Note: Global Thread Pool must be larger than sub thread pools.
     GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 20);
@@ -859,9 +865,16 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     }
     if (DataStoreS3Pool::instance)
     {
-        DataStoreS3Pool::instance->setMaxThreads(max_io_thread_count);
-        DataStoreS3Pool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-        DataStoreS3Pool::instance->setQueueSize(max_io_thread_count * 2);
+        size_t max_s3_thread_count = std::ceil(settings.s3_thread_count_scale * logical_cores);
+        LOG_INFO(
+            Logger::get(),
+            "s3_thread_count_scale={}, logical_cores={}, max_io_thread_count={}",
+            settings.s3_thread_count_scale,
+            logical_cores,
+            max_s3_thread_count);
+        DataStoreS3Pool::instance->setMaxThreads(max_s3_thread_count);
+        DataStoreS3Pool::instance->setMaxFreeThreads(max_s3_thread_count / 2);
+        DataStoreS3Pool::instance->setQueueSize(max_s3_thread_count * 2);
     }
     if (S3FileCachePool::instance)
     {
