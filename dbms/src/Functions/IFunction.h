@@ -176,12 +176,6 @@ public:
     {
         throw Exception(fmt::format("Function {} has no information about its monotonicity.", getName()), ErrorCodes::NOT_IMPLEMENTED);
     }
-
-    // Set meta data for functions that need meta data.
-    virtual void setMetaData(const tipb::Expr & /*expr*/)
-    {
-        throw Exception(fmt::format("Function {} doesn't override setMetaData", getName()), ErrorCodes::NOT_IMPLEMENTED);
-    }
 };
 
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
@@ -306,11 +300,6 @@ public:
     }
 
     virtual void setCollator(const TiDB::TiDBCollatorPtr &) {}
-
-    virtual void setMetaData(const tipb::Expr & /*expr*/)
-    {
-        throw Exception(fmt::format("Function {} doesn't override setMetaData()", getName()), ErrorCodes::NOT_IMPLEMENTED);
-    }
 };
 
 /// Wrappers over IFunction.

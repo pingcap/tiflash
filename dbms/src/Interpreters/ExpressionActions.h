@@ -116,8 +116,6 @@ public:
 
     std::string toString() const;
 
-    void setMetaData(const tipb::Expr & expr) const { function->setMetaData(expr); }
-
 private:
     friend class ExpressionActions;
 
@@ -167,9 +165,6 @@ public:
 
     /// Adds new column names to out_new_columns (formed as a result of the added action).
     void add(const ExpressionAction & action, Names & out_new_columns);
-
-    // Set meta data for the last ExpressionAction
-    void setMetaData(const tipb::Expr & expr);
 
     /// Adds to the beginning the removal of all extra columns.
     void prependProjectInput();
