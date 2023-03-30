@@ -118,12 +118,12 @@ void waitTaskFinish(std::vector<std::future<void>>::iterator begin, std::vector<
             (*begin).get();
             ++begin;
         }
-        catch (const Exception & e)
+        catch (Exception & e)
         {
-            //LOG_ERROR(log, "future get failed with error code = {}, e.displayText() = {}", e.code(), e.displayText());
             ++begin;
             waitTaskFinish(begin, end);
-            throw;
+            e.addMessage(e.getStackTrace().toString());
+            e.rethrow();
         }
     }
 }
@@ -214,13 +214,13 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
             try
             {
                 thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
-                futures.emplace_back(task->get_future()); // 我可以认为 get_future 不抛异常嘛
+                futures.emplace_back(task->get_future());
             }
-            catch (const Exception & e)
+            catch (Exception & e)
             {
-                // LOG_ERROR(log, "scheduleOrThrowOnError failed with error code = {}, e.displayText() = {}", e.code(), e.displayText());
                 waitTaskFinish(futures.begin(), futures.end());
-                throw;
+                e.addMessage(e.getStackTrace().toString());
+                e.rethrow();
             }
         }
         else
