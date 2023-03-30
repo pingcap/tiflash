@@ -158,7 +158,7 @@ void loadMetadata(Context & context)
     auto load_database_thread_num = std::min(default_num_threads, databases.size());
 
     auto load_databases_thread_pool = ThreadPool(load_database_thread_num, load_database_thread_num / 2, load_database_thread_num * 2);
-    ThreadPoolWaitGroup<ThreadPool> load_databases_wait_group(&load_databases_thread_pool);
+    ThreadPoolWaitGroup load_databases_wait_group(&load_databases_thread_pool);
 
     auto load_tables_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
 

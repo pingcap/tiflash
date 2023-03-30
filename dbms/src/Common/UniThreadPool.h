@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Poco/Event.h>
 #include <boost_wrapper/priority_queue.h>
 
@@ -30,8 +31,6 @@
 #include <optional>
 #include <queue>
 #include <thread>
-
-#include "Common/Exception.h"
 
 namespace DB
 {

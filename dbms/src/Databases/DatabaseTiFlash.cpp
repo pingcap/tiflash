@@ -123,8 +123,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};
 
-    std::vector<std::future<void>> futures;
-    ThreadPoolWaitGroup<ThreadPool> wait_group(thread_pool);
+    ThreadPoolWaitGroup wait_group(thread_pool);
 
     std::mutex failed_tables_mutex;
     Tables tables_failed_to_startup;
