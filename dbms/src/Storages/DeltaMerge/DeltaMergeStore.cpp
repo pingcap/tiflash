@@ -180,7 +180,6 @@ ColumnDefinesPtr generateStoreColumns(const ColumnDefines & table_columns, bool 
     }
     return columns;
 }
-
 } // namespace
 
 DeltaMergeStore::Settings DeltaMergeStore::EMPTY_SETTINGS = DeltaMergeStore::Settings{.not_compress_columns = NotCompress{}};
@@ -277,35 +276,26 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
         }
         else
         {
-            // 在这里做 segment level 的并行
             auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
 
+            // parallel restore segment to speed up
             if (thread_pool)
             {
+                ThreadPoolWaitGroup wait_group(thread_pool);
                 auto segment_ids = Segment::getAllSegmentIds(*dm_context, segment_id);
                 std::mutex mutex;
                 for (auto & segment_id : segment_ids)
                 {
-                    auto task = [this, dm_context, segment_id, &mutex]() {
+                    auto task = std::make_shared<std::packaged_task<void()>>([this, dm_context, segment_id, &mutex] {
                         auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
                         std::lock_guard lock(mutex);
                         segments.emplace(segment->getRowKeyRange().getEnd(), segment);
                         id_to_segment.emplace(segment_id, segment);
-                    };
-                    try
-                    {
-                        thread_pool->scheduleOrThrowOnError(task);
-                    }
-                    catch (const Exception & e)
-                    {
-                        LOG_ERROR(log, "scheduleOrThrowOnError failed, error code = {}, e.displayText() = {}", e.code(), e.displayText());
-                        // wait before throw, to avoid core dump
-                        thread_pool->wait();
-                        throw;
-                    }
+                    });
+                    wait_group.schedule(task);
                 }
 
-                thread_pool->wait();
+                wait_group.wait();
             }
             else
             {

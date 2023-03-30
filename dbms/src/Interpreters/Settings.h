@@ -304,7 +304,7 @@ struct Settings
     M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
     M(SettingUInt64, pipeline_task_thread_pool_size, 0, "The size of task thread pool. 0 means using number_of_logical_cpu_cores.")                                                                                                     \
     M(SettingUInt64, local_tunnel_version, 1, "1: not refined, 2: refined") \
-    M(SettingUInt64, init_thread_count_scale, 50, "Number of thread = number of logical cpu cores * init_thread_count_scale. It just works for thread pool for initStores and loadMetadata")
+    M(SettingUInt64, init_thread_count_scale, 100, "Number of thread = number of logical cpu cores * init_thread_count_scale. It just works for thread pool for initStores and loadMetadata")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 
