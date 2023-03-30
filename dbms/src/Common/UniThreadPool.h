@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Poco/Event.h>
 #include <boost_wrapper/priority_queue.h>
 
@@ -29,8 +30,6 @@
 #include <optional>
 #include <queue>
 #include <thread>
-
-#include "Common/Exception.h"
 
 namespace DB
 {
@@ -299,7 +298,14 @@ public:
     ThreadPoolWaitGroup(const ThreadPoolWaitGroup &) = delete;
     ~ThreadPoolWaitGroup()
     {
-        wait();
+        try
+        {
+            wait();
+        }
+        catch (const Exception & exc)
+        {
+            LOG_ERROR(&Poco::Logger::get("ThreadPoolWaitGroup"), "Exception error code = {}, message = {}", exc.code(), exc.displayText());
+        }
     }
 
     void schedule(std::shared_ptr<std::packaged_task<void()>> task)
