@@ -370,19 +370,9 @@ private:
         }
     }
 
-    // It should only be called in the destructor.
-    //
-    // This function is used to hold the destruction of receiver so that the push operation
-    // of local tunnel is always valid(valid means pushing data to an alive reveiver).
-    void closeLocalConnection() const
-    {
-        local_request_handler.closeConnection();
-    }
-
     size_t source_index;
     LocalRequestHandler local_request_handler;
     std::atomic_bool is_done;
-    std::mutex mu;
 };
 
 // TODO remove it in the future

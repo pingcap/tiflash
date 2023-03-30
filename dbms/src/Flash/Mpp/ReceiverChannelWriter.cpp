@@ -48,7 +48,6 @@ bool ReceiverChannelWriter::writeFineGrain(
             std::move(chunks[i]));
         success = (write_func(i, std::move(recv_msg)) == MPMCQueueResult::OK);
 
-        success = (*msg_channels)[i]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
         ReceiverChannel::injectFailPointReceiverPushFail(success, mode);
 
         // Only the first ExchangeReceiverInputStream need to handle resp.
