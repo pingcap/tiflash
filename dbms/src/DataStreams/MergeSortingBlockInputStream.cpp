@@ -17,6 +17,7 @@
 #include <DataStreams/MergeSortingBlocksBlockInputStream.h>
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
+#include <DataStreams/SortHelper.h>
 #include <DataStreams/copyData.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
@@ -24,55 +25,6 @@
 
 namespace DB
 {
-namespace
-{
-/** Remove constant columns from block.
-  */
-void removeConstantsFromBlock(Block & block)
-{
-    size_t columns = block.columns();
-    size_t i = 0;
-    while (i < columns)
-    {
-        if (block.getByPosition(i).column->isColumnConst())
-        {
-            block.erase(i);
-            --columns;
-        }
-        else
-            ++i;
-    }
-}
-
-void removeConstantsFromSortDescription(const Block & header, SortDescription & description)
-{
-    description.erase(
-        std::remove_if(description.begin(), description.end(), [&](const SortColumnDescription & elem) {
-            if (!elem.column_name.empty())
-                return header.getByName(elem.column_name).column->isColumnConst();
-            else
-                return header.safeGetByPosition(elem.column_number).column->isColumnConst();
-        }),
-        description.end());
-}
-
-/** Add into block, whose constant columns was removed by previous function,
-  *  constant columns from header (which must have structure as before removal of constants from block).
-  */
-void enrichBlockWithConstants(Block & block, const Block & header)
-{
-    size_t rows = block.rows();
-    size_t columns = header.columns();
-
-    for (size_t i = 0; i < columns; ++i)
-    {
-        const auto & col_type_name = header.getByPosition(i);
-        if (col_type_name.column->isColumnConst())
-            block.insert(i, {col_type_name.column->cloneResized(rows), col_type_name.type, col_type_name.name});
-    }
-}
-} // namespace
-
 MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     const BlockInputStreamPtr & input,
     const SortDescription & description_,
@@ -91,8 +43,8 @@ MergeSortingBlockInputStream::MergeSortingBlockInputStream(
     children.push_back(input);
     header = children.at(0)->getHeader();
     header_without_constants = header;
-    removeConstantsFromBlock(header_without_constants);
-    removeConstantsFromSortDescription(header, description);
+    SortHelper::removeConstantsFromBlock(header_without_constants);
+    SortHelper::removeConstantsFromSortDescription(header, description);
     spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
 }
 
@@ -116,7 +68,7 @@ Block MergeSortingBlockInputStream::readImpl()
             if (description.empty())
                 return block;
 
-            removeConstantsFromBlock(block);
+            SortHelper::removeConstantsFromBlock(block);
 
             blocks.push_back(block);
             sum_bytes_in_blocks += block.bytes();
@@ -172,7 +124,7 @@ Block MergeSortingBlockInputStream::readImpl()
 
     Block res = impl->read();
     if (res)
-        enrichBlockWithConstants(res, header);
+        SortHelper::enrichBlockWithConstants(res, header);
     return res;
 }
 
