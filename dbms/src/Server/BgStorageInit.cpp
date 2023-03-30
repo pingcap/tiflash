@@ -86,12 +86,11 @@ void BgStorageInitHolder::start(Context & global_context, const LoggerPtr & log,
             {
                 init_storages_thread_pool.scheduleOrThrowOnError(task);
             }
-            catch (const Exception & e)
+            catch (Exception & e)
             {
-                LOG_ERROR(log, "scheduleOrThrowOnError failed, error code = {}, e.displayText() = {}", e.code(), e.displayText());
-                // wait before throw, to avoid core dump
                 init_storages_thread_pool.wait();
-                throw;
+                e.addMessage(e.getStackTrace().toString());
+                e.rethrow();
             }
         }
 

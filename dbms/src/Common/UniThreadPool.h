@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <ext/scope_guard.h>
 #include <functional>
+#include <future>
 #include <list>
 #include <mutex>
 #include <optional>
@@ -31,6 +32,7 @@
 
 namespace DB
 {
+void waitTasks(std::vector<std::future<void>> & futures);
 /** Very simple thread pool similar to boost::threadpool.
   * Advantages:
   * - catches exceptions and rethrows on wait.

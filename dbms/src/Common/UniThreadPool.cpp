@@ -40,6 +40,36 @@ extern const Metric LocalThreadActive;
 
 namespace DB
 {
+void waitTasks(std::vector<std::future<void>> & futures)
+{
+    std::exception_ptr first_exception;
+    for (auto & future : futures)
+    {
+        // ensure all futures finished
+        try
+        {
+            future.get();
+        }
+        catch (...)
+        {
+            if (!first_exception)
+                first_exception = std::current_exception();
+        }
+    }
+    if (first_exception)
+    {
+        try
+        {
+            std::rethrow_exception(first_exception);
+        }
+        catch (Exception & exc)
+        {
+            exc.addMessage(exc.getStackTrace().toString());
+            exc.rethrow();
+        }
+    }
+}
+
 template <typename Thread>
 ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_)
     : ThreadPoolImpl(max_threads_, max_threads_, max_threads_)

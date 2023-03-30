@@ -173,11 +173,11 @@ void loadMetadata(Context & context)
         {
             load_databases_thread_pool.scheduleOrThrowOnError(task);
         }
-        catch (const Exception & e)
+        catch (Exception & e)
         {
-            LOG_ERROR(log, "scheduleOrThrowOnError failed with error code = {}, e.displayText() = {}", e.code(), e.displayText());
             load_databases_thread_pool.wait();
-            throw;
+            e.addMessage(e.getStackTrace().toString());
+            e.rethrow();
         }
     }
 

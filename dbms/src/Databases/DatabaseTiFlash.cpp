@@ -108,27 +108,6 @@ static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
 static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
 static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
 
-
-void waitTaskFinish(std::vector<std::future<void>>::iterator begin, std::vector<std::future<void>>::iterator end)
-{
-    while (begin != end)
-    {
-        try
-        {
-            (*begin).get();
-            ++begin;
-        }
-        catch (Exception & e)
-        {
-            ++begin;
-            waitTaskFinish(begin, end);
-            e.addMessage(e.getStackTrace().toString());
-            e.rethrow();
-        }
-    }
-}
-
-
 void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag)
 {
     using FileNames = std::vector<std::string>;
@@ -218,7 +197,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
             }
             catch (Exception & e)
             {
-                waitTaskFinish(futures.begin(), futures.end());
+                waitTasks(futures);
                 e.addMessage(e.getStackTrace().toString());
                 e.rethrow();
             }
@@ -229,7 +208,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
 
     if (thread_pool)
     {
-        waitTaskFinish(futures.begin(), futures.end());
+        waitTasks(futures);
     }
 
     DatabaseLoading::cleanupTables(*this, name, tables_failed_to_startup, log);
