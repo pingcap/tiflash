@@ -68,8 +68,9 @@ public:
     {
         return reader.readWithFilter(filter);
     }
-
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     DMFileReader reader;
     bool enable_read_thread;
 };
