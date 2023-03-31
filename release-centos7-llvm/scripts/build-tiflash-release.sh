@@ -58,29 +58,8 @@ else
 fi
 rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 
-cmake -S "${SRCPATH}" \
-  ${DEFINE_CMAKE_PREFIX_PATH} \
-  -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
-  -DENABLE_TESTING=OFF \
-  -DENABLE_TESTS=OFF \
-  -DENABLE_FAILPOINTS=${ENABLE_FAILPOINTS} \
-  -DJEMALLOC_NARENAS=${JEMALLOC_NARENAS} \
-  -Wno-dev \
-  -DUSE_CCACHE=OFF \
-  -DUSE_INTERNAL_SSL_LIBRARY=ON \
-  -DRUN_HAVE_STD_REGEX=0 \
-  -DENABLE_THINLTO=${ENABLE_THINLTO} \
-  -DTHINLTO_JOBS=${NPROC} \
-  -DENABLE_PCH=${ENABLE_PCH} \
-  -GNinja
+cd ${SRCPATH}/contrib/s3_benchmark
 
-cmake --build . --target tiflash --parallel ${NPROC}
-cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
+OPENSSL_STATIC=1 cargo build --release
 
-# unset LD_LIBRARY_PATH before test
-unset LD_LIBRARY_PATH
-readelf -d "${INSTALL_DIR}/tiflash"
-ldd "${INSTALL_DIR}/tiflash"
-
-# show version
-${INSTALL_DIR}/tiflash version
+pwd
