@@ -123,7 +123,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};
 
-    auto & wait_group = thread_pool->waitGroup();
+    auto wait_group = thread_pool ? thread_pool->waitGroup() : nullptr;
 
     std::mutex failed_tables_mutex;
     Tables tables_failed_to_startup;
@@ -188,13 +188,13 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
         });
 
         if (thread_pool)
-            wait_group.schedule(task);
+            wait_group->schedule(task);
         else
             (*task)();
     }
 
     if (thread_pool)
-        wait_group.wait();
+        wait_group->wait();
 
     DatabaseLoading::cleanupTables(*this, name, tables_failed_to_startup, log);
 }

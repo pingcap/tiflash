@@ -158,7 +158,7 @@ void loadMetadata(Context & context)
     auto load_database_thread_num = std::min(default_num_threads, databases.size());
 
     auto load_databases_thread_pool = ThreadPool(load_database_thread_num, load_database_thread_num / 2, load_database_thread_num * 2);
-    auto & load_databases_wait_group = load_databases_thread_pool.waitGroup();
+    auto load_databases_wait_group = load_databases_thread_pool.waitGroup();
 
     auto load_tables_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
 
@@ -171,10 +171,10 @@ void loadMetadata(Context & context)
             load_database(context, db_name, meta_file, &load_tables_thread_pool, has_force_restore_data_flag);
         });
 
-        load_databases_wait_group.schedule(task);
+        load_databases_wait_group->schedule(task);
     }
 
-    load_databases_wait_group.wait();
+    load_databases_wait_group->wait();
 
     if (has_force_restore_data_flag)
         force_restore_data_flag_file.remove();
