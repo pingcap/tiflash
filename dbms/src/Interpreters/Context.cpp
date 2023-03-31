@@ -1504,12 +1504,6 @@ SchemaSyncServicePtr & Context::getSchemaSyncService()
     return shared->schema_sync_service;
 }
 
-void Context::initializeTiFlashMetrics() const
-{
-    auto lock = getLock();
-    (void)TiFlashMetrics::instance();
-}
-
 void Context::initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption)
 {
     auto lock = getLock();

@@ -411,8 +411,6 @@ public:
         size_t remote_cache_capacity = 0);
     PathCapacityMetricsPtr getPathCapacity() const;
 
-    void initializeTiFlashMetrics() const;
-
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
