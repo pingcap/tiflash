@@ -161,14 +161,13 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
         });
 
         if (thread_pool)
-        {
             wait_group->schedule(task);
-        }
         else
             (*task)();
     }
 
-    wait_group->wait();
+    if (thread_pool)
+        wait_group->wait();
 
     DatabaseLoading::cleanupTables(*this, name, tables_failed_to_startup, log);
 }
