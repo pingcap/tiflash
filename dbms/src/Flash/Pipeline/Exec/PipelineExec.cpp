@@ -20,7 +20,7 @@ namespace DB
 void PipelineExec::executePrefix()
 {
     sink_op->operatePrefix();
-    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
         (*it)->operatePrefix();
     source_op->operatePrefix();
 }
@@ -28,7 +28,7 @@ void PipelineExec::executePrefix()
 void PipelineExec::executeSuffix()
 {
     sink_op->operateSuffix();
-    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
         (*it)->operateSuffix();
     source_op->operateSuffix();
 }
@@ -140,7 +140,7 @@ OperatorStatus PipelineExec::awaitImpl()
         setIOOpIfNeeded(op_status, sink_op);
         return op_status;
     }
-    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
     {
         // If the transform_op returns `NEED_INPUT`,
         // we need to call the upstream transform_op until a transform_op returns something other than `NEED_INPUT`.
