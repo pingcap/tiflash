@@ -124,27 +124,9 @@ private:
     void processNonConstGroupingIDs(const ColumnPtr & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
     {
         if (col_grouping_ids->isColumnNullable())
-            processNullableGroupingIDs(static_cast<const ColumnNullable &>(*col_grouping_ids), col_res, row_num);
+            throw Exception("Grouping function shouldn't get nullable column");
         else
             processVectorGroupingIDs(col_grouping_ids, col_res, row_num);
-    }
-
-    void processNullableGroupingIDs(const ColumnNullable & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
-    {
-        switch (getVersion())
-        {
-        case 1:
-            groupingNullableVec<1>(col_grouping_ids, col_res, row_num);
-            break;
-        case 2:
-            groupingNullableVec<2>(col_grouping_ids, col_res, row_num);
-            break;
-        case 3:
-            groupingNullableVec<3>(col_grouping_ids, col_res, row_num);
-            break;
-        default:
-            throw Exception(fmt::format("Invalid version {} in grouping function", getVersion()));
-        };
     }
 
     void processVectorGroupingIDs(const ColumnPtr & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
@@ -163,43 +145,6 @@ private:
         default:
             throw Exception(fmt::format("Invalid version {} in grouping function", getVersion()));
         };
-    }
-
-    template <int version>
-    void groupingNullableVec(const ColumnNullable & col_grouping_ids, ColumnPtr & col_res, size_t row_num) const
-    {
-        // get arg's data container and null map
-        const auto & grouping_nested_col_data = col_grouping_ids.getNestedColumnPtr();
-        const auto * grouping_col_vec = checkAndGetColumn<ColumnVector<ArgType>>(&(*grouping_nested_col_data));
-        if (grouping_col_vec == nullptr)
-            throw Exception("Arg's data type should be UInt64 in grouping function.");
-        const typename ColumnVector<ArgType>::Container & grouping_container = grouping_col_vec->getData();
-        const auto & grouping_null_map = col_grouping_ids.getNullMapData();
-
-        // get result's data container
-        auto col_vec_res = ColumnVector<ResultType>::create();
-        typename ColumnVector<ResultType>::Container & vec_res = col_vec_res->getData();
-        vec_res.assign(row_num, static_cast<ResultType>(0));
-
-        // get result's null map
-        auto nullmap_col_res = ColumnUInt8::create();
-        typename ColumnUInt8::Container & res_null_map = nullmap_col_res->getData();
-        res_null_map.assign(row_num, static_cast<UInt8>(1));
-
-        for (size_t i = 0; i < row_num; ++i)
-        {
-            if (grouping_null_map[i] == 1)
-                continue; // null_map has been set to 1 when initialized
-
-            res_null_map[i] = 0;
-            if constexpr (version == 1)
-                vec_res[i] = groupingImplV1(grouping_container[i], getMetaGroupingID());
-            else if constexpr (version == 2)
-                vec_res[i] = groupingImplV2(grouping_container[i], getMetaGroupingID());
-            else if constexpr (version == 3)
-                vec_res[i] = groupingImplV3(grouping_container[i], getMetaGroupingIDs());
-        }
-        col_res = ColumnNullable::create(std::move(col_vec_res), std::move(nullmap_col_res));
     }
 
     template <int version>
@@ -225,6 +170,8 @@ private:
                 vec_res[i] = groupingImplV2(grouping_container[i], getMetaGroupingID());
             else if constexpr (version == 3)
                 vec_res[i] = groupingImplV3(grouping_container[i], getMetaGroupingIDs());
+            else
+                throw Exception("Invalid version in grouping function");
         }
         col_res = std::move(col_vec_res);
     }

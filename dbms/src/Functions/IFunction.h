@@ -300,6 +300,11 @@ public:
     }
 
     virtual void setCollator(const TiDB::TiDBCollatorPtr &) {}
+
+    virtual void setMetaData(const tipb::Expr & /**/)
+    {
+        throw Exception(fmt::format("Function {} doesn't implement setMetaData method", getName()));
+    }
 };
 
 /// Wrappers over IFunction.
@@ -357,7 +362,7 @@ public:
         return function->getMonotonicityForRange(type, left, right);
     }
 
-    void setMetaData(const tipb::Expr & expr) override
+    void setMetaData(const tipb::Expr & expr)
     {
         function->setMetaData(expr);
     }
