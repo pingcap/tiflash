@@ -29,6 +29,7 @@ CPFilesWriter::CPFilesWriter(CPFilesWriter::Options options)
     , max_data_file_size(options.max_data_file_size)
     , manifest_writer(CPManifestFileWriter::create({
           .file_path = options.manifest_file_path,
+          .max_edit_records_per_part = options.max_edit_records_per_part,
       }))
     , data_source(options.data_source)
     , locked_files(options.must_locked_files)

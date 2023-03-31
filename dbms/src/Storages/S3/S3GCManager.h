@@ -16,6 +16,7 @@
 
 #include <Core/Types.h>
 #include <Storages/BackgroundProcessingPool.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
 #include <common/types.h>
@@ -87,6 +88,7 @@ public:
         pingcap::pd::ClientPtr pd_client_,
         OwnerManagerPtr gc_owner_manager_,
         S3LockClientPtr lock_client_,
+        DM::Remote::IDataStorePtr remote_data_store_,
         S3GCConfig config_);
 
     ~S3GCManager() = default;
@@ -131,6 +133,8 @@ private:
 
     const OwnerManagerPtr gc_owner_manager;
     const S3LockClientPtr lock_client;
+
+    DM::Remote::IDataStorePtr remote_data_store;
 
     std::atomic<bool> shutdown_called;
 

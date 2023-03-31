@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
@@ -31,6 +32,7 @@ public:
     struct Options
     {
         const std::string & file_path;
+        UInt64 max_edit_records_per_part = 100000;
     };
 
     static CPManifestFileWriterPtr create(Options options)
@@ -41,7 +43,10 @@ public:
     explicit CPManifestFileWriter(Options options)
         : file_writer(std::make_unique<WriteBufferFromFile>(options.file_path))
         , compressed_writer(std::make_unique<CompressedWriteBuffer<true>>(*file_writer, CompressionSettings()))
-    {}
+        , max_edit_records_per_part(options.max_edit_records_per_part)
+    {
+        RUNTIME_CHECK(max_edit_records_per_part > 0, max_edit_records_per_part);
+    }
 
     ~CPManifestFileWriter()
     {
@@ -64,6 +69,8 @@ public:
     void flush();
 
 private:
+    void writeEditsPart(const universal::PageEntriesEdit & edit, UInt64 start, UInt64 limit);
+
     enum class WriteStage
     {
         WritingPrefix = 0,
@@ -77,6 +84,7 @@ private:
     // compressed<plain_file>
     const std::unique_ptr<WriteBufferFromFile> file_writer;
     const WriteBufferPtr compressed_writer;
+    const UInt64 max_edit_records_per_part;
 
     WriteStage write_stage = WriteStage::WritingPrefix;
 };
