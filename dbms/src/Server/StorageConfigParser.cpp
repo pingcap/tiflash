@@ -585,7 +585,7 @@ void StorageS3Config::parse(const String & content)
 String StorageS3Config::toString() const
 {
     return fmt::format(
-        "StroageS3Config{{"
+        "StorageS3Config{{"
         "endpoint={} bucket={} root={} "
         "max_connections={} connection_timeout_ms={} "
         "request_timeout_ms={} access_key_id_size={} secret_access_key_size={}"
