@@ -100,7 +100,7 @@ public:
 
     std::shared_ptr<ThreadPoolWaitGroup<Thread>> waitGroup()
     {
-        std::shared_ptr<ThreadPoolWaitGroup<Thread>> wait_group = std::make_shared<ThreadPoolWaitGroup>(*this);
+        std::shared_ptr<ThreadPoolWaitGroup<Thread>> wait_group = std::make_shared<ThreadPoolWaitGroup<Thread>>(*this);
         return wait_group;
     }
 

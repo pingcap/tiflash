@@ -52,7 +52,6 @@ ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_, size_t max_free_thre
     , max_free_threads(max_free_threads_)
     , queue_size(queue_size_)
     , shutdown_on_exception(shutdown_on_exception_)
-    , wait_group(ThreadPoolWaitGroup(*this))
 {
 }
 
