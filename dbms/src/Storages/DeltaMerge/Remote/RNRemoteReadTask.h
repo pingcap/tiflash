@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNRemoteReadTask_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Page/PageDefinesBase.h>
@@ -39,15 +40,8 @@ namespace DM
 {
 namespace tests
 {
-class RemoteReadTaskTest;
+class RNRemoteReadTaskTest;
 }
-
-class RNRemoteReadTask;
-using RNRemoteReadTaskPtr = std::shared_ptr<RNRemoteReadTask>;
-class RNRemoteTableReadTask;
-using RNRemoteTableReadTaskPtr = std::shared_ptr<RNRemoteTableReadTask>;
-class RNRemoteSegmentReadTask;
-using RNRemoteSegmentReadTaskPtr = std::shared_ptr<RNRemoteSegmentReadTask>;
 
 enum class SegmentReadTaskState
 {
@@ -68,7 +62,7 @@ enum class SegmentReadTaskState
 class RNRemoteReadTask
 {
 public:
-    explicit RNRemoteReadTask(std::vector<RNRemoteTableReadTaskPtr> && tasks_);
+    explicit RNRemoteReadTask(std::vector<RNRemoteStoreReadTaskPtr> && input_tasks_);
 
     ~RNRemoteReadTask();
 
@@ -100,7 +94,7 @@ public:
 
     const String & getErrorMessage() const;
 
-    friend class tests::RemoteReadTaskTest;
+    friend class tests::RNRemoteReadTaskTest;
     friend struct DB::FetchPagesRequest;
 
 private:
@@ -115,8 +109,8 @@ private:
 
     // A task pool for fetching data from write nodes
     mutable std::mutex mtx_tasks;
-    std::unordered_map<UInt64, RNRemoteTableReadTaskPtr> tasks;
-    std::unordered_map<UInt64, RNRemoteTableReadTaskPtr>::iterator curr_store;
+    std::unordered_map<StoreID, RNRemoteStoreReadTaskPtr> store_tasks;
+    std::unordered_map<StoreID, RNRemoteStoreReadTaskPtr>::iterator curr_store;
 
     // A task pool for segment tasks
     // The tasks are sorted by the ready state of segment tasks
@@ -129,12 +123,37 @@ private:
 };
 
 // Represent a read tasks from one write node
-class RNRemoteTableReadTask
+class RNRemoteStoreReadTask
 {
 public:
+<<<<<<< HEAD
     RNRemoteTableReadTask(
         UInt64 store_id_,
         TableID table_id_,
+=======
+    RNRemoteStoreReadTask(
+        StoreID store_id_,
+        std::vector<RNRemotePhysicalTableReadTaskPtr> table_read_tasks_);
+
+    size_t numRemainTasks() const;
+    RNRemoteSegmentReadTaskPtr nextTask();
+
+    friend class RNRemoteReadTask;
+
+private:
+    const StoreID store_id;
+    mutable std::mutex mtx_tasks;
+    const std::vector<RNRemotePhysicalTableReadTaskPtr> table_read_tasks;
+    std::vector<RNRemotePhysicalTableReadTaskPtr>::const_iterator cur_table_task;
+};
+
+class RNRemotePhysicalTableReadTask
+{
+public:
+    RNRemotePhysicalTableReadTask(
+        StoreID store_id_,
+        KeyspaceTableID ks_table_id_,
+>>>>>>> 83542e3213 (Fix exception thrown when reading from multiple partitions under S3 disagg (#7185))
         DisaggTaskId snap_id_,
         const String & address_)
         : store_id(store_id_)
@@ -143,11 +162,15 @@ public:
         , address(address_)
     {}
 
+<<<<<<< HEAD
     StoreID storeID() const { return store_id; }
 
     TableID tableID() const { return table_id; }
 
     static RNRemoteTableReadTaskPtr buildFrom(
+=======
+    static RNRemotePhysicalTableReadTaskPtr buildFrom(
+>>>>>>> 83542e3213 (Fix exception thrown when reading from multiple partitions under S3 disagg (#7185))
         const Context & db_context,
         StoreID store_id,
         const String & address,
@@ -155,28 +178,16 @@ public:
         const RemotePb::RemotePhysicalTable & table,
         const LoggerPtr & log);
 
-    size_t size() const
+    size_t numRemainTasks() const
     {
         std::lock_guard guard(mtx_tasks);
         return tasks.size();
     }
 
-    RNRemoteSegmentReadTaskPtr nextTask()
-    {
-        std::lock_guard gurad(mtx_tasks);
-        if (tasks.empty())
-            return nullptr;
-        auto task = tasks.front();
-        tasks.pop_front();
-        return task;
-    }
+    RNRemoteSegmentReadTaskPtr nextTask();
 
-    const std::list<RNRemoteSegmentReadTaskPtr> & allTasks() const
-    {
-        return tasks;
-    }
-
-    friend class tests::RemoteReadTaskTest;
+    friend class tests::RNRemoteReadTaskTest;
+    friend class RNRemoteReadTask;
 
 private:
     const StoreID store_id;
@@ -235,7 +246,7 @@ public:
 
     void prepare();
 
-    friend class tests::RemoteReadTaskTest;
+    friend class tests::RNRemoteReadTaskTest;
     friend struct DB::FetchPagesRequest;
     friend class RNRemoteReadTask;
 

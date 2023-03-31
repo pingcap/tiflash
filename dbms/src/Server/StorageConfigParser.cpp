@@ -570,8 +570,15 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
         read_s3_auth_info_from_config();
     }
 
+<<<<<<< HEAD
     LOG_INFO(
         log,
+=======
+String StorageS3Config::toString() const
+{
+    return fmt::format(
+        "StorageS3Config{{"
+>>>>>>> 83542e3213 (Fix exception thrown when reading from multiple partitions under S3 disagg (#7185))
         "endpoint={} bucket={} root={} "
         "max_connections={} connection_timeout_ms={} "
         "request_timeout_ms={} access_key_id_size={} secret_access_key_size={}",

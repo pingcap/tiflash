@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Interpreters/Context_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNRemoteReadTask_fwd.h>
 #include <Storages/IStorage.h>
 
 #pragma GCC diagnostic push
@@ -38,8 +39,11 @@ using ColumnDefines = std::vector<ColumnDefine>;
 using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
+<<<<<<< HEAD
 class RNRemoteReadTask;
 using RNRemoteReadTaskPtr = std::shared_ptr<RNRemoteReadTask>;
+=======
+>>>>>>> 83542e3213 (Fix exception thrown when reading from multiple partitions under S3 disagg (#7185))
 } // namespace DM
 
 // Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
@@ -88,6 +92,14 @@ private:
     DM::RNRemoteReadTaskPtr buildDisaggregatedTask(
         const Context & db_context,
         const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
+<<<<<<< HEAD
+=======
+    void buildDisaggTask(
+        const Context & db_context,
+        const pingcap::coprocessor::BatchCopTask & batch_cop_task,
+        std::vector<DM::RNRemoteStoreReadTaskPtr> & store_read_tasks,
+        std::mutex & store_read_tasks_lock);
+>>>>>>> 83542e3213 (Fix exception thrown when reading from multiple partitions under S3 disagg (#7185))
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest>
     buildDisaggregatedTaskForNode(
         const Context & db_context,

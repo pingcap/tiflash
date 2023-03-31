@@ -38,7 +38,7 @@ Exception fromS3Error(const Aws::S3::S3Error & e, const std::string & fmt, Args 
 {
     return DB::Exception(
         ErrorCodes::S3_ERROR,
-        fmt + fmt::format(" s3error={} s3msg={}", magic_enum::enum_name(e.GetErrorType()), e.GetMessage()),
+        fmt + fmt::format(" s3error={} s3msg={} request_id={}", magic_enum::enum_name(e.GetErrorType()), e.GetMessage(), e.GetRequestId()),
         args...);
 }
 

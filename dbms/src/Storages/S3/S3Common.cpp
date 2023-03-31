@@ -47,6 +47,7 @@
 #include <filesystem>
 #include <fstream>
 #include <ios>
+#include <magic_enum.hpp>
 #include <memory>
 
 namespace ProfileEvents
@@ -240,6 +241,25 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     }
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
+<<<<<<< HEAD
+=======
+        Aws::Client::ClientConfiguration sts_cfg;
+        sts_cfg.verifySSL = false;
+        Aws::STS::STSClient sts_client(sts_cfg);
+        Aws::STS::Model::GetCallerIdentityRequest req;
+        auto get_identity_outcome = sts_client.GetCallerIdentity(req);
+        if (!get_identity_outcome.IsSuccess())
+        {
+            const auto & error = get_identity_outcome.GetError();
+            LOG_WARNING(log, "get CallerIdentity failed, exception={} message={} request_id={}", error.GetExceptionName(), error.GetMessage(), error.GetRequestId());
+        }
+        else
+        {
+            const auto & result = get_identity_outcome.GetResult();
+            LOG_INFO(log, "CallerIdentity{{UserId:{}, Account:{}, Arn:{}}}", result.GetUserId(), result.GetAccount(), result.GetArn());
+        }
+
+>>>>>>> 83542e3213 (Fix exception thrown when reading from multiple partitions under S3 disagg (#7185))
         // Request that does not require authentication.
         // Such as the EC2 access permission to the S3 bucket is configured.
         // If the empty access_key_id and secret_access_key are passed to S3Client,
@@ -289,7 +309,7 @@ bool objectExists(const TiFlashS3Client & client, const String & key)
     {
         return false;
     }
-    throw fromS3Error(outcome.GetError(), "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+    throw fromS3Error(error, "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
 }
 
 void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging)
@@ -306,7 +326,27 @@ void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const S
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
+<<<<<<< HEAD
         throw fromS3Error(result.GetError(), "S3 PutEmptyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+=======
+        if (current_retry == max_retry_times - 1) // Last request
+        {
+            throw fromS3Error(result.GetError(), "S3 PutEmptyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+        }
+        else
+        {
+            const auto & e = result.GetError();
+            LOG_ERROR(
+                client.log,
+                "S3 PutEmptyObject failed: {}, request_id={} bucket={} root={} key={}",
+                e.GetMessage(),
+                e.GetRequestId(),
+                client.bucket(),
+                client.root(),
+                key);
+            return false;
+        }
+>>>>>>> 83542e3213 (Fix exception thrown when reading from multiple partitions under S3 disagg (#7185))
     }
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
@@ -327,7 +367,28 @@ void uploadFile(const TiFlashS3Client & client, const String & local_fname, cons
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
+<<<<<<< HEAD
         throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
+=======
+        if (current_retry == max_retry_times - 1) // Last request
+        {
+            throw fromS3Error(result.GetError(), "S3 PutObject failed, local_fname={} bucket={} root={} key={}", local_fname, client.bucket(), client.root(), remote_fname);
+        }
+        else
+        {
+            const auto & e = result.GetError();
+            LOG_ERROR(
+                client.log,
+                "S3 PutObject failed: {}, request_id={} local_fname={} bucket={} root={} key={}",
+                e.GetMessage(),
+                e.GetRequestId(),
+                local_fname,
+                client.bucket(),
+                client.root(),
+                remote_fname);
+            return false;
+        }
+>>>>>>> 83542e3213 (Fix exception thrown when reading from multiple partitions under S3 disagg (#7185))
     }
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
@@ -637,7 +698,11 @@ ObjectInfo tryGetObjectInfo(
         {
             return ObjectInfo{.exist = false, .size = 0, .last_modification_time = {}};
         }
+<<<<<<< HEAD
         throw fromS3Error(o.GetError(), "Failed to check existence of object, bucket={} key={}", client.bucket(), key);
+=======
+        throw fromS3Error(o.GetError(), "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+>>>>>>> 83542e3213 (Fix exception thrown when reading from multiple partitions under S3 disagg (#7185))
     }
     // Else the object still exist
     const auto & res = o.GetResult();
@@ -653,7 +718,10 @@ void deleteObject(const TiFlashS3Client & client, const String & key)
     client.setBucketAndKeyWithRoot(req, key);
     ProfileEvents::increment(ProfileEvents::S3DeleteObject);
     auto o = client.DeleteObject(req);
-    RUNTIME_CHECK(o.IsSuccess(), o.GetError().GetMessage());
+    if (!o.IsSuccess())
+    {
+        throw fromS3Error(o.GetError(), "S3 DeleteObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+    }
     const auto & res = o.GetResult();
     UNUSED(res);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_delete_object).Observe(sw.elapsedSeconds());

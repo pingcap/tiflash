@@ -70,7 +70,8 @@ namespace DB
     M(force_ps_wal_compact)                                       \
     M(pause_before_full_gc_prepare)                               \
     M(force_owner_mgr_state)                                      \
-    M(exception_during_spill)
+    M(exception_during_spill)                                     \
+    M(force_fail_to_create_etcd_session)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
