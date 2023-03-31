@@ -429,6 +429,16 @@ String getThreadId()
     return ss.str();
 }
 
+void createThreadDirectoryIfNotExists(const WorkloadOptions & opts)
+{
+    auto tid = getThreadId();
+    auto dir = fmt::format("{}/{}", opts.s3_temp_dir, tid);
+    if (!std::filesystem::exists(dir))
+    {
+        std::filesystem::create_directories(dir);
+    }
+}
+
 void genFile(const String & fname, UInt64 fsize, char value)
 {
     String data(4096, value);
@@ -480,12 +490,7 @@ void getRandomObject(const DB::DM::tests::WorkloadOptions & opts)
 
 void putRandomObjectLoop(const WorkloadOptions & opts)
 {
-    static thread_local String tid = getThreadId();
-    auto dir = fmt::format("{}/{}", opts.s3_temp_dir, tid);
-    if (!std::filesystem::exists(dir))
-    {
-        std::filesystem::create_directories(dir);
-    }
+    createThreadDirectoryIfNotExists(opts);
     for (UInt64 i = 0; i < opts.s3_put_count_per_thread; ++i)
     {
         putRandomObject(opts);
@@ -494,12 +499,7 @@ void putRandomObjectLoop(const WorkloadOptions & opts)
 
 void getRandomObjectLoop(const WorkloadOptions & opts)
 {
-    static thread_local String tid = getThreadId();
-    auto dir = fmt::format("{}/{}", opts.s3_temp_dir, tid);
-    if (!std::filesystem::exists(dir))
-    {
-        std::filesystem::create_directories(dir);
-    }
+    createThreadDirectoryIfNotExists(opts);
     for (UInt64 i = 0; i < opts.s3_get_count_per_thread; ++i)
     {
         getRandomObject(opts);
@@ -508,7 +508,7 @@ void getRandomObjectLoop(const WorkloadOptions & opts)
 
 void benchS3(WorkloadOptions & opts)
 {
-    Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
+    //Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
     TiFlashTestEnv::setupLogger("debug");
 
     RUNTIME_CHECK(!opts.s3_bucket.empty());
@@ -550,12 +550,7 @@ void benchS3(WorkloadOptions & opts)
         /*queue_size*/ opts.s3_put_concurrency * 2);
 
     // make remote_fnames not empty.
-    static thread_local String tid = getThreadId();
-    auto dir = fmt::format("{}/{}", opts.s3_temp_dir, tid);
-    if (!std::filesystem::exists(dir))
-    {
-        std::filesystem::create_directories(dir);
-    }
+    createThreadDirectoryIfNotExists(opts);
     putRandomObjectLoop(opts);
 
     std::vector<std::future<void>> put_results;
