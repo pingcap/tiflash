@@ -52,30 +52,33 @@
 namespace DB::DM
 {
 
-RNRemoteReadTask::RNRemoteReadTask(std::vector<RNRemoteTableReadTaskPtr> && tasks_)
+RNRemoteReadTask::RNRemoteReadTask(std::vector<RNRemoteStoreReadTaskPtr> && input_tasks_)
     : num_segments(0)
     , log(Logger::get())
 {
-    for (const auto & table_task : tasks_)
+    for (const auto & store_task : input_tasks_)
     {
-        if (!table_task)
+        if (!store_task)
             continue;
-        auto res = tasks.emplace(table_task->storeID(), table_task);
-        RUNTIME_CHECK_MSG(res.second, "Duplicated task from store_id={}", table_task->storeID());
-        num_segments += table_task->size();
+        auto res = store_tasks.emplace(store_task->store_id, store_task);
+        RUNTIME_CHECK_MSG(res.second, "Duplicated task from store_id={}", store_task->store_id);
+        num_segments += store_task->numRemainTasks();
 
         // Push all inited tasks to ready queue
-        for (const auto & task : table_task->allTasks())
+        for (const auto & table_task : store_task->table_read_tasks)
         {
-            // TODO: If all pages are ready in local
-            // cache, and the segment does not contains any
-            // blocks on write node's mem-table, then we
-            // can simply skip the fetch page pharse and
-            // push it into ready queue
-            ready_segment_tasks[task->state].push_back(task);
+            for (const auto & seg_task : table_task->tasks)
+            {
+                // TODO: If all pages are ready in local
+                // cache, and the segment does not contains any
+                // blocks on write node's mem-table, then we
+                // can simply skip the fetch page pharse and
+                // push it into ready queue
+                ready_segment_tasks[seg_task->state].push_back(seg_task);
+            }
         }
     }
-    curr_store = tasks.begin();
+    curr_store = store_tasks.begin();
 }
 
 RNRemoteReadTask::~RNRemoteReadTask()
@@ -95,22 +98,22 @@ RNRemoteSegmentReadTaskPtr RNRemoteReadTask::nextFetchTask()
     std::lock_guard gurad(mtx_tasks);
     while (true)
     {
-        if (tasks.empty())
+        if (store_tasks.empty())
             return nullptr;
 
-        if (curr_store->second->size() > 0)
+        if (curr_store->second->numRemainTasks() > 0)
         {
             auto task = curr_store->second->nextTask();
             // Move to next store
             curr_store++;
-            if (curr_store == tasks.end())
-                curr_store = tasks.begin();
+            if (curr_store == store_tasks.end())
+                curr_store = store_tasks.begin();
             return task;
         }
         // No tasks left in this store, erase and try to pop task from the next store
-        curr_store = tasks.erase(curr_store);
-        if (curr_store == tasks.end())
-            curr_store = tasks.begin();
+        curr_store = store_tasks.erase(curr_store);
+        if (curr_store == store_tasks.end())
+            curr_store = store_tasks.begin();
     }
 }
 
@@ -300,7 +303,43 @@ bool RNRemoteReadTask::doneOrErrorHappen() const
     return false;
 }
 
-RNRemoteTableReadTaskPtr RNRemoteTableReadTask::buildFrom(
+/// RNRemoteStoreReadTask ///
+
+RNRemoteStoreReadTask::RNRemoteStoreReadTask(
+    StoreID store_id_,
+    std::vector<RNRemotePhysicalTableReadTaskPtr> table_read_tasks_)
+    : store_id(store_id_)
+    , table_read_tasks(std::move(table_read_tasks_))
+{
+    cur_table_task = table_read_tasks.begin();
+}
+
+size_t RNRemoteStoreReadTask::numRemainTasks() const
+{
+    std::lock_guard guard(mtx_tasks);
+    size_t num_segments = 0;
+    for (const auto & table_task : table_read_tasks)
+    {
+        num_segments += table_task->numRemainTasks();
+    }
+    return num_segments;
+}
+
+RNRemoteSegmentReadTaskPtr RNRemoteStoreReadTask::nextTask()
+{
+    std::lock_guard guard(mtx_tasks);
+    while (cur_table_task != table_read_tasks.end())
+    {
+        if (auto seg_task = (*cur_table_task)->nextTask(); seg_task != nullptr)
+            return seg_task;
+        ++cur_table_task;
+    }
+    return {};
+}
+
+/// RNRemotePhysicalTableReadTask ///
+
+RNRemotePhysicalTableReadTaskPtr RNRemotePhysicalTableReadTask::buildFrom(
     const Context & db_context,
     const ScanContextPtr & scan_context,
     const StoreID store_id,
@@ -311,7 +350,7 @@ RNRemoteTableReadTaskPtr RNRemoteTableReadTask::buildFrom(
 {
     // Deserialize from `DisaggregatedPhysicalTable`, this should also
     // ensure the local cache pages.
-    auto table_task = std::make_shared<RNRemoteTableReadTask>(
+    auto table_task = std::make_shared<RNRemotePhysicalTableReadTask>(
         store_id,
         KeyspaceTableID{remote_table.keyspace_id(), remote_table.table_id()},
         snapshot_id,
@@ -349,6 +388,16 @@ RNRemoteTableReadTaskPtr RNRemoteTableReadTask::buildFrom(
         table_task->tasks.push_back(f.get());
 
     return table_task;
+}
+
+RNRemoteSegmentReadTaskPtr RNRemotePhysicalTableReadTask::nextTask()
+{
+    std::lock_guard gurad(mtx_tasks);
+    if (tasks.empty())
+        return nullptr;
+    auto task = tasks.front();
+    tasks.pop_front();
+    return task;
 }
 
 /**
