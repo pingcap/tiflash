@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Common/ConcurrentIOQueue.h>
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/ConcurrentIOQueue.h>
 #include <Common/grpcpp.h>
 #include <common/logger_useful.h>
 
@@ -172,6 +172,15 @@ public:
     MPMCQueueResult pop(U && data)
     {
         auto ret = recv_queue->pop(std::forward<U>(data));
+        if (ret == MPMCQueueResult::OK)
+            kickCompletionQueue();
+        return ret;
+    }
+
+    template <typename U>
+    MPMCQueueResult tryPop(U && data)
+    {
+        auto ret = recv_queue->tryPop(std::forward<U>(data));
         if (ret == MPMCQueueResult::OK)
             kickCompletionQueue();
         return ret;

@@ -24,6 +24,7 @@
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
+#include <Flash/Mpp/ReceiverChannelTryWriter.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 #include <grpcpp/alarm.h>
@@ -176,9 +177,9 @@ void ExchangeReceiverBase<RPCContext>::prepareMsgChannels()
 {
     if (enable_fine_grained_shuffle_flag)
         for (size_t i = 0; i < output_stream_count; ++i)
-            msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+            msg_channels.push_back(std::make_shared<ConcurrentIOQueue<RecvMsgPtr>>(max_buffer_size));
     else
-        msg_channels.push_back(std::make_shared<ConcurrentIOQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+        msg_channels.push_back(std::make_shared<ConcurrentIOQueue<RecvMsgPtr>>(max_buffer_size));
 }
 
 template <typename RPCContext>
@@ -432,7 +433,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
 
 template <typename RPCContext>
 DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
-    const std::shared_ptr<ReceivedMessage> & recv_msg,
+    const RecvMsgPtr & recv_msg,
     std::queue<Block> & block_queue,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
@@ -489,8 +490,8 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::receive(size_t stream_id)
 {
     return receive(
         stream_id,
-        [&](size_t stream_id, std::shared_ptr<ReceivedMessage> & recv_msg) {
-            return msg_channels[stream_id]->pop(recv_msg);
+        [&](size_t stream_id, RecvMsgPtr & recv_msg) {
+            return grpc_recv_queue[stream_id].pop(recv_msg);
         });
 }
 
@@ -499,24 +500,24 @@ ReceiveResult ExchangeReceiverBase<RPCContext>::nonBlockingReceive(size_t stream
 {
     return receive(
         stream_id,
-        [&](size_t stream_id, std::shared_ptr<ReceivedMessage> & recv_msg) {
-            return msg_channels[stream_id]->tryPop(recv_msg);
+        [&](size_t stream_id, RecvMsgPtr & recv_msg) {
+            return grpc_recv_queue[stream_id].tryPop(recv_msg);
         });
 }
 
 template <typename RPCContext>
 ReceiveResult ExchangeReceiverBase<RPCContext>::receive(
     size_t stream_id,
-    std::function<MPMCQueueResult(size_t, std::shared_ptr<ReceivedMessage> &)> recv_func)
+    std::function<MPMCQueueResult(size_t, RecvMsgPtr &)> recv_func)
 {
     if (unlikely(stream_id >= grpc_recv_queue.size()))
     {
-        auto err_msg = fmt::format("stream_id out of range, stream_id: {}, total_channel_count: {}", stream_id, msg_channels.size());
+        auto err_msg = fmt::format("stream_id out of range, stream_id: {}, total_channel_count: {}", stream_id, grpc_recv_queue.size());
         LOG_ERROR(exc_log, err_msg);
         throw Exception(err_msg);
     }
 
-    std::shared_ptr<ReceivedMessage> recv_msg;
+    RecvMsgPtr recv_msg;
     switch (recv_func(stream_id, recv_msg))
     {
     case MPMCQueueResult::OK:
@@ -608,7 +609,7 @@ template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
     std::queue<Block> & block_queue,
     const Block & header,
-    const std::shared_ptr<ReceivedMessage> & recv_msg,
+    const RecvMsgPtr & recv_msg,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     assert(recv_msg != nullptr);

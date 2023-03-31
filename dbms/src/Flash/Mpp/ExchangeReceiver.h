@@ -94,7 +94,7 @@ enum class ReceiveStatus
 struct ReceiveResult
 {
     ReceiveStatus recv_status;
-    std::shared_ptr<ReceivedMessage> recv_msg;
+    RecvMsgPtr recv_msg;
 };
 
 template <typename RPCContext>
@@ -160,7 +160,7 @@ private:
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     DecodeDetail decodeChunks(
-        const std::shared_ptr<ReceivedMessage> & recv_msg,
+        const RecvMsgPtr & recv_msg,
         std::queue<Block> & block_queue,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
@@ -179,12 +179,12 @@ private:
     ExchangeReceiverResult toDecodeResult(
         std::queue<Block> & block_queue,
         const Block & header,
-        const std::shared_ptr<ReceivedMessage> & recv_msg,
+        const RecvMsgPtr & recv_msg,
         std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr);
 
     ReceiveResult receive(
         size_t stream_id,
-        std::function<MPMCQueueResult(size_t, std::shared_ptr<ReceivedMessage> &)> recv_func);
+        std::function<MPMCQueueResult(size_t, RecvMsgPtr &)> recv_func);
 
 private:
     void prepareMsgChannels();

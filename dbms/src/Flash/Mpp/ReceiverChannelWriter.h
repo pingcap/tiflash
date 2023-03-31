@@ -20,7 +20,6 @@
 #include <Flash/Mpp/GRPCReceiveQueue.h>
 #include <Flash/Mpp/ReceiverChannelBase.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
-#include <Flash/Mpp/ReceiverChannelBase.h>
 
 #include <memory>
 
