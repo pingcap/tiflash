@@ -40,6 +40,7 @@
 #include <sys/wait.h>
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -140,7 +141,7 @@ ContextPtr init(WorkloadOptions & opts)
             .bucket = opts.s3_bucket,
             .access_key_id = opts.s3_access_key_id,
             .secret_access_key = opts.s3_secret_access_key,
-            .root = "dtw",
+            .root = opts.s3_root,
         };
         DB::S3::ClientFactory::instance().init(config);
         initThreadPool();
@@ -449,7 +450,7 @@ void putRandomObject(const DB::DM::tests::WorkloadOptions & opts)
     static thread_local auto gen = DB::DM::tests::KeyGenerator::create(opts);
 
     auto remote_fname = fmt::format("{}/{}", tid, index++);
-    auto local_fname = fmt::format("/tmp/{}", remote_fname);
+    auto local_fname = fmt::format("{}/{}", opts.s3_temp_dir, remote_fname);
     auto fsize = gen->get64();
     char value = gen->get64() % 256;
     genFile(local_fname, fsize, value);
@@ -461,12 +462,12 @@ void putRandomObject(const DB::DM::tests::WorkloadOptions & opts)
     std::filesystem::remove(local_fname);
 }
 
-void getRandomObject()
+void getRandomObject(const DB::DM::tests::WorkloadOptions & opts)
 {
     static thread_local String tid = getThreadId();
     static thread_local UInt64 index = 0;
     auto [remote_fname, fsize] = getRemoteFname();
-    auto local_fname = fmt::format("/tmp/{}/{}", tid, index++);
+    auto local_fname = fmt::format("{}/{}/{}", opts.s3_temp_dir, tid, index++);
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     Stopwatch sw;
     S3::downloadFile(*client, local_fname, remote_fname);
@@ -480,7 +481,7 @@ void getRandomObject()
 void putRandomObjectLoop(const WorkloadOptions & opts)
 {
     static thread_local String tid = getThreadId();
-    auto dir = fmt::format("/tmp/{}", tid);
+    auto dir = fmt::format("{}/{}", opts.s3_temp_dir, tid);
     if (!std::filesystem::exists(dir))
     {
         std::filesystem::create_directories(dir);
@@ -494,20 +495,20 @@ void putRandomObjectLoop(const WorkloadOptions & opts)
 void getRandomObjectLoop(const WorkloadOptions & opts)
 {
     static thread_local String tid = getThreadId();
-    auto dir = fmt::format("/tmp/{}", tid);
+    auto dir = fmt::format("{}/{}", opts.s3_temp_dir, tid);
     if (!std::filesystem::exists(dir))
     {
         std::filesystem::create_directories(dir);
     }
     for (UInt64 i = 0; i < opts.s3_get_count_per_thread; ++i)
     {
-        getRandomObject();
+        getRandomObject(opts);
     }
 }
 
 void benchS3(WorkloadOptions & opts)
 {
-    //Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
+    Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
     TiFlashTestEnv::setupLogger("debug");
 
     RUNTIME_CHECK(!opts.s3_bucket.empty());
@@ -515,6 +516,16 @@ void benchS3(WorkloadOptions & opts)
     RUNTIME_CHECK(!opts.s3_root.empty());
     RUNTIME_CHECK(opts.s3_put_concurrency > 0);
     RUNTIME_CHECK(opts.s3_get_concurrency > 0);
+    RUNTIME_CHECK(!opts.s3_temp_dir.empty(), opts.s3_temp_dir);
+
+    if (!std::filesystem::exists(opts.s3_temp_dir))
+    {
+        std::filesystem::create_directories(opts.s3_temp_dir);
+    }
+    else
+    {
+        RUNTIME_CHECK(std::filesystem::is_directory(opts.s3_temp_dir), opts.s3_temp_dir);
+    }
 
     DB::StorageS3Config config = {
         .endpoint = opts.s3_endpoint,
@@ -538,6 +549,15 @@ void benchS3(WorkloadOptions & opts)
         /*max_free_threads*/ opts.s3_put_concurrency,
         /*queue_size*/ opts.s3_put_concurrency * 2);
 
+    // make remote_fnames not empty.
+    static thread_local String tid = getThreadId();
+    auto dir = fmt::format("{}/{}", opts.s3_temp_dir, tid);
+    if (!std::filesystem::exists(dir))
+    {
+        std::filesystem::create_directories(dir);
+    }
+    putRandomObjectLoop(opts);
+
     std::vector<std::future<void>> put_results;
     for (UInt64 i = 0; i < opts.s3_put_concurrency; ++i)
     {
@@ -548,8 +568,6 @@ void benchS3(WorkloadOptions & opts)
         put_results.push_back(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
-
-    std::this_thread::sleep_for(std::chrono::seconds(10));
 
     std::vector<std::future<void>> get_results;
     for (UInt64 i = 0; i < opts.s3_get_concurrency; ++i)

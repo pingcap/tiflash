@@ -75,6 +75,7 @@ struct WorkloadOptions
     UInt64 s3_get_concurrency;
     UInt64 s3_put_count_per_thread;
     UInt64 s3_get_count_per_thread;
+    String s3_temp_dir;
 
     std::string toString(std::string seperator = "\n") const;
     std::pair<bool, std::string> parseOptions(int argc, char * argv[]);

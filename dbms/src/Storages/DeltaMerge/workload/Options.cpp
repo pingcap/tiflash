@@ -107,7 +107,8 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("s3_put_concurrency", value<UInt64>()->default_value(16), "") //
         ("s3_get_concurrency", value<UInt64>()->default_value(16), "") //
         ("s3_put_count_per_thread", value<UInt64>()->default_value(16), "") //
-        ("s3_get_count_per_thread", value<UInt64>()->default_value(16), "");
+        ("s3_get_count_per_thread", value<UInt64>()->default_value(16), "") //
+        ("s3_temp_dir", value<std::string>()->default_value("./s3_tmp"), "");
 
     boost::program_options::variables_map vm;
     boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
@@ -195,6 +196,10 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     s3_get_concurrency = vm["s3_get_concurrency"].as<UInt64>();
     s3_put_count_per_thread = vm["s3_put_count_per_thread"].as<UInt64>();
     s3_get_count_per_thread = vm["s3_get_count_per_thread"].as<UInt64>();
+    if (vm.count("s3_temp_dir") > 0)
+    {
+        s3_temp_dir = vm["s3_temp_dir"].as<String>();
+    }
 
     return {true, toString()};
 }
