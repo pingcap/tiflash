@@ -72,7 +72,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("failpoints,F", value<std::vector<std::string>>()->multitoken(), "failpoint(s) to enable: fp1 fp2 fp3...") //
         //
         ("log_file", value<std::string>()->default_value(""), "") //
-        ("log_level", value<std::string>()->default_value("information"), "") //
+        ("log_level", value<std::string>()->default_value("debug"), "") //
         //
         ("verification", value<bool>()->default_value(true), "") //
         ("verify_round", value<uint64_t>()->default_value(10), "") //
@@ -86,7 +86,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("read_thread_count", value<uint64_t>()->default_value(1), "") //
         ("read_stream_count", value<uint64_t>()->default_value(4), "") //
         //
-        ("testing_type", value<std::string>()->default_value(""), "daily_perf/daily_random") //
+        ("testing_type", value<std::string>()->default_value(""), "daily_perf/daily_random/s3_bench") //
         //
         ("log_write_request", value<bool>()->default_value(false), "") //
         //
@@ -102,7 +102,15 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("s3_bucket", value<std::string>()->default_value(""), "") //
         ("s3_endpoint", value<std::string>()->default_value(""), "") //
         ("s3_access_key_id", value<std::string>()->default_value(""), "") //
-        ("s3_secret_access_key", value<std::string>()->default_value(""), "");
+        ("s3_secret_access_key", value<std::string>()->default_value(""), "") //
+        ("s3_root", value<std::string>()->default_value(""), "") //
+        ("s3_put_concurrency", value<UInt64>()->default_value(16), "") //
+        ("s3_get_concurrency", value<UInt64>()->default_value(16), "") //
+        ("s3_put_count_per_thread", value<UInt64>()->default_value(16), "") //
+        ("s3_get_count_per_thread", value<UInt64>()->default_value(16), "") //
+        ("s3_temp_dir", value<std::string>()->default_value("./s3_tmp"), "") //
+        ("s3_always_new_client", value<bool>()->default_value(true), "") //
+        ("s3_region", value<std::string>()->default_value(""), "");
 
     boost::program_options::variables_map vm;
     boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
@@ -185,6 +193,20 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     s3_endpoint = vm["s3_endpoint"].as<String>();
     s3_access_key_id = vm["s3_access_key_id"].as<String>();
     s3_secret_access_key = vm["s3_secret_access_key"].as<String>();
+    s3_root = vm["s3_root"].as<String>();
+    s3_put_concurrency = vm["s3_put_concurrency"].as<UInt64>();
+    s3_get_concurrency = vm["s3_get_concurrency"].as<UInt64>();
+    s3_put_count_per_thread = vm["s3_put_count_per_thread"].as<UInt64>();
+    s3_get_count_per_thread = vm["s3_get_count_per_thread"].as<UInt64>();
+    if (vm.count("s3_temp_dir") > 0)
+    {
+        s3_temp_dir = vm["s3_temp_dir"].as<String>();
+    }
+    if (vm.count("s3_always_new_client") > 0)
+    {
+        s3_always_new_client = vm["s3_always_new_client"].as<bool>();
+    }
+    s3_region = vm["s3_region"].as<String>();
 
     return {true, toString()};
 }

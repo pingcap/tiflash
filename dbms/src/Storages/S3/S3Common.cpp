@@ -65,6 +65,8 @@
 #include <mutex>
 #include <thread>
 
+extern String S3_REGION;
+
 namespace ProfileEvents
 {
 extern const Event S3HeadObject;
@@ -264,8 +266,10 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     log = Logger::get();
+    LOG_INFO(log, "Aws::InitAPI start");
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
+    LOG_INFO(log, "Aws::InitAPI end");
 
     std::unique_lock lock_init(mtx_init);
     if (client_is_inited) // another thread has done init
@@ -283,7 +287,9 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 
     if (!mock_s3_)
     {
+        LOG_INFO(log, "Create TiFlashS3Client start");
         shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
+        LOG_INFO(log, "Create TiFlashS3Client end");
     }
     else
     {
@@ -352,12 +358,21 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
     return initClientFromWriteNode();
 }
 
+std::shared_ptr<TiFlashS3Client> ClientFactory::newTiFlashClient()
+{
+    return std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
+}
+
+
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {
-    Aws::Client::ClientConfiguration cfg;
+    LOG_INFO(log, "Create ClientConfiguration start");
+    Aws::Client::ClientConfiguration cfg("", true);
+    LOG_INFO(log, "Create ClientConfiguration end");
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
     cfg.connectTimeoutMs = config_.connection_timeout_ms;
+    cfg.region = S3_REGION;
     if (!config_.endpoint.empty())
     {
         cfg.endpointOverride = config_.endpoint;
@@ -367,10 +382,12 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     }
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
-        Aws::Client::ClientConfiguration sts_cfg;
+        Aws::Client::ClientConfiguration sts_cfg("", true);
         sts_cfg.verifySSL = false;
+        sts_cfg.region = S3_REGION;
         Aws::STS::STSClient sts_client(sts_cfg);
         Aws::STS::Model::GetCallerIdentityRequest req;
+        LOG_INFO(log, "GetCallerIdentity start");
         auto get_identity_outcome = sts_client.GetCallerIdentity(req);
         if (!get_identity_outcome.IsSuccess())
         {
@@ -382,21 +399,28 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             const auto & result = get_identity_outcome.GetResult();
             LOG_INFO(log, "CallerIdentity{{UserId:{}, Account:{}, Arn:{}}}", result.GetUserId(), result.GetAccount(), result.GetArn());
         }
+        LOG_INFO(log, "GetCallerIdentity end");
 
         // Request that does not require authentication.
         // Such as the EC2 access permission to the S3 bucket is configured.
         // If the empty access_key_id and secret_access_key are passed to S3Client,
         // an authentication error will be reported.
-        return std::make_unique<Aws::S3::S3Client>(cfg);
+        LOG_INFO(log, "Create S3Client start");
+        auto cli = std::make_unique<Aws::S3::S3Client>(cfg);
+        LOG_INFO(log, "Create S3Client end");
+        return cli;
     }
     else
     {
         Aws::Auth::AWSCredentials cred(config_.access_key_id, config_.secret_access_key);
-        return std::make_unique<Aws::S3::S3Client>(
+        LOG_INFO(log, "Create S3Client start");
+        auto cli = std::make_unique<Aws::S3::S3Client>(
             cred,
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
             /*useVirtualAddressing*/ true);
+        LOG_INFO(log, "Create S3Client end");
+        return cli;
     }
 }
 
@@ -514,7 +538,7 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
-    LOG_DEBUG(client.log, "uploadFile local_fname={}, key={}, write_bytes={} cost={:.2f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
+    LOG_DEBUG(client.log, "uploadFile local_fname={}, key={}, write_bytes={} cost={:.3f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
     return true;
 }
 

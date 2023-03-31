@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/workload/DTWorkload.h>
 #include <Storages/DeltaMerge/workload/Handle.h>
+#include <Storages/DeltaMerge/workload/KeyGenerator.h>
 #include <Storages/DeltaMerge/workload/Options.h>
 #include <Storages/DeltaMerge/workload/Utils.h>
 #include <Storages/Page/PageConstants.h>
@@ -38,8 +39,14 @@
 #include <signal.h>
 #include <sys/wait.h>
 
+#include <algorithm>
+#include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <random>
+#include <thread>
+
+#include "Options.h"
 
 using namespace DB;
 using namespace DB::tests;
@@ -134,6 +141,7 @@ ContextPtr init(WorkloadOptions & opts)
             .bucket = opts.s3_bucket,
             .access_key_id = opts.s3_access_key_id,
             .secret_access_key = opts.s3_secret_access_key,
+            .root = opts.s3_root,
         };
         DB::S3::ClientFactory::instance().init(config);
         initThreadPool();
@@ -350,6 +358,260 @@ void dailyRandomTest(WorkloadOptions & opts, ContextPtr context)
     }
 }
 
+
+std::mutex mtx_remote_fnames;
+std::vector<std::pair<String, UInt64>> remote_fnames;
+
+void addRemoteFname(const String & remote_fname, UInt64 fsize)
+{
+    std::lock_guard lock(mtx_remote_fnames);
+    remote_fnames.push_back({remote_fname, fsize});
+}
+
+std::pair<String, UInt64> getRemoteFname()
+{
+    static auto gen = DB::DM::tests::KeyGenerator::create(WorkloadOptions{.testing_type = "s3_bench"});
+    std::lock_guard lock(mtx_remote_fnames);
+    return remote_fnames[gen->get64() % remote_fnames.size()];
+}
+
+class S3Stat
+{
+public:
+    void addPutStat(const String & key, double seconds)
+    {
+        std::lock_guard lock(mtx);
+        put_stats.emplace_back(key, seconds);
+    }
+    void addGetStat(const String & key, double seconds)
+    {
+        std::lock_guard lock(mtx);
+        get_stats.emplace_back(key, seconds);
+    }
+
+    std::vector<std::pair<String, double>> getPutStat()
+    {
+        std::lock_guard lock(mtx);
+        return put_stats;
+    }
+    std::vector<std::pair<String, double>> getGutStat()
+    {
+        std::lock_guard lock(mtx);
+        return get_stats;
+    }
+
+    std::pair<String, double> getMaxPutStat()
+    {
+        std::lock_guard lock(mtx);
+        auto itr = std::max_element(put_stats.begin(), put_stats.end(), [](const auto & a, const auto & b) { return a.second < b.second; });
+        return *itr;
+    }
+
+    std::pair<String, double> getMaxGetStat()
+    {
+        std::lock_guard lock(mtx);
+        auto itr = std::max_element(get_stats.begin(), get_stats.end(), [](const auto & a, const auto & b) { return a.second < b.second; });
+        return *itr;
+    }
+
+private:
+    std::mutex mtx;
+    std::vector<std::pair<String, double>> put_stats;
+    std::vector<std::pair<String, double>> get_stats;
+};
+
+S3Stat s3_stat;
+
+String getThreadId()
+{
+    std::ostringstream ss;
+    ss << std::this_thread::get_id();
+    return ss.str();
+}
+
+void createThreadDirectoryIfNotExists(const WorkloadOptions & opts)
+{
+    auto tid = getThreadId();
+    auto dir = fmt::format("{}/{}", opts.s3_temp_dir, tid);
+    if (!std::filesystem::exists(dir))
+    {
+        std::filesystem::create_directories(dir);
+    }
+}
+
+void genFile(const String & fname, UInt64 fsize, char value)
+{
+    String data(4096, value);
+    std::ofstream ostr(fname, std::ios_base::out | std::ios_base::binary);
+    RUNTIME_CHECK(ostr.is_open(), fname, strerror(errno));
+    std::string_view s(data);
+    for (UInt64 i = 0; i < fsize;)
+    {
+        auto n = std::min(4096, fsize - i);
+        ostr << s.substr(0, n);
+        i += n;
+    }
+}
+
+std::shared_ptr<S3::TiFlashS3Client> getS3Client(const WorkloadOptions & opts)
+{
+    if (opts.s3_always_new_client)
+    {
+        return S3::ClientFactory::instance().newTiFlashClient();
+    }
+    else
+    {
+        return S3::ClientFactory::instance().sharedTiFlashClient();
+    }
+}
+
+void putRandomObject(const DB::DM::tests::WorkloadOptions & opts)
+{
+    static thread_local String tid = getThreadId();
+    static thread_local UInt64 index = 0;
+    static thread_local auto gen = DB::DM::tests::KeyGenerator::create(opts);
+
+    auto remote_fname = fmt::format("{}/{}", tid, index++);
+    auto local_fname = fmt::format("{}/{}", opts.s3_temp_dir, remote_fname);
+    auto fsize = gen->get64();
+    char value = gen->get64() % 256;
+    genFile(local_fname, fsize, value);
+    auto client = getS3Client(opts);
+    Stopwatch sw;
+    S3::uploadFile(*client, local_fname, remote_fname);
+    addRemoteFname(remote_fname, fsize);
+    s3_stat.addPutStat(remote_fname, sw.elapsedSeconds());
+    std::filesystem::remove(local_fname);
+}
+
+void getRandomObject(const DB::DM::tests::WorkloadOptions & opts)
+{
+    static thread_local String tid = getThreadId();
+    static thread_local UInt64 index = 0;
+    auto [remote_fname, fsize] = getRemoteFname();
+    auto local_fname = fmt::format("{}/{}/{}", opts.s3_temp_dir, tid, index++);
+    auto client = getS3Client(opts);
+    Stopwatch sw;
+    S3::downloadFile(*client, local_fname, remote_fname);
+    s3_stat.addGetStat(remote_fname, sw.elapsedSeconds());
+    auto download_size = std::filesystem::file_size(local_fname);
+    std::cout << fmt::format("GetObject {} bytes={} cost={:.3f}s", remote_fname, download_size, sw.elapsedSeconds()) << std::endl;
+    RUNTIME_CHECK(fsize = download_size, remote_fname, download_size, fsize);
+    std::filesystem::remove(local_fname);
+}
+
+void putRandomObjectLoop(const WorkloadOptions & opts)
+{
+    createThreadDirectoryIfNotExists(opts);
+    for (UInt64 i = 0; i < opts.s3_put_count_per_thread; ++i)
+    {
+        putRandomObject(opts);
+    }
+}
+
+void getRandomObjectLoop(const WorkloadOptions & opts)
+{
+    createThreadDirectoryIfNotExists(opts);
+    for (UInt64 i = 0; i < opts.s3_get_count_per_thread; ++i)
+    {
+        getRandomObject(opts);
+    }
+}
+
+String S3_REGION;
+
+void benchS3(WorkloadOptions & opts)
+{
+    //Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
+    TiFlashTestEnv::setupLogger(opts.log_level );
+
+    RUNTIME_CHECK(!opts.s3_bucket.empty());
+    RUNTIME_CHECK(!opts.s3_endpoint.empty());
+    RUNTIME_CHECK(!opts.s3_root.empty());
+    RUNTIME_CHECK(opts.s3_put_concurrency > 0);
+    RUNTIME_CHECK(opts.s3_get_concurrency > 0);
+    RUNTIME_CHECK(!opts.s3_temp_dir.empty(), opts.s3_temp_dir);
+    RUNTIME_CHECK(!opts.s3_region.empty());
+
+    S3_REGION = opts.s3_region;
+
+    if (!std::filesystem::exists(opts.s3_temp_dir))
+    {
+        std::filesystem::create_directories(opts.s3_temp_dir);
+    }
+    else
+    {
+        RUNTIME_CHECK(std::filesystem::is_directory(opts.s3_temp_dir), opts.s3_temp_dir);
+    }
+
+    DB::StorageS3Config config = {
+        .endpoint = opts.s3_endpoint,
+        .bucket = opts.s3_bucket,
+        .access_key_id = opts.s3_access_key_id,
+        .secret_access_key = opts.s3_secret_access_key,
+        .root = opts.s3_root,
+    };
+    std::cout << fmt::format("StorageS3Config: {}", config.toString()) << std::endl;
+    DB::S3::ClientFactory::instance().init(config);
+
+    // Threads for GetObject
+    S3FileCachePool::initialize(
+        /*max_threads*/ opts.s3_get_concurrency,
+        /*max_free_threads*/ opts.s3_get_concurrency,
+        /*queue_size*/ opts.s3_get_concurrency * 2);
+
+    // Threads For PutObject
+    DataStoreS3Pool::initialize(
+        /*max_threads*/ opts.s3_put_concurrency,
+        /*max_free_threads*/ opts.s3_put_concurrency,
+        /*queue_size*/ opts.s3_put_concurrency * 2);
+
+    // make remote_fnames not empty.
+    createThreadDirectoryIfNotExists(opts);
+    putRandomObjectLoop(opts);
+
+    std::vector<std::future<void>> put_results;
+    for (UInt64 i = 0; i < opts.s3_put_concurrency; ++i)
+    {
+        auto task = std::make_shared<std::packaged_task<void()>>(
+            [&]() {
+                putRandomObjectLoop(opts);
+            });
+        put_results.push_back(task->get_future());
+        DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+    }
+
+    std::vector<std::future<void>> get_results;
+    for (UInt64 i = 0; i < opts.s3_get_concurrency; ++i)
+    {
+        auto task = std::make_shared<std::packaged_task<void()>>(
+            [&]() {
+                getRandomObjectLoop(opts);
+            });
+        get_results.push_back(task->get_future());
+        S3FileCachePool::get().scheduleOrThrowOnError([task]() { (*task)(); });
+    }
+    for (auto & f : put_results)
+    {
+        f.get();
+    }
+
+    for (auto & f : get_results)
+    {
+        f.get();
+    }
+
+    {
+        auto [key, seconds] = s3_stat.getMaxPutStat();
+        std::cout << fmt::format("max put time: {} => {}", key, seconds) << std::endl;
+    }
+    {
+        auto [key, seconds] = s3_stat.getMaxGetStat();
+        std::cout << fmt::format("max get time: {} => {}", key, seconds) << std::endl;
+    }
+    DB::S3::ClientFactory::instance().shutdown();
+}
+
 int DTWorkload::mainEntry(int argc, char ** argv)
 {
     WorkloadOptions opts;
@@ -358,6 +620,19 @@ int DTWorkload::mainEntry(int argc, char ** argv)
     {
         std::cerr << msg << std::endl;
         return -1;
+    }
+
+    if (opts.testing_type == "s3_bench")
+    {
+        try
+        {
+            benchS3(opts);
+        }
+        catch (...)
+        {
+            DB::tryLogCurrentException("exception thrown");
+        }
+        return 0;
     }
 
     // Log file is created in the first directory of `opts.work_dirs` by default.
