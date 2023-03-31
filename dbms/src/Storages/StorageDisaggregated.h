@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNRemoteReadTask_fwd.h>
 #include <Storages/IStorage.h>
 
 #pragma GCC diagnostic push
@@ -40,10 +41,6 @@ using ColumnDefines = std::vector<ColumnDefine>;
 using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
-class RNRemoteReadTask;
-using RNRemoteReadTaskPtr = std::shared_ptr<RNRemoteReadTask>;
-class RNRemoteTableReadTask;
-using RNRemoteTableReadTaskPtr = std::shared_ptr<RNRemoteTableReadTask>;
 } // namespace DM
 
 using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
@@ -96,8 +93,8 @@ private:
     void buildDisaggTask(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task,
-        std::vector<DM::RNRemoteTableReadTaskPtr> & build_results,
-        std::mutex & build_results_lock);
+        std::vector<DM::RNRemoteStoreReadTaskPtr> & store_read_tasks,
+        std::mutex & store_read_tasks_lock);
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest>
     buildDisaggTaskForNode(
         const Context & db_context,
