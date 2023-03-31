@@ -73,7 +73,7 @@ void BgStorageInitHolder::start(Context & global_context, const LoggerPtr & log,
 
         size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency()) * global_context.getSettingsRef().init_thread_count_scale;
         auto init_storages_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
-        ThreadPoolWaitGroup init_storages_wait_group(&init_storages_thread_pool);
+        auto & init_storages_wait_group = init_storages_thread_pool.waitGroup();
 
         for (auto & iter : storages)
         {

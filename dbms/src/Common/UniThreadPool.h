@@ -34,6 +34,7 @@
 
 namespace DB
 {
+// class ThreadPoolWaitGroup;
 /** Very simple thread pool similar to boost::threadpool.
   * Advantages:
   * - catches exceptions and rethrows on wait.
@@ -96,6 +97,79 @@ public:
     void setQueueSize(size_t value);
     size_t getMaxThreads() const;
 
+    /// ThreadPoolWaitGroup is used to wait all the task launched here to finish
+    /// ThreadPoolWaitGroup guarantee the exception safty of TheadPool.
+    class ThreadPoolWaitGroup
+    {
+    public:
+        explicit ThreadPoolWaitGroup(ThreadPoolImpl<Thread> & thread_pool_)
+            : thread_pool(thread_pool_)
+        {}
+        ThreadPoolWaitGroup(const ThreadPoolWaitGroup &) = delete;
+        ~ThreadPoolWaitGroup()
+        {
+            try
+            {
+                wait();
+            }
+            catch (const Exception & exc)
+            {
+                LOG_ERROR(&Poco::Logger::get("ThreadPoolWaitGroup"), "Exception error code = {}, message = {}", exc.code(), exc.displayText());
+            }
+        }
+
+        void schedule(std::shared_ptr<std::packaged_task<void()>> task)
+        {
+            thread_pool.scheduleOrThrowOnError([task] { (*task)(); });
+            futures.emplace_back(task->get_future());
+        }
+
+        void wait()
+        {
+            if (consumed)
+                return;
+            consumed = true;
+
+            std::exception_ptr first_exception;
+            for (auto & future : futures)
+            {
+                // ensure all futures finished
+                try
+                {
+                    future.get();
+                }
+                catch (...)
+                {
+                    if (!first_exception)
+                        first_exception = std::current_exception();
+                }
+            }
+
+            if (first_exception)
+            {
+                try
+                {
+                    std::rethrow_exception(first_exception);
+                }
+                catch (Exception & exc)
+                {
+                    exc.addMessage(exc.getStackTrace().toString());
+                    exc.rethrow();
+                }
+            }
+        }
+
+    private:
+        std::vector<std::future<void>> futures;
+        ThreadPoolImpl<Thread> & thread_pool;
+        bool consumed = false;
+    };
+
+    ThreadPoolWaitGroup & waitGroup()
+    {
+        return wait_group;
+    }
+
 private:
     mutable std::mutex mutex;
     std::condition_variable job_finished;
@@ -108,6 +182,8 @@ private:
     size_t scheduled_jobs = 0;
     bool shutdown = false;
     const bool shutdown_on_exception = true;
+
+    ThreadPoolWaitGroup wait_group;
 
     struct JobWithPriority
     {
@@ -287,74 +363,6 @@ protected:
     }
 };
 
-/// ThreadPoolWaitGroup is used to wait all the task launched here to finish
-/// ThreadPoolWaitGroup guarantee the exception safty of TheadPool.
-template <typename ThreadPool>
-class ThreadPoolWaitGroup
-{
-public:
-    explicit ThreadPoolWaitGroup(ThreadPool * thread_pool_)
-        : thread_pool(thread_pool_)
-    {}
-    ThreadPoolWaitGroup(const ThreadPoolWaitGroup &) = delete;
-    ~ThreadPoolWaitGroup()
-    {
-        try
-        {
-            wait();
-        }
-        catch (const Exception & exc)
-        {
-            LOG_ERROR(&Poco::Logger::get("ThreadPoolWaitGroup"), "Exception error code = {}, message = {}", exc.code(), exc.displayText());
-        }
-    }
-
-    void schedule(std::shared_ptr<std::packaged_task<void()>> task)
-    {
-        thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
-        futures.emplace_back(task->get_future());
-    }
-
-    void wait()
-    {
-        if (consumed)
-            return;
-        consumed = true;
-
-        std::exception_ptr first_exception;
-        for (auto & future : futures)
-        {
-            // ensure all futures finished
-            try
-            {
-                future.get();
-            }
-            catch (...)
-            {
-                if (!first_exception)
-                    first_exception = std::current_exception();
-            }
-        }
-
-        if (first_exception)
-        {
-            try
-            {
-                std::rethrow_exception(first_exception);
-            }
-            catch (Exception & exc)
-            {
-                exc.addMessage(exc.getStackTrace().toString());
-                exc.rethrow();
-            }
-        }
-    }
-
-private:
-    std::vector<std::future<void>> futures;
-    ThreadPool * thread_pool;
-    bool consumed = false;
-};
 
 /// Schedule jobs/tasks on global thread pool without implicit passing tracing context on current thread to underlying worker as parent tracing context.
 ///

@@ -102,7 +102,7 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};
 
-    ThreadPoolWaitGroup wait_group(thread_pool);
+    auto & wait_group = thread_pool->waitGroup();
 
     std::mutex failed_tables_mutex;
     Tables tables_failed_to_startup;
