@@ -351,6 +351,11 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
     return initClientFromWriteNode();
 }
 
+std::shared_ptr<TiFlashS3Client> ClientFactory::newTiFlashClient()
+{
+    return std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
+}
+
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {
     Aws::Client::ClientConfiguration cfg;
