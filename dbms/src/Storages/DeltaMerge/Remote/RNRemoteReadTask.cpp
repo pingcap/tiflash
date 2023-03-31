@@ -341,6 +341,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteStoreReadTask::nextTask()
 
 RNRemotePhysicalTableReadTaskPtr RNRemotePhysicalTableReadTask::buildFrom(
     const Context & db_context,
+    const ScanContextPtr & scan_context,
     const StoreID store_id,
     const String & address,
     const DisaggTaskId & snapshot_id,
@@ -370,6 +371,7 @@ RNRemotePhysicalTableReadTaskPtr RNRemotePhysicalTableReadTask::buildFrom(
 
             return RNRemoteSegmentReadTask::buildFrom(
                 db_context,
+                scan_context,
                 remote_seg,
                 snapshot_id,
                 table_task->store_id,
@@ -422,6 +424,7 @@ RNRemoteSegmentReadTask::RNRemoteSegmentReadTask(
 
 RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
     const Context & db_context,
+    const ScanContextPtr & scan_context,
     const RemotePb::RemoteSegment & proto,
     const DisaggTaskId & snapshot_id,
     StoreID store_id,
@@ -459,8 +462,7 @@ RNRemoteSegmentReadTaskPtr RNRemoteSegmentReadTask::buildFrom(
         /* is_common_handle */ segment_range.is_common_handle,
         /* rowkey_column_size */ segment_range.rowkey_column_size,
         db_context.getSettingsRef(),
-        /* scan_context */ std::make_shared<ScanContext>() // Currently we don't access its content
-    );
+        scan_context);
 
     task->segment = std::make_shared<Segment>(
         log,
