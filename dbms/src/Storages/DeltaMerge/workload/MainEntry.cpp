@@ -453,6 +453,18 @@ void genFile(const String & fname, UInt64 fsize, char value)
     }
 }
 
+std::shared_ptr<S3::TiFlashS3Client> getS3Client(const WorkloadOptions & opts)
+{
+    if (opts.s3_always_new_client)
+    {
+        return S3::ClientFactory::instance().newTiFlashClient();
+    }
+    else
+    {
+        return S3::ClientFactory::instance().sharedTiFlashClient();
+    }
+}
+
 void putRandomObject(const DB::DM::tests::WorkloadOptions & opts)
 {
     static thread_local String tid = getThreadId();
@@ -464,7 +476,7 @@ void putRandomObject(const DB::DM::tests::WorkloadOptions & opts)
     auto fsize = gen->get64();
     char value = gen->get64() % 256;
     genFile(local_fname, fsize, value);
-    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+    auto client = getS3Client(opts);
     Stopwatch sw;
     S3::uploadFile(*client, local_fname, remote_fname);
     addRemoteFname(remote_fname, fsize);
@@ -478,7 +490,7 @@ void getRandomObject(const DB::DM::tests::WorkloadOptions & opts)
     static thread_local UInt64 index = 0;
     auto [remote_fname, fsize] = getRemoteFname();
     auto local_fname = fmt::format("{}/{}/{}", opts.s3_temp_dir, tid, index++);
-    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+    auto client = getS3Client(opts);
     Stopwatch sw;
     S3::downloadFile(*client, local_fname, remote_fname);
     s3_stat.addGetStat(remote_fname, sw.elapsedSeconds());
@@ -509,7 +521,7 @@ void getRandomObjectLoop(const WorkloadOptions & opts)
 void benchS3(WorkloadOptions & opts)
 {
     //Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
-    TiFlashTestEnv::setupLogger("debug");
+    TiFlashTestEnv::setupLogger(opts.log_level);
 
     RUNTIME_CHECK(!opts.s3_bucket.empty());
     RUNTIME_CHECK(!opts.s3_endpoint.empty());
