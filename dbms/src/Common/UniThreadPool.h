@@ -98,10 +98,9 @@ public:
     void setQueueSize(size_t value);
     size_t getMaxThreads() const;
 
-    std::shared_ptr<ThreadPoolWaitGroup<Thread>> waitGroup()
+    std::unique_ptr<ThreadPoolWaitGroup<Thread>> waitGroup()
     {
-        std::shared_ptr<ThreadPoolWaitGroup<Thread>> wait_group = std::make_shared<ThreadPoolWaitGroup<Thread>>(*this);
-        return wait_group;
+        return std::make_unique<ThreadPoolWaitGroup<Thread>>(*this);
     }
 
 private:
