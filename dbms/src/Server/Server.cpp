@@ -637,7 +637,7 @@ public:
                     LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
                 }
 
-                /// At least one of TCP and HTTP servers must be created.
+                /// TCP servers must be created.
                 if (servers.empty())
                     throw Exception("No 'tcp_port' and 'http_port' is specified in configuration file.", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
             }

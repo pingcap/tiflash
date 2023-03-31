@@ -34,8 +34,10 @@
 #include <Flash/Mpp/MppVersion.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/ServiceUtils.h>
+#include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Interpreters/executeQuery.h>
 #include <Server/IServer.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
@@ -50,12 +52,6 @@
 #include <kvproto/disaggregated.pb.h>
 
 #include <ext/scope_guard.h>
-
-#include "Common/Exception.h"
-#include "Flash/Coprocessor/UnaryDAGResponseWriter.h"
-#include "IO/MemoryReadWriteBuffer.h"
-// #include "Core/QueryProcessingStage.h"
-#include <Interpreters/executeQuery.h>
 
 namespace DB
 {
