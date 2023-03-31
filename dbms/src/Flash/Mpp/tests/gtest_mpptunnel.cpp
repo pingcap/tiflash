@@ -199,7 +199,7 @@ public:
                 },
                 []() {},
                 ReceiverChannelWriter(&msg_channels, "", log, &data_size_in_queue, ReceiverMode::Local));
-            tunnel->connectLocalV2(0, local_request_handler, false, false);
+            tunnel->connectLocalV2(0, local_request_handler, false, true);
         }
     }
 
@@ -592,7 +592,8 @@ try
     std::vector<std::thread> threads;
     for (size_t i = 0; i < tunnels.size(); ++i)
     {
-        auto run_tunnel = [sender_tunnel = tunnels[i]->getLocalTunnelSenderV1(), send_data_packet_num]() {
+        auto run_tunnel = [sender_tunnel = tunnels[i]->getLocalTunnelSenderV2(), send_data_packet_num]() {
+            ASSERT_TRUE(sender_tunnel.get() != nullptr);
             for (size_t i = 0; i < send_data_packet_num; ++i)
                 sender_tunnel->push(newDataPacket("111"));
             sender_tunnel->finish();
@@ -636,8 +637,8 @@ try
 
     tunnels[0]->write(newDataPacket("First"));
     tunnels[0]->write(newDataPacket("Second"));
-    tunnels[0]->getLocalTunnelSenderV1()->consumerFinish("");
-    GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(tunnels[0]->getTunnelSender()), true);
+    tunnels[0]->getLocalTunnelSenderV2()->consumerFinish("");
+    GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(tunnels[0]->getLocalTunnelSenderV2()), true);
 
     t.join();
     auto result_size = receiver->getReceivedMsgs().size();
