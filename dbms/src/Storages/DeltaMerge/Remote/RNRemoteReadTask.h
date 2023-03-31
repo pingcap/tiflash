@@ -158,6 +158,7 @@ public:
 
     static RNRemotePhysicalTableReadTaskPtr buildFrom(
         const Context & db_context,
+        const ScanContextPtr & scan_context,
         StoreID store_id,
         const String & address,
         const DisaggTaskId & snapshot_id,
@@ -191,6 +192,7 @@ class RNRemoteSegmentReadTask
 public:
     static RNRemoteSegmentReadTaskPtr buildFrom(
         const Context & db_context,
+        const ScanContextPtr & scan_context,
         const RemotePb::RemoteSegment & proto,
         const DisaggTaskId & snapshot_id,
         StoreID store_id,
