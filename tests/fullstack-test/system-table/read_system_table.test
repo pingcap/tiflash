@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-mysql> use test;
-mysql> drop table if exists t;
-mysql> create table t (a int);
+mysql> drop table if exists test.t;
+mysql> create table test.t (a int);
 
 # empty set
 mysql> select * from information_schema.tiflash_replica;
@@ -22,7 +21,7 @@ mysql> select * from information_schema.tiflash_segments;
 mysql> select * from information_schema.tiflash_tables;
 
 # add tiflash replica
-mysql> alter table t set tiflash replica 1;
+mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
 mysql> select * from information_schema.tiflash_replica;
@@ -47,7 +46,7 @@ mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schem
 +---------------+------------+------------+
 
 # insert data
-mysql> insert into t values (1), (2), (3);
+mysql> insert into test.t values (1), (2), (3);
 func> wait_table test t
 
 mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments;
@@ -65,7 +64,7 @@ mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schem
 +---------------+------------+------------+
 
 # delete data
-mysql> delete from t where a = 1;
+mysql> delete from test.t where a = 1;
 func> wait_table test t
 
 mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments;
@@ -83,4 +82,4 @@ mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schem
 +---------------+------------+------------+
 
 # drop table
-mysql> drop table t;
+mysql> drop table test.t;
