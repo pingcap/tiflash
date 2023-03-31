@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/UniThreadPool.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context_fwd.h>
@@ -23,8 +24,6 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
-
-#include "Common/UniThreadPool.h"
 
 
 namespace TiDB

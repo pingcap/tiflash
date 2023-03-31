@@ -33,6 +33,8 @@
 
 namespace DB
 {
+template <typename Thread>
+class ThreadPoolWaitGroup;
 /** Very simple thread pool similar to boost::threadpool.
   * Advantages:
   * - catches exceptions and rethrows on wait.
@@ -94,6 +96,12 @@ public:
     void setMaxFreeThreads(size_t value);
     void setQueueSize(size_t value);
     size_t getMaxThreads() const;
+
+    std::shared_ptr<ThreadPoolWaitGroup<Thread>> waitGroup()
+    {
+        std::shared_ptr<ThreadPoolWaitGroup<Thread>> wait_group = std::make_shared<ThreadPoolWaitGroup<Thread>>(*this);
+        return wait_group;
+    }
 
 private:
     mutable std::mutex mutex;
@@ -288,11 +296,13 @@ protected:
 
 /// ThreadPoolWaitGroup is used to wait all the task launched here to finish
 /// ThreadPoolWaitGroup guarantee the exception safty of TheadPool.
-template <typename ThreadPool>
+/// ThreadPoolWaitGroup is used to wait all the task launched here to finish
+/// To guarantee the exception safty of ThreadPoolWaitGroup, we need to create object, do schedule and wait in the same scope.
+template <typename Thread>
 class ThreadPoolWaitGroup
 {
 public:
-    explicit ThreadPoolWaitGroup(ThreadPool * thread_pool_)
+    explicit ThreadPoolWaitGroup(ThreadPoolImpl<Thread> & thread_pool_)
         : thread_pool(thread_pool_)
     {}
     ThreadPoolWaitGroup(const ThreadPoolWaitGroup &) = delete;
@@ -308,9 +318,10 @@ public:
         }
     }
 
-    void schedule(std::shared_ptr<std::packaged_task<void()>> task)
+    void schedule(std::function<void()> func)
     {
-        thread_pool->scheduleOrThrowOnError([task] { (*task)(); });
+        auto task = std::make_shared<std::packaged_task<void()>>(func);
+        thread_pool.scheduleOrThrowOnError([task] { (*task)(); });
         futures.emplace_back(task->get_future());
     }
 
@@ -351,7 +362,7 @@ public:
 
 private:
     std::vector<std::future<void>> futures;
-    ThreadPool * thread_pool;
+    ThreadPoolImpl<Thread> & thread_pool;
     bool consumed = false;
 };
 

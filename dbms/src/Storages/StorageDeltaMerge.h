@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/UniThreadPool.h>
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
@@ -28,8 +29,6 @@
 #include <Storages/Transaction/TiDB.h>
 
 #include <ext/shared_ptr_helper.h>
-
-#include "Common/UniThreadPool.h"
 
 namespace DB
 {

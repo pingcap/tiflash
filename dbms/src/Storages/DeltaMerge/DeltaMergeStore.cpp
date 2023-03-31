@@ -281,21 +281,21 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
             // parallel restore segment to speed up
             if (thread_pool)
             {
-                ThreadPoolWaitGroup wait_group(thread_pool);
+                auto wait_group = thread_pool->waitGroup();
                 auto segment_ids = Segment::getAllSegmentIds(*dm_context, segment_id);
                 std::mutex mutex;
                 for (auto & segment_id : segment_ids)
                 {
-                    auto task = std::make_shared<std::packaged_task<void()>>([this, dm_context, segment_id, &mutex] {
+                    auto task = [this, dm_context, segment_id, &mutex] {
                         auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
                         std::lock_guard lock(mutex);
                         segments.emplace(segment->getRowKeyRange().getEnd(), segment);
                         id_to_segment.emplace(segment_id, segment);
-                    });
-                    wait_group.schedule(task);
+                    };
+                    wait_group->schedule(task);
                 }
 
-                wait_group.wait();
+                wait_group->wait();
             }
             else
             {
