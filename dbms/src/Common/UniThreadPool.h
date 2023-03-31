@@ -296,7 +296,7 @@ protected:
 };
 
 /// ThreadPoolWaitGroup is used to wait all the task launched here to finish
-/// ThreadPoolWaitGroup guarantee the exception safty of TheadPool.
+/// To guarantee the exception safty of ThreadPoolWaitGroup, we need to create object, do schedule and wait in the same scope.
 template <typename Thread>
 class ThreadPoolWaitGroup
 {
@@ -317,8 +317,9 @@ public:
         }
     }
 
-    void schedule(std::shared_ptr<std::packaged_task<void()>> task)
+    void schedule(std::function<void()> func)
     {
+        auto task = std::make_shared<std::packaged_task<void()>>(func);
         thread_pool.scheduleOrThrowOnError([task] { (*task)(); });
         futures.emplace_back(task->get_future());
     }
