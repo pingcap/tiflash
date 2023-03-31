@@ -390,7 +390,7 @@ private:
     size_t source_index;
     LocalRequestHandler local_request_handler;
     std::atomic_bool is_done;
-    std::mutex mu;
+    mutable std::mutex mu;
 };
 
 // TODO remove it in the future
