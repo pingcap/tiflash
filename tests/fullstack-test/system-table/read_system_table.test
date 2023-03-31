@@ -1,0 +1,86 @@
+# Copyright 2023 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> use test;
+mysql> drop table if exists t;
+mysql> create table t (a int);
+
+# empty set
+mysql> select * from information_schema.tiflash_replica;
+mysql> select * from information_schema.tiflash_segments;
+mysql> select * from information_schema.tiflash_tables;
+
+# add tiflash replica
+mysql> alter table t set tiflash replica 1;
+func> wait_table test t
+
+mysql> select * from information_schema.tiflash_replica;
++--------------+------------+----------+---------------+-----------------+-----------+----------+
+| TABLE_SCHEMA | TABLE_NAME | TABLE_ID | REPLICA_COUNT | LOCATION_LABELS | AVAILABLE | PROGRESS |
++--------------+------------+----------+---------------+-----------------+-----------+----------+
+| test         | t          |       88 |             1 |                 |         1 |        1 |
++--------------+------------+----------+---------------+-----------------+-----------+----------+
+
+mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments;
++---------------+------------+------+
+| tidb_database | tidb_table | rows |
++---------------+------------+------+
+| test          | t          |    0 |
++---------------+------------+------+
+
+mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables;
++---------------+------------+------------+
+| tidb_database | tidb_table | total_rows |
++---------------+------------+------------+
+| test          | t          |          0 |
++---------------+------------+------------+
+
+# insert data
+mysql> insert into t values (1), (2), (3);
+func> wait_table test t
+
+mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments;
++---------------+------------+------+
+| tidb_database | tidb_table | rows |
++---------------+------------+------+
+| test          | t          |    3 |
++---------------+------------+------+
+
+mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables;
++---------------+------------+------------+
+| tidb_database | tidb_table | total_rows |
++---------------+------------+------------+
+| test          | t          |          3 |
++---------------+------------+------------+
+
+# delete data
+mysql> delete from t where a = 1;
+func> wait_table test t
+
+mysql> select `tidb_database`, `tidb_table`, `rows` from information_schema.tiflash_segments;
++---------------+------------+------+
+| tidb_database | tidb_table | rows |
++---------------+------------+------+
+| test          | t          |    2 |
++---------------+------------+------+
+
+mysql> select `tidb_database`, `tidb_table`, `total_rows` from information_schema.tiflash_tables;
++---------------+------------+------------+
+| tidb_database | tidb_table | total_rows |
++---------------+------------+------------+
+| test          | t          |          2 |
++---------------+------------+------------+
+
+# drop table
+mysql> drop table t;
