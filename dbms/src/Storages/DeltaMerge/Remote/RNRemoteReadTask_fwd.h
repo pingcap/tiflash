@@ -12,25 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/LimitTransformAction.h>
-#include <Operators/LimitTransformOp.h>
+#pragma once
 
-namespace DB
-{
-template <typename LimitActionPtr>
-OperatorStatus LimitTransformOp<LimitActionPtr>::transformImpl(Block & block)
-{
-    if (!action->transform(block))
-        block = {};
-    return OperatorStatus::HAS_OUTPUT;
-}
+#include <memory>
 
-template <typename LimitActionPtr>
-void LimitTransformOp<LimitActionPtr>::transformHeaderImpl(Block & header_)
+namespace DB::DM
 {
-    header_ = action->getHeader();
-}
 
-template class LimitTransformOp<GlobalLimitPtr>;
-template class LimitTransformOp<LocalLimitPtr>;
-} // namespace DB
+class RNRemoteReadTask;
+using RNRemoteReadTaskPtr = std::shared_ptr<RNRemoteReadTask>;
+class RNRemoteStoreReadTask;
+using RNRemoteStoreReadTaskPtr = std::shared_ptr<RNRemoteStoreReadTask>;
+class RNRemotePhysicalTableReadTask;
+using RNRemotePhysicalTableReadTaskPtr = std::shared_ptr<RNRemotePhysicalTableReadTask>;
+class RNRemoteSegmentReadTask;
+using RNRemoteSegmentReadTaskPtr = std::shared_ptr<RNRemoteSegmentReadTask>;
+
+} // namespace DB::DM

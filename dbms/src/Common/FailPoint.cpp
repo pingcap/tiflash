@@ -70,7 +70,8 @@ namespace DB
     M(force_ps_wal_compact)                                       \
     M(pause_before_full_gc_prepare)                               \
     M(force_owner_mgr_state)                                      \
-    M(exception_during_spill)
+    M(exception_during_spill)                                     \
+    M(force_fail_to_create_etcd_session)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -98,7 +99,8 @@ namespace DB
     M(force_fail_in_flush_region_data)                       \
     M(force_use_dmfile_format_v3)                            \
     M(force_set_mocked_s3_object_mtime)                      \
-    M(force_stop_background_checkpoint_upload)
+    M(force_stop_background_checkpoint_upload)               \
+    M(skip_seek_before_read_dmfile)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
@@ -267,9 +269,7 @@ FailPointHelper::getFailPointVal(const String & fail_point_name)
 {
     if (auto iter = fail_point_val.find(fail_point_name); iter != fail_point_val.end())
     {
-        auto v = iter->second;
-        fail_point_val.erase(iter);
-        return v;
+        return iter->second;
     }
     return std::nullopt;
 }
@@ -282,8 +282,8 @@ void FailPointHelper::disableFailPoint(const String & fail_point_name)
         /// if someone wait on this, the deconstruct will never be called.
         iter->second->notifyAll();
         fail_point_wait_channels.erase(iter);
-        fail_point_val.erase(fail_point_name);
     }
+    fail_point_val.erase(fail_point_name);
     fiu_disable(fail_point_name.c_str());
 }
 

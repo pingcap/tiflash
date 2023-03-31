@@ -33,6 +33,23 @@ void cut(Block & block, size_t rows [[maybe_unused]], size_t limit, size_t pos)
 }
 } // namespace
 
+bool LocalLimitTransformAction::transform(Block & block)
+{
+    if (unlikely(!block))
+        return true;
+
+    /// pos - how many lines were read, including the last read block
+    if (pos >= limit)
+        return false;
+
+    auto rows = block.rows();
+    pos += rows;
+    if (pos > limit)
+        cut(block, rows, limit, pos);
+    // for pos <= limit, give away the whole block
+    return true;
+}
+
 bool GlobalLimitTransformAction::transform(Block & block)
 {
     if (unlikely(!block))

@@ -3133,7 +3133,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size_)
         throw Exception(error_message);
     try
     {
-        LOG_DEBUG(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_non_joined_data_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_non_joined_data_streams.size()));
+        LOG_TRACE(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_non_joined_data_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_non_joined_data_streams.size()));
         assert(restore_build_streams.size() == restore_probe_streams.size() && restore_build_streams.size() == restore_non_joined_data_streams.size());
         auto get_back_stream = [](BlockInputStreams & streams) {
             BlockInputStreamPtr stream = streams.back();
@@ -3159,9 +3159,9 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size_)
         RUNTIME_CHECK_MSG(partitions[spilled_partition_index]->isSpill(), "should not restore unspilled partition.");
         if (restore_join_build_concurrency <= 0)
             restore_join_build_concurrency = getRestoreJoinBuildConcurrency(partitions.size(), spilled_partition_indexes.size(), join_restore_concurrency, probe_concurrency);
-        /// for restore join we make sure that the bulid concurrency is at least 2, so it can be spill again
+        /// for restore join we make sure that the build concurrency is at least 2, so it can be spill again
         assert(restore_join_build_concurrency >= 2);
-        LOG_DEBUG(log, "partition {}, round {}, build concurrency {}", spilled_partition_index, restore_round, restore_join_build_concurrency);
+        LOG_INFO(log, "Begin restore data from disk for hash join, partition {}, round {}, build concurrency {}.", spilled_partition_index, restore_round, restore_join_build_concurrency);
         restore_build_streams = build_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
         restore_probe_streams = probe_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
         restore_non_joined_data_streams.resize(restore_join_build_concurrency, nullptr);

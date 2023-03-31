@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/Logger.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/S3/MockS3Client.h>
 #include <aws/core/AmazonWebServiceRequest.h>
@@ -44,6 +45,7 @@
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/UploadPartRequest.h>
 #include <boost_wrapper/string_split.h>
+#include <common/logger_useful.h>
 #include <common/types.h>
 #include <fiu.h>
 
@@ -255,9 +257,15 @@ Model::HeadObjectOutcome MockS3Client::HeadObject(const Model::HeadObjectRequest
             if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_mocked_s3_object_mtime); v)
             {
                 auto m = std::any_cast<std::map<String, Aws::Utils::DateTime>>(v.value());
-                if (auto iter_m = m.find(normalizedKey(request.GetKey())); iter_m != m.end())
+                const auto req_key = normalizedKey(request.GetKey());
+                if (auto iter_m = m.find(req_key); iter_m != m.end())
                 {
                     r.SetLastModified(iter_m->second);
+                    LOG_WARNING(Logger::get(), "failpoint set mtime, key={} mtime={}", req_key, iter_m->second.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
+                }
+                else
+                {
+                    LOG_WARNING(Logger::get(), "failpoint set mtime failed, key={}", req_key);
                 }
             }
         };

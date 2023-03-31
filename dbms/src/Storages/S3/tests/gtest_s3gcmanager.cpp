@@ -15,11 +15,12 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
-#include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3GCManager.h>
@@ -28,8 +29,6 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/OwnerManager.h>
 #include <aws/core/utils/DateTime.h>
-#include <aws/s3/model/CreateBucketRequest.h>
-#include <aws/s3/model/CreateBucketResult.h>
 #include <aws/s3/model/GetObjectTaggingRequest.h>
 #include <gtest/gtest.h>
 #include <pingcap/pd/MockPDClient.h>
@@ -64,18 +63,29 @@ public:
 
     void SetUp() override
     {
+        DB::base::TiFlashStorageTestBasic::SetUp();
+
         auto config = getConfig();
         mock_s3_client = ClientFactory::instance().sharedTiFlashClient();
         auto mock_gc_owner = OwnerManager::createMockOwner("owner_0");
         auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_s3_client);
         auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
-        gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_gc_owner, mock_lock_client, config);
+        auto data_store = std::make_shared<DM::Remote::DataStoreS3>(::DB::tests::TiFlashTestEnv::getMockFileProvider());
+        gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_gc_owner, mock_lock_client, data_store, config);
 
         ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client);
 
-        dir = getTemporaryPath();
-        dropDataOnDisk(dir);
-        createIfNotExist(dir);
+        tmp_dir = getTemporaryPath();
+        data_file_path_pattern1 = tmp_dir + "/data1_{index}";
+        data_file_id_pattern1 = "data1_{index}";
+        manifest_file_path1 = tmp_dir + "/manifest_foo1";
+        manifest_file_id1 = "manifest_foo1";
+        data_file_path_pattern2 = tmp_dir + "/data2_{index}";
+        data_file_id_pattern2 = "data2_{index}";
+        manifest_file_path2 = tmp_dir + "/manifest_foo2";
+        manifest_file_id2 = "manifest_foo2";
+        dropDataOnDisk(tmp_dir);
+        createIfNotExist(tmp_dir);
     }
 
     void TearDown() override
@@ -84,11 +94,21 @@ public:
     }
 
 protected:
-    String dir;
+    String tmp_dir;
 
     std::shared_ptr<TiFlashS3Client> mock_s3_client;
     std::unique_ptr<S3GCManager> gc_mgr;
     LoggerPtr log;
+
+    String data_file_id_pattern1;
+    String data_file_path_pattern1;
+    String manifest_file_id1;
+    String manifest_file_path1;
+
+    String data_file_id_pattern2;
+    String data_file_path_pattern2;
+    String manifest_file_id2;
+    String manifest_file_path2;
 };
 
 class S3GCManagerByScanDeleteTest : public S3GCManagerTest
@@ -336,6 +356,9 @@ try
         S3::uploadEmptyFile(*mock_s3_client, delmark_key);
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3599 * 1000);
         FailPointHelper::enableFailPoint(FailPoints::force_set_mocked_s3_object_mtime, std::map<String, Aws::Utils::DateTime>{{mock_s3_client->root() + delmark_key, delmark_mtime}});
+        SCOPE_EXIT({
+            FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime);
+        });
         // mock_s3_client->head_result_mtime = delmark_mtime;
         gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
@@ -351,6 +374,9 @@ try
         S3::uploadEmptyFile(*mock_s3_client, delmark_key);
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3601 * 1000);
         FailPointHelper::enableFailPoint(FailPoints::force_set_mocked_s3_object_mtime, std::map<String, Aws::Utils::DateTime>{{mock_s3_client->root() + delmark_key, delmark_mtime}});
+        SCOPE_EXIT({
+            FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime);
+        });
         gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
 
         // lock datafile and delmark are deleted
@@ -580,15 +606,13 @@ TEST_F(S3GCManagerTest, ReadManifestFromS3)
 try
 {
     using namespace ::DB::PS::V3;
-    const String mf_key = "manifest_foo";
-    const String mf_key2 = "manifest_bar";
     { // prepare the manifest on S3
         const String entry_data = "apple_value";
         auto writer = CPFilesWriter::create({
-            .data_file_path = dir + "/data_1",
-            .data_file_id = "data_1",
-            .manifest_file_path = dir + "/" + mf_key,
-            .manifest_file_id = mf_key,
+            .data_file_path_pattern = data_file_path_pattern1,
+            .data_file_id_pattern = data_file_id_pattern1,
+            .manifest_file_path = manifest_file_path1,
+            .manifest_file_id = manifest_file_id1,
             .data_source = CPWriteDataSourceFixture::create({{0, entry_data}, {entry_data.size(), entry_data}}),
         });
 
@@ -631,18 +655,19 @@ try
                            1);
             writer->writeEditsAndApplyCheckpointInfo(edits);
         }
-        writer->writeSuffix();
+        auto data_paths = writer->writeSuffix();
+        LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
         writer.reset();
 
-        S3::uploadFile(*mock_s3_client, dir + "/" + mf_key, mf_key);
+        S3::uploadFile(*mock_s3_client, manifest_file_path1, manifest_file_id1);
     }
     { // prepare the second manifest on S3
         const String entry_data = "cherry_value";
         auto writer = CPFilesWriter::create({
-            .data_file_path = dir + "/data_2",
-            .data_file_id = "data_2",
-            .manifest_file_path = dir + "/" + mf_key2,
-            .manifest_file_id = mf_key2,
+            .data_file_path_pattern = data_file_path_pattern2,
+            .data_file_id_pattern = data_file_id_pattern2,
+            .manifest_file_path = manifest_file_path2,
+            .manifest_file_id = manifest_file_id2,
             .data_source = CPWriteDataSourceFixture::create({
                 {0, entry_data},
             }),
@@ -663,32 +688,33 @@ try
                            1);
             writer->writeEditsAndApplyCheckpointInfo(edits);
         }
-        writer->writeSuffix();
+        auto data_paths = writer->writeSuffix();
+        LOG_DEBUG(log, "Checkpoint data paths: {}", data_paths);
         writer.reset();
 
-        S3::uploadFile(*mock_s3_client, dir + "/" + mf_key2, mf_key2);
+        S3::uploadFile(*mock_s3_client, manifest_file_path2, manifest_file_id2);
     }
 
     // read from S3 key
     {
-        auto locks = gc_mgr->getValidLocksFromManifest({mf_key});
+        auto locks = gc_mgr->getValidLocksFromManifest({manifest_file_id1});
         EXPECT_EQ(locks.size(), 3) << fmt::format("{}", locks);
         // the lock ingest by FAP
         EXPECT_TRUE(locks.contains("apple_lock")) << fmt::format("{}", locks);
         EXPECT_TRUE(locks.contains("banana_lock")) << fmt::format("{}", locks);
         // the lock generated by checkpoint dump
-        EXPECT_TRUE(locks.contains("data_1")) << fmt::format("{}", locks);
+        EXPECT_TRUE(locks.contains("data1_0")) << fmt::format("{}", locks);
     }
     {
-        auto locks = gc_mgr->getValidLocksFromManifest({mf_key, mf_key2});
+        auto locks = gc_mgr->getValidLocksFromManifest({manifest_file_id1, manifest_file_id2});
         EXPECT_EQ(locks.size(), 4) << fmt::format("{}", locks);
         // the lock ingest by FAP
         EXPECT_TRUE(locks.contains("apple_lock")) << fmt::format("{}", locks);
         EXPECT_TRUE(locks.contains("banana_lock")) << fmt::format("{}", locks);
         // the lock generated by checkpoint dump
-        EXPECT_TRUE(locks.contains("data_1")) << fmt::format("{}", locks);
+        EXPECT_TRUE(locks.contains("data1_0")) << fmt::format("{}", locks);
         // the lock in the second checkpoint
-        EXPECT_TRUE(locks.contains("data_2")) << fmt::format("{}", locks);
+        EXPECT_TRUE(locks.contains("data2_0")) << fmt::format("{}", locks);
     }
 }
 CATCH
