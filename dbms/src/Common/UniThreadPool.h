@@ -310,9 +310,9 @@ public:
         {
             wait();
         }
-        catch (const Exception & exc)
+        catch (...)
         {
-            LOG_ERROR(&Poco::Logger::get("ThreadPoolWaitGroup"), "Exception error code = {}, message = {}", exc.code(), exc.displayText());
+            tryLogCurrentException(Logger::get(), "Error in destructor function of ThreadPoolWaitGroup");
         }
     }
 
