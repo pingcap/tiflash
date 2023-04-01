@@ -128,7 +128,7 @@ STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentials
     }
 
     Aws::Client::ClientConfiguration config;
-    config.scheme = Aws::Http::Scheme::HTTP; // Override by HTTP
+    config.scheme = Aws::Http::Scheme::HTTPS;
     config.region = tmp_region;
 
     Aws::Vector<Aws::String> retryable_errors;
