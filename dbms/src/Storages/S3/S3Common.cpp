@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,9 +20,11 @@
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
+#include <Storages/S3/Credentials.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <aws/core/auth/AWSCredentials.h>
+#include <aws/core/auth/STSCredentialsProvider.h>
 #include <aws/core/http/Scheme.h>
 #include <aws/core/utils/logging/LogMacros.h>
 #include <aws/core/utils/logging/LogSystemInterface.h>
@@ -406,7 +408,8 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
         // If the empty access_key_id and secret_access_key are passed to S3Client,
         // an authentication error will be reported.
         LOG_INFO(log, "Create S3Client start");
-        auto cli = std::make_unique<Aws::S3::S3Client>(cfg);
+        auto provider = std::make_shared<S3CredentialsProviderChain>();
+        auto cli = std::make_unique<Aws::S3::S3Client>(provider, std::make_shared<Aws::S3::S3EndpointProvider>(), cfg);
         LOG_INFO(log, "Create S3Client end");
         return cli;
     }
