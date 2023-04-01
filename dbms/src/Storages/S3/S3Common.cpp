@@ -60,6 +60,7 @@
 #include <filesystem>
 #include <fstream>
 #include <ios>
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -379,7 +380,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
         if (!get_identity_outcome.IsSuccess())
         {
             const auto & error = get_identity_outcome.GetError();
-            LOG_WARNING(log, "get CallerIdentity failed, exception={} message={}", error.GetExceptionName(), error.GetMessage());
+            LOG_WARNING(log, "get CallerIdentity failed, exception={} message={} request_id={}", error.GetExceptionName(), error.GetMessage(), error.GetRequestId());
         }
         else
         {
@@ -436,7 +437,7 @@ bool objectExists(const TiFlashS3Client & client, const String & key)
     {
         return false;
     }
-    throw fromS3Error(outcome.GetError(), "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+    throw fromS3Error(error, "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
 }
 
 static bool doUploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging, Int32 max_retry_times, Int32 current_retry)
@@ -459,7 +460,15 @@ static bool doUploadEmptyFile(const TiFlashS3Client & client, const String & key
         }
         else
         {
-            LOG_ERROR(client.log, "S3 PutEmptyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+            const auto & e = result.GetError();
+            LOG_ERROR(
+                client.log,
+                "S3 PutEmptyObject failed: {}, request_id={} bucket={} root={} key={}",
+                e.GetMessage(),
+                e.GetRequestId(),
+                client.bucket(),
+                client.root(),
+                key);
             return false;
         }
     }
@@ -494,7 +503,16 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
         }
         else
         {
-            LOG_ERROR(client.log, "S3 PutObject failed: {}, local_fname={} bucket={} root={} key={}", result.GetError().GetMessage(), local_fname, client.bucket(), client.root(), remote_fname);
+            const auto & e = result.GetError();
+            LOG_ERROR(
+                client.log,
+                "S3 PutObject failed: {}, request_id={} local_fname={} bucket={} root={} key={}",
+                e.GetMessage(),
+                e.GetRequestId(),
+                local_fname,
+                client.bucket(),
+                client.root(),
+                remote_fname);
             return false;
         }
     }
@@ -815,7 +833,7 @@ ObjectInfo tryGetObjectInfo(
         {
             return ObjectInfo{.exist = false, .size = 0, .last_modification_time = {}};
         }
-        throw fromS3Error(o.GetError(), "Failed to check existence of object, bucket={} root={} key={}", client.bucket(), client.root(), key);
+        throw fromS3Error(o.GetError(), "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
     }
     // Else the object still exist
     const auto & res = o.GetResult();
@@ -831,7 +849,10 @@ void deleteObject(const TiFlashS3Client & client, const String & key)
     client.setBucketAndKeyWithRoot(req, key);
     ProfileEvents::increment(ProfileEvents::S3DeleteObject);
     auto o = client.DeleteObject(req);
-    RUNTIME_CHECK(o.IsSuccess(), o.GetError().GetMessage());
+    if (!o.IsSuccess())
+    {
+        throw fromS3Error(o.GetError(), "S3 DeleteObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+    }
     const auto & res = o.GetResult();
     UNUSED(res);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_delete_object).Observe(sw.elapsedSeconds());

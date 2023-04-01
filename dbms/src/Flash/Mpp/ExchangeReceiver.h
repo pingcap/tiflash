@@ -191,6 +191,7 @@ private:
     void handleConnectionAfterException();
 
     void setUpConnectionWithReadLoop(Request && req);
+    void setUpLocalConnections(std::vector<Request> & requests, bool has_remote_conn);
 
     bool isReceiverForTiFlashStorage()
     {

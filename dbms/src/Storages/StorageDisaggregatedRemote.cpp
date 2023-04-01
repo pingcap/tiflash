@@ -93,6 +93,9 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
 {
     using namespace pingcap;
 
+    auto scan_context = std::make_shared<DM::ScanContext>();
+    context.getDAGContext()->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+
     DM::RNRemoteReadTaskPtr remote_read_tasks;
 
     double total_backoff_seconds = 0.0;
@@ -114,7 +117,10 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
             RUNTIME_CHECK(!batch_cop_tasks.empty());
 
             // Fetch the remote segment read tasks from write nodes
-            remote_read_tasks = buildDisaggTasks(db_context, batch_cop_tasks);
+            remote_read_tasks = buildDisaggTasks(
+                db_context,
+                scan_context,
+                batch_cop_tasks);
 
             break;
         }
@@ -144,13 +150,14 @@ BlockInputStreams StorageDisaggregated::readFromWriteNode(
 
 DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggTasks(
     const Context & db_context,
+    const DM::ScanContextPtr & scan_context,
     const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks)
 {
     size_t tasks_n = batch_cop_tasks.size();
 
-    std::mutex build_results_lock;
-    std::vector<DM::RNRemoteTableReadTaskPtr> build_results;
-    build_results.reserve(tasks_n);
+    std::mutex store_read_tasks_lock;
+    std::vector<DM::RNRemoteStoreReadTaskPtr> store_read_tasks;
+    store_read_tasks.reserve(tasks_n);
 
     auto thread_manager = newThreadManager();
     const auto & executor_id = table_scan.getTableScanExecutorID();
@@ -162,22 +169,28 @@ DM::RNRemoteReadTaskPtr StorageDisaggregated::buildDisaggTasks(
             true,
             "BuildDisaggTask",
             [&] {
-                buildDisaggTask(db_context, cop_task, build_results, build_results_lock);
+                buildDisaggTask(
+                    db_context,
+                    scan_context,
+                    cop_task,
+                    store_read_tasks,
+                    store_read_tasks_lock);
             });
     }
 
     // The first exception will be thrown out.
     thread_manager->wait();
 
-    return std::make_shared<DM::RNRemoteReadTask>(std::move(build_results));
+    return std::make_shared<DM::RNRemoteReadTask>(std::move(store_read_tasks));
 }
 
 /// Note: This function runs concurrently when there are multiple Write Nodes.
 void StorageDisaggregated::buildDisaggTask(
     const Context & db_context,
+    const DM::ScanContextPtr & scan_context,
     const pingcap::coprocessor::BatchCopTask & batch_cop_task,
-    std::vector<DM::RNRemoteTableReadTaskPtr> & build_results,
-    std::mutex & build_results_lock)
+    std::vector<DM::RNRemoteStoreReadTaskPtr> & store_read_tasks,
+    std::mutex & store_read_tasks_lock)
 {
     Stopwatch watch;
 
@@ -287,7 +300,8 @@ void StorageDisaggregated::buildDisaggTask(
     }
 
     // Parse the resp and gen tasks on read node
-    // The number of tasks is equal to number of write nodes
+    std::vector<DM::RNRemotePhysicalTableReadTaskPtr> remote_seg_tasks;
+    remote_seg_tasks.reserve(resp->tables_size());
     for (const auto & physical_table : resp->tables())
     {
         DB::DM::RemotePb::RemotePhysicalTable table;
@@ -296,26 +310,26 @@ void StorageDisaggregated::buildDisaggTask(
 
         Stopwatch w_build_table_task;
 
-        const auto task = DM::RNRemoteTableReadTask::buildFrom(
+        const auto task = DM::RNRemotePhysicalTableReadTask::buildFrom(
             db_context,
+            scan_context,
             resp->store_id(),
             batch_cop_task.store_addr,
             snapshot_id,
             table,
             log);
-        {
-            std::unique_lock lock(build_results_lock);
-            build_results.push_back(task);
-        }
+        remote_seg_tasks.emplace_back(task);
 
         LOG_DEBUG(
             log,
-            "Build RNRemoteTableReadTask finished, elapsed={:.3f}s store={} addr={} segments={}",
+            "Build RNRemotePhysicalTableReadTask finished, elapsed={:.3f}s store={} addr={} segments={}",
             w_build_table_task.elapsedSeconds(),
             resp->store_id(),
             batch_cop_task.store_addr,
             table.segments().size());
     }
+    std::unique_lock lock(store_read_tasks_lock);
+    store_read_tasks.emplace_back(std::make_shared<DM::RNRemoteStoreReadTask>(resp->store_id(), remote_seg_tasks));
 
     GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_read_task).Observe(watch.elapsedSeconds());
 }
