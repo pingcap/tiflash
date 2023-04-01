@@ -518,10 +518,12 @@ void getRandomObjectLoop(const WorkloadOptions & opts)
     }
 }
 
+String S3_REGION;
+
 void benchS3(WorkloadOptions & opts)
 {
     //Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
-    TiFlashTestEnv::setupLogger(opts.log_level);
+    TiFlashTestEnv::setupLogger(opts.log_level );
 
     RUNTIME_CHECK(!opts.s3_bucket.empty());
     RUNTIME_CHECK(!opts.s3_endpoint.empty());
@@ -529,6 +531,9 @@ void benchS3(WorkloadOptions & opts)
     RUNTIME_CHECK(opts.s3_put_concurrency > 0);
     RUNTIME_CHECK(opts.s3_get_concurrency > 0);
     RUNTIME_CHECK(!opts.s3_temp_dir.empty(), opts.s3_temp_dir);
+    RUNTIME_CHECK(!opts.s3_region.empty());
+
+    S3_REGION = opts.s3_region;
 
     if (!std::filesystem::exists(opts.s3_temp_dir))
     {
