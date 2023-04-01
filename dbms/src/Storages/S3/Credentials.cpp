@@ -32,7 +32,7 @@ static const char STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG[] = "STSAssumeRoleWithWeb
 static const int STS_CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD = 5 * 1000;
 
 // Override Aws::Auth::STSAssumeRoleWebIdentityCredentialsProvider by http
-class STSAssumeRoleWebIdentityCredentialsProvider : Aws::Auth::AWSCredentialsProvider
+class STSAssumeRoleWebIdentityCredentialsProvider : public Aws::Auth::AWSCredentialsProvider
 {
 public:
     STSAssumeRoleWebIdentityCredentialsProvider();
@@ -215,7 +215,7 @@ S3CredentialsProviderChain::S3CredentialsProviderChain()
     /// quite verbose even if nobody configured them. So we use our provider first and only after it use default providers.
     /// And ProcessCredentialsProvider is useless in our cases, removed.
 
-    AddProvider(Aws::MakeShared<Aws::Auth::STSAssumeRoleWebIdentityCredentialsProvider>(S3CredentialsProviderChainTag));
+    AddProvider(Aws::MakeShared<DB::S3::STSAssumeRoleWebIdentityCredentialsProvider>(S3CredentialsProviderChainTag));
     AddProvider(Aws::MakeShared<Aws::Auth::EnvironmentAWSCredentialsProvider>(S3CredentialsProviderChainTag));
 
     //ECS TaskRole Credentials only available when ENVIRONMENT VARIABLE is set
