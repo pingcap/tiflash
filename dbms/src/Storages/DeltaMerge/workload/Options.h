@@ -77,6 +77,7 @@ struct WorkloadOptions
     UInt64 s3_get_count_per_thread;
     String s3_temp_dir;
     bool s3_always_new_client;
+    String s3_region;
 
     std::string toString(std::string seperator = "\n") const;
     std::pair<bool, std::string> parseOptions(int argc, char * argv[]);
