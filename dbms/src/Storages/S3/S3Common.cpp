@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,9 +20,11 @@
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
+#include <Storages/S3/Credentials.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <aws/core/auth/AWSCredentials.h>
+#include <aws/core/auth/STSCredentialsProvider.h>
 #include <aws/core/http/Scheme.h>
 #include <aws/core/utils/logging/LogMacros.h>
 #include <aws/core/utils/logging/LogSystemInterface.h>
@@ -92,11 +94,9 @@ Poco::Message::Priority convertLogLevel(Aws::Utils::Logging::LogLevel log_level)
     case Aws::Utils::Logging::LogLevel::Warn:
         return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Info:
-        // treat aws info logging as trace level
-        return Poco::Message::PRIO_TRACE;
+        return Poco::Message::PRIO_INFORMATION;
     case Aws::Utils::Logging::LogLevel::Debug:
-        // treat aws debug logging as trace level
-        return Poco::Message::PRIO_TRACE;
+        return Poco::Message::PRIO_DEBUG;
     case Aws::Utils::Logging::LogLevel::Trace:
         return Poco::Message::PRIO_TRACE;
     default:
@@ -372,6 +372,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
     cfg.connectTimeoutMs = config_.connection_timeout_ms;
+    cfg.httpRequestTimeoutMs = config_.request_timeout_ms;
     cfg.region = S3_REGION;
     if (!config_.endpoint.empty())
     {
@@ -385,6 +386,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
         Aws::Client::ClientConfiguration sts_cfg("", true);
         sts_cfg.verifySSL = false;
         sts_cfg.region = S3_REGION;
+        sts_cfg.httpRequestTimeoutMs = config_.request_timeout_ms;
         Aws::STS::STSClient sts_client(sts_cfg);
         Aws::STS::Model::GetCallerIdentityRequest req;
         LOG_INFO(log, "GetCallerIdentity start");
@@ -406,7 +408,8 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
         // If the empty access_key_id and secret_access_key are passed to S3Client,
         // an authentication error will be reported.
         LOG_INFO(log, "Create S3Client start");
-        auto cli = std::make_unique<Aws::S3::S3Client>(cfg);
+        auto provider = std::make_shared<S3CredentialsProviderChain>();
+        auto cli = std::make_unique<Aws::S3::S3Client>(provider, std::make_shared<Aws::S3::S3EndpointProvider>(), cfg);
         LOG_INFO(log, "Create S3Client end");
         return cli;
     }
