@@ -94,11 +94,9 @@ Poco::Message::Priority convertLogLevel(Aws::Utils::Logging::LogLevel log_level)
     case Aws::Utils::Logging::LogLevel::Warn:
         return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Info:
-        // treat aws info logging as trace level
-        return Poco::Message::PRIO_TRACE;
+        return Poco::Message::PRIO_INFORMATION;
     case Aws::Utils::Logging::LogLevel::Debug:
-        // treat aws debug logging as trace level
-        return Poco::Message::PRIO_TRACE;
+        return Poco::Message::PRIO_DEBUG;
     case Aws::Utils::Logging::LogLevel::Trace:
         return Poco::Message::PRIO_TRACE;
     default:
@@ -374,6 +372,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
     cfg.connectTimeoutMs = config_.connection_timeout_ms;
+    cfg.httpRequestTimeoutMs = config_.request_timeout_ms;
     cfg.region = S3_REGION;
     if (!config_.endpoint.empty())
     {
@@ -387,6 +386,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
         Aws::Client::ClientConfiguration sts_cfg("", true);
         sts_cfg.verifySSL = false;
         sts_cfg.region = S3_REGION;
+        sts_cfg.httpRequestTimeoutMs = config_.request_timeout_ms;
         Aws::STS::STSClient sts_client(sts_cfg);
         Aws::STS::Model::GetCallerIdentityRequest req;
         LOG_INFO(log, "GetCallerIdentity start");
