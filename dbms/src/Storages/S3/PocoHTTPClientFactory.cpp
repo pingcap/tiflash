@@ -33,8 +33,15 @@ PocoHTTPClientFactory::PocoHTTPClientFactory(PocoHTTPClientConfiguration & http_
 std::shared_ptr<Aws::Http::HttpClient>
 PocoHTTPClientFactory::CreateHttpClient(const Aws::Client::ClientConfiguration & clientConfiguration) const
 {
-    // FIXME: this can not convert to the right address
-    return std::make_shared<PocoHTTPClient>(clientConfiguration, poco_cfg);
+    try
+    {
+        return std::make_shared<PocoHTTPClient>(clientConfiguration);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        throw;
+    }
 }
 
 std::shared_ptr<Aws::Http::HttpRequest> PocoHTTPClientFactory::CreateHttpRequest(

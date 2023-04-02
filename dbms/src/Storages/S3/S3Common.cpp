@@ -280,10 +280,8 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     LOG_INFO(log, "Aws::InitAPI start, S3_CLIENT_TYPE={}", S3_CLIENT_TYPE);
     if (S3_CLIENT_TYPE != 0)
     {
-        aws_options.httpOptions.httpClientFactory_create_fn = [] {
-            // TODO: set the cfg
-            PocoHTTPClientConfiguration poco_cfg(S3_REGION, RemoteHostFilter(), 100, /*enable_s3_requests_logging_*/ true, /*for_disk_s3_*/ false);
-            return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
+        aws_options.httpOptions.httpClientFactory_create_fn = [](){
+            return std::make_shared<PocoHTTPClientFactory>();
         };
     }
     Aws::InitAPI(aws_options);
@@ -387,7 +385,8 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
 {
     LOG_INFO(log, "Create ClientConfiguration start");
     Aws::Client::ClientConfiguration cfg("", true);
-    // PocoHTTPClientConfiguration cfg(S3_REGION, RemoteHostFilter(), 100, true, false);
+//    cfg.error_report = [](const ClientConfigurationPerRequest &) {
+//    };
     LOG_INFO(log, "Create ClientConfiguration end");
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
@@ -404,7 +403,6 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
         Aws::Client::ClientConfiguration sts_cfg("", true);
-        // PocoHTTPClientConfiguration sts_cfg(S3_REGION, RemoteHostFilter(), 100, true, false);
         sts_cfg.verifySSL = false;
         sts_cfg.region = S3_REGION;
         sts_cfg.httpRequestTimeoutMs = config_.request_timeout_ms;

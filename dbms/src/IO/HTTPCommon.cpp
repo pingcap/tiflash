@@ -81,23 +81,24 @@ bool isHTTPS(const Poco::URI & uri)
 HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool https, bool keep_alive, bool resolve_host = true)
 {
     HTTPSessionPtr session;
-
+    LOG_DEBUG(Logger::get(), "host={} port={} https={} keep_alive={} resolve_host={}", host, port, https, keep_alive, resolve_host);
     if (https)
     {
 #if Poco_NetSSL_FOUND
         String resolved_host = resolve_host ? DNSResolver::instance().resolveHost(host).toString() : host;
-        auto https_session = std::make_shared<Poco::Net::HTTPSClientSession>(host, port);
-        // if (resolve_host)
-        //     https_session->setResolvedHost(DNSResolver::instance().resolveHost(host).toString());
-
+        LOG_DEBUG(Logger::get(), "host={} => {}", host, resolved_host);
+        Poco::Net::Context::Ptr ctx = new Poco::Net::Context(Poco::Net::Context::CLIENT_USE, "", Poco::Net::Context::VerificationMode::VERIFY_NONE);
+        auto https_session = std::make_shared<Poco::Net::HTTPSClientSession>(resolved_host, port, ctx);
         session = std::move(https_session);
 #else
+        std::abort();
         throw Exception(ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME, "ClickHouse was built without HTTPS support");
 #endif
     }
     else
     {
         String resolved_host = resolve_host ? DNSResolver::instance().resolveHost(host).toString() : host;
+        LOG_DEBUG(Logger::get(), "host={} => {}", host, resolved_host);
         session = std::make_shared<Poco::Net::HTTPClientSession>(resolved_host, port);
     }
 
