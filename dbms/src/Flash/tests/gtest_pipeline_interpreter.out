@@ -253,13 +253,7 @@ Union: <for test>
 ~test_suite_name: FineGrainedShuffle
 ~result_index: 0
 ~result:
-Union: <for test>
- Expression x 8: <final projection>
-  Expression: <expr after window>
-   Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
-    MergeSorting: <enable fine grained shuffle>, limit = 0
-     PartialSorting: <enable fine grained shuffle>: limit = 0
-      MockExchangeReceiver
+pipeline#0: MockExchangeReceiver|exchange_receiver_0 -> WindowSort|sort_1 -> Window|window_2 -> Projection|NonTiDBOperator
 @
 ~test_suite_name: FineGrainedShuffle
 ~result_index: 1

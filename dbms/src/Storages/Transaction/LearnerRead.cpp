@@ -55,18 +55,23 @@ struct UnavailableRegions
 
     bool empty() const { return size() == 0; }
 
-    void setRegionLock(RegionID region_id_, LockInfoPtr && region_lock_)
+    void addRegionLock(RegionID region_id_, LockInfoPtr && region_lock_)
     {
-        region_lock = std::pair(region_id_, std::move(region_lock_));
+        region_locks.emplace_back(region_id_, std::move(region_lock_));
         doAdd(region_id_);
     }
 
-    void tryThrowRegionException(bool batch_cop)
+    void tryThrowRegionException(bool batch_cop, bool is_wn_disagg_read)
     {
-        // For batch-cop request, all unavailable regions, include the ones with lock exception, should be collected and retry next round.
-        // For normal cop request, which only contains one region, LockException should be thrown directly and let upper layer(like client-c, tidb, tispark) handle it.
-        if (!batch_cop && region_lock)
-            throw LockException(region_lock->first, std::move(region_lock->second));
+        // For batch-cop request (not handled by disagg write node), all unavailable regions, include the ones with lock exception, should be collected and retry next round.
+        // For normal cop request, which only contains one region, LockException should be thrown directly and let upper layer (like client-c, tidb, tispark) handle it.
+        // For batch-cop request (handled by disagg write node), LockException should be thrown directly and let upper layer (disagg read node) handle it.
+
+        if (is_wn_disagg_read && !region_locks.empty())
+            throw LockException(std::move(region_locks));
+
+        if (!batch_cop && !region_locks.empty())
+            throw LockException(std::move(region_locks));
 
         if (!ids.empty())
             throw RegionException(std::move(ids), status);
@@ -81,7 +86,7 @@ private:
     inline void doAdd(RegionID id) { ids.emplace(id); }
 
     RegionException::UnavailableRegions ids;
-    std::optional<std::pair<RegionID, LockInfoPtr>> region_lock;
+    std::vector<std::pair<RegionID, LockInfoPtr>> region_locks;
     std::atomic<RegionException::RegionReadStatus> status{RegionException::RegionReadStatus::NOT_FOUND}; // NOLINT
 };
 
@@ -295,7 +300,7 @@ LearnerReadSnapshot doLearnerRead(
             }
             else if (resp.has_locked())
             {
-                unavailable_regions.setRegionLock(region_id, LockInfoPtr(resp.release_locked()));
+                unavailable_regions.addRegionLock(region_id, LockInfoPtr(resp.release_locked()));
             }
             else
             {
@@ -374,7 +379,7 @@ LearnerReadSnapshot doLearnerRead(
 
                 std::visit(
                     variant_op::overloaded{
-                        [&](LockInfoPtr & lock) { unavailable_regions.setRegionLock(region->id(), std::move(lock)); },
+                        [&](LockInfoPtr & lock) { unavailable_regions.addRegionLock(region->id(), std::move(lock)); },
                         [&](RegionException::RegionReadStatus & status) {
                             if (status != RegionException::RegionReadStatus::OK)
                             {
@@ -405,7 +410,9 @@ LearnerReadSnapshot doLearnerRead(
     const auto start_time = Clock::now();
     batch_wait_index(0);
 
-    unavailable_regions.tryThrowRegionException(for_batch_cop);
+    unavailable_regions.tryThrowRegionException(
+        for_batch_cop,
+        context.getDAGContext() ? context.getDAGContext()->is_disaggregated_task : false);
 
     const auto end_time = Clock::now();
     const auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();

@@ -1159,7 +1159,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.kvstore_data_path, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
-    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled())
+    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         config.initCacheDir();
         FileCache::initialize(global_context->getPathCapacity(), config);

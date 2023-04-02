@@ -71,6 +71,14 @@ void orderStreams(
     const Context & context,
     const LoggerPtr & log);
 
+void executeLocalSort(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const SortDescription & order_descr,
+    std::optional<size_t> limit,
+    const Context & context,
+    const LoggerPtr & log);
+
 void executeCreatingSets(
     DAGPipeline & pipeline,
     const Context & context,
