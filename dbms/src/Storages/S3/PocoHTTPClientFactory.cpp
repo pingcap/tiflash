@@ -25,10 +25,6 @@ extern String S3_REGION;
 
 namespace DB::S3
 {
-PocoHTTPClientFactory::PocoHTTPClientFactory(PocoHTTPClientConfiguration & http_cfg)
-    : poco_cfg(http_cfg)
-{
-}
 
 std::shared_ptr<Aws::Http::HttpClient>
 PocoHTTPClientFactory::CreateHttpClient(const Aws::Client::ClientConfiguration & clientConfiguration) const
