@@ -18,6 +18,9 @@
 #include <aws/core/http/HttpRequest.h>
 #include <aws/core/http/HttpResponse.h>
 #include <aws/core/http/standard/StandardHttpRequest.h>
+#include <memory>
+
+extern String S3_REGION;
 
 namespace DB::S3
 {
@@ -25,9 +28,16 @@ std::shared_ptr<Aws::Http::HttpClient>
 PocoHTTPClientFactory::CreateHttpClient(const Aws::Client::ClientConfiguration & clientConfiguration) const
 {
     // FIXME: this can not convert to the right address
-    const auto & poco_client_cfg = static_cast<const PocoHTTPClientConfiguration &>(clientConfiguration);
-    LOG_INFO(Logger::get(), "address: param:{} poco:{}", fmt::ptr(&clientConfiguration), fmt::ptr(&poco_client_cfg));
-    return std::make_shared<PocoHTTPClient>(poco_client_cfg);
+    const auto * poco_client_cfg = dynamic_cast<const PocoHTTPClientConfiguration *>(&clientConfiguration);
+    if (poco_client_cfg)
+    {
+        LOG_INFO(Logger::get(), "address: param:{} poco:{}", fmt::ptr(&clientConfiguration), fmt::ptr(poco_client_cfg));
+        return std::make_shared<PocoHTTPClient>(*poco_client_cfg);
+    } else {
+        LOG_INFO(Logger::get(), "failed to dynamic_cast from input clientConfiguration, use default, address: param:{}", fmt::ptr(&clientConfiguration));
+        PocoHTTPClientConfiguration default_cfg(S3_REGION, RemoteHostFilter(), 100, true, false);
+        return std::make_shared<PocoHTTPClient>(default_cfg);
+    }
 }
 
 std::shared_ptr<Aws::Http::HttpRequest> PocoHTTPClientFactory::CreateHttpRequest(
