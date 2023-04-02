@@ -14,18 +14,27 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Storages/S3/PocoHTTPClient.h>
-#include <aws/core/auth/AWSCredentialsProviderChain.h>
+#include <iostream>
+
 
 namespace DB::S3
 {
-class S3CredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
+/**
+ * Wrapper of IOStream to store response stream and corresponding HTTP session.
+ */
+template <typename Session>
+class SessionAwareIOStream : public std::iostream
 {
 public:
-    explicit S3CredentialsProviderChain(const PocoHTTPClientConfiguration & configuration);
+    SessionAwareIOStream(Session session_, std::streambuf * sb)
+        : std::iostream(sb)
+        , session(std::move(session_))
+    {
+    }
 
 private:
-    LoggerPtr log;
+    /// Poco HTTP session is holder of response stream.
+    Session session;
 };
+
 } // namespace DB::S3

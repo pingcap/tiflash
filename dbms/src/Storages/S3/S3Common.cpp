@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
+#include <Common/RemoteHostFilter.h>
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
@@ -22,9 +23,13 @@
 #include <Server/StorageConfigParser.h>
 #include <Storages/S3/Credentials.h>
 #include <Storages/S3/MockS3Client.h>
+#include <Storages/S3/PocoHTTPClient.h>
+#include <Storages/S3/PocoHTTPClientFactory.h>
 #include <Storages/S3/S3Common.h>
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/auth/STSCredentialsProvider.h>
+#include <aws/core/auth/signer/AWSAuthV4Signer.h>
+#include <aws/core/http/HttpClientFactory.h>
 #include <aws/core/http/Scheme.h>
 #include <aws/core/utils/logging/LogMacros.h>
 #include <aws/core/utils/logging/LogSystemInterface.h>
@@ -67,7 +72,12 @@
 #include <mutex>
 #include <thread>
 
+#include "Poco/Environment.h"
+
+/// FIXME: remove this hack !!!
 extern String S3_REGION;
+extern int64_t S3_CLIENT_TYPE;
+/// FIXME: remove this hack !!!
 
 namespace ProfileEvents
 {
@@ -115,7 +125,7 @@ public:
 
     Aws::Utils::Logging::LogLevel GetLogLevel() const final
     {
-        return Aws::Utils::Logging::LogLevel::Info;
+        return Aws::Utils::Logging::LogLevel::Trace;
     }
 
     void Log(Aws::Utils::Logging::LogLevel log_level, const char * tag, const char * format_str, ...) final // NOLINT
@@ -266,9 +276,14 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     log = Logger::get();
-    LOG_INFO(log, "Aws::InitAPI start");
+    S3_CLIENT_TYPE = Poco::Environment::get("S3_CLIENT_TYPE", "0")[0] - '0';
+    LOG_INFO(log, "Aws::InitAPI start, S3_CLIENT_TYPE={}", S3_CLIENT_TYPE);
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
+    if (S3_CLIENT_TYPE != 0)
+    {
+        Aws::Http::SetHttpClientFactory(std::make_shared<PocoHTTPClientFactory>());
+    }
     LOG_INFO(log, "Aws::InitAPI end");
 
     std::unique_lock lock_init(mtx_init);
@@ -367,7 +382,10 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::newTiFlashClient()
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {
     LOG_INFO(log, "Create ClientConfiguration start");
-    Aws::Client::ClientConfiguration cfg("", true);
+    // Aws::Client::ClientConfiguration cfg("", true);
+    PocoHTTPClientConfiguration cfg(S3_REGION, RemoteHostFilter(), 100, true, false);
+    cfg.error_report = [](const ClientConfigurationPerRequest &) {
+    };
     LOG_INFO(log, "Create ClientConfiguration end");
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
@@ -383,10 +401,12 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     }
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
-        Aws::Client::ClientConfiguration sts_cfg("", true);
+        // Aws::Client::ClientConfiguration sts_cfg("", true);
+        PocoHTTPClientConfiguration sts_cfg(S3_REGION, RemoteHostFilter(), 100, true, false);
         sts_cfg.verifySSL = false;
         sts_cfg.region = S3_REGION;
         sts_cfg.httpRequestTimeoutMs = config_.request_timeout_ms;
+        LOG_INFO(Logger::get(), "address: sts_cfg:{}", fmt::ptr(&sts_cfg));
         Aws::STS::STSClient sts_client(sts_cfg);
         Aws::STS::Model::GetCallerIdentityRequest req;
         LOG_INFO(log, "GetCallerIdentity start");
@@ -408,8 +428,13 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
         // If the empty access_key_id and secret_access_key are passed to S3Client,
         // an authentication error will be reported.
         LOG_INFO(log, "Create S3Client start");
-        auto provider = std::make_shared<S3CredentialsProviderChain>();
-        auto cli = std::make_unique<Aws::S3::S3Client>(provider, std::make_shared<Aws::S3::S3EndpointProvider>(), cfg);
+        auto provider = std::make_shared<S3CredentialsProviderChain>(cfg);
+        LOG_INFO(Logger::get(), "address: cfg:{}", fmt::ptr(&cfg));
+        auto cli = std::make_unique<Aws::S3::S3Client>(
+            provider,
+            cfg,
+            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+            /*userVirtualAddressing*/ true);
         LOG_INFO(log, "Create S3Client end");
         return cli;
     }
