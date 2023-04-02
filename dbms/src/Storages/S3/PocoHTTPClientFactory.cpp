@@ -19,15 +19,22 @@
 #include <aws/core/http/HttpResponse.h>
 #include <aws/core/http/standard/StandardHttpRequest.h>
 
+#include <memory>
+
+extern String S3_REGION;
+
 namespace DB::S3
 {
+PocoHTTPClientFactory::PocoHTTPClientFactory(PocoHTTPClientConfiguration & http_cfg)
+    : poco_cfg(http_cfg)
+{
+}
+
 std::shared_ptr<Aws::Http::HttpClient>
 PocoHTTPClientFactory::CreateHttpClient(const Aws::Client::ClientConfiguration & clientConfiguration) const
 {
     // FIXME: this can not convert to the right address
-    const auto & poco_client_cfg = static_cast<const PocoHTTPClientConfiguration &>(clientConfiguration);
-    LOG_INFO(Logger::get(), "address: param:{} poco:{}", fmt::ptr(&clientConfiguration), fmt::ptr(&poco_client_cfg));
-    return std::make_shared<PocoHTTPClient>(poco_client_cfg);
+    return std::make_shared<PocoHTTPClient>(clientConfiguration, poco_cfg);
 }
 
 std::shared_ptr<Aws::Http::HttpRequest> PocoHTTPClientFactory::CreateHttpRequest(

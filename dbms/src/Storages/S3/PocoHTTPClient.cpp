@@ -129,6 +129,7 @@ PocoHTTPClientConfiguration::PocoHTTPClientConfiguration(
 }
 #endif
 
+#if 0
 void PocoHTTPClientConfiguration::updateSchemeAndRegion()
 {
     if (!endpointOverride.empty())
@@ -158,23 +159,24 @@ void PocoHTTPClientConfiguration::updateSchemeAndRegion()
         }
     }
 }
+#endif
 
 
-PocoHTTPClient::PocoHTTPClient(const PocoHTTPClientConfiguration & client_configuration)
-    : per_request_configuration(client_configuration.per_request_configuration)
-    , error_report(client_configuration.error_report)
+PocoHTTPClient::PocoHTTPClient(const Aws::Client::ClientConfiguration & client_configuration, const PocoHTTPClientConfiguration & poco_configuration)
+    : per_request_configuration(poco_configuration.per_request_configuration)
+    , error_report(poco_configuration.error_report)
     , timeouts(ConnectionTimeouts(
           Poco::Timespan(client_configuration.connectTimeoutMs * 1000), /// connection timeout.
           Poco::Timespan(client_configuration.requestTimeoutMs * 1000), /// send timeout.
           Poco::Timespan(client_configuration.requestTimeoutMs * 1000) /// receive timeout.
           ))
-    , remote_host_filter(client_configuration.remote_host_filter)
-    , s3_max_redirects(client_configuration.s3_max_redirects)
-    , enable_s3_requests_logging(client_configuration.enable_s3_requests_logging)
-    , for_disk_s3(client_configuration.for_disk_s3)
-    // , get_request_throttler(client_configuration.get_request_throttler)
-    // , put_request_throttler(client_configuration.put_request_throttler)
-    , extra_headers(client_configuration.extra_headers)
+    , remote_host_filter(poco_configuration.remote_host_filter)
+    , s3_max_redirects(poco_configuration.s3_max_redirects)
+    , enable_s3_requests_logging(poco_configuration.enable_s3_requests_logging)
+    , for_disk_s3(poco_configuration.for_disk_s3)
+    // , get_request_throttler(poco_configuration.get_request_throttler)
+    // , put_request_throttler(poco_configuration.put_request_throttler)
+    , extra_headers(poco_configuration.extra_headers)
 {
 }
 

@@ -18,6 +18,7 @@
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/auth/STSCredentialsProvider.h>
+#include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/client/SpecifiedRetryableErrorsRetryStrategy.h>
 #include <aws/core/http/HttpClientFactory.h>
 #include <aws/core/platform/Environment.h>
@@ -39,7 +40,7 @@ static const int STS_CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD = 5 * 1000;
 class STSAssumeRoleWebIdentityCredentialsProvider : public Aws::Auth::AWSCredentialsProvider
 {
 public:
-    STSAssumeRoleWebIdentityCredentialsProvider(DB::S3::PocoHTTPClientConfiguration & aws_client_configuration);
+    STSAssumeRoleWebIdentityCredentialsProvider();
 
     /**
      * Retrieves the credentials if found, otherwise returns empty credential set.
@@ -65,7 +66,7 @@ private:
 };
 
 
-STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentialsProvider(DB::S3::PocoHTTPClientConfiguration & aws_client_configuration)
+STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentialsProvider()
     : m_initialized(false)
     , log(Logger::get())
 {
@@ -131,6 +132,7 @@ STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentials
         LOG_DEBUG(log, "Resolved session_name from profile_config or environment variable to be {}", m_session_name);
     }
 
+    Aws::Client::ClientConfiguration aws_client_configuration;
     aws_client_configuration.scheme = Aws::Http::Scheme::HTTPS;
     aws_client_configuration.region = tmp_region;
 
@@ -529,7 +531,7 @@ void AWSInstanceProfileCredentialsProvider::refreshIfExpired()
 
 static const char S3CredentialsProviderChainTag[] = "S3CredentialsProviderChain";
 
-S3CredentialsProviderChain::S3CredentialsProviderChain(const PocoHTTPClientConfiguration & configuration)
+S3CredentialsProviderChain::S3CredentialsProviderChain()
     : log(Logger::get())
 {
     static const char AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI[] = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
@@ -541,10 +543,7 @@ S3CredentialsProviderChain::S3CredentialsProviderChain(const PocoHTTPClientConfi
     /// quite verbose even if nobody configured them. So we use our provider first and only after it use default providers.
     /// And ProcessCredentialsProvider is useless in our cases, removed.
 
-    {
-        DB::S3::PocoHTTPClientConfiguration aws_client_configuration = configuration; // copy
-        AddProvider(std::make_shared<DB::S3::STSAssumeRoleWebIdentityCredentialsProvider>(aws_client_configuration));
-    }
+    AddProvider(std::make_shared<DB::S3::STSAssumeRoleWebIdentityCredentialsProvider>());
     AddProvider(Aws::MakeShared<Aws::Auth::EnvironmentAWSCredentialsProvider>(S3CredentialsProviderChainTag));
 
     //ECS TaskRole Credentials only available when ENVIRONMENT VARIABLE is set
@@ -575,7 +574,8 @@ S3CredentialsProviderChain::S3CredentialsProviderChain(const PocoHTTPClientConfi
     }
     else if (Aws::Utils::StringUtils::ToLower(ec2_metadata_disabled.c_str()) != "true")
     {
-        DB::S3::PocoHTTPClientConfiguration aws_client_configuration = configuration;
+#if 0
+        Aws::Client::ClientConfiguration aws_client_configuration;
         /// See MakeDefaultHttpResourceClientConfiguration().
         /// This is part of EC2 metadata client, but unfortunately it can't be accessed from outside
         /// of contrib/aws/aws-cpp-sdk-core/source/internal/AWSHttpResourceClient.cpp
@@ -601,9 +601,11 @@ S3CredentialsProviderChain::S3CredentialsProviderChain(const PocoHTTPClientConfi
 
         AddProvider(std::make_shared<AWSInstanceProfileCredentialsProvider>(config_loader));
         LOG_INFO(log, "Added EC2 metadata service credentials provider to the provider chain.");
+#else
 
-        // AddProvider(Aws::MakeShared<Aws::Auth::InstanceProfileCredentialsProvider>(S3CredentialsProviderChainTag));
-        // LOG_INFO(log, "Added EC2 metadata service credentials provider to the provider chain.");
+        AddProvider(Aws::MakeShared<Aws::Auth::InstanceProfileCredentialsProvider>(S3CredentialsProviderChainTag));
+        LOG_INFO(log, "Added EC2 metadata service credentials provider to the provider chain.");
+#endif
     }
 
     /// Quite verbose provider (argues if file with credentials doesn't exist) so iut's the last one
