@@ -24,10 +24,15 @@ namespace DB::S3
 std::shared_ptr<Aws::Http::HttpClient>
 PocoHTTPClientFactory::CreateHttpClient(const Aws::Client::ClientConfiguration & clientConfiguration) const
 {
-    // FIXME: this can not convert to the right address
-    const auto & poco_client_cfg = static_cast<const PocoHTTPClientConfiguration &>(clientConfiguration);
-    LOG_INFO(Logger::get(), "address: param:{} poco:{}", fmt::ptr(&clientConfiguration), fmt::ptr(&poco_client_cfg));
-    return std::make_shared<PocoHTTPClient>(poco_client_cfg);
+    try
+    {
+        return std::make_shared<PocoHTTPClient>(clientConfiguration);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        throw;
+    }
 }
 
 std::shared_ptr<Aws::Http::HttpRequest> PocoHTTPClientFactory::CreateHttpRequest(

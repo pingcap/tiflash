@@ -278,12 +278,14 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     log = Logger::get();
     S3_CLIENT_TYPE = Poco::Environment::get("S3_CLIENT_TYPE", "0")[0] - '0';
     LOG_INFO(log, "Aws::InitAPI start, S3_CLIENT_TYPE={}", S3_CLIENT_TYPE);
-    Aws::InitAPI(aws_options);
-    Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
     if (S3_CLIENT_TYPE != 0)
     {
-        Aws::Http::SetHttpClientFactory(std::make_shared<PocoHTTPClientFactory>());
+        aws_options.httpOptions.httpClientFactory_create_fn = [](){
+            return std::make_shared<PocoHTTPClientFactory>();
+        };
     }
+    Aws::InitAPI(aws_options);
+    Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
     LOG_INFO(log, "Aws::InitAPI end");
 
     std::unique_lock lock_init(mtx_init);
@@ -382,10 +384,9 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::newTiFlashClient()
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {
     LOG_INFO(log, "Create ClientConfiguration start");
-    // Aws::Client::ClientConfiguration cfg("", true);
-    PocoHTTPClientConfiguration cfg(S3_REGION, RemoteHostFilter(), 100, true, false);
-    cfg.error_report = [](const ClientConfigurationPerRequest &) {
-    };
+    Aws::Client::ClientConfiguration cfg("", true);
+//    cfg.error_report = [](const ClientConfigurationPerRequest &) {
+//    };
     LOG_INFO(log, "Create ClientConfiguration end");
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
@@ -401,8 +402,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     }
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
-        // Aws::Client::ClientConfiguration sts_cfg("", true);
-        PocoHTTPClientConfiguration sts_cfg(S3_REGION, RemoteHostFilter(), 100, true, false);
+        Aws::Client::ClientConfiguration sts_cfg("", true);
         sts_cfg.verifySSL = false;
         sts_cfg.region = S3_REGION;
         sts_cfg.httpRequestTimeoutMs = config_.request_timeout_ms;

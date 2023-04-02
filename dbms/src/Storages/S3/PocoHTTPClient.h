@@ -51,46 +51,7 @@ struct ClientConfigurationPerRequest
     unsigned proxy_port = 0;
 };
 
-struct PocoHTTPClientConfiguration : public Aws::Client::ClientConfiguration
-{
-    std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration = [](const Aws::Http::HttpRequest &) {
-        return ClientConfigurationPerRequest();
-    };
-    String force_region;
-    const RemoteHostFilter & remote_host_filter;
-    unsigned int s3_max_redirects;
-    bool enable_s3_requests_logging;
-    bool for_disk_s3;
-    // ThrottlerPtr get_request_throttler;
-    // ThrottlerPtr put_request_throttler;
-    HTTPHeaderEntries extra_headers;
-
-    void updateSchemeAndRegion();
-
-    std::function<void(const ClientConfigurationPerRequest &)> error_report;
-
-private:
-#if 0
-    PocoHTTPClientConfiguration(
-        const String & force_region_,
-        const RemoteHostFilter & remote_host_filter_,
-        unsigned int s3_max_redirects_,
-        bool enable_s3_requests_logging_,
-        bool for_disk_s3_,
-        const ThrottlerPtr & get_request_throttler_,
-        const ThrottlerPtr & put_request_throttler_);
-#else
-    PocoHTTPClientConfiguration(
-        const String & force_region_,
-        const RemoteHostFilter & remote_host_filter_,
-        unsigned int s3_max_redirects_,
-        bool enable_s3_requests_logging_,
-        bool for_disk_s3_);
-#endif
-
-    /// Constructor of Aws::Client::ClientConfiguration must be called after AWS SDK initialization.
-    friend ClientFactory;
-};
+using PocoHTTPClientConfiguration = Aws::Client::ClientConfiguration;
 
 class PocoHTTPResponse : public Aws::Http::Standard::StandardHttpResponse
 {
@@ -133,7 +94,7 @@ private:
 class PocoHTTPClient : public Aws::Http::HttpClient
 {
 public:
-    explicit PocoHTTPClient(const PocoHTTPClientConfiguration & client_configuration);
+    explicit PocoHTTPClient(const Aws::Client::ClientConfiguration & client_configuration);
     ~PocoHTTPClient() override = default;
 
     std::shared_ptr<Aws::Http::HttpResponse> MakeRequest(
@@ -173,10 +134,10 @@ private:
     std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration;
     std::function<void(const ClientConfigurationPerRequest &)> error_report;
     ConnectionTimeouts timeouts;
-    const RemoteHostFilter & remote_host_filter;
-    unsigned int s3_max_redirects;
-    bool enable_s3_requests_logging;
-    bool for_disk_s3;
+    //const RemoteHostFilter & remote_host_filter;
+    static constexpr unsigned int s3_max_redirects = 3;
+    //bool enable_s3_requests_logging;
+    //bool for_disk_s3;
 
     /// Limits get request per second rate for GET, SELECT and all other requests, excluding throttled by put throttler
     /// (i.e. throttles GetObject, HeadObject)
