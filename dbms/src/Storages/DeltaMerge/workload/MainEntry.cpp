@@ -519,6 +519,7 @@ void getRandomObjectLoop(const WorkloadOptions & opts)
 }
 
 String S3_REGION;
+int64_t S3_CLIENT_TYPE;
 
 void benchS3(WorkloadOptions & opts)
 {
@@ -534,6 +535,7 @@ void benchS3(WorkloadOptions & opts)
     RUNTIME_CHECK(!opts.s3_region.empty());
 
     S3_REGION = opts.s3_region;
+    S3_CLIENT_TYPE = opts.s3_client_type;
 
     if (!std::filesystem::exists(opts.s3_temp_dir))
     {

@@ -71,7 +71,12 @@
 #include <mutex>
 #include <thread>
 
+#include "Poco/Environment.h"
+
+/// FIXME: remove this hack !!!
 extern String S3_REGION;
+extern int64_t S3_CLIENT_TYPE;
+/// FIXME: remove this hack !!!
 
 namespace ProfileEvents
 {
@@ -119,7 +124,7 @@ public:
 
     Aws::Utils::Logging::LogLevel GetLogLevel() const final
     {
-        return Aws::Utils::Logging::LogLevel::Info;
+        return Aws::Utils::Logging::LogLevel::Trace;
     }
 
     void Log(Aws::Utils::Logging::LogLevel log_level, const char * tag, const char * format_str, ...) final // NOLINT
@@ -270,10 +275,14 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     log = Logger::get();
-    LOG_INFO(log, "Aws::InitAPI start");
+    S3_CLIENT_TYPE = Poco::Environment::get("S3_CLIENT_TYPE", "0")[0] - '0';
+    LOG_INFO(log, "Aws::InitAPI start, S3_CLIENT_TYPE={}", S3_CLIENT_TYPE);
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
-    Aws::Http::SetHttpClientFactory(std::make_shared<PocoHTTPClientFactory>());
+    if (S3_CLIENT_TYPE != 0)
+    {
+        Aws::Http::SetHttpClientFactory(std::make_shared<PocoHTTPClientFactory>());
+    }
     LOG_INFO(log, "Aws::InitAPI end");
 
     std::unique_lock lock_init(mtx_init);
