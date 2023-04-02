@@ -18,6 +18,8 @@
 #include <string_view>
 #include <unordered_set>
 
+#include "Poco/Exception.h"
+
 namespace ProfileEvents
 {
 extern const Event DNSError;
@@ -96,6 +98,7 @@ DNSResolver::IPAddresses hostByName(const std::string & host)
     /// Do not resolve IPv6 (or IPv4) if no local IPv6 (or IPv4) addresses are configured.
     /// It should not affect client address checking, since client cannot connect from IPv6 address
     /// if server has no IPv6 addresses.
+    // auto flags = Poco::Net::DNS::DNS_HINT_AI_ADDRCONFIG | Poco::Net::DNS::DNS_HINT_AI_CANONNAME;
     auto flags = Poco::Net::DNS::DNS_HINT_AI_ADDRCONFIG;
 
     DNSResolver::IPAddresses addresses;
@@ -107,6 +110,11 @@ DNSResolver::IPAddresses hostByName(const std::string & host)
     catch (const Poco::Net::DNSException & e)
     {
         LOG_ERROR(&Poco::Logger::get("DNSResolver"), "Cannot resolve host ({}), error {}: {}.", host, e.code(), e.name());
+        addresses.clear();
+    }
+    catch (Poco::IOException & e)
+    {
+        LOG_ERROR(&Poco::Logger::get("DNSResolver"), "Cannot resolve host ({}), io error {}: {}.", host, e.code(), e.name());
         addresses.clear();
     }
 
