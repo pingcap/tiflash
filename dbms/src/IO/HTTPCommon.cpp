@@ -98,6 +98,7 @@ HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool h
     else
     {
         String resolved_host = resolve_host ? DNSResolver::instance().resolveHost(host).toString() : host;
+        LOG_DEBUG(Logger::get(), "host={} => {}", host, resolved_host);
         session = std::make_shared<Poco::Net::HTTPClientSession>(resolved_host, port);
     }
 
