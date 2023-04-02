@@ -51,7 +51,7 @@ struct ClientConfigurationPerRequest
     unsigned proxy_port = 0;
 };
 
-struct PocoHTTPClientConfiguration : public Aws::Client::ClientConfiguration
+struct PocoHTTPClientConfiguration
 {
     std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration = [](const Aws::Http::HttpRequest &) {
         return ClientConfigurationPerRequest();
@@ -65,7 +65,7 @@ struct PocoHTTPClientConfiguration : public Aws::Client::ClientConfiguration
     // ThrottlerPtr put_request_throttler;
     HTTPHeaderEntries extra_headers;
 
-    void updateSchemeAndRegion();
+    // void updateSchemeAndRegion();
 
     std::function<void(const ClientConfigurationPerRequest &)> error_report;
 
@@ -133,7 +133,7 @@ private:
 class PocoHTTPClient : public Aws::Http::HttpClient
 {
 public:
-    explicit PocoHTTPClient(const PocoHTTPClientConfiguration & client_configuration);
+    explicit PocoHTTPClient(const Aws::Client::ClientConfiguration & client_configuration, const PocoHTTPClientConfiguration & poco_configuration);
     ~PocoHTTPClient() override = default;
 
     std::shared_ptr<Aws::Http::HttpResponse> MakeRequest(

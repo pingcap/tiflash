@@ -23,7 +23,7 @@ namespace DB::S3
 class S3CredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
 {
 public:
-    explicit S3CredentialsProviderChain(const PocoHTTPClientConfiguration & configuration);
+    S3CredentialsProviderChain();
 
 private:
     LoggerPtr log;
