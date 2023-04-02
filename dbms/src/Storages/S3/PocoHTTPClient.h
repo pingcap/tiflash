@@ -69,7 +69,7 @@ struct PocoHTTPClientConfiguration : public Aws::Client::ClientConfiguration
 
     std::function<void(const ClientConfigurationPerRequest &)> error_report;
 
-private:
+// private:
 #if 0
     PocoHTTPClientConfiguration(
         const String & force_region_,
