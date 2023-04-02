@@ -24,6 +24,7 @@ struct ConnectionTimeouts
     Poco::Timespan connection_timeout;
     Poco::Timespan send_timeout;
     Poco::Timespan receive_timeout;
+    Poco::Timespan http_keep_alive_timeout{0};
 
     ConnectionTimeouts() = default;
 

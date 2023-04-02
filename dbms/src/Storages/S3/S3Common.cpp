@@ -22,9 +22,11 @@
 #include <Server/StorageConfigParser.h>
 #include <Storages/S3/Credentials.h>
 #include <Storages/S3/MockS3Client.h>
+#include <Storages/S3/PocoHTTPClientFactory.h>
 #include <Storages/S3/S3Common.h>
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/auth/STSCredentialsProvider.h>
+#include <aws/core/http/HttpClientFactory.h>
 #include <aws/core/http/Scheme.h>
 #include <aws/core/utils/logging/LogMacros.h>
 #include <aws/core/utils/logging/LogSystemInterface.h>
@@ -269,6 +271,7 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     LOG_INFO(log, "Aws::InitAPI start");
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
+    Aws::Http::SetHttpClientFactory(std::make_shared<PocoHTTPClientFactory>());
     LOG_INFO(log, "Aws::InitAPI end");
 
     std::unique_lock lock_init(mtx_init);

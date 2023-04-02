@@ -523,7 +523,7 @@ String S3_REGION;
 void benchS3(WorkloadOptions & opts)
 {
     //Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
-    TiFlashTestEnv::setupLogger(opts.log_level );
+    TiFlashTestEnv::setupLogger(opts.log_level);
 
     RUNTIME_CHECK(!opts.s3_bucket.empty());
     RUNTIME_CHECK(!opts.s3_endpoint.empty());

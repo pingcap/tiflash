@@ -40,6 +40,28 @@
     M(ExternalAggregationUncompressedBytes)    \
                                                \
     M(ContextLock)                             \
+    M(CreatedHTTPConnections)                  \
+    M(DNSError)                                \
+    M(S3ReadMicroseconds)                      \
+    M(S3WriteMicroseconds)                     \
+    M(S3ReadRequestsCount)                     \
+    M(S3WriteRequestsCount)                    \
+    M(S3ReadRequestsErrors)                    \
+    M(S3WriteRequestsErrors)                   \
+    M(S3ReadRequestsThrottling)                \
+    M(S3WriteRequestsThrottling)               \
+    M(S3ReadRequestsRedirects)                 \
+    M(S3WriteRequestsRedirects)                \
+    M(DiskS3ReadMicroseconds)                  \
+    M(DiskS3WriteMicroseconds)                 \
+    M(DiskS3ReadRequestsCount)                 \
+    M(DiskS3WriteRequestsCount)                \
+    M(DiskS3ReadRequestsErrors)                \
+    M(DiskS3WriteRequestsErrors)               \
+    M(DiskS3ReadRequestsThrottling)            \
+    M(DiskS3WriteRequestsThrottling)           \
+    M(DiskS3ReadRequestsRedirects)             \
+    M(DiskS3WriteRequestsRedirects)            \
                                                \
     M(RWLockAcquiredReadLocks)                 \
     M(RWLockAcquiredWriteLocks)                \
