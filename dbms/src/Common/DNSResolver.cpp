@@ -4,10 +4,13 @@
 // #include <Common/thread_local_rng.h>
 #include <Common/DNSPTRResolverProvider.h>
 #include <Common/LRUCache.h>
+#include <Common/NetException.h>
 #include <Core/Names.h>
+#include <Poco/Exception.h>
 #include <Poco/Net/DNS.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/Net/NetException.h>
+#include <Poco/NumberFormatter.h>
 #include <Poco/NumberParser.h>
 #include <arpa/inet.h>
 #include <common/types.h>
@@ -17,8 +20,6 @@
 #include <optional>
 #include <string_view>
 #include <unordered_set>
-
-#include "Poco/Exception.h"
 
 namespace ProfileEvents
 {
@@ -93,19 +94,44 @@ void splitHostAndPort(const std::string & host_and_port, std::string & out_host,
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Port must be numeric");
 }
 
+void DNSOnError(int code, const std::string & arg)
+{
+    switch (code)
+    {
+    case POCO_ESYSNOTREADY:
+        throw Poco::Net::NetException("Net subsystem not ready");
+    case POCO_ENOTINIT:
+        throw Poco::Net::NetException("Net subsystem not initialized");
+    case POCO_HOST_NOT_FOUND:
+        throw Poco::Net::HostNotFoundException(arg);
+    case POCO_TRY_AGAIN:
+        throw Poco::Net::DNSException("Temporary DNS error while resolving", arg);
+    case POCO_NO_RECOVERY:
+        throw Poco::Net::DNSException("Non recoverable DNS error while resolving", arg);
+    case POCO_NO_DATA:
+        throw Poco::Net::NoAddressFoundException(arg);
+    default:
+        throw Poco::IOException(Poco::NumberFormatter::format(code));
+    }
+}
+Poco::Net::HostEntry DNShostByName(const std::string & hostname)
+{
+    struct hostent * he = gethostbyname(hostname.c_str());
+    if (he)
+    {
+        return Poco::Net::HostEntry(he);
+    }
+    DNSOnError(h_errno, hostname); // will throw an appropriate exception
+    throw Poco::Net::NetException(); // to silence compiler
+}
+
 DNSResolver::IPAddresses hostByName(const std::string & host)
 {
-    /// Do not resolve IPv6 (or IPv4) if no local IPv6 (or IPv4) addresses are configured.
-    /// It should not affect client address checking, since client cannot connect from IPv6 address
-    /// if server has no IPv6 addresses.
-    // auto flags = Poco::Net::DNS::DNS_HINT_AI_ADDRCONFIG | Poco::Net::DNS::DNS_HINT_AI_CANONNAME;
-    auto flags = Poco::Net::DNS::DNS_HINT_AI_ADDRCONFIG;
-
     DNSResolver::IPAddresses addresses;
 
     try
     {
-        addresses = Poco::Net::DNS::hostByName(host, &Poco::Net::DNS::DEFAULT_DNS_TIMEOUT, flags).addresses();
+        addresses = DNShostByName(host).addresses();
     }
     catch (const Poco::Net::DNSException & e)
     {
