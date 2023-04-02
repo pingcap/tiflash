@@ -124,6 +124,7 @@ PocoHTTPClientConfiguration::PocoHTTPClientConfiguration(
     , s3_max_redirects(s3_max_redirects_)
     , enable_s3_requests_logging(enable_s3_requests_logging_)
     , for_disk_s3(for_disk_s3_)
+    , error_report(nullptr)
 {
 }
 #endif

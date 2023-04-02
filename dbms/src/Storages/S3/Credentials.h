@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Storages/S3/PocoHTTPClient.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 
 namespace DB::S3
@@ -22,7 +23,7 @@ namespace DB::S3
 class S3CredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
 {
 public:
-    S3CredentialsProviderChain();
+    explicit S3CredentialsProviderChain(const PocoHTTPClientConfiguration & configuration);
 
 private:
     LoggerPtr log;
