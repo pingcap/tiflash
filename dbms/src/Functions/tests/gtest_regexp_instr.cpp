@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/tests/regexp_test_util.h>
 #include <Functions/FunctionsRegexpInstr.h>
+#include <Functions/tests/regexp_test_util.h>
 
 namespace DB
 {
 namespace tests
 {
-class RegexpInstr : public Regexp {};
+class RegexpInstr : public Regexp
+{
+};
 
 struct RegexpInstrCase
 {

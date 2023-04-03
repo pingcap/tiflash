@@ -12,15 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/tests/regexp_test_util.h>
 #include <Functions/FunctionsRegexpLike.h>
+#include <Functions/tests/regexp_test_util.h>
+
 #include <Functions/FunctionsStringSearch.cpp> // NOLINT
 
 namespace DB
 {
 namespace tests
 {
-class RegexpLike : public Regexp {};
+class RegexpLike : public Regexp
+{
+};
 
 TEST_F(RegexpLike, testRegexpMatchType)
 {
