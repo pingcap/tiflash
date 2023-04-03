@@ -288,16 +288,6 @@ void setResponseDefaultHeaders(Poco::Net::HTTPResponse & response, size_t keep_a
         response.set("Keep-Alive", "timeout=" + std::to_string(timeout.totalSeconds()));
 }
 
-std::once_flag ssl_init_once;
-
-void SSLInit()
-{
-    // http://stackoverflow.com/questions/18315472/https-request-in-c-using-poco
-#if Poco_NetSSL_FOUND
-    Poco::Net::initializeSSL();
-#endif
-}
-
 HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, bool resolve_host)
 {
     const std::string & host = uri.getHost();

@@ -81,9 +81,6 @@ using HTTPSessionPtr = std::shared_ptr<Poco::Net::HTTPClientSession>;
 
 void setResponseDefaultHeaders(Poco::Net::HTTPResponse & response, size_t keep_alive_timeout);
 
-extern std::once_flag ssl_init_once;
-void SSLInit();
-
 /// Create session object to perform requests and set required parameters.
 HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, bool resolve_host = true);
 

@@ -213,8 +213,7 @@ void PocoHTTPClient::makeRequestInternal(
             session = makeHTTPSession(target_uri, timeouts, /* resolve_host = */ true);
 
             /// In case of error this address will be written to logs
-            // request.SetResolvedRemoteHost(session->getResolvedAddress()); // FIXME?
-            request.SetResolvedRemoteHost(session->getHost());
+            request.SetResolvedRemoteHost(session->getResolvedAddress());
 
             Poco::Net::HTTPRequest poco_request(Poco::Net::HTTPRequest::HTTP_1_1);
 
