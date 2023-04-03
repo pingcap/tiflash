@@ -95,13 +95,26 @@ public:
 
 struct StorageS3Config
 {
+<<<<<<< HEAD
+=======
+    bool is_enabled = false;
+
+    // verbose logging for http requests. Use for debugging
+    bool verbose = false;
+
+>>>>>>> 01b453643e (Use Poco http client to replace curl http client (#7209))
     String endpoint;
     String bucket;
     String access_key_id;
     String secret_access_key;
     UInt64 max_connections = 1024;
     UInt64 connection_timeout_ms = 1000;
+<<<<<<< HEAD
     UInt64 request_timeout_ms = 3000;
+=======
+    UInt64 request_timeout_ms = 7000;
+    UInt64 max_redirections = 10;
+>>>>>>> 01b453643e (Use Poco http client to replace curl http client (#7209))
     String root;
 
     inline static String S3_ACCESS_KEY_ID = "S3_ACCESS_KEY_ID";

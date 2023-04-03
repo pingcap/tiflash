@@ -542,10 +542,13 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     cpptoml::parser p(ss);
     auto table = p.parse();
 
+    readConfig(table, "verbose", verbose);
     readConfig(table, "endpoint", endpoint);
     readConfig(table, "bucket", bucket);
     readConfig(table, "max_connections", max_connections);
     RUNTIME_CHECK(max_connections > 0);
+    readConfig(table, "max_redirections", max_redirections);
+    RUNTIME_CHECK(max_redirections > 0);
     readConfig(table, "connection_timeout_ms", connection_timeout_ms);
     RUNTIME_CHECK(connection_timeout_ms > 0);
     readConfig(table, "request_timeout_ms", request_timeout_ms);
@@ -573,12 +576,20 @@ void StorageS3Config::parse(const String & content, const LoggerPtr & log)
     LOG_INFO(
         log,
         "endpoint={} bucket={} root={} "
+<<<<<<< HEAD
         "max_connections={} connection_timeout_ms={} "
         "request_timeout_ms={} access_key_id_size={} secret_access_key_size={}",
+=======
+        "max_connections={} max_redirections={} "
+        "connection_timeout_ms={} request_timeout_ms={} "
+        "access_key_id_size={} secret_access_key_size={}"
+        "}}",
+>>>>>>> 01b453643e (Use Poco http client to replace curl http client (#7209))
         endpoint,
         bucket,
         root,
         max_connections,
+        max_redirections,
         connection_timeout_ms,
         request_timeout_ms,
         access_key_id.size(),

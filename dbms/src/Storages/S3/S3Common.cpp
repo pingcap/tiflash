@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,24 @@
 
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
+#include <Common/RemoteHostFilter.h>
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
+<<<<<<< HEAD
+=======
+#include <Interpreters/Context_fwd.h>
+#include <Server/StorageConfigParser.h>
+#include <Storages/S3/Credentials.h>
+>>>>>>> 01b453643e (Use Poco http client to replace curl http client (#7209))
 #include <Storages/S3/MockS3Client.h>
+#include <Storages/S3/PocoHTTPClient.h>
+#include <Storages/S3/PocoHTTPClientFactory.h>
 #include <Storages/S3/S3Common.h>
 #include <aws/core/auth/AWSCredentials.h>
+#include <aws/core/auth/STSCredentialsProvider.h>
+#include <aws/core/auth/signer/AWSAuthV4Signer.h>
+#include <aws/core/http/HttpClientFactory.h>
 #include <aws/core/http/Scheme.h>
 #include <aws/core/utils/logging/LogMacros.h>
 #include <aws/core/utils/logging/LogSystemInterface.h>
@@ -42,7 +54,17 @@
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/TaggingDirective.h>
 #include <common/logger_useful.h>
+<<<<<<< HEAD
+=======
+#include <kvproto/disaggregated.pb.h>
+#include <pingcap/kv/Cluster.h>
+#include <pingcap/kv/RegionCache.h>
+#include <pingcap/kv/Rpc.h>
+#include <pingcap/kv/internal/type_traits.h>
+#include <re2/re2.h>
+>>>>>>> 01b453643e (Use Poco http client to replace curl http client (#7209))
 
+#include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <filesystem>
 #include <fstream>
@@ -74,10 +96,9 @@ Poco::Message::Priority convertLogLevel(Aws::Utils::Logging::LogLevel log_level)
     case Aws::Utils::Logging::LogLevel::Warn:
         return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Info:
-        // treat aws info logging as trace level
-        return Poco::Message::PRIO_TRACE;
+        return Poco::Message::PRIO_INFORMATION;
     case Aws::Utils::Logging::LogLevel::Debug:
-        // treat aws debug logging as trace level
+        // treat AWS debug log as trace level
         return Poco::Message::PRIO_TRACE;
     case Aws::Utils::Logging::LogLevel::Trace:
         return Poco::Message::PRIO_TRACE;
@@ -97,7 +118,7 @@ public:
 
     Aws::Utils::Logging::LogLevel GetLogLevel() const final
     {
-        return Aws::Utils::Logging::LogLevel::Info;
+        return Aws::Utils::Logging::LogLevel::Debug;
     }
 
     void Log(Aws::Utils::Logging::LogLevel log_level, const char * tag, const char * format_str, ...) final // NOLINT
@@ -181,6 +202,24 @@ bool ClientFactory::isEnabled() const
 
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
+<<<<<<< HEAD
+=======
+    log = Logger::get();
+    LOG_DEBUG(log, "Aws::InitAPI start");
+    // Override the HTTP client, use PocoHTTPClient instead
+    aws_options.httpOptions.httpClientFactory_create_fn = [&config_] {
+        // TODO: do we need the remote host filter?
+        PocoHTTPClientConfiguration poco_cfg(RemoteHostFilter(), config_.max_redirections, /*enable_s3_requests_logging_*/ config_.verbose);
+        return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
+    };
+    Aws::InitAPI(aws_options);
+    Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
+
+    std::unique_lock lock_init(mtx_init);
+    if (client_is_inited) // another thread has done init
+        return;
+
+>>>>>>> 01b453643e (Use Poco http client to replace curl http client (#7209))
     config = config_;
     RUNTIME_CHECK(!config.root.starts_with("//"), config.root);
     config.root = normalizedRoot(config.root);
@@ -188,7 +227,9 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
     if (!mock_s3_)
     {
+        LOG_DEBUG(log, "Create TiFlashS3Client start");
         shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
+        LOG_DEBUG(log, "Create TiFlashS3Client end");
     }
     else
     {
@@ -225,9 +266,37 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient() const
     return shared_tiflash_client;
 }
 
+<<<<<<< HEAD
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_)
+=======
+void updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg)
 {
-    Aws::Client::ClientConfiguration cfg;
+    if (cfg.endpointOverride.empty())
+    {
+        return;
+    }
+
+    static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
+    Poco::URI uri(cfg.endpointOverride);
+    String matched_region;
+    if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
+    {
+        boost::algorithm::to_lower(matched_region);
+        cfg.region = matched_region;
+    }
+    else
+    {
+        /// In global mode AWS C++ SDK send `us-east-1` but accept switching to another one if being suggested.
+        cfg.region = Aws::Region::AWS_GLOBAL;
+    }
+}
+
+std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
+>>>>>>> 01b453643e (Use Poco http client to replace curl http client (#7209))
+{
+    LOG_INFO(log, "Create ClientConfiguration start");
+    Aws::Client::ClientConfiguration cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
+    LOG_INFO(log, "Create ClientConfiguration end");
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
     cfg.connectTimeoutMs = config_.connection_timeout_ms;
@@ -238,22 +307,55 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
         cfg.scheme = scheme;
         cfg.verifySSL = scheme == Aws::Http::Scheme::HTTPS;
     }
+    updateRegionByEndpoint(cfg);
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
+<<<<<<< HEAD
+=======
+        Aws::Client::ClientConfiguration sts_cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
+        sts_cfg.verifySSL = false;
+        Aws::STS::STSClient sts_client(sts_cfg);
+        Aws::STS::Model::GetCallerIdentityRequest req;
+        LOG_DEBUG(log, "GetCallerIdentity start");
+        auto get_identity_outcome = sts_client.GetCallerIdentity(req);
+        if (!get_identity_outcome.IsSuccess())
+        {
+            const auto & error = get_identity_outcome.GetError();
+            LOG_WARNING(log, "get CallerIdentity failed, exception={} message={} request_id={}", error.GetExceptionName(), error.GetMessage(), error.GetRequestId());
+        }
+        else
+        {
+            const auto & result = get_identity_outcome.GetResult();
+            LOG_INFO(log, "CallerIdentity{{UserId:{}, Account:{}, Arn:{}}}", result.GetUserId(), result.GetAccount(), result.GetArn());
+        }
+        LOG_DEBUG(log, "GetCallerIdentity end");
+
+>>>>>>> 01b453643e (Use Poco http client to replace curl http client (#7209))
         // Request that does not require authentication.
         // Such as the EC2 access permission to the S3 bucket is configured.
         // If the empty access_key_id and secret_access_key are passed to S3Client,
         // an authentication error will be reported.
-        return std::make_unique<Aws::S3::S3Client>(cfg);
+        LOG_DEBUG(log, "Create S3Client start");
+        auto provider = std::make_shared<S3CredentialsProviderChain>();
+        auto cli = std::make_unique<Aws::S3::S3Client>(
+            provider,
+            cfg,
+            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+            /*userVirtualAddressing*/ true);
+        LOG_DEBUG(log, "Create S3Client end");
+        return cli;
     }
     else
     {
         Aws::Auth::AWSCredentials cred(config_.access_key_id, config_.secret_access_key);
-        return std::make_unique<Aws::S3::S3Client>(
+        LOG_DEBUG(log, "Create S3Client start");
+        auto cli = std::make_unique<Aws::S3::S3Client>(
             cred,
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
             /*useVirtualAddressing*/ true);
+        LOG_DEBUG(log, "Create S3Client end");
+        return cli;
     }
 }
 
@@ -332,7 +434,17 @@ void uploadFile(const TiFlashS3Client & client, const String & local_fname, cons
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
+<<<<<<< HEAD
     LOG_DEBUG(client.log, "uploadFile local_fname={}, key={}, write_bytes={} cost={:.2f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
+=======
+    LOG_DEBUG(client.log, "uploadFile local_fname={}, key={}, write_bytes={} cost={:.3f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
+    return true;
+}
+
+void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, int max_retry_times)
+{
+    retryWrapper(doUploadFile, client, local_fname, remote_fname, max_retry_times);
+>>>>>>> 01b453643e (Use Poco http client to replace curl http client (#7209))
 }
 
 void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname)
