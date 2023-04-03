@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/getMPPTaskTracingLog.h>
+#include <Operators/ExchangeReceiverSourceOp.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
@@ -25,13 +26,14 @@
 
 namespace DB
 {
-MPPTaskStatistics::MPPTaskStatistics(const MPPTaskId & id_, String address_)
+MPPTaskStatistics::MPPTaskStatistics(const MPPTaskId & id_, String address_, bool enable_pipeline_)
     : log(getMPPTaskTracingLog(id_))
-    , executor_statistics_collector(log->identifier())
+    , executor_statistics_collector(log->identifier(), enable_pipeline_)
     , id(id_)
     , host(std::move(address_))
     , task_init_timestamp(Clock::now())
     , status(INITIALIZING)
+    , enable_pipeline(enable_pipeline_)
 {}
 
 void MPPTaskStatistics::start()
@@ -86,7 +88,11 @@ void MPPTaskStatistics::collectRuntimeStatistics()
     const auto & return_statistics = it->second->getBaseRuntimeStatistics();
     // record io bytes
     output_bytes = return_statistics.bytes;
-    recordInputBytes(*dag_context);
+
+    if (!enable_pipeline)
+        recordInputBytes(*dag_context);
+    else
+        recordInputBytesForPipeline(*dag_context);
 }
 
 tipb::SelectResponse MPPTaskStatistics::genExecutionSummaryResponse()
@@ -153,6 +159,29 @@ void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
                 else
                 {
                     local_input_bytes += profile_info.bytes;
+                }
+            }
+        }
+    }
+}
+
+/// TODO: Fully support remote input bytes for pipeline model
+void MPPTaskStatistics::recordInputBytesForPipeline(DAGContext & dag_context)
+{
+    for (const auto & map_entry : dag_context.getIOSourcesMap())
+    {
+        for (const auto & io_source : map_entry.second)
+        {
+            if (auto * source_ptr = dynamic_cast<SourceOp *>(io_source.get()); source_ptr)
+            {
+                const auto & profile = source_ptr->getProfile();
+                if (dynamic_cast<ExchangeReceiverSourceOp *>(source_ptr))
+                {
+                    remote_input_bytes += profile->bytes;
+                }
+                else
+                {
+                    local_input_bytes += profile->bytes;
                 }
             }
         }

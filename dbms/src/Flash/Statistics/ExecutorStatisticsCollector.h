@@ -31,8 +31,8 @@ class ExecutorStatisticsCollector
 {
 public:
     explicit ExecutorStatisticsCollector(const String & req_id,
-                                         bool force_fill_executor_id_ = false,
-                                         bool enable_pipeline_ = false)
+                                         bool enable_pipeline_ = false,
+                                         bool force_fill_executor_id_ = false)
         : log(Logger::get(req_id))
         , force_fill_executor_id(force_fill_executor_id_)
         , enable_pipeline(enable_pipeline_)

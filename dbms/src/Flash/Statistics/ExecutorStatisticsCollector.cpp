@@ -38,7 +38,7 @@ RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_
     {
         for (const auto & map_entry : dag_context.getIOSourcesMap())
             for (const auto & source_op_ptr : map_entry.second)
-                if (auto * exchange_receiver_source_op_ptr = dynamic_cast<ExchangeReceiverSourceOp *>(source_op_ptr); exchange_receiver_source_op_ptr)
+                if (auto * exchange_receiver_source_op_ptr = dynamic_cast<ExchangeReceiverSourceOp *>(source_op_ptr.get()); exchange_receiver_source_op_ptr)
                     exchange_execution_summary.merge(exchange_receiver_source_op_ptr->getRemoteExecutionSummary());
     }
     else

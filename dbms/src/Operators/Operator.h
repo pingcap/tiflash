@@ -108,9 +108,8 @@ public:
 
     OperatorStatus awaitImpl() override { return OperatorStatus::HAS_OUTPUT; }
 };
-using SourceOpPtr = std::unique_ptr<SourceOp>;
+using SourceOpPtr = std::shared_ptr<SourceOp>;
 using SourceOps = std::vector<SourceOpPtr>;
-
 class TransformOp : public Operator
 {
 public:

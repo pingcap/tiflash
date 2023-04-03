@@ -140,8 +140,14 @@ public:
                 time_processed_ns = std::max(time_processed_ns, operator_profile->execution_time);
                 base.rows += operator_profile->rows;
                 base.blocks += operator_profile->blocks;
+                base.bytes += operator_profile->bytes;
             }
             base.execution_time_ns += time_processed_ns;
+        }
+
+        if constexpr (ExecutorImpl::has_extra_info)
+        {
+            collectExtraRuntimeDetailForPipeline();
         }
     }
 
@@ -161,6 +167,8 @@ protected:
     virtual void appendExtraJson(FmtBuffer &) const {}
 
     virtual void collectExtraRuntimeDetail() {}
+
+    virtual void collectExtraRuntimeDetailForPipeline() {}
 
     void collectJoinBuildTime()
     {

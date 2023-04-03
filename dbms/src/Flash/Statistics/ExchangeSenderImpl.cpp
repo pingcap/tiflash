@@ -49,6 +49,16 @@ void ExchangeSenderStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 
 void ExchangeSenderStatistics::collectExtraRuntimeDetail()
 {
+    collectExtraRuntimeDetailImpl();
+}
+
+void ExchangeSenderStatistics::collectExtraRuntimeDetailForPipeline()
+{
+    collectExtraRuntimeDetailImpl();
+}
+
+void ExchangeSenderStatistics::collectExtraRuntimeDetailImpl()
+{
     const auto & mpp_tunnels = dag_context.tunnel_set->getTunnels();
     for (UInt16 i = 0; i < partition_num; ++i)
     {

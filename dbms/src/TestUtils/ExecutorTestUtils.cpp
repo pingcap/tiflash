@@ -328,7 +328,7 @@ void ExecutorTest::testForExecutionSummary(
     executeStreams(&dag_context);
     ASSERT_TRUE(dag_context.collect_execution_summaries);
 
-    ExecutorStatisticsCollector statistics_collector("test_execution_summary", true, enable_pipeline);
+    ExecutorStatisticsCollector statistics_collector("test_execution_summary", enable_pipeline, true);
     statistics_collector.initialize(&dag_context);
     auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
     ASSERT_EQ(summaries.size(), expect.size()) << "\n"

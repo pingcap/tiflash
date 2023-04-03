@@ -16,7 +16,7 @@
 
 namespace DB
 {
-void PipelineExecBuilder::setSourceOp(SourceOpPtr && source_op_)
+void PipelineExecBuilder::setSourceOp(SourceOpPtr source_op_)
 {
     assert(!source_op && source_op_);
     source_op = std::move(source_op_);

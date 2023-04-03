@@ -65,7 +65,8 @@ using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 class ProcessListEntry;
 
 class SourceOp;
-using SourceOpPtrs = std::vector<SourceOp *>;
+using SourceOpPtr = std::shared_ptr<SourceOp>;
+using SourceOpPtrs = std::vector<SourceOpPtr>;
 
 // a group of profile for same operator
 using OperatorProfiles = std::vector<OperatorProfilePtr>;

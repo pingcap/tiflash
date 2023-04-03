@@ -92,7 +92,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , manager(context_->getTMTContext().getMPPTaskManager().get())
     , schedule_entry(manager, id)
     , log(Logger::get(id.toString()))
-    , mpp_task_statistics(id, meta.address())
+    , mpp_task_statistics(id, meta.address(), context->getSettingsRef().enable_pipeline)
 {
     current_memory_tracker = nullptr;
 }

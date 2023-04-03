@@ -34,7 +34,7 @@ public:
     using Clock = std::chrono::system_clock;
     using Timestamp = Clock::time_point;
 
-    MPPTaskStatistics(const MPPTaskId & id_, String address_);
+    MPPTaskStatistics(const MPPTaskId & id_, String address_, bool enable_pipeline);
 
     void start();
 
@@ -56,6 +56,7 @@ public:
 
 private:
     void recordInputBytes(DAGContext & dag_context);
+    void recordInputBytesForPipeline(DAGContext & dag_context);
 
     const LoggerPtr log;
 
@@ -74,6 +75,7 @@ private:
     Timestamp read_wait_index_start_timestamp{Clock::duration::zero()};
     Timestamp read_wait_index_end_timestamp{Clock::duration::zero()};
     TaskStatus status;
+    bool enable_pipeline;
     String error_message;
 
     Int64 local_input_bytes = 0;

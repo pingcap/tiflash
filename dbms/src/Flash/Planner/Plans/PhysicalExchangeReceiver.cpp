@@ -109,13 +109,13 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
     group_builder.init(concurrency);
     size_t partition_id = 0;
     group_builder.transform([&](auto & builder) {
-        auto source_op = std::make_unique<ExchangeReceiverSourceOp>(
+        auto source_op = std::make_shared<ExchangeReceiverSourceOp>(
             exec_status,
             log->identifier(),
             mpp_exchange_receiver,
             /*stream_id=*/fine_grained_shuffle.enable() ? partition_id++ : 0);
-        builder.setSourceOp(std::move(source_op));
-        exchange_receiver_io_source_ops.push_back(source_op.get());
+        builder.setSourceOp(source_op);
+        exchange_receiver_io_source_ops.push_back(source_op);
     });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
 }

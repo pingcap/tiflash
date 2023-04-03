@@ -149,6 +149,8 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, *mock_context.context);
     root.reset();
     executor_index = 0;
+    for (auto & task : query_tasks)
+        task.dag_request->set_collect_execution_summaries(true);
     return query_tasks;
 }
 

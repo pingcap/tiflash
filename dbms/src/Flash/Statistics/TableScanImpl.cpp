@@ -15,7 +15,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>
-
+#include <Operators/UnorderedSourceOp.h>
 namespace DB
 {
 String TableScanDetail::toJson() const
@@ -35,7 +35,6 @@ void TableScanStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
         remote_table_scan_detail.toJson());
 }
 
-/// TODO: collectExtraRuntimeDetail for Pipeline model
 void TableScanStatistics::collectExtraRuntimeDetail()
 {
     const auto & io_stream_map = dag_context.getInBoundIOInputStreamsMap();
@@ -69,6 +68,28 @@ void TableScanStatistics::collectExtraRuntimeDetail()
             else
             {
                 /// Streams like: NullBlockInputStream.
+            }
+        }
+    }
+}
+
+void TableScanStatistics::collectExtraRuntimeDetailForPipeline()
+{
+    const auto & io_sources_map = dag_context.getIOSourcesMap();
+    auto it = io_sources_map.find(executor_id);
+    if (it != io_sources_map.end())
+    {
+        for (const auto & io_source : it->second)
+        {
+            /// TODO: Support remote table scan detail for pipeline model
+            if (auto * source_ptr = dynamic_cast<SourceOp *>(io_source.get()); source_ptr)
+            {
+            
+                local_table_scan_detail.bytes += source_ptr->getProfile()->bytes;
+            }
+            else
+            {
+                /// Sources like: NullSourceOp
             }
         }
     }
