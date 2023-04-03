@@ -222,7 +222,7 @@ std::span<pollfd> CaresPTRResolver::get_readable_sockets(int * sockets, pollfd *
 
 int64_t CaresPTRResolver::calculate_timeout()
 {
-    timeval tv;
+    timeval tv{};
     if (auto * tvp = ares_timeout(channel, nullptr, &tv))
     {
         auto timeout = tvp->tv_sec * 1000 + tvp->tv_usec / 1000;
