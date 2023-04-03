@@ -78,7 +78,7 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
             }
             else
             {
-                // convert to merge phase.
+                // convert to restore phase.
                 status = LocalSortStatus::RESTORE;
 
                 /// If spill happens

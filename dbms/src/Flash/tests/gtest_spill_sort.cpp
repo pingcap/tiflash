@@ -64,11 +64,11 @@ try
                        .topN(order_by_items, limit_size)
                        .build(context);
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    WRAP_FOR_SPILL_SORT_TEST_BEGIN
     /// disable spill
     context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
     auto ref_columns = executeStreams(request, original_max_streams);
     /// enable spill
-    WRAP_FOR_SPILL_SORT_TEST_BEGIN
     context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
     // don't use `executeAndAssertColumnsEqual` since it takes too long to run
     /// todo use ASSERT_COLUMNS_EQ_R once TiFlash support final TopN
@@ -108,12 +108,12 @@ try
                            .topN(order_by_items, limit_size)
                            .build(context);
         context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+        WRAP_FOR_SPILL_SORT_TEST_BEGIN
         /// disable spill
         context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
         auto ref_columns = executeStreams(request, original_max_streams);
         /// enable spill
         context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
-        WRAP_FOR_SPILL_SORT_TEST_BEGIN
         // don't use `executeAndAssertColumnsEqual` since it takes too long to run
         /// todo use ASSERT_COLUMNS_EQ_R once TiFlash support final TopN
         ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
