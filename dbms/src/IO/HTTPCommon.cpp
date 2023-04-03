@@ -87,8 +87,8 @@ HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool h
 #if Poco_NetSSL_FOUND
         String resolved_host = resolve_host ? DNSResolver::instance().resolveHost(host).toString() : host;
         auto https_session = std::make_shared<Poco::Net::HTTPSClientSession>(host, port);
-        // if (resolve_host)
-        //     https_session->setResolvedHost(DNSResolver::instance().resolveHost(host).toString());
+        if (resolve_host)
+            https_session->setResolvedHost(DNSResolver::instance().resolveHost(host).toString());
 
         session = std::move(https_session);
 #else
@@ -123,7 +123,7 @@ private:
     {
         auto session = makeHTTPSessionImpl(host, port, https, true, resolve_host);
 #if 1
-        RUNTIME_CHECK(proxy_host.empty());
+        RUNTIME_CHECK_MSG(proxy_host.empty(), "proxy is not yet supported");
         UNUSED(proxy_host, proxy_port, proxy_https);
 #else
         if (!proxy_host.empty())

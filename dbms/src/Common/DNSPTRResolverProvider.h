@@ -27,7 +27,7 @@ struct DNSPTRResolver
 
     virtual std::unordered_set<std::string> resolve(const std::string & ip) = 0;
 
-    virtual std::unordered_set<std::string> resolve_v6(const std::string & ip) = 0;
+    virtual std::unordered_set<std::string> resolve_v6(const std::string & ip) = 0; // NOLINT(readability-identifier-naming)
 };
 /*
  * Provides a ready-to-use DNSPTRResolver instance.

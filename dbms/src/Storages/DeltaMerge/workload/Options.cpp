@@ -109,8 +109,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("s3_put_count_per_thread", value<UInt64>()->default_value(16), "") //
         ("s3_get_count_per_thread", value<UInt64>()->default_value(16), "") //
         ("s3_temp_dir", value<std::string>()->default_value("./s3_tmp"), "") //
-        ("s3_always_new_client", value<bool>()->default_value(true), "") //
-        ("s3_region", value<std::string>()->default_value(""), "");
+        ("s3_always_new_client", value<bool>()->default_value(true), "");
 
     boost::program_options::variables_map vm;
     boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
@@ -206,7 +205,6 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     {
         s3_always_new_client = vm["s3_always_new_client"].as<bool>();
     }
-    s3_region = vm["s3_region"].as<String>();
 
     return {true, toString()};
 }

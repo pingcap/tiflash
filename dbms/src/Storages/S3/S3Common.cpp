@@ -62,7 +62,9 @@
 #include <pingcap/kv/RegionCache.h>
 #include <pingcap/kv/Rpc.h>
 #include <pingcap/kv/internal/type_traits.h>
+#include <re2/re2.h>
 
+#include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <filesystem>
 #include <fstream>
@@ -71,13 +73,6 @@
 #include <memory>
 #include <mutex>
 #include <thread>
-
-#include "Poco/Environment.h"
-
-/// FIXME: remove this hack !!!
-extern String S3_REGION;
-extern int64_t S3_CLIENT_TYPE;
-/// FIXME: remove this hack !!!
 
 namespace ProfileEvents
 {
@@ -125,7 +120,7 @@ public:
 
     Aws::Utils::Logging::LogLevel GetLogLevel() const final
     {
-        return Aws::Utils::Logging::LogLevel::Trace;
+        return Aws::Utils::Logging::LogLevel::Debug;
     }
 
     void Log(Aws::Utils::Logging::LogLevel log_level, const char * tag, const char * format_str, ...) final // NOLINT
@@ -276,19 +271,15 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     log = Logger::get();
-    S3_CLIENT_TYPE = Poco::Environment::get("S3_CLIENT_TYPE", "0")[0] - '0';
-    LOG_INFO(log, "Aws::InitAPI start, S3_CLIENT_TYPE={}", S3_CLIENT_TYPE);
-    if (S3_CLIENT_TYPE != 0)
-    {
-        aws_options.httpOptions.httpClientFactory_create_fn = [] {
-            // TODO: set the cfg
-            PocoHTTPClientConfiguration poco_cfg(S3_REGION, RemoteHostFilter(), 100, /*enable_s3_requests_logging_*/ true, /*for_disk_s3_*/ false);
-            return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
-        };
-    }
+    LOG_DEBUG(log, "Aws::InitAPI start");
+    // Override the HTTP client, use PocoHTTPClient instead
+    aws_options.httpOptions.httpClientFactory_create_fn = [&config_] {
+        // TODO: do we need the remote host filter?
+        PocoHTTPClientConfiguration poco_cfg(RemoteHostFilter(), config_.max_redirections, /*enable_s3_requests_logging_*/ config_.verbose);
+        return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
+    };
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
-    LOG_INFO(log, "Aws::InitAPI end");
 
     std::unique_lock lock_init(mtx_init);
     if (client_is_inited) // another thread has done init
@@ -306,9 +297,9 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 
     if (!mock_s3_)
     {
-        LOG_INFO(log, "Create TiFlashS3Client start");
+        LOG_DEBUG(log, "Create TiFlashS3Client start");
         shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
-        LOG_INFO(log, "Create TiFlashS3Client end");
+        LOG_DEBUG(log, "Create TiFlashS3Client end");
     }
     else
     {
@@ -377,23 +368,36 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
     return initClientFromWriteNode();
 }
 
-std::shared_ptr<TiFlashS3Client> ClientFactory::newTiFlashClient()
+void updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg)
 {
-    return std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
-}
+    if (cfg.endpointOverride.empty())
+    {
+        return;
+    }
 
+    static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
+    Poco::URI uri(cfg.endpointOverride);
+    String matched_region;
+    if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
+    {
+        boost::algorithm::to_lower(matched_region);
+        cfg.region = matched_region;
+    }
+    else
+    {
+        /// In global mode AWS C++ SDK send `us-east-1` but accept switching to another one if being suggested.
+        cfg.region = Aws::Region::AWS_GLOBAL;
+    }
+}
 
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {
     LOG_INFO(log, "Create ClientConfiguration start");
     Aws::Client::ClientConfiguration cfg("", true);
-    // PocoHTTPClientConfiguration cfg(S3_REGION, RemoteHostFilter(), 100, true, false);
     LOG_INFO(log, "Create ClientConfiguration end");
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
     cfg.connectTimeoutMs = config_.connection_timeout_ms;
-    cfg.httpRequestTimeoutMs = config_.request_timeout_ms;
-    cfg.region = S3_REGION;
     if (!config_.endpoint.empty())
     {
         cfg.endpointOverride = config_.endpoint;
@@ -401,17 +405,14 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
         cfg.scheme = scheme;
         cfg.verifySSL = scheme == Aws::Http::Scheme::HTTPS;
     }
+    updateRegionByEndpoint(cfg);
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
         Aws::Client::ClientConfiguration sts_cfg("", true);
-        // PocoHTTPClientConfiguration sts_cfg(S3_REGION, RemoteHostFilter(), 100, true, false);
         sts_cfg.verifySSL = false;
-        sts_cfg.region = S3_REGION;
-        sts_cfg.httpRequestTimeoutMs = config_.request_timeout_ms;
-        LOG_INFO(Logger::get(), "address: sts_cfg:{}", fmt::ptr(&sts_cfg));
         Aws::STS::STSClient sts_client(sts_cfg);
         Aws::STS::Model::GetCallerIdentityRequest req;
-        LOG_INFO(log, "GetCallerIdentity start");
+        LOG_DEBUG(log, "GetCallerIdentity start");
         auto get_identity_outcome = sts_client.GetCallerIdentity(req);
         if (!get_identity_outcome.IsSuccess())
         {
@@ -423,33 +424,32 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             const auto & result = get_identity_outcome.GetResult();
             LOG_INFO(log, "CallerIdentity{{UserId:{}, Account:{}, Arn:{}}}", result.GetUserId(), result.GetAccount(), result.GetArn());
         }
-        LOG_INFO(log, "GetCallerIdentity end");
+        LOG_DEBUG(log, "GetCallerIdentity end");
 
         // Request that does not require authentication.
         // Such as the EC2 access permission to the S3 bucket is configured.
         // If the empty access_key_id and secret_access_key are passed to S3Client,
         // an authentication error will be reported.
-        LOG_INFO(log, "Create S3Client start");
+        LOG_DEBUG(log, "Create S3Client start");
         auto provider = std::make_shared<S3CredentialsProviderChain>();
-        LOG_INFO(Logger::get(), "address: cfg:{}", fmt::ptr(&cfg));
         auto cli = std::make_unique<Aws::S3::S3Client>(
             provider,
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
             /*userVirtualAddressing*/ true);
-        LOG_INFO(log, "Create S3Client end");
+        LOG_DEBUG(log, "Create S3Client end");
         return cli;
     }
     else
     {
         Aws::Auth::AWSCredentials cred(config_.access_key_id, config_.secret_access_key);
-        LOG_INFO(log, "Create S3Client start");
+        LOG_DEBUG(log, "Create S3Client start");
         auto cli = std::make_unique<Aws::S3::S3Client>(
             cred,
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
             /*useVirtualAddressing*/ true);
-        LOG_INFO(log, "Create S3Client end");
+        LOG_DEBUG(log, "Create S3Client end");
         return cli;
     }
 }

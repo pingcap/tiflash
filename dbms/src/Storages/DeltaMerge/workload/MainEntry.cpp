@@ -46,8 +46,6 @@
 #include <random>
 #include <thread>
 
-#include "Options.h"
-
 using namespace DB;
 using namespace DB::tests;
 using namespace DB::DM::tests;
@@ -453,16 +451,9 @@ void genFile(const String & fname, UInt64 fsize, char value)
     }
 }
 
-std::shared_ptr<S3::TiFlashS3Client> getS3Client(const WorkloadOptions & opts)
+std::shared_ptr<S3::TiFlashS3Client> getS3Client(const WorkloadOptions & /*opts*/)
 {
-    if (opts.s3_always_new_client)
-    {
-        return S3::ClientFactory::instance().newTiFlashClient();
-    }
-    else
-    {
-        return S3::ClientFactory::instance().sharedTiFlashClient();
-    }
+    return S3::ClientFactory::instance().sharedTiFlashClient();
 }
 
 void putRandomObject(const DB::DM::tests::WorkloadOptions & opts)
@@ -518,9 +509,6 @@ void getRandomObjectLoop(const WorkloadOptions & opts)
     }
 }
 
-String S3_REGION;
-int64_t S3_CLIENT_TYPE;
-
 void benchS3(WorkloadOptions & opts)
 {
     //Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
@@ -532,10 +520,6 @@ void benchS3(WorkloadOptions & opts)
     RUNTIME_CHECK(opts.s3_put_concurrency > 0);
     RUNTIME_CHECK(opts.s3_get_concurrency > 0);
     RUNTIME_CHECK(!opts.s3_temp_dir.empty(), opts.s3_temp_dir);
-    RUNTIME_CHECK(!opts.s3_region.empty());
-
-    S3_REGION = opts.s3_region;
-    S3_CLIENT_TYPE = opts.s3_client_type;
 
     if (!std::filesystem::exists(opts.s3_temp_dir))
     {

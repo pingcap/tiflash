@@ -14,6 +14,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/DNSResolver.h>
+#include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/Throttler.h>
 #include <IO/HTTPCommon.h>
@@ -38,8 +39,6 @@
 #include <functional>
 #include <utility>
 
-#include "Common/Exception.h"
-
 static const int SUCCESS_RESPONSE_MIN = 200;
 static const int SUCCESS_RESPONSE_MAX = 299;
 
@@ -57,27 +56,10 @@ extern const Event S3WriteRequestsErrors;
 extern const Event S3WriteRequestsThrottling;
 extern const Event S3WriteRequestsRedirects;
 
-extern const Event DiskS3ReadMicroseconds;
-extern const Event DiskS3ReadRequestsCount;
-extern const Event DiskS3ReadRequestsErrors;
-extern const Event DiskS3ReadRequestsThrottling;
-extern const Event DiskS3ReadRequestsRedirects;
-
-extern const Event DiskS3WriteMicroseconds;
-extern const Event DiskS3WriteRequestsCount;
-extern const Event DiskS3WriteRequestsErrors;
-extern const Event DiskS3WriteRequestsThrottling;
-extern const Event DiskS3WriteRequestsRedirects;
-
 extern const Event S3GetRequestThrottlerCount;
 extern const Event S3GetRequestThrottlerSleepMicroseconds;
 extern const Event S3PutRequestThrottlerCount;
 extern const Event S3PutRequestThrottlerSleepMicroseconds;
-
-extern const Event DiskS3GetRequestThrottlerCount;
-extern const Event DiskS3GetRequestThrottlerSleepMicroseconds;
-extern const Event DiskS3PutRequestThrottlerCount;
-extern const Event DiskS3PutRequestThrottlerSleepMicroseconds;
 } // namespace ProfileEvents
 
 namespace CurrentMetrics
@@ -94,73 +76,16 @@ extern const int TOO_MANY_REDIRECTS;
 namespace DB::S3
 {
 
-#if 0
 PocoHTTPClientConfiguration::PocoHTTPClientConfiguration(
-    const String & force_region_,
     const RemoteHostFilter & remote_host_filter_,
     unsigned int s3_max_redirects_,
-    bool enable_s3_requests_logging_,
-    bool for_disk_s3_,
-    const ThrottlerPtr & get_request_throttler_,
-    const ThrottlerPtr & put_request_throttler_)
-    : force_region(force_region_)
-    , remote_host_filter(remote_host_filter_)
+    bool enable_s3_requests_logging_)
+    : remote_host_filter(remote_host_filter_)
     , s3_max_redirects(s3_max_redirects_)
     , enable_s3_requests_logging(enable_s3_requests_logging_)
-    , for_disk_s3(for_disk_s3_)
-    , get_request_throttler(get_request_throttler_)
-    , put_request_throttler(put_request_throttler_)
-{
-}
-#else
-PocoHTTPClientConfiguration::PocoHTTPClientConfiguration(
-    const String & force_region_,
-    const RemoteHostFilter & remote_host_filter_,
-    unsigned int s3_max_redirects_,
-    bool enable_s3_requests_logging_,
-    bool for_disk_s3_)
-    : force_region(force_region_)
-    , remote_host_filter(remote_host_filter_)
-    , s3_max_redirects(s3_max_redirects_)
-    , enable_s3_requests_logging(enable_s3_requests_logging_)
-    , for_disk_s3(for_disk_s3_)
     , error_report(nullptr)
 {
 }
-#endif
-
-#if 0
-void PocoHTTPClientConfiguration::updateSchemeAndRegion()
-{
-    if (!endpointOverride.empty())
-    {
-        static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
-        Poco::URI uri(endpointOverride);
-        if (uri.getScheme() == "http")
-            scheme = Aws::Http::Scheme::HTTP;
-
-        if (force_region.empty())
-        {
-            String matched_region;
-            if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
-            {
-                boost::algorithm::to_lower(matched_region);
-                region = matched_region;
-            }
-            else
-            {
-                /// In global mode AWS C++ SDK send `us-east-1` but accept switching to another one if being suggested.
-                region = Aws::Region::AWS_GLOBAL;
-            }
-        }
-        else
-        {
-            region = force_region;
-        }
-    }
-}
-#endif
-
 
 PocoHTTPClient::PocoHTTPClient(const Aws::Client::ClientConfiguration & client_configuration, const PocoHTTPClientConfiguration & poco_configuration)
     : per_request_configuration(poco_configuration.per_request_configuration)
@@ -171,12 +96,9 @@ PocoHTTPClient::PocoHTTPClient(const Aws::Client::ClientConfiguration & client_c
           Poco::Timespan(client_configuration.requestTimeoutMs * 1000) /// receive timeout.
           ))
     , remote_host_filter(poco_configuration.remote_host_filter)
+    , extra_headers(poco_configuration.extra_headers)
     , s3_max_redirects(poco_configuration.s3_max_redirects)
     , enable_s3_requests_logging(poco_configuration.enable_s3_requests_logging)
-    , for_disk_s3(poco_configuration.for_disk_s3)
-    // , get_request_throttler(poco_configuration.get_request_throttler)
-    // , put_request_throttler(poco_configuration.put_request_throttler)
-    , extra_headers(poco_configuration.extra_headers)
 {
 }
 
@@ -247,7 +169,7 @@ PocoHTTPClient::S3MetricKind PocoHTTPClient::getMetricKind(const Aws::Http::Http
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unsupported request method");
 }
 
-void PocoHTTPClient::addMetric(const Aws::Http::HttpRequest & request, S3MetricType type, ProfileEvents::Count amount) const
+void PocoHTTPClient::addMetric(const Aws::Http::HttpRequest & request, S3MetricType type, ProfileEvents::Count amount)
 {
     const ProfileEvents::Event events_map[static_cast<size_t>(S3MetricType::EnumSize)][static_cast<size_t>(S3MetricKind::EnumSize)] = {
         {ProfileEvents::S3ReadMicroseconds, ProfileEvents::S3WriteMicroseconds},
@@ -257,19 +179,9 @@ void PocoHTTPClient::addMetric(const Aws::Http::HttpRequest & request, S3MetricT
         {ProfileEvents::S3ReadRequestsRedirects, ProfileEvents::S3WriteRequestsRedirects},
     };
 
-    const ProfileEvents::Event disk_s3_events_map[static_cast<size_t>(S3MetricType::EnumSize)][static_cast<size_t>(S3MetricKind::EnumSize)] = {
-        {ProfileEvents::DiskS3ReadMicroseconds, ProfileEvents::DiskS3WriteMicroseconds},
-        {ProfileEvents::DiskS3ReadRequestsCount, ProfileEvents::DiskS3WriteRequestsCount},
-        {ProfileEvents::DiskS3ReadRequestsErrors, ProfileEvents::DiskS3WriteRequestsErrors},
-        {ProfileEvents::DiskS3ReadRequestsThrottling, ProfileEvents::DiskS3WriteRequestsThrottling},
-        {ProfileEvents::DiskS3ReadRequestsRedirects, ProfileEvents::DiskS3WriteRequestsRedirects},
-    };
-
     S3MetricKind kind = getMetricKind(request);
 
     ProfileEvents::increment(events_map[static_cast<unsigned int>(type)][static_cast<unsigned int>(kind)], amount);
-    if (for_disk_s3)
-        ProfileEvents::increment(disk_s3_events_map[static_cast<unsigned int>(type)][static_cast<unsigned int>(kind)], amount);
 }
 
 void PocoHTTPClient::makeRequestInternal(
@@ -284,36 +196,7 @@ void PocoHTTPClient::makeRequestInternal(
     if (enable_s3_requests_logging)
         LOG_DEBUG(log, "Make request to: {}", uri);
 
-    switch (request.GetMethod())
-    {
-    case Aws::Http::HttpMethod::HTTP_GET:
-    case Aws::Http::HttpMethod::HTTP_HEAD:
-        // if (get_request_throttler)
-        // {
-        //     UInt64 sleep_us = get_request_throttler->add(1, ProfileEvents::S3GetRequestThrottlerCount, ProfileEvents::S3GetRequestThrottlerSleepMicroseconds);
-        //     if (for_disk_s3)
-        //     {
-        //         ProfileEvents::increment(ProfileEvents::DiskS3GetRequestThrottlerCount);
-        //         ProfileEvents::increment(ProfileEvents::DiskS3GetRequestThrottlerSleepMicroseconds, sleep_us);
-        //     }
-        // }
-        break;
-    case Aws::Http::HttpMethod::HTTP_PUT:
-    case Aws::Http::HttpMethod::HTTP_POST:
-    case Aws::Http::HttpMethod::HTTP_PATCH:
-        // if (put_request_throttler)
-        // {
-        //     UInt64 sleep_us = put_request_throttler->add(1, ProfileEvents::S3PutRequestThrottlerCount, ProfileEvents::S3PutRequestThrottlerSleepMicroseconds);
-        //     if (for_disk_s3)
-        //     {
-        //         ProfileEvents::increment(ProfileEvents::DiskS3PutRequestThrottlerCount);
-        //         ProfileEvents::increment(ProfileEvents::DiskS3PutRequestThrottlerSleepMicroseconds, sleep_us);
-        //     }
-        // }
-        break;
-    case Aws::Http::HttpMethod::HTTP_DELETE:
-        break; // Not throttled
-    }
+    // TODO: Support Throttler
 
     addMetric(request, S3MetricType::Count);
     CurrentMetrics::Increment metric_increment{CurrentMetrics::S3Requests};

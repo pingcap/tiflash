@@ -15,11 +15,11 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Storages/S3/PocoHTTPClient.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 
 namespace DB::S3
 {
+// Override AWS credentials provider chain
 class S3CredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
 {
 public:

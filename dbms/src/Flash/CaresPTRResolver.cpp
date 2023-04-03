@@ -82,11 +82,11 @@ CaresPTRResolver::~CaresPTRResolver()
 {
     ares_destroy(channel);
     /*
-         * Library initialization is currently done only once in the constructor. Multiple instances of CaresPTRResolver
-         * will be used in the lifetime of ClickHouse, thus it's problematic to have de-init here.
-         * In a practical view, it makes little to no sense to de-init a DNS library since DNS requests will happen
-         * until the end of the program. Hence, ares_library_cleanup() will not be called.
-         * */
+     * Library initialization is currently done only once in the constructor. Multiple instances of CaresPTRResolver
+     * will be used in the lifetime of ClickHouse, thus it's problematic to have de-init here.
+     * In a practical view, it makes little to no sense to de-init a DNS library since DNS requests will happen
+     * until the end of the program. Hence, ares_library_cleanup() will not be called.
+     **/
 }
 
 std::unordered_set<std::string> CaresPTRResolver::resolve(const std::string & ip)
@@ -125,7 +125,7 @@ std::unordered_set<std::string> CaresPTRResolver::resolve_v6(const std::string &
 
 void CaresPTRResolver::resolve(const std::string & ip, std::unordered_set<std::string> & response)
 {
-    in_addr addr;
+    in_addr addr{};
 
     inet_pton(AF_INET, ip.c_str(), &addr);
 
@@ -134,7 +134,7 @@ void CaresPTRResolver::resolve(const std::string & ip, std::unordered_set<std::s
 
 void CaresPTRResolver::resolve_v6(const std::string & ip, std::unordered_set<std::string> & response)
 {
-    in6_addr addr;
+    in6_addr addr{};
     inet_pton(AF_INET6, ip.c_str(), &addr);
 
     ares_gethostbyaddr(channel, reinterpret_cast<const void *>(&addr), sizeof(addr), AF_INET6, callback, &response);

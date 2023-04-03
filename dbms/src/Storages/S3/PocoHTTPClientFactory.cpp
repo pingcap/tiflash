@@ -21,8 +21,6 @@
 
 #include <memory>
 
-extern String S3_REGION;
-
 namespace DB::S3
 {
 PocoHTTPClientFactory::PocoHTTPClientFactory(PocoHTTPClientConfiguration & http_cfg)
@@ -33,7 +31,7 @@ PocoHTTPClientFactory::PocoHTTPClientFactory(PocoHTTPClientConfiguration & http_
 std::shared_ptr<Aws::Http::HttpClient>
 PocoHTTPClientFactory::CreateHttpClient(const Aws::Client::ClientConfiguration & clientConfiguration) const
 {
-    // FIXME: this can not convert to the right address
+    // TODO: maybe we need different `poco_cfg` for different client sometimes?
     return std::make_shared<PocoHTTPClient>(clientConfiguration, poco_cfg);
 }
 

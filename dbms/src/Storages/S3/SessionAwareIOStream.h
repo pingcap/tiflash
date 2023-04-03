@@ -16,7 +16,6 @@
 
 #include <iostream>
 
-
 namespace DB::S3
 {
 /**

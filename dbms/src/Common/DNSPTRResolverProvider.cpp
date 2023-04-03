@@ -13,6 +13,9 @@
 // limitations under the License.
 
 #include <Common/DNSPTRResolverProvider.h>
+// Note that this include the `CaresPTRResolver` defined under "Flash/" because that class need
+// to link with thirdparty that is not included by libcommon_io. Use a register function
+// instead of include it could be better.
 #include <Flash/CaresPTRResolver.h>
 
 namespace DB

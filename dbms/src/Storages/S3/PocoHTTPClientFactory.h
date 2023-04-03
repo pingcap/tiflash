@@ -1,5 +1,3 @@
-
-#pragma once
 // Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+#pragma once
 
 #include <Storages/S3/PocoHTTPClient.h>
 #include <aws/core/http/HttpClientFactory.h>
@@ -28,7 +28,7 @@ namespace DB::S3
 class PocoHTTPClientFactory : public Aws::Http::HttpClientFactory
 {
 public:
-    PocoHTTPClientFactory(PocoHTTPClientConfiguration & http_cfg);
+    explicit PocoHTTPClientFactory(PocoHTTPClientConfiguration & http_cfg);
 
     ~PocoHTTPClientFactory() override = default;
     [[nodiscard]] std::shared_ptr<Aws::Http::HttpClient>

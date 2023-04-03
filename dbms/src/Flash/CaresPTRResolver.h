@@ -29,6 +29,9 @@ namespace DB
  * Implements reverse DNS resolution using c-ares lib. System reverse DNS resolution via
  * gethostbyaddr or getnameinfo does not work reliably because in some systems
  * it returns all PTR records for a given IP and in others it returns only one.
+ *
+ * Note that this class is defined under "Flash/" because it need to link/find header with c-ares
+ * inside grpc
  **/
 class CaresPTRResolver : public DNSPTRResolver
 {

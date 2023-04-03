@@ -15,7 +15,6 @@
 #include <Common/DNSResolver.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
-// #include <Common/thread_local_rng.h>
 #include <Common/DNSPTRResolverProvider.h>
 #include <Common/LRUCache.h>
 #include <Common/NetException.h>
@@ -107,6 +106,10 @@ void splitHostAndPort(const std::string & host_and_port, std::string & out_host,
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Port must be numeric");
 }
+
+///
+/// getaddrinfo_a failed on CentOS, use `gethostbyname` instead.
+///
 
 void DNSOnError(int code, const std::string & arg)
 {

@@ -15,11 +15,10 @@
 #pragma once
 
 #include <Common/RemoteHostFilter.h>
-#include <Poco/Net/HTTPClientSession.h>
-// #include <Common/Throttler_fwd.h>
 #include <IO/ConnectionTimeouts.h>
 #include <IO/HTTPCommon.h>
 #include <IO/HTTPHeaderEntries.h>
+#include <Poco/Net/HTTPClientSession.h>
 #include <Storages/S3/SessionAwareIOStream.h>
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/http/HttpClient.h>
@@ -56,37 +55,17 @@ struct PocoHTTPClientConfiguration
     std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration = [](const Aws::Http::HttpRequest &) {
         return ClientConfigurationPerRequest();
     };
-    String force_region;
     const RemoteHostFilter & remote_host_filter;
     unsigned int s3_max_redirects;
     bool enable_s3_requests_logging;
-    bool for_disk_s3;
-    // ThrottlerPtr get_request_throttler;
-    // ThrottlerPtr put_request_throttler;
     HTTPHeaderEntries extra_headers;
-
-    // void updateSchemeAndRegion();
 
     std::function<void(const ClientConfigurationPerRequest &)> error_report;
 
-// private:
-#if 0
     PocoHTTPClientConfiguration(
-        const String & force_region_,
         const RemoteHostFilter & remote_host_filter_,
         unsigned int s3_max_redirects_,
-        bool enable_s3_requests_logging_,
-        bool for_disk_s3_,
-        const ThrottlerPtr & get_request_throttler_,
-        const ThrottlerPtr & put_request_throttler_);
-#else
-    PocoHTTPClientConfiguration(
-        const String & force_region_,
-        const RemoteHostFilter & remote_host_filter_,
-        unsigned int s3_max_redirects_,
-        bool enable_s3_requests_logging_,
-        bool for_disk_s3_);
-#endif
+        bool enable_s3_requests_logging_);
 
     /// Constructor of Aws::Client::ClientConfiguration must be called after AWS SDK initialization.
     friend ClientFactory;
@@ -130,6 +109,8 @@ private:
     Aws::Utils::Stream::ResponseStream body_stream;
 };
 
+// A HTTP client base on Poco
+// TODO: Support Throttler
 class PocoHTTPClient : public Aws::Http::HttpClient
 {
 public:
@@ -168,26 +149,15 @@ private:
     };
 
     static S3MetricKind getMetricKind(const Aws::Http::HttpRequest & request);
-    void addMetric(const Aws::Http::HttpRequest & request, S3MetricType type, ProfileEvents::Count amount = 1) const;
+    static void addMetric(const Aws::Http::HttpRequest & request, S3MetricType type, ProfileEvents::Count amount = 1) ;
 
     std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration;
     std::function<void(const ClientConfigurationPerRequest &)> error_report;
     ConnectionTimeouts timeouts;
     const RemoteHostFilter & remote_host_filter;
-    unsigned int s3_max_redirects;
-    bool enable_s3_requests_logging;
-    bool for_disk_s3;
-
-    /// Limits get request per second rate for GET, SELECT and all other requests, excluding throttled by put throttler
-    /// (i.e. throttles GetObject, HeadObject)
-    // ThrottlerPtr get_request_throttler;
-
-    /// Limits put request per second rate for PUT, COPY, POST, LIST requests
-    /// (i.e. throttles PutObject, CopyObject, ListObjects, CreateMultipartUpload, UploadPartCopy, UploadPart, CompleteMultipartUpload)
-    /// NOTE: DELETE and CANCEL requests are not throttled by either put or get throttler
-    // ThrottlerPtr put_request_throttler;
-
     const HTTPHeaderEntries extra_headers;
+    UInt32 s3_max_redirects;
+    bool enable_s3_requests_logging;
 };
 
 } // namespace DB::S3

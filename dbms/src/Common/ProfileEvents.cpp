@@ -52,16 +52,6 @@
     M(S3WriteRequestsThrottling)               \
     M(S3ReadRequestsRedirects)                 \
     M(S3WriteRequestsRedirects)                \
-    M(DiskS3ReadMicroseconds)                  \
-    M(DiskS3WriteMicroseconds)                 \
-    M(DiskS3ReadRequestsCount)                 \
-    M(DiskS3WriteRequestsCount)                \
-    M(DiskS3ReadRequestsErrors)                \
-    M(DiskS3WriteRequestsErrors)               \
-    M(DiskS3ReadRequestsThrottling)            \
-    M(DiskS3WriteRequestsThrottling)           \
-    M(DiskS3ReadRequestsRedirects)             \
-    M(DiskS3WriteRequestsRedirects)            \
                                                \
     M(RWLockAcquiredReadLocks)                 \
     M(RWLockAcquiredWriteLocks)                \

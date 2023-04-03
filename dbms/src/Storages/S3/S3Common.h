@@ -122,8 +122,6 @@ public:
 
     std::shared_ptr<TiFlashS3Client> sharedTiFlashClient();
 
-    std::shared_ptr<TiFlashS3Client> newTiFlashClient();
-
     S3GCMethod gc_method = S3GCMethod::Lifecycle;
 
 private:
