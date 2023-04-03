@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/Spiller.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Operators/Operator.h>
@@ -24,6 +25,7 @@ enum class LocalSortStatus
 {
     PARTIAL,
     MERGE,
+    RESTORE,
 };
 
 /// Only do partial and merge sort at the current operator, no sharing of objects with other operators.
@@ -35,11 +37,15 @@ public:
         const String & req_id_,
         const SortDescription & order_desc_,
         size_t limit_,
-        size_t max_block_size_)
+        size_t max_block_size_,
+        size_t max_bytes_before_external_sort_,
+        const SpillConfig & spill_config_)
         : TransformOp(exec_status_, req_id_)
         , order_desc(order_desc_)
         , limit(limit_)
         , max_block_size(max_block_size_)
+        , max_bytes_before_external_sort(max_bytes_before_external_sort_)
+        , spill_config(spill_config_)
     {}
 
     String getName() const override
@@ -54,6 +60,8 @@ protected:
     OperatorStatus transformImpl(Block & block) override;
     OperatorStatus tryOutputImpl(Block & block) override;
 
+    OperatorStatus executeIOImpl() override;
+
     void transformHeaderImpl(Block & header_) override;
 
 private:
@@ -64,6 +72,8 @@ private:
     // 0 means no limit.
     size_t limit;
     size_t max_block_size;
+
+    LocalSortStatus status{LocalSortStatus::PARTIAL};
 
     /// Before operation, will remove constant columns from blocks. And after, place constant columns back.
     /// (to avoid excessive virtual function calls and because constants cannot be serialized in Native format for temporary files)
@@ -77,6 +87,11 @@ private:
     // If there is no output in the merge phase, merge_impl will be nullptr.
     std::unique_ptr<IBlockInputStream> merge_impl;
 
-    LocalSortStatus status{LocalSortStatus::PARTIAL};
+    /// Everything below is for external sorting.
+    size_t sum_bytes_in_blocks = 0;
+    size_t max_bytes_before_external_sort;
+    const SpillConfig spill_config;
+    std::unique_ptr<Spiller> spiller;
+    std::optional<Block> restore_result;
 };
 } // namespace DB

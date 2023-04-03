@@ -30,6 +30,14 @@ public:
     }
 };
 
+#define WRAP_FOR_SPILL_SORT_TEST_BEGIN             \
+    std::vector<bool> pipeline_bools{false, true}; \
+    for (auto enable_pipeline : pipeline_bools)    \
+    {                                              \
+        enablePipeline(enable_pipeline);
+
+#define WRAP_FOR_SPILL_SORT_TEST_END }
+
 /// todo add more tests
 TEST_F(SpillSortTestRunner, SimpleCase)
 try
@@ -60,6 +68,7 @@ try
     context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
     auto ref_columns = executeStreams(request, original_max_streams);
     /// enable spill
+    WRAP_FOR_SPILL_SORT_TEST_BEGIN
     context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
     // don't use `executeAndAssertColumnsEqual` since it takes too long to run
     /// todo use ASSERT_COLUMNS_EQ_R once TiFlash support final TopN
@@ -67,6 +76,7 @@ try
     /// enable spill and use small max_cached_data_bytes_in_spiller
     context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+    WRAP_FOR_SPILL_SORT_TEST_END
 }
 CATCH
 
@@ -103,14 +113,20 @@ try
         auto ref_columns = executeStreams(request, original_max_streams);
         /// enable spill
         context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
+        WRAP_FOR_SPILL_SORT_TEST_BEGIN
         // don't use `executeAndAssertColumnsEqual` since it takes too long to run
         /// todo use ASSERT_COLUMNS_EQ_R once TiFlash support final TopN
         ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
         /// enable spill and use small max_cached_data_bytes_in_spiller
         context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
         ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+        WRAP_FOR_SPILL_SORT_TEST_END
     }
 }
 CATCH
+
+#undef WRAP_FOR_TEST_BEGIN
+#undef WRAP_FOR_TEST_END
+
 } // namespace tests
 } // namespace DB

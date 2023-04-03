@@ -13,9 +13,13 @@
 // limitations under the License.
 
 #include <DataStreams/MergeSortingBlocksBlockInputStream.h>
+#include <DataStreams/MergingSortedBlockInputStream.h>
 #include <DataStreams/SortHelper.h>
+#include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Interpreters/sortBlock.h>
 #include <Operators/LocalSortTransformOp.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -26,6 +30,8 @@ void LocalSortTransformOp::operatePrefix()
     SortHelper::removeConstantsFromSortDescription(header, order_desc);
     // For order by constants, generate LimitOperator instead of SortOperator.
     assert(!order_desc.empty());
+
+    spiller = std::make_unique<Spiller>(spill_config, true, 1, header_without_constants, log);
 }
 
 void LocalSortTransformOp::operateSuffix()
@@ -51,30 +57,65 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
     {
         if unlikely (!block)
         {
-            // convert to merge phase.
-            status = LocalSortStatus::MERGE;
-            if likely (!sorted_blocks.empty())
+            if (!spiller->hasSpilledData())
             {
-                // In merge phase, the MergeSortingBlocksBlockInputStream of pull model is used to do merge sort.
-                // TODO refine MergeSortingBlocksBlockInputStream and use a more common class to do merge sort in both push model and pull model.
-                merge_impl = std::make_unique<MergeSortingBlocksBlockInputStream>(
-                    sorted_blocks,
-                    order_desc,
-                    log->identifier(),
-                    max_block_size,
-                    limit);
-                merge_impl->readPrefix();
-                block = getMergeOutput();
+                // convert to merge phase.
+                status = LocalSortStatus::MERGE;
+                if likely (!sorted_blocks.empty())
+                {
+                    // In merge phase, the MergeSortingBlocksBlockInputStream of pull model is used to do merge sort.
+                    // TODO refine MergeSortingBlocksBlockInputStream and use a more common class to do merge sort in both push model and pull model.
+                    merge_impl = std::make_unique<MergeSortingBlocksBlockInputStream>(
+                        sorted_blocks,
+                        order_desc,
+                        log->identifier(),
+                        max_block_size,
+                        limit);
+                    merge_impl->readPrefix();
+                    block = getMergeOutput();
+                }
+                return OperatorStatus::HAS_OUTPUT;
             }
-            return OperatorStatus::HAS_OUTPUT;
+            else
+            {
+                // convert to merge phase.
+                status = LocalSortStatus::RESTORE;
+
+                /// If spill happens
+                LOG_INFO(log, "Begin restore data from disk for merge sort.");
+    
+                /// Create sorted streams to merge.
+                spiller->finishSpill();
+                auto inputs_to_merge = spiller->restoreBlocks(0, 0);
+    
+                /// Rest of sorted_blocks in memory.
+                if (!sorted_blocks.empty())
+                    inputs_to_merge.emplace_back(std::make_shared<MergeSortingBlocksBlockInputStream>(
+                        sorted_blocks,
+                        order_desc,
+                        log->identifier(),
+                        max_block_size,
+                        limit));
+    
+                /// Will merge that sorted streams.
+                merge_impl = std::make_unique<MergingSortedBlockInputStream>(inputs_to_merge, order_desc, max_block_size, limit);
+                merge_impl->readPrefix();
+                return OperatorStatus::IO;
+            }
         }
         SortHelper::removeConstantsFromBlock(block);
         sortBlock(block, order_desc, limit);
+        sum_bytes_in_blocks += block.bytes();
         sorted_blocks.emplace_back(std::move(block));
+        if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)
+        {
+            // spill
+            return OperatorStatus::IO;
+        }
         return OperatorStatus::NEED_INPUT;
     }
-    case LocalSortStatus::MERGE:
-        throw Exception("Unexpected status: MERGE.");
+    default:
+        throw Exception(fmt::format("Unexpected status: {}.", magic_enum::enum_name(status)));
     }
 }
 
@@ -90,6 +131,39 @@ OperatorStatus LocalSortTransformOp::tryOutputImpl(Block & block)
             block = getMergeOutput();
         return OperatorStatus::HAS_OUTPUT;
     }
+    case LocalSortStatus::RESTORE:
+    {
+        if (!restore_result)
+            return OperatorStatus::IO;
+        block = std::move(*restore_result);
+        restore_result.reset();
+        return OperatorStatus::HAS_OUTPUT;
+    }
+    default:
+        throw Exception(fmt::format("Unexpected status: {}.", magic_enum::enum_name(status)));
+    }
+}
+
+OperatorStatus LocalSortTransformOp::executeIOImpl()
+{
+    switch (status)
+    {
+    case LocalSortStatus::PARTIAL:
+    {
+        MergeSortingBlocksBlockInputStream block_in(sorted_blocks, order_desc, log->identifier(), max_block_size, limit);
+        spiller->spillBlocksUsingBlockInputStream(block_in, 0, [&]() { return exec_status.isCancelled(); });
+        sorted_blocks.clear();
+        sum_bytes_in_blocks = 0;
+        return OperatorStatus::NEED_INPUT;
+    }
+    case LocalSortStatus::RESTORE:
+    {
+        assert(!restore_result);
+        restore_result.emplace(getMergeOutput());
+        return OperatorStatus::HAS_OUTPUT;
+    }
+    default:
+        throw Exception(fmt::format("Unexpected status: {}.", magic_enum::enum_name(status)));
     }
 }
 
