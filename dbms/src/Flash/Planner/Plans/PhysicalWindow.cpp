@@ -92,13 +92,14 @@ void PhysicalWindow::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context &
 void PhysicalWindow::buildPipelineExecGroup(
     PipelineExecutorStatus & exec_status,
     PipelineExecGroupBuilder & group_builder,
-    Context & /*context*/,
+    Context & context,
     size_t /*concurrency*/)
 {
     // TODO support non fine grained shuffle.
     assert(fine_grained_shuffle.enable());
+    auto & executor_profile = context.getDAGContext()->getPipelineProfilesMap()[executor_id];
 
-    executeExpression(exec_status, group_builder, window_description.before_window, log);
+    executeExpression(exec_status, group_builder, executor_profile, window_description.before_window, log);
     window_description.fillArgColumnNumbers();
 
     /// Window function can be multiple threaded when fine grained shuffle is enabled.
@@ -106,7 +107,7 @@ void PhysicalWindow::buildPipelineExecGroup(
         builder.appendTransformOp(std::make_unique<WindowTransformOp>(exec_status, log->identifier(), window_description));
     });
 
-    executeExpression(exec_status, group_builder, window_description.after_window, log);
+    executeExpression(exec_status, group_builder, executor_profile, window_description.after_window, log);
 }
 
 void PhysicalWindow::finalize(const Names & parent_require)

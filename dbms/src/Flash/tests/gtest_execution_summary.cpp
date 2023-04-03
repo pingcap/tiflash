@@ -312,7 +312,6 @@ try
 }
 CATCH
 
-// ywq todo test more...
 TEST_F(ExecutionSummaryTestRunner, window)
 try
 {
@@ -333,21 +332,20 @@ try
 
         auto gen_request = [&](size_t exchange_concurrency) {
             return context
-                .receive(fmt::format("exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency)
+                .receive(fmt::format("exchange_receiver_{}", exchange_concurrency), exchange_concurrency)
                 .sort({{"partition", false}, {"order", false}}, true, exchange_concurrency)
                 .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame(), exchange_concurrency)
                 .build(context);
         };
         for (auto concurrency : concurrencies)
         {
-            Expect expect{{"table_scan_0", {12, concurrency}},
-                          {"aggregation_1", {3, not_check_concurrency}},
-                          {"project_2", {3, concurrency}}};
-            Expect expect_pipeline{{"table_scan_0", {12, concurrency}},
-                                   {"aggregation_1", {3, 1}},
-                                   {"project_2", {3, 1}}};
+            Expect expect{{"exchange_receiver_0", {8, concurrency}},
+                          {"sort_1", {8, concurrency}},
+                          {"window_2", {8, concurrency}}};
+
+            auto request = gen_request(concurrency);
+            testForExecutionSummary(request, enable_planner, expect, expect);
         }
-        gen_request(1);
     }
     WRAP_FOR_EXCUTION_SUMMARY_TREE_BASED_TEST_END
 }
