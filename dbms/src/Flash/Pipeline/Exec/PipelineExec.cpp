@@ -115,8 +115,7 @@ OperatorStatus PipelineExec::executeIO()
 }
 OperatorStatus PipelineExec::executeIOImpl()
 {
-    assert(io_op);
-    assert(*io_op);
+    assert(io_op && *io_op);
     auto op_status = (*io_op)->executeIO();
     if (op_status != OperatorStatus::IO)
         io_op.reset();
