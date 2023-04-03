@@ -232,7 +232,7 @@ try
                           "  topn_4 | order_by: {(<2, String>, desc: false)}, limit: 10\n"
                           "   aggregation_3 | group_by: {<2, String>, <1, String>}, agg_func: {max(<0, Long>)}\n"
                           "    project_2 | {<0, Long>, <1, String>, <2, String>}\n"
-                          "     selection_1 | equals(<0, Long>, <1, String>) and equals(<0, Long>, <1, String>)}\n"
+                          "     selection_1 | equals(<0, Long>, <1, String>) and equals(<0, Long>, <1, String>)\n"
                           "      table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
@@ -388,7 +388,7 @@ try
                            .build(context, DAGRequestType::list);
         String expected = R"(
 Limit | 10
- Selection | equals(<1, String>, <-5692549928996306944, String>)}
+ Selection | equals(<1, String>, <-5692549928996306944, String>)
   Aggregation | group_by: {<1, String>}, agg_func: {max(<0, String>)}
    Selection | equals(<0, String>, <1, String>)
     TableScan | {<0, String>, <1, String>})";
@@ -405,7 +405,7 @@ Limit | 10
                            .build(context, DAGRequestType::list);
         String expected = R"(
 TopN | order_by: {(<1, String>, desc: false)}, limit: 10
- Selection | equals(<1, String>, <-5692549928996306944, String>)}
+ Selection | equals(<1, String>, <-5692549928996306944, String>)
   Aggregation | group_by: {<1, String>}, agg_func: {max(<0, String>)}
    Selection | equals(<0, String>, <1, String>)
     TableScan | {<0, String>, <1, String>})";
