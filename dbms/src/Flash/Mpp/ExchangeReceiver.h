@@ -174,7 +174,6 @@ private:
 
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
-    void destructAsyncRequestHandler();
 
     ExchangeReceiverResult toDecodeResult(
         std::queue<Block> & block_queue,

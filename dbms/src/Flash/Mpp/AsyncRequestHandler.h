@@ -73,14 +73,14 @@ public:
         , close_conn(std::move(close_conn_))
     {
         // TODO add random fail point to mock the fail
-        LOG_INFO(log, "Profiling: async_cons {}", reinterpret_cast<UInt64>(this));
+        // LOG_INFO(log, "Profiling: async_cons {}", reinterpret_cast<UInt64>(this));
         start();
     }
 
-    ~AsyncRequestHandler() override
-    {
-        LOG_INFO(log, "Profiling: async_des {}", reinterpret_cast<UInt64>(this));
-    }
+    // ~AsyncRequestHandler() override
+    // {
+    //     // LOG_INFO(log, "Profiling: async_des {}", reinterpret_cast<UInt64>(this));
+    // }
 
     // execute will be called by RPC framework so it should be as light as possible.
     // Do not do anything after processXXX functions.
@@ -90,27 +90,27 @@ public:
         {
         case AsyncRequestStage::WAIT_RETRY:
             // debug
-            LOG_INFO(log, "Profiling: enter WAIT_RETRY");
+            // LOG_INFO(log, "Profiling: enter WAIT_RETRY");
             start();
             break;
         case AsyncRequestStage::WAIT_MAKE_READER:
             // debug
-            LOG_INFO(log, "Profiling: enter WAIT_MAKE_READER");
+            // LOG_INFO(log, "Profiling: enter WAIT_MAKE_READER");
             processWaitMakeReader(ok);
             break;
         case AsyncRequestStage::WAIT_READ:
             // debug
-            LOG_INFO(log, "Profiling: enter WAIT_READ");
+            // LOG_INFO(log, "Profiling: enter WAIT_READ");
             processWaitRead(ok);
             break;
         case AsyncRequestStage::WAIT_REWRITE:
             // debug
-            LOG_INFO(log, "Profiling: enter WAIT_REWRITE");
+            // LOG_INFO(log, "Profiling: enter WAIT_REWRITE");
             processWaitReWrite();
             break;
         case AsyncRequestStage::WAIT_FINISH:
             // debug
-            LOG_INFO(log, "Profiling: enter WAIT_FINISH");
+            // LOG_INFO(log, "Profiling: enter WAIT_FINISH");
             processWaitFinish();
             break;
         default:
@@ -164,7 +164,7 @@ private:
         if (unlikely(isChannelFull(send_res)))
         {
             // debug
-            LOG_INFO(log, "Profiling: channel full...");
+            // LOG_INFO(log, "Profiling: channel full...");
             asyncWaitForRewrite();
             return;
         }
@@ -185,13 +185,13 @@ private:
         if (unlikely(isChannelFull(res)))
         {
             // debug
-            LOG_INFO(log, "Profiling: rewrite full again");
+            // LOG_INFO(log, "Profiling: rewrite full again");
             asyncWaitForRewrite();
             return;
         }
 
         // debug
-        LOG_INFO(log, "Profiling: rewrite successfully");
+        // LOG_INFO(log, "Profiling: rewrite successfully");
         stage = AsyncRequestStage::WAIT_READ;
         startAsyncRead();
     }

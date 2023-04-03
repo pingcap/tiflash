@@ -76,7 +76,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 {
     try
     {
-        LOG_INFO(exc_log, "Profiling: er_cons {}", reinterpret_cast<UInt64>(this));
+        // LOG_INFO(exc_log, "Profiling: er_cons {}", reinterpret_cast<UInt64>(this));
         prepareMsgChannels();
         prepareGRPCReceiveQueue();
         if (isReceiverForTiFlashStorage())
@@ -107,12 +107,11 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     try
     {
         close();
-        LOG_INFO(exc_log, "Profiling: er_des {} 1", reinterpret_cast<UInt64>(this));
+        // LOG_INFO(exc_log, "Profiling: er_des {} 1", reinterpret_cast<UInt64>(this));
         waitAllConnectionDone();
-        LOG_INFO(exc_log, "Profiling: er_des {} 2", reinterpret_cast<UInt64>(this));
+        // LOG_INFO(exc_log, "Profiling: er_des {} 2", reinterpret_cast<UInt64>(this));
         thread_manager->wait();
-        LOG_INFO(exc_log, "Profiling: er_des {} 3", reinterpret_cast<UInt64>(this));
-        destructAsyncRequestHandler();
+        // LOG_INFO(exc_log, "Profiling: er_des {} 3", reinterpret_cast<UInt64>(this));
         ExchangeReceiverMetric::clearDataSizeMetric(data_size_in_queue);
     }
     catch (...)
@@ -138,13 +137,13 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
 {
     std::unique_lock lock(mu);
-    LOG_INFO(exc_log, "Profiling: er_des_wait_all {} 0", reinterpret_cast<UInt64>(this));
+    // LOG_INFO(exc_log, "Profiling: er_des_wait_all {} 0", reinterpret_cast<UInt64>(this));
     auto pred = [&] {
         return live_connections == 0;
     };
     cv.wait(lock, pred);
 
-    LOG_INFO(exc_log, "Profiling: er_des_wait_all {} 1", reinterpret_cast<UInt64>(this));
+    // LOG_INFO(exc_log, "Profiling: er_des_wait_all {} 1", reinterpret_cast<UInt64>(this));
 
     // The meaning of calling of connectionDone by local tunnel is to tell the receiver
     // to close channels and the local tunnel may still alive after it calls connectionDone.
@@ -152,7 +151,7 @@ void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
     // In order to ensure the destructions of local tunnels are
     // after the ExchangeReceiver, we need to wait at here.
     waitLocalConnectionDone(lock);
-    LOG_INFO(exc_log, "Profiling: er_des_wait_all {} 2", reinterpret_cast<UInt64>(this));
+    // LOG_INFO(exc_log, "Profiling: er_des_wait_all {} 2", reinterpret_cast<UInt64>(this));
 }
 
 template <typename RPCContext>

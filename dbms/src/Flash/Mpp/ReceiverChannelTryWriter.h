@@ -35,13 +35,15 @@ public:
         : ReceiverChannelBase(grpc_recv_queues_.size(), req_info_, log_, data_size_in_queue_, mode_)
         , grpc_recv_queues(grpc_recv_queues_)
     {
-        LOG_INFO(log, "Profiling: rct_cons {}", reinterpret_cast<size_t>(this));
+        // debug
+        // LOG_INFO(log, "Profiling: rct_cons {}", reinterpret_cast<size_t>(this));
     }
 
-    ~ReceiverChannelTryWriter()
-    {
-        LOG_INFO(log, "Profiling: rct_des {}", reinterpret_cast<size_t>(this));
-    }
+    // ~ReceiverChannelTryWriter()
+    // {
+    //     // debug
+    //     // LOG_INFO(log, "Profiling: rct_des {}", reinterpret_cast<size_t>(this));
+    // }
 
     template <bool enable_fine_grained_shuffle>
     GRPCReceiveQueueRes tryWrite(size_t source_index, const TrackedMppDataPacketPtr & tracked_packet);
