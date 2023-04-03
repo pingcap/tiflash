@@ -149,11 +149,6 @@ DictionarySourcePtr DictionarySourceFactory::create(
                 "Dictionary source of type `http` does not support attribute expressions",
                 ErrorCodes::LOGICAL_ERROR};
 
-#if Poco_NetSSL_FOUND
-        // Used for https queries
-        std::call_once(ssl_init_once, SSLInit);
-#endif
-
         return std::make_unique<HTTPDictionarySource>(dict_struct, config, config_prefix + ".http", sample_block, context);
     }
     else if ("library" == source_type)

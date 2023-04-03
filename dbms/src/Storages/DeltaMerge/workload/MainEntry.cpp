@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/UniThreadPool.h>
 #include <IO/IOThreadPools.h>
+#include <IO/UseSSL.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Server/ServerInfo.h>
@@ -610,6 +611,7 @@ int DTWorkload::mainEntry(int argc, char ** argv)
 
     if (opts.testing_type == "s3_bench")
     {
+        UseSSL ssl_holder;
         try
         {
             benchS3(opts);
