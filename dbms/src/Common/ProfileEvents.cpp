@@ -137,6 +137,7 @@
     M(S3ListObjects)                           \
     M(S3DeleteObject)                          \
     M(S3CopyObject)                            \
+    M(S3GetObjectRerty)                        \
     M(FileCacheHit)                            \
     M(FileCacheMiss)                           \
     M(FileCacheEvict)
