@@ -44,6 +44,10 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
+namespace FailPoints
+{
+extern const char skip_seek_before_read_dmfile[];
+} // namespace FailPoints
 namespace DM
 {
 DMFileReader::Stream::Stream(
@@ -95,7 +99,7 @@ DMFileReader::Stream::Stream(
     size_t buffer_size = 0;
     size_t estimated_size = 0;
 
-    const auto & use_packs = reader.pack_filter.getUsePacks();
+    const auto & use_packs = reader.pack_filter.getUsePacksConst();
     if (!reader.dmfile->configuration)
     {
         for (size_t i = 0; i < packs;)
@@ -243,16 +247,16 @@ DMFileReader::DMFileReader(
     }
 }
 
-bool DMFileReader::shouldSeek(size_t pack_id)
+bool DMFileReader::shouldSeek(size_t pack_id) const
 {
     // If current pack is the first one, or we just finished reading the last pack, then no need to seek.
-    return pack_id != 0 && !pack_filter.getUsePacks()[pack_id - 1];
+    return pack_id != 0 && !pack_filter.getUsePacksConst()[pack_id - 1];
 }
 
 bool DMFileReader::getSkippedRows(size_t & skip_rows)
 {
     skip_rows = 0;
-    const auto & use_packs = pack_filter.getUsePacks();
+    const auto & use_packs = pack_filter.getUsePacksConst();
     const auto & pack_stats = dmfile->getPackStats();
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
@@ -295,6 +299,14 @@ size_t DMFileReader::skipNextBlock()
 
     scan_context->total_dmfile_skipped_rows += read_rows;
     next_row_offset += read_rows;
+
+    // When we read dmfile, if the previous pack is not read,
+    // then we should seek to the right offset of dmfile.
+    // So if skip some packs successfully,
+    // then we set the last pack to false to indicate that we should seek before read.
+    if (likely(read_rows > 0))
+        use_packs[next_pack_id - 1] = false;
+
     return read_rows;
 }
 
@@ -420,7 +432,7 @@ Block DMFileReader::read()
 
     getSkippedRows(skip_rows);
 
-    const auto & use_packs = pack_filter.getUsePacks();
+    const auto & use_packs = pack_filter.getUsePacksConst();
     if (next_pack_id >= use_packs.size())
         return {};
     // Find max continuing rows we can read.
@@ -479,7 +491,6 @@ Block DMFileReader::read()
 
     bool do_clean_read_on_handle_on_fast_mode = enable_handle_clean_read && is_fast_scan && expected_handle_res == All;
     bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_scan && deleted_rows == 0;
-
 
     if (do_clean_read_on_normal_mode)
     {
@@ -565,6 +576,7 @@ Block DMFileReader::read()
                         column->reserve(read_rows);
                         for (auto & [range, strategy] : read_strategy)
                         {
+                            fiu_do_on(FailPoints::skip_seek_before_read_dmfile, { strategy = ColumnCache::Strategy::Disk; });
                             if (strategy == ColumnCache::Strategy::Memory)
                             {
                                 for (size_t cursor = range.first; cursor < range.second; cursor++)
@@ -665,10 +677,10 @@ void DMFileReader::readFromDisk(
 
                 if (should_seek)
                 {
+                    fiu_do_on(FailPoints::skip_seek_before_read_dmfile, { return sub_stream->buf.get(); });
                     sub_stream->buf->seek(sub_stream->getOffsetInFile(start_pack_id),
                                           sub_stream->getOffsetInDecompressedBlock(start_pack_id));
                 }
-
                 return sub_stream->buf.get();
             },
             read_rows,
@@ -705,7 +717,7 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
     }
 }
 
-void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col)
+void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col) const
 {
     if (col_data_cache == nullptr)
     {
@@ -721,7 +733,7 @@ void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pac
     }
 }
 
-bool DMFileReader::getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col)
+bool DMFileReader::getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col) const
 {
     if (col_data_cache == nullptr)
     {
