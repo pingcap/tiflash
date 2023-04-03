@@ -191,7 +191,6 @@ private:
     void prepareGRPCReceiveQueue();
     void addLocalConnectionNum();
     void createAsyncRequestHandler(Request && request);
-    void destructAllAsyncRequestHandler();
 
     void setUpLocalConnection(Request && req);
     void setUpSyncConnection(Request && req);
@@ -201,6 +200,7 @@ private:
     void handleConnectionAfterException();
 
     void setUpConnectionWithReadLoop(Request && req);
+    void setUpLocalConnections(std::vector<Request> & requests, bool has_remote_conn);
 
     bool isReceiverForTiFlashStorage()
     {
@@ -225,8 +225,8 @@ private:
     std::vector<GRPCReceiveQueue<RecvMsgPtr>> grpc_recv_queue;
     AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
 
-    std::vector<AsyncRequestHandler<RPCContext, true> *> async_handler_fine_grained_ptrs;
-    std::vector<AsyncRequestHandler<RPCContext, false> *> async_handler_no_fine_grained_ptrs;
+    std::vector<std::unique_ptr<AsyncRequestHandler<RPCContext, true>>> async_handler_fine_grained_ptrs;
+    std::vector<std::unique_ptr<AsyncRequestHandler<RPCContext, false>>> async_handler_no_fine_grained_ptrs;
 
     std::mutex mu;
     std::condition_variable cv;

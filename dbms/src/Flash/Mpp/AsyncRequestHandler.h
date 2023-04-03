@@ -72,6 +72,7 @@ public:
         , kick_recv_tag(thisAsUnaryCallback())
         , close_conn(std::move(close_conn_))
     {
+        // TODO add random fail point to mock the fail
         LOG_INFO(log, "Profiling: async_cons {}", reinterpret_cast<UInt64>(this));
         start();
     }
