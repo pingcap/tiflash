@@ -271,18 +271,14 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
 
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
-    Int64 S3_CLIENT_TYPE = Poco::Environment::get("S3_CLIENT_TYPE", "0")[0] - '0'; // NOLINT(readability-identifier-naming)
     log = Logger::get();
-    LOG_DEBUG(log, "Aws::InitAPI start, S3_CLIENT_TYPE={}", S3_CLIENT_TYPE);
-    if (S3_CLIENT_TYPE)
-    {
-        // Override the HTTP client, use PocoHTTPClient instead
-        aws_options.httpOptions.httpClientFactory_create_fn = [&config_] {
-            // TODO: do we need the remote host filter?
-            PocoHTTPClientConfiguration poco_cfg(RemoteHostFilter(), config_.max_redirections, /*enable_s3_requests_logging_*/ config_.verbose);
-            return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
-        };
-    }
+    LOG_DEBUG(log, "Aws::InitAPI start");
+    // Override the HTTP client, use PocoHTTPClient instead
+    aws_options.httpOptions.httpClientFactory_create_fn = [&config_] {
+        // TODO: do we need the remote host filter?
+        PocoHTTPClientConfiguration poco_cfg(RemoteHostFilter(), config_.max_redirections, /*enable_s3_requests_logging_*/ config_.verbose);
+        return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
+    };
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
 
