@@ -93,7 +93,12 @@ private:
 std::unique_ptr<KeyGenerator> KeyGenerator::create(const WorkloadOptions & opts)
 {
     const auto & dist = opts.write_key_distribution;
-    if (dist == "uniform")
+    const auto & testing_type = opts.testing_type;
+    if (testing_type == "s3_bench")
+    {
+        return std::make_unique<UniformDistributionKeyGenerator>(1 * 1024 * 1024, 100 * 1024 * 1024);
+    }
+    else if (dist == "uniform")
     {
         return std::make_unique<UniformDistributionKeyGenerator>(opts.max_key_count);
     }
