@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// #include <Server/HTTP/HTTPServerResponse.h>
 #include <Common/DNSResolver.h>
 #include <Common/Exception.h>
 #include <Common/PoolBase.h>
@@ -22,8 +21,8 @@
 #include <IO/HTTPCommon.h>
 #include <Poco/Net/HTTPClientSession.h>
 #include <Poco/URI.h>
+#include <Poco/Util/Application.h>
 #include <Poco/Version.h>
-
 
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/AcceptCertificateHandler.h>
@@ -36,8 +35,6 @@
 #include <Poco/Net/SSLManager.h>
 #include <Poco/Net/SecureStreamSocket.h>
 #endif
-
-#include <Poco/Util/Application.h>
 
 #include <sstream>
 #include <tuple>

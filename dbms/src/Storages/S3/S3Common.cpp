@@ -393,7 +393,7 @@ void updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg)
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {
     LOG_INFO(log, "Create ClientConfiguration start");
-    Aws::Client::ClientConfiguration cfg("", true);
+    Aws::Client::ClientConfiguration cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
     LOG_INFO(log, "Create ClientConfiguration end");
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
@@ -408,7 +408,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     updateRegionByEndpoint(cfg);
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
-        Aws::Client::ClientConfiguration sts_cfg("", true);
+        Aws::Client::ClientConfiguration sts_cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
         sts_cfg.verifySSL = false;
         Aws::STS::STSClient sts_client(sts_cfg);
         Aws::STS::Model::GetCallerIdentityRequest req;

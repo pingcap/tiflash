@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/DNSPTRResolverProvider.h>
 #include <Common/DNSResolver.h>
 #include <Common/Exception.h>
-#include <Common/ProfileEvents.h>
-#include <Common/DNSPTRResolverProvider.h>
 #include <Common/LRUCache.h>
 #include <Common/NetException.h>
+#include <Common/ProfileEvents.h>
 #include <Core/Names.h>
 #include <Poco/Exception.h>
 #include <Poco/Net/DNS.h>
