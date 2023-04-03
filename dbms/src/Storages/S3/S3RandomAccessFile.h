@@ -51,6 +51,7 @@ public:
         const String & remote_fname_,
         std::optional<std::pair<UInt64, UInt64>> offset_and_size_ = std::nullopt);
 
+    // Can only seek forward.
     off_t seek(off_t offset, int whence) override;
 
     ssize_t read(char * buf, size_t size) override;
@@ -107,8 +108,9 @@ private:
     std::shared_ptr<TiFlashS3Client> client_ptr;
     String remote_fname;
     std::optional<std::pair<UInt64, UInt64>> offset_and_size;
-
+    off_t cur_offset;
     Aws::S3::Model::GetObjectResult read_result;
+    Int64 content_length;
 
     DB::LoggerPtr log;
     bool is_close = false;

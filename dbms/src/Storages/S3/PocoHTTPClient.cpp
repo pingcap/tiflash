@@ -100,6 +100,7 @@ PocoHTTPClient::PocoHTTPClient(const Aws::Client::ClientConfiguration & client_c
     , s3_max_redirects(poco_configuration.s3_max_redirects)
     , enable_s3_requests_logging(poco_configuration.enable_s3_requests_logging)
 {
+    timeouts.http_keep_alive_timeout = Poco::Timespan(client_configuration.requestTimeoutMs * 1000);
 }
 
 std::shared_ptr<Aws::Http::HttpResponse> PocoHTTPClient::MakeRequest(
@@ -193,6 +194,13 @@ void PocoHTTPClient::makeRequestInternal(
     Poco::Logger * log = &Poco::Logger::get("AWSClient");
 
     auto uri = request.GetUri().GetURIString();
+
+    // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+    if (uri.find(".amazonaws.com?") != std::string::npos)
+    {
+        boost::algorithm::replace_first(uri, ".amazonaws.com?", ".amazonaws.com/?");
+    }
+
     if (enable_s3_requests_logging)
         LOG_DEBUG(log, "Make request to: {}", uri);
 

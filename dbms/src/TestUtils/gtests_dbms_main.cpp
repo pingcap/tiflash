@@ -82,6 +82,7 @@ int main(int argc, char ** argv)
     DB::DataStoreS3Pool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
     DB::RNRemoteReadTaskPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
     DB::RNPagePreparerPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
+    /*
     const auto s3_endpoint = Poco::Environment::get("S3_ENDPOINT", "");
     const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "mockbucket");
     const auto s3_root = Poco::Environment::get("S3_ROOT", "tiflash_ut/");
@@ -94,6 +95,15 @@ int main(int argc, char ** argv)
         .access_key_id = access_key_id,
         .secret_access_key = secret_access_key,
         .root = s3_root,
+    };*/
+    const String mock_s3 = "false";
+    auto s3config = DB::StorageS3Config{
+        .verbose = true,
+        .endpoint = "172.16.5.85:9000",
+        .bucket = "gtest",
+        .access_key_id = "minioadmin",
+        .secret_access_key = "minioadmin",
+        .root = "jinhe",
     };
     s3config.enable(/*check_requirements*/ false, DB::Logger::get());
     Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing

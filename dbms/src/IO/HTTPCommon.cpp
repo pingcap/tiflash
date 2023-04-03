@@ -294,7 +294,7 @@ HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts &
     UInt16 port = uri.getPort();
     bool https = isHTTPS(uri);
 
-    auto session = makeHTTPSessionImpl(host, port, https, false, resolve_host);
+    auto session = makeHTTPSessionImpl(host, port, https, /*keep_alive*/true, resolve_host);
     setTimeouts(*session, timeouts);
     return session;
 }

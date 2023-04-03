@@ -25,7 +25,9 @@
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <aws/s3/model/GetObjectRequest.h>
 
+#include <chrono>
 #include <optional>
+#include <thread>
 
 namespace ProfileEvents
 {
@@ -42,6 +44,7 @@ S3RandomAccessFile::S3RandomAccessFile(
     : client_ptr(std::move(client_ptr_))
     , remote_fname(remote_fname_)
     , offset_and_size(offset_and_size_)
+    , cur_offset(0)
     , log(Logger::get("S3RandomAccessFile"))
 {
     initialize();
@@ -54,9 +57,10 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
     size_t gcount = istr.gcount();
     if (gcount == 0 && !istr.eof())
     {
-        LOG_ERROR(log, "Cannot read from istream. bucket={} root={} key={}", client_ptr->bucket(), client_ptr->root(), remote_fname);
+        LOG_ERROR(log, "Cannot read from istream. bucket={} root={} key={} errmsg={}", client_ptr->bucket(), client_ptr->root(), remote_fname, strerror(errno));
         return -1;
     }
+    cur_offset += gcount;
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, gcount);
     return gcount;
 }
@@ -68,14 +72,20 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
         LOG_ERROR(log, "Only SEEK_SET mode is allowed, but {} is received", whence);
         return -1;
     }
-    if (unlikely(offset_ < 0))
+    if (unlikely(offset_ < cur_offset || offset_ > content_length))
     {
-        LOG_ERROR(log, "Seek position is out of bounds. Offset: {}", offset_);
+        LOG_ERROR(log, "Seek position is out of bounds: offset={}, cur_offset={}, content_length={}", offset_, cur_offset, content_length);
         return -1;
     }
+    if (offset_ == cur_offset)
+    {
+        return cur_offset;
+    }
     auto & istr = read_result.GetBody();
-    istr.seekg(offset_);
-    return istr.tellg();
+    istr.ignore(offset_ - cur_offset);
+    RUNTIME_CHECK(istr, remote_fname, strerror(errno));
+    cur_offset = offset_;
+    return cur_offset;
 }
 
 void S3RandomAccessFile::initialize()
@@ -95,9 +105,11 @@ void S3RandomAccessFile::initialize()
     {
         throw S3::fromS3Error(outcome.GetError(), "S3 GetObject failed, bucket={} root={} key={}", client_ptr->bucket(), client_ptr->root(), remote_fname);
     }
-    ProfileEvents::increment(ProfileEvents::S3ReadBytes, outcome.GetResult().GetContentLength());
+    content_length = outcome.GetResult().GetContentLength();
+    ProfileEvents::increment(ProfileEvents::S3ReadBytes, content_length);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
     read_result = outcome.GetResultWithOwnership();
+    RUNTIME_CHECK(read_result.GetBody(), remote_fname, strerror(errno));
 }
 
 inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname, std::optional<UInt64> filesize)
