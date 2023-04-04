@@ -359,7 +359,7 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
             case TXN_SOURCE_PREFIX_FOR_LOCK:
             {
                 // Used for CDC, useless for TiFlash.
-                UInt64 txn_source_prefic = readUInt64(data, len);
+                UInt64 txn_source_prefic = readVarUInt(data, len);
                 UNUSED(txn_source_prefic);
                 break;
             }
