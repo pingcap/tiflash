@@ -360,7 +360,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
 
     /// handle timezone/duration cast for local table scan.
     executeCastAfterTableScan(exec_status, group_builder, remote_read_streams_start_index);
-    
+
     /// TODO: handle generated column if necessary.
 
     /// handle filter conditions for local and remote table scan.
@@ -614,7 +614,7 @@ SourceOps DAGStorageInterpreter::buildRemoteSourceOps(
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
     size_t task_per_thread = all_tasks.size() / concurrent_num;
     size_t rest_task = all_tasks.size() % concurrent_num;
-    pingcap::kv::LabelFilter tiflash_label_filter = pingcap::kv::labelFilterNoTiFlashWriteNode; 
+    pingcap::kv::LabelFilter tiflash_label_filter = pingcap::kv::labelFilterNoTiFlashWriteNode;
     /// TODO: support S3
     SourceOps remote_source_ops;
     for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)

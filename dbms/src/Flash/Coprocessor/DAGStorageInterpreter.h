@@ -83,7 +83,7 @@ private:
         size_t max_block_size);
 
     SourceOps buildLocalSourceOpsForPhysicalTable(
-        PipelineExecutorStatus & exec_status, 
+        PipelineExecutorStatus & exec_status,
         PipelineExecGroupBuilder & group_builder,
         const TableID & table_id,
         const SelectQueryInfo & query_info,
