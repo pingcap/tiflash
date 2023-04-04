@@ -66,7 +66,8 @@ static const char ROLLBACK_TS_PREFIX = 'r';
 static const char FLAG_OVERLAPPED_ROLLBACK = 'R';
 static const char GC_FENCE_PREFIX = 'F';
 static const char LAST_CHANGE_PREFIX = 'l';
-static const char TXN_SOURCE_PREFIX = 'S';
+static const char TXN_SOURCE_PREFIX_FOR_WRITE = 'S';
+static const char TXN_SOURCE_PREFIX_FOR_LOCK = 's';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
@@ -429,7 +430,7 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
             UNUSED(versions_to_last_change);
             break;
         }
-        case RecordKVFormat::TXN_SOURCE_PREFIX:
+        case RecordKVFormat::TXN_SOURCE_PREFIX_FOR_WRITE:
         {
             // Used for CDC, useless for TiFlash.
             UInt64 txn_source_prefic = readUInt64(data, len);
