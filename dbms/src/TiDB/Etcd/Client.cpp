@@ -165,7 +165,7 @@ SessionPtr Client::createSession(grpc::ClientContext * grpc_context, Int64 ttl)
     {
         return session;
     }
-    return nullptr;
+    return {};
 }
 
 grpc::Status Client::leaseRevoke(LeaseID lease_id)
