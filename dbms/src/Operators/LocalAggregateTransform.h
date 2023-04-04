@@ -24,6 +24,7 @@ enum class LocalAggStatus
     build,
     spill,
     convert,
+    final_spill,
     restore,
 };
 
@@ -55,7 +56,7 @@ private:
 
     OperatorStatus fromBuildToConvert(Block & block);
 
-    OperatorStatus fromBuildToRestore();
+    OperatorStatus fromBuildToFinalSpillOfRestore();
 
 private:
     Aggregator::Params params;
@@ -63,6 +64,6 @@ private:
 
     LocalAggStatus status{LocalAggStatus::build};
 
-    std::vector<std::function<void()>> io_funcs;
+    LocalAggregateRestorerPtr restorer;
 };
 } // namespace DB

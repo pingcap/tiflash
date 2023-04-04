@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Interpreters/Aggregator.h>
+#include <Operators/LocalAggregateRestorer.h>
 #include <Operators/Operator.h>
 
 namespace DB
@@ -50,7 +51,13 @@ public:
 
     void buildOnBlock(size_t task_index, const Block & block);
 
-    std::optional<std::function<void()>> trySpill(size_t task_index, bool try_mark_need_spill = false);
+    bool hasSpilledData() const;
+
+    bool isNeedSpill(size_t task_index, bool try_mark_need_spill = false);
+
+    void spillData(size_t task_index);
+
+    LocalAggregateRestorerPtr buildLocalRestorer(std::function<bool()> && is_cancelled);
 
     void initConvergent();
 
@@ -68,9 +75,15 @@ private:
     bool keys_size = false;
     bool empty_result_for_aggregation_by_empty_set = false;
 
-    std::atomic_bool inited_build = false;
-    std::atomic_bool inited_convergent = false;
-
+    enum class AggStatus
+    {
+        init,
+        build,
+        convergent,
+        restore,
+    };
+    std::atomic<AggStatus> status{AggStatus::init};
+ 
     MergingBucketsPtr merging_buckets;
     ManyAggregatedDataVariants many_data;
     // use unique_ptr to avoid false sharing.
