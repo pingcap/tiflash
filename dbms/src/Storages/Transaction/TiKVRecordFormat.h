@@ -66,6 +66,8 @@ static const char ROLLBACK_TS_PREFIX = 'r';
 static const char FLAG_OVERLAPPED_ROLLBACK = 'R';
 static const char GC_FENCE_PREFIX = 'F';
 static const char LAST_CHANGE_PREFIX = 'l';
+static const char TXN_SOURCE_PREFIX_FOR_WRITE = 'S';
+static const char TXN_SOURCE_PREFIX_FOR_LOCK = 's';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
@@ -419,6 +421,22 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
                  * rewriting record and there must be a complete row written to tikv, just ignore it in tiflash.
                  */
             return std::nullopt;
+        case RecordKVFormat::LAST_CHANGE_PREFIX:
+        {
+            // Used to accelerate TiKV MVCC scan, useless for TiFlash.
+            UInt64 last_change_ts = readUInt64(data, len);
+            UInt64 versions_to_last_change = readVarUInt(data, len);
+            UNUSED(last_change_ts);
+            UNUSED(versions_to_last_change);
+            break;
+        }
+        case RecordKVFormat::TXN_SOURCE_PREFIX_FOR_WRITE:
+        {
+            // Used for CDC, useless for TiFlash.
+            UInt64 txn_source_prefic = readVarUInt(data, len);
+            UNUSED(txn_source_prefic);
+            break;
+        }
         default:
             throw Exception("invalid flag " + std::to_string(flag) + " in write cf", ErrorCodes::LOGICAL_ERROR);
         }
