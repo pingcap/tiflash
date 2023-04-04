@@ -194,13 +194,6 @@ void PocoHTTPClient::makeRequestInternal(
     Poco::Logger * log = &Poco::Logger::get("AWSClient");
 
     auto uri = request.GetUri().GetURIString();
-
-    // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
-    if (uri.find(".amazonaws.com?") != std::string::npos)
-    {
-        boost::algorithm::replace_first(uri, ".amazonaws.com?", ".amazonaws.com/?");
-    }
-
     if (enable_s3_requests_logging)
         LOG_DEBUG(log, "Make request to: {}", uri);
 
