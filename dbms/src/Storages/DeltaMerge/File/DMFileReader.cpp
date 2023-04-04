@@ -21,7 +21,6 @@
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Poco/File.h>
-#include <Poco/Thread_STD.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>

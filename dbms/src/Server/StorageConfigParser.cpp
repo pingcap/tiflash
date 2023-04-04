@@ -31,6 +31,7 @@
 #include <Common/formatReadable.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/Environment.h>
 #include <Poco/Path.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>

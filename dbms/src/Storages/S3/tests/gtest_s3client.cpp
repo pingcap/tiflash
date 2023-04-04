@@ -31,8 +31,27 @@ public:
         ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*client);
     }
 
+    void TearDown() override
+    {
+    }
+
     std::shared_ptr<TiFlashS3Client> client;
 };
+
+
+TEST_F(S3ClientTest, UploadDelete)
+try
+{
+    deleteObject(*client, "s999/manifest/mf_1");
+    ASSERT_FALSE(objectExists(*client, "s999/manifest/mf_1"));
+
+    uploadEmptyFile(*client, "s999/manifest/mf_1");
+    ASSERT_TRUE(objectExists(*client, "s999/manifest/mf_1"));
+
+    deleteObject(*client, "s999/manifest/mf_1");
+    ASSERT_FALSE(objectExists(*client, "s999/manifest/mf_1"));
+}
+CATCH
 
 TEST_F(S3ClientTest, UploadRead)
 try

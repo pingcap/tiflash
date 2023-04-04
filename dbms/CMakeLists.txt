@@ -170,8 +170,13 @@ target_link_libraries (tiflash_common_io
     ${LZ4_LIBRARY}
     ${ZSTD_LIBRARY}
     ${DOUBLE_CONVERSION_LIBRARIES}
-    ${Poco_Net_LIBRARY}
-    ${Poco_Data_LIBRARY}
+    Poco::Foundation
+    Poco::Net
+    Poco::Net::SSL 
+    Poco::JSON 
+    Poco::Util
+    Poco::Crypto
+    Poco::XML
     ${ZLIB_LIBRARIES}
     ${EXECINFO_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
@@ -310,7 +315,11 @@ if (ENABLE_TESTS)
     target_compile_definitions(dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_compile_definitions(dbms PUBLIC MULTIPLE_CONTEXT_GTEST)
 
-    target_link_libraries(gtests_dbms test_util_gtest_main tiflash_functions tiflash-dttool-lib delta_merge)
+    target_link_libraries(gtests_dbms
+        test_util_gtest_main tiflash_functions tiflash-dttool-lib delta_merge
+        ${LZ4_LIBRARY}
+        ${ZSTD_LIBRARY}
+    )
 
     install (TARGETS gtests_dbms
             COMPONENT tiflash-gtest

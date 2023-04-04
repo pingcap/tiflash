@@ -48,13 +48,13 @@ public:
         log = Logger::get();
 
         auto & client_factory = DB::S3::ClientFactory::instance();
-        is_s3_test_enabled = client_factory.isEnabled();
 
         owner_manager = std::static_pointer_cast<MockOwnerManager>(OwnerManager::createMockOwner("owner_0"));
         owner_manager->campaignOwner();
 
         s3_client = client_factory.sharedTiFlashClient();
         s3_lock_service = std::make_unique<DB::S3::S3LockService>(owner_manager);
+        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
         ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client);
         createS3DataFiles();
     }
@@ -89,8 +89,6 @@ public:
     }
 
 protected:
-    bool is_s3_test_enabled = false;
-
     std::shared_ptr<MockOwnerManager> owner_manager;
     std::unique_ptr<DB::S3::S3LockService> s3_lock_service;
 
@@ -102,19 +100,6 @@ protected:
     const UInt64 lock_store_id = 2;
     LoggerPtr log;
 };
-
-#define CHECK_S3_ENABLED                                                          \
-    if (!is_s3_test_enabled)                                                      \
-    {                                                                             \
-        const auto * t = ::testing::UnitTest::GetInstance()->current_test_info(); \
-        LOG_INFO(                                                                 \
-            log,                                                                  \
-            "{}.{} is skipped because S3ClientFactory is not inited.",            \
-            t->test_case_name(),                                                  \
-            t->name());                                                           \
-        return;                                                                   \
-    }
-
 
 TEST_F(S3LockServiceTest, SingleTryAddLockRequest)
 try

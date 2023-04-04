@@ -277,17 +277,8 @@ option (ENABLE_CPPUNIT "Enable CppUnit" OFF)
 
 include (cmake/find_zlib.cmake)
 include (cmake/find_zstd.cmake)
-if (ENABLE_ODBC)
-    include (cmake/find_ltdl.cmake) # for odbc
-    if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/poco/cmake/FindODBC.cmake)
-        include (${CMAKE_CURRENT_SOURCE_DIR}/contrib/poco/cmake/FindODBC.cmake) # for poco
-    else ()
-        include (cmake/find_odbc.cmake)
-    endif ()
-    message (STATUS "Using odbc: ${ODBC_INCLUDE_DIRECTORIES} : ${ODBC_LIBRARIES}")
-endif()
-include (cmake/find_poco.cmake)
 include (cmake/find_lz4.cmake)
+include (cmake/find_poco.cmake)
 include (cmake/find_sparsehash.cmake)
 include (cmake/find_rt.cmake)
 include (cmake/find_execinfo.cmake)
