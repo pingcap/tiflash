@@ -19,8 +19,8 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FilterConditions.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
@@ -98,11 +98,12 @@ void executePushedDownFilter(
     DAGPipeline & pipeline);
 
 void executePushedDownFilter(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
     size_t remote_read_sources_start_index,
     const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
-    LoggerPtr log,
-    PipelineExecGroupBuilder & group_builder);
+    LoggerPtr log);
 
 void executeGeneratedColumnPlaceholder(
     size_t remote_read_streams_start_index,
@@ -110,4 +111,7 @@ void executeGeneratedColumnPlaceholder(
     LoggerPtr log,
     DAGPipeline & pipeline);
 
+NamesWithAliases buildTableScanProjectionCols(
+    const NamesAndTypes & schema,
+    const NamesAndTypes & storage_schema);
 } // namespace DB

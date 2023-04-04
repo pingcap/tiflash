@@ -21,11 +21,10 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalTableScan.h>
 #include <Interpreters/Context.h>
-#include <Operators/ExpressionTransformOp.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Operators/ExpressionTransformOp.h>
 
 namespace DB
 {
@@ -73,66 +72,40 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
     }
 }
 
-void PhysicalTableScan::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t concurrency)
+void PhysicalTableScan::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t concurrency)
 {
-    // ywq todo respect concurrency
     DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, concurrency);
-    storage_interpreter.execute(group_builder);
+    storage_interpreter.execute(exec_status, group_builder);
 
-    buildProjection(group_builder, storage_interpreter.analyzer->getCurrentInputColumns(), context);
+    buildProjection(exec_status, group_builder, storage_interpreter.analyzer->getCurrentInputColumns(), context);
 }
 
 void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, const NamesAndTypes & storage_schema)
 {
-    RUNTIME_CHECK(
-        storage_schema.size() == schema.size(),
-        storage_schema.size(),
-        schema.size());
-    NamesWithAliases schema_project_cols;
-    for (size_t i = 0; i < schema.size(); ++i)
-    {
-        RUNTIME_CHECK(
-            schema[i].type->equals(*storage_schema[i].type),
-            schema[i].name,
-            schema[i].type->getName(),
-            storage_schema[i].name,
-            storage_schema[i].type->getName());
-        assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
-        schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
-    }
+    auto schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
     /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
     executeExpression(pipeline, schema_project, log, "table scan schema projection");
 }
 
-// ywq todo refine...
-void PhysicalTableScan::buildProjection(PipelineExecGroupBuilder & group_builder,const NamesAndTypes & storage_schema, Context &)
+void PhysicalTableScan::buildProjection(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const NamesAndTypes & storage_schema,
+    Context &)
 {
-    RUNTIME_CHECK(
-        storage_schema.size() == schema.size(),
-        storage_schema.size(),
-        schema.size());
-    NamesWithAliases schema_project_cols;
-    for (size_t i = 0; i < schema.size(); ++i)
-    {
-        RUNTIME_CHECK(
-            schema[i].type->equals(*storage_schema[i].type),
-            schema[i].name,
-            schema[i].type->getName(),
-            storage_schema[i].name,
-            storage_schema[i].type->getName());
-        assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
-        schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
-    }
-   
+    auto schema_project_cols = buildTableScanProjectionCols(schema, storage_schema);
+
     /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_actions = PhysicalPlanHelper::newActions(group_builder.getCurrentHeader());
     schema_actions->add(ExpressionAction::project(schema_project_cols));
-    group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), schema_actions));
-    });
+    executeExpression(exec_status, group_builder, schema_actions, log);
 }
 
 void PhysicalTableScan::finalize(const Names & parent_require)

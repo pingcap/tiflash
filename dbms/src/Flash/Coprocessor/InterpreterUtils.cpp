@@ -277,14 +277,14 @@ void executePushedDownFilter(
 }
 
 void executePushedDownFilter(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
     size_t remote_read_sources_start_index,
     const FilterConditions & filter_conditions,
     DAGExpressionAnalyzer & analyzer,
-    LoggerPtr log,
-    PipelineExecGroupBuilder & group_builder)
+    LoggerPtr log)
 {
-    // ywq todo
-    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions, analyzer);
+    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions.conditions, analyzer);
 
     assert(remote_read_sources_start_index <= group_builder.group.size());
     auto input_header = group_builder.getCurrentHeader();
@@ -293,9 +293,9 @@ void executePushedDownFilter(
     for (size_t i = 0; i < remote_read_sources_start_index; ++i)
     {
         auto & group = group_builder.group[i];
-        group.appendTransformOp(std::make_unique<FilterTransformOp>(group_builder.exec_status, log->identifier(), input_header, before_where, filter_column_name));
+        group.appendTransformOp(std::make_unique<FilterTransformOp>(exec_status, log->identifier(), input_header, before_where, filter_column_name));
         // after filter, do project action to keep the schema of local transforms and remote transforms the same.
-        group.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), project_after_where));
+        group.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), project_after_where));
     }
 }
 
@@ -314,6 +314,28 @@ void executeGeneratedColumnPlaceholder(
         stream = std::make_shared<GeneratedColumnPlaceholderBlockInputStream>(stream, generated_column_infos, log->identifier());
         stream->setExtraInfo("generated column placeholder above table scan");
     }
+}
+
+NamesWithAliases buildTableScanProjectionCols(const NamesAndTypes & schema,
+                                              const NamesAndTypes & storage_schema)
+{
+    RUNTIME_CHECK(
+        storage_schema.size() == schema.size(),
+        storage_schema.size(),
+        schema.size());
+    NamesWithAliases schema_project_cols;
+    for (size_t i = 0; i < schema.size(); ++i)
+    {
+        RUNTIME_CHECK(
+            schema[i].type->equals(*storage_schema[i].type),
+            schema[i].name,
+            schema[i].type->getName(),
+            storage_schema[i].name,
+            storage_schema[i].type->getName());
+        assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
+        schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
+    }
+    return schema_project_cols;
 }
 
 } // namespace DB

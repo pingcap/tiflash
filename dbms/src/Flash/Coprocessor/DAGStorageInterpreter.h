@@ -53,7 +53,7 @@ public:
 
     void execute(DAGPipeline & pipeline);
 
-    void execute(PipelineExecGroupBuilder & group_builder);
+    void execute(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
 
     /// Members will be transferred to DAGQueryBlockInterpreter after execute
 
@@ -83,15 +83,18 @@ private:
         size_t max_block_size);
 
     SourceOps buildLocalSourceOpsForPhysicalTable(
+        PipelineExecutorStatus & exec_status, 
+        PipelineExecGroupBuilder & group_builder,
         const TableID & table_id,
         const SelectQueryInfo & query_info,
-        PipelineExecGroupBuilder & group_builder,
         size_t max_block_size);
-
 
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
 
-    SourceOps buildLocalSourceOps(PipelineExecGroupBuilder & group_builder, size_t max_block_size);
+    SourceOps buildLocalSourceOps(
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        size_t max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
@@ -109,20 +112,24 @@ private:
 
     std::vector<pingcap::coprocessor::CopTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
     void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
-    SourceOps buildRemoteSourceOps(const std::vector<RemoteRequest> & remote_requests, PipelineExecGroupBuilder & group_builder);
+
+    SourceOps buildRemoteSourceOps(
+        PipelineExecutorStatus & exec_status,
+        const std::vector<RemoteRequest> & remote_requests);
 
     void executeCastAfterTableScan(
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);
 
     void executeCastAfterTableScan(
-        size_t remote_read_sources_start_index,
-        PipelineExecGroupBuilder & group_builder);
+        PipelineExecutorStatus & exec_status,
+        PipelineExecGroupBuilder & group_builder,
+        size_t remote_read_sources_start_index);
 
     void prepare();
 
     void executeImpl(DAGPipeline & pipeline);
-    void executeImpl(PipelineExecGroupBuilder & group_builder);
+    void executeImpl(PipelineExecutorStatus & exec_status, PipelineExecGroupBuilder & group_builder);
 
 private:
     std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
