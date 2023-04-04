@@ -17,8 +17,6 @@
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 
-#include "Storages/Transaction/TiKVRecordFormat.h"
-
 namespace DB
 {
 using CFModifyFlag = RecordKVFormat::CFModifyFlag;
