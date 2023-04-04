@@ -67,7 +67,7 @@ protected:
     void appendExtraJson(FmtBuffer &) const override;
     void collectExtraRuntimeDetail() override;
     void collectExtraRuntimeDetailForPipeline() override;
-    
+
 private:
     void collectExtraRuntimeDetailImpl();
 };

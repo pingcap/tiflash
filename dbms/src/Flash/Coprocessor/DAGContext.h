@@ -66,7 +66,7 @@ class ProcessListEntry;
 
 class SourceOp;
 using SourceOpPtr = std::shared_ptr<SourceOp>;
-using SourceOpPtrs = std::vector<SourceOpPtr>;
+using SourceOps = std::vector<SourceOpPtr>;
 
 // a group of profile for same operator
 using OperatorProfiles = std::vector<OperatorProfilePtr>;
@@ -160,7 +160,7 @@ public:
 
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
-    std::unordered_map<String, SourceOpPtrs> & getIOSourcesMap();
+    std::unordered_map<String, SourceOps> & getIOSourcesMap();
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
@@ -355,7 +355,7 @@ private:
     std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;
 
     /// io_source_ops_map is a map that maps from executor_id (table_scan / exchange_receiver) to SourceOps.
-    std::unordered_map<String, SourceOpPtrs> io_source_ops_map;
+    std::unordered_map<String, SourceOps> io_source_ops_map;
 
     UInt64 flags;
     UInt64 sql_mode;

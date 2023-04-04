@@ -84,7 +84,6 @@ void TableScanStatistics::collectExtraRuntimeDetailForPipeline()
             /// TODO: Support remote table scan detail for pipeline model
             if (auto * source_ptr = dynamic_cast<SourceOp *>(io_source.get()); source_ptr)
             {
-            
                 local_table_scan_detail.bytes += source_ptr->getProfile()->bytes;
             }
             else

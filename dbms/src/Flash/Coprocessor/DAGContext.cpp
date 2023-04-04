@@ -229,7 +229,7 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStr
     return inbound_io_input_streams_map;
 }
 
-std::unordered_map<String, SourceOpPtrs> & DAGContext::getIOSourcesMap()
+std::unordered_map<String, SourceOps> & DAGContext::getIOSourcesMap()
 {
     return io_source_ops_map;
 }
