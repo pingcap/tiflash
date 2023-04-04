@@ -75,6 +75,12 @@ private:
     bool keys_size = false;
     bool empty_result_for_aggregation_by_empty_set = false;
 
+    /**
+     * init────►build───┬───►convergent
+     *                  │
+     *                  ▼
+     *               restore
+     */
     enum class AggStatus
     {
         init,
@@ -83,7 +89,7 @@ private:
         restore,
     };
     std::atomic<AggStatus> status{AggStatus::init};
- 
+
     MergingBucketsPtr merging_buckets;
     ManyAggregatedDataVariants many_data;
     // use unique_ptr to avoid false sharing.

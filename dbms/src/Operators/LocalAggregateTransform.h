@@ -19,6 +19,14 @@
 
 namespace DB
 {
+/**
+ * build───┬─────────────►restore
+ *         │                 ▲
+ *         ├───►final_spill──┘
+ *         │
+ *         ▼
+ *      convergent
+ */
 enum class LocalAggStatus
 {
     build,

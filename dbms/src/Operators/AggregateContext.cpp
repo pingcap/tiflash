@@ -56,7 +56,7 @@ bool AggregateContext::isNeedSpill(size_t task_index, bool try_mark_need_spill)
 {
     assert(status.load() == AggStatus::build);
     auto & data = *many_data[task_index];
-    if (try_mark_need_spill)
+    if (try_mark_need_spill && !data.need_spill)
         data.tryMarkNeedSpill();
     return data.need_spill;
 }

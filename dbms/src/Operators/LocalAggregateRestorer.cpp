@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/LocalAggregateRestorer.h>
 #include <Interpreters/Aggregator.h>
+#include <Operators/LocalAggregateRestorer.h>
 
 namespace DB
 {
@@ -35,7 +35,7 @@ LocalAggregateRestorer::LocalAggregateRestorer(
 bool LocalAggregateRestorer::loadFromInputs()
 {
     assert(!bucket_inputs.empty());
-    for (auto it = bucket_inputs.begin(); it != bucket_inputs.end() && unlikely(!is_cancelled()); )
+    for (auto it = bucket_inputs.begin(); it != bucket_inputs.end() && unlikely(!is_cancelled());)
         it = it->load() ? std::next(it) : bucket_inputs.erase(it);
     if unlikely (is_cancelled() || bucket_inputs.empty())
     {
@@ -74,7 +74,7 @@ void LocalAggregateRestorer::loadBucketData()
 {
     if unlikely (!finished)
         return;
-    
+
     assert(bucket_data.empty());
     if (loadFromInputs())
         storeFromInputToBucketData();
