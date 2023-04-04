@@ -161,6 +161,7 @@ public:
 
     MergedTaskPtr pop(uint64_t pool_id);
     void push(const MergedTaskPtr & t);
+    bool has(UInt64 pool_id);
 
 private:
     std::mutex mtx;
