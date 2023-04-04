@@ -42,7 +42,7 @@ public:
     // ~ReceiverChannelTryWriter()
     // {
     //     // debug
-    //     // LOG_INFO(log, "Profiling: rct_des {}", reinterpret_cast<size_t>(this));
+    //     LOG_INFO(log, "Profiling: rct_des {}", reinterpret_cast<size_t>(this));
     // }
 
     template <bool enable_fine_grained_shuffle>

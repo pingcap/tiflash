@@ -31,8 +31,14 @@ inline void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]]
     case ReceiverMode::Sync:
         fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false);
         break;
+    case ReceiverMode::Async:
+        fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false);
+        break;
     default:
-        throw Exception(fmt::format("Invalid ReceiverMode: {}", magic_enum::enum_name(mode)));
+        {
+            // TODO log error here
+            throw Exception(fmt::format("Invalid ReceiverMode: {}", magic_enum::enum_name(mode)));
+        }
     }
 }
 } // namespace

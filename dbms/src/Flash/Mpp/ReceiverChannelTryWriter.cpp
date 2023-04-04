@@ -47,8 +47,8 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWrite(size_t source_index, cons
         res = tryWriteNonFineGrain(source_index, tracked_packet, error_ptr, resp_ptr);
 
     // debug
-    if (res == GRPCReceiveQueueRes::FULL)
-        // LOG_INFO(log, "Profiling: channelreceiver tryWrite full...");
+    // if (res == GRPCReceiveQueueRes::FULL)
+    //     LOG_INFO(log, "Profiling: channelreceiver tryWrite full...");
 
     if (likely(res == GRPCReceiveQueueRes::OK || res == GRPCReceiveQueueRes::FULL))
         ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());

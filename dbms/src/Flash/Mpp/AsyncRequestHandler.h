@@ -29,7 +29,7 @@ enum class AsyncRequestStage
 {
     NEED_INIT,
     WAIT_MAKE_READER,
-    WAIT_READ,
+    WAIT_BATCH_READ,
     WAIT_FINISH,
     WAIT_RETRY,
     WAIT_REWRITE,
@@ -40,6 +40,7 @@ using Clock = std::chrono::system_clock;
 
 constexpr Int32 max_retry_times = 10;
 constexpr Int32 retry_interval_time = 1; // second
+constexpr Int32 batch_packet_count = 16;
 
 template <typename RPCContext, bool enable_fine_grained_shuffle>
 class AsyncRequestHandler : public UnaryCallback<bool>
@@ -65,13 +66,19 @@ public:
         , has_data(false)
         , retry_times(0)
         , stage(AsyncRequestStage::NEED_INIT)
+        , read_packet_index(0)
+        , received_packet_index(0)
         , finish_status(RPCContext::getStatusOK())
         , log(Logger::get(req_id, req_info))
         , channel_try_writer(grpc_recv_queues_, req_info, log, data_size_in_queue, ReceiverMode::Async)
         , async_wait_rewrite_queue(std::move(async_wait_rewrite_queue_))
         , kick_recv_tag(thisAsUnaryCallback())
         , close_conn(std::move(close_conn_))
+        , is_close_conn_called(false)
     {
+        packets.resize(batch_packet_count);
+        for (auto & packet : packets)
+            packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
         // TODO add random fail point to mock the fail
         // LOG_INFO(log, "Profiling: async_cons {}", reinterpret_cast<UInt64>(this));
         start();
@@ -79,42 +86,50 @@ public:
 
     // ~AsyncRequestHandler() override
     // {
-    //     // LOG_INFO(log, "Profiling: async_des {}", reinterpret_cast<UInt64>(this));
+    //     LOG_INFO(log, "Profiling: async_des {}", reinterpret_cast<UInt64>(this));
     // }
 
     // execute will be called by RPC framework so it should be as light as possible.
     // Do not do anything after processXXX functions.
     void execute(bool & ok) override
     {
-        switch (stage)
+        try
         {
-        case AsyncRequestStage::WAIT_RETRY:
-            // debug
-            // LOG_INFO(log, "Profiling: enter WAIT_RETRY");
-            start();
-            break;
-        case AsyncRequestStage::WAIT_MAKE_READER:
-            // debug
-            // LOG_INFO(log, "Profiling: enter WAIT_MAKE_READER");
-            processWaitMakeReader(ok);
-            break;
-        case AsyncRequestStage::WAIT_READ:
-            // debug
-            // LOG_INFO(log, "Profiling: enter WAIT_READ");
-            processWaitRead(ok);
-            break;
-        case AsyncRequestStage::WAIT_REWRITE:
-            // debug
-            // LOG_INFO(log, "Profiling: enter WAIT_REWRITE");
-            processWaitReWrite();
-            break;
-        case AsyncRequestStage::WAIT_FINISH:
-            // debug
-            // LOG_INFO(log, "Profiling: enter WAIT_FINISH");
-            processWaitFinish();
-            break;
-        default:
-            __builtin_unreachable();
+            switch (stage)
+            {
+            case AsyncRequestStage::WAIT_RETRY:
+                // debug
+                // LOG_INFO(log, "Profiling: enter WAIT_RETRY");
+                start();
+                break;
+            case AsyncRequestStage::WAIT_MAKE_READER:
+                // debug
+                // LOG_INFO(log, "Profiling: enter WAIT_MAKE_READER");
+                processWaitMakeReader(ok);
+                break;
+            case AsyncRequestStage::WAIT_BATCH_READ:
+                // debug
+                // LOG_INFO(log, "Profiling: enter WAIT_READ");
+                processWaitBatchRead(ok);
+                break;
+            case AsyncRequestStage::WAIT_REWRITE:
+                // debug
+                // LOG_INFO(log, "Profiling: enter WAIT_REWRITE");
+                processWaitReWrite();
+                break;
+            case AsyncRequestStage::WAIT_FINISH:
+                // debug
+                // LOG_INFO(log, "Profiling: enter WAIT_FINISH");
+                processWaitFinish();
+                break;
+            default:
+                __builtin_unreachable();
+            }
+        }
+        catch (...)
+        {
+            // TODO log error here
+            closeConnection("Exception is thrown in AsyncRequestHandler");
         }
     }
 
@@ -131,69 +146,19 @@ private:
         }
         else
         {
-            stage = AsyncRequestStage::WAIT_READ;
             startAsyncRead();
         }
     }
 
-    void processWaitRead(bool ok)
+    void processWaitBatchRead(bool ok)
     {
-        if (unlikely(!ok))
-        {
-            stage = AsyncRequestStage::WAIT_FINISH;
-            reader->finish(finish_status, thisAsUnaryCallback());
-            return;
-        }
+        if (ok)
+            ++read_packet_index;
 
-        has_data = true;
-
-        if (auto error_message = getErrorFromPacket(); unlikely(!error_message.empty()))
-        {
-            closeConnection(fmt::format("Exchange receiver meet error : {}", error_message));
-            return;
-        }
-
-        GRPCReceiveQueueRes send_res = sendPacket();
-
-        if (unlikely(sendPacketHasError(send_res)))
-        {
-            closeConnection("Exchange receiver meet error : push packets fail");
-            return;
-        }
-
-        if (unlikely(isChannelFull(send_res)))
-        {
-            // debug
-            // LOG_INFO(log, "Profiling: channel full...");
-            asyncWaitForRewrite();
-            return;
-        }
-
-        startAsyncRead();
-    }
-
-    void processWaitReWrite()
-    {
-        GRPCReceiveQueueRes res = channel_try_writer.tryReWrite<enable_fine_grained_shuffle>();
-
-        if (unlikely(sendPacketHasError(res)))
-        {
-            closeConnection("Exchange receiver meet error : push packets fail");
-            return;
-        }
-
-        if (unlikely(isChannelFull(res)))
-        {
-            // debug
-            // LOG_INFO(log, "Profiling: rewrite full again");
-            asyncWaitForRewrite();
-            return;
-        }
-
-        // debug
-        // LOG_INFO(log, "Profiling: rewrite successfully");
-        stage = AsyncRequestStage::WAIT_READ;
-        startAsyncRead();
+        if (!ok || read_packet_index == batch_packet_count || packets[read_packet_index - 1]->hasError())
+            processReceivedData();
+        else
+            reader->read(packets[read_packet_index], thisAsUnaryCallback());
     }
 
     void processWaitFinish()
@@ -222,19 +187,87 @@ private:
 
     void startAsyncRead()
     {
-        packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
-        reader->read(packet, thisAsUnaryCallback());
+        stage = AsyncRequestStage::WAIT_BATCH_READ;
+        read_packet_index = 0;
+        received_packet_index = 0;
+        reader->read(packets[read_packet_index], thisAsUnaryCallback());
     }
 
-    String getErrorFromPacket()
+    void processReceivedData()
     {
-        if (unlikely(packet->hasError()))
-            return packet->error();
+        LOG_TRACE(log, "Received {} packets.", read_packet_index);
 
-        packet->recomputeTrackedMem();
-        if (unlikely(packet->hasError()))
-            return packet->error();
+        String err_info;
+        if (read_packet_index > 0)
+            has_data = true;
 
+        if (auto error_message = getErrorFromPackets(); unlikely(!error_message.empty()))
+        {
+            closeConnection(fmt::format("Exchange receiver meet error : {}", error_message));
+            return;
+        }
+
+        GRPCReceiveQueueRes res = sendPackets();
+
+        if (!checkResultAfterSendingPackets(res))
+            return;
+
+        startAsyncRead();
+    }
+
+    void processWaitReWrite()
+    {
+        GRPCReceiveQueueRes res = reSendPackets();
+
+        if (!checkResultAfterSendingPackets(res))
+            return;
+
+        // debug
+        // LOG_INFO(log, "Profiling: rewrite successfully");
+        stage = AsyncRequestStage::WAIT_BATCH_READ;
+        startAsyncRead();
+    }
+
+    // return true if we still need to receive data from server.
+    bool checkResultAfterSendingPackets(GRPCReceiveQueueRes res)
+    {
+        if (unlikely(sendPacketHasError(res)))
+        {
+            closeConnection("Exchange receiver meet error : push packets fail");
+            return false;
+        }
+
+        if (unlikely(isChannelFull(res)))
+        {
+            // debug
+            // LOG_INFO(log, "Profiling: rewrite full again");
+            asyncWaitForRewrite();
+            return false;
+        }
+
+        if (read_packet_index < batch_packet_count)
+        {
+            stage = AsyncRequestStage::WAIT_FINISH;
+            reader->finish(finish_status, thisAsUnaryCallback());
+            return false;
+        }
+
+        return true;
+    }
+
+    String getErrorFromPackets()
+    {
+        // step 1: check if there is error packet
+        // only the last packet may has error, see execute().
+        if (read_packet_index != 0 && packets[read_packet_index - 1]->hasError())
+            return packets[read_packet_index - 1]->error();
+        // step 2: check memory overflow error
+        for (Int32 i = 0; i < read_packet_index; ++i)
+        {
+            packets[i]->recomputeTrackedMem();
+            if (packets[i]->hasError())
+                return packets[i]->error();
+        }
         return "";
     }
 
@@ -245,8 +278,12 @@ private:
 
     void closeConnection(String && msg)
     {
-        stage = AsyncRequestStage::FINISHED;
-        close_conn(!msg.empty(), msg, log);
+        if (!is_close_conn_called)
+        {
+            stage = AsyncRequestStage::FINISHED;
+            close_conn(!msg.empty(), msg, log);
+            is_close_conn_called = true;
+        }
     }
 
     void start()
@@ -277,9 +314,33 @@ private:
         }
     }
 
-    GRPCReceiveQueueRes sendPacket()
+    GRPCReceiveQueueRes sendPackets()
     {
-        return channel_try_writer.tryWrite<enable_fine_grained_shuffle>(request.source_index, packet);
+        // note: no exception should be thrown rudely, since it's called by a GRPC poller.
+        while (received_packet_index < read_packet_index)
+        {
+            auto & packet = packets[received_packet_index++];
+            auto res = channel_try_writer.tryWrite<enable_fine_grained_shuffle>(request.source_index, packet);
+            if (res == GRPCReceiveQueueRes::FULL)
+            {
+                packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+                return res;
+            }
+            if (res != GRPCReceiveQueueRes::OK)
+                return res;
+
+            // can't reuse packet since it is sent to readers.
+            packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+        }
+        return GRPCReceiveQueueRes::OK;
+    }
+
+    GRPCReceiveQueueRes reSendPackets()
+    {
+        GRPCReceiveQueueRes res = channel_try_writer.tryReWrite<enable_fine_grained_shuffle>();
+        if (res != GRPCReceiveQueueRes::OK)
+            return res;
+        return sendPackets();
     }
 
     bool sendPacketHasError(GRPCReceiveQueueRes res)
@@ -319,6 +380,10 @@ private:
     int retry_times;
     AsyncRequestStage stage;
 
+    Int32 read_packet_index;
+    Int32 received_packet_index;
+    TrackedMppDataPacketPtrs packets;
+
     std::shared_ptr<AsyncReader> reader;
     TrackedMppDataPacketPtr packet;
     Status finish_status;
@@ -333,5 +398,8 @@ private:
     // Do not use any variable in AsyncRequestHandler after close_conn is called,
     // because AsyncRequestHandler may have been destructed by ExchangeReceiver after close_conn is called.
     std::function<void(bool, const String &, const LoggerPtr &)> close_conn;
+
+    // try-catch may call close_conn, and we need to ensure that close_conn is called for only once.
+    bool is_close_conn_called;
 };
 } // namespace DB
