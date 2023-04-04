@@ -7358,10 +7358,10 @@
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_shared_block_schemas{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"hit_count\"}) by (instance)",
+              "expr": "sum(rate(tiflash_shared_block_schemas{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"hit_count\"}[1m])) by (instance)",
               "hide": false,
               "interval": "",
-              "legendFormat": "hit_count",
+              "legendFormat": "hit_count_ops",
               "refId": "B"
             },
             {
