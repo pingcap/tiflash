@@ -17,6 +17,8 @@
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 
+#include "Storages/Transaction/TiKVRecordFormat.h"
+
 namespace DB
 {
 using CFModifyFlag = RecordKVFormat::CFModifyFlag;
@@ -353,6 +355,13 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                 UInt64 versions_to_last_change = readVarUInt(data, len);
                 UNUSED(last_change_ts);
                 UNUSED(versions_to_last_change);
+                break;
+            }
+            case TXN_SOURCE_PREFIX:
+            {
+                // Used for CDC, useless for TiFlash.
+                UInt64 txn_source_prefic = readUInt64(data, len);
+                UNUSED(txn_source_prefic);
                 break;
             }
             default:
