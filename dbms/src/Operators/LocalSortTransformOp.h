@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Core/Spiller.h>
 #include <Core/SortDescription.h>
+#include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Operators/Operator.h>
 
@@ -24,6 +24,7 @@ namespace DB
 enum class LocalSortStatus
 {
     PARTIAL,
+    SPILL,
     MERGE,
     RESTORE,
 };
@@ -66,6 +67,10 @@ protected:
 
 private:
     Block getMergeOutput();
+    OperatorStatus fromPartialToSpill();
+    OperatorStatus fromSpillToPartial();
+    OperatorStatus fromPartialToRestore();
+    OperatorStatus fromPartialToMerge(Block & block);
 
 private:
     SortDescription order_desc;
@@ -92,6 +97,20 @@ private:
     size_t max_bytes_before_external_sort;
     const SpillConfig spill_config;
     std::unique_ptr<Spiller> spiller;
-    std::optional<Block> restore_result;
+    // Used for merge phase.
+    BatchSpillHandlerPtr batch_hander;
+    // Used for restore phase.
+    class RestoredResult
+    {
+    public:
+        bool hasData() const;
+        void put(Block && ret);
+        Block output();
+
+    private:
+        std::optional<Block> block;
+        bool finished = false;
+    };
+    RestoredResult restored_result;
 };
 } // namespace DB

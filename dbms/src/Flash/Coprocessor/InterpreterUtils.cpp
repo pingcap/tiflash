@@ -192,11 +192,11 @@ void executeLocalSort(
         const Settings & settings = context.getSettingsRef();
         size_t max_bytes_before_external_sort = getAverageThreshold(settings.max_bytes_before_external_sort, group_builder.concurrency);
         SpillConfig spill_config{
-            context.getTemporaryPath(), 
-            fmt::format("{}_sort", log->identifier()), 
-            settings.max_cached_data_bytes_in_spiller, 
-            settings.max_spilled_rows_per_file, 
-            settings.max_spilled_bytes_per_file, 
+            context.getTemporaryPath(),
+            fmt::format("{}_sort", log->identifier()),
+            settings.max_cached_data_bytes_in_spiller,
+            settings.max_spilled_rows_per_file,
+            settings.max_spilled_bytes_per_file,
             context.getFileProvider()};
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<LocalSortTransformOp>(

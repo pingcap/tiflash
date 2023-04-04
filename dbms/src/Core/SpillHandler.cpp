@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Core/SpillHandler.h>
+#include <DataStreams/IBlockInputStream.h>
 
 namespace DB
 {
@@ -170,6 +171,66 @@ void SpillHandler::finish()
         current_spilled_file_index = INVALID_CURRENT_SPILLED_FILE_INDEX;
         RUNTIME_CHECK_MSG(spiller->isSpillFinished() == false, "{}: spill after the spiller is finished.", spiller->config.spill_id);
     }
+}
+
+BatchSpillHandler::BatchSpillHandler(
+    Spiller * spiller,
+    UInt64 partition_id,
+    const BlockInputStreamPtr & from_,
+    size_t bytes_threshold_,
+    const std::function<bool()> & is_cancelled_)
+    : handler(spiller->createSpillHandler(partition_id))
+    , from(from_)
+    , bytes_threshold(bytes_threshold_)
+    , is_cancelled(is_cancelled_)
+{
+    assert(from);
+    from->readPrefix();
+}
+
+/// bytes_threshold == 0 means no limit, and will read all data
+bool BatchSpillHandler::batchRead()
+{
+    assert(batch.empty());
+
+    std::vector<Block> ret;
+    size_t current_return_size = 0;
+    while (Block block = from->read())
+    {
+        if unlikely (is_cancelled())
+            return false;
+        ret.push_back(std::move(block));
+        current_return_size += ret.back().estimateBytesForSpill();
+        if (bytes_threshold > 0 && current_return_size >= bytes_threshold)
+            break;
+    }
+
+    if unlikely (is_cancelled())
+        return false;
+
+    if (ret.empty())
+    {
+        assert(!finished);
+        finished = true;
+
+        from->readSuffix();
+        /// submit the spilled data
+        handler.finish();
+        return false;
+    }
+    else
+    {
+        std::swap(batch, ret);
+        return true;
+    }
+}
+
+void BatchSpillHandler::spill()
+{
+    assert(!finished && !batch.empty());
+    std::vector<Block> ret;
+    std::swap(batch, ret);
+    handler.spillBlocks(std::move(ret));
 }
 
 } // namespace DB
