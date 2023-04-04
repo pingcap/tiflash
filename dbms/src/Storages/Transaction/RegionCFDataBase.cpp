@@ -16,6 +16,7 @@
 #include <Storages/Transaction/RegionCFDataTrait.h>
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
+#include "Storages/Transaction/TiKVRecordFormat.h"
 
 namespace DB
 {
@@ -355,7 +356,7 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                 UNUSED(versions_to_last_change);
                 break;
             }
-            case TXN_SOURCE_PREFIX:
+            case TXN_SOURCE_PREFIX_FOR_LOCK:
             {
                 // Used for CDC, useless for TiFlash.
                 UInt64 txn_source_prefic = readUInt64(data, len);
