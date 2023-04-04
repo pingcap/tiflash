@@ -21,11 +21,22 @@
 
 namespace DB
 {
+/**
+ *                    SPILL
+ *                      ▲
+ *                      │
+ *                      ▼
+ * MERGE/RESTORE◄────PARTIAL
+ */
 enum class LocalSortStatus
 {
+    // Accept the block and execute partial sort
     PARTIAL,
+    // spill the blocks from partial sort to disk
     SPILL,
+    // merge the blocks from partial sort in memory
     MERGE,
+    // merge the blocks from partial sort in disk
     RESTORE,
 };
 
@@ -67,9 +78,15 @@ protected:
 
 private:
     Block getMergeOutput();
+
+    // PARTIAL◄─────►SPILL
     OperatorStatus fromPartialToSpill();
     OperatorStatus fromSpillToPartial();
+
+    // PARTIAL─────►RESTORE
     OperatorStatus fromPartialToRestore();
+
+    // PARTIAL─────►MERGE
     OperatorStatus fromPartialToMerge(Block & block);
 
 private:
@@ -88,8 +105,10 @@ private:
     // Used for partial phase.
     // Only a single block is ordered, the global order is not guaranteed.
     Blocks sorted_blocks;
-    // Used for merge phase.
+    // Used for merge/restore phase.
+    // In merge phase, merge_impl is a memory stream.
     // If there is no output in the merge phase, merge_impl will be nullptr.
+    // In restore phase, merge_impl is a disk stream and merge_impl shouldn't be nullptr.
     std::unique_ptr<IBlockInputStream> merge_impl;
 
     /// Everything below is for external sorting.
@@ -97,7 +116,7 @@ private:
     size_t max_bytes_before_external_sort;
     const SpillConfig spill_config;
     std::unique_ptr<Spiller> spiller;
-    // Used for merge phase.
+    // Used for spill phase.
     BatchSpillHandlerPtr batch_hander;
     // Used for restore phase.
     class RestoredResult

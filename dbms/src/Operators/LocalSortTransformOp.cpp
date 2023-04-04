@@ -177,10 +177,7 @@ OperatorStatus LocalSortTransformOp::tryOutputImpl(Block & block)
             block = restored_result.output();
             return OperatorStatus::HAS_OUTPUT;
         }
-        else
-        {
-            return OperatorStatus::IO;
-        }
+        return OperatorStatus::IO;
     }
     default:
         throw Exception(fmt::format("Unexpected status: {}.", magic_enum::enum_name(status)));
