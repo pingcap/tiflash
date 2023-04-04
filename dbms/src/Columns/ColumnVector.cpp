@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnVector.h>
+#include <Columns/ColumnsCommon.h>
 #include <Common/Arena.h>
 #include <Common/Exception.h>
 #include <Common/HashTable/Hash.h>
@@ -213,7 +214,11 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
     Container & res_data = res->getData();
 
     if (result_size_hint)
-        res_data.reserve(result_size_hint > 0 ? result_size_hint : size);
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filt);
+        res_data.reserve(result_size_hint);
+    }
 
     const UInt8 * filt_pos = &filt[0];
     const UInt8 * filt_end = filt_pos + size;
