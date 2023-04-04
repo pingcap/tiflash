@@ -113,7 +113,7 @@ void executeExpression(
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), expr_actions));
         });
-        executor_profile.push_back(group_builder.getOperatorProfiles());
+        executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
 }
 
@@ -187,7 +187,7 @@ void executeLocalSort(
             group_builder.transform([&](auto & builder) {
                 builder.appendTransformOp(std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_status, log->identifier(), local_limit));
             });
-            executor_profile.push_back(group_builder.getOperatorProfiles());
+            executor_profile.emplace_back(group_builder.getOperatorProfiles());
         }
         // For order by const and doesn't has limit, do nothing here.
     }
@@ -201,7 +201,7 @@ void executeLocalSort(
                 limit.value_or(0), // 0 means that no limit in LocalSortTransformOp.
                 context.getSettingsRef().max_block_size));
         });
-        executor_profile.push_back(group_builder.getOperatorProfiles());
+        executor_profile.emplace_back(group_builder.getOperatorProfiles());
     }
 }
 
