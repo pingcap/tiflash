@@ -1044,12 +1044,13 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
         auto const & ci = table_scan.getColumns()[i];
+        auto tidb_ci = TiDB::toTiDBColumnInfo(ci);
         ColumnID cid = ci.column_id();
 
-        if (ci.hasGeneratedColumnFlag())
+        if (tidb_ci.hasGeneratedColumnFlag())
         {
             LOG_DEBUG(log, "got column({}) with generated column flag", i);
-            const auto & data_type = getDataTypeByColumnInfoForComputingLayer(ci);
+            const auto & data_type = getDataTypeByColumnInfoForComputingLayer(tidb_ci);
             const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
             generated_column_infos.push_back(std::make_tuple(i, col_name, data_type));
             source_columns_tmp.emplace_back(NameAndTypePair{col_name, data_type});
