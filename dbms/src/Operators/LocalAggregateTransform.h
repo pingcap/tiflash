@@ -66,6 +66,8 @@ private:
 
     OperatorStatus fromBuildToFinalSpillOfRestore();
 
+    void switchStatus(LocalAggStatus to);
+
 private:
     Aggregator::Params params;
     AggregateContext agg_context;

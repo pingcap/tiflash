@@ -29,7 +29,15 @@ LocalAggregateRestorer::LocalAggregateRestorer(
     for (const auto & bucket_stream : bucket_streams)
         bucket_inputs.emplace_back(bucket_stream);
     if (bucket_inputs.empty())
-        finished = true;
+        finish();
+}
+
+void LocalAggregateRestorer::finish()
+{
+    assert(!finished);
+    finished = true;
+    bucket_inputs.clear();
+    LOG_INFO(log, "local agg restore finished");
 }
 
 bool LocalAggregateRestorer::loadFromInputs()
@@ -39,8 +47,7 @@ bool LocalAggregateRestorer::loadFromInputs()
         it = it->load() ? std::next(it) : bucket_inputs.erase(it);
     if unlikely (is_cancelled() || bucket_inputs.empty())
     {
-        finished = true;
-        bucket_inputs.clear();
+        finish();
         return false;
     }
     return true;
@@ -56,8 +63,7 @@ void LocalAggregateRestorer::storeFromInputToBucketData()
         min_bucket_num = std::min(bucket_input.bucketNum(), min_bucket_num);
     if unlikely (min_bucket_num >= NUM_BUCKETS)
     {
-        finished = true;
-        bucket_inputs.clear();
+        finish();
         return;
     }
 
@@ -72,7 +78,7 @@ void LocalAggregateRestorer::storeFromInputToBucketData()
 
 void LocalAggregateRestorer::loadBucketData()
 {
-    if unlikely (!finished)
+    if unlikely (finished)
         return;
 
     assert(bucket_data.empty());

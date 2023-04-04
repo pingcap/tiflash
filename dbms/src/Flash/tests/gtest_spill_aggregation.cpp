@@ -358,5 +358,58 @@ try
     }
 }
 CATCH
+
+TEST_F(SpillAggregationTestRunner, FineGrainedShuffle)
+try
+{
+    DB::MockColumnInfoVec column_infos{{"a", TiDB::TP::TypeLongLong}, {"b", TiDB::TP::TypeLongLong}, {"c", TiDB::TP::TypeLongLong}, {"d", TiDB::TP::TypeLongLong}, {"e", TiDB::TP::TypeLongLong}};
+    DB::MockColumnInfoVec partition_column_infos{{"a", TiDB::TP::TypeLongLong}, {"b", TiDB::TP::TypeLongLong}};
+    ColumnsWithTypeAndName column_datas;
+    size_t table_rows = 5120;
+    size_t duplicated_rows = 2560;
+    UInt64 max_block_size = 100;
+    size_t total_data_size = 0;
+    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(column_infos))
+    {
+        ColumnGeneratorOpts opts{table_rows, getDataTypeByColumnInfoForComputingLayer(column_info)->getName(), RANDOM, column_info.name};
+        column_datas.push_back(ColumnGenerator::instance().generate(opts));
+        total_data_size += column_datas.back().column->byteSize();
+    }
+    for (auto & column_data : column_datas)
+        column_data.column->assumeMutable()->insertRangeFrom(*column_data.column, 0, duplicated_rows);
+    context.addExchangeReceiver("exchange_receiver_1_concurrency", column_infos, column_datas, 1, partition_column_infos);
+    context.addExchangeReceiver("exchange_receiver_3_concurrency", column_infos, column_datas, 3, partition_column_infos);
+    context.addExchangeReceiver("exchange_receiver_5_concurrency", column_infos, column_datas, 5, partition_column_infos);
+    context.addExchangeReceiver("exchange_receiver_10_concurrency", column_infos, column_datas, 10, partition_column_infos);
+    std::vector<size_t> exchange_receiver_concurrency = {1, 3, 5, 10};
+
+    auto gen_request = [&](size_t exchange_concurrency) {
+        return context
+            .receive(fmt::format("exchange_receiver_{}_concurrency", exchange_concurrency), exchange_concurrency)
+            .aggregation({Min(col("c")), Max(col("d")), Count(col("e"))}, {col("a"), col("b")}, exchange_concurrency)
+            .build(context);
+    };
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+
+    /// disable spill
+    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
+    auto baseline = executeStreams(gen_request(1), 1);
+
+    /// enable spill
+    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(total_data_size / 200)));
+    context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(1)));
+    context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(1)));
+    for (size_t exchange_concurrency : exchange_receiver_concurrency)
+    {
+        /// don't use `executeAndAssertColumnsEqual` since it takes too long to run
+        auto request = gen_request(exchange_concurrency);
+        // enablePipeline(false);
+        // ASSERT_COLUMNS_EQ_UR(baseline, executeStreams(request, exchange_concurrency));
+        enablePipeline(true);
+        ASSERT_COLUMNS_EQ_UR(baseline, executeStreams(request, exchange_concurrency));
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

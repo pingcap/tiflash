@@ -44,6 +44,8 @@ private:
 
     void storeFromInputToBucketData();
 
+    void finish();
+
 private:
     Aggregator & aggregator;
 

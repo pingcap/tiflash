@@ -53,7 +53,7 @@ public:
 
     bool hasSpilledData() const;
 
-    bool isNeedSpill(size_t task_index, bool try_mark_need_spill = false);
+    bool needSpill(size_t task_index, bool try_mark_need_spill = false);
 
     void spillData(size_t task_index);
 

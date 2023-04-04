@@ -52,7 +52,7 @@ bool AggregateContext::hasSpilledData() const
     return aggregator->hasSpilledData();
 }
 
-bool AggregateContext::isNeedSpill(size_t task_index, bool try_mark_need_spill)
+bool AggregateContext::needSpill(size_t task_index, bool try_mark_need_spill)
 {
     assert(status.load() == AggStatus::build);
     auto & data = *many_data[task_index];
