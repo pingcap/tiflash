@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
+#include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
 #include <aws/core/Aws.h>
 #include <aws/core/http/Scheme.h>
@@ -25,6 +26,11 @@
 #include <common/types.h>
 
 #include <magic_enum.hpp>
+
+namespace pingcap::kv
+{
+struct Cluster;
+}
 
 namespace DB::ErrorCodes
 {
@@ -38,7 +44,7 @@ Exception fromS3Error(const Aws::S3::S3Error & e, const std::string & fmt, Args 
 {
     return DB::Exception(
         ErrorCodes::S3_ERROR,
-        fmt + fmt::format(" s3error={} s3msg={}", magic_enum::enum_name(e.GetErrorType()), e.GetMessage()),
+        fmt + fmt::format(" s3error={} s3msg={} request_id={}", magic_enum::enum_name(e.GetErrorType()), e.GetMessage(), e.GetRequestId()),
         args...);
 }
 
@@ -70,7 +76,9 @@ public:
     template <typename Request>
     void setBucketAndKeyWithRoot(Request & req, const String & key) const
     {
-        req.WithBucket(bucket_name).WithKey(key_root + key);
+        bool is_root_single_slash = key_root == "/";
+        // If the `root == '/'`, don't prepend the root to the prefix, otherwise S3 list doesn't work.
+        req.WithBucket(bucket_name).WithKey(is_root_single_slash ? key : key_root + key);
     }
 
 private:
@@ -83,7 +91,7 @@ public:
 
 enum class S3GCMethod
 {
-    Lifecycle,
+    Lifecycle = 1,
     ScanThenDelete,
 };
 
@@ -98,11 +106,21 @@ public:
 
     void init(const StorageS3Config & config_, bool mock_s3_ = false);
 
+    void setKVCluster(pingcap::kv::Cluster * kv_cluster_)
+    {
+        std::unique_lock lock_init(mtx_init);
+        kv_cluster = kv_cluster_;
+    }
+
     void shutdown();
 
-    const String & bucket() const { return config.bucket; }
+    StorageS3Config getConfigCopy() const
+    {
+        std::unique_lock lock_init(mtx_init);
+        return config;
+    }
 
-    std::shared_ptr<TiFlashS3Client> sharedTiFlashClient() const;
+    std::shared_ptr<TiFlashS3Client> sharedTiFlashClient();
 
     S3GCMethod gc_method = S3GCMethod::Lifecycle;
 
@@ -111,12 +129,21 @@ private:
     DISALLOW_COPY_AND_MOVE(ClientFactory);
     std::unique_ptr<Aws::S3::S3Client> create() const;
 
-    static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & config_);
+    static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & config_, const LoggerPtr & log);
     static Aws::Http::Scheme parseScheme(std::string_view endpoint);
 
+    std::shared_ptr<TiFlashS3Client> initClientFromWriteNode();
+
+private:
     Aws::SDKOptions aws_options;
+
+    std::atomic_bool client_is_inited = false;
+    mutable std::mutex mtx_init; // protect `config` `shared_tiflash_client` `kv_cluster`
     StorageS3Config config;
     std::shared_ptr<TiFlashS3Client> shared_tiflash_client;
+    pingcap::kv::Cluster * kv_cluster = nullptr;
+
+    LoggerPtr log;
 };
 
 bool isNotFoundError(Aws::S3::S3Errors error);
@@ -125,7 +152,7 @@ Aws::S3::Model::HeadObjectOutcome headObject(const TiFlashS3Client & client, con
 
 bool objectExists(const TiFlashS3Client & client, const String & key);
 
-void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname);
+void uploadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname, int max_retry_times = 3);
 
 constexpr std::string_view TaggingObjectIsDeleted = "tiflash_deleted=true";
 void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days);
@@ -134,7 +161,7 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
  * tagging is the tag-set for the object. The tag-set must be encoded as URL Query
  * parameters. (For example, "Key1=Value1")
  */
-void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging = "");
+void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging = "", int max_retry_times = 3);
 
 void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname);
 
@@ -183,4 +210,18 @@ void rawListPrefix(
     std::string_view delimiter,
     std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
 
+template <typename F, typename... T>
+void retryWrapper(F f, const T &... args)
+{
+    Int32 i = 0;
+    while (true)
+    {
+        // When `f` return true or throw exception, break the loop.
+        if (f(args..., i))
+        {
+            break;
+        }
+        ++i;
+    }
+}
 } // namespace DB::S3

@@ -25,6 +25,7 @@
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/JoinPartition.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <absl/base/optimization.h>
@@ -107,9 +108,7 @@ public:
          const SpillConfig & probe_spill_config_,
          Int64 join_restore_concurrency_,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
-         const String & left_filter_column = "",
-         const String & right_filter_column = "",
-         const JoinOtherConditions & conditions = {},
+         const JoinNonEqualConditions & non_equal_conditions_ = {},
          size_t max_block_size = 0,
          const String & match_helper_name = "",
          size_t restore_round = 0,
@@ -327,57 +326,6 @@ public:
     // only use for left semi joins.
     const String match_helper_name;
 
-    struct BuildPartition
-    {
-        BlocksList blocks;
-        Blocks original_blocks;
-        size_t rows{0};
-        size_t bytes{0};
-    };
-
-    struct ProbePartition
-    {
-        Blocks blocks;
-        size_t rows{0};
-        size_t bytes{0};
-    };
-
-    struct JoinPartition
-    {
-        /// mutex to protect concurrent modify partition
-        /// note if you wants to acquire both build_probe_mutex and partition_mutex,
-        /// please lock build_probe_mutex first
-        std::mutex partition_mutex;
-        BuildPartition build_partition;
-        ProbePartition probe_partition;
-        ArenaPtr pool;
-        bool spill{};
-        /// only update this field when spill is enabled. todo support this field in non-spill mode
-        std::atomic<size_t> memory_usage{0};
-
-        void insertBlockForBuild(Block && block)
-        {
-            size_t rows = block.rows();
-            size_t bytes = block.bytes();
-            build_partition.rows += rows;
-            build_partition.bytes += bytes;
-            build_partition.blocks.push_back(block);
-            build_partition.original_blocks.push_back(std::move(block));
-            memory_usage += bytes;
-        }
-
-        void insertBlockForProbe(Block && block)
-        {
-            size_t rows = block.rows();
-            size_t bytes = block.bytes();
-            probe_partition.rows += rows;
-            probe_partition.bytes += bytes;
-            probe_partition.blocks.push_back(std::move(block));
-            memory_usage += bytes;
-        }
-    };
-    using JoinPartitions = std::vector<std::unique_ptr<JoinPartition>>;
-
     SpillerPtr build_spiller;
     SpillerPtr probe_spiller;
 
@@ -431,10 +379,7 @@ private:
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
-    String left_filter_column;
-    String right_filter_column;
-
-    const JoinOtherConditions other_conditions;
+    const JoinNonEqualConditions non_equal_conditions;
 
     ASTTableJoin::Strictness original_strictness;
     size_t max_block_size;
@@ -484,6 +429,8 @@ private:
     std::atomic<bool> right_table_is_empty{true};
     /// Indicate if the right table has a all-key-null row.
     std::atomic<bool> right_has_all_key_null_row{false};
+
+    bool has_build_data_in_memory = false;
 
 private:
     Type type = Type::EMPTY;
@@ -560,11 +507,7 @@ private:
     void trySpillBuildPartitions(bool force);
     void trySpillProbePartitions(bool force);
     /// use lock as the argument to force the caller acquire the lock before call them
-    Blocks trySpillBuildPartition(size_t partition_index, bool force, std::unique_lock<std::mutex> & partition_lock);
-    Blocks trySpillProbePartition(size_t partition_index, bool force, std::unique_lock<std::mutex> & partition_lock);
-    void releaseBuildPartitionBlocks(size_t partition_index, std::unique_lock<std::mutex> & partition_lock);
     void releaseBuildPartitionHashTable(size_t partition_index, std::unique_lock<std::mutex> & partition_lock);
-    void releaseProbePartitionBlocks(size_t partition_index, std::unique_lock<std::mutex> & partition_lock);
     void releaseAllPartitions();
 
 

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -166,13 +166,13 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
 
 void GRPCReceiverContext::sendMPPTaskToTiFlashStorageNode(
     LoggerPtr log,
-    const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs)
+    const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs)
 {
     if (disaggregated_dispatch_reqs.empty())
         throw Exception("unexpected disaggregated_dispatch_reqs, it's empty.");
 
     std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
-    for (const StorageDisaggregated::RequestAndRegionIDs & dispatch_req : disaggregated_dispatch_reqs)
+    for (const RequestAndRegionIDs & dispatch_req : disaggregated_dispatch_reqs)
     {
         LOG_DEBUG(log, "tiflash_compute node start to send MPPTask({})", std::get<0>(dispatch_req)->DebugString());
         thread_manager->schedule(/*propagate_memory_tracker=*/false, "", [&dispatch_req, this] {
@@ -280,13 +280,14 @@ void GRPCReceiverContext::establishMPPConnectionLocalV2(
     const ExchangeRecvRequest & request,
     size_t source_index,
     LocalRequestHandler & local_request_handler,
-    bool is_fine_grained)
+    bool is_fine_grained,
+    bool has_remote_conn)
 {
     RUNTIME_CHECK_MSG(request.is_local, "This should be a local request");
 
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request.req.get(), std::chrono::seconds(10));
     checkLocalTunnel(tunnel, err_msg);
-    tunnel->connectLocalV2(source_index, local_request_handler, is_fine_grained);
+    tunnel->connectLocalV2(source_index, local_request_handler, is_fine_grained, has_remote_conn);
 }
 
 // TODO remove it in the future

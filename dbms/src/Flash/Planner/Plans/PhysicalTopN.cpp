@@ -22,8 +22,7 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
-#include <Operators/ExpressionTransformOp.h>
-#include <Operators/TopNTransformOp.h>
+#include <Operators/LocalSortTransformOp.h>
 
 namespace DB
 {
@@ -51,6 +50,7 @@ PhysicalPlanNodePtr PhysicalTopN::build(
     auto physical_top_n = std::make_shared<PhysicalTopN>(
         executor_id,
         child->getSchema(),
+        child->getFineGrainedShuffle(),
         log->identifier(),
         child,
         order_descr,
@@ -68,17 +68,15 @@ void PhysicalTopN::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & c
     orderStreams(pipeline, max_streams, order_descr, limit, false, context, log);
 }
 
-void PhysicalTopN::buildPipelineExec(PipelineExecGroupBuilder & group_builder, Context & context, size_t /*concurrency*/)
+void PhysicalTopN::buildPipelineExecGroup(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    Context & context,
+    size_t /*concurrency*/)
 {
-    if (!before_sort_actions->getActions().empty())
-    {
-        group_builder.transform([&](auto & builder) {
-            builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(group_builder.exec_status, log->identifier(), before_sort_actions));
-        });
-    }
-    group_builder.transform([&](auto & builder) {
-        builder.appendTransformOp(std::make_unique<TopNTransformOp>(group_builder.exec_status, log->identifier(), order_descr, limit, context.getSettingsRef().max_block_size));
-    });
+    executeExpression(exec_status, group_builder, before_sort_actions, log);
+
+    executeLocalSort(exec_status, group_builder, order_descr, limit, context, log);
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)

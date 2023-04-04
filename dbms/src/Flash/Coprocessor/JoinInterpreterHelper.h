@@ -18,6 +18,7 @@
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/IDataType.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/JoinUtils.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Storages/Transaction/Collator.h>
 #include <tipb/executor.pb.h>
@@ -36,8 +37,50 @@ struct JoinKeyType
 };
 using JoinKeyTypes = std::vector<JoinKeyType>;
 
-struct JoinOtherConditions
+/// JoinNonEqualConditions is the join conditions that are not evaluated in the "hash table probe" stage, there are two kinds of these conditions
+/// 1. conditions that need to be evaluated before "hash table probe" stage
+///    a. left conditions: the filter condition on the left table
+///    b. right conditions: the filter condition on the right table
+/// 2. conditions that need to be evaluated after "hash table probe" stage
+///    a. other condition: the filter that involve columns from both left and right table
+///    b. other condition from in: a special case that convert from `not in subquery`
+///    c. null aware equal condition: used for null aware join
+/// some examples
+/// Left condition:
+///  `select * from t1 left join t2 on t1.col1 = t2.col2 and t1.col2 > 1`
+///   - left condition is `t1.col2 > 1`
+///   note left condition should only exists in left/semi/left-semi join, otherwise, `t1.col2 > 1` should be pushed down as a filter on table scan
+/// Right condition:
+///  `select * from t1 right join t2 on t1.col1 = t2.col2 and t2.col2 > 1`
+///   - right condition is `t2.col2 > 1`
+///   note left condition should only exists in right join, otherwise, `t2.col2 > 1` should be pushed down as a filter on table scan
+///
+/// Other condition, other condition from in and null aware equal condition:
+/// Example 1:
+///   `select * from t1 inner join t2 on t1.col1 = t2.col1 and t1.col2 > t2.col2`
+///   - join key are `t1.col1` and `t2.col1`
+///   - other_cond is `t1.col2 > t2.col2`
+///
+/// Example 2:
+///   `select * from t1 where col1 not in (select col1 from t2 where t1.col2 = t2.col2 and t1.col3 > t2.col3)`
+///   There are several possibilities which depends on TiDB's planner.
+///   1. cartesian anti semi join.
+///      - join key is empty
+///      - other_cond is `t1.col2 = t2.col2 and t1.col3 > t2.col3`
+///      - other_cond_from_in is `t1.col1 = t2.col1`
+///   2. anti semi join.
+///      - join keys are `t1.col2` and `t2.col2`
+///      - other_cond is `t1.col3 > t2.col3`
+///      - other_cond_from_in is `t1.col1 = t2.col1`
+///   3. null-aware anti semi join
+///      - join keys are `t1.col1` and `t2.col1`
+///      - other_cond is `t1.col2 = t2.col2 and t1.col3 > t2.col3`
+///      - null_aware_eq_cond is `t1.col1 = t2.col1`
+struct JoinNonEqualConditions
 {
+    String left_filter_column;
+    String right_filter_column;
+
     String other_cond_name;
     String other_eq_cond_from_in_name;
     ExpressionActionsPtr other_cond_expr;
@@ -46,15 +89,20 @@ struct JoinOtherConditions
     String null_aware_eq_cond_name;
     ExpressionActionsPtr null_aware_eq_cond_expr;
 
-    /// Validate this JoinConditions and return error message if any.
-    String validate(bool is_null_aware_semi_join) const
+    /// Validate this JoinNonEqualConditions and return error message if any.
+    String validate(ASTTableJoin::Kind kind) const
     {
+        if (unlikely(!left_filter_column.empty() && !isLeftJoin(kind)))
+            return "non left join with left conditions";
+        if (unlikely(!right_filter_column.empty() && !isRightJoin(kind)))
+            return "non right join with right conditions";
+
         if unlikely ((!other_cond_name.empty() || !other_eq_cond_from_in_name.empty()) && other_cond_expr == nullptr)
             return "other_cond_name and/or other_eq_cond_from_in_name are not empty but other_cond_expr is nullptr";
         if unlikely (other_cond_name.empty() && other_eq_cond_from_in_name.empty() && other_cond_expr != nullptr)
             return "other_cond_name and other_eq_cond_from_in_name are empty but other_cond_expr is not nullptr";
 
-        if (is_null_aware_semi_join)
+        if (isNullAwareSemiFamily(kind))
         {
             if unlikely (null_aware_eq_cond_name.empty() || null_aware_eq_cond_expr == nullptr)
                 return "null-aware semi join does not have null_aware_eq_cond_name or null_aware_eq_cond_expr is nullptr";
@@ -123,38 +171,24 @@ struct TiFlashJoin
         const Block & right_input_header,
         const String & match_helper_name) const;
 
-    /// Example 1:
-    ///   `select * from t1 inner join t2 on t1.col1 = t2.col1 and t1.col2 > t2.col2`
-    ///   - join key are `t1.col1` and `t2.col1`
-    ///   - other_cond is `t1.col2 > t2.col2`
-    ///
-    /// Example 2:
-    ///   `select * from t1 where col1 not in (select col1 from t2 where t1.col2 = t2.col2 and t1.col3 > t2.col3)`
-    ///   There are several possibilities which depends on TiDB's planner.
-    ///   1. cartesian anti semi join.
-    ///      - join key is empty
-    ///      - other_cond is `t1.col2 = t2.col2 and t1.col3 > t2.col3`
-    ///      - other_cond_from_in is `t1.col1 = t2.col1`
-    ///   2. anti semi join.
-    ///      - join keys are `t1.col2` and `t2.col2`
-    ///      - other_cond is `t1.col3 > t2.col3`
-    ///      - other_cond_from_in is `t1.col1 = t2.col1`
-    ///   3. null-aware anti semi join
-    ///      - join keys are `t1.col1` and `t2.col1`
-    ///      - other_cond is `t1.col2 = t2.col2 and t1.col3 > t2.col3`
-    ///      - null_aware_eq_cond is `t1.col1 = t2.col1`
-    ///
-    /// Note that new columns from build side prepare join actions cannot be appended.
-    /// because the input that other filter accepts is
-    /// {left_input_columns, right_input_columns, new_columns_from_probe_side_prepare, match_helper_name}.
-    JoinOtherConditions genJoinOtherConditionsAction(
+    void fillJoinOtherConditionsAction(
         const Context & context,
         const Block & left_input_header,
         const Block & right_input_header,
         const ExpressionActionsPtr & probe_side_prepare_join,
         const Names & probe_key_names,
-        const Names & build_key_names) const;
+        const Names & build_key_names,
+        JoinNonEqualConditions & join_non_equal_conditions) const;
 
+    /// The NamesAndTypes used by `otherJoinFilter` should only be {left_input_columns, right_input_columns}
+    /// but in our implementation, the probe_prepare_join_actions is evaluated on the `probe_block` before
+    /// "hash table probe", and after that, the same `probe_block` is used to combine the right columns from
+    /// right block(and `match_helper` column if needed), then the final block schema after "hash table probe"
+    /// is `probe_block` schema + `right_input_header` schema + `match_helper_column`, but TiDB's schema is
+    /// based on {left_input_columns, right_input_columns} so the NamesAndTypes returned by this function is
+    /// {left_input_columns, right_input_columns, other_columns_added_by_probe_prepare_join_actions}
+    ///  -`other_columns_added_by_probe_join_actions` is added to avoid duplicated columns error
+    ///  -`match_helper_col` is not handled explicitly because `other_condition` never use that column.
     NamesAndTypes genColumnsForOtherJoinFilter(
         const Block & left_input_header,
         const Block & right_input_header,

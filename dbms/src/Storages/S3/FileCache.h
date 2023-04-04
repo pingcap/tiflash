@@ -113,6 +113,12 @@ public:
         return (std::chrono::system_clock::now() - last_access_time) < sec;
     }
 
+    Status getStatus() const
+    {
+        std::lock_guard lock(mtx);
+        return status;
+    }
+
 private:
     mutable std::mutex mtx;
     const String local_fname;
@@ -250,8 +256,8 @@ public:
     void restoreTable(const std::filesystem::directory_entry & table_entry);
     void restoreDMFile(const std::filesystem::directory_entry & dmfile_entry);
 
-    void remove(const String & s3_key);
-    std::pair<Int64, std::list<String>::iterator> removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f);
+    void remove(const String & s3_key, bool force = false);
+    std::pair<Int64, std::list<String>::iterator> removeImpl(LRUFileTable & table, const String & s3_key, FileSegmentPtr & f, bool force = false);
     void removeDiskFile(const String & local_fname);
 
     // Estimated size is an empirical value.

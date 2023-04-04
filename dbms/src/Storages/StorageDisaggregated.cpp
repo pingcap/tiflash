@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
@@ -130,12 +131,11 @@ std::vector<pingcap::coprocessor::BatchCopTask> StorageDisaggregated::buildBatch
     return batch_cop_tasks;
 }
 
-StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
+RequestAndRegionIDs StorageDisaggregated::buildDispatchMPPTaskRequest(
     const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
     auto dispatch_req = std::make_shared<::mpp::DispatchTaskRequest>();
     ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
-    // TODO(iosmanthus): support S3 remote read in keyspace mode.
     auto keyspace_id = context.getDAGContext()->getKeyspaceID();
     dispatch_req_meta->set_keyspace_id(keyspace_id);
     dispatch_req_meta->set_api_version(keyspace_id == NullspaceID ? kvrpcpb::APIVersion::V1 : kvrpcpb::APIVersion::V2);
@@ -157,7 +157,7 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     std::vector<pingcap::kv::RegionVerID> region_ids = RequestUtils::setUpRegionInfos(batch_cop_task, dispatch_req);
 
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
-    const auto * dag_req = context.getDAGContext()->dag_request;
+    const auto * dag_req = context.getDAGContext()->dag_request();
     tipb::DAGRequest sender_dag_req;
     sender_dag_req.set_time_zone_name(dag_req->time_zone_name());
     sender_dag_req.set_time_zone_offset(dag_req->time_zone_offset());
@@ -196,7 +196,7 @@ StorageDisaggregated::RequestAndRegionIDs StorageDisaggregated::buildDispatchMPP
     // Ignore sender.PartitionKeys and sender.Types because it's a PassThrough sender.
 
     dispatch_req->set_encoded_plan(sender_dag_req.SerializeAsString());
-    return StorageDisaggregated::RequestAndRegionIDs{dispatch_req, region_ids, batch_cop_task.store_id};
+    return RequestAndRegionIDs{dispatch_req, region_ids, batch_cop_task.store_id};
 }
 
 tipb::Executor StorageDisaggregated::buildTableScanTiPB()

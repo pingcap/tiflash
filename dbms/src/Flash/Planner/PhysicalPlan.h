@@ -50,7 +50,7 @@ public:
 private:
     void addRootFinalProjectionIfNeed();
 
-    void build(const String & executor_id, const tipb::Executor * executor);
+    void build(const tipb::Executor * executor);
 
     void buildFinalProjection(const String & column_prefix, bool is_root);
 

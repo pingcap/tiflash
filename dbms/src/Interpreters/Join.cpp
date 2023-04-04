@@ -57,46 +57,6 @@ extern const int ILLEGAL_COLUMN;
 
 namespace
 {
-/// Do I need to use the hash table maps_*_full, in which we remember whether the row was joined.
-bool getFullness(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Full;
-}
-bool isLeftJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Cross_Left;
-}
-bool isRightJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right;
-}
-bool isInnerJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Cross;
-}
-bool isAntiJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti;
-}
-bool isCrossJoin(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Cross || kind == ASTTableJoin::Kind::Cross_Left
-        || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Cross_Anti
-        || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
-}
-/// (cartesian/null-aware) (anti) left semi join.
-bool isLeftSemiFamily(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::LeftSemi || kind == ASTTableJoin::Kind::LeftAnti
-        || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti
-        || kind == ASTTableJoin::Kind::NullAware_LeftSemi || kind == ASTTableJoin::Kind::NullAware_LeftAnti;
-}
-bool isNullAwareSemiFamily(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::NullAware_Anti || kind == ASTTableJoin::Kind::NullAware_LeftAnti
-        || kind == ASTTableJoin::Kind::NullAware_LeftSemi;
-}
-
 ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block)
 {
     size_t keys_size = key_names.size();
@@ -222,9 +182,7 @@ Join::Join(
     const SpillConfig & probe_spill_config_,
     Int64 join_restore_concurrency_,
     const TiDB::TiDBCollators & collators_,
-    const String & left_filter_column_,
-    const String & right_filter_column_,
-    const JoinOtherConditions & other_conditions,
+    const JoinNonEqualConditions & non_equal_conditions_,
     size_t max_block_size_,
     const String & match_helper_name,
     size_t restore_round_,
@@ -240,9 +198,7 @@ Join::Join(
     , probe_concurrency(0)
     , active_probe_concurrency(0)
     , collators(collators_)
-    , left_filter_column(left_filter_column_)
-    , right_filter_column(right_filter_column_)
-    , other_conditions(other_conditions)
+    , non_equal_conditions(non_equal_conditions_)
     , original_strictness(strictness)
     , max_block_size(max_block_size_)
     , max_bytes_before_external_join(max_bytes_before_external_join_)
@@ -254,7 +210,7 @@ Join::Join(
     , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
-    if (other_conditions.other_cond_expr != nullptr)
+    if (non_equal_conditions.other_cond_expr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
         if (strictness == ASTTableJoin::Strictness::Any)
@@ -262,12 +218,8 @@ Join::Join(
             strictness = ASTTableJoin::Strictness::All;
         }
     }
-    if (unlikely(!left_filter_column.empty() && !isLeftJoin(kind)))
-        throw Exception("Not supported: non left join with left conditions");
-    if (unlikely(!right_filter_column.empty() && !isRightJoin(kind)))
-        throw Exception("Not supported: non right join with right conditions");
 
-    String err = other_conditions.validate(isNullAwareSemiFamily(kind));
+    String err = non_equal_conditions.validate(kind);
     if (unlikely(!err.empty()))
         throw Exception("Validate join conditions error: {}" + err);
 
@@ -296,7 +248,7 @@ bool CanAsColumnString(const IColumn * column)
         || (column->isColumnConst() && typeid_cast<const ColumnString *>(&static_cast<const ColumnConst *>(column)->getDataColumn()));
 }
 
-Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes) const
+Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes_) const
 {
     const size_t keys_size = key_columns.size();
 
@@ -305,7 +257,7 @@ Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_siz
 
     bool all_fixed = true;
     size_t keys_bytes = 0;
-    key_sizes.resize(keys_size);
+    key_sizes_.resize(keys_size);
     for (size_t j = 0; j < keys_size; ++j)
     {
         if (!key_columns[j]->isFixedAndContiguous())
@@ -313,8 +265,8 @@ Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_siz
             all_fixed = false;
             break;
         }
-        key_sizes[j] = key_columns[j]->sizeOfValueIfFixed();
-        keys_bytes += key_sizes[j];
+        key_sizes_[j] = key_columns[j]->sizeOfValueIfFixed();
+        keys_bytes += key_sizes_[j];
     }
 
     /// If there is one numeric key that fits in 64 bits
@@ -619,7 +571,7 @@ size_t Join::getTotalByteCount()
     if (isEnableSpill())
     {
         for (const auto & join_partition : partitions)
-            res += join_partition->memory_usage;
+            res += join_partition->getMemoryUsage();
     }
     else
     {
@@ -640,7 +592,7 @@ size_t Join::getTotalByteCount()
             for (const auto & partition : partitions)
             {
                 /// note the return value might not be accurate since it does not use lock, but should be enough for current usage
-                res += partition->pool->size();
+                res += partition->getPartitionPoolSize();
             }
         }
     }
@@ -668,8 +620,7 @@ void Join::setBuildConcurrencyAndInitJoinPartition(size_t build_concurrency_)
     partitions.reserve(build_concurrency);
     for (size_t i = 0; i < getBuildConcurrency(); ++i)
     {
-        partitions.push_back(std::make_unique<JoinPartition>());
-        partitions.back()->pool = std::make_shared<Arena>();
+        partitions.push_back(std::make_unique<JoinPartition>(log));
     }
 
     // init for non-joined-streams.
@@ -732,9 +683,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         createSpillConfigWithNewSpillId(probe_spill_config, fmt::format("{}_hash_join_{}_probe", log->identifier(), restore_round + 1)),
         join_restore_concurrency,
         collators,
-        left_filter_column,
-        right_filter_column,
-        other_conditions,
+        non_equal_conditions,
         max_block_size,
         match_helper_name,
         restore_round + 1,
@@ -766,8 +715,8 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     setSampleBlock(sample_block);
     for (size_t i = 0; i < build_concurrency; i++)
     {
-        partitions[i]->memory_usage += partitions[i]->pool->size();
-        partitions[i]->memory_usage += getPartitionByteCount(i);
+        partitions[i]->addMemoryUsage(partitions[i]->getPartitionPoolSize());
+        partitions[i]->addMemoryUsage(getPartitionByteCount(i));
     }
 }
 
@@ -1175,26 +1124,26 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
             Blocks blocks_to_spill;
             {
                 const auto & join_partition = partitions[i];
-                std::unique_lock partition_lock(join_partition->partition_mutex);
+                auto partition_lock = join_partition->lockPartition();
                 partitions[i]->insertBlockForBuild(std::move(dispatch_blocks[i]));
-                if (join_partition->spill)
-                    blocks_to_spill = trySpillBuildPartition(i, force_spill_partition_blocks, partition_lock);
+                if (join_partition->isSpill())
+                    blocks_to_spill = join_partition->trySpillBuildPartition(force_spill_partition_blocks, build_spill_config.max_cached_data_bytes_in_spiller, partition_lock);
                 else
-                    stored_block = &(join_partition->build_partition.blocks.back());
+                    stored_block = join_partition->getLastBuildBlock();
                 if (stored_block != nullptr)
                 {
-                    size_t pool_size_before_insert = join_partition->pool->size();
+                    size_t pool_size_before_insert = join_partition->getPartitionPoolSize();
                     size_t map_size_before_insert = getPartitionByteCount(i);
                     insertFromBlockInternal(stored_block, i);
-                    size_t pool_size_after_insert = join_partition->pool->size();
+                    size_t pool_size_after_insert = join_partition->getPartitionPoolSize();
                     size_t map_size_after_insert = getPartitionByteCount(i);
                     if likely (pool_size_after_insert > pool_size_before_insert)
                     {
-                        join_partition->memory_usage += (pool_size_after_insert - pool_size_before_insert);
+                        join_partition->addMemoryUsage(pool_size_after_insert - pool_size_before_insert);
                     }
                     if likely (map_size_after_insert > map_size_before_insert)
                     {
-                        join_partition->memory_usage += (map_size_after_insert - map_size_before_insert);
+                        join_partition->addMemoryUsage(map_size_after_insert - map_size_before_insert);
                     }
                     continue;
                 }
@@ -1269,7 +1218,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
     /// Reuse null_map to record the filtered rows, the rows contains NULL or does not
     /// match the join filter will not insert to the maps
-    recordFilteredRows(block, right_filter_column, null_map_holder, null_map);
+    recordFilteredRows(block, non_equal_conditions.right_filter_column, null_map_holder, null_map);
 
     if (getFullness(kind))
     {
@@ -1316,28 +1265,28 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
 
     if (!isCrossJoin(kind))
     {
-        assert(partitions[stream_index]->pool != nullptr);
+        assert(partitions[stream_index]->getPartitionPool() != nullptr);
         /// Fill the hash table.
         if (isNullAwareSemiFamily(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(kind, type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(kind, type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->getPartitionPool(), enable_fine_grained_shuffle, enable_join_spill);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(kind, type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(kind, type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->getPartitionPool(), enable_fine_grained_shuffle, enable_join_spill);
         }
         else if (getFullness(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(kind, type, maps_any_full, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(kind, type, maps_any_full, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->getPartitionPool(), enable_fine_grained_shuffle, enable_join_spill);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(kind, type, maps_all_full, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(kind, type, maps_all_full, rows, key_columns, key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map[stream_index], stream_index, getBuildConcurrency(), *partitions[stream_index]->getPartitionPool(), enable_fine_grained_shuffle, enable_join_spill);
         }
         else
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(kind, type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(kind, type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrency(), *partitions[stream_index]->getPartitionPool(), enable_fine_grained_shuffle, enable_join_spill);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(kind, type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrency(), *partitions[stream_index]->pool, enable_fine_grained_shuffle, enable_join_spill);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(kind, type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrency(), *partitions[stream_index]->getPartitionPool(), enable_fine_grained_shuffle, enable_join_spill);
         }
     }
 }
@@ -1746,14 +1695,14 @@ void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & fi
  */
 void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & anti_filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_columns) const
 {
-    other_conditions.other_cond_expr->execute(block);
+    non_equal_conditions.other_cond_expr->execute(block);
 
     auto filter_column = ColumnUInt8::create();
     auto & filter = filter_column->getData();
     filter.assign(block.rows(), static_cast<UInt8>(1));
-    if (!other_conditions.other_cond_name.empty())
+    if (!non_equal_conditions.other_cond_name.empty())
     {
-        mergeNullAndFilterResult(block, filter, other_conditions.other_cond_name, false);
+        mergeNullAndFilterResult(block, filter, non_equal_conditions.other_cond_name, false);
     }
 
     ColumnUInt8::Container row_filter(filter.size(), 0);
@@ -1782,9 +1731,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
 
         /// nullmap and data of `other_eq_filter_from_in_column`.
         const ColumnUInt8::Container *eq_in_vec = nullptr, *eq_in_nullmap = nullptr;
-        if (!other_conditions.other_eq_cond_from_in_name.empty())
+        if (!non_equal_conditions.other_eq_cond_from_in_name.empty())
         {
-            auto orig_filter_column = block.getByName(other_conditions.other_eq_cond_from_in_name).column;
+            auto orig_filter_column = block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column;
             if (orig_filter_column->isColumnConst())
                 orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
             if (orig_filter_column->isColumnNullable())
@@ -1840,13 +1789,13 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         return;
     }
 
-    if (!other_conditions.other_eq_cond_from_in_name.empty())
+    if (!non_equal_conditions.other_eq_cond_from_in_name.empty())
     {
         /// other_eq_filter_from_in_column is used in anti semi join:
         /// if there is a row that return null or false for other_condition, then for anti semi join, this row should be returned.
         /// otherwise, it will check other_eq_filter_from_in_column, if other_eq_filter_from_in_column return false, this row should
         /// be returned, if other_eq_filter_from_in_column return true or null this row should not be returned.
-        mergeNullAndFilterResult(block, filter, other_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
+        mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
     }
 
     if (isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All)
@@ -1942,7 +1891,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
     /// reuse null_map to record the filtered rows, the rows contains NULL or does not
     /// match the join filter won't join to anything
-    recordFilteredRows(block, left_filter_column, null_map_holder, null_map);
+    recordFilteredRows(block, non_equal_conditions.left_filter_column, null_map_holder, null_map);
 
     size_t existing_columns = block.columns();
 
@@ -2085,7 +2034,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps, ProbeProcessInfo & pr
     }
 
     /// handle other conditions
-    if (!other_conditions.other_cond_name.empty() || !other_conditions.other_eq_cond_from_in_name.empty())
+    if (!non_equal_conditions.other_cond_name.empty() || !non_equal_conditions.other_eq_cond_from_in_name.empty())
     {
         if (!offsets_to_replicate)
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
@@ -2258,7 +2207,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
         right_table_rows += block_right.rows();
 
     size_t left_rows_per_iter = std::max(rows_left, 1);
-    if (max_block_size > 0 && right_table_rows > 0 && other_conditions.other_cond_expr != nullptr
+    if (max_block_size > 0 && right_table_rows > 0 && non_equal_conditions.other_cond_expr != nullptr
         && CrossJoinAdder<KIND, STRICTNESS>::allRightRowsMaybeAdded())
     {
         /// if other_condition is not null, and all right columns maybe added during join, try to use multiple iter
@@ -2308,7 +2257,7 @@ void Join::joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map [[
             }
         }
         auto block_per_iter = block.cloneWithColumns(std::move(dst_columns));
-        if (other_conditions.other_cond_expr != nullptr)
+        if (non_equal_conditions.other_cond_expr != nullptr)
             handleOtherConditions(block_per_iter, is_row_matched, expanded_row_size_after_join, right_column_index);
         if (start == 0 || block_per_iter.rows() > 0)
             /// always need to generate at least one block
@@ -2331,7 +2280,7 @@ void Join::joinBlockImplCross(Block & block) const
     size_t rows_left = block.rows();
     ColumnPtr null_map_holder;
     ConstNullMapPtr null_map{};
-    recordFilteredRows(block, left_filter_column, null_map_holder, null_map);
+    recordFilteredRows(block, non_equal_conditions.left_filter_column, null_map_holder, null_map);
 
     std::unique_ptr<IColumn::Filter> filter = std::make_unique<IColumn::Filter>(rows_left);
     std::unique_ptr<IColumn::Offsets> offsets_to_replicate = std::make_unique<IColumn::Offsets>(rows_left);
@@ -2376,7 +2325,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
     const BlocksList & right_blocks,
     const std::vector<Join::RowsNotInsertToMap> & null_rows,
     size_t max_block_size,
-    const JoinOtherConditions & other_conditions,
+    const JoinNonEqualConditions & non_equal_conditions,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     const ConstNullMapPtr & null_map,
@@ -2530,7 +2479,7 @@ void NO_INLINE joinBlockImplNullAwareInternal(
             right_blocks,
             null_rows,
             max_block_size,
-            other_conditions);
+            non_equal_conditions);
 
         helper.joinResult(res_list);
 
@@ -2624,7 +2573,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
     const BlocksList & right_blocks,
     const std::vector<Join::RowsNotInsertToMap> & null_rows,
     size_t max_block_size,
-    const JoinOtherConditions & other_conditions,
+    const JoinNonEqualConditions & non_equal_conditions,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     const ConstNullMapPtr & null_map,
@@ -2643,7 +2592,7 @@ void NO_INLINE joinBlockImplNullAwareCast(
         right_blocks,                                                                               \
         null_rows,                                                                                  \
         max_block_size,                                                                             \
-        other_conditions,                                                                           \
+        non_equal_conditions,                                                                       \
         key_columns,                                                                                \
         key_sizes,                                                                                  \
         null_map,                                                                                   \
@@ -2712,7 +2661,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
 
     ColumnPtr filter_map_holder;
     ConstNullMapPtr filter_map{};
-    recordFilteredRows(block, left_filter_column, filter_map_holder, filter_map);
+    recordFilteredRows(block, non_equal_conditions.left_filter_column, filter_map_holder, filter_map);
 
     size_t existing_columns = block.columns();
 
@@ -2737,7 +2686,7 @@ void Join::joinBlockImplNullAware(Block & block, const Maps & maps) const
             blocks,                                                                                                                                     \
             rows_not_inserted_to_map,                                                                                                                   \
             max_block_size,                                                                                                                             \
-            other_conditions,                                                                                                                           \
+            non_equal_conditions,                                                                                                                       \
             key_columns,                                                                                                                                \
             key_sizes,                                                                                                                                  \
             null_map,                                                                                                                                   \
@@ -2826,6 +2775,15 @@ void Join::workAfterBuildFinish()
             trySpillBuildPartitions(true);
             tryMarkBuildSpillFinish();
         }
+        for (const auto & partition : partitions)
+        {
+            if (!partition->isSpill() && partition->hasBuildData())
+                has_build_data_in_memory = true;
+        }
+    }
+    else
+    {
+        has_build_data_in_memory = !original_blocks.empty();
     }
 }
 
@@ -2885,10 +2843,10 @@ void Join::finishOneNonJoin(size_t partition_index)
 {
     while (partition_index < build_concurrency)
     {
-        std::unique_lock partition_lock(partitions[partition_index]->partition_mutex);
-        releaseBuildPartitionBlocks(partition_index, partition_lock);
-        releaseProbePartitionBlocks(partition_index, partition_lock);
-        if (!partitions[partition_index]->spill)
+        std::unique_lock partition_lock = partitions[partition_index]->lockPartition();
+        partitions[partition_index]->releaseBuildPartitionBlocks(partition_lock);
+        partitions[partition_index]->releaseProbePartitionBlocks(partition_lock);
+        if (!partitions[partition_index]->isSpill())
         {
             releaseBuildPartitionHashTable(partition_index, partition_lock);
         }
@@ -3108,10 +3066,10 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         }
         for (size_t j = 0; j < partitions.size(); ++j)
         {
-            if (!partitions[j]->spill && (target_partition_index == -1 || partitions[j]->memory_usage > max_bytes))
+            if (!partitions[j]->isSpill() && (target_partition_index == -1 || partitions[j]->getMemoryUsage() > max_bytes))
             {
                 target_partition_index = j;
-                max_bytes = partitions[j]->memory_usage;
+                max_bytes = partitions[j]->getMemoryUsage();
             }
         }
         if (target_partition_index == -1)
@@ -3125,11 +3083,11 @@ void Join::spillMostMemoryUsedPartitionIfNeed()
         LOG_DEBUG(log, fmt::format("all bytes used : {} in join, partition size : {}", getTotalByteCount(), partitions.size()));
         LOG_DEBUG(log, fmt::format("make round : {}, partition : {} spill.", restore_round, target_partition_index));
 
-        std::unique_lock partition_lock(partitions[target_partition_index]->partition_mutex);
-        partitions[target_partition_index]->spill = true;
+        std::unique_lock partition_lock = partitions[target_partition_index]->lockPartition();
+        partitions[target_partition_index]->markSpill();
         releaseBuildPartitionHashTable(target_partition_index, partition_lock);
         spilled_partition_indexes.push_back(target_partition_index);
-        blocks_to_spill = trySpillBuildPartition(target_partition_index, true, partition_lock);
+        blocks_to_spill = partitions[target_partition_index]->trySpillBuildPartition(true, build_spill_config.max_cached_data_bytes_in_spiller, partition_lock);
     }
     build_spiller->spillBlocks(std::move(blocks_to_spill), target_partition_index);
     LOG_DEBUG(log, fmt::format("all bytes used after spill : {}", getTotalByteCount()));
@@ -3153,7 +3111,7 @@ void Join::tryMarkProbeSpillFinish()
 
 bool Join::getPartitionSpilled(size_t partition_index)
 {
-    return partitions[partition_index]->spill;
+    return partitions[partition_index]->isSpill();
 }
 
 
@@ -3168,14 +3126,14 @@ bool Join::hasPartitionSpilled()
     return !spilled_partition_indexes.empty();
 }
 
-RestoreInfo Join::getOneRestoreStream(size_t max_block_size)
+RestoreInfo Join::getOneRestoreStream(size_t max_block_size_)
 {
     std::unique_lock lock(build_probe_mutex);
     if (meet_error)
         throw Exception(error_message);
     try
     {
-        LOG_DEBUG(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_non_joined_data_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_non_joined_data_streams.size()));
+        LOG_TRACE(log, fmt::format("restore_build_streams {}, restore_probe_streams {}, restore_non_joined_data_streams {}", restore_build_streams.size(), restore_build_streams.size(), restore_non_joined_data_streams.size()));
         assert(restore_build_streams.size() == restore_probe_streams.size() && restore_build_streams.size() == restore_non_joined_data_streams.size());
         auto get_back_stream = [](BlockInputStreams & streams) {
             BlockInputStreamPtr stream = streams.back();
@@ -3198,12 +3156,12 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size)
             return {};
         }
         auto spilled_partition_index = spilled_partition_indexes.front();
-        RUNTIME_CHECK_MSG(partitions[spilled_partition_index]->spill, "should not restore unspilled partition.");
+        RUNTIME_CHECK_MSG(partitions[spilled_partition_index]->isSpill(), "should not restore unspilled partition.");
         if (restore_join_build_concurrency <= 0)
             restore_join_build_concurrency = getRestoreJoinBuildConcurrency(partitions.size(), spilled_partition_indexes.size(), join_restore_concurrency, probe_concurrency);
-        /// for restore join we make sure that the bulid concurrency is at least 2, so it can be spill again
+        /// for restore join we make sure that the build concurrency is at least 2, so it can be spill again
         assert(restore_join_build_concurrency >= 2);
-        LOG_DEBUG(log, "partition {}, round {}, build concurrency {}", spilled_partition_index, restore_round, restore_join_build_concurrency);
+        LOG_INFO(log, "Begin restore data from disk for hash join, partition {}, round {}, build concurrency {}.", spilled_partition_index, restore_round, restore_join_build_concurrency);
         restore_build_streams = build_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
         restore_probe_streams = probe_spiller->restoreBlocks(spilled_partition_index, restore_join_build_concurrency, true);
         restore_non_joined_data_streams.resize(restore_join_build_concurrency, nullptr);
@@ -3226,7 +3184,7 @@ RestoreInfo Join::getOneRestoreStream(size_t max_block_size)
         if (needReturnNonJoinedData())
         {
             for (Int64 i = 0; i < restore_join_build_concurrency; i++)
-                restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size);
+                restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size_);
         }
         auto non_joined_data_stream = get_back_stream(restore_non_joined_data_streams);
         return {restore_join, non_joined_data_stream, build_stream, probe_stream};
@@ -3252,12 +3210,11 @@ void Join::dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>
         Blocks blocks_to_spill;
         bool need_spill = false;
         {
-            std::unique_lock partition_lock(partitions[i]->partition_mutex);
+            std::unique_lock partition_lock = partitions[i]->lockPartition();
             if (getPartitionSpilled(i))
             {
-                //                insertBlockToProbePartition(std::move(partition_blocks[i]), i);
                 partitions[i]->insertBlockForProbe(std::move(partition_blocks[i]));
-                blocks_to_spill = trySpillProbePartition(i, false, partition_lock);
+                blocks_to_spill = partitions[i]->trySpillProbePartition(false, probe_spill_config.max_cached_data_bytes_in_spiller, partition_lock);
                 need_spill = true;
             }
         }
@@ -3270,85 +3227,23 @@ void Join::dispatchProbeBlock(Block & block, std::list<std::tuple<size_t, Block>
     }
 }
 
-Blocks Join::trySpillBuildPartition(size_t partition_index, bool force, std::unique_lock<std::mutex> & partition_lock)
-{
-    const auto & join_partition = partitions[partition_index];
-    if (join_partition->spill
-        && ((force && join_partition->build_partition.bytes) || join_partition->build_partition.bytes >= build_spill_config.max_cached_data_bytes_in_spiller))
-    {
-        auto ret = join_partition->build_partition.original_blocks;
-        releaseBuildPartitionBlocks(partition_index, partition_lock);
-        if unlikely (join_partition->memory_usage != 0)
-        {
-            join_partition->memory_usage = 0;
-            LOG_WARNING(log, "Incorrect memory usage after spill");
-        }
-        return ret;
-    }
-    else
-    {
-        return {};
-    }
-}
-
 void Join::trySpillBuildPartitions(bool force)
 {
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-        Blocks blocks_to_spill;
-        {
-            std::unique_lock partition_lock(partitions[i]->partition_mutex);
-            blocks_to_spill = trySpillBuildPartition(i, force, partition_lock);
-        }
-        build_spiller->spillBlocks(std::move(blocks_to_spill), i);
+        build_spiller->spillBlocks(partitions[i]->trySpillBuildPartition(force, build_spill_config.max_cached_data_bytes_in_spiller), i);
     }
-}
-
-Blocks Join::trySpillProbePartition(size_t partition_index, bool force, std::unique_lock<std::mutex> & partition_lock)
-{
-    const auto & join_partition = partitions[partition_index];
-    if (join_partition->spill && ((force && join_partition->probe_partition.bytes) || join_partition->probe_partition.bytes >= probe_spill_config.max_cached_data_bytes_in_spiller))
-    {
-        auto ret = partitions[partition_index]->probe_partition.blocks;
-        releaseProbePartitionBlocks(partition_index, partition_lock);
-        if unlikely (join_partition->memory_usage != 0)
-        {
-            join_partition->memory_usage = 0;
-            LOG_WARNING(log, "Incorrect memory usage after spill");
-        }
-        return ret;
-    }
-    else
-        return {};
 }
 
 void Join::trySpillProbePartitions(bool force)
 {
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-        Blocks blocks_to_spill;
-        {
-            std::unique_lock partition_lock(partitions[i]->partition_mutex);
-            blocks_to_spill = trySpillProbePartition(i, force, partition_lock);
-        }
-        probe_spiller->spillBlocks(std::move(blocks_to_spill), i);
+        probe_spiller->spillBlocks(partitions[i]->trySpillProbePartition(force, probe_spill_config.max_cached_data_bytes_in_spiller), i);
     }
 }
 
-void Join::releaseBuildPartitionBlocks(size_t partition_index, std::unique_lock<std::mutex> &)
-{
-    const auto & join_partition = partitions[partition_index];
-    if likely (join_partition->memory_usage >= join_partition->build_partition.bytes)
-        join_partition->memory_usage -= join_partition->build_partition.bytes;
-    else
-        join_partition->memory_usage = 0;
-    join_partition->build_partition.bytes = 0;
-    join_partition->build_partition.rows = 0;
-    join_partition->build_partition.blocks.clear();
-    join_partition->build_partition.original_blocks.clear();
-}
-
-void Join::releaseBuildPartitionHashTable(size_t partition_index, std::unique_lock<std::mutex> &)
+void Join::releaseBuildPartitionHashTable(size_t partition_index, std::unique_lock<std::mutex> & partition_lock)
 {
     size_t map_bytes = clearMapPartition(maps_any, type, partition_index);
     map_bytes += clearMapPartition(maps_all, type, partition_index);
@@ -3359,34 +3254,18 @@ void Join::releaseBuildPartitionHashTable(size_t partition_index, std::unique_lo
     {
         rows_not_inserted_to_map[partition_index] = RowsNotInsertToMap(max_block_size);
     }
-    size_t pool_bytes = join_partition->pool->size();
-    join_partition->pool.reset();
-    if likely (join_partition->memory_usage >= map_bytes + pool_bytes)
-        join_partition->memory_usage -= (map_bytes + pool_bytes);
-    else
-        join_partition->memory_usage = 0;
-}
-
-void Join::releaseProbePartitionBlocks(size_t partition_index, std::unique_lock<std::mutex> &)
-{
-    const auto & join_partition = partitions[partition_index];
-    join_partition->probe_partition.blocks.clear();
-    if likely (join_partition->memory_usage >= join_partition->probe_partition.bytes)
-        join_partition->memory_usage -= join_partition->probe_partition.bytes;
-    else
-        join_partition->memory_usage = 0;
-    join_partition->probe_partition.bytes = 0;
-    join_partition->probe_partition.rows = 0;
+    join_partition->subMemoryUsage(map_bytes);
+    join_partition->releasePartitionPool(partition_lock);
 }
 
 void Join::releaseAllPartitions()
 {
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-        std::unique_lock partition_lock(partitions[i]->partition_mutex);
-        releaseBuildPartitionBlocks(i, partition_lock);
-        releaseProbePartitionBlocks(i, partition_lock);
-        if (!partitions[i]->spill)
+        std::unique_lock partition_lock = partitions[i]->lockPartition();
+        partitions[i]->releaseBuildPartitionBlocks(partition_lock);
+        partitions[i]->releaseProbePartitionBlocks(partition_lock);
+        if (!partitions[i]->isSpill())
         {
             releaseBuildPartitionHashTable(i, partition_lock);
         }

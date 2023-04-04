@@ -593,7 +593,7 @@ void DeltaMergeStore::ingestFiles(
         }
         else
         {
-            Remote::DMFileOID oid{.store_id = store_id, .table_id = dm_context->physical_table_id, .file_id = external_file.id};
+            Remote::DMFileOID oid{.store_id = store_id, .keyspace_id = dm_context->keyspace_id, .table_id = dm_context->physical_table_id, .file_id = external_file.id};
             file = remote_data_store->prepareDMFile(oid, external_file.id)->restore(DMFile::ReadMetaMode::memoryAndDiskSize());
         }
         rows += file->getRows();
@@ -657,7 +657,7 @@ void DeltaMergeStore::ingestFiles(
             }
             else
             {
-                Remote::DMFileOID oid{.store_id = store_id, .table_id = dm_context->physical_table_id, .file_id = file->fileId()};
+                Remote::DMFileOID oid{.store_id = store_id, .keyspace_id = dm_context->keyspace_id, .table_id = dm_context->physical_table_id, .file_id = file->fileId()};
                 PS::V3::CheckpointLocation loc{
                     .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
                     .offset_in_file = 0,
@@ -875,7 +875,7 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
                 segment->simpleInfo(),
                 segment_ingest_range.toDebugString());
 
-            const bool succeeded = ingestSegmentDataIntoSegmentUsingSplit(*dm_context, segment, target_segments[segment_idx]);
+            const bool succeeded = ingestSegmentDataIntoSegmentUsingSplit(*dm_context, segment, segment_ingest_range, target_segments[segment_idx]);
             if (succeeded)
             {
                 updated_segments.insert(segment);
@@ -904,10 +904,10 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
 bool DeltaMergeStore::ingestSegmentDataIntoSegmentUsingSplit(
     DMContext & dm_context,
     const SegmentPtr & segment,
+    const RowKeyRange & ingest_range,
     const SegmentPtr & segment_to_ingest)
 {
     const auto & segment_range = segment->getRowKeyRange();
-    const auto & ingest_range = segment_to_ingest->getRowKeyRange();
 
     // The ingest_range must fall in segment's range.
     RUNTIME_CHECK(
@@ -1032,14 +1032,13 @@ void DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     }
 
     LOG_INFO(log, "Ingest checkpoint from store {} for region {}", checkpoint_info->remote_store_id, checkpoint_info->region_id);
-    auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, physical_table_id, range, checkpoint_info);
+    auto segment_meta_infos = Segment::readAllSegmentsMetaInfoInRange(*dm_context, range, checkpoint_info);
     LOG_INFO(log, "Ingest checkpoint segments num {}", segment_meta_infos.size());
     WriteBatches wbs{*dm_context->storage_pool};
     auto restored_segments = Segment::createTargetSegmentsFromCheckpoint( //
         log,
         *dm_context,
         checkpoint_info->remote_store_id,
-        physical_table_id,
         segment_meta_infos,
         range,
         checkpoint_info->temp_ps,

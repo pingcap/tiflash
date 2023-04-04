@@ -14,38 +14,30 @@
 
 #pragma once
 
-#include <Operators/AggregateContext.h>
-#include <Operators/Operator.h>
+#include <Flash/Pipeline/Exec/PipelineExec.h>
+#include <Flash/Pipeline/Schedule/Events/Event.h>
 
 namespace DB
 {
-class AggregateSinkOp : public SinkOp
+class FineGrainedPipelineEvent : public Event
 {
 public:
-    AggregateSinkOp(
+    FineGrainedPipelineEvent(
         PipelineExecutorStatus & exec_status_,
-        size_t index_,
-        AggregateContextPtr agg_context_,
-        const String & req_id)
-        : SinkOp(exec_status_, req_id)
-        , index(index_)
-        , agg_context(agg_context_)
+        MemoryTrackerPtr mem_tracker_,
+        const String & req_id,
+        PipelineExecPtr && pipeline_exec_)
+        : Event(exec_status_, std::move(mem_tracker_), req_id)
+        , pipeline_exec(std::move(pipeline_exec_))
     {
+        assert(pipeline_exec);
     }
-
-    String getName() const override
-    {
-        return "AggregateSinkOp";
-    }
-
-    void operateSuffix() override;
 
 protected:
-    OperatorStatus writeImpl(Block && block) override;
+    std::vector<TaskPtr> scheduleImpl() override;
 
 private:
-    size_t index{};
-    uint64_t total_rows{};
-    AggregateContextPtr agg_context;
+    // The pipeline exec for executing the specific fine-grained partition.
+    PipelineExecPtr pipeline_exec;
 };
 } // namespace DB

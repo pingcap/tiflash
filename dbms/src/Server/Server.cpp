@@ -50,6 +50,7 @@
 #include <IO/HTTPCommon.h>
 #include <IO/IOThreadPools.h>
 #include <IO/ReadHelpers.h>
+#include <IO/UseSSL.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/ProcessList.h>
@@ -620,7 +621,6 @@ public:
                         return server.global_context->getSecurityConfig()->checkCommonName(cert);
                     };
                     context->setAdhocVerification(check_common_name);
-                    std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
                     CertificateReloader::initSSLCallback(context, server.global_context.get());
@@ -661,7 +661,6 @@ public:
                     {
                         LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
                     }
-                    std::call_once(ssl_init_once, SSLInit);
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port"));
                     socket.setReceiveTimeout(settings.receive_timeout);
@@ -920,6 +919,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
 
+    UseSSL ssl_holder;
+
     const auto log = Logger::get();
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
@@ -955,6 +956,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
+    const auto disaggregated_mode = getDisaggregatedMode(config());
+    const auto use_autoscaler = useAutoScaler(config());
+    const bool use_autoscaler_without_s3 = useAutoScalerWithoutS3(config());
+
     // Some Storage's config is necessary for Proxy
     TiFlashStorageConfig storage_config;
     // Deprecated settings.
@@ -962,6 +967,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // "0" by default, means no quota, the actual disk capacity is used.
     size_t global_capacity_quota = 0;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
+    if (!storage_config.s3_config.bucket.empty())
+    {
+        storage_config.s3_config.enable(/*check_requirements*/ true, log);
+    }
+    else if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
+    {
+        if (!use_autoscaler_without_s3)
+        {
+            // compute node with auto scaler, the requirements will be initted later.
+            storage_config.s3_config.enable(/*check_requirements*/ false, log);
+        }
+        // else keep the behavior running disagg without S3 when auto scaler is enable.
+    }
+
     if (storage_config.format_version != 0)
     {
         if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V5.identifier)
@@ -1079,8 +1098,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
       */
     global_context = Context::createGlobal();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
-    global_context->getSharedContextDisagg()->disaggregated_mode = getDisaggregatedMode(config());
-    global_context->getSharedContextDisagg()->use_autoscaler = useAutoScaler(config());
+    global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
+    global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     /// Init File Provider
     bool enable_encryption = false;
@@ -1141,7 +1160,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.kvstore_data_path, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
-    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled())
+    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         config.initCacheDir();
         FileCache::initialize(global_context->getPathCapacity(), config);
@@ -1451,6 +1470,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
             kvstore->setStore(store_meta);
         }
         global_context->getTMTContext().reloadConfig(config());
+
+        // setup the kv cluster for disagg compute node fetching config
+        if (S3::ClientFactory::instance().isEnabled())
+        {
+            auto & tmt = global_context->getTMTContext();
+            S3::ClientFactory::instance().setKVCluster(tmt.getKVCluster());
+        }
     }
 
     // Initialize the thread pool of storage before the storage engine is initialized.
@@ -1495,11 +1521,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
         DB::DM::SegmentReaderPoolManager::instance().stop();
         FileCache::shutdown();
+        global_context->shutdown();
         if (storage_config.s3_config.isS3Enabled())
         {
             S3::ClientFactory::instance().shutdown();
         }
-        global_context->shutdown();
         LOG_DEBUG(log, "Shutted down storages.");
     });
 

@@ -11,25 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <Operators/AggregateSinkOp.h>
+
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsRegexpSubstr.h>
 
 namespace DB
 {
-OperatorStatus AggregateSinkOp::writeImpl(Block && block)
-{
-    if (unlikely(!block))
-    {
-        return OperatorStatus::FINISHED;
-    }
-    agg_context->buildOnBlock(index, block);
-    total_rows += block.rows();
-    block.clear();
-    return OperatorStatus::NEED_INPUT;
-}
+using FunctionRegexpSubstr = FunctionStringRegexpSubstr<NameRegexpSubstr>;
 
-void AggregateSinkOp::operateSuffix()
+void registerFunctionsRegexpSubstr(FunctionFactory & factory)
 {
-    LOG_DEBUG(log, "finish write with {} rows", total_rows);
+    factory.registerFunction<FunctionRegexpSubstr>();
 }
-
 } // namespace DB

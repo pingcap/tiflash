@@ -119,7 +119,10 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     RUNTIME_ASSERT(logger);
 
     if (!TaskScheduler::instance || !Pipeline::isSupported(*dag_context.dag_request))
+    {
+        LOG_DEBUG(logger, "Can't run by pipeline model, fallback to block inputstream model");
         return {};
+    }
 
     prepareForExecute(context);
 
@@ -137,7 +140,7 @@ std::optional<QueryExecutorPtr> executeAsPipeline(Context & context, bool intern
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
 
     PhysicalPlan physical_plan{context, logger->identifier()};
-    physical_plan.build(dag_context.dag_request);
+    physical_plan.build(dag_context.dag_request());
     physical_plan.outputAndOptimize();
     auto pipeline = physical_plan.toPipeline();
     auto executor = std::make_unique<PipelineExecutor>(memory_tracker, context, logger->identifier(), pipeline);

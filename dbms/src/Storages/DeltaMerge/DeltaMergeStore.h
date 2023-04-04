@@ -244,6 +244,7 @@ public:
                     bool data_path_contains_database_name,
                     const String & db_name,
                     const String & table_name_,
+                    KeyspaceID keyspace_id_,
                     TableID physical_table_id_,
                     bool has_replica,
                     const ColumnDefines & columns,
@@ -310,6 +311,7 @@ public:
     bool ingestSegmentDataIntoSegmentUsingSplit(
         DMContext & dm_context,
         const SegmentPtr & segment,
+        const RowKeyRange & ingest_range,
         const SegmentPtr & segment_to_ingest);
 
     void ingestSegmentsFromCheckpointInfo(const DMContextPtr & dm_context,
@@ -687,6 +689,7 @@ public:
     String db_name;
     String table_name;
 
+    const KeyspaceID keyspace_id;
     const TableID physical_table_id;
 
     const bool is_common_handle;

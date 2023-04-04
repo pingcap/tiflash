@@ -92,16 +92,19 @@ private:
     const size_t expected_block_size;
     const ReadMode read_mode;
     const int extra_table_id_index;
+    KeyspaceID keyspace_id;
     TableID physical_table_id;
 
     Stopwatch watch;
-    double seconds_pop;
-    double seconds_build;
+    double seconds_next_task;
+    double seconds_build_stream;
 
     size_t total_rows = 0;
     bool done = false;
 
     BlockInputStreamPtr cur_stream;
+    RNRemoteSegmentReadTaskPtr cur_read_task; // When reading from cur_stream we need cur_read_task is alive.
+
     UInt64 cur_segment_id;
 
     LoggerPtr log;

@@ -28,7 +28,9 @@ tiflash-env/tiflash-linker: tiflash-env
 	cp tiflash-linker tiflash-env
 
 tiflash-env-$(ARCH).tar.xz: tiflash-env/prepare-sysroot.sh tiflash-env/loader tiflash-env/tiflash-linker
-	docker run --rm -v $(MOUNT):/tiflash-env hub.pingcap.net/tiflash/tiflash-llvm-base:$(DOCKER_TAG) /tiflash-env/prepare-sysroot.sh
+	# Add the z to modify the selinux label of the host file or directory being mounted into the container.
+	# Reference: https://docs.docker.com/storage/bind-mounts/#configure-the-selinux-label
+	docker run --rm -v $(MOUNT):/tiflash-env:z hub.pingcap.net/tiflash/tiflash-llvm-base:$(DOCKER_TAG) /tiflash-env/prepare-sysroot.sh
 	tar -cvaf tiflash-env-$(ARCH).tar.xz tiflash-env
 
 clean:

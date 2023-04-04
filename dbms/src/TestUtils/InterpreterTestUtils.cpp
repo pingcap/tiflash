@@ -18,8 +18,8 @@
 #include <Flash/executeQuery.h>
 #include <Poco/File.h>
 #include <Poco/FileStream.h>
+#include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/InterpreterTestUtils.h>
-#include <TestUtils/executorSerializer.h>
 
 #include <string>
 
