@@ -46,6 +46,12 @@ String constructStatusString(ExchangeReceiverState state, const String & error_m
     return fmt::format("Receiver state: {}, error message: {}", magic_enum::enum_name(state), error_message);
 }
 
+size_t getMaxBufferSize(Int32 source_num, Int32 recv_queue_size)
+{
+    size_t size = recv_queue_size == 0 ? static_cast<size_t>(source_num) * 50 : static_cast<size_t>(recv_queue_size);
+    return std::min(1000, size);
+}
+
 enum class AsyncRequestStagev1
 {
     NEED_INIT,
@@ -332,7 +338,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , source_num(source_num_)
     , enable_fine_grained_shuffle_flag(enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
     , output_stream_count(enable_fine_grained_shuffle_flag ? std::min(max_streams_, fine_grained_shuffle_stream_count_) : max_streams_)
-    , max_buffer_size(recv_queue_size == 0 ? source_num * 50 : recv_queue_size)
+    , max_buffer_size(getMaxBufferSize(source_num, recv_queue_size))
     , connection_uncreated_num(source_num)
     , thread_manager(newThreadManager())
     , async_wait_rewrite_queue(std::make_shared<AsyncRequestHandlerWaitQueue>())
