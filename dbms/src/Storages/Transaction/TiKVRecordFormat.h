@@ -433,7 +433,7 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
         case RecordKVFormat::TXN_SOURCE_PREFIX_FOR_WRITE:
         {
             // Used for CDC, useless for TiFlash.
-            UInt64 txn_source_prefic = readUInt64(data, len);
+            UInt64 txn_source_prefic = readVarUInt(data, len);
             UNUSED(txn_source_prefic);
             break;
         }
