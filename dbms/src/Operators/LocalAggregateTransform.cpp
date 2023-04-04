@@ -47,11 +47,8 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
             // status from build to convert.
             status = LocalAggStatus::convert;
             agg_context.initConvergent();
-            if likely (!agg_context.useNullSource())
-            {
-                RUNTIME_CHECK(agg_context.getConvergentConcurrency() == local_concurrency);
-                block = agg_context.readForConvergent(task_index);
-            }
+            RUNTIME_CHECK(agg_context.getConvergentConcurrency() == local_concurrency);
+            block = agg_context.readForConvergent(task_index);
             return OperatorStatus::HAS_OUTPUT;
         }
         agg_context.buildOnBlock(task_index, block);
@@ -69,8 +66,7 @@ OperatorStatus LocalAggregateTransform::tryOutputImpl(Block & block)
     case LocalAggStatus::build:
         return OperatorStatus::NEED_INPUT;
     case LocalAggStatus::convert:
-        if likely (!agg_context.useNullSource())
-            block = agg_context.readForConvergent(task_index);
+        block = agg_context.readForConvergent(task_index);
         return OperatorStatus::HAS_OUTPUT;
     }
 }

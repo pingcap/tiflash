@@ -99,8 +99,7 @@ void AggregateContext::initConvergent()
 size_t AggregateContext::getConvergentConcurrency()
 {
     RUNTIME_CHECK(inited_convergent);
-
-    return isTwoLevel() ? merging_buckets->getConcurrency() : 1;
+    return merging_buckets ? merging_buckets->getConcurrency() : 1;
 }
 
 Block AggregateContext::getHeader() const
@@ -109,21 +108,11 @@ Block AggregateContext::getHeader() const
     return aggregator->getHeader(true);
 }
 
-bool AggregateContext::isTwoLevel()
-{
-    RUNTIME_CHECK(inited_build);
-    return many_data[0]->isTwoLevel();
-}
-
-bool AggregateContext::useNullSource()
-{
-    RUNTIME_CHECK(inited_convergent);
-    return !merging_buckets;
-}
-
 Block AggregateContext::readForConvergent(size_t index)
 {
     RUNTIME_CHECK(inited_convergent);
+    if unlikely (!merging_buckets)
+        return {};
     return merging_buckets->getData(index);
 }
 } // namespace DB

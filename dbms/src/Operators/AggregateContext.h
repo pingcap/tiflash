@@ -61,11 +61,6 @@ public:
 
     Block getHeader() const;
 
-    bool useNullSource();
-
-private:
-    bool isTwoLevel();
-
 private:
     std::unique_ptr<Aggregator> aggregator;
     bool keys_size = false;
