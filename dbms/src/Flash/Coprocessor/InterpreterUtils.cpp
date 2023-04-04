@@ -14,11 +14,7 @@
 
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
-<<<<<<< HEAD
-=======
-#include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
->>>>>>> e84ed489e6 (add GeneratedColumnPlaceholderInputStream (#6796))
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
@@ -199,57 +195,6 @@ void executeCreatingSets(
             log->identifier());
     }
 }
-<<<<<<< HEAD
-=======
-
-std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
-    const FilterConditions & filter_conditions,
-    DAGExpressionAnalyzer & analyzer)
-{
-    assert(filter_conditions.hasValue());
-
-    ExpressionActionsChain chain;
-    analyzer.initChain(chain);
-    String filter_column_name = analyzer.appendWhere(chain, filter_conditions.conditions);
-    ExpressionActionsPtr before_where = chain.getLastActions();
-    chain.addStep();
-
-    // remove useless tmp column and keep the schema of local streams and remote streams the same.
-    NamesWithAliases project_cols;
-    for (const auto & col : analyzer.getCurrentInputColumns())
-    {
-        chain.getLastStep().required_output.push_back(col.name);
-        project_cols.emplace_back(col.name, col.name);
-    }
-    chain.getLastActions()->add(ExpressionAction::project(project_cols));
-    ExpressionActionsPtr project_after_where = chain.getLastActions();
-    chain.finalize();
-    chain.clear();
-
-    return {before_where, filter_column_name, project_after_where};
-}
-
-void executePushedDownFilter(
-    size_t remote_read_streams_start_index,
-    const FilterConditions & filter_conditions,
-    DAGExpressionAnalyzer & analyzer,
-    LoggerPtr log,
-    DAGPipeline & pipeline)
-{
-    auto [before_where, filter_column_name, project_after_where] = ::DB::buildPushDownFilter(filter_conditions, analyzer);
-
-    assert(remote_read_streams_start_index <= pipeline.streams.size());
-    // for remote read, filter had been pushed down, don't need to execute again.
-    for (size_t i = 0; i < remote_read_streams_start_index; ++i)
-    {
-        auto & stream = pipeline.streams[i];
-        stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log->identifier());
-        stream->setExtraInfo("push down filter");
-        // after filter, do project action to keep the schema of local streams and remote streams the same.
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
-        stream->setExtraInfo("projection after push down filter");
-    }
-}
 
 void executeGeneratedColumnPlaceholder(
     size_t remote_read_streams_start_index,
@@ -267,5 +212,4 @@ void executeGeneratedColumnPlaceholder(
         stream->setExtraInfo("generated column placeholder above table scan");
     }
 }
->>>>>>> e84ed489e6 (add GeneratedColumnPlaceholderInputStream (#6796))
 } // namespace DB
