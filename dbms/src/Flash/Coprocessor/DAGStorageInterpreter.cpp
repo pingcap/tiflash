@@ -341,15 +341,18 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
         remote_source_ops = buildRemoteSourceOps(exec_status, remote_requests);
 
     /// build pipeline
-    group_builder.init(source_ops.size());
+    size_t local_source_size = source_ops.size();
+    group_builder.init(source_ops.size() + remote_source_ops.size());
     size_t i = 0;
     group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::move(source_ops[i++]));
-    });
-
-    i = 0;
-    group_builder.transform([&](auto & builder) {
-        builder.setSourceOp(std::move(remote_source_ops[i++]));
+        if (i >= local_source_size)
+        {
+            auto idx = i - local_source_size;
+            builder.setSourceOp(std::move(remote_source_ops[idx]));
+            i++;
+        }
+        else
+            builder.setSourceOp(std::move(source_ops[i++]));
     });
 
     for (const auto & lock : drop_locks)
@@ -631,7 +634,6 @@ SourceOps DAGStorageInterpreter::buildRemoteSourceOps(
 
         // use BlockInputStreamSourceOp
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
-        // pipeline.streams.push_back(input);
         remote_source_ops.emplace_back(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), input));
         task_start = task_end;
     }
