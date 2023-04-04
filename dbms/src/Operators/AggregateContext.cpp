@@ -46,6 +46,16 @@ void AggregateContext::buildOnBlock(size_t task_index, const Block & block)
     threads_data[task_index]->src_rows += block.rows();
 }
 
+std::optional<std::function<void()>> AggregateContext::trySpill(size_t task_index, bool try_mark_need_spill)
+{
+    auto & data = *many_data[task_index];
+    if (try_mark_need_spill)
+        data.tryMarkNeedSpill();
+    if (data.need_spill)
+        return [&]() { aggregator->spill(data); };
+    return {};
+}
+
 void AggregateContext::initConvergentPrefix()
 {
     assert(build_watch);
