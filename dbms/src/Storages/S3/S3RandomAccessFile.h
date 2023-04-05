@@ -18,7 +18,6 @@
 #include <Common/Logger.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
-#include <Storages/S3/S3Common.h>
 #include <aws/s3/model/GetObjectResult.h>
 #include <common/types.h>
 
@@ -29,9 +28,9 @@
 #undef thread_local
 #endif
 
-namespace Aws::S3
+namespace DB::S3
 {
-class S3Client;
+class TiFlashS3Client;
 }
 
 namespace DB::ErrorCodes
@@ -56,10 +55,7 @@ public:
 
     ssize_t read(char * buf, size_t size) override;
 
-    std::string getFileName() const override
-    {
-        return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
-    }
+    std::string getFileName() const override;
 
     ssize_t pread(char * /*buf*/, size_t /*size*/, off_t /*offset*/) const override
     {
@@ -114,6 +110,7 @@ private:
 
     DB::LoggerPtr log;
     bool is_close = false;
+    bool is_inited = false;
 };
 
 } // namespace DB::S3

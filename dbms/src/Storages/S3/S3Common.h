@@ -24,7 +24,7 @@
 #include <aws/s3/S3Client.h>
 #include <aws/s3/S3Errors.h>
 #include <common/types.h>
-
+#include <Storages/S3/S3RandomAccessFile.h>
 #include <magic_enum.hpp>
 
 namespace pingcap::kv
@@ -164,6 +164,7 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging = "", int max_retry_times = 3);
 
 void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname);
+void downloadFile2(std::shared_ptr<TiFlashS3Client> client, const String & local_fname, const String & remote_fname);
 
 void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key, const String & tagging);
 

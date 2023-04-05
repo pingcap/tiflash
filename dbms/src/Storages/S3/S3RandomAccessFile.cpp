@@ -18,6 +18,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/RandomAccessFile.h>
+#include <Storages/S3/S3Common.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/MemoryRandomAccessFile.h>
 #include <Storages/S3/S3Common.h>
@@ -47,11 +48,16 @@ S3RandomAccessFile::S3RandomAccessFile(
     , cur_offset(0)
     , log(Logger::get("S3RandomAccessFile"))
 {
-    initialize();
+}
+
+std::string S3RandomAccessFile::getFileName() const
+{
+    return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
 }
 
 ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 {
+    initialize();
     auto & istr = read_result.GetBody();
     istr.read(buf, size);
     size_t gcount = istr.gcount();
@@ -60,6 +66,7 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
         LOG_ERROR(log, "Cannot read from istream. bucket={} root={} key={} errmsg={}", client_ptr->bucket(), client_ptr->root(), remote_fname, strerror(errno));
         return -1;
     }
+    LOG_DEBUG(log, "Read file={} content_length={} cur_offset={} => gcount={}", remote_fname, content_length, cur_offset, gcount);
     cur_offset += gcount;
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, gcount);
     return gcount;
@@ -72,6 +79,7 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
         LOG_ERROR(log, "Only SEEK_SET mode is allowed, but {} is received", whence);
         return -1;
     }
+    initialize();
     if (unlikely(offset_ < cur_offset || offset_ > content_length))
     {
         LOG_ERROR(log, "Seek position is out of bounds: offset={}, cur_offset={}, content_length={}", offset_, cur_offset, content_length);
@@ -84,12 +92,18 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
     auto & istr = read_result.GetBody();
     istr.ignore(offset_ - cur_offset);
     RUNTIME_CHECK(istr, remote_fname, strerror(errno));
+    LOG_DEBUG(log, "Seek file={} content_length={} cur_offset={} => offset={}", remote_fname, content_length, cur_offset, offset_);
     cur_offset = offset_;
     return cur_offset;
 }
 
 void S3RandomAccessFile::initialize()
 {
+    if (is_inited)
+    {
+        return;
+    }
+
     Stopwatch sw;
     Aws::S3::Model::GetObjectRequest req;
     if (offset_and_size)
@@ -110,6 +124,7 @@ void S3RandomAccessFile::initialize()
     GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
     read_result = outcome.GetResultWithOwnership();
     RUNTIME_CHECK(read_result.GetBody(), remote_fname, strerror(errno));
+    is_inited = true;
 }
 
 inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname, std::optional<UInt64> filesize)

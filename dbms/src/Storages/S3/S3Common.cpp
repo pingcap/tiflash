@@ -597,6 +597,29 @@ void downloadFile(const TiFlashS3Client & client, const String & local_fname, co
     RUNTIME_CHECK_MSG(ostr.good(), "Write {} fail: {}", local_fname, strerror(errno));
 }
 
+
+void downloadFile2(std::shared_ptr<TiFlashS3Client> client, const String & local_fname, const String & remote_fname)
+{
+    Stopwatch sw;
+    S3RandomAccessFile file(client, remote_fname);
+    Aws::OFStream ostr(local_fname, std::ios_base::out | std::ios_base::binary);
+    RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} fail: {}", local_fname, strerror(errno));
+
+    char buf[8192];
+    while (true)
+    {
+        auto n = file.read(buf, sizeof(buf));
+        RUNTIME_CHECK(n >= 0, remote_fname);
+        if (n == 0)
+        {
+            break;
+        }
+
+        ostr.write(buf, n);
+        RUNTIME_CHECK_MSG(ostr.good(), "Write {} fail: {}", local_fname, strerror(errno));
+    }
+}
+
 void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key, const String & tagging)
 {
     Stopwatch sw;
