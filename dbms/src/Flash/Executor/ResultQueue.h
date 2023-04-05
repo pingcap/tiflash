@@ -24,5 +24,4 @@ namespace DB
 {
 using ResultQueue = MPMCQueue<Block>;
 using ResultQueuePtr = std::shared_ptr<ResultQueue>;
-using ResultQueueHolder = PtrHolder<ResultQueuePtr>;
 } // namespace DB

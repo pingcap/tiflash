@@ -90,6 +90,9 @@ private:
 
     std::atomic_bool is_cancelled{false};
 
-    ResultQueueHolder result_queue_holder;
+    // `result_queue.finish` can only be called in `onEventFinish` because `result_queue.pop` cannot end until events end.
+    // `registerResultQueue` is called before event scheduled, so is safe to use result_queue without lock.
+    // If `registerResultQueue` is called, `result_queue` must be safely visible in `onEventFinish`.
+    std::optional<ResultQueuePtr> result_queue;
 };
 } // namespace DB

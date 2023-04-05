@@ -103,28 +103,19 @@ void PipelineExecutorStatus::onEventFinish() noexcept
             query_finished = true;
         }
     }
-    if (query_finished)
-    {
-        if (auto ret = result_queue_holder.tryGet(); ret)
-            (*ret)->finish();
-    }
+    if (query_finished && result_queue.has_value())
+        (*result_queue)->finish();
 }
 
 void PipelineExecutorStatus::cancel() noexcept
 {
     is_cancelled.store(true, std::memory_order_release);
-
-    if (auto ret = result_queue_holder.tryGet(); ret)
-        (*ret)->cancel();
 }
 
 ResultQueuePtr PipelineExecutorStatus::registerResultQueue(size_t queue_size) noexcept
 {
-    auto result_queue = std::make_shared<ResultQueue>(queue_size);
-    ResultQueuePtr tmp = result_queue;
-    result_queue_holder.set(std::move(tmp));
-    if unlikely (is_cancelled)
-        result_queue_holder->cancel();
-    return result_queue;
+    assert(!result_queue.has_value());
+    result_queue.emplace(std::make_shared<ResultQueue>(queue_size));
+    return *result_queue;
 }
 } // namespace DB
