@@ -281,7 +281,7 @@ struct MockReceiverContext
         return std::make_pair(MPPTunnelPtr(), grpc::Status::CANCELLED);
     }
 
-    void establishMPPConnectionLocalV2(const Request &, size_t, LocalRequestHandler &, bool) {}
+    void establishMPPConnectionLocalV2(const Request &, size_t, LocalRequestHandler &, bool, bool) {}
 
     PacketQueuePtr queue;
     std::vector<tipb::FieldType> field_types{};

@@ -164,6 +164,7 @@ void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vecto
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     const auto remote_dir = S3::S3Filename::fromDMFileOID(remote_oid).toFullKey();
     std::vector<std::future<void>> results;
+    results.reserve(target_short_fnames.size());
     for (const auto & fname : target_short_fnames)
     {
         auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
@@ -183,6 +184,24 @@ void DataStoreS3::copyToLocal(const S3::DMFileOID & remote_oid, const std::vecto
     }
 }
 
+void DataStoreS3::setTaggingsForKeys(const std::vector<String> & keys, std::string_view tagging)
+{
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+    std::vector<std::future<void>> results;
+    results.reserve(keys.size());
+    for (const auto & k : keys)
+    {
+        auto task = std::make_shared<std::packaged_task<void()>>([&s3_client, &tagging, key = k] {
+            rewriteObjectWithTagging(*s3_client, key, String(tagging));
+        });
+        results.emplace_back(task->get_future());
+        DataStoreS3Pool::get().scheduleOrThrowOnError([task] { (*task)(); });
+    }
+    for (auto & f : results)
+    {
+        f.get();
+    }
+}
 
 IPreparedDMFileTokenPtr DataStoreS3::prepareDMFile(const S3::DMFileOID & oid, UInt64 page_id)
 {

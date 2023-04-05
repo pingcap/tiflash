@@ -97,13 +97,17 @@ struct StorageS3Config
 {
     bool is_enabled = false;
 
+    // verbose logging for http requests. Use for debugging
+    bool verbose = false;
+
     String endpoint;
     String bucket;
     String access_key_id;
     String secret_access_key;
-    UInt64 max_connections = 1024;
+    UInt64 max_connections = 4096;
     UInt64 connection_timeout_ms = 1000;
-    UInt64 request_timeout_ms = 3000;
+    UInt64 request_timeout_ms = 7000;
+    UInt64 max_redirections = 10;
     String root;
 
     inline static String S3_ACCESS_KEY_ID = "S3_ACCESS_KEY_ID";

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,14 +15,21 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
+#include <Common/RemoteHostFilter.h>
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
+#include <Storages/S3/Credentials.h>
 #include <Storages/S3/MockS3Client.h>
+#include <Storages/S3/PocoHTTPClient.h>
+#include <Storages/S3/PocoHTTPClientFactory.h>
 #include <Storages/S3/S3Common.h>
 #include <aws/core/auth/AWSCredentials.h>
+#include <aws/core/auth/STSCredentialsProvider.h>
+#include <aws/core/auth/signer/AWSAuthV4Signer.h>
+#include <aws/core/http/HttpClientFactory.h>
 #include <aws/core/http/Scheme.h>
 #include <aws/core/utils/logging/LogMacros.h>
 #include <aws/core/utils/logging/LogSystemInterface.h>
@@ -41,20 +48,28 @@
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/ListObjectsV2Result.h>
+#include <aws/s3/model/MetadataDirective.h>
 #include <aws/s3/model/PutBucketLifecycleConfigurationRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/TaggingDirective.h>
+#include <aws/sts/STSClient.h>
+#include <aws/sts/STSServiceClientModel.h>
+#include <aws/sts/model/GetCallerIdentityRequest.h>
+#include <aws/sts/model/GetCallerIdentityResult.h>
 #include <common/logger_useful.h>
 #include <kvproto/disaggregated.pb.h>
 #include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/RegionCache.h>
 #include <pingcap/kv/Rpc.h>
 #include <pingcap/kv/internal/type_traits.h>
+#include <re2/re2.h>
 
+#include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <filesystem>
 #include <fstream>
 #include <ios>
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -84,10 +99,9 @@ Poco::Message::Priority convertLogLevel(Aws::Utils::Logging::LogLevel log_level)
     case Aws::Utils::Logging::LogLevel::Warn:
         return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Info:
-        // treat aws info logging as trace level
-        return Poco::Message::PRIO_TRACE;
+        return Poco::Message::PRIO_INFORMATION;
     case Aws::Utils::Logging::LogLevel::Debug:
-        // treat aws debug logging as trace level
+        // treat AWS debug log as trace level
         return Poco::Message::PRIO_TRACE;
     case Aws::Utils::Logging::LogLevel::Trace:
         return Poco::Message::PRIO_TRACE;
@@ -107,7 +121,7 @@ public:
 
     Aws::Utils::Logging::LogLevel GetLogLevel() const final
     {
-        return Aws::Utils::Logging::LogLevel::Info;
+        return Aws::Utils::Logging::LogLevel::Debug;
     }
 
     void Log(Aws::Utils::Logging::LogLevel log_level, const char * tag, const char * format_str, ...) final // NOLINT
@@ -258,6 +272,13 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     log = Logger::get();
+    LOG_DEBUG(log, "Aws::InitAPI start");
+    // Override the HTTP client, use PocoHTTPClient instead
+    aws_options.httpOptions.httpClientFactory_create_fn = [&config_] {
+        // TODO: do we need the remote host filter?
+        PocoHTTPClientConfiguration poco_cfg(RemoteHostFilter(), config_.max_redirections, /*enable_s3_requests_logging_*/ config_.verbose);
+        return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
+    };
     Aws::InitAPI(aws_options);
     Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
 
@@ -277,7 +298,9 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 
     if (!mock_s3_)
     {
+        LOG_DEBUG(log, "Create TiFlashS3Client start");
         shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
+        LOG_DEBUG(log, "Create TiFlashS3Client end");
     }
     else
     {
@@ -335,7 +358,7 @@ ClientFactory & ClientFactory::instance()
 
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create() const
 {
-    return create(config);
+    return create(config, log);
 }
 
 std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
@@ -346,9 +369,33 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
     return initClientFromWriteNode();
 }
 
-std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_)
+void updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg)
 {
-    Aws::Client::ClientConfiguration cfg;
+    if (cfg.endpointOverride.empty())
+    {
+        return;
+    }
+
+    static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
+    Poco::URI uri(cfg.endpointOverride);
+    String matched_region;
+    if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
+    {
+        boost::algorithm::to_lower(matched_region);
+        cfg.region = matched_region;
+    }
+    else
+    {
+        /// In global mode AWS C++ SDK send `us-east-1` but accept switching to another one if being suggested.
+        cfg.region = Aws::Region::AWS_GLOBAL;
+    }
+}
+
+std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
+{
+    LOG_INFO(log, "Create ClientConfiguration start");
+    Aws::Client::ClientConfiguration cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
+    LOG_INFO(log, "Create ClientConfiguration end");
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
     cfg.connectTimeoutMs = config_.connection_timeout_ms;
@@ -359,22 +406,52 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
         cfg.scheme = scheme;
         cfg.verifySSL = scheme == Aws::Http::Scheme::HTTPS;
     }
+    updateRegionByEndpoint(cfg);
     if (config_.access_key_id.empty() && config_.secret_access_key.empty())
     {
+        Aws::Client::ClientConfiguration sts_cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
+        sts_cfg.verifySSL = false;
+        Aws::STS::STSClient sts_client(sts_cfg);
+        Aws::STS::Model::GetCallerIdentityRequest req;
+        LOG_DEBUG(log, "GetCallerIdentity start");
+        auto get_identity_outcome = sts_client.GetCallerIdentity(req);
+        if (!get_identity_outcome.IsSuccess())
+        {
+            const auto & error = get_identity_outcome.GetError();
+            LOG_WARNING(log, "get CallerIdentity failed, exception={} message={} request_id={}", error.GetExceptionName(), error.GetMessage(), error.GetRequestId());
+        }
+        else
+        {
+            const auto & result = get_identity_outcome.GetResult();
+            LOG_INFO(log, "CallerIdentity{{UserId:{}, Account:{}, Arn:{}}}", result.GetUserId(), result.GetAccount(), result.GetArn());
+        }
+        LOG_DEBUG(log, "GetCallerIdentity end");
+
         // Request that does not require authentication.
         // Such as the EC2 access permission to the S3 bucket is configured.
         // If the empty access_key_id and secret_access_key are passed to S3Client,
         // an authentication error will be reported.
-        return std::make_unique<Aws::S3::S3Client>(cfg);
+        LOG_DEBUG(log, "Create S3Client start");
+        auto provider = std::make_shared<S3CredentialsProviderChain>();
+        auto cli = std::make_unique<Aws::S3::S3Client>(
+            provider,
+            cfg,
+            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+            /*userVirtualAddressing*/ true);
+        LOG_DEBUG(log, "Create S3Client end");
+        return cli;
     }
     else
     {
         Aws::Auth::AWSCredentials cred(config_.access_key_id, config_.secret_access_key);
-        return std::make_unique<Aws::S3::S3Client>(
+        LOG_DEBUG(log, "Create S3Client start");
+        auto cli = std::make_unique<Aws::S3::S3Client>(
             cred,
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
             /*useVirtualAddressing*/ true);
+        LOG_DEBUG(log, "Create S3Client end");
+        return cli;
     }
 }
 
@@ -410,7 +487,7 @@ bool objectExists(const TiFlashS3Client & client, const String & key)
     {
         return false;
     }
-    throw fromS3Error(outcome.GetError(), "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+    throw fromS3Error(error, "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
 }
 
 static bool doUploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging, Int32 max_retry_times, Int32 current_retry)
@@ -433,7 +510,15 @@ static bool doUploadEmptyFile(const TiFlashS3Client & client, const String & key
         }
         else
         {
-            LOG_ERROR(client.log, "S3 PutEmptyObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+            const auto & e = result.GetError();
+            LOG_ERROR(
+                client.log,
+                "S3 PutEmptyObject failed: {}, request_id={} bucket={} root={} key={}",
+                e.GetMessage(),
+                e.GetRequestId(),
+                client.bucket(),
+                client.root(),
+                key);
             return false;
         }
     }
@@ -468,14 +553,23 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
         }
         else
         {
-            LOG_ERROR(client.log, "S3 PutObject failed: {}, local_fname={} bucket={} root={} key={}", result.GetError().GetMessage(), local_fname, client.bucket(), client.root(), remote_fname);
+            const auto & e = result.GetError();
+            LOG_ERROR(
+                client.log,
+                "S3 PutObject failed: {}, request_id={} local_fname={} bucket={} root={} key={}",
+                e.GetMessage(),
+                e.GetRequestId(),
+                local_fname,
+                client.bucket(),
+                client.root(),
+                remote_fname);
             return false;
         }
     }
     ProfileEvents::increment(ProfileEvents::S3WriteBytes, write_bytes);
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_put_object).Observe(elapsed_seconds);
-    LOG_DEBUG(client.log, "uploadFile local_fname={}, key={}, write_bytes={} cost={:.2f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
+    LOG_DEBUG(client.log, "uploadFile local_fname={}, key={}, write_bytes={} cost={:.3f}s", local_fname, remote_fname, write_bytes, elapsed_seconds);
     return true;
 }
 
@@ -511,7 +605,9 @@ void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key
     // The copy_source format is "${source_bucket}/${source_key}"
     auto copy_source = client.bucket() + "/" + (client.root() == "/" ? "" : client.root()) + key;
     client.setBucketAndKeyWithRoot(req, key);
+    // metadata directive and tagging directive must be set to `REPLACE`
     req.WithCopySource(copy_source) //
+        .WithMetadataDirective(Aws::S3::Model::MetadataDirective::REPLACE)
         .WithTagging(tagging)
         .WithTaggingDirective(Aws::S3::Model::TaggingDirective::REPLACE);
     ProfileEvents::increment(ProfileEvents::S3CopyObject);
@@ -787,7 +883,7 @@ ObjectInfo tryGetObjectInfo(
         {
             return ObjectInfo{.exist = false, .size = 0, .last_modification_time = {}};
         }
-        throw fromS3Error(o.GetError(), "Failed to check existence of object, bucket={} root={} key={}", client.bucket(), client.root(), key);
+        throw fromS3Error(o.GetError(), "S3 HeadObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
     }
     // Else the object still exist
     const auto & res = o.GetResult();
@@ -803,7 +899,10 @@ void deleteObject(const TiFlashS3Client & client, const String & key)
     client.setBucketAndKeyWithRoot(req, key);
     ProfileEvents::increment(ProfileEvents::S3DeleteObject);
     auto o = client.DeleteObject(req);
-    RUNTIME_CHECK(o.IsSuccess(), o.GetError().GetMessage());
+    if (!o.IsSuccess())
+    {
+        throw fromS3Error(o.GetError(), "S3 DeleteObject failed, bucket={} root={} key={}", client.bucket(), client.root(), key);
+    }
     const auto & res = o.GetResult();
     UNUSED(res);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_delete_object).Observe(sw.elapsedSeconds());
