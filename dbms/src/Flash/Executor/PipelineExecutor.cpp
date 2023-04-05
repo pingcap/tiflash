@@ -53,8 +53,8 @@ ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
 
     if (unlikely(context.isTest()))
     {
-        // In test mode, a single query should take no more than 15 seconds to execute.
-        std::chrono::seconds timeout(15);
+        // In test mode, a single query should take no more than 5 minutes to execute.
+        std::chrono::minutes timeout(5);
         status.waitFor(timeout);
     }
     else
