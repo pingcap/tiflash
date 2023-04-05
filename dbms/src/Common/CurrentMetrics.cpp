@@ -66,6 +66,7 @@
     M(StoragePoolV3Only)                        \
     M(StoragePoolMixMode)                       \
     M(RegionPersisterRunMode)                   \
+    M(S3Requests)                               \
     M(GlobalStorageRunMode)                     \
     M(GlobalThread)                             \
     M(GlobalThreadActive)                       \

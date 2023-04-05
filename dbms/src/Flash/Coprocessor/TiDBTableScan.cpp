@@ -70,6 +70,8 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
         tipb_table_scan->set_table_id(table_id);
         for (const auto & column : partition_table_scan.columns())
             *tipb_table_scan->add_columns() = column;
+        for (const auto & filter : partition_table_scan.pushed_down_filter_conditions())
+            *tipb_table_scan->add_pushed_down_filter_conditions() = filter;
         tipb_table_scan->set_desc(partition_table_scan.desc());
         for (auto id : partition_table_scan.primary_column_ids())
             tipb_table_scan->add_primary_column_ids(id);

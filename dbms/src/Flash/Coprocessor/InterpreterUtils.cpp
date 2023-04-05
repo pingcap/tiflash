@@ -17,15 +17,19 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
+#include <DataStreams/LimitTransformAction.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
+#include <DataStreams/SortHelper.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExpressionTransformOp.h>
+#include <Operators/LimitTransformOp.h>
+#include <Operators/LocalSortTransformOp.h>
 
 namespace DB
 {
@@ -159,6 +163,40 @@ void orderStreams(
             // todo use identifier_executor_id as the spill id
             SpillConfig(context.getTemporaryPath(), fmt::format("{}_sort", log->identifier()), settings.max_cached_data_bytes_in_spiller, settings.max_spilled_rows_per_file, settings.max_spilled_bytes_per_file, context.getFileProvider()),
             log->identifier());
+    }
+}
+
+void executeLocalSort(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    const SortDescription & order_descr,
+    std::optional<size_t> limit,
+    const Context & context,
+    const LoggerPtr & log)
+{
+    auto input_header = group_builder.getCurrentHeader();
+    if (SortHelper::isSortByConstants(input_header, order_descr))
+    {
+        // For order by const col and has limit, we will generate LimitOperator directly.
+        if (limit)
+        {
+            auto local_limit = std::make_shared<LocalLimitTransformAction>(input_header, *limit);
+            group_builder.transform([&](auto & builder) {
+                builder.appendTransformOp(std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_status, log->identifier(), local_limit));
+            });
+        }
+        // For order by const and doesn't has limit, do nothing here.
+    }
+    else
+    {
+        group_builder.transform([&](auto & builder) {
+            builder.appendTransformOp(std::make_unique<LocalSortTransformOp>(
+                exec_status,
+                log->identifier(),
+                order_descr,
+                limit.value_or(0), // 0 means that no limit in LocalSortTransformOp.
+                context.getSettingsRef().max_block_size));
+        });
     }
 }
 
