@@ -85,8 +85,7 @@ void HashJoinProbeBlockInputStream::onCurrentReadNonJoinedDataDone()
 
 void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
 {
-    auto cur_probe_exec = *probe_exec;
-    auto restore_probe_exec = cur_probe_exec->tryGetRestoreExec();
+    auto restore_probe_exec = probe_exec->tryGetRestoreExec();
     if (restore_probe_exec.has_value() && !isCancelledOrThrowIfKilled())
     {
         probe_exec.set(std::move(*restore_probe_exec));
@@ -100,10 +99,10 @@ void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
 
 void HashJoinProbeBlockInputStream::onAllProbeDone()
 {
-    auto cur_probe_exec = *probe_exec;
-    if (cur_probe_exec->needOutputNonJoinedData())
+    auto & cur_probe_exec = *probe_exec;
+    if (cur_probe_exec.needOutputNonJoinedData())
     {
-        cur_probe_exec->onNonJoinedStart();
+        cur_probe_exec.onNonJoinedStart();
         switchStatus(ProbeStatus::READ_NON_JOINED_DATA);
     }
     else
@@ -125,10 +124,10 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
             {
             case ProbeStatus::WAIT_BUILD_FINISH:
             {
-                auto cur_probe_exec = *probe_exec;
-                cur_probe_exec->waitUntilAllBuildFinished();
+                auto & cur_probe_exec = *probe_exec;
+                cur_probe_exec.waitUntilAllBuildFinished();
                 /// after Build finish, always go to Probe stage
-                cur_probe_exec->onProbeStart();
+                cur_probe_exec.onProbeStart();
                 switchStatus(ProbeStatus::PROBE);
                 break;
             }

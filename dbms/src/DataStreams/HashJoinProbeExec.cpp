@@ -137,8 +137,7 @@ std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::tryGetRestoreExec()
         return {};
 
     /// find restore exec in DFS way
-    auto ret = doTryGetRestoreExec();
-    if (ret.has_value())
+    if (auto ret = doTryGetRestoreExec(); ret.has_value())
         return ret;
 
     /// current join has no more partition to restore, so check if previous join still has partition to restore

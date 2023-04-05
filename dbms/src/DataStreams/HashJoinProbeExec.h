@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/PtrHolder.h>
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/Join.h>
@@ -104,32 +105,5 @@ private:
     std::optional<HashJoinProbeExecPtr> parent;
 };
 
-class HashJoinProbeExecHolder
-{
-public:
-    HashJoinProbeExecPtr operator->()
-    {
-        std::lock_guard lock(mu);
-        assert(exec);
-        return exec;
-    }
-
-    HashJoinProbeExecPtr operator*()
-    {
-        std::lock_guard lock(mu);
-        assert(exec);
-        return exec;
-    }
-
-    void set(HashJoinProbeExecPtr && new_one)
-    {
-        assert(new_one);
-        std::lock_guard lock(mu);
-        exec = new_one;
-    }
-
-private:
-    std::mutex mu;
-    HashJoinProbeExecPtr exec;
-};
+using HashJoinProbeExecHolder = PtrHolder<HashJoinProbeExecPtr>;
 } // namespace DB
