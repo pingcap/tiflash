@@ -54,9 +54,6 @@ Block HashJoinProbeBlockInputStream::getHeader() const
 void HashJoinProbeBlockInputStream::cancel(bool kill)
 {
     IProfilingBlockInputStream::cancel(kill);
-    /// When the probe stream quits probe by cancelling instead of normal finish, the Join operator might still produce meaningless blocks
-    /// and expects these meaningless blocks won't be used to produce meaningful result.
-
     JoinPtr current_join;
     RestoreInfo restore_info;
     {
@@ -74,9 +71,10 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
     ///    will call `cancel(false)`, in this case, there is two sub-cases
     ///    a. the data stream read an empty block because of EOF, then it means there must be no threads waiting in Join, so cancel the join is safe
     ///    b. the data stream read an empty block because of early exit of some executor(like limit), in this case, just wake the waiting
-    ///       threads is not 100% safe because if the probe thread is wake up when build is not finished yet, it may produce wrong results, for now
-    ///       it is safe because when any of the data stream read empty block because of early exit, the execution framework ensures that no further
-    ///       data will be used.
+    ///       threads is not 100% safe because if the probe thread is wake up when build/probe is not finished yet, and we assume that in this case
+    ///       no more data will be read, and in order to avoid generate wrong data,
+    ///       - for threads reading joined data: will return empty block if build is not finished yet
+    ///       - for threads reading non joined data: will return empty block if build or probe is not finished yet
     current_join->cancel();
     if (restore_info.non_joined_stream != nullptr)
     {

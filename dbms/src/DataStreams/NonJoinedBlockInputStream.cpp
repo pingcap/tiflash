@@ -131,15 +131,16 @@ Block NonJoinedBlockInputStream::readImpl()
     /// If build concurrency is less than non join concurrency,
     /// just return empty block for extra non joined block input stream read
     if (unlikely(index >= parent.getBuildConcurrency()))
-        return Block();
+        return {};
     if unlikely (parent.active_build_threads != 0 || parent.active_probe_threads != 0)
     {
+        /// build/probe is not finished yet, the query must be cancelled, so just return {}
         LOG_WARNING(parent.log, "NonJoinedBlock read without non zero active_build_threads/active_probe_threads, return empty block");
         return {};
     }
     if (!parent.has_build_data_in_memory)
         /// no build data in memory, the non joined result must be empty
-        return Block();
+        return {};
 
     /// todo read data based on JoinPartition
     if (add_not_mapped_rows)

@@ -2862,6 +2862,7 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
 {
     if unlikely (active_build_threads != 0)
     {
+        /// build is not finished yet, the query must be cancelled, so just return {}
         LOG_WARNING(log, "JoinBlock without non zero active_build_threads, return empty block");
         return {};
     }
