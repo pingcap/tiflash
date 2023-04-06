@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Executor/ResultHandler.h>
+#include <Flash/Executor/ResultQueue.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 
 #include <deque>
@@ -65,7 +66,7 @@ public:
     void toTreeString(FmtBuffer & buffer, size_t level = 0) const;
 
     // used for getting the result blocks.
-    void addGetResultSink(ResultHandler && result_handler);
+    void addGetResultSink(const ResultQueuePtr & result_queue);
 
     PipelineExecGroup buildExecGroup(PipelineExecutorStatus & exec_status, Context & context, size_t concurrency);
 

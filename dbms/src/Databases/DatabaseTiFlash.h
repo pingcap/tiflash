@@ -37,7 +37,7 @@ public:
     String getEngineName() const override { return "TiFlash"; }
 
 
-    void loadTables(Context & context, legacy::ThreadPool * thread_pool, bool has_force_restore_data_flag) override;
+    void loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag) override;
 
     void createTable(const Context & context, const String & table_name, const StoragePtr & table, const ASTPtr & query) override;
 
