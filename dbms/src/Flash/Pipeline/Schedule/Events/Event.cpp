@@ -43,12 +43,7 @@ void Event::addInput(const EventPtr & input)
     assert(status == EventStatus::INIT);
     input->addOutput(shared_from_this());
     ++unfinished_inputs;
-}
-
-bool Event::withoutInput()
-{
-    assert(status == EventStatus::INIT);
-    return 0 == unfinished_inputs;
+    is_source = false;
 }
 
 void Event::addOutput(const EventPtr & output)
@@ -65,11 +60,32 @@ void Event::onInputFinish() noexcept
         schedule();
 }
 
+bool Event::prepreForSource()
+{
+    assert(status == EventStatus::INIT);
+    if (is_source)
+    {
+        // For source event, `exec_status.onEventSchedule()` needs to be called before schedule.
+        // Suppose there are two source events, A and B, a possible sequence of calls is:
+        // `A.prepreForSource --> B.prepreForSource --> A.schedule --> A.finish --> B.schedule --> B.finish`.
+        // if `exec_status.onEventSchedule()` be called in schedule just like non-source event,
+        // `exec_status.wait` and `result_queue.pop` may return early.
+        exec_status.onEventSchedule();
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 void Event::schedule() noexcept
 {
     switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
     assert(0 == unfinished_inputs);
-    exec_status.onEventSchedule();
+    // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepreForSource`.
+    if (!is_source)
+        exec_status.onEventSchedule();
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     std::vector<TaskPtr> tasks;
     try

@@ -58,7 +58,8 @@ public:
 
     void onTaskFinish() noexcept;
 
-    bool withoutInput();
+    // return true for source event.
+    bool prepreForSource();
 
 protected:
     // Returns the tasks ready to be scheduled.
@@ -94,5 +95,8 @@ private:
     std::atomic_int32_t unfinished_tasks{0};
 
     std::atomic<EventStatus> status{EventStatus::INIT};
+
+    // is_source is true if and only if there is no input.
+    bool is_source = true;
 };
 } // namespace DB

@@ -287,13 +287,13 @@ class EventTestRunner : public ::testing::Test
 public:
     void schedule(std::vector<EventPtr> & events, std::shared_ptr<ThreadManager> thread_manager = nullptr)
     {
-        Events without_input_events;
+        Events sources;
         for (const auto & event : events)
         {
-            if (event->withoutInput())
-                without_input_events.push_back(event);
+            if (event->prepreForSource())
+                sources.push_back(event);
         }
-        for (const auto & event : without_input_events)
+        for (const auto & event : sources)
         {
             if (thread_manager)
                 thread_manager->schedule(false, "event", [event]() { event->schedule(); });
@@ -436,7 +436,7 @@ try
         }
         {
             auto on_err_event = std::make_shared<OnErrEvent>(exec_status);
-            assert(on_err_event->withoutInput());
+            assert(on_err_event->prepreForSource());
             on_err_event->schedule();
         }
         wait(exec_status);
