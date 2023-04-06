@@ -38,7 +38,7 @@ void PipelineExecutor::scheduleEvents()
     Events sources;
     for (const auto & event : events)
     {
-        if (event->prepreForSource())
+        if (event->prepareForSource())
             sources.push_back(event);
     }
     for (const auto & event : sources)
