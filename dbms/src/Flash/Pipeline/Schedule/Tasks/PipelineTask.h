@@ -32,6 +32,8 @@ public:
 protected:
     ExecTaskStatus doExecuteImpl() override;
 
+    ExecTaskStatus doExecuteIOImpl() override;
+
     ExecTaskStatus doAwaitImpl() override;
 
     void finalizeImpl() override;

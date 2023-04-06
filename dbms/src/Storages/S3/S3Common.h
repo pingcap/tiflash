@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ Exception fromS3Error(const Aws::S3::S3Error & e, const std::string & fmt, Args 
 {
     return DB::Exception(
         ErrorCodes::S3_ERROR,
-        fmt + fmt::format(" s3error={} s3msg={}", magic_enum::enum_name(e.GetErrorType()), e.GetMessage()),
+        fmt + fmt::format(" s3error={} s3msg={} request_id={}", magic_enum::enum_name(e.GetErrorType()), e.GetMessage(), e.GetRequestId()),
         args...);
 }
 
