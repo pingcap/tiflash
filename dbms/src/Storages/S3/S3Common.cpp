@@ -282,7 +282,10 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     // Override the HTTP client, use PocoHTTPClient instead
     aws_options.httpOptions.httpClientFactory_create_fn = [&config_] {
         // TODO: do we need the remote host filter?
-        PocoHTTPClientConfiguration poco_cfg(RemoteHostFilter(), config_.max_redirections, /*enable_s3_requests_logging_*/ config_.verbose);
+        PocoHTTPClientConfiguration poco_cfg(
+            std::make_shared<RemoteHostFilter>(),
+            config_.max_redirections,
+            /*enable_s3_requests_logging_*/ config_.verbose);
         return std::make_shared<PocoHTTPClientFactory>(poco_cfg);
     };
     Aws::InitAPI(aws_options);

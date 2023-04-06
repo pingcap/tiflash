@@ -77,8 +77,8 @@ namespace DB::S3
 {
 
 PocoHTTPClientConfiguration::PocoHTTPClientConfiguration(
-    const RemoteHostFilter & remote_host_filter_,
-    unsigned int s3_max_redirects_,
+    const std::shared_ptr<RemoteHostFilter> & remote_host_filter_,
+    UInt32 s3_max_redirects_,
     bool enable_s3_requests_logging_)
     : remote_host_filter(remote_host_filter_)
     , s3_max_redirects(s3_max_redirects_)
@@ -317,7 +317,7 @@ void PocoHTTPClient::makeRequestInternal(
             if (poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT)
             {
                 auto location = poco_response.get("location");
-                remote_host_filter.checkURL(Poco::URI(location));
+                remote_host_filter->checkURL(Poco::URI(location));
                 uri = location;
                 if (enable_s3_requests_logging)
                     LOG_DEBUG(log, "Redirecting request to new location: {}", location);
