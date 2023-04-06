@@ -59,7 +59,7 @@ public:
     void onTaskFinish() noexcept;
 
     // return true for source event.
-    bool prepreForSource();
+    bool prepareForSource();
 
 protected:
     // Returns the tasks ready to be scheduled.

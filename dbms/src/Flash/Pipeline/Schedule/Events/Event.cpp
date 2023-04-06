@@ -60,14 +60,14 @@ void Event::onInputFinish() noexcept
         schedule();
 }
 
-bool Event::prepreForSource()
+bool Event::prepareForSource()
 {
     assert(status == EventStatus::INIT);
     if (is_source)
     {
         // For source event, `exec_status.onEventSchedule()` needs to be called before schedule.
         // Suppose there are two source events, A and B, a possible sequence of calls is:
-        // `A.prepreForSource --> B.prepreForSource --> A.schedule --> A.finish --> B.schedule --> B.finish`.
+        // `A.prepareForSource --> B.prepareForSource --> A.schedule --> A.finish --> B.schedule --> B.finish`.
         // if `exec_status.onEventSchedule()` be called in schedule just like non-source event,
         // `exec_status.wait` and `result_queue.pop` may return early.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
@@ -89,7 +89,7 @@ void Event::schedule() noexcept
     }
     else
     {
-        // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepreForSource`.
+        // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepareForSource`.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
         exec_status.onEventSchedule();
     }
