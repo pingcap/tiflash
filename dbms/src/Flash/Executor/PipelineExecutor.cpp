@@ -52,14 +52,61 @@ ExecutionResult PipelineExecutor::execute(ResultHandler result_handler)
 
     if (unlikely(context.isTest()))
     {
+<<<<<<< HEAD
         // In test mode, a single query should take no more than 15 seconds to execute.
         std::chrono::seconds timeout(15);
+=======
+        // In test mode, a single query should take no more than 5 minutes to execute.
+        static std::chrono::minutes timeout(5);
+>>>>>>> c35877f6d0 (fix potential deadlock in `CreatingSetBlockInputStream` (#7223))
         status.waitFor(timeout);
     }
     else
     {
         status.wait();
     }
+<<<<<<< HEAD
+=======
+}
+
+void PipelineExecutor::consume(const ResultQueuePtr & result_queue, ResultHandler && result_handler)
+{
+    Block ret;
+    if (unlikely(context.isTest()))
+    {
+        // In test mode, a single query should take no more than 5 minutes to execute.
+        static std::chrono::minutes timeout(5);
+        while (result_queue->popTimeout(ret, timeout) == MPMCQueueResult::OK)
+            result_handler(ret);
+    }
+    else
+    {
+        while (result_queue->pop(ret) == MPMCQueueResult::OK)
+            result_handler(ret);
+    }
+}
+
+ExecutionResult PipelineExecutor::execute(ResultHandler && result_handler)
+{
+    if (result_handler.isIgnored())
+    {
+        scheduleEvents();
+        wait();
+    }
+    else
+    {
+        ///                                 ┌──get_result_sink
+        /// result_handler◄──result_queue◄──┼──get_result_sink
+        ///                                 └──get_result_sink
+
+        // The queue size is same as UnionBlockInputStream = concurrency * 5.
+        auto result_queue = status.registerResultQueue(/*queue_size=*/context.getMaxStreams() * 5);
+        assert(root_pipeline);
+        root_pipeline->addGetResultSink(result_queue);
+        scheduleEvents();
+        consume(result_queue, std::move(result_handler));
+    }
+>>>>>>> c35877f6d0 (fix potential deadlock in `CreatingSetBlockInputStream` (#7223))
     return status.toExecutionResult();
 }
 

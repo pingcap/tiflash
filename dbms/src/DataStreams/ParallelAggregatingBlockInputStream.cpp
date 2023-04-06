@@ -90,6 +90,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 */
 
             aggregator.finishSpill();
+            LOG_INFO(log, "Begin restore data from disk for aggregation.");
             BlockInputStreams input_streams = aggregator.restoreSpilledData();
             impl = std::make_unique<MergingAggregatedMemoryEfficientBlockInputStream>(
                 input_streams,
