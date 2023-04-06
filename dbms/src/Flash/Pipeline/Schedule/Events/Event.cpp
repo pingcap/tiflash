@@ -83,7 +83,11 @@ bool Event::prepreForSource()
 void Event::schedule() noexcept
 {
     assert(0 == unfinished_inputs);
-    if (!is_source)
+    if (is_source)
+    {
+        RUNTIME_ASSERT(status == EventStatus::SCHEDULED);
+    }
+    else
     {
         // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepreForSource`.
         switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
