@@ -164,9 +164,9 @@ OperatorStatus LocalSortTransformOp::tryOutputImpl(Block & block)
     case LocalSortStatus::SPILL:
     {
         assert(cached_handler);
-        if (!cached_handler->batchRead())
-            return fromSpillToPartial();
-        return OperatorStatus::IO;
+        return cached_handler->batchRead()
+            ? OperatorStatus::IO
+            : fromSpillToPartial();
     }
     case LocalSortStatus::MERGE:
     {
@@ -196,7 +196,7 @@ OperatorStatus LocalSortTransformOp::executeIOImpl()
     {
         assert(cached_handler);
         cached_handler->spill();
-        return OperatorStatus::HAS_OUTPUT;
+        return OperatorStatus::NEED_INPUT;
     }
     case LocalSortStatus::RESTORE:
     {
