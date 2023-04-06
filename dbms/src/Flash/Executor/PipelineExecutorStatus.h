@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Flash/Executor/ExecutionResult.h>
+#include <Flash/Executor/ResultQueue.h>
 
 #include <atomic>
 #include <exception>
@@ -69,10 +70,12 @@ public:
 
     void cancel() noexcept;
 
-    bool isCancelled() noexcept
+    ALWAYS_INLINE bool isCancelled() noexcept
     {
         return is_cancelled.load(std::memory_order_acquire);
     }
+
+    ResultQueuePtr registerResultQueue(size_t queue_size) noexcept;
 
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_) noexcept;
@@ -86,5 +89,10 @@ private:
     UInt32 active_event_count{0};
 
     std::atomic_bool is_cancelled{false};
+
+    // `result_queue.finish` can only be called in `onEventFinish` because `result_queue.pop` cannot end until events end.
+    // `registerResultQueue` is called before event scheduled, so is safe to use result_queue without lock.
+    // If `registerResultQueue` is called, `result_queue` must be safely visible in `onEventFinish`.
+    std::optional<ResultQueuePtr> result_queue;
 };
 } // namespace DB

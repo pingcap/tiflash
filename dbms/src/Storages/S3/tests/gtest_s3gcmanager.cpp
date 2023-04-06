@@ -15,11 +15,12 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
 #include <Storages/Page/V3/CheckpointFile/CPFilesWriter.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
 #include <Storages/S3/CheckpointManifestS3Set.h>
-#include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3GCManager.h>
@@ -28,8 +29,6 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/OwnerManager.h>
 #include <aws/core/utils/DateTime.h>
-#include <aws/s3/model/CreateBucketRequest.h>
-#include <aws/s3/model/CreateBucketResult.h>
 #include <aws/s3/model/GetObjectTaggingRequest.h>
 #include <gtest/gtest.h>
 #include <pingcap/pd/MockPDClient.h>
@@ -64,26 +63,29 @@ public:
 
     void SetUp() override
     {
+        DB::base::TiFlashStorageTestBasic::SetUp();
+
         auto config = getConfig();
         mock_s3_client = ClientFactory::instance().sharedTiFlashClient();
         auto mock_gc_owner = OwnerManager::createMockOwner("owner_0");
         auto mock_lock_client = std::make_shared<MockS3LockClient>(mock_s3_client);
         auto mock_pd_client = std::make_shared<pingcap::pd::MockPDClient>();
-        gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_gc_owner, mock_lock_client, config);
+        auto data_store = std::make_shared<DM::Remote::DataStoreS3>(::DB::tests::TiFlashTestEnv::getMockFileProvider());
+        gc_mgr = std::make_unique<S3GCManager>(mock_pd_client, mock_gc_owner, mock_lock_client, data_store, config);
 
         ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client);
 
-        dir_ = getTemporaryPath();
-        data_file_path_pattern1 = dir_ + "/data1_{index}";
+        tmp_dir = getTemporaryPath();
+        data_file_path_pattern1 = tmp_dir + "/data1_{index}";
         data_file_id_pattern1 = "data1_{index}";
-        manifest_file_path1 = dir_ + "/manifest_foo1";
+        manifest_file_path1 = tmp_dir + "/manifest_foo1";
         manifest_file_id1 = "manifest_foo1";
-        data_file_path_pattern2 = dir_ + "/data2_{index}";
+        data_file_path_pattern2 = tmp_dir + "/data2_{index}";
         data_file_id_pattern2 = "data2_{index}";
-        manifest_file_path2 = dir_ + "/manifest_foo2";
+        manifest_file_path2 = tmp_dir + "/manifest_foo2";
         manifest_file_id2 = "manifest_foo2";
-        dropDataOnDisk(dir_);
-        createIfNotExist(dir_);
+        dropDataOnDisk(tmp_dir);
+        createIfNotExist(tmp_dir);
     }
 
     void TearDown() override
@@ -92,7 +94,7 @@ public:
     }
 
 protected:
-    String dir_;
+    String tmp_dir;
 
     std::shared_ptr<TiFlashS3Client> mock_s3_client;
     std::unique_ptr<S3GCManager> gc_mgr;

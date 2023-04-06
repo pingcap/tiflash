@@ -26,6 +26,7 @@
 #include <functional>
 #include <future>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <queue>
@@ -294,8 +295,6 @@ protected:
 };
 
 /// ThreadPoolWaitGroup is used to wait all the task launched here to finish
-/// ThreadPoolWaitGroup guarantee the exception safty of TheadPool.
-/// ThreadPoolWaitGroup is used to wait all the task launched here to finish
 /// To guarantee the exception safty of ThreadPoolWaitGroup, we need to create object, do schedule and wait in the same scope.
 template <typename Thread>
 class ThreadPoolWaitGroup
@@ -311,9 +310,9 @@ public:
         {
             wait();
         }
-        catch (const Exception & exc)
+        catch (...)
         {
-            LOG_ERROR(&Poco::Logger::get("ThreadPoolWaitGroup"), "Exception error code = {}, message = {}", exc.code(), exc.displayText());
+            tryLogCurrentException(Logger::get(), "Error in destructor function of ThreadPoolWaitGroup");
         }
     }
 
@@ -364,7 +363,6 @@ private:
     ThreadPoolImpl<Thread> & thread_pool;
     bool consumed = false;
 };
-
 /// Schedule jobs/tasks on global thread pool without implicit passing tracing context on current thread to underlying worker as parent tracing context.
 ///
 /// If you implement your own job/task scheduling upon global thread pool or schedules a long time running job in a infinite loop way,
