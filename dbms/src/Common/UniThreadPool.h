@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Poco/Event.h>
 #include <boost_wrapper/priority_queue.h>
 
@@ -23,7 +24,9 @@
 #include <cstdint>
 #include <ext/scope_guard.h>
 #include <functional>
+#include <future>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <queue>
@@ -31,6 +34,8 @@
 
 namespace DB
 {
+template <typename Thread>
+class ThreadPoolWaitGroup;
 /** Very simple thread pool similar to boost::threadpool.
   * Advantages:
   * - catches exceptions and rethrows on wait.
@@ -92,6 +97,11 @@ public:
     void setMaxFreeThreads(size_t value);
     void setQueueSize(size_t value);
     size_t getMaxThreads() const;
+
+    std::unique_ptr<ThreadPoolWaitGroup<Thread>> waitGroup()
+    {
+        return std::make_unique<ThreadPoolWaitGroup<Thread>>(*this);
+    }
 
 private:
     mutable std::mutex mutex;
@@ -284,6 +294,75 @@ protected:
     }
 };
 
+/// ThreadPoolWaitGroup is used to wait all the task launched here to finish
+/// To guarantee the exception safty of ThreadPoolWaitGroup, we need to create object, do schedule and wait in the same scope.
+template <typename Thread>
+class ThreadPoolWaitGroup
+{
+public:
+    explicit ThreadPoolWaitGroup(ThreadPoolImpl<Thread> & thread_pool_)
+        : thread_pool(thread_pool_)
+    {}
+    ThreadPoolWaitGroup(const ThreadPoolWaitGroup &) = delete;
+    ~ThreadPoolWaitGroup()
+    {
+        try
+        {
+            wait();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(Logger::get(), "Error in destructor function of ThreadPoolWaitGroup");
+        }
+    }
+
+    void schedule(std::function<void()> func)
+    {
+        auto task = std::make_shared<std::packaged_task<void()>>(func);
+        thread_pool.scheduleOrThrowOnError([task] { (*task)(); });
+        futures.emplace_back(task->get_future());
+    }
+
+    void wait()
+    {
+        if (consumed)
+            return;
+        consumed = true;
+
+        std::exception_ptr first_exception;
+        for (auto & future : futures)
+        {
+            // ensure all futures finished
+            try
+            {
+                future.get();
+            }
+            catch (...)
+            {
+                if (!first_exception)
+                    first_exception = std::current_exception();
+            }
+        }
+
+        if (first_exception)
+        {
+            try
+            {
+                std::rethrow_exception(first_exception);
+            }
+            catch (Exception & exc)
+            {
+                exc.addMessage(exc.getStackTrace().toString());
+                exc.rethrow();
+            }
+        }
+    }
+
+private:
+    std::vector<std::future<void>> futures;
+    ThreadPoolImpl<Thread> & thread_pool;
+    bool consumed = false;
+};
 /// Schedule jobs/tasks on global thread pool without implicit passing tracing context on current thread to underlying worker as parent tracing context.
 ///
 /// If you implement your own job/task scheduling upon global thread pool or schedules a long time running job in a infinite loop way,
