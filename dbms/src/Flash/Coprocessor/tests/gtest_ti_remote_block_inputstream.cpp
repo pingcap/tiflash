@@ -53,7 +53,7 @@ bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & righ
         (left.num_produced_rows == right.num_produced_rows) && //
         (left.time_processed_ns == right.time_processed_ns) && //
         (left.scan_context->total_dmfile_scanned_rows == right.scan_context->total_dmfile_scanned_rows) && //
-        (left.scan_context->total_dmfile_skipped_rows == right.scan_context->total_dmfile_skipped_rows);
+        (left.scan_context->total_dmfile_scanned_packs == right.scan_context->total_dmfile_scanned_packs);
 }
 
 struct MockWriter
@@ -73,9 +73,9 @@ struct MockWriter
         summary.scan_context = std::make_unique<DM::ScanContext>();
 
         summary.scan_context->total_dmfile_scanned_packs = 1;
-        summary.scan_context->total_dmfile_skipped_packs = 2;
+        summary.scan_context->total_dmfile_lm_skipped_packs = 2;
         summary.scan_context->total_dmfile_scanned_rows = 8000;
-        summary.scan_context->total_dmfile_skipped_rows = 15000;
+        summary.scan_context->total_dmfile_index_skipped_packs = 1;
         summary.scan_context->total_dmfile_rough_set_index_load_time_ns = 10;
         summary.scan_context->total_dmfile_read_time_ns = 200;
         summary.scan_context->total_create_snapshot_time_ns = 5;

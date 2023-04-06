@@ -261,8 +261,6 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
         skip_rows += pack_stats[next_pack_id].rows;
-        scan_context->total_dmfile_skipped_packs += 1;
-        scan_context->total_dmfile_skipped_rows += pack_stats[next_pack_id].rows;
     }
     next_row_offset += skip_rows;
     return next_pack_id < use_packs.size();
@@ -294,10 +292,9 @@ size_t DMFileReader::skipNextBlock()
             break;
 
         read_rows += pack_stats[next_pack_id].rows;
-        scan_context->total_dmfile_skipped_packs += 1;
+        scan_context->total_dmfile_lm_skipped_packs += 1;
     }
 
-    scan_context->total_dmfile_skipped_rows += read_rows;
     next_row_offset += read_rows;
 
     // When we read dmfile, if the previous pack is not read,
@@ -482,7 +479,6 @@ Block DMFileReader::read()
     res.setStartOffset(start_row_offset);
 
     size_t read_packs = next_pack_id - start_pack_id;
-
     scan_context->total_dmfile_scanned_packs += read_packs;
     scan_context->total_dmfile_scanned_rows += read_rows;
 

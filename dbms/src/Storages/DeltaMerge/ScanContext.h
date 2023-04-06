@@ -29,17 +29,17 @@ namespace DB::DM
 class ScanContext
 {
 public:
-    /// sum of scanned packs in dmfiles(both stable and ColumnFileBig) among this query
-    std::atomic<uint64_t> total_dmfile_scanned_packs{0};
-
-    /// sum of skipped packs in dmfiles(both stable and ColumnFileBig) among this query
-    std::atomic<uint64_t> total_dmfile_skipped_packs{0};
-
     /// sum of scanned rows in dmfiles(both stable and ColumnFileBig) among this query
     std::atomic<uint64_t> total_dmfile_scanned_rows{0};
 
-    /// sum of skipped rows in dmfiles(both stable and ColumnFileBig) among this query
-    std::atomic<uint64_t> total_dmfile_skipped_rows{0};
+    /// sum of scanned rows in dmfiles(both stable and ColumnFileBig) among this query
+    std::atomic<uint64_t> total_dmfile_scanned_packs{0};
+
+    // sum of skipped packs due to index(not include handle) in dmfiles(both stable and ColumnFileBig) among this query
+    std::atomic<uint64_t> total_dmfile_index_skipped_packs{0};
+
+    // sum of skipped packs due to late materialize in dmfiles(both stable and ColumnFileBig) among this query
+    std::atomic<uint64_t> total_dmfile_lm_skipped_packs{0};
 
     std::atomic<uint64_t> total_dmfile_rough_set_index_load_time_ns{0};
     std::atomic<uint64_t> total_dmfile_read_time_ns{0};
@@ -53,10 +53,10 @@ public:
 
     void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
     {
-        total_dmfile_scanned_packs = tiflash_scan_context_pb.total_dmfile_scanned_packs();
-        total_dmfile_skipped_packs = tiflash_scan_context_pb.total_dmfile_skipped_packs();
+        total_dmfile_index_skipped_packs = tiflash_scan_context_pb.total_dmfile_index_skipped_packs();
+        total_dmfile_lm_skipped_packs = tiflash_scan_context_pb.total_dmfile_lm_skipped_packs();
         total_dmfile_scanned_rows = tiflash_scan_context_pb.total_dmfile_scanned_rows();
-        total_dmfile_skipped_rows = tiflash_scan_context_pb.total_dmfile_skipped_rows();
+        total_dmfile_scanned_packs = tiflash_scan_context_pb.total_dmfile_scanned_packs();
         total_dmfile_rough_set_index_load_time_ns = tiflash_scan_context_pb.total_dmfile_rough_set_index_load_time_ms() * 1000000;
         total_dmfile_read_time_ns = tiflash_scan_context_pb.total_dmfile_read_time_ms() * 1000000;
         total_create_snapshot_time_ns = tiflash_scan_context_pb.total_create_snapshot_time_ms() * 1000000;
@@ -67,10 +67,10 @@ public:
     tipb::TiFlashScanContext serialize()
     {
         tipb::TiFlashScanContext tiflash_scan_context_pb{};
-        tiflash_scan_context_pb.set_total_dmfile_scanned_packs(total_dmfile_scanned_packs);
-        tiflash_scan_context_pb.set_total_dmfile_skipped_packs(total_dmfile_skipped_packs);
+        tiflash_scan_context_pb.set_total_dmfile_index_skipped_packs(total_dmfile_index_skipped_packs);
+        tiflash_scan_context_pb.set_total_dmfile_lm_skipped_packs(total_dmfile_lm_skipped_packs);
         tiflash_scan_context_pb.set_total_dmfile_scanned_rows(total_dmfile_scanned_rows);
-        tiflash_scan_context_pb.set_total_dmfile_skipped_rows(total_dmfile_skipped_rows);
+        tiflash_scan_context_pb.set_total_dmfile_scanned_packs(total_dmfile_scanned_packs);
         tiflash_scan_context_pb.set_total_dmfile_rough_set_index_load_time_ms(total_dmfile_rough_set_index_load_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_dmfile_read_time_ms(total_dmfile_read_time_ns / 1000000);
         tiflash_scan_context_pb.set_total_create_snapshot_time_ms(total_create_snapshot_time_ns / 1000000);
@@ -81,10 +81,10 @@ public:
 
     void merge(const ScanContext & other)
     {
-        total_dmfile_scanned_packs += other.total_dmfile_scanned_packs;
-        total_dmfile_skipped_packs += other.total_dmfile_skipped_packs;
+        total_dmfile_index_skipped_packs += other.total_dmfile_index_skipped_packs;
+        total_dmfile_lm_skipped_packs += other.total_dmfile_lm_skipped_packs;
         total_dmfile_scanned_rows += other.total_dmfile_scanned_rows;
-        total_dmfile_skipped_rows += other.total_dmfile_skipped_rows;
+        total_dmfile_scanned_packs += other.total_dmfile_scanned_packs;
         total_dmfile_rough_set_index_load_time_ns += other.total_dmfile_rough_set_index_load_time_ns;
         total_dmfile_read_time_ns += other.total_dmfile_read_time_ns;
         total_create_snapshot_time_ns += other.total_create_snapshot_time_ns;
@@ -94,10 +94,10 @@ public:
 
     void merge(const tipb::TiFlashScanContext & other)
     {
-        total_dmfile_scanned_packs += other.total_dmfile_scanned_packs();
-        total_dmfile_skipped_packs += other.total_dmfile_skipped_packs();
+        total_dmfile_index_skipped_packs += other.total_dmfile_index_skipped_packs();
+        total_dmfile_lm_skipped_packs += other.total_dmfile_lm_skipped_packs();
         total_dmfile_scanned_rows += other.total_dmfile_scanned_rows();
-        total_dmfile_skipped_rows += other.total_dmfile_skipped_rows();
+        total_dmfile_scanned_packs += other.total_dmfile_scanned_packs();
         total_dmfile_rough_set_index_load_time_ns += other.total_dmfile_rough_set_index_load_time_ms() * 1000000;
         total_dmfile_read_time_ns += other.total_dmfile_read_time_ms() * 1000000;
         total_create_snapshot_time_ns += other.total_create_snapshot_time_ms() * 1000000;

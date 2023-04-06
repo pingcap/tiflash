@@ -198,7 +198,12 @@ private:
 
             for (size_t i = 0; i < pack_count; ++i)
             {
-                use_packs[i] = (static_cast<bool>(use_packs[i])) && (filter->roughCheck(i, param) != None);
+                if (use_packs[i])
+                {
+                    auto use_pack = filter->roughCheck(i, param) != None;
+                    use_packs[i] = use_pack;
+                    scan_context->total_dmfile_index_skipped_packs += !use_pack;
+                }
             }
         }
 
