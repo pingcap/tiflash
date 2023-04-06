@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -114,4 +114,11 @@ void executeGeneratedColumnPlaceholder(
 NamesWithAliases buildTableScanProjectionCols(
     const NamesAndTypes & schema,
     const NamesAndTypes & storage_schema);
+
+void executeGeneratedColumnPlaceholder(
+    PipelineExecutorStatus & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    size_t remote_read_sources_start_index,
+    const std::vector<std::tuple<UInt64, String, DataTypePtr>> & generated_column_infos,
+    LoggerPtr log);
 } // namespace DB

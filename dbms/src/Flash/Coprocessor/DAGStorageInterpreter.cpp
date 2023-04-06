@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -352,7 +352,9 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
             i++;
         }
         else
+        {
             builder.setSourceOp(std::move(source_ops[i++]));
+        }
     });
 
     for (const auto & lock : drop_locks)
@@ -364,7 +366,7 @@ void DAGStorageInterpreter::executeImpl(PipelineExecutorStatus & exec_status, Pi
     /// handle timezone/duration cast for local table scan.
     executeCastAfterTableScan(exec_status, group_builder, remote_read_streams_start_index);
 
-    /// TODO: handle generated column if necessary.
+    executeGeneratedColumnPlaceholder(exec_status, group_builder, remote_read_streams_start_index, generated_column_infos, log);
 
     /// handle filter conditions for local and remote table scan.
     if (filter_conditions.hasValue())
