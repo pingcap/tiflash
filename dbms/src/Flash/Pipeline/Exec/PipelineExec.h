@@ -55,17 +55,6 @@ private:
         Block & block,
         size_t & start_transform_op_index);
 
-    template <typename Op>
-    void setIOOpIfNeeded(OperatorStatus op_status, const Op & op)
-    {
-        assert(op);
-        if (op_status == OperatorStatus::IO)
-        {
-            assert(!io_op);
-            io_op.emplace(op.get());
-        }
-    }
-
 private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
