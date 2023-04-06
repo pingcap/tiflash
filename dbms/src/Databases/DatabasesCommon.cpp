@@ -304,6 +304,7 @@ std::tuple<String, StoragePtr> loadTable(Context & context,
     {
         LOG_ERROR(log, "File {} is empty. Removing.", table_metadata_path);
         Poco::File(table_metadata_path).remove();
+        return std::make_tuple("", nullptr);
     }
 
     try
