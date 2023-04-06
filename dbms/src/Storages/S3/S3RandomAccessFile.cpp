@@ -33,7 +33,7 @@ namespace ProfileEvents
 {
 extern const Event S3GetObject;
 extern const Event S3ReadBytes;
-extern const Event S3GetObjectRerty;
+extern const Event S3GetObjectRetry;
 } // namespace ProfileEvents
 
 namespace DB::S3
