@@ -177,10 +177,10 @@ public:
 
     const Names & getLeftJoinKeys() const { return key_names_left; }
 
-    void setInitActiveBuildConcurrency()
+    void setInitActiveBuildThreads()
     {
         std::unique_lock lock(build_probe_mutex);
-        active_build_concurrency = getBuildConcurrency();
+        active_build_threads = getBuildConcurrency();
     }
 
     size_t getProbeConcurrency() const
@@ -192,7 +192,7 @@ public:
     {
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
-        active_probe_concurrency = probe_concurrency;
+        active_probe_threads = probe_concurrency;
     }
 
     void cancel()
@@ -366,11 +366,11 @@ private:
 
     mutable std::condition_variable build_cv;
     size_t build_concurrency;
-    size_t active_build_concurrency;
+    std::atomic<size_t> active_build_threads;
 
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
-    size_t active_probe_concurrency;
+    std::atomic<size_t> active_probe_threads;
 
     bool is_canceled = false;
     bool meet_error = false;
