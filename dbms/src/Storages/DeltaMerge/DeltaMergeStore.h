@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/UniThreadPool.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -33,8 +34,6 @@
 #include <Storages/Transaction/TiDB.h>
 
 #include <queue>
-
-#include "Common/UniThreadPool.h"
 
 namespace DB
 {
