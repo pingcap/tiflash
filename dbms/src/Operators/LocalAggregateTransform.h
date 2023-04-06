@@ -29,10 +29,15 @@ namespace DB
  */
 enum class LocalAggStatus
 {
+    // Accept the block and build aggregate data.
     build,
+    // spill the aggregate data into disk.
     spill,
+    // convert the aggregate data to block and then output it.
     convert,
+    // spill the rest remaining memory aggregate data.
     final_spill,
+    // load the disk aggregate data to memory and then convert to block and output it.
     restore,
 };
 
