@@ -21,9 +21,7 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <aws/s3/S3Client.h>
-#include <aws/s3/model/CreateBucketRequest.h>
-#include <aws/s3/model/DeleteBucketRequest.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <gtest/gtest.h>
 
@@ -45,6 +43,7 @@ public:
 
     void SetUp() override
     {
+        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
         ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client);
     }
 

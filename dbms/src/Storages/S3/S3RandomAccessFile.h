@@ -18,7 +18,6 @@
 #include <Common/Logger.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
-#include <Storages/S3/S3Common.h>
 #include <aws/s3/model/GetObjectResult.h>
 #include <common/types.h>
 
@@ -29,9 +28,9 @@
 #undef thread_local
 #endif
 
-namespace Aws::S3
+namespace DB::S3
 {
-class S3Client;
+class TiFlashS3Client;
 }
 
 namespace DB::ErrorCodes
@@ -51,14 +50,12 @@ public:
         const String & remote_fname_,
         std::optional<std::pair<UInt64, UInt64>> offset_and_size_ = std::nullopt);
 
+    // Can only seek forward.
     off_t seek(off_t offset, int whence) override;
 
     ssize_t read(char * buf, size_t size) override;
 
-    std::string getFileName() const override
-    {
-        return fmt::format("{}/{}", client_ptr->bucket(), remote_fname);
-    }
+    std::string getFileName() const override;
 
     ssize_t pread(char * /*buf*/, size_t /*size*/, off_t /*offset*/) const override
     {
@@ -107,11 +104,13 @@ private:
     std::shared_ptr<TiFlashS3Client> client_ptr;
     String remote_fname;
     std::optional<std::pair<UInt64, UInt64>> offset_and_size;
-
+    off_t cur_offset;
     Aws::S3::Model::GetObjectResult read_result;
+    Int64 content_length;
 
     DB::LoggerPtr log;
     bool is_close = false;
+    bool is_inited = false;
 };
 
 } // namespace DB::S3

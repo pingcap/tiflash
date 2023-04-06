@@ -39,6 +39,7 @@
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <aws/s3/model/DeleteBucketCorsRequest.h>
+#include <fmt/chrono.h>
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -63,10 +64,14 @@ using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 class S3FileTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    static void SetUpTestCase() {}
+    static void SetUpTestCase()
+    {
+    }
 
     void SetUp() override
     {
+        is_mocked_s3_client = ::DB::tests::TiFlashTestEnv::isMockedS3Client();
+
         TiFlashStorageTestBasic::SetUp();
 
         reload();
@@ -182,6 +187,7 @@ protected:
         return data_store->prepareDMFile(oid)->restore(DMFile::ReadMetaMode::all());
     }
 
+    bool is_mocked_s3_client = false;
     LoggerPtr log;
     std::vector<char> buf_unit;
     std::shared_ptr<TiFlashS3Client> s3_client;
@@ -515,10 +521,10 @@ try
     FailPointHelper::enableFailPoint(
         FailPoints::force_set_mocked_s3_object_mtime,
         std::map<String, Aws::Utils::DateTime>{
-            {s3_client->root() + df_keys[0], test_infos[0].mtime},
-            {s3_client->root() + df_keys[1], test_infos[1].mtime},
-            {s3_client->root() + df_keys[2], test_infos[2].mtime},
-            {s3_client->root() + df_keys[3], test_infos[3].mtime},
+            {df_keys[0], test_infos[0].mtime},
+            {df_keys[1], test_infos[1].mtime},
+            {df_keys[2], test_infos[2].mtime},
+            {df_keys[3], test_infos[3].mtime},
         });
     SCOPE_EXIT({
         FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime);
@@ -529,7 +535,7 @@ try
     for (size_t idx = 0; idx < test_infos.size(); ++idx)
     {
         ASSERT_EQ(remote_files_info.at(lock_keys[idx]).size, test_infos[idx].total_size);
-        ASSERT_EQ(remote_files_info.at(lock_keys[idx]).mtime, test_infos[idx].mtime);
+        ASSERT_EQ(remote_files_info.at(lock_keys[idx]).mtime, test_infos[idx].mtime) << fmt::format("remote_mtime:{:%Y-%m-%d %H:%M:%S} test_mtime:{:%Y-%m-%d %H:%M:%S}", remote_files_info.at(lock_keys[idx]).mtime, test_infos[idx].mtime);
     }
     ASSERT_EQ(remote_files_info.at(lock_keys[4]).size, -1); // not exist or exception happens
 
