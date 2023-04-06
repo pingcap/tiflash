@@ -275,11 +275,26 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     }
     catch (...)
     {
+<<<<<<< HEAD
         std::unique_lock<std::mutex> lock(exception_mutex);
         exception_from_workers.push_back(std::current_exception());
         if (subquery.join)
             subquery.join->setBuildTableState(Join::BuildTableState::FAILED);
         LOG_FMT_ERROR(log, "{} throw exception: {} In {} sec. ", log_msg, getCurrentExceptionMessage(false, true), watch.elapsedSeconds());
+=======
+        {
+            std::unique_lock lock(exception_mutex);
+            exception_from_workers.push_back(std::current_exception());
+        }
+        auto error_message = getCurrentExceptionMessage(false, true);
+        if (subquery.join)
+            subquery.join->meetError(error_message);
+        LOG_ERROR(log, "{} throw exception: {} In {} sec. ", gen_log_msg(), error_message, watch.elapsedSeconds());
+        /// createOne is concurrently running in multiple threads, call cancel here to stop other threads
+        /// need to use cancel(true) here because the other threads may be blocked in `ExchangeReceiver::nextResult`,
+        /// cancel(true) will wake up these threads
+        cancel(true);
+>>>>>>> c35877f6d0 (fix potential deadlock in `CreatingSetBlockInputStream` (#7223))
     }
 }
 
