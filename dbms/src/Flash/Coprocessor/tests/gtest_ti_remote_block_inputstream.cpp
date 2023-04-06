@@ -281,7 +281,7 @@ struct MockReceiverContext
         return std::make_pair(MPPTunnelPtr(), grpc::Status::CANCELLED);
     }
 
-    void establishMPPConnectionLocalV2(const Request &, size_t, LocalRequestHandler &, bool) {}
+    void establishMPPConnectionLocalV2(const Request &, size_t, LocalRequestHandler &, bool, bool) {}
 
     PacketQueuePtr queue;
     std::vector<tipb::FieldType> field_types{};
@@ -391,10 +391,7 @@ public:
 
         // 3. send execution summary
         writer->add_summary = true;
-
-        ExecutorStatisticsCollector statistics_collector("");
-        statistics_collector.initialize(dag_context_ptr.get());
-        auto summary_response = statistics_collector.genExecutionSummaryResponse();
+        tipb::SelectResponse summary_response;
         writer->write(summary_response);
     }
 
@@ -420,9 +417,7 @@ public:
 
         // 3. send execution summary
         writer->add_summary = true;
-        ExecutorStatisticsCollector statistics_collector("");
-        statistics_collector.initialize(dag_context_ptr.get());
-        auto execution_summary_response = statistics_collector.genExecutionSummaryResponse();
+        tipb::SelectResponse execution_summary_response;
         writer->write(execution_summary_response);
     }
 

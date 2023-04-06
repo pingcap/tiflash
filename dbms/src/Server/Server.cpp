@@ -50,6 +50,7 @@
 #include <IO/HTTPCommon.h>
 #include <IO/IOThreadPools.h>
 #include <IO/ReadHelpers.h>
+#include <IO/UseSSL.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/ProcessList.h>
@@ -619,7 +620,6 @@ public:
                         return server.global_context->getSecurityConfig()->checkCommonName(cert);
                     };
                     context->setAdhocVerification(check_common_name);
-                    std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
                     CertificateReloader::initSSLCallback(context, server.global_context.get());
@@ -660,7 +660,6 @@ public:
                     {
                         LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
                     }
-                    std::call_once(ssl_init_once, SSLInit);
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port"));
                     socket.setReceiveTimeout(settings.receive_timeout);
@@ -918,6 +917,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
 
+    UseSSL ssl_holder;
+
     const auto log = Logger::get();
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
@@ -1157,7 +1158,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.kvstore_data_path, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
-    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled())
+    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         config.initCacheDir();
         FileCache::initialize(global_context->getPathCapacity(), config);

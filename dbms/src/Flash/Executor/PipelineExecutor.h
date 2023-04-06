@@ -16,6 +16,7 @@
 
 #include <Flash/Executor/PipelineExecutorStatus.h>
 #include <Flash/Executor/QueryExecutor.h>
+#include <Flash/Executor/ResultQueue.h>
 
 namespace DB
 {
@@ -68,6 +69,13 @@ public:
 
 protected:
     ExecutionResult execute(ResultHandler && result_handler) override;
+
+private:
+    void scheduleEvents();
+
+    void wait();
+
+    void consume(const ResultQueuePtr & result_queue, ResultHandler && result_handler);
 
 private:
     PipelinePtr root_pipeline;

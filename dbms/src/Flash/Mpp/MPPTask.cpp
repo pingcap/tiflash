@@ -27,7 +27,6 @@
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/Utils.h>
-#include <Flash/Statistics/traverseExecutors.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
@@ -159,7 +158,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
     auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
-    const auto & exchange_sender = dag_req.root_executor().exchange_sender();
+    const auto & exchange_sender = dag_context->dag_request.rootExecutor().exchange_sender();
 
     for (int i = 0; i < exchange_sender.encoded_task_meta_size(); ++i)
     {
@@ -192,7 +191,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 void MPPTask::initExchangeReceivers()
 {
     auto receiver_set_local = std::make_shared<MPPReceiverSet>(log->identifier());
-    traverseExecutors(&dag_req, [&](const tipb::Executor & executor) {
+    dag_context->dag_request.traverse([&](const tipb::Executor & executor) {
         if (executor.tp() == tipb::ExecType::TypeExchangeReceiver)
         {
             assert(executor.has_executor_id());
@@ -406,10 +405,18 @@ void MPPTask::runImpl()
         auto result = query_executor_holder->execute();
         if (likely(result.is_success))
         {
-            // finish receiver
-            receiver_set->close();
+            /// Need to finish writing before closing the receiver.
+            /// For example, for the query with limit, calling `finishWrite` first to ensure that the limit executor on the TiDB side can end normally,
+            /// otherwise the upstream MPPTasks will fail because of the closed receiver and then passing the error to TiDB.
+            ///
+            ///               ┌──tiflash(limit)◄─┬─tiflash(no limit)
+            /// tidb(limit)◄──┼──tiflash(limit)◄─┼─tiflash(no limit)
+            ///               └──tiflash(limit)◄─┴─tiflash(no limit)
+
             // finish MPPTunnel
             finishWrite();
+            // finish receiver
+            receiver_set->close();
         }
         auto ru = query_executor_holder->collectRequestUnit();
         LOG_INFO(log, "mpp finish with request unit: {}", ru);

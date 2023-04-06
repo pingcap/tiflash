@@ -42,6 +42,7 @@ extern String getPrefix(String key);
 namespace FailPoints
 {
 extern const char force_owner_mgr_state[];
+extern const char force_fail_to_create_etcd_session[];
 } // namespace FailPoints
 } // namespace DB
 
@@ -339,6 +340,43 @@ try
     EXPECT_EQ(lease_0, lease_1) << "should use same etcd lease for elec";
 
     LOG_INFO(log, "test wait for n*ttl passed");
+}
+CATCH
+
+
+TEST_F(OwnerManagerTest, CreateEtcdSessionFail)
+try
+{
+    auto etcd_endpoint = Poco::Environment::get("ETCD_ENDPOINT", "");
+    if (etcd_endpoint.empty())
+    {
+        const auto * t = ::testing::UnitTest::GetInstance()->current_test_info();
+        LOG_INFO(
+            log,
+            "{}.{} is skipped because env ETCD_ENDPOINT not set. "
+            "Run it with an etcd cluster using `ETCD_ENDPOINT=127.0.0.1:2379 ./dbms/gtests_dbms ...`",
+            t->test_case_name(),
+            t->name());
+        return;
+    }
+
+    using namespace std::chrono_literals;
+
+    auto ctx = TiFlashTestEnv::getContext();
+    pingcap::ClusterConfig config;
+    pingcap::pd::ClientPtr pd_client = std::make_shared<pingcap::pd::Client>(Strings{etcd_endpoint}, config);
+    auto etcd_client = DB::Etcd::Client::create(pd_client, config);
+    const String id = "owner_0";
+    auto owner0 = std::static_pointer_cast<EtcdOwnerManager>(OwnerManager::createS3GCOwner(*ctx, id, etcd_client, test_ttl));
+    auto owner_info = owner0->getOwnerID();
+    EXPECT_EQ(owner_info.status, OwnerType::NotOwner) << magic_enum::enum_name(owner_info.status);
+
+    FailPointHelper::enableFailPoint(FailPoints::force_fail_to_create_etcd_session);
+
+    owner0->campaignOwner();
+
+    std::this_thread::sleep_for(5s); // wait bg task wake
+    owner0->cancel();
 }
 CATCH
 
