@@ -312,7 +312,7 @@ void PocoHTTPClient::makeRequestInternal(
                 LOG_INFO(log, "URI={}, Response status: {}, {}", uri, status_code, poco_response.getReason());
             }
 
-            if (poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT || status_code == 302)
+            if (poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT || poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_FOUND)
             {
                 auto location = poco_response.get("location");
                 remote_host_filter.checkURL(Poco::URI(location));
