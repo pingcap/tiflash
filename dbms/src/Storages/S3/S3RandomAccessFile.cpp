@@ -66,7 +66,6 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
         LOG_ERROR(log, "Cannot read from istream. bucket={} root={} key={} errmsg={}", client_ptr->bucket(), client_ptr->root(), remote_fname, strerror(errno));
         return -1;
     }
-    LOG_DEBUG(log, "Read file={} content_length={} cur_offset={} => gcount={}", remote_fname, content_length, cur_offset, gcount);
     cur_offset += gcount;
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, gcount);
     return gcount;
@@ -92,7 +91,6 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
     auto & istr = read_result.GetBody();
     istr.ignore(offset_ - cur_offset);
     RUNTIME_CHECK(istr, remote_fname, strerror(errno));
-    LOG_DEBUG(log, "Seek file={} content_length={} cur_offset={} => offset={}", remote_fname, content_length, cur_offset, offset_);
     cur_offset = offset_;
     return cur_offset;
 }
@@ -149,8 +147,7 @@ inline static RandomAccessFilePtr createFromNormalFile(const String & remote_fna
         return file;
     }
     auto & ins = S3::ClientFactory::instance();
-    auto ptr = std::make_shared<S3RandomAccessFile>(ins.sharedTiFlashClient(), remote_fname);
-    return ptr;
+    return std::make_shared<S3RandomAccessFile>(ins.sharedTiFlashClient(), remote_fname);
 }
 
 inline static String readMergedSubFilesFromS3(const S3RandomAccessFile::ReadFileInfo & read_file_info_)

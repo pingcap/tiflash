@@ -64,14 +64,10 @@ using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
 class S3FileTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    static void SetUpTestCase()
-    {
-    }
+    static void SetUpTestCase() {}
 
     void SetUp() override
     {
-        is_mocked_s3_client = ::DB::tests::TiFlashTestEnv::isMockedS3Client();
-
         TiFlashStorageTestBasic::SetUp();
 
         reload();
@@ -187,7 +183,6 @@ protected:
         return data_store->prepareDMFile(oid)->restore(DMFile::ReadMetaMode::all());
     }
 
-    bool is_mocked_s3_client = false;
     LoggerPtr log;
     std::vector<char> buf_unit;
     std::shared_ptr<TiFlashS3Client> s3_client;

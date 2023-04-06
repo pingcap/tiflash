@@ -47,11 +47,6 @@ public:
         ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client);
     }
 
-    void TearDown() override
-    {
-        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
-    }
-
 protected:
     std::shared_ptr<S3::TiFlashS3Client> s3_client;
     LoggerPtr log;

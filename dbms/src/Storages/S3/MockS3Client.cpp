@@ -86,7 +86,10 @@ Model::GetObjectOutcome MockS3Client::GetObject(const Model::GetObjectRequest & 
         boost::algorithm::split(v, request.GetRange().substr(prefix.size()), boost::algorithm::is_any_of("-"));
         RUNTIME_CHECK(v.size() == 2, request.GetRange());
         left = std::stoul(v[0]);
-        right = std::stoul(v[1]);
+        if (!v[1].empty())
+        {
+            right = std::stoul(v[1]);
+        }
     }
     auto size = right - left + 1;
     Model::GetObjectResult result;
