@@ -117,8 +117,12 @@ private:
     const SpillConfig spill_config;
     std::unique_ptr<Spiller> spiller;
     // Used for spill phase.
-    BatchSpillHandlerPtr batch_hander;
+    // - `cached_handler.batchRead` is executed in `tryOutput` and `transform`.
+    // - `cached_handler.spill` is executed in `executeIO`.
+    CachedSpillHandlerPtr cached_handler;
     // Used for restore phase.
+    // - `restored_result.output` is executed in `tryOutput`.
+    // - `restored_result.put` is executed in `executeIO`.
     class RestoredResult
     {
     public:

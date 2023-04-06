@@ -173,7 +173,7 @@ void SpillHandler::finish()
     }
 }
 
-BatchSpillHandler::BatchSpillHandler(
+CachedSpillHandler::CachedSpillHandler(
     Spiller * spiller,
     UInt64 partition_id,
     const BlockInputStreamPtr & from_,
@@ -189,7 +189,7 @@ BatchSpillHandler::BatchSpillHandler(
 }
 
 /// bytes_threshold == 0 means no limit, and will read all data
-bool BatchSpillHandler::batchRead()
+bool CachedSpillHandler::batchRead()
 {
     assert(batch.empty());
 
@@ -225,7 +225,7 @@ bool BatchSpillHandler::batchRead()
     }
 }
 
-void BatchSpillHandler::spill()
+void CachedSpillHandler::spill()
 {
     assert(!finished && !batch.empty());
     std::vector<Block> ret;

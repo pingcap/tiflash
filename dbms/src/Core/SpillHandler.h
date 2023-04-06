@@ -63,10 +63,10 @@ private:
     static const Int64 INVALID_CURRENT_SPILLED_FILE_INDEX = -10;
 };
 
-class BatchSpillHandler
+class CachedSpillHandler
 {
 public:
-    BatchSpillHandler(
+    CachedSpillHandler(
         Spiller * spiller,
         UInt64 partition_id,
         const BlockInputStreamPtr & from_,
@@ -86,6 +86,6 @@ private:
     Blocks batch;
     bool finished = false;
 };
-using BatchSpillHandlerPtr = std::shared_ptr<BatchSpillHandler>;
+using CachedSpillHandlerPtr = std::shared_ptr<CachedSpillHandler>;
 
 } // namespace DB

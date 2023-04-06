@@ -24,8 +24,8 @@ class IBlockInputStream;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 using BlockInputStreams = std::vector<BlockInputStreamPtr>;
 class SpillHandler;
-class BatchSpillHandler;
-using BatchSpillHandlerPtr = std::shared_ptr<BatchSpillHandler>;
+class CachedSpillHandler;
+using CachedSpillHandlerPtr = std::shared_ptr<CachedSpillHandler>;
 
 struct SpillDetails
 {
@@ -89,7 +89,7 @@ public:
     void spillBlocks(Blocks && blocks, UInt64 partition_id);
     SpillHandler createSpillHandler(UInt64 partition_id);
     /// spill blocks by reading from BlockInputStream, this is more memory friendly compared to spillBlocks
-    BatchSpillHandlerPtr createBatchSpillHandler(
+    CachedSpillHandlerPtr createCachedSpillHandler(
         const BlockInputStreamPtr & from,
         UInt64 partition_id,
         const std::function<bool()> & is_cancelled);

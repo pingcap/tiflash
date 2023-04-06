@@ -52,6 +52,7 @@ Block LocalSortTransformOp::getMergeOutput()
 
 OperatorStatus LocalSortTransformOp::fromPartialToMerge(Block & block)
 {
+    assert(status == LocalSortStatus::PARTIAL);
     // convert to merge phase.
     status = LocalSortStatus::MERGE;
     if likely (!sorted_blocks.empty())
@@ -72,6 +73,7 @@ OperatorStatus LocalSortTransformOp::fromPartialToMerge(Block & block)
 
 OperatorStatus LocalSortTransformOp::fromPartialToRestore()
 {
+    assert(status == LocalSortStatus::PARTIAL);
     // convert to restore phase.
     status = LocalSortStatus::RESTORE;
 
@@ -99,23 +101,25 @@ OperatorStatus LocalSortTransformOp::fromPartialToRestore()
 
 OperatorStatus LocalSortTransformOp::fromPartialToSpill()
 {
+    assert(status == LocalSortStatus::PARTIAL);
     // convert to restore phase.
     status = LocalSortStatus::SPILL;
-    assert(!batch_hander);
-    batch_hander = spiller->createBatchSpillHandler(
+    assert(!cached_handler);
+    cached_handler = spiller->createCachedSpillHandler(
         std::make_shared<MergeSortingBlocksBlockInputStream>(sorted_blocks, order_desc, log->identifier(), max_block_size, limit),
         /*partition_id=*/0,
         [&]() { return exec_status.isCancelled(); });
-    // fallback to partial
-    if (!batch_hander->batchRead())
+    // fallback to partial phase.
+    if (!cached_handler->batchRead())
         return fromSpillToPartial();
     return OperatorStatus::IO;
 }
 
 OperatorStatus LocalSortTransformOp::fromSpillToPartial()
 {
-    assert(batch_hander);
-    batch_hander.reset();
+    assert(status == LocalSortStatus::SPILL);
+    assert(cached_handler);
+    cached_handler.reset();
     sum_bytes_in_blocks = 0;
     sorted_blocks.clear();
     status = LocalSortStatus::PARTIAL;
@@ -135,7 +139,7 @@ OperatorStatus LocalSortTransformOp::transformImpl(Block & block)
                 : fromPartialToMerge(block);
         }
 
-        // execute partial sort and store in `sorted_blocks`.
+        // execute partial sort and store the sorted block in `sorted_blocks`.
         SortHelper::removeConstantsFromBlock(block);
         sortBlock(block, order_desc, limit);
         sum_bytes_in_blocks += block.bytes();
@@ -159,8 +163,8 @@ OperatorStatus LocalSortTransformOp::tryOutputImpl(Block & block)
         return OperatorStatus::NEED_INPUT;
     case LocalSortStatus::SPILL:
     {
-        assert(batch_hander);
-        if (!batch_hander->batchRead())
+        assert(cached_handler);
+        if (!cached_handler->batchRead())
             return fromSpillToPartial();
         return OperatorStatus::IO;
     }
@@ -190,8 +194,8 @@ OperatorStatus LocalSortTransformOp::executeIOImpl()
     {
     case LocalSortStatus::SPILL:
     {
-        assert(batch_hander);
-        batch_hander->spill();
+        assert(cached_handler);
+        cached_handler->spill();
         return OperatorStatus::HAS_OUTPUT;
     }
     case LocalSortStatus::RESTORE:
@@ -216,17 +220,16 @@ bool LocalSortTransformOp::RestoredResult::hasData() const
 void LocalSortTransformOp::RestoredResult::put(Block && ret)
 {
     assert(!hasData());
-    if (!ret)
+    if unlikely (!ret)
         finished = true;
     block.emplace(std::move(ret));
 }
 
 Block LocalSortTransformOp::RestoredResult::output()
 {
-    if (finished)
+    if unlikely (finished)
         return {};
-    Block ret;
-    ret = std::move(*block);
+    Block ret = std::move(*block);
     block.reset();
     return ret;
 }

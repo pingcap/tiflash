@@ -104,12 +104,12 @@ Spiller::Spiller(const SpillConfig & config_, bool is_input_sorted_, UInt64 part
     }
 }
 
-BatchSpillHandlerPtr Spiller::createBatchSpillHandler(
+CachedSpillHandlerPtr Spiller::createCachedSpillHandler(
     const BlockInputStreamPtr & from,
     UInt64 partition_id,
     const std::function<bool()> & is_cancelled)
 {
-    return std::make_shared<BatchSpillHandler>(
+    return std::make_shared<CachedSpillHandler>(
         this,
         partition_id,
         from,
@@ -120,9 +120,9 @@ BatchSpillHandlerPtr Spiller::createBatchSpillHandler(
 void Spiller::spillBlocksUsingBlockInputStream(const BlockInputStreamPtr & block_in, UInt64 partition_id, const std::function<bool()> & is_cancelled)
 {
     assert(block_in);
-    auto batch_handler = createBatchSpillHandler(block_in, partition_id, is_cancelled);
-    while (batch_handler->batchRead())
-        batch_handler->spill();
+    auto cached_handler = createCachedSpillHandler(block_in, partition_id, is_cancelled);
+    while (cached_handler->batchRead())
+        cached_handler->spill();
 }
 
 std::pair<std::unique_ptr<SpilledFile>, bool> Spiller::getOrCreateSpilledFile(UInt64 partition_id)
