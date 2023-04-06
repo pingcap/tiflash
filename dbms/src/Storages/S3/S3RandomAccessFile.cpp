@@ -150,7 +150,7 @@ bool S3RandomAccessFile::initialize()
         ProfileEvents::increment(ProfileEvents::S3GetObject);
         if (cur_retry > 1)
         {
-            ProfileEvents::increment(ProfileEvents::S3GetObjectRerty);
+            ProfileEvents::increment(ProfileEvents::S3GetObjectRetry);
         }
         auto outcome = client_ptr->GetObject(req);
         if (!outcome.IsSuccess())
