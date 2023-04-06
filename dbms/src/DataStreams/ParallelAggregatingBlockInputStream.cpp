@@ -91,6 +91,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 *  then read and merge them, spending the minimum amount of memory.
                 */
 
+<<<<<<< HEAD
             const auto & files = aggregator.getTemporaryFiles();
             BlockInputStreams input_streams;
             for (const auto & file : files.files)
@@ -106,6 +107,11 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 (files.sum_size_compressed / 1048576.0),
                 (files.sum_size_uncompressed / 1048576.0));
 
+=======
+            aggregator.finishSpill();
+            LOG_INFO(log, "Begin restore data from disk for aggregation.");
+            BlockInputStreams input_streams = aggregator.restoreSpilledData();
+>>>>>>> c35877f6d0 (fix potential deadlock in `CreatingSetBlockInputStream` (#7223))
             impl = std::make_unique<MergingAggregatedMemoryEfficientBlockInputStream>(
                 input_streams,
                 params,
