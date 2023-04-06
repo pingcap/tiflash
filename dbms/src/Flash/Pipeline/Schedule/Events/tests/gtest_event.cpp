@@ -436,8 +436,8 @@ try
         }
         {
             auto on_err_event = std::make_shared<OnErrEvent>(exec_status);
-            assert(on_err_event->prepreForSource());
-            on_err_event->schedule();
+            if (on_err_event->prepreForSource())
+                on_err_event->schedule();
         }
         wait(exec_status);
         auto err_msg = exec_status.getExceptionMsg();
@@ -458,7 +458,8 @@ try
     PipelineExecutorStatus exec_status;
     auto tracker = MemoryTracker::create();
     auto event = std::make_shared<AssertMemoryTraceEvent>(exec_status, tracker);
-    event->schedule();
+    if (event->prepreForSource())
+        event->schedule();
     wait(exec_status);
     assertNoErr(exec_status);
 }
@@ -499,7 +500,8 @@ try
     {
         PipelineExecutorStatus exec_status;
         auto event = std::make_shared<ManyTasksEvent>(exec_status, i);
-        event->schedule();
+        if (event->prepreForSource())
+            event->schedule();
         wait(exec_status);
         assertNoErr(exec_status);
     }

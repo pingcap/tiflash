@@ -70,6 +70,7 @@ bool Event::prepreForSource()
         // `A.prepreForSource --> B.prepreForSource --> A.schedule --> A.finish --> B.schedule --> B.finish`.
         // if `exec_status.onEventSchedule()` be called in schedule just like non-source event,
         // `exec_status.wait` and `result_queue.pop` may return early.
+        switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
         exec_status.onEventSchedule();
         return true;
     }
@@ -81,11 +82,13 @@ bool Event::prepreForSource()
 
 void Event::schedule() noexcept
 {
-    switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
     assert(0 == unfinished_inputs);
-    // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepreForSource`.
     if (!is_source)
+    {
+        // for is_source == true, `exec_status.onEventSchedule()` has been called in `prepreForSource`.
+        switchStatus(EventStatus::INIT, EventStatus::SCHEDULED);
         exec_status.onEventSchedule();
+    }
     MemoryTrackerSetter setter{true, mem_tracker.get()};
     std::vector<TaskPtr> tasks;
     try
