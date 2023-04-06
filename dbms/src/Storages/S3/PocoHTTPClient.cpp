@@ -201,17 +201,15 @@ void PocoHTTPClient::makeRequestInternal(
 
     addMetric(request, S3MetricType::Count);
     CurrentMetrics::Increment metric_increment{CurrentMetrics::S3Requests};
-
+    PooledHTTPSessionPtr session;
     try
     {
         for (unsigned int attempt = 0; attempt <= s3_max_redirects; ++attempt)
         {
             Poco::URI target_uri(uri);
-            HTTPSessionPtr session;
             auto request_configuration = per_request_configuration(request);
-
             RUNTIME_CHECK(request_configuration.proxy_host.empty());
-            session = makeHTTPSession(target_uri, timeouts, /* resolve_host = */ true);
+            session = makePooledHTTPSession(target_uri, timeouts, 4096, /* resolve_host = */ true);
 
             /// In case of error this address will be written to logs
             request.SetResolvedRemoteHost(session->getResolvedAddress());
@@ -273,6 +271,16 @@ void PocoHTTPClient::makeRequestInternal(
             for (const auto & [header_name, header_value] : extra_headers)
                 poco_request.set(boost::algorithm::to_lower_copy(header_name), header_value);
 
+            poco_request.setKeepAlive(true);
+            {
+                WriteBufferFromOwnString headers_ss;
+                for (const auto & [header_name, header_value] : poco_request)
+                {
+                    headers_ss << header_name << ": " << header_value << "; ";
+                }
+                LOG_DEBUG(log, "URI={}, Request headers: {}", uri, headers_ss.str());
+            }
+
             Poco::Net::HTTPResponse poco_response;
 
             Stopwatch watch;
@@ -282,7 +290,7 @@ void PocoHTTPClient::makeRequestInternal(
             if (request.GetContentBody())
             {
                 if (enable_s3_requests_logging)
-                    LOG_DEBUG(log, "Writing request body.");
+                    LOG_DEBUG(log, "URI={}, Writing request body.", uri);
 
                 /// Rewind content body buffer.
                 /// NOTE: we should do that always (even if `attempt == 0`) because the same request can be retried also by AWS,
@@ -292,36 +300,48 @@ void PocoHTTPClient::makeRequestInternal(
 
                 auto size = Poco::StreamCopier::copyStream(*request.GetContentBody(), request_body_stream);
                 if (enable_s3_requests_logging)
-                    LOG_DEBUG(log, "Written {} bytes to request body", size);
+                    LOG_DEBUG(log, "URI={}, Written {} bytes to request body", uri, size);
             }
 
             if (enable_s3_requests_logging)
-                LOG_DEBUG(log, "Receiving response...");
+                LOG_DEBUG(log, "URI={}, Receiving response...", uri);
             auto & response_body_stream = session->receiveResponse(poco_response);
 
             watch.stop();
             // addMetric(request, S3MetricType::Microseconds, watch.elapsedMicroseconds());
+            auto & sk = session->socket();
+            LOG_DEBUG(
+                log,
+                "URI={} sendBufferSize={} receiveBufferSize={} available={} keepAlive={} noDelay={} sendTimeout={}ms recvTimeout={}ms keep",
+                uri,
+                sk.getSendBufferSize(),
+                sk.getReceiveBufferSize(),
+                sk.available(),
+                sk.getKeepAlive(),
+                sk.getNoDelay(),
+                sk.getSendTimeout().totalMilliseconds(),
+                sk.getReceiveTimeout().totalMilliseconds());
 
             int status_code = static_cast<int>(poco_response.getStatus());
 
             if (status_code >= SUCCESS_RESPONSE_MIN && status_code <= SUCCESS_RESPONSE_MAX)
             {
                 if (enable_s3_requests_logging)
-                    LOG_DEBUG(log, "Response status: {}, {}", status_code, poco_response.getReason());
+                    LOG_DEBUG(log, "URI={}, Response status: {}, {}", uri, status_code, poco_response.getReason());
             }
             else
             {
                 /// Error statuses are more important so we show them even if `enable_s3_requests_logging == false`.
-                LOG_INFO(log, "Response status: {}, {}", status_code, poco_response.getReason());
+                LOG_INFO(log, "URI={}, Response status: {}, {}", uri, status_code, poco_response.getReason());
             }
 
-            if (poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT)
+            if (poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT || status_code == 302)
             {
                 auto location = poco_response.get("location");
                 remote_host_filter.checkURL(Poco::URI(location));
                 uri = location;
                 if (enable_s3_requests_logging)
-                    LOG_DEBUG(log, "Redirecting request to new location: {}", location);
+                    LOG_DEBUG(log, "URI={}, Redirecting request to new location: {}", uri, location);
 
                 addMetric(request, S3MetricType::Redirects);
 
@@ -339,7 +359,7 @@ void PocoHTTPClient::makeRequestInternal(
                     response->AddHeader(header_name, header_value);
                     headers_ss << header_name << ": " << header_value << "; ";
                 }
-                LOG_DEBUG(log, "Received headers: {}", headers_ss.str());
+                LOG_DEBUG(log, "URI={}, Received headers: {}", uri, headers_ss.str());
             }
             else
             {
@@ -354,7 +374,7 @@ void PocoHTTPClient::makeRequestInternal(
                                             std::istreambuf_iterator<char>());
 
                 /// Just trim string so it will not be so long
-                LOG_TRACE(log, "Got dangerous response with successful code {}, checking its body: '{}'", status_code, response_string.substr(0, 300));
+                LOG_DEBUG(log, "Got dangerous response with successful code {}, checking its body: '{}'", status_code, response_string.substr(0, 300));
                 const static std::string_view needle = "<Error>";
                 if (auto it = std::search(response_string.begin(), response_string.end(), std::default_searcher(needle.begin(), needle.end())); it != response_string.end())
                 {
@@ -381,7 +401,7 @@ void PocoHTTPClient::makeRequestInternal(
                     if (status_code >= 500 && error_report)
                         error_report(request_configuration);
                 }
-                response->SetResponseBody(response_body_stream, session);
+                response->SetResponseBody(response_body_stream, session, uri);
             }
 
             return;
@@ -393,6 +413,10 @@ void PocoHTTPClient::makeRequestInternal(
         tryLogCurrentException(log, fmt::format("Failed to make request to: {}", uri));
         response->SetClientErrorType(Aws::Client::CoreErrors::NETWORK_CONNECTION);
         response->SetClientErrorMessage(getCurrentExceptionMessage(false));
+        if (!session.isNull())
+        {
+            session->attachSessionData(response->GetClientErrorMessage());
+        }
 
         addMetric(request, S3MetricType::Errors);
 

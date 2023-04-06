@@ -15,6 +15,7 @@
 #pragma once
 
 #include <iostream>
+#include <common/logger_useful.h>
 
 namespace DB::S3
 {
@@ -25,15 +26,31 @@ template <typename Session>
 class SessionAwareIOStream : public std::iostream
 {
 public:
-    SessionAwareIOStream(Session session_, std::streambuf * sb)
+    SessionAwareIOStream(Session session_, std::streambuf * sb, const String & uri_)
         : std::iostream(sb)
         , session(std::move(session_))
+        , uri(uri_)
     {
+        const auto * network_exception = session->networkException();
+        if (network_exception != nullptr)
+        {
+            LOG_ERROR(Logger::get(), "{} uri={} exception={}:{}:{}", __PRETTY_FUNCTION__, uri, network_exception->message(), network_exception->what(), network_exception->code());
+        }        
+    }
+
+    ~SessionAwareIOStream()
+    {
+        const auto * network_exception = session->networkException();
+        if (network_exception != nullptr)
+        {
+            LOG_ERROR(Logger::get(), "{} uri={} exception={}:{}:{}", __PRETTY_FUNCTION__, uri, network_exception->message(), network_exception->what(), network_exception->code());
+        }  
     }
 
 private:
     /// Poco HTTP session is holder of response stream.
     Session session;
+    String uri;
 };
 
 } // namespace DB::S3

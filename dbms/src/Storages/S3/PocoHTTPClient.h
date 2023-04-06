@@ -74,7 +74,7 @@ struct PocoHTTPClientConfiguration
 class PocoHTTPResponse : public Aws::Http::Standard::StandardHttpResponse
 {
 public:
-    using SessionPtr = std::shared_ptr<Poco::Net::HTTPClientSession>;
+    //using SessionPtr = std::shared_ptr<Poco::Net::HTTPClientSession>;
 
     explicit PocoHTTPResponse(const std::shared_ptr<const Aws::Http::HttpRequest> request)
         : Aws::Http::Standard::StandardHttpResponse(request)
@@ -82,10 +82,11 @@ public:
     {
     }
 
-    void SetResponseBody(Aws::IStream & incoming_stream, SessionPtr & session_) /// NOLINT
+    template <typename SessionPtr>
+    void SetResponseBody(Aws::IStream & incoming_stream, SessionPtr & session_, const String & uri) /// NOLINT
     {
         body_stream = Aws::Utils::Stream::ResponseStream(
-            Aws::New<SessionAwareIOStream<SessionPtr>>("http result streambuf", session_, incoming_stream.rdbuf()));
+            Aws::New<SessionAwareIOStream<SessionPtr>>("http result streambuf", session_, incoming_stream.rdbuf(), uri));
     }
 
     void SetResponseBody(std::string & response_body) /// NOLINT
