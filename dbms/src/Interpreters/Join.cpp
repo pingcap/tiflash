@@ -2860,7 +2860,7 @@ void Join::finishOneNonJoin(size_t partition_index)
 
 Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
 {
-    if (dry_run)
+    if unlikely (dry_run)
     {
         assert(probe_process_info.block.rows() == 0);
     }
