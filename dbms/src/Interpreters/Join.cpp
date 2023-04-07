@@ -1427,7 +1427,7 @@ void Join::joinBlockNullAwareImpl(
     const ColumnRawPtrs & key_columns,
     const ConstNullMapPtr & null_map,
     const ConstNullMapPtr & filter_map,
-    const ConstNullMapPtr all_key_null_map) const
+    const ConstNullMapPtr & all_key_null_map) const
 {
     size_t rows = block.rows();
     std::vector<RowsNotInsertToMap *> null_rows(partitions.size(), nullptr);
@@ -1718,10 +1718,10 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
 
     if (isCrossJoin(kind))
         block = joinBlockCross(probe_process_info);
-    else if (!isNullAwareSemiFamily(kind))
-        block = joinBlockHash(probe_process_info);
-    else
+    else if (isNullAwareSemiFamily(kind))
         block = joinBlockNullAware(probe_process_info);
+    else
+        block = joinBlockHash(probe_process_info);
 
     /// for (cartesian)antiLeftSemi join, the meaning of "match-helper" is `non-matched` instead of `matched`.
     if (kind == LeftAnti || kind == Cross_LeftAnti)

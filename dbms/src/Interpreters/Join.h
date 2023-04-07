@@ -362,7 +362,7 @@ private:
         const ColumnRawPtrs & key_columns,
         const ConstNullMapPtr & null_map,
         const ConstNullMapPtr & filter_map,
-        const ConstNullMapPtr all_key_null_map) const;
+        const ConstNullMapPtr & all_key_null_map) const;
 
     IColumn::Selector hashToSelector(const WeakHash32 & hash) const;
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);

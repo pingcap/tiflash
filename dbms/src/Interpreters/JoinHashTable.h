@@ -118,26 +118,27 @@ struct MapsTemplate
 {
     using MappedType = Mapped;
     using key8Type = HashMap<UInt8, Mapped, TrivialHash, HashTableFixedGrower<8>>;
-    std::unique_ptr<key8Type> key8;
     using key16Type = HashMap<UInt16, Mapped, TrivialHash, HashTableFixedGrower<16>>;
-    std::unique_ptr<key16Type> key16;
     using key32Type = HashMap<UInt32, Mapped, HashCRC32<UInt32>>;
-    std::unique_ptr<key32Type> key32;
     using key64Type = HashMap<UInt64, Mapped, HashCRC32<UInt64>>;
-    std::unique_ptr<key64Type> key64;
     using key_stringType = HashMapWithSavedHash<StringRef, Mapped>;
-    std::unique_ptr<key_stringType> key_string;
     using key_strbinpaddingType = HashMapWithSavedHash<StringRef, Mapped>;
-    std::unique_ptr<key_strbinpaddingType> key_strbinpadding;
     using key_strbinType = HashMapWithSavedHash<StringRef, Mapped>;
-    std::unique_ptr<key_strbinType> key_strbin;
     using key_fixed_stringType = HashMapWithSavedHash<StringRef, Mapped>;
-    std::unique_ptr<key_fixed_stringType> key_fixed_string;
     using keys128Type = HashMap<UInt128, Mapped, HashCRC32<UInt128>>;
-    std::unique_ptr<keys128Type> keys128;
     using keys256Type = HashMap<UInt256, Mapped, HashCRC32<UInt256>>;
-    std::unique_ptr<keys256Type> keys256;
     using serializedType = HashMapWithSavedHash<StringRef, Mapped>;
+
+    std::unique_ptr<key8Type> key8;
+    std::unique_ptr<key16Type> key16;
+    std::unique_ptr<key32Type> key32;
+    std::unique_ptr<key64Type> key64;
+    std::unique_ptr<key_stringType> key_string;
+    std::unique_ptr<key_strbinpaddingType> key_strbinpadding;
+    std::unique_ptr<key_strbinType> key_strbin;
+    std::unique_ptr<key_fixed_stringType> key_fixed_string;
+    std::unique_ptr<keys128Type> keys128;
+    std::unique_ptr<keys256Type> keys256;
     std::unique_ptr<serializedType> serialized;
     // TODO: add more cases like Aggregator
 };
