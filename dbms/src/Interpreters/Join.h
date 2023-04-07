@@ -128,7 +128,7 @@ public:
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
       */
-    Block joinBlock(ProbeProcessInfo & probe_process_info) const;
+    Block joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run = false) const;
 
     void checkTypes(const Block & block) const;
 
@@ -177,10 +177,10 @@ public:
 
     const Names & getLeftJoinKeys() const { return key_names_left; }
 
-    void setInitActiveBuildConcurrency()
+    void setInitActiveBuildThreads()
     {
         std::unique_lock lock(build_probe_mutex);
-        active_build_concurrency = getBuildConcurrency();
+        active_build_threads = getBuildConcurrency();
     }
 
     size_t getProbeConcurrency() const
@@ -192,13 +192,13 @@ public:
     {
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
-        active_probe_concurrency = probe_concurrency;
+        active_probe_threads = probe_concurrency;
     }
 
-    void cancel()
+    void wakeUpAllWaitingThreads()
     {
         std::unique_lock lk(build_probe_mutex);
-        is_canceled = true;
+        skip_wait = true;
         probe_cv.notify_all();
         build_cv.notify_all();
     }
@@ -366,13 +366,13 @@ private:
 
     mutable std::condition_variable build_cv;
     size_t build_concurrency;
-    size_t active_build_concurrency;
+    std::atomic<size_t> active_build_threads;
 
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
-    size_t active_probe_concurrency;
+    std::atomic<size_t> active_probe_threads;
 
-    bool is_canceled = false;
+    bool skip_wait = false;
     bool meet_error = false;
     String error_message;
 

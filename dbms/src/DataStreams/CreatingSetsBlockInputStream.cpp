@@ -109,7 +109,7 @@ void CreatingSetsBlockInputStream::createAll()
             for (auto & elem : subqueries_for_sets)
             {
                 if (elem.second.join)
-                    elem.second.join->setInitActiveBuildConcurrency();
+                    elem.second.join->setInitActiveBuildThreads();
             }
         }
         Stopwatch watch;
