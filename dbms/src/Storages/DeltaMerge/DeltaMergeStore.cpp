@@ -283,12 +283,11 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
             {
                 auto wait_group = thread_pool->waitGroup();
                 auto segment_ids = Segment::getAllSegmentIds(*dm_context, segment_id);
-                std::mutex mutex;
                 for (auto & segment_id : segment_ids)
                 {
-                    auto task = [this, dm_context, segment_id, &mutex] {
+                    auto task = [this, dm_context, segment_id] {
                         auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
-                        std::lock_guard lock(mutex);
+                        std::lock_guard lock(read_write_mutex);
                         segments.emplace(segment->getRowKeyRange().getEnd(), segment);
                         id_to_segment.emplace(segment_id, segment);
                     };
@@ -299,7 +298,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
             }
             else
             {
-                while (segment_id)
+                while (segment_id != 0)
                 {
                     auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
                     segments.emplace(segment->getRowKeyRange().getEnd(), segment);
