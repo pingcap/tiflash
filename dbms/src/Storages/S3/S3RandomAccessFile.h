@@ -18,6 +18,7 @@
 #include <Common/Logger.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
+#include <Storages/S3/S3Common.h>
 #include <aws/s3/model/GetObjectResult.h>
 #include <common/types.h>
 
