@@ -35,13 +35,13 @@ void PipelineExecutor::scheduleEvents()
 {
     assert(root_pipeline);
     auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
-    Events without_input_events;
+    Events sources;
     for (const auto & event : events)
     {
-        if (event->withoutInput())
-            without_input_events.push_back(event);
+        if (event->prepareForSource())
+            sources.push_back(event);
     }
-    for (const auto & event : without_input_events)
+    for (const auto & event : sources)
         event->schedule();
 }
 
