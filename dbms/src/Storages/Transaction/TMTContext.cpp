@@ -132,8 +132,11 @@ void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, con
     {
         // update the client config including pd_client
         cluster->update(raft_config.pd_addrs, cluster_config);
-        // update the etcd_client after pd_client get updated
-        etcd_client->update(cluster_config);
+        if (etcd_client)
+        {
+            // update the etcd_client after pd_client get updated
+            etcd_client->update(cluster_config);
+        }
     }
 }
 

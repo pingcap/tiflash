@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/S3/MockS3Client.h>
@@ -53,10 +52,6 @@
 #include <mutex>
 #include <string_view>
 
-namespace DB::FailPoints
-{
-extern const char force_set_mocked_s3_object_mtime[];
-} // namespace DB::FailPoints
 namespace DB::S3::tests
 {
 using namespace Aws::S3;
@@ -256,24 +251,6 @@ Model::HeadObjectOutcome MockS3Client::HeadObject(const Model::HeadObjectRequest
     if (itr_obj != bucket_storage.end())
     {
         auto r = Model::HeadObjectResult{};
-        auto try_set_mtime = [&] {
-            if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_mocked_s3_object_mtime); v)
-            {
-                auto m = std::any_cast<std::map<String, Aws::Utils::DateTime>>(v.value());
-                const auto req_key = normalizedKey(request.GetKey());
-                if (auto iter_m = m.find(req_key); iter_m != m.end())
-                {
-                    r.SetLastModified(iter_m->second);
-                    LOG_WARNING(Logger::get(), "failpoint set mtime, key={} mtime={}", req_key, iter_m->second.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
-                }
-                else
-                {
-                    LOG_WARNING(Logger::get(), "failpoint set mtime failed, key={}", req_key);
-                }
-            }
-        };
-        UNUSED(try_set_mtime);
-        fiu_do_on(FailPoints::force_set_mocked_s3_object_mtime, { try_set_mtime(); });
         r.SetContentLength(itr_obj->second.size());
         return r;
     }
