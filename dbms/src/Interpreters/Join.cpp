@@ -2807,7 +2807,7 @@ void Join::waitUntilAllBuildFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
     build_cv.wait(lock, [&]() {
-        return active_build_threads == 0 || meet_error || is_canceled;
+        return active_build_threads == 0 || meet_error || skip_wait;
     });
     if (meet_error)
         throw Exception(error_message);
@@ -2832,7 +2832,7 @@ void Join::waitUntilAllProbeFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
     probe_cv.wait(lock, [&]() {
-        return active_probe_threads == 0 || meet_error || is_canceled;
+        return active_probe_threads == 0 || meet_error || skip_wait;
     });
     if (meet_error)
         throw Exception(error_message);
@@ -2858,13 +2858,20 @@ void Join::finishOneNonJoin(size_t partition_index)
     }
 }
 
-Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
+Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
 {
-    if unlikely (active_build_threads != 0)
+    if (dry_run)
     {
-        /// build is not finished yet, the query must be cancelled, so just return {}
-        LOG_WARNING(log, "JoinBlock without non zero active_build_threads, return empty block");
-        return {};
+        assert(probe_process_info.block.rows() == 0);
+    }
+    else
+    {
+        if unlikely (active_build_threads != 0)
+        {
+            /// build is not finished yet, the query must be cancelled, so just return {}
+            LOG_WARNING(log, "JoinBlock without non zero active_build_threads, return empty block");
+            return {};
+        }
     }
     std::shared_lock lock(rwlock);
 
