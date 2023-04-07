@@ -99,6 +99,10 @@ void PipelineExecutorStatus::onEventFinish() noexcept
         --active_event_count;
         if (0 == active_event_count)
         {
+            // It is not expected for a query to be finished more than one time.
+            bool expect_origin = false;
+            RUNTIME_ASSERT(is_finished.compare_exchange_strong(expect_origin, true));
+
             cv.notify_all();
             query_finished = true;
         }

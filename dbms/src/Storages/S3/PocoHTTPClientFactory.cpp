@@ -23,7 +23,7 @@
 
 namespace DB::S3
 {
-PocoHTTPClientFactory::PocoHTTPClientFactory(PocoHTTPClientConfiguration & http_cfg)
+PocoHTTPClientFactory::PocoHTTPClientFactory(const PocoHTTPClientConfiguration & http_cfg)
     : poco_cfg(http_cfg)
 {
 }
