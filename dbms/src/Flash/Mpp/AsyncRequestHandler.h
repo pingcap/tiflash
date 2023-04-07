@@ -36,14 +36,18 @@ enum class AsyncRequestStage
     FINISHED,
 };
 
-using Clock = std::chrono::system_clock;
+using SteadyClock = std::chrono::steady_clock;
 
 constexpr Int32 max_retry_times = 10;
 constexpr Int32 retry_interval_time = 1; // second
 constexpr Int32 batch_packet_count = 16;
 
+class AsyncRequestHandlerBase : public UnaryCallback<bool>
+{
+};
+
 template <typename RPCContext, bool enable_fine_grained_shuffle>
-class AsyncRequestHandler : public UnaryCallback<bool>
+class AsyncRequestHandler : public AsyncRequestHandlerBase
 {
 public:
     using Status = typename RPCContext::Status;
@@ -80,14 +84,8 @@ public:
         for (auto & packet : packets)
             packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
         // TODO add random fail point to mock the fail
-        // LOG_INFO(log, "Profiling: async_cons {}", reinterpret_cast<UInt64>(this));
         start();
     }
-
-    // ~AsyncRequestHandler() override
-    // {
-    //     LOG_INFO(log, "Profiling: async_des {}", reinterpret_cast<UInt64>(this));
-    // }
 
     // execute will be called by RPC framework so it should be as light as possible.
     // Do not do anything after processXXX functions.
@@ -98,32 +96,22 @@ public:
             switch (stage)
             {
             case AsyncRequestStage::WAIT_RETRY:
-                // debug
-                // LOG_INFO(log, "Profiling: enter WAIT_RETRY");
                 start();
                 break;
             case AsyncRequestStage::WAIT_MAKE_READER:
-                // debug
-                // LOG_INFO(log, "Profiling: enter WAIT_MAKE_READER");
                 processWaitMakeReader(ok);
                 break;
             case AsyncRequestStage::WAIT_BATCH_READ:
-                // debug
-                // LOG_INFO(log, "Profiling: enter WAIT_READ");
                 processWaitBatchRead(ok);
                 break;
             case AsyncRequestStage::WAIT_REWRITE:
-                // debug
-                // LOG_INFO(log, "Profiling: enter WAIT_REWRITE");
                 processWaitReWrite();
                 break;
             case AsyncRequestStage::WAIT_FINISH:
-                // debug
-                // LOG_INFO(log, "Profiling: enter WAIT_FINISH");
                 processWaitFinish();
                 break;
             default:
-                __builtin_unreachable();
+                RUNTIME_ASSERT(false, "Unexpected stage {}", magic_enum::enum_name(stage));
             }
         }
         catch (...)
@@ -222,8 +210,6 @@ private:
         if (!checkResultAfterSendingPackets(res))
             return;
 
-        // debug
-        // LOG_INFO(log, "Profiling: rewrite successfully");
         stage = AsyncRequestStage::WAIT_BATCH_READ;
         startAsyncRead();
     }
@@ -239,8 +225,6 @@ private:
 
         if (unlikely(isChannelFull(res)))
         {
-            // debug
-            // LOG_INFO(log, "Profiling: rewrite full again");
             asyncWaitForRewrite();
             return false;
         }
@@ -304,7 +288,7 @@ private:
 
             // Let alarm put me into CompletionQueue after a while
             // , so that we can try to connect again.
-            alarm.Set(cq, Clock::now() + std::chrono::seconds(retry_interval_time), this);
+            alarm.Set(cq, SteadyClock::now() + std::chrono::seconds(retry_interval_time), this);
             return true;
         }
         else

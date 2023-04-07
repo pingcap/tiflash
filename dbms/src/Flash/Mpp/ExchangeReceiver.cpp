@@ -23,8 +23,8 @@
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Flash/Mpp/ReceiverChannelTryWriter.h>
+#include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 #include <grpcpp/alarm.h>
@@ -94,7 +94,6 @@ public:
         for (auto & packet : packets)
             packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
 
-        // LOG_INFO(log, "Profiling: msg channel size: {}", msg_channels->size());
         start();
     }
 
@@ -104,12 +103,10 @@ public:
         switch (stage)
         {
         case AsyncRequestStagev1::WAIT_RETRY:
-            // LOG_INFO(log, "Profiling: WAIT_RETRY");
             start();
             break;
         case AsyncRequestStagev1::WAIT_MAKE_READER:
         {
-            // LOG_INFO(log, "Profiling: WAIT_MAKE_READER");
             // Use lock to ensure reader is created already in reactor thread
             std::lock_guard lock(mu);
             if (!ok)
@@ -128,7 +125,6 @@ public:
             break;
         }
         case AsyncRequestStagev1::WAIT_BATCH_READ:
-            // LOG_INFO(log, "Profiling: WAIT_BATCH_READ");
             if (ok)
                 ++read_packet_index;
 
@@ -138,7 +134,6 @@ public:
                 reader->read(packets[read_packet_index], thisAsUnaryCallback());
             break;
         case AsyncRequestStagev1::WAIT_FINISH:
-            // LOG_INFO(log, "Profiling: WAIT_FINISH");
             notifyReactor();
             break;
         default:
@@ -154,8 +149,7 @@ public:
         switch (stage)
         {
         case AsyncRequestStagev1::WAIT_BATCH_READ:
-            // LOG_TRACE(log, "Received {} packets.", read_packet_index);
-            // LOG_INFO(log, "Profiling: Received {} packets.", read_packet_index);
+            LOG_TRACE(log, "Received {} packets.", read_packet_index);
             if (read_packet_index > 0)
                 has_data = true;
 
@@ -165,20 +159,16 @@ public:
                 setDone("Exchange receiver meet error : push packets fail");
             else if (read_packet_index < batch_packet_count_v1)
             {
-                // LOG_INFO(log, "Profiling: to WAIT_FINISH.");
                 stage = AsyncRequestStagev1::WAIT_FINISH;
                 reader->finish(finish_status, thisAsUnaryCallback());
             }
             else
             {
-                // LOG_INFO(log, "Profiling: start another read.");
                 read_packet_index = 0;
                 reader->read(packets[0], thisAsUnaryCallback());
             }
-            // LOG_INFO(log, "Profiling: Received {} packets finished.", read_packet_index);
             break;
         case AsyncRequestStagev1::WAIT_FINISH:
-            // LOG_INFO(log, "Profiling: handle WAIT_FINISH.");
             if (finish_status.ok())
                 setDone("");
             else
@@ -250,7 +240,6 @@ private:
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::lock_guard lock(mu);
         rpc_context->makeAsyncReader(*request, reader, cq, thisAsUnaryCallback());
-        // LOG_INFO(log, "Profiling: start");
     }
 
     bool retryOrDone(String done_msg)
@@ -274,21 +263,18 @@ private:
 
     bool sendPackets()
     {
-        // LOG_INFO(log, "Profiling: start to send packets.");
         // note: no exception should be thrown rudely, since it's called by a GRPC poller.
         for (size_t i = 0; i < read_packet_index; ++i)
         {
             auto & packet = packets[i];
             if (!channel_writer.write<enable_fine_grained_shuffle>(request->source_index, packet))
             {
-                // LOG_INFO(log, "Profiling: send packets fail, i: {}.", i);
                 return false;
             }
 
             // can't reuse packet since it is sent to readers.
             packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
         }
-        // LOG_INFO(log, "Profiling: send packets finished.");
         return true;
     }
 
@@ -354,7 +340,6 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 {
     try
     {
-        // LOG_INFO(exc_log, "Profiling: er_cons {}", reinterpret_cast<UInt64>(this));
         prepareMsgChannels();
         prepareGRPCReceiveQueue();
         if (isReceiverForTiFlashStorage())
@@ -385,11 +370,8 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     try
     {
         close();
-        // LOG_INFO(exc_log, "Profiling: er_des {} 1", reinterpret_cast<UInt64>(this));
         waitAllConnectionDone();
-        // LOG_INFO(exc_log, "Profiling: er_des {} 2", reinterpret_cast<UInt64>(this));
         thread_manager->wait();
-        // LOG_INFO(exc_log, "Profiling: er_des {} 3", reinterpret_cast<UInt64>(this));
         ExchangeReceiverMetric::clearDataSizeMetric(data_size_in_queue);
     }
     catch (...)
@@ -415,13 +397,10 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
 {
     std::unique_lock lock(mu);
-    // LOG_INFO(exc_log, "Profiling: er_des_wait_all {} 0", reinterpret_cast<UInt64>(this));
     auto pred = [&] {
         return live_connections == 0;
     };
     cv.wait(lock, pred);
-
-    // LOG_INFO(exc_log, "Profiling: er_des_wait_all {} 1", reinterpret_cast<UInt64>(this));
 
     // The meaning of calling of connectionDone by local tunnel is to tell the receiver
     // to close channels and the local tunnel may still alive after it calls connectionDone.
@@ -429,7 +408,6 @@ void ExchangeReceiverBase<RPCContext>::waitAllConnectionDone()
     // In order to ensure the destructions of local tunnels are
     // after the ExchangeReceiver, we need to wait at here.
     waitLocalConnectionDone(lock);
-    // LOG_INFO(exc_log, "Profiling: er_des_wait_all {} 2", reinterpret_cast<UInt64>(this));
 }
 
 template <typename RPCContext>
@@ -551,10 +529,9 @@ void ExchangeReceiverBase<RPCContext>::setUpAsyncConnection(std::vector<Request>
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && request)
 {
-
     if (enable_fine_grained_shuffle_flag)
     {
-        async_handler_fine_grained_ptrs.push_back(
+        async_handler_ptrs.push_back(
             std::make_unique<AsyncRequestHandler<RPCContext, true>>(
                 grpc_recv_queue,
                 async_wait_rewrite_queue,
@@ -568,7 +545,7 @@ void ExchangeReceiverBase<RPCContext>::createAsyncRequestHandler(Request && requ
     }
     else
     {
-        async_handler_no_fine_grained_ptrs.push_back(
+        async_handler_ptrs.push_back(
             std::make_unique<AsyncRequestHandler<RPCContext, false>>(
                 grpc_recv_queue,
                 async_wait_rewrite_queue,
@@ -905,9 +882,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
     size_t stream_id,
     std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
-    // LOG_INFO(exc_log, "Profiling: start to receive data, stream_id: {}, queue size: {}", stream_id, msg_channels[stream_id]->size());
     auto recv_res = receive(stream_id);
-    // LOG_INFO(exc_log, "Profiling: receiving data completed, stream_id: {}, queue size: {}", stream_id, msg_channels[stream_id]->size());
     return toExchangeReceiveResult(
         recv_res,
         block_queue,

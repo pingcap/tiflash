@@ -81,18 +81,7 @@ struct ReceivedMessage
         , error_ptr(error_ptr_)
         , resp_ptr(resp_ptr_)
         , chunks(chunks_)
-    {
-        // debug
-        // auto * log = &Poco::Logger::get("LRUCache");
-        // LOG_INFO(log, "Profiling: rm_cons", reinterpret_cast<size_t>(this));
-    }
-
-    // ~ReceivedMessage()
-    // {
-    //     // debug
-    //     // auto * log = &Poco::Logger::get("LRUCache");
-    //     // LOG_INFO(log, "Profiling: rm_des", reinterpret_cast<size_t>(this));
-    // }
+    {}
 
     void switchMemTracker()
     {
@@ -117,7 +106,7 @@ public:
     ~ReceiverChannelBase() = default;
 
 protected:
-    bool splitPacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks);
+    bool splitFineGrainedShufflePacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks);
 
     static const mpp::Error * getErrorPtr(const mpp::MPPDataPacket & packet);
     static const String * getRespPtr(const mpp::MPPDataPacket & packet);

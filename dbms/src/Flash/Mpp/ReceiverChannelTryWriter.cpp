@@ -46,10 +46,6 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWrite(size_t source_index, cons
     else
         res = tryWriteNonFineGrain(source_index, tracked_packet, error_ptr, resp_ptr);
 
-    // debug
-    // if (res == GRPCReceiveQueueRes::FULL)
-    //     LOG_INFO(log, "Profiling: channelreceiver tryWrite full...");
-
     if (likely(res == GRPCReceiveQueueRes::OK || res == GRPCReceiveQueueRes::FULL))
         ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
     LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) res:{}, enable_fine_grained_shuffle: {}", channel_size, magic_enum::enum_name(res), enable_fine_grained_shuffle);
@@ -62,7 +58,7 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteFineGrain(size_t source_in
     auto & packet = tracked_packet->packet;
     std::vector<std::vector<const String *>> chunks(channel_size);
 
-    if (!splitPacketIntoChunks(source_index, packet, chunks))
+    if (!splitFineGrainedShufflePacketIntoChunks(source_index, packet, chunks))
         return GRPCReceiveQueueRes::CANCELLED;
 
     // Still need to send error_ptr or resp_ptr even if packet.chunks_size() is zero.
@@ -118,15 +114,11 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryWriteNonFineGrain(size_t source
 template <bool enable_fine_grained_shuffle>
 GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite()
 {
-    // debug
-    // LOG_INFO(log, "Profiling: receiverchannel enter tryReWrite...");
     GRPCReceiveQueueRes res = GRPCReceiveQueueRes::OK;
     auto iter = rewrite_msgs.begin();
 
     while (loopJudge(res) && (iter != rewrite_msgs.end()))
     {
-        // debug
-        // LOG_INFO(log, "Profiling: receiverchannel enter tryReWrite loop...");
         GRPCReceiveQueueRes write_res = tryRewriteImpl(iter->first, iter->second);
         if (write_res == GRPCReceiveQueueRes::OK)
         {
@@ -140,9 +132,6 @@ GRPCReceiveQueueRes ReceiverChannelTryWriter::tryReWrite()
         updateResult(res, write_res);
         fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, res = GRPCReceiveQueueRes::CANCELLED);
     }
-
-    // debug
-    // LOG_INFO(log, "Profiling: receiverchannel tryReWrite {}...", magic_enum::enum_name(res));
 
     return res;
 }

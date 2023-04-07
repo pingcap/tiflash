@@ -19,7 +19,7 @@
 
 namespace DB
 {
-bool ReceiverChannelBase::splitPacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks)
+bool ReceiverChannelBase::splitFineGrainedShufflePacketIntoChunks(size_t source_index, mpp::MPPDataPacket & packet, std::vector<std::vector<const String *>> & chunks)
 {
     if (packet.chunks().empty())
         return true;

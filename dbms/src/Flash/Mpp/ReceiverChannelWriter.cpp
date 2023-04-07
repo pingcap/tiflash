@@ -17,6 +17,8 @@
 
 #include <utility>
 
+#include "Common/Exception.h"
+
 namespace DB
 {
 namespace
@@ -35,10 +37,7 @@ inline void injectFailPointReceiverPushFail(bool & push_succeed [[maybe_unused]]
         fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false);
         break;
     default:
-        {
-            // TODO log error here
-            throw Exception(fmt::format("Invalid ReceiverMode: {}", magic_enum::enum_name(mode)));
-        }
+        RUNTIME_ASSERT(false, "Illegal ReceiverMode");
     }
 }
 } // namespace
@@ -54,7 +53,7 @@ bool ReceiverChannelWriter::writeFineGrain(
     auto & packet = tracked_packet->packet;
     std::vector<std::vector<const String *>> chunks(msg_channels->size());
 
-    if (!splitPacketIntoChunks(source_index, packet, chunks))
+    if (!splitFineGrainedShufflePacketIntoChunks(source_index, packet, chunks))
         return false;
 
     // Still need to send error_ptr or resp_ptr even if packet.chunks_size() is zero.

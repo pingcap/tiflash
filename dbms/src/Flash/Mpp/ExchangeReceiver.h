@@ -229,8 +229,7 @@ private:
     std::vector<GRPCReceiveQueue<RecvMsgPtr>> grpc_recv_queue;
     AsyncRequestHandlerWaitQueuePtr async_wait_rewrite_queue;
 
-    std::vector<std::unique_ptr<AsyncRequestHandler<RPCContext, true>>> async_handler_fine_grained_ptrs;
-    std::vector<std::unique_ptr<AsyncRequestHandler<RPCContext, false>>> async_handler_no_fine_grained_ptrs;
+    std::vector<std::unique_ptr<AsyncRequestHandlerBase>> async_handler_ptrs;
 
     std::mutex mu;
     std::condition_variable cv;
