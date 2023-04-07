@@ -36,6 +36,10 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
 
     probe_exec.set(HashJoinProbeExec::build(original_join, input, non_joined_stream_index, max_block_size_));
     probe_exec->setCancellationHook([&]() { return isCancelledOrThrowIfKilled(); });
+
+    ProbeProcessInfo header_probe_process_info(0);
+    header_probe_process_info.resetBlock(input->getHeader());
+    header = original_join->joinBlock(header_probe_process_info, true);
 }
 
 void HashJoinProbeBlockInputStream::readSuffixImpl()
@@ -45,19 +49,12 @@ void HashJoinProbeBlockInputStream::readSuffixImpl()
 
 Block HashJoinProbeBlockInputStream::getHeader() const
 {
-    Block res = children.back()->getHeader();
-    assert(res.rows() == 0);
-    ProbeProcessInfo header_probe_process_info(0);
-    header_probe_process_info.resetBlock(std::move(res));
-    /// use original_join here so we don't need add lock
-    return original_join->joinBlock(header_probe_process_info);
+    return header;
 }
 
 void HashJoinProbeBlockInputStream::cancel(bool kill)
 {
     IProfilingBlockInputStream::cancel(kill);
-    /// When the probe stream quits probe by cancelling instead of normal finish, the Join operator might still produce meaningless blocks
-    /// and expects these meaningless blocks won't be used to produce meaningful result.
 
     probe_exec->cancel();
 }

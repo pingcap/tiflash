@@ -194,9 +194,9 @@ Join::Join(
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
     , build_concurrency(0)
-    , active_build_concurrency(0)
+    , active_build_threads(0)
     , probe_concurrency(0)
-    , active_probe_concurrency(0)
+    , active_probe_threads(0)
     , collators(collators_)
     , non_equal_conditions(non_equal_conditions_)
     , original_strictness(strictness)
@@ -613,7 +613,7 @@ void Join::setBuildConcurrencyAndInitJoinPartition(size_t build_concurrency_)
 {
     if (unlikely(build_concurrency > 0))
         throw Exception("Logical error: `setBuildConcurrencyAndInitJoinPartition` shouldn't be called more than once", ErrorCodes::LOGICAL_ERROR);
-    /// do not set active_build_concurrency because in compile stage, `joinBlock` will be called to get generate header, if active_build_concurrency
+    /// do not set active_build_threads because in compile stage, `joinBlock` will be called to get generate header, if active_build_threads
     /// is set here, `joinBlock` will hang when used to get header
     build_concurrency = std::max(1, build_concurrency_);
 
@@ -2729,12 +2729,12 @@ void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right)
 void Join::finishOneBuild()
 {
     std::unique_lock lock(build_probe_mutex);
-    if (active_build_concurrency == 1)
+    if (active_build_threads == 1)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_build);
     }
-    --active_build_concurrency;
-    if (active_build_concurrency == 0)
+    --active_build_threads;
+    if (active_build_threads == 0)
     {
         workAfterBuildFinish();
         build_cv.notify_all();
@@ -2808,7 +2808,7 @@ void Join::waitUntilAllBuildFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
     build_cv.wait(lock, [&]() {
-        return active_build_concurrency == 0 || meet_error || is_canceled;
+        return active_build_threads == 0 || meet_error || skip_wait;
     });
     if (meet_error)
         throw Exception(error_message);
@@ -2817,12 +2817,12 @@ void Join::waitUntilAllBuildFinished() const
 void Join::finishOneProbe()
 {
     std::unique_lock lock(build_probe_mutex);
-    if (active_probe_concurrency == 1)
+    if (active_probe_threads == 1)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
     }
-    --active_probe_concurrency;
-    if (active_probe_concurrency == 0)
+    --active_probe_threads;
+    if (active_probe_threads == 0)
     {
         workAfterProbeFinish();
         probe_cv.notify_all();
@@ -2833,7 +2833,7 @@ void Join::waitUntilAllProbeFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
     probe_cv.wait(lock, [&]() {
-        return active_probe_concurrency == 0 || meet_error || is_canceled;
+        return active_probe_threads == 0 || meet_error || skip_wait;
     });
     if (meet_error)
         throw Exception(error_message);
@@ -2842,21 +2842,38 @@ void Join::waitUntilAllProbeFinished() const
 
 void Join::finishOneNonJoin(size_t partition_index)
 {
-    while (partition_index < build_concurrency)
+    if likely (active_build_threads == 0 && active_probe_threads == 0)
     {
-        std::unique_lock partition_lock = partitions[partition_index]->lockPartition();
-        partitions[partition_index]->releaseBuildPartitionBlocks(partition_lock);
-        partitions[partition_index]->releaseProbePartitionBlocks(partition_lock);
-        if (!partitions[partition_index]->isSpill())
+        /// only clear hash table if not active build/probe threads
+        while (partition_index < build_concurrency)
         {
-            releaseBuildPartitionHashTable(partition_index, partition_lock);
+            std::unique_lock partition_lock = partitions[partition_index]->lockPartition();
+            partitions[partition_index]->releaseBuildPartitionBlocks(partition_lock);
+            partitions[partition_index]->releaseProbePartitionBlocks(partition_lock);
+            if (!partitions[partition_index]->isSpill())
+            {
+                releaseBuildPartitionHashTable(partition_index, partition_lock);
+            }
+            partition_index += build_concurrency;
         }
-        partition_index += build_concurrency;
     }
 }
 
-Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
+Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
 {
+    if unlikely (dry_run)
+    {
+        assert(probe_process_info.block.rows() == 0);
+    }
+    else
+    {
+        if unlikely (active_build_threads != 0)
+        {
+            /// build is not finished yet, the query must be cancelled, so just return {}
+            LOG_WARNING(log, "JoinBlock without non zero active_build_threads, return empty block");
+            return {};
+        }
+    }
     std::shared_lock lock(rwlock);
 
     probe_process_info.updateStartRow();
@@ -3170,7 +3187,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         auto new_max_bytes_before_external_join = static_cast<size_t>(max_bytes_before_external_join * (static_cast<double>(restore_join_build_concurrency) / build_concurrency));
         restore_join = createRestoreJoin(std::max(1, new_max_bytes_before_external_join));
         restore_join->initBuild(build_sample_block, restore_join_build_concurrency);
-        restore_join->setInitActiveBuildConcurrency();
+        restore_join->setInitActiveBuildThreads();
         restore_join->initProbe(probe_sample_block, restore_join_build_concurrency);
         for (Int64 i = 0; i < restore_join_build_concurrency; i++)
         {

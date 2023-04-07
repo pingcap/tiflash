@@ -133,6 +133,8 @@ private:
     ProbeStatus status{ProbeStatus::WAIT_BUILD_FINISH};
     size_t joined_rows = 0;
     size_t non_joined_rows = 0;
+
+    Block header;
 };
 
 } // namespace DB
