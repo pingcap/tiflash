@@ -218,8 +218,8 @@ namespace DB
         F(type_lock_conflict, {"type", "lock_conflict"}), F(type_delete_conflict, {"type", "delete_conflict"}),                                     \
         F(type_delete_risk, {"type", "delete_risk"}))                                                                                               \
     M(tiflash_disaggregated_object_lock_request_duration_seconds, "Bucketed histogram of S3 object lock/delete request duration", Histogram,        \
-        F(type_lock, {{"type", "cop"}}, ExpBuckets{0.001, 2, 20}),                                                                                  \
-        F(type_delete, {{"type", "batch"}}, ExpBuckets{0.001, 2, 20}))                                                                              \
+        F(type_lock, {{"type", "lock"}}, ExpBuckets{0.001, 2, 20}),                                                                                 \
+        F(type_delete, {{"type", "delete"}}, ExpBuckets{0.001, 2, 20}))                                                                             \
     M(tiflash_disaggregated_read_tasks_count, "Total number of storage engine disaggregated read tasks", Counter)                                   \
     M(tiflash_disaggregated_breakdown_duration_seconds, "", Histogram,                                                                              \
         F(type_rpc_establish, {{"type", "rpc_establish"}}, ExpBuckets{0.01, 2, 20}),                                                                \
@@ -321,6 +321,14 @@ namespace DB
         F(type_num_files, {"type", "num_files"}))                                                                                                   \
     M(tiflash_storage_checkpoint_flow, "The bytes flow cause by remote checkpoint", Counter,                                                        \
         F(type_incremental, {"type", "incremental"}), F(type_compaction, {"type", "compaction"}))                                                   \
+    M(tiflash_storage_checkpoint_keys_by_types, "The keys flow cause by remote checkpoint", Counter,                                                \
+        F(type_raftengine, {"type", "raftengine"}), F(type_kvengine, {"type", "kvengine"}), F(type_kvstore, {"type", "kvstore"}),                   \
+        F(type_data, {"type", "data"}), F(type_log, {"type", "log"}), F(type_meta, {"type", "kvstore"}),                                            \
+        F(type_unknown, {"type", "unknown"}))                                                                                                       \
+    M(tiflash_storage_checkpoint_flow_by_types, "The bytes flow cause by remote checkpoint", Counter,                                               \
+        F(type_raftengine, {"type", "raftengine"}), F(type_kvengine, {"type", "kvengine"}), F(type_kvstore, {"type", "kvstore"}),                   \
+        F(type_data, {"type", "data"}), F(type_log, {"type", "log"}), F(type_meta, {"type", "kvstore"}),                                            \
+        F(type_unknown, {"type", "unknown"}))                                                                                                       \
     M(tiflash_storage_s3_request_seconds, "S3 request duration in seconds", Histogram,                                                              \
         F(type_put_object, {{"type", "put_object"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
         F(type_copy_object, {{"type", "copy_object"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
@@ -331,6 +339,11 @@ namespace DB
         F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
         F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                               \
         F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}))                                                                   \
+    M(tiflash_storage_s3_gc_status, "S3 GC status", Gauge,                                                                                          \
+        F(type_lifecycle_added, {{"type", "lifecycle_added"}}),                                                                                     \
+        F(type_lifecycle_failed, {{"type", "lifecycle_failed"}}),                                                                                   \
+        F(type_owner, {{"type", "owner"}}),                                                                                                         \
+        F(type_running, {{"type", "running"}}))                                                                                                     \
     M(tiflash_storage_s3_gc_seconds, "S3 GC subprocess duration in seconds",                                                                        \
         Histogram,  /* these command usually cost several seconds, increase the start bucket to 500ms */                                            \
         F(type_total, {{"type", "total"}}, ExpBuckets{0.5, 2, 20}),                                                                                 \
@@ -340,10 +353,12 @@ namespace DB
         F(type_clean_manifests, {{"type", "clean_manifests"}}, ExpBuckets{0.5, 2, 20}),                                                             \
         F(type_scan_then_clean_data_files, {{"type", "scan_then_clean_data_files"}}, ExpBuckets{0.5, 2, 20}),                                       \
         F(type_clean_one_lock, {{"type", "clean_one_lock"}}, ExpBuckets{0.5, 2, 20}))                                                               \
-    M(tiflash_storage_checkpoint_seconds, "PageStorage checkpoint elapsed time", Histogram,                                                         \
-        F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets{0.001, 2, 20}),                                         \
-        F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets{0.001, 2, 20}),                                                 \
-        F(type_upload_checkpoint, {{"type", "upload_checkpoint"}}, ExpBuckets{0.001, 2, 20}))
+    M(tiflash_storage_checkpoint_seconds, "PageStorage checkpoint elapsed time",                                                                    \
+        Histogram, /* these command usually cost several seconds, increase the start bucket to 50ms */                                              \
+        F(type_dump_checkpoint_snapshot, {{"type", "dump_checkpoint_snapshot"}}, ExpBuckets{0.05, 2, 20}),                                          \
+        F(type_dump_checkpoint_data, {{"type", "dump_checkpoint_data"}}, ExpBuckets{0.05, 2, 20}),                                                  \
+        F(type_upload_checkpoint, {{"type", "upload_checkpoint"}}, ExpBuckets{0.05, 2, 20}),                                                        \
+        F(type_copy_checkpoint_info, {{"type", "copy_checkpoint_info"}}, ExpBuckets{0.05, 2, 20}))
 
 // clang-format on
 
