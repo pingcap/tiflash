@@ -61,11 +61,13 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
     while (true)
     {
         auto n = readImpl(buf, size);
-        if (unlikely(n < 0 && errno == 104))
+        if (unlikely(n < 0 && errno == ECONNRESET))
         {
             // If it is a "Connection reset by peer" error, then initialize again
             if (initialize())
+            {
                 continue;
+            }
         }
         return n;
     }
@@ -91,9 +93,13 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
     while (true)
     {
         auto off = seekImpl(offset_, whence);
-        if (unlikely(off < 0 && errno == 104 && initialize())) // Connection reset by peer and re-initialize succ.
+        if (unlikely(off < 0 && errno == ECONNRESET))
         {
-            continue;
+            // If it is a "Connection reset by peer" error, then initialize again
+            if (initialize())
+            {
+                continue;
+            }
         }
         return off;
     }
