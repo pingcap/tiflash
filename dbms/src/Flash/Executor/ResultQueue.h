@@ -14,35 +14,14 @@
 
 #pragma once
 
-#include <IO/IOThreadPool.h>
+#include <Common/MPMCQueue.h>
+#include <Common/PtrHolder.h>
+#include <Core/Block.h>
+
+#include <mutex>
 
 namespace DB
 {
-
-namespace io_pool_details
-{
-
-struct S3FileCacheTrait
-{
-};
-
-struct DataStoreS3Trait
-{
-};
-
-struct RemoteReadTaskTrait
-{
-};
-
-struct RNPreparerTrait
-{
-};
-
-} // namespace io_pool_details
-
-// TODO: Move these out.
-using DataStoreS3Pool = IOThreadPool<io_pool_details::DataStoreS3Trait>;
-using S3FileCachePool = IOThreadPool<io_pool_details::S3FileCacheTrait>;
-using RNRemoteReadTaskPool = IOThreadPool<io_pool_details::RemoteReadTaskTrait>;
-using RNPagePreparerPool = IOThreadPool<io_pool_details::RNPreparerTrait>;
+using ResultQueue = MPMCQueue<Block>;
+using ResultQueuePtr = std::shared_ptr<ResultQueue>;
 } // namespace DB

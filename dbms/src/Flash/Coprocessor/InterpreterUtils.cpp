@@ -182,8 +182,8 @@ void executeLocalSort(
         // For order by const col and has limit, we will generate LimitOperator directly.
         if (limit)
         {
-            auto local_limit = std::make_shared<LocalLimitTransformAction>(input_header, *limit);
             group_builder.transform([&](auto & builder) {
+                auto local_limit = std::make_shared<LocalLimitTransformAction>(input_header, *limit);
                 builder.appendTransformOp(std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_status, log->identifier(), local_limit));
             });
         }

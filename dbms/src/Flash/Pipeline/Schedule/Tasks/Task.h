@@ -34,7 +34,10 @@ extern const char random_pipeline_model_task_construct_failpoint[];
  *               ▲
  *               │
  *  ┌────────────────────────┐
- *  │ WATITING◄─────►RUNNING │
+ *  │     ┌──►RUNNING◄──┐    │
+ *  │     │             │    │
+ *  │     ▼             ▼    │
+ *  │ WATITING◄────────►IO   │
  *  └────────────────────────┘
  */
 enum class ExecTaskStatus
@@ -42,6 +45,7 @@ enum class ExecTaskStatus
     INIT,
     WAITING,
     RUNNING,
+    IO,
     FINISHED,
     ERROR,
     CANCELLED,
@@ -74,19 +78,30 @@ public:
     ExecTaskStatus execute() noexcept
     {
         assert(getMemTracker().get() == current_memory_tracker);
+        assert(exec_status == ExecTaskStatus::INIT || exec_status == ExecTaskStatus::RUNNING);
         switchStatus(executeImpl());
+        return exec_status;
+    }
+
+    ExecTaskStatus executeIO() noexcept
+    {
+        assert(getMemTracker().get() == current_memory_tracker);
+        assert(exec_status == ExecTaskStatus::INIT || exec_status == ExecTaskStatus::IO);
+        switchStatus(executeIOImpl());
         return exec_status;
     }
 
     ExecTaskStatus await() noexcept
     {
         assert(getMemTracker().get() == current_memory_tracker);
+        assert(exec_status == ExecTaskStatus::INIT || exec_status == ExecTaskStatus::WAITING);
         switchStatus(awaitImpl());
         return exec_status;
     }
 
 protected:
     virtual ExecTaskStatus executeImpl() noexcept = 0;
+    virtual ExecTaskStatus executeIOImpl() noexcept { return ExecTaskStatus::RUNNING; }
     // Avoid allocating memory in `await` if possible.
     virtual ExecTaskStatus awaitImpl() noexcept { return ExecTaskStatus::RUNNING; }
 
