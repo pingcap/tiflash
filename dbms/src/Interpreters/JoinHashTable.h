@@ -99,17 +99,30 @@ enum class JoinType
 template <typename Mapped>
 struct ConcurrentMapsTemplate
 {
-    std::unique_ptr<ConcurrentHashMap<UInt8, Mapped, TrivialHash, HashTableFixedGrower<8>>> key8;
-    std::unique_ptr<ConcurrentHashMap<UInt16, Mapped, TrivialHash, HashTableFixedGrower<16>>> key16;
-    std::unique_ptr<ConcurrentHashMap<UInt32, Mapped, HashCRC32<UInt32>>> key32;
-    std::unique_ptr<ConcurrentHashMap<UInt64, Mapped, HashCRC32<UInt64>>> key64;
-    std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_string;
-    std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_strbinpadding;
-    std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_strbin;
-    std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_fixed_string;
-    std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>> keys128;
-    std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>> keys256;
-    std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> serialized;
+    using MappedType = Mapped;
+    using key8Type = ConcurrentHashMap<UInt8, Mapped, TrivialHash, HashTableFixedGrower<8>>;
+    using key16Type = ConcurrentHashMap<UInt16, Mapped, TrivialHash, HashTableFixedGrower<16>>;
+    using key32Type = ConcurrentHashMap<UInt32, Mapped, HashCRC32<UInt32>>;
+    using key64Type = ConcurrentHashMap<UInt64, Mapped, HashCRC32<UInt64>>;
+    using key_stringType = ConcurrentHashMapWithSavedHash<StringRef, Mapped>;
+    using key_strbinpaddingType = ConcurrentHashMapWithSavedHash<StringRef, Mapped>;
+    using key_strbinType = ConcurrentHashMapWithSavedHash<StringRef, Mapped>;
+    using key_fixed_stringType = ConcurrentHashMapWithSavedHash<StringRef, Mapped>;
+    using keys128Type = ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>;
+    using keys256Type = ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>;
+    using serializedType = ConcurrentHashMapWithSavedHash<StringRef, Mapped>;
+
+    std::unique_ptr<key8Type> key8;
+    std::unique_ptr<key16Type> key16;
+    std::unique_ptr<key32Type> key32;
+    std::unique_ptr<key64Type> key64;
+    std::unique_ptr<key_stringType> key_string;
+    std::unique_ptr<key_strbinpaddingType> key_strbinpadding;
+    std::unique_ptr<key_strbinType> key_strbin;
+    std::unique_ptr<key_fixed_stringType> key_fixed_string;
+    std::unique_ptr<keys128Type> keys128;
+    std::unique_ptr<keys256Type> keys256;
+    std::unique_ptr<serializedType> serialized;
     // TODO: add more cases like Aggregator
 };
 
