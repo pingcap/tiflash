@@ -35,6 +35,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/BlockInputStreamSourceOp.h>
+#include <Operators/CoprocessorReaderSourceOp.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/NullSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
@@ -634,11 +635,13 @@ SourceOps DAGStorageInterpreter::buildRemoteSourceOps(
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1, tiflash_label_filter);
         context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
 
-        // use BlockInputStreamSourceOp
-        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
-        remote_source_ops.emplace_back(std::make_unique<BlockInputStreamSourceOp>(exec_status, log->identifier(), input));
+        remote_source_ops.emplace_back(std::make_unique<CoprocessorReaderSourceOp>(exec_status, log->identifier(), coprocessor_reader));
         task_start = task_end;
     }
+
+    LOG_DEBUG(
+        log,
+        "remote sourceOps built");
     return remote_source_ops;
 }
 
@@ -1353,6 +1356,7 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::
             filter_conditions,
             log));
     }
+    LOG_INFO(log, "remote request size: {}", remote_requests.size());
     return remote_requests;
 }
 

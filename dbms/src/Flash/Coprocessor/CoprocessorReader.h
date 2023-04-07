@@ -146,12 +146,17 @@ public:
         return detail;
     }
 
-    // stream_id, decoder_ptr are only meaningful for ExchagneReceiver.
-    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<CHBlockChunkDecodeAndSquash> & /*decoder_ptr*/)
+    std::pair<pingcap::coprocessor::ResponseIter::Result, bool> nonBlockingNext()
     {
-        RUNTIME_CHECK(opened == true);
+        return resp_iter.nonBlockingNext();
+    }
 
-        auto && [result, has_next] = resp_iter.next();
+    CoprocessorReaderResult toResult(std::pair<pingcap::coprocessor::ResponseIter::Result, bool> & result_pair,
+                                     std::queue<Block> & block_queue,
+                                     const Block & header)
+    {
+        auto && [result, has_next] = result_pair;
+
         if (!result.error.empty())
             return {nullptr, true, result.error.message(), false};
 
@@ -180,6 +185,16 @@ public:
         {
             return {nullptr, true, "Error while decoding coprocessor::Response", false};
         }
+    }
+
+    // stream_id, decoder_ptr are only meaningful for ExchagneReceiver.
+    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<CHBlockChunkDecodeAndSquash> & /*decoder_ptr*/)
+    {
+        RUNTIME_CHECK(opened == true);
+
+        auto && result_pair = resp_iter.next();
+
+        return toResult(result_pair, block_queue, header);
     }
 
     size_t getSourceNum() const { return 1; }
