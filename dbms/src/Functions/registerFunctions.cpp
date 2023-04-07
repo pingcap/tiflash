@@ -45,6 +45,10 @@ void registerFunctionsDuration(FunctionFactory &);
 void registerFunctionsRegexp(FunctionFactory &);
 void registerFunctionsJson(FunctionFactory &);
 void registerFunctionsIsIPAddr(FunctionFactory &);
+void registerFunctionsRegexpLike(FunctionFactory &);
+void registerFunctionsRegexpInstr(FunctionFactory &);
+void registerFunctionsRegexpSubstr(FunctionFactory &);
+void registerFunctionsRegexpReplace(FunctionFactory &);
 void registerFunctionsGrouping(FunctionFactory & factory);
 
 void registerFunctions()
@@ -72,7 +76,10 @@ void registerFunctions()
     registerFunctionsNull(factory);
     registerFunctionsStringMath(factory);
     registerFunctionsDuration(factory);
-    registerFunctionsRegexp(factory);
+    registerFunctionsRegexpLike(factory);
+    registerFunctionsRegexpInstr(factory);
+    registerFunctionsRegexpSubstr(factory);
+    registerFunctionsRegexpReplace(factory);
     registerFunctionsJson(factory);
     registerFunctionsIsIPAddr(factory);
     registerFunctionsGrouping(factory);

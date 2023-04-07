@@ -153,10 +153,10 @@ void Pipeline::toTreeString(FmtBuffer & buffer, size_t level) const
         child->toTreeString(buffer, level);
 }
 
-void Pipeline::addGetResultSink(ResultHandler && result_handler)
+void Pipeline::addGetResultSink(const ResultQueuePtr & result_queue)
 {
     assert(!plan_nodes.empty());
-    auto get_result_sink = PhysicalGetResultSink::build(std::move(result_handler), log, plan_nodes.back());
+    auto get_result_sink = PhysicalGetResultSink::build(result_queue, log, plan_nodes.back());
     addPlanNode(get_result_sink);
 }
 

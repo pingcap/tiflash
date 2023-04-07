@@ -18,9 +18,8 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-
-#include "Columns/ColumnNullable.h"
-#include "common/types.h"
+#include <Columns/ColumnNullable.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -104,11 +103,11 @@ public:
             throw Exception("number of grouping_ids should be greater than 0");
 
         if (version == 1 || version == 2)
-            meta_grouping_id = meta_data.grouping_ids().at(0);
+            meta_grouping_id = meta_data.grouping_ids()[0];
         else
         {
             for (size_t i = 0; i < num; ++i)
-                meta_grouping_ids.insert(meta_data.grouping_ids().at(i));
+                meta_grouping_ids.insert(meta_data.grouping_ids()[0]);
         }
     }
 
