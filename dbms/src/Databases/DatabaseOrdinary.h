@@ -32,7 +32,7 @@ public:
 
     void loadTables(
         Context & context,
-        legacy::ThreadPool * thread_pool,
+        ThreadPool * thread_pool,
         bool has_force_restore_data_flag) override;
 
     void createTable(

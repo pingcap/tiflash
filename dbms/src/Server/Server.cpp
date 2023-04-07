@@ -50,6 +50,7 @@
 #include <IO/HTTPCommon.h>
 #include <IO/IOThreadPools.h>
 #include <IO/ReadHelpers.h>
+#include <IO/UseSSL.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/ProcessList.h>
@@ -520,7 +521,6 @@ private:
     const LoggerPtr & log;
 };
 
-
 class Server::TcpHttpServersHolder
 {
 public:
@@ -620,7 +620,6 @@ public:
                         return server.global_context->getSecurityConfig()->checkCommonName(cert);
                     };
                     context->setAdhocVerification(check_common_name);
-                    std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
                     CertificateReloader::initSSLCallback(context, server.global_context.get());
@@ -661,7 +660,6 @@ public:
                     {
                         LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
                     }
-                    std::call_once(ssl_init_once, SSLInit);
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port"));
                     socket.setReceiveTimeout(settings.receive_timeout);
@@ -839,11 +837,10 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 {
     // TODO: make BackgroundPool/BlockableBackgroundPool/DynamicThreadPool spawned from `GlobalThreadPool`
     size_t max_io_thread_count = std::ceil(settings.io_thread_count_scale * logical_cores);
-
     // Note: Global Thread Pool must be larger than sub thread pools.
-    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 20);
+    GlobalThreadPool::instance().setMaxThreads(max_io_thread_count * 200);
     GlobalThreadPool::instance().setMaxFreeThreads(max_io_thread_count);
-    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 8);
+    GlobalThreadPool::instance().setQueueSize(max_io_thread_count * 400);
 
     if (RNPagePreparerPool::instance)
     {
@@ -919,6 +916,8 @@ void syncSchemaWithTiDB(
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
+
+    UseSSL ssl_holder;
 
     const auto log = Logger::get();
 #ifdef FIU_ENABLE
@@ -1557,7 +1556,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto get_pool_size = [](const auto & setting) {
             return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
         };
-        TaskSchedulerConfig config{get_pool_size(settings.pipeline_task_thread_pool_size)};
+        TaskSchedulerConfig config{
+            get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
+            get_pool_size(settings.pipeline_io_task_thread_pool_size),
+        };
         assert(!TaskScheduler::instance);
         TaskScheduler::instance = std::make_unique<TaskScheduler>(config);
     }
