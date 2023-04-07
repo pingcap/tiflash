@@ -420,7 +420,7 @@ bool UniversalPageStorage::canSkipCheckpoint() const
     return snap->sequence == last_checkpoint_sequence;
 }
 
-PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
+PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const UniversalPageStorage::DumpCheckpointOptions & options)
 {
     std::scoped_lock lock(checkpoint_mu);
     Stopwatch sw;
@@ -508,23 +508,25 @@ PS::V3::CPDataWriteStats UniversalPageStorage::dumpIncrementalCheckpoint(const U
         // New checkpoint infos are attached in `writeEditsAndApplyCheckpointInfo`.
         page_directory->copyCheckpointInfoFromEdit(edit_from_mem);
     }
+    auto copy_checkpoint_info_seconds = sw.elapsedMillisecondsFromLastTime() / 1000.0;
 
     last_checkpoint_sequence = snap->sequence;
 
     GET_METRIC(tiflash_storage_checkpoint_seconds, type_dump_checkpoint_snapshot).Observe(dump_snapshot_seconds);
     GET_METRIC(tiflash_storage_checkpoint_seconds, type_dump_checkpoint_data).Observe(dump_data_seconds);
     GET_METRIC(tiflash_storage_checkpoint_seconds, type_upload_checkpoint).Observe(upload_seconds);
-    LOG_DEBUG(log,
-              "Checkpoint result: files={}, dump_snapshot={:.3f}s, dump_data={:.3f}s, upload={:.3f}s, "
-              "total={:.3f}s, sequence={}, incremental_data_bytes={}, compact_data_bytes={}",
-              data_file_paths,
-              dump_snapshot_seconds,
-              dump_data_seconds,
-              upload_seconds,
-              sw.elapsedSeconds(),
-              sequence,
-              write_stats.incremental_data_bytes,
-              write_stats.compact_data_bytes);
+    GET_METRIC(tiflash_storage_checkpoint_seconds, type_copy_checkpoint_info).Observe(copy_checkpoint_info_seconds);
+    LOG_INFO(log,
+             "Checkpoint result: files={} dump_snapshot={:.3f}s dump_data={:.3f}s upload={:.3f}s copy_checkpoint_info={:.3f}s "
+             "total={:.3f}s sequence={} {}",
+             data_file_paths,
+             dump_snapshot_seconds,
+             dump_data_seconds,
+             upload_seconds,
+             copy_checkpoint_info_seconds,
+             sw.elapsedSeconds(),
+             sequence,
+             write_stats);
     return write_stats;
 }
 
