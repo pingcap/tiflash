@@ -76,7 +76,7 @@ public:
         const static std::vector<String> SEARCH_PATH = {"../tests/testdata/", "/tests/testdata/"};
         for (const auto & prefix : SEARCH_PATH)
         {
-            String path = prefix + name;
+            String path = Poco::Path{prefix + name}.absolute().toString();
             if (auto f = Poco::File(path); f.exists() && f.isDirectory())
             {
                 Strings paths;
@@ -105,13 +105,15 @@ public:
 
     static FileProviderPtr getMockFileProvider();
 
+    static void setIsMockedS3Client(bool mock) { is_mocked_s3_client = mock; }
+    static bool isMockedS3Client() { return is_mocked_s3_client; }
     static bool createBucketIfNotExist(::DB::S3::TiFlashS3Client & s3_client);
-
     static void deleteBucket(::DB::S3::TiFlashS3Client & s3_client);
 
-    TiFlashTestEnv() = delete;
+    TiFlashTestEnv() = delete; // no instance allow
 
 private:
     static std::vector<ContextPtr> global_contexts;
+    static bool is_mocked_s3_client;
 };
 } // namespace DB::tests

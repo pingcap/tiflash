@@ -35,13 +35,13 @@ void PipelineExecutor::scheduleEvents()
 {
     assert(root_pipeline);
     auto events = root_pipeline->toEvents(status, context, context.getMaxStreams());
-    Events without_input_events;
+    Events sources;
     for (const auto & event : events)
     {
-        if (event->withoutInput())
-            without_input_events.push_back(event);
+        if (event->prepareForSource())
+            sources.push_back(event);
     }
-    for (const auto & event : without_input_events)
+    for (const auto & event : sources)
         event->schedule();
 }
 
@@ -49,8 +49,8 @@ void PipelineExecutor::wait()
 {
     if (unlikely(context.isTest()))
     {
-        // In test mode, a single query should take no more than 15 seconds to execute.
-        static std::chrono::seconds timeout(15);
+        // In test mode, a single query should take no more than 5 minutes to execute.
+        static std::chrono::minutes timeout(5);
         status.waitFor(timeout);
     }
     else
@@ -64,8 +64,8 @@ void PipelineExecutor::consume(const ResultQueuePtr & result_queue, ResultHandle
     Block ret;
     if (unlikely(context.isTest()))
     {
-        // In test mode, a single query should take no more than 15 seconds to execute.
-        static std::chrono::seconds timeout(15);
+        // In test mode, a single query should take no more than 5 minutes to execute.
+        static std::chrono::minutes timeout(5);
         while (result_queue->popTimeout(ret, timeout) == MPMCQueueResult::OK)
             result_handler(ret);
     }

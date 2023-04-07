@@ -40,10 +40,14 @@ public:
 
     OperatorStatus execute();
 
+    OperatorStatus executeIO();
+
     OperatorStatus await();
 
 private:
     OperatorStatus executeImpl();
+
+    OperatorStatus executeIOImpl();
 
     OperatorStatus awaitImpl();
 
@@ -55,6 +59,9 @@ private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
+
+    // hold the operator which is ready for executing io.
+    std::optional<Operator *> io_op;
 };
 using PipelineExecPtr = std::unique_ptr<PipelineExec>;
 // a set of pipeline_execs running in parallel.
