@@ -120,8 +120,7 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
         return cur_offset;
     }
     auto & istr = read_result.GetBody();
-    istr.ignore(offset_ - cur_offset);
-    if (!istr)
+    if (!istr.ignore(offset_ - cur_offset))
     {
         LOG_ERROR(log, "Cannot ignore from istream, errmsg={}", strerror(errno));
         return -1;
