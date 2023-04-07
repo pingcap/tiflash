@@ -61,9 +61,11 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
     while (true)
     {
         auto n = readImpl(buf, size);
-        if (unlikely(n < 0 && errno == 104 && initialize())) // Connection reset by peer and re-initialize succ.
+        if (unlikely(n < 0 && errno == 104))
         {
-            continue;
+            // If it is a "Connection reset by peer" error, then initialize again
+            if (initialize())
+                continue;
         }
         return n;
     }
