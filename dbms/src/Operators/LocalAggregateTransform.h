@@ -69,7 +69,7 @@ private:
 
     OperatorStatus fromBuildToConvert(Block & block);
 
-    OperatorStatus fromBuildToFinalSpillOfRestore();
+    OperatorStatus fromBuildToFinalSpillOrRestore();
 
     void switchStatus(LocalAggStatus to);
 

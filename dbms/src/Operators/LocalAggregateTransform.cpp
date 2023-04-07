@@ -47,7 +47,7 @@ OperatorStatus LocalAggregateTransform::transformImpl(Block & block)
         if unlikely (!block)
         {
             return agg_context.hasSpilledData()
-                ? fromBuildToFinalSpillOfRestore()
+                ? fromBuildToFinalSpillOrRestore()
                 : fromBuildToConvert(block);
         }
         agg_context.buildOnBlock(task_index, block);
@@ -69,7 +69,7 @@ OperatorStatus LocalAggregateTransform::fromBuildToConvert(Block & block)
     return OperatorStatus::HAS_OUTPUT;
 }
 
-OperatorStatus LocalAggregateTransform::fromBuildToFinalSpillOfRestore()
+OperatorStatus LocalAggregateTransform::fromBuildToFinalSpillOrRestore()
 {
     assert(status == LocalAggStatus::build);
     if (agg_context.needSpill(task_index, /*try_mark_need_spill=*/true))
