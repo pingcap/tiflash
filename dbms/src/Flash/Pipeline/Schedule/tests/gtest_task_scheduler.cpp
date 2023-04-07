@@ -124,10 +124,59 @@ private:
     Waiter & waiter;
 };
 
+class SimpleBlockedTask : public Task
+{
+public:
+    explicit SimpleBlockedTask(Waiter & waiter_)
+        : waiter(waiter_)
+    {}
+
+    ~SimpleBlockedTask()
+    {
+        waiter.notify();
+    }
+
+protected:
+    ExecTaskStatus executeImpl() noexcept override
+    {
+        if (loop_count > 0)
+        {
+            if ((loop_count % 2) == 0)
+                return ExecTaskStatus::IO;
+            else
+            {
+                --loop_count;
+                return ExecTaskStatus::RUNNING;
+            }
+        }
+        return ExecTaskStatus::FINISHED;
+    }
+
+    ExecTaskStatus executeIOImpl() noexcept override
+    {
+        if (loop_count > 0)
+        {
+            if ((loop_count % 2) == 0)
+            {
+                --loop_count;
+                return ExecTaskStatus::IO;
+            }
+            else
+                return ExecTaskStatus::RUNNING;
+        }
+        return ExecTaskStatus::FINISHED;
+    }
+
+private:
+    int loop_count = 10 + random() % 10;
+    Waiter & waiter;
+};
+
 enum class TraceTaskStatus
 {
     initing,
     running,
+    io,
     waiting,
 };
 class MemoryTraceTask : public Task
@@ -152,6 +201,9 @@ protected:
         switch (status)
         {
         case TraceTaskStatus::initing:
+            status = TraceTaskStatus::io;
+            return ExecTaskStatus::IO;
+        case TraceTaskStatus::io:
             status = TraceTaskStatus::waiting;
             return ExecTaskStatus::WAITING;
         case TraceTaskStatus::waiting:
@@ -163,6 +215,13 @@ protected:
         default:
             __builtin_unreachable();
         }
+    }
+
+    ExecTaskStatus executeIOImpl() noexcept override
+    {
+        assert(status == TraceTaskStatus::io);
+        CurrentMemoryTracker::alloc(MEMORY_TRACER_SUBMIT_THRESHOLD + 10);
+        return ExecTaskStatus::RUNNING;
     }
 
     ExecTaskStatus awaitImpl() noexcept override
@@ -187,6 +246,11 @@ protected:
 
     ExecTaskStatus awaitImpl() noexcept override
     {
+        return ExecTaskStatus::IO;
+    }
+
+    ExecTaskStatus executeIOImpl() noexcept override
+    {
         return ExecTaskStatus::RUNNING;
     }
 };
@@ -199,7 +263,7 @@ public:
 
     void submitAndWait(std::vector<TaskPtr> & tasks, Waiter & waiter)
     {
-        TaskSchedulerConfig config{thread_num};
+        TaskSchedulerConfig config{thread_num, thread_num};
         TaskScheduler task_scheduler{config};
         task_scheduler.submit(tasks);
         waiter.wait();
@@ -255,7 +319,7 @@ TEST_F(TaskSchedulerTestRunner, shutdown)
 try
 {
     auto do_test = [](size_t task_thread_pool_size, size_t task_num) {
-        TaskSchedulerConfig config{task_thread_pool_size};
+        TaskSchedulerConfig config{task_thread_pool_size, task_thread_pool_size};
         TaskScheduler task_scheduler{config};
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)

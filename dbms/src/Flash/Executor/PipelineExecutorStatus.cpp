@@ -92,15 +92,34 @@ void PipelineExecutorStatus::onEventSchedule() noexcept
 
 void PipelineExecutorStatus::onEventFinish() noexcept
 {
-    std::lock_guard lock(mu);
-    assert(active_event_count > 0);
-    --active_event_count;
-    if (0 == active_event_count)
-        cv.notify_all();
+    bool query_finished = false;
+    {
+        std::lock_guard lock(mu);
+        assert(active_event_count > 0);
+        --active_event_count;
+        if (0 == active_event_count)
+        {
+            // It is not expected for a query to be finished more than one time.
+            bool expect_origin = false;
+            RUNTIME_ASSERT(is_finished.compare_exchange_strong(expect_origin, true));
+
+            cv.notify_all();
+            query_finished = true;
+        }
+    }
+    if (query_finished && result_queue.has_value())
+        (*result_queue)->finish();
 }
 
 void PipelineExecutorStatus::cancel() noexcept
 {
     is_cancelled.store(true, std::memory_order_release);
+}
+
+ResultQueuePtr PipelineExecutorStatus::registerResultQueue(size_t queue_size) noexcept
+{
+    assert(!result_queue.has_value());
+    result_queue.emplace(std::make_shared<ResultQueue>(queue_size));
+    return *result_queue;
 }
 } // namespace DB
