@@ -256,6 +256,7 @@ RemotePb::ColumnFileRemote Serializer::serializeTo(const ColumnFileInMemory & cf
         auto wb = WriteBufferFromString(*remote_in_memory->mutable_schema());
         serializeSchema(wb, cf_in_mem.getSchema()->getSchema());
     }
+    std::scoped_lock lock(cf_in_mem.cache->mutex);
     const auto block_rows = cf_in_mem.cache->block.rows();
     for (const auto & col : cf_in_mem.cache->block)
     {
