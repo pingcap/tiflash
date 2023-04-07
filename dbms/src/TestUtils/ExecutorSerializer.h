@@ -11,25 +11,31 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <Operators/AggregateSinkOp.h>
+
+#pragma once
+
+#include <Common/FmtUtils.h>
+#include <Flash/Statistics/traverseExecutors.h>
+#include <TestUtils/TiFlashTestException.h>
+#include <common/types.h>
 
 namespace DB
 {
-OperatorStatus AggregateSinkOp::writeImpl(Block && block)
+namespace tests
 {
-    if (unlikely(!block))
-    {
-        return OperatorStatus::FINISHED;
-    }
-    agg_context->buildOnBlock(index, block);
-    total_rows += block.rows();
-    block.clear();
-    return OperatorStatus::NEED_INPUT;
-}
+class ExecutorSerializer
+{
+public:
+    String serialize(const tipb::DAGRequest * dag_request);
 
-void AggregateSinkOp::operateSuffix()
-{
-    LOG_DEBUG(log, "finish write with {} rows", total_rows);
-}
+private:
+    void serializeListStruct(const tipb::DAGRequest * dag_request);
+    void serializeTreeStruct(const tipb::Executor & root_executor, size_t level);
+    void addPrefix(size_t level) { buf.append(String(level, ' ')); }
+
+private:
+    FmtBuffer buf;
+};
+} // namespace tests
 
 } // namespace DB

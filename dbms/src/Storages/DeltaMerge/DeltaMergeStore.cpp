@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Core/SortDescription.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -44,6 +45,7 @@
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 
 #include <atomic>
@@ -1177,7 +1179,7 @@ DeltaMergeStore::writeNodeBuildRemoteReadSnapshot(
     GET_METRIC(tiflash_disaggregated_read_tasks_count).Increment(tasks.size());
     LOG_DEBUG(tracing_logger, "Read create segment snapshot done");
 
-    return std::make_unique<Remote::DisaggPhysicalTableReadSnapshot>(physical_table_id, std::move(tasks));
+    return std::make_unique<Remote::DisaggPhysicalTableReadSnapshot>(KeyspaceTableID{keyspace_id, physical_table_id}, std::move(tasks));
 }
 
 size_t forceMergeDeltaRows(const DMContextPtr & dm_context)

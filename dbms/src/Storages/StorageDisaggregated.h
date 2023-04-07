@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,11 +15,12 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNRemoteReadTask_fwd.h>
 #include <Storages/IStorage.h>
 
 #pragma GCC diagnostic push
@@ -31,6 +32,8 @@
 
 namespace DB
 {
+class DAGContext;
+class ExchangeReceiver;
 namespace DM
 {
 struct ColumnDefine;
@@ -38,9 +41,9 @@ using ColumnDefines = std::vector<ColumnDefine>;
 using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
-class RNRemoteReadTask;
-using RNRemoteReadTaskPtr = std::shared_ptr<RNRemoteReadTask>;
 } // namespace DM
+
+using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
 
 // Naive implementation of StorageDisaggregated, all region data will be transferred by GRPC,
 // rewrite this when local cache is supported.
@@ -72,7 +75,6 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
-    using RequestAndRegionIDs = std::tuple<std::shared_ptr<::mpp::DispatchTaskRequest>, std::vector<::pingcap::kv::RegionVerID>, uint64_t>;
     RequestAndRegionIDs buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
 
     // To help find exec summary of ExchangeSender in tiflash_storage and merge it into TableScan's exec summary.
@@ -85,11 +87,18 @@ private:
     BlockInputStreams readFromWriteNode(
         const Context & db_context,
         unsigned num_streams);
-    DM::RNRemoteReadTaskPtr buildDisaggregatedTask(
+    DM::RNRemoteReadTaskPtr buildDisaggTasks(
         const Context & db_context,
+        const DM::ScanContextPtr & scan_context,
         const std::vector<pingcap::coprocessor::BatchCopTask> & batch_cop_tasks);
+    void buildDisaggTask(
+        const Context & db_context,
+        const DM::ScanContextPtr & scan_context,
+        const pingcap::coprocessor::BatchCopTask & batch_cop_task,
+        std::vector<DM::RNRemoteStoreReadTaskPtr> & store_read_tasks,
+        std::mutex & store_read_tasks_lock);
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest>
-    buildDisaggregatedTaskForNode(
+    buildDisaggTaskForNode(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
     DM::RSOperatorPtr buildRSOperator(

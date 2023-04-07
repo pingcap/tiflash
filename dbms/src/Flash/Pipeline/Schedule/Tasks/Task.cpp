@@ -42,6 +42,9 @@ void addToStatusMetrics(ExecTaskStatus to)
     case ExecTaskStatus::RUNNING:
         GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_running).Increment();
         break;
+    case ExecTaskStatus::IO:
+        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_io).Increment();
+        break;
     case ExecTaskStatus::FINISHED:
         GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_finished).Increment();
         break;
@@ -74,13 +77,23 @@ Task::Task(MemoryTrackerPtr mem_tracker_, const String & req_id)
 ExecTaskStatus Task::execute() noexcept
 {
     assert(getMemTracker().get() == current_memory_tracker);
+    assert(exec_status == ExecTaskStatus::INIT || exec_status == ExecTaskStatus::RUNNING);
     switchStatus(executeImpl());
+    return exec_status;
+}
+
+ExecTaskStatus Task::executeIO() noexcept
+{
+    assert(getMemTracker().get() == current_memory_tracker);
+    assert(exec_status == ExecTaskStatus::INIT || exec_status == ExecTaskStatus::IO);
+    switchStatus(executeIOImpl());
     return exec_status;
 }
 
 ExecTaskStatus Task::await() noexcept
 {
     assert(getMemTracker().get() == current_memory_tracker);
+    assert(exec_status == ExecTaskStatus::INIT || exec_status == ExecTaskStatus::WAITING);
     switchStatus(awaitImpl());
     return exec_status;
 }

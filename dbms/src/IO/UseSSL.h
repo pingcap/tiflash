@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,27 +14,16 @@
 
 #pragma once
 
-#include <Common/FmtUtils.h>
-#include <Flash/Statistics/traverseExecutors.h>
-#include <TestUtils/TiFlashTestException.h>
+#include <Common/nocopyable.h>
 
 namespace DB
 {
-namespace tests
+// http://stackoverflow.com/questions/18315472/https-request-in-c-using-poco
+struct UseSSL
 {
-class ExecutorSerializer
-{
-public:
-    String serialize(const tipb::DAGRequest * dag_request);
+    UseSSL();
+    ~UseSSL();
 
-private:
-    void serializeListStruct(const tipb::DAGRequest * dag_request);
-    void serializeTreeStruct(const tipb::Executor & root_executor, size_t level);
-    void addPrefix(size_t level) { buf.append(String(level, ' ')); }
-
-private:
-    FmtBuffer buf;
+    DISALLOW_COPY_AND_MOVE(UseSSL);
 };
-} // namespace tests
-
 } // namespace DB

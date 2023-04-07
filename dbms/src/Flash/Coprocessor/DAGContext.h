@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
 #include <kvproto/mpp.pb.h>
-#include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Logger.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
@@ -128,19 +128,19 @@ class DAGContext
 {
 public:
     // for non-mpp(cop/batchCop)
-    DAGContext(const tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
+    DAGContext(tipb::DAGRequest & dag_request_, TablesRegionsInfo && tables_regions_info_, KeyspaceID keyspace_id_, const String & tidb_host_, bool is_batch_cop_, LoggerPtr log_);
 
     // for mpp
-    DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
+    DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_);
 
     // for disaggregated task on write node
-    DAGContext(const tipb::DAGRequest & dag_request_, const DM::DisaggTaskId & task_id_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_);
+    DAGContext(tipb::DAGRequest & dag_request_, const disaggregated::DisaggTaskMeta & task_meta_, TablesRegionsInfo && tables_regions_info_, const String & compute_node_host_, LoggerPtr log_);
 
     // for test
     explicit DAGContext(UInt64 max_error_count_);
 
     // for tests need to run query tasks.
-    DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
+    DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
 
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
@@ -273,9 +273,8 @@ public:
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
-    String getRootExecutorId();
 
-    const tipb::DAGRequest * dag_request;
+    DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
     /// dummy_query_string and dummy_ast is used for that
     String dummy_query_string;
@@ -292,8 +291,6 @@ public:
     // For disaggregated read, this is the host of compute node
     String tidb_host = "Unknown";
     bool collect_execution_summaries{};
-    bool return_executor_id{};
-    String root_executor_id;
     /* const */ bool is_mpp_task = false;
     /* const */ bool is_root_mpp_task = false;
     /* const */ bool is_batch_cop = false;
@@ -313,10 +310,6 @@ public:
     bool keep_session_timezone_info = false;
     std::vector<tipb::FieldType> output_field_types;
     std::vector<Int32> output_offsets;
-
-    /// Hold the order of list based executors.
-    /// It is used to ensure that the order of Execution summary of list based executors is the same as the order of list based executors.
-    std::vector<String> list_based_executors_order;
 
     /// executor_id, ScanContextPtr
     /// Currently, max(scan_context_map.size()) == 1, because one mpp task only have do one table scan

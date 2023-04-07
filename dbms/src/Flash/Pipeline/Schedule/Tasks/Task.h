@@ -25,7 +25,10 @@ namespace DB
  *               ▲
  *               │
  *  ┌────────────────────────┐
- *  │ WATITING◄─────►RUNNING │
+ *  │     ┌──►RUNNING◄──┐    │
+ *  │     │             │    │
+ *  │     ▼             ▼    │
+ *  │ WATITING◄────────►IO   │
  *  └────────────────────────┘
  */
 enum class ExecTaskStatus
@@ -33,6 +36,7 @@ enum class ExecTaskStatus
     INIT,
     WAITING,
     RUNNING,
+    IO,
     FINISHED,
     ERROR,
     CANCELLED,
@@ -54,10 +58,13 @@ public:
 
     ExecTaskStatus execute() noexcept;
 
+    ExecTaskStatus executeIO() noexcept;
+
     ExecTaskStatus await() noexcept;
 
 protected:
     virtual ExecTaskStatus executeImpl() noexcept = 0;
+    virtual ExecTaskStatus executeIOImpl() noexcept { return ExecTaskStatus::RUNNING; }
     // Avoid allocating memory in `await` if possible.
     virtual ExecTaskStatus awaitImpl() noexcept { return ExecTaskStatus::RUNNING; }
 

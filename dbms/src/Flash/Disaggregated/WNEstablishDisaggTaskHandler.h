@@ -14,8 +14,7 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Executor/QueryExecutorHolder.h>
+#include <Flash/Executor/QueryExecutor.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <kvproto/disaggregated.pb.h>
@@ -26,7 +25,7 @@
 namespace DB
 {
 class WNEstablishDisaggTaskHandler;
-
+class DAGContext;
 class Logger;
 using LoggerPtr = std::shared_ptr<Logger>;
 

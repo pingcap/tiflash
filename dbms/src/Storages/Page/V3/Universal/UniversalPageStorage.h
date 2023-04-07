@@ -193,6 +193,9 @@ public:
         /**
          */
         const std::function<std::unordered_set<String>()> compact_getter = nullptr;
+
+        UInt64 max_data_file_size = 256 * 1024 * 1024; // 256MB
+        UInt64 max_edit_records_per_part = 100000;
     };
 
     PS::V3::CPDataWriteStats dumpIncrementalCheckpoint(const DumpCheckpointOptions & options);
@@ -202,9 +205,9 @@ public:
         return remote_data_files_stat_cache.getCopy();
     }
 
-    void updateRemoteFilesTotalSizes(const PS::V3::CPDataFilesStatCache::CacheMap & updated_stat)
+    void updateRemoteFilesStatCache(const PS::V3::CPDataFilesStatCache::CacheMap & updated_stat)
     {
-        remote_data_files_stat_cache.updateTotalSize(updated_stat);
+        remote_data_files_stat_cache.updateCache(updated_stat);
     }
 
     PageIdU64 getMaxIdAfterRestart() const;

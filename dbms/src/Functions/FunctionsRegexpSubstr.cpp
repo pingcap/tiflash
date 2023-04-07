@@ -12,21 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <atomic>
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsRegexpSubstr.h>
 
 namespace DB
 {
-// TODO support more metrics after profile info of task has supported.
-class TaskExecutionMetrics
+using FunctionRegexpSubstr = FunctionStringRegexpSubstr<NameRegexpSubstr>;
+
+void registerFunctionsRegexpSubstr(FunctionFactory & factory)
 {
-public:
-    TaskExecutionMetrics();
-
-    void updateOnRound(uint64_t max_execution_time_ns);
-
-private:
-    std::atomic_uint64_t max_execution_time_ns_of_a_round{0};
-};
+    factory.registerFunction<FunctionRegexpSubstr>();
+}
 } // namespace DB

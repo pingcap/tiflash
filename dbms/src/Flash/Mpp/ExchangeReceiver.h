@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2023 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -110,7 +110,7 @@ public:
         const String & executor_id,
         uint64_t fine_grained_shuffle_stream_count,
         Int32 local_tunnel_version_,
-        const std::vector<StorageDisaggregated::RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
+        const std::vector<RequestAndRegionIDs> & disaggregated_dispatch_reqs_ = {});
 
     ~ExchangeReceiverBase();
 
@@ -191,6 +191,7 @@ private:
     void handleConnectionAfterException();
 
     void setUpConnectionWithReadLoop(Request && req);
+    void setUpLocalConnections(std::vector<Request> & requests, bool has_remote_conn);
 
     bool isReceiverForTiFlashStorage()
     {
@@ -230,7 +231,7 @@ private:
     std::atomic<Int64> data_size_in_queue;
 
     // For tiflash_compute node, need to send MPPTask to tiflash_storage node.
-    std::vector<StorageDisaggregated::RequestAndRegionIDs> disaggregated_dispatch_reqs;
+    std::vector<RequestAndRegionIDs> disaggregated_dispatch_reqs;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

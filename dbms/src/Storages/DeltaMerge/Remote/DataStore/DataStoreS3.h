@@ -51,8 +51,9 @@ public:
 
     bool putCheckpointFiles(const PS::V3::LocalCheckpointFiles & local_files, StoreID store_id, UInt64 upload_seq) override;
 
-    std::unordered_map<String, Int64> getDataFileSizes(const std::unordered_set<String> & lock_keys) override;
+    std::unordered_map<String, DataFileInfo> getDataFilesInfo(const std::unordered_set<String> & lock_keys) override;
 
+    void setTaggingsForKeys(const std::vector<String> & keys, std::string_view tagging) override;
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else

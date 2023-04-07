@@ -14,49 +14,46 @@
 
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
-#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
-#include <Flash/Pipeline/Schedule/TaskQueues/FiFOTaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/TaskThreadPool.h>
+#include <Flash/Pipeline/Schedule/TaskThreadPoolImpl.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
-TaskThreadPool::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
-    : task_queue(std::make_unique<FIFOTaskQueue>())
+template <typename Impl>
+TaskThreadPool<Impl>::TaskThreadPool(TaskScheduler & scheduler_, size_t thread_num)
+    : task_queue(Impl::newTaskQueue())
     , scheduler(scheduler_)
 {
-    GET_METRIC(tiflash_pipeline_scheduler, type_pending_tasks_count).Set(0);
-    GET_METRIC(tiflash_pipeline_scheduler, type_running_tasks_count).Set(0);
-    GET_METRIC(tiflash_pipeline_scheduler, type_task_thread_pool_size).Set(0);
-
     RUNTIME_CHECK(thread_num > 0);
     threads.reserve(thread_num);
     for (size_t i = 0; i < thread_num; ++i)
         threads.emplace_back(&TaskThreadPool::loop, this, i);
 }
 
-void TaskThreadPool::close()
+template <typename Impl>
+void TaskThreadPool<Impl>::close()
 {
     task_queue->close();
 }
 
-void TaskThreadPool::waitForStop()
+template <typename Impl>
+void TaskThreadPool<Impl>::waitForStop()
 {
     for (auto & thread : threads)
         thread.join();
     LOG_INFO(logger, "task thread pool is stopped");
 }
 
-void TaskThreadPool::loop(size_t thread_no) noexcept
+template <typename Impl>
+void TaskThreadPool<Impl>::loop(size_t thread_no) noexcept
 {
-    GET_METRIC(tiflash_pipeline_scheduler, type_task_thread_pool_size).Increment();
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_pipeline_scheduler, type_task_thread_pool_size).Decrement();
-    });
+    metrics.incThreadCnt();
+    SCOPE_EXIT({ metrics.decThreadCnt(); });
 
     auto thread_no_str = fmt::format("thread_no={}", thread_no);
     auto thread_logger = logger->getChild(thread_no_str);
@@ -67,7 +64,7 @@ void TaskThreadPool::loop(size_t thread_no) noexcept
     TaskPtr task;
     while (likely(task_queue->take(task)))
     {
-        GET_METRIC(tiflash_pipeline_scheduler, type_pending_tasks_count).Decrement();
+        metrics.decPendingTask();
         handleTask(task, thread_logger);
         assert(!task);
         ASSERT_MEMORY_TRACKER
@@ -76,35 +73,39 @@ void TaskThreadPool::loop(size_t thread_no) noexcept
     LOG_INFO(thread_logger, "loop finished");
 }
 
-void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
+template <typename Impl>
+void TaskThreadPool<Impl>::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
 {
     assert(task);
     TRACE_MEMORY(task);
 
-    GET_METRIC(tiflash_pipeline_scheduler, type_running_tasks_count).Increment();
+    metrics.incExecutingTask();
 
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
     ExecTaskStatus status;
     while (true)
     {
-        status = task->execute();
+        status = Impl::exec(task);
         auto execute_time_ns = stopwatch.elapsed();
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (status != ExecTaskStatus::RUNNING || execute_time_ns >= YIELD_MAX_TIME_SPENT_NS)
+        if (status != Impl::TargetStatus || execute_time_ns >= YIELD_MAX_TIME_SPENT_NS)
         {
-            task_metrics.updateOnRound(execute_time_ns);
+            metrics.updateTaskMaxtimeOnRound(execute_time_ns);
             break;
         }
     }
 
-    GET_METRIC(tiflash_pipeline_scheduler, type_running_tasks_count).Decrement();
+    metrics.decExecutingTask();
     switch (status)
     {
     case ExecTaskStatus::RUNNING:
-        submit(std::move(task));
+        scheduler.submitToCPUTaskThreadPool(std::move(task));
+        break;
+    case ExecTaskStatus::IO:
+        scheduler.submitToIOTaskThreadPool(std::move(task));
         break;
     case ExecTaskStatus::WAITING:
-        scheduler.wait_reactor.submit(std::move(task));
+        scheduler.submitToWaitReactor(std::move(task));
         break;
     case FINISH_STATUS:
         task.reset();
@@ -114,15 +115,21 @@ void TaskThreadPool::handleTask(TaskPtr & task, const LoggerPtr & log) noexcept
     }
 }
 
-void TaskThreadPool::submit(TaskPtr && task) noexcept
+template <typename Impl>
+void TaskThreadPool<Impl>::submit(TaskPtr && task) noexcept
 {
-    GET_METRIC(tiflash_pipeline_scheduler, type_pending_tasks_count).Increment();
+    metrics.incPendingTask(1);
     task_queue->submit(std::move(task));
 }
 
-void TaskThreadPool::submit(std::vector<TaskPtr> & tasks) noexcept
+template <typename Impl>
+void TaskThreadPool<Impl>::submit(std::vector<TaskPtr> & tasks) noexcept
 {
-    GET_METRIC(tiflash_pipeline_scheduler, type_pending_tasks_count).Increment(tasks.size());
+    metrics.incPendingTask(tasks.size());
     task_queue->submit(tasks);
 }
+
+template class TaskThreadPool<CPUImpl>;
+template class TaskThreadPool<IOImpl>;
+
 } // namespace DB

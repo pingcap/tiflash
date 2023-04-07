@@ -17,10 +17,39 @@
 
 namespace DB
 {
+#define HANDLE_OP_STATUS(op, op_status, expect_status)                                            \
+    switch (op_status)                                                                            \
+    {                                                                                             \
+    case (expect_status):                                                                         \
+        break;                                                                                    \
+    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */ \
+    case OperatorStatus::IO:                                                                      \
+        assert(!io_op);                                                                           \
+        assert(op);                                                                               \
+        io_op.emplace((op).get());                                                                \
+    /* For unexpected status, an immediate return is required. */                                 \
+    default:                                                                                      \
+        return (op_status);                                                                       \
+    }
+
+#define HANDLE_LAST_OP_STATUS(op, op_status)                                                      \
+    assert(op);                                                                                   \
+    switch (op_status)                                                                            \
+    {                                                                                             \
+    /* For the io status, the operator needs to be filled in io_op for later use in executeIO. */ \
+    case OperatorStatus::IO:                                                                      \
+        assert(!io_op);                                                                           \
+        assert(op);                                                                               \
+        io_op.emplace((op).get());                                                                \
+    /* For the last operator, the status will always be returned. */                              \
+    default:                                                                                      \
+        return (op_status);                                                                       \
+    }
+
 void PipelineExec::executePrefix()
 {
     sink_op->operatePrefix();
-    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
         (*it)->operatePrefix();
     source_op->operatePrefix();
 }
@@ -28,7 +57,7 @@ void PipelineExec::executePrefix()
 void PipelineExec::executeSuffix()
 {
     sink_op->operateSuffix();
-    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
         (*it)->operateSuffix();
     source_op->operateSuffix();
 }
@@ -63,11 +92,10 @@ OperatorStatus PipelineExec::executeImpl()
     {
         const auto & transform_op = transform_ops[transform_op_index];
         op_status = transform_op->transform(block);
-        if (op_status != OperatorStatus::HAS_OUTPUT)
-            return op_status;
+        HANDLE_OP_STATUS(transform_op, op_status, OperatorStatus::HAS_OUTPUT);
     }
     op_status = sink_op->write(std::move(block));
-    return op_status;
+    HANDLE_LAST_OP_STATUS(sink_op, op_status);
 }
 
 // try fetch block from transform_ops and source_op.
@@ -76,21 +104,36 @@ OperatorStatus PipelineExec::fetchBlock(
     size_t & start_transform_op_index)
 {
     auto op_status = sink_op->prepare();
-    if (op_status != OperatorStatus::NEED_INPUT)
-        return op_status;
+    HANDLE_OP_STATUS(sink_op, op_status, OperatorStatus::NEED_INPUT);
     for (int64_t index = transform_ops.size() - 1; index >= 0; --index)
     {
         const auto & transform_op = transform_ops[index];
         op_status = transform_op->tryOutput(block);
-        if (op_status != OperatorStatus::NEED_INPUT)
-        {
-            // Once the transform op tryOutput has succeeded, execution will begin with the next transform op.
-            start_transform_op_index = index + 1;
-            return op_status;
-        }
+        // Once the transform op tryOutput has succeeded, execution will begin with the next transform op.
+        start_transform_op_index = index + 1;
+        HANDLE_OP_STATUS(transform_op, op_status, OperatorStatus::NEED_INPUT);
     }
     start_transform_op_index = 0;
     op_status = source_op->read(block);
+    HANDLE_LAST_OP_STATUS(source_op, op_status);
+}
+
+OperatorStatus PipelineExec::executeIO()
+{
+    auto op_status = executeIOImpl();
+#ifndef NDEBUG
+    // `NEED_INPUT` means that pipeline_exec need data to do the calculations and expect the next call to `execute`.
+    // `HAS_OUTPUT` means that pipeline_exec has data to do the calculations and expect the next call to `execute`.
+    assertOperatorStatus(op_status, {OperatorStatus::FINISHED, OperatorStatus::HAS_OUTPUT, OperatorStatus::NEED_INPUT});
+#endif
+    return op_status;
+}
+OperatorStatus PipelineExec::executeIOImpl()
+{
+    assert(io_op && *io_op);
+    auto op_status = (*io_op)->executeIO();
+    if (op_status != OperatorStatus::IO)
+        io_op.reset();
     return op_status;
 }
 
@@ -106,17 +149,19 @@ OperatorStatus PipelineExec::await()
 OperatorStatus PipelineExec::awaitImpl()
 {
     auto op_status = sink_op->await();
-    if (op_status != OperatorStatus::NEED_INPUT)
-        return op_status;
-    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it)
+    HANDLE_OP_STATUS(sink_op, op_status, OperatorStatus::NEED_INPUT);
+    for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
     {
         // If the transform_op returns `NEED_INPUT`,
         // we need to call the upstream transform_op until a transform_op returns something other than `NEED_INPUT`.
         op_status = (*it)->await();
-        if (op_status != OperatorStatus::NEED_INPUT)
-            return op_status;
+        HANDLE_OP_STATUS((*it), op_status, OperatorStatus::NEED_INPUT);
     }
     op_status = source_op->await();
-    return op_status;
+    HANDLE_LAST_OP_STATUS(source_op, op_status);
 }
+
+#undef HANDLE_OP_STATUS
+#undef HANDLE_LAST_OP_STATUS
+
 } // namespace DB
