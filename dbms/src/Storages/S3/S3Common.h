@@ -215,6 +215,10 @@ void rawListPrefix(
     std::string_view delimiter,
     std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
 
+// Unlike `deleteObject` or other method above, this does not handle
+// the TiFlashS3Client `root`.
+void rawDeleteObject(const Aws::S3::S3Client & client, const String & bucket, const String & key);
+
 template <typename F, typename... T>
 void retryWrapper(F f, const T &... args)
 {
