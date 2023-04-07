@@ -158,7 +158,7 @@ Block NonJoinedBlockInputStream::readImpl()
         const auto & src_col = result_sample_block.safeGetByPosition(column_indices_right[i]);
         columns_right[i] = src_col.type->createColumn();
         if (row_counter_column == nullptr)
-            row_counter_column = columns_left[i].get();
+            row_counter_column = columns_right[i].get();
     }
     assert(row_counter_column != nullptr);
 
