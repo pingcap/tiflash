@@ -14,7 +14,6 @@
 
 #include <Common/Exception.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Server/BgStorageInit.h>
 #include <Storages/IManageableStorage.h>
@@ -64,11 +63,11 @@ void doInitStores(Context & global_context, const LoggerPtr & log)
         }
     };
 
-    size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency()) * global_context.getSettingsRef().init_thread_count_scale;
-    auto init_storages_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
+    size_t num_threads = std::max(4UL, std::thread::hardware_concurrency()) * global_context.getSettingsRef().init_thread_count_scale;
+    auto init_storages_thread_pool = ThreadPool(num_threads, num_threads / 2, num_threads * 2);
     auto init_storages_wait_group = init_storages_thread_pool.waitGroup();
 
-    auto restore_segments_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
+    auto restore_segments_thread_pool = ThreadPool(num_threads, num_threads / 2, num_threads * 2);
 
     for (auto & iter : storages)
     {

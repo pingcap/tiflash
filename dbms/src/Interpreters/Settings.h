@@ -238,14 +238,16 @@ struct Settings
     M(SettingUInt64, dt_small_file_size_threshold, 128 * 1024, "When S3 is enabled, file size less than dt_small_file_size_threshold will be merged before uploading to S3")                                                            \
     M(SettingDouble, dt_merged_file_max_size, 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                                     \
     M(SettingDouble, io_thread_count_scale, 5.0, "Number of thread of IOThreadPool = number of logical cpu cores * io_thread_count_scale.  Only has meaning at server startup.")                                                        \
+    M(SettingUInt64, init_thread_count_scale, 100, "Number of thread = number of logical cpu cores * init_thread_count_scale. It just works for thread pool for initStores and loadMetadata")                                           \
                                                                                                                                                                                                                                         \
     M(SettingChecksumAlgorithm, dt_checksum_algorithm, ChecksumAlgo::XXH3, "Checksum algorithm for delta tree stable storage")                                                                                                          \
     M(SettingCompressionMethod, dt_compression_method, CompressionMethod::LZ4, "The method of data compression when writing.")                                                                                                          \
     M(SettingInt64, dt_compression_level, 1, "The compression level.")                                                                                                                                                                  \
     \
     M(SettingInt64, remote_checkpoint_interval_seconds, 30, "The interval of uploading checkpoint to the remote store. Unit is second.")                                                                                                \
+    M(SettingInt64, remote_gc_method, 1, "The method of running GC task on the remote store. 1 - lifecycle, 2 - scan.")                                                                                                                 \
     M(SettingInt64, remote_gc_interval_seconds, 3600, "The interval of running GC task on the remote store. Unit is second.")                                                                                                           \
-    M(SettingInt64, remote_gc_min_age_seconds, 3600, "The file will NOT be compacted when the time difference between the last modification is less than this threshold")                                                              \
+    M(SettingInt64, remote_gc_min_age_seconds, 3600, "The file will NOT be compacted when the time difference between the last modification is less than this threshold")                                                               \
     M(SettingDouble, remote_gc_ratio, 0.5, "The files with valid rate less than this threshold will be compacted")                                                                                                                      \
     M(SettingInt64, remote_gc_small_size, 128 * 1024, "The files with total size less than this threshold will be compacted")                                                                                                           \
     M(SettingDouble, disagg_read_concurrency_scale, 20.0, "Scale * logical cpu cores = disaggregated read IO concurrency.")                                                                                                             \
@@ -303,8 +305,7 @@ struct Settings
     M(SettingBool, enable_planner, true, "Enable planner")                                                                                                                                                                              \
     M(SettingBool, enable_pipeline, false, "Enable pipeline model")                                                                                                                                                                     \
     M(SettingUInt64, pipeline_task_thread_pool_size, 0, "The size of task thread pool. 0 means using number_of_logical_cpu_cores.")                                                                                                     \
-    M(SettingUInt64, local_tunnel_version, 1, "1: not refined, 2: refined") \
-    M(SettingUInt64, init_thread_count_scale, 100, "Number of thread = number of logical cpu cores * init_thread_count_scale. It just works for thread pool for initStores and loadMetadata")
+    M(SettingUInt64, local_tunnel_version, 2, "1: not refined, 2: refined")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 

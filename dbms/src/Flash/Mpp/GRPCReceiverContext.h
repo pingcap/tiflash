@@ -104,7 +104,12 @@ public:
 
     void fillSchema(DAGSchema & schema) const;
 
-    void establishMPPConnectionLocalV2(const ExchangeRecvRequest & request, size_t source_index, LocalRequestHandler & local_request_handler, bool is_fine_grained);
+    void establishMPPConnectionLocalV2(
+        const ExchangeRecvRequest & request,
+        size_t source_index,
+        LocalRequestHandler & local_request_handler,
+        bool is_fine_grained,
+        bool has_remote_conn);
 
     static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(const ::mpp::EstablishMPPConnectionRequest * request, const std::shared_ptr<MPPTaskManager> & task_manager);
 
