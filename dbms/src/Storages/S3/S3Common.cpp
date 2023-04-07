@@ -86,6 +86,7 @@ extern const Event S3WriteBytes;
 extern const Event S3ListObjects;
 extern const Event S3DeleteObject;
 extern const Event S3CopyObject;
+extern const Event S3PutObjectRetry;
 } // namespace ProfileEvents
 
 namespace
@@ -510,6 +511,10 @@ static bool doUploadEmptyFile(const TiFlashS3Client & client, const String & key
     auto istr = Aws::MakeShared<Aws::StringStream>("EmptyObjectInputStream", "", std::ios_base::in | std::ios_base::binary);
     req.SetBody(istr);
     ProfileEvents::increment(ProfileEvents::S3PutObject);
+    if (current_retry > 0)
+    {
+        ProfileEvents::increment(ProfileEvents::S3PutObjectRetry);
+    }
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
@@ -553,6 +558,10 @@ static bool doUploadFile(const TiFlashS3Client & client, const String & local_fn
     auto write_bytes = std::filesystem::file_size(local_fname);
     req.SetBody(istr);
     ProfileEvents::increment(ProfileEvents::S3PutObject);
+    if (current_retry > 0)
+    {
+        ProfileEvents::increment(ProfileEvents::S3PutObjectRetry);
+    }
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
