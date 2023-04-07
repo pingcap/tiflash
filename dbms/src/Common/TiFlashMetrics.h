@@ -339,8 +339,8 @@ namespace DB
         F(type_io_executing_tasks_count, {"type", "io_executing_tasks_count"}),                                                                     \
         F(type_cpu_task_thread_pool_size, {"type", "cpu_task_thread_pool_size"}),                                                                   \
         F(type_io_task_thread_pool_size, {"type", "io_task_thread_pool_size"}),                                                                     \
-        F(type_max_cpu_execution_time_ms_of_a_round, {"type", "max_cpu_execution_time_ms_of_a_round"}),                                             \
-        F(type_max_io_execution_time_ms_of_a_round, {"type", "max_io_execution_time_ms_of_a_round"}))                                               \
+        F(type_cpu_max_execution_time_ms_of_a_round, {"type", "cpu_max_execution_time_ms_of_a_round"}),                                             \
+        F(type_io_max_execution_time_ms_of_a_round, {"type", "io_max_execution_time_ms_of_a_round"}))                                               \
     M(tiflash_pipeline_task_change_to_status, "pipeline task change to status", Counter,                                                            \
         F(type_to_init, {"type", "to_init"}),                                                                                                       \
         F(type_to_waiting, {"type", "to_waiting"}),                                                                                                 \
