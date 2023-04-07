@@ -527,6 +527,7 @@ PS::V3::CPDataDumpStats UniversalPageStorage::dumpIncrementalCheckpoint(const Un
              sw.elapsedSeconds(),
              sequence,
              write_stats);
+    SetMetrics(write_stats);
     return write_stats;
 }
 
