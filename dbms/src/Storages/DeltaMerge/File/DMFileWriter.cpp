@@ -15,6 +15,7 @@
 #include <Common/TiFlashException.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
+#include <Storages/S3/S3Common.h>
 
 #ifndef NDEBUG
 #include <sys/stat.h>
