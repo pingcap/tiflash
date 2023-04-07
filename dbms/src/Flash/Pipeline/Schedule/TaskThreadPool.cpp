@@ -22,6 +22,8 @@
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 template <typename Impl>

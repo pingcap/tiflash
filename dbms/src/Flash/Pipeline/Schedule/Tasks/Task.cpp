@@ -31,30 +31,27 @@ namespace
 // TODO supports more detailed status transfer metrics, such as from waiting to running.
 void addToStatusMetrics(ExecTaskStatus to)
 {
+#define M(expect_status, metric_name)                                                \
+    case (expect_status):                                                            \
+    {                                                                                \
+        GET_METRIC(tiflash_pipeline_task_change_to_status, metric_name).Increment(); \
+        break;                                                                       \
+    }
+
     switch (to)
     {
-    case ExecTaskStatus::INIT:
-        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_init).Increment();
-        break;
-    case ExecTaskStatus::WAITING:
-        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_waiting).Increment();
-        break;
-    case ExecTaskStatus::RUNNING:
-        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_running).Increment();
-        break;
-    case ExecTaskStatus::IO:
-        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_io).Increment();
-        break;
-    case ExecTaskStatus::FINISHED:
-        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_finished).Increment();
-        break;
-    case ExecTaskStatus::ERROR:
-        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_error).Increment();
-        break;
-    case ExecTaskStatus::CANCELLED:
-        GET_METRIC(tiflash_pipeline_task_change_to_status, type_to_cancelled).Increment();
-        break;
+        M(ExecTaskStatus::INIT, type_to_init)
+        M(ExecTaskStatus::WAITING, type_to_waiting)
+        M(ExecTaskStatus::RUNNING, type_to_running)
+        M(ExecTaskStatus::IO, type_to_io)
+        M(ExecTaskStatus::FINISHED, type_to_finished)
+        M(ExecTaskStatus::ERROR, type_to_error)
+        M(ExecTaskStatus::CANCELLED, type_to_cancelled)
+    default:
+        throw Exception(fmt::format("Unknown task status: {}.", magic_enum::enum_name(to)), ErrorCodes::LOGICAL_ERROR);
     }
+
+#undef M
 }
 } // namespace
 
