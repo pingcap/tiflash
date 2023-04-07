@@ -108,6 +108,7 @@ private:
     String remote_fname;
     // We may merge several small files into a S3 object.
     // `offset_and_size_in_object` is the offset and size of current file in S3 Object.
+    // And `cur_offset` is the offset in the current file.
     std::optional<std::pair<UInt64, UInt64>> offset_and_size_in_object;
     off_t cur_offset;
     Aws::S3::Model::GetObjectResult read_result;
