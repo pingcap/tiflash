@@ -77,8 +77,8 @@ namespace DB::S3
 {
 
 PocoHTTPClientConfiguration::PocoHTTPClientConfiguration(
-    const RemoteHostFilter & remote_host_filter_,
-    unsigned int s3_max_redirects_,
+    const std::shared_ptr<RemoteHostFilter> & remote_host_filter_,
+    UInt32 s3_max_redirects_,
     bool enable_s3_requests_logging_)
     : remote_host_filter(remote_host_filter_)
     , s3_max_redirects(s3_max_redirects_)
@@ -206,11 +206,9 @@ void PocoHTTPClient::makeRequestInternal(
         for (unsigned int attempt = 0; attempt <= s3_max_redirects; ++attempt)
         {
             Poco::URI target_uri(uri);
-            HTTPSessionPtr session;
             auto request_configuration = per_request_configuration(request);
-
             RUNTIME_CHECK(request_configuration.proxy_host.empty());
-            session = makeHTTPSession(target_uri, timeouts, /* resolve_host = */ true);
+            auto session = makeHTTPSession(target_uri, timeouts, /* resolve_host = */ true);
 
             /// In case of error this address will be written to logs
             request.SetResolvedRemoteHost(session->getResolvedAddress());
@@ -281,7 +279,7 @@ void PocoHTTPClient::makeRequestInternal(
             if (request.GetContentBody())
             {
                 if (enable_s3_requests_logging)
-                    LOG_DEBUG(log, "Writing request body.");
+                    LOG_DEBUG(log, "URI={}, Writing request body.", uri);
 
                 /// Rewind content body buffer.
                 /// NOTE: we should do that always (even if `attempt == 0`) because the same request can be retried also by AWS,
@@ -291,11 +289,11 @@ void PocoHTTPClient::makeRequestInternal(
 
                 auto size = Poco::StreamCopier::copyStream(*request.GetContentBody(), request_body_stream);
                 if (enable_s3_requests_logging)
-                    LOG_DEBUG(log, "Written {} bytes to request body", size);
+                    LOG_DEBUG(log, "URI={}, Written {} bytes to request body", uri, size);
             }
 
             if (enable_s3_requests_logging)
-                LOG_DEBUG(log, "Receiving response...");
+                LOG_DEBUG(log, "URI={}, Receiving response...", uri);
             auto & response_body_stream = session->receiveResponse(poco_response);
 
             watch.stop();
@@ -306,21 +304,21 @@ void PocoHTTPClient::makeRequestInternal(
             if (status_code >= SUCCESS_RESPONSE_MIN && status_code <= SUCCESS_RESPONSE_MAX)
             {
                 if (enable_s3_requests_logging)
-                    LOG_DEBUG(log, "Response status: {}, {}", status_code, poco_response.getReason());
+                    LOG_DEBUG(log, "URI={}, Response status: {}, {}", uri, status_code, poco_response.getReason());
             }
             else
             {
                 /// Error statuses are more important so we show them even if `enable_s3_requests_logging == false`.
-                LOG_INFO(log, "Response status: {}, {}", status_code, poco_response.getReason());
+                LOG_INFO(log, "URI={}, Response status: {}, {}", uri, status_code, poco_response.getReason());
             }
 
-            if (poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT)
+            if (poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT || poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_FOUND)
             {
                 auto location = poco_response.get("location");
-                remote_host_filter.checkURL(Poco::URI(location));
+                remote_host_filter->checkURL(Poco::URI(location));
                 uri = location;
                 if (enable_s3_requests_logging)
-                    LOG_DEBUG(log, "Redirecting request to new location: {}", location);
+                    LOG_DEBUG(log, "URI={}, Redirecting request to new location: {}", uri, location);
 
                 addMetric(request, S3MetricType::Redirects);
 
@@ -338,7 +336,7 @@ void PocoHTTPClient::makeRequestInternal(
                     response->AddHeader(header_name, header_value);
                     headers_ss << header_name << ": " << header_value << "; ";
                 }
-                LOG_DEBUG(log, "Received headers: {}", headers_ss.str());
+                LOG_DEBUG(log, "URI={}, Received headers: {}", uri, headers_ss.str());
             }
             else
             {

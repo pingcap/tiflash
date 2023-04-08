@@ -37,26 +37,23 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
 
     RUNTIME_CHECK_MSG(join != nullptr, "join ptr should not be null.");
     RUNTIME_CHECK_MSG(join->getProbeConcurrency() > 0, "Join probe concurrency must be greater than 0");
+    auto input_header = input->getHeader();
+    assert(input_header.rows() == 0);
     if (need_output_non_joined_data)
-        non_joined_stream = join->createStreamWithNonJoinedRows(input->getHeader(), current_non_joined_stream_index, join->getProbeConcurrency(), max_block_size);
+        non_joined_stream = join->createStreamWithNonJoinedRows(input_header, current_non_joined_stream_index, join->getProbeConcurrency(), max_block_size);
+    ProbeProcessInfo header_probe_process_info(0);
+    header_probe_process_info.resetBlock(std::move(input_header));
+    header = original_join->joinBlock(header_probe_process_info, true);
 }
 
 Block HashJoinProbeBlockInputStream::getHeader() const
 {
-    Block res = children.back()->getHeader();
-    assert(res.rows() == 0);
-    ProbeProcessInfo header_probe_process_info(0);
-    header_probe_process_info.resetBlock(std::move(res));
-    /// use original_join here so we don't need add lock
-    return original_join->joinBlock(header_probe_process_info);
+    return header;
 }
 
 void HashJoinProbeBlockInputStream::cancel(bool kill)
 {
     IProfilingBlockInputStream::cancel(kill);
-    /// When the probe stream quits probe by cancelling instead of normal finish, the Join operator might still produce meaningless blocks
-    /// and expects these meaningless blocks won't be used to produce meaningful result.
-
     JoinPtr current_join;
     RestoreInfo restore_info;
     {
@@ -66,18 +63,23 @@ void HashJoinProbeBlockInputStream::cancel(bool kill)
         restore_info.build_stream = restore_build_stream;
         restore_info.probe_stream = restore_probe_stream;
     }
-    /// Cancel join just wake up all the threads waiting in Join::waitUntilAllBuildFinished/Join::waitUntilAllProbeFinished,
-    /// the ongoing join process will not be interrupted
-    /// There is a little bit hack here because cancel will be called in two cases:
-    /// 1. the query is cancelled by the caller or meet error: in this case, wake up all waiting threads is safe
-    /// 2. the query is executed normally, and one of the data stream has read an empty block, the the data stream and all its children
-    ///    will call `cancel(false)`, in this case, there is two sub-cases
-    ///    a. the data stream read an empty block because of EOF, then it means there must be no threads waiting in Join, so cancel the join is safe
-    ///    b. the data stream read an empty block because of early exit of some executor(like limit), in this case, just wake the waiting
-    ///       threads is not 100% safe because if the probe thread is wake up when build is not finished yet, it may produce wrong results, for now
-    ///       it is safe because when any of the data stream read empty block because of early exit, the execution framework ensures that no further
-    ///       data will be used.
-    current_join->cancel();
+    /// Join::wakeUpAllWaitingThreads wakes up all the threads waiting in Join::waitUntilAllBuildFinished/waitUntilAllProbeFinished,
+    /// and once this function is called, all the subsequent call of Join::waitUntilAllBuildFinished/waitUntilAllProbeFinished will
+    /// skip waiting directly.
+    /// HashJoinProbeBlockInputStream::cancel will be called in two cases:
+    /// 1. the query is cancelled by the caller or meet error: in this case, wake up all waiting threads is safe, because no data
+    ///    will be used data anymore
+    /// 2. the query is executed normally, and one of the data stream has read an empty block, the the data stream and all its
+    ///    children will call `cancel(false)`, in this case, there is two sub-cases
+    ///    a. the data stream read an empty block because of EOF, then it means there must be no threads waiting in Join, so wake
+    ///       up all waiting threads is safe because actually there is no threads to be waken up
+    ///    b. the data stream read an empty block because of early exit of some executor(like limit), in this case, waking up the
+    ///       waiting threads is not 100% safe because if the probe thread is waken up when build is not finished yet, it may get
+    ///       wrong result. Currently, the execution framework ensures that when any of the data stream read empty block because
+    ///       of early exit, no further data will be used, and in order to make sure no wrong result is generated
+    ///       - for threads reading joined data: will return empty block if build is not finished yet
+    ///       - for threads reading non joined data: will return empty block if build or probe is not finished yet
+    current_join->wakeUpAllWaitingThreads();
     if (restore_info.non_joined_stream != nullptr)
     {
         auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(restore_info.non_joined_stream.get());

@@ -583,6 +583,7 @@ void FileCache::restoreDMFile(const std::filesystem::directory_entry & dmfile_en
             if (canCache(file_type) && cache_capacity - cache_used >= size)
             {
                 table.set(toS3Key(fname), std::make_shared<FileSegment>(fname, FileSegment::Status::Complete, size, file_type));
+                capacity_metrics->addUsedSize(fname, size);
                 cache_used += size;
             }
             else

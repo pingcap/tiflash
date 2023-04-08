@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnConst.h>
 #include <Common/typeid_cast.h>
+#include <Interpreters/JoinPartition.h>
 #include <Interpreters/NullAwareSemiJoinHelper.h>
 
 namespace DB
@@ -39,7 +40,7 @@ NASemiJoinResult<KIND, STRICTNESS>::NASemiJoinResult(size_t row_num_, NASemiJoin
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
 template <typename Mapped, NASemiJoinStep STEP>
-void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<Join::RowsNotInsertToMap> & null_rows, size_t & current_offset, size_t min_pace)
+void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added_columns, size_t left_columns, size_t right_columns, const std::vector<RowsNotInsertToMap *> & null_rows, size_t & current_offset, size_t min_pace)
 {
     static_assert(STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
 
@@ -70,7 +71,7 @@ void NASemiJoinResult<KIND, STRICTNESS>::fillRightColumns(MutableColumns & added
         size_t count = pace;
         while (pos_in_null_rows < null_rows.size() && count > 0)
         {
-            const auto & rows = null_rows[pos_in_null_rows];
+            const auto & rows = *null_rows[pos_in_null_rows];
 
             while (pos_in_columns_vector < rows.materialized_columns_vec.size() && count > 0)
             {
@@ -203,7 +204,7 @@ NASemiJoinHelper<KIND, STRICTNESS, Mapped>::NASemiJoinHelper(
     size_t left_columns_,
     size_t right_columns_,
     const BlocksList & right_blocks_,
-    const std::vector<Join::RowsNotInsertToMap> & null_rows_,
+    const std::vector<RowsNotInsertToMap *> & null_rows_,
     size_t max_block_size_,
     const JoinNonEqualConditions & non_equal_conditions_)
     : block(block_)
@@ -481,22 +482,13 @@ void NASemiJoinHelper<KIND, STRICTNESS, Mapped>::runAndCheckExprResult(Block & e
     }
 }
 
-template class NASemiJoinResult<NullAware_Anti, Any>;
-template class NASemiJoinResult<NullAware_Anti, All>;
+#define M(KIND, STRICTNESS, MAPTYPE) \
+    template class NASemiJoinResult<KIND, STRICTNESS>;
+APPLY_FOR_NULL_AWARE_JOIN(M)
+#undef M
 
-template class NASemiJoinResult<NullAware_LeftSemi, Any>;
-template class NASemiJoinResult<NullAware_LeftSemi, All>;
-
-template class NASemiJoinResult<NullAware_LeftAnti, Any>;
-template class NASemiJoinResult<NullAware_LeftAnti, All>;
-
-template class NASemiJoinHelper<NullAware_Anti, Any, Join::RowRef>;
-template class NASemiJoinHelper<NullAware_Anti, All, Join::RowRefList>;
-
-template class NASemiJoinHelper<NullAware_LeftSemi, Any, Join::RowRef>;
-template class NASemiJoinHelper<NullAware_LeftSemi, All, Join::RowRefList>;
-
-template class NASemiJoinHelper<NullAware_LeftAnti, Any, Join::RowRef>;
-template class NASemiJoinHelper<NullAware_LeftAnti, All, Join::RowRefList>;
-
+#define M(KIND, STRICTNESS, MAPTYPE) \
+    template class NASemiJoinHelper<KIND, STRICTNESS, MAPTYPE::MappedType::Base_t>;
+APPLY_FOR_NULL_AWARE_JOIN(M)
+#undef M
 } // namespace DB

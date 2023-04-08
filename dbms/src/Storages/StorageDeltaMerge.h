@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/UniThreadPool.h>
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
@@ -181,7 +182,7 @@ public:
 
     void releaseDecodingBlock(Int64 block_decoding_schema_version, BlockUPtr block) override;
 
-    bool initStoreIfDataDirExist() override;
+    bool initStoreIfDataDirExist(ThreadPool * thread_pool) override;
 
     DM::DMConfigurationOpt createChecksumConfig() const
     {
@@ -217,7 +218,7 @@ private:
 
     DataTypePtr getPKTypeImpl() const override;
 
-    DM::DeltaMergeStorePtr & getAndMaybeInitStore();
+    DM::DeltaMergeStorePtr & getAndMaybeInitStore(ThreadPool * thread_pool = nullptr);
     bool storeInited() const
     {
         return store_inited.load(std::memory_order_acquire);

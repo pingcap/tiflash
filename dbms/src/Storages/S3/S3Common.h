@@ -19,6 +19,7 @@
 #include <Common/nocopyable.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
+#include <Storages/S3/S3RandomAccessFile.h>
 #include <aws/core/Aws.h>
 #include <aws/core/http/Scheme.h>
 #include <aws/s3/S3Client.h>
@@ -39,13 +40,16 @@ extern const int S3_ERROR;
 
 namespace DB::S3
 {
+
+inline String S3ErrorMessage(const Aws::S3::S3Error & e)
+{
+    return fmt::format(" s3error={} s3msg={} request_id={}", magic_enum::enum_name(e.GetErrorType()), e.GetMessage(), e.GetRequestId());
+}
+
 template <typename... Args>
 Exception fromS3Error(const Aws::S3::S3Error & e, const std::string & fmt, Args &&... args)
 {
-    return DB::Exception(
-        ErrorCodes::S3_ERROR,
-        fmt + fmt::format(" s3error={} s3msg={} request_id={}", magic_enum::enum_name(e.GetErrorType()), e.GetMessage(), e.GetRequestId()),
-        args...);
+    return DB::Exception(ErrorCodes::S3_ERROR, fmt + S3ErrorMessage(e), args...);
 }
 
 class TiFlashS3Client : public Aws::S3::S3Client
@@ -164,6 +168,7 @@ void ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 void uploadEmptyFile(const TiFlashS3Client & client, const String & key, const String & tagging = "", int max_retry_times = 3);
 
 void downloadFile(const TiFlashS3Client & client, const String & local_fname, const String & remote_fname);
+void downloadFileByS3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client, const String & local_fname, const String & remote_fname);
 
 void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key, const String & tagging);
 
@@ -209,6 +214,10 @@ void rawListPrefix(
     const String & prefix,
     std::string_view delimiter,
     std::function<PageResult(const Aws::S3::Model::ListObjectsV2Result & result)> pager);
+
+// Unlike `deleteObject` or other method above, this does not handle
+// the TiFlashS3Client `root`.
+void rawDeleteObject(const Aws::S3::S3Client & client, const String & bucket, const String & key);
 
 template <typename F, typename... T>
 void retryWrapper(F f, const T &... args)
