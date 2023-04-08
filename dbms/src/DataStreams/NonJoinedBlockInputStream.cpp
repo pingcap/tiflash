@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnUtils.h>
 #include <DataStreams/NonJoinedBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
 

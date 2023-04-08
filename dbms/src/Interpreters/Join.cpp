@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnConst.h>
-#include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnNullable.h>
-#include <Columns/ColumnString.h>
+#include <Columns/ColumnUtils.h>
 #include <Common/ColumnsHashing.h>
 #include <Common/FailPoint.h>
 #include <Common/typeid_cast.h>
@@ -111,13 +108,6 @@ ColumnRawPtrs extractAndMaterializeKeyColumns(const Block & block, Columns & mat
 const std::string Join::match_helper_prefix = "__left-semi-join-match-helper";
 const DataTypePtr Join::match_helper_type = makeNullable(std::make_shared<DataTypeInt8>());
 
-void convertColumnToNullable(ColumnWithTypeAndName & column)
-{
-    column.type = makeNullable(column.type);
-    if (column.column)
-        column.column = makeNullable(column.column);
-}
-
 Join::Join(
     const Names & key_names_left_,
     const Names & key_names_right_,
@@ -189,92 +179,6 @@ void Join::meetErrorImpl(const String & error_message_, std::unique_lock<std::mu
     error_message = error_message_.empty() ? "Join meet error" : error_message_;
     build_cv.notify_all();
     probe_cv.notify_all();
-}
-
-bool CanAsColumnString(const IColumn * column)
-{
-    return typeid_cast<const ColumnString *>(column)
-        || (column->isColumnConst() && typeid_cast<const ColumnString *>(&static_cast<const ColumnConst *>(column)->getDataColumn()));
-}
-
-JoinType Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes_) const
-{
-    const size_t keys_size = key_columns.size();
-
-    if (keys_size == 0)
-        return JoinType::CROSS;
-
-    bool all_fixed = true;
-    size_t keys_bytes = 0;
-    key_sizes_.resize(keys_size);
-    for (size_t j = 0; j < keys_size; ++j)
-    {
-        if (!key_columns[j]->isFixedAndContiguous())
-        {
-            all_fixed = false;
-            break;
-        }
-        key_sizes_[j] = key_columns[j]->sizeOfValueIfFixed();
-        keys_bytes += key_sizes_[j];
-    }
-
-    /// If there is one numeric key that fits in 64 bits
-    if (keys_size == 1 && key_columns[0]->isNumeric())
-    {
-        size_t size_of_field = key_columns[0]->sizeOfValueIfFixed();
-        if (size_of_field == 1)
-            return JoinType::key8;
-        if (size_of_field == 2)
-            return JoinType::key16;
-        if (size_of_field == 4)
-            return JoinType::key32;
-        if (size_of_field == 8)
-            return JoinType::key64;
-        if (size_of_field == 16)
-            return JoinType::keys128;
-        throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16.", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    /// If the keys fit in N bits, we will use a hash table for N-bit-packed keys
-    if (all_fixed && keys_bytes <= 16)
-        return JoinType::keys128;
-    if (all_fixed && keys_bytes <= 32)
-        return JoinType::keys256;
-
-    /// If there is single string key, use hash table of it's values.
-    if (keys_size == 1 && CanAsColumnString(key_columns[0]))
-    {
-        if (collators.empty() || !collators[0])
-            return JoinType::key_strbin;
-        else
-        {
-            switch (collators[0]->getCollatorType())
-            {
-            case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
-            case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
-            case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
-            case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
-            {
-                return JoinType::key_strbinpadding;
-            }
-            case TiDB::ITiDBCollator::CollatorType::BINARY:
-            {
-                return JoinType::key_strbin;
-            }
-            default:
-            {
-                // for CI COLLATION, use original way
-                return JoinType::key_string;
-            }
-            }
-        }
-    }
-
-    if (keys_size == 1 && typeid_cast<const ColumnFixedString *>(key_columns[0]))
-        return JoinType::key_fixed_string;
-
-    /// Otherwise, use serialized values as the key.
-    return JoinType::serialized;
 }
 
 size_t Join::getTotalRowCount() const
@@ -412,7 +316,7 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     if (unlikely(initialized))
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
-    type = chooseMethod(getKeyColumns(key_names_right, sample_block), key_sizes);
+    type = chooseJoinType(getKeyColumns(key_names_right, sample_block), key_sizes, collators);
     setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     build_sample_block = sample_block;
     build_spiller = std::make_unique<Spiller>(build_spill_config, false, build_concurrency_, build_sample_block, log);
@@ -1353,24 +1257,10 @@ Block Join::joinBlockNullAware(ProbeProcessInfo & probe_process_info) const
 {
     Block block = probe_process_info.block;
 
-    size_t keys_size = key_names_left.size();
-    ColumnRawPtrs key_columns(keys_size);
-
     /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
     /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
     Columns materialized_columns;
-
-    /// Memoize key columns to work with.
-    for (size_t i = 0; i < keys_size; ++i)
-    {
-        key_columns[i] = block.getByName(key_names_left[i]).column.get();
-
-        if (ColumnPtr converted = key_columns[i]->convertToFullColumnIfConst())
-        {
-            materialized_columns.emplace_back(converted);
-            key_columns[i] = materialized_columns.back().get();
-        }
-    }
+    ColumnRawPtrs key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names_left);
 
     /// Note that `extractAllKeyNullMap` must be done before `extractNestedColumnsAndNullMap`
     /// because `extractNestedColumnsAndNullMap` will change the nullable column to its nested column.

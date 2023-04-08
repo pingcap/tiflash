@@ -293,8 +293,6 @@ private:
 private:
     JoinType type = JoinType::EMPTY;
 
-    JoinType chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes) const;
-
     Sizes key_sizes;
 
     /// Block with columns from the right-side table except key columns.
@@ -394,7 +392,5 @@ struct RestoreInfo
         , build_stream(build_stream_)
         , probe_stream(probe_stream_){};
 };
-
-void convertColumnToNullable(ColumnWithTypeAndName & column);
 
 } // namespace DB
