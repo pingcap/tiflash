@@ -40,6 +40,9 @@ protected:
     ExecTaskStatus executeImpl() noexcept override;
     virtual ExecTaskStatus doExecuteImpl() = 0;
 
+    ExecTaskStatus executeIOImpl() noexcept override;
+    virtual ExecTaskStatus doExecuteIOImpl() { return ExecTaskStatus::RUNNING; };
+
     ExecTaskStatus awaitImpl() noexcept override;
     virtual ExecTaskStatus doAwaitImpl() { return ExecTaskStatus::RUNNING; };
 

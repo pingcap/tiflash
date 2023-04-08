@@ -69,6 +69,11 @@ ExecTaskStatus EventTask::executeImpl() noexcept
     return doTaskAction([&] { return doExecuteImpl(); });
 }
 
+ExecTaskStatus EventTask::executeIOImpl() noexcept
+{
+    return doTaskAction([&] { return doExecuteIOImpl(); });
+}
+
 ExecTaskStatus EventTask::awaitImpl() noexcept
 {
     return doTaskAction([&] { return doAwaitImpl(); });
