@@ -23,6 +23,25 @@
 #include <chrono>
 #include <vector>
 
+#define RESET_FONT "\033[0m"
+#define BOLD_FONT "\033[1m"
+#define BLACK "\033[30m"
+#define RED "\033[31m"
+#define GREEN "\033[32m"
+#define YELLOW "\033[33m"
+#define BLUE "\033[34m"
+#define MAGENTA "\033[35m"
+#define CYAN "\033[36m"
+#define WHITE "\033[37m"
+#define BRIGHT_BLACK "\033[90m"
+#define BRIGHT_RED "\033[91m"
+#define BRIGHT_GREEN "\033[92m"
+#define BRIGHT_YELLOW "\033[93m"
+#define BRIGHT_BLUE "\033[94m"
+#define BRIGHT_MAGENTA "\033[95m"
+#define BRIGHT_CYAN "\033[96m"
+#define BRIGHT_WHITE "\033[97m"
+
 namespace DB
 {
 void UnifiedLogFormatter::format(const Poco::Message & msg, std::string & text)
@@ -31,30 +50,63 @@ void UnifiedLogFormatter::format(const Poco::Message & msg, std::string & text)
 
     // Timestamp
     {
+        if (enable_color)
+            buf.append(BRIGHT_GREEN);
+
         buf.append('[');
         writeTimestamp(buf);
         buf.append("] ");
+
+        if (enable_color)
+            buf.append(RESET_FONT);
     }
+
     // Priority
     {
+        if (enable_color)
+        {
+            buf.append(BOLD_FONT);
+            writePriorityColor(buf, msg.getPriority());
+        }
+
         buf.append('[');
         writePriority(buf, msg.getPriority());
         buf.append("] ");
+
+        if (enable_color)
+            buf.append(RESET_FONT);
     }
+
     // Source File
     {
+        if (enable_color)
+            buf.append(MAGENTA);
+
         if (unlikely(!msg.getSourceFile()))
             buf.append("[<unknown>] ");
         else
             buf.fmtAppend(FMT_COMPILE("[{}:{}] "), msg.getSourceFile(), msg.getSourceLine());
+
+        if (enable_color)
+            buf.append(RESET_FONT);
     }
     // Message
     {
+        if (enable_color)
+            writeMessageColor(buf, msg.getPriority());
+
         buf.append('[');
         writeEscapedString(buf, msg.getText());
         buf.append("] ");
+
+        if (enable_color)
+            buf.append(RESET_FONT);
     }
+
     // Source and Identifiers
+    if (enable_color)
+        buf.append(BRIGHT_BLACK);
+
     {
         const std::string & source = msg.getSource();
         if (!source.empty())
@@ -68,7 +120,64 @@ void UnifiedLogFormatter::format(const Poco::Message & msg, std::string & text)
     {
         buf.fmtAppend(FMT_COMPILE("[thread_id={}]"), Poco::ThreadNumber::get());
     }
+
+    if (enable_color)
+        buf.append(RESET_FONT);
+
     text = buf.toString();
+}
+
+void UnifiedLogFormatter::writePriorityColor(FmtBuffer & buf, const Poco::Message::Priority & priority)
+{
+    switch (priority)
+    {
+    case Poco::Message::Priority::PRIO_TRACE:
+        buf.append(BRIGHT_BLACK);
+        break;
+    case Poco::Message::Priority::PRIO_DEBUG:
+        buf.append(BRIGHT_BLACK);
+        break;
+    case Poco::Message::Priority::PRIO_INFORMATION:
+        buf.append(BRIGHT_BLUE);
+        break;
+    case Poco::Message::Priority::PRIO_WARNING:
+        buf.append(YELLOW);
+        break;
+    case Poco::Message::Priority::PRIO_ERROR:
+        buf.append(RED);
+        break;
+    case Poco::Message::Priority::PRIO_FATAL:
+        buf.append(RED);
+        break;
+    case Poco::Message::Priority::PRIO_CRITICAL:
+        buf.append(RED);
+        break;
+    case Poco::Message::Priority::PRIO_NOTICE:
+        break;
+    default:
+        break;
+    }
+}
+
+void UnifiedLogFormatter::writeMessageColor(FmtBuffer & buf, const Poco::Message::Priority & priority)
+{
+    switch (priority)
+    {
+    case Poco::Message::Priority::PRIO_WARNING:
+        buf.append(YELLOW);
+        break;
+    case Poco::Message::Priority::PRIO_ERROR:
+        buf.append(RED);
+        break;
+    case Poco::Message::Priority::PRIO_FATAL:
+        buf.append(RED);
+        break;
+    case Poco::Message::Priority::PRIO_CRITICAL:
+        buf.append(RED);
+        break;
+    default:
+        break;
+    }
 }
 
 void UnifiedLogFormatter::writePriority(FmtBuffer & buf, const Poco::Message::Priority & priority)

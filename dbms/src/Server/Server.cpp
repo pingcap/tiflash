@@ -61,6 +61,7 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
+#include <Poco/Util/HelpFormatter.h>
 #include <Server/BgStorageInit.h>
 #include <Server/Bootstrap.h>
 #include <Server/CertificateReloader.h>
@@ -238,6 +239,31 @@ void Server::initialize(Poco::Util::Application & self)
     logger().information("starting up");
 }
 
+void Server::defineOptions(Poco::Util::OptionSet & options)
+{
+    options.addOption(
+        Poco::Util::Option("help", "h", "show help and exit")
+            .required(false)
+            .repeatable(false)
+            .binding("help"));
+    BaseDaemon::defineOptions(options);
+}
+
+int Server::run()
+{
+    if (config().hasOption("help"))
+    {
+        Poco::Util::HelpFormatter help_formatter(Server::options());
+        auto header_str = fmt::format("{} server [OPTION] [-- [POSITIONAL_ARGS]...]\n"
+                                      "POSITIONAL_ARGS can be used to rewrite config properties, for example, --http_port=8010",
+                                      commandName());
+        help_formatter.setHeader(header_str);
+        help_formatter.format(std::cout);
+        return 0;
+    }
+    return BaseDaemon::run();
+}
+
 std::string Server::getDefaultCorePath() const
 {
     return getCanonicalPath(config().getString("path")) + "cores";
@@ -245,19 +271,11 @@ std::string Server::getDefaultCorePath() const
 
 struct TiFlashProxyConfig
 {
-    static const std::string config_prefix;
     std::vector<const char *> args;
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
 
     // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
-    const String engine_store_version = "engine-version";
-    const String engine_store_git_hash = "engine-git-hash";
-    const String engine_store_address = "engine-addr";
-    const String engine_store_advertise_address = "advertise-engine-addr";
-    const String pd_endpoints = "pd-endpoints";
-    const String engine_label = "engine-label";
-    const String engine_role_label = "engine-role-label";
 
     void addExtraArgs(const std::string & k, const std::string & v)
     {
@@ -275,38 +293,41 @@ struct TiFlashProxyConfig
         // tiflash_compute doesn't need proxy.
         // todo: remove after AutoScaler is stable.
         if (disaggregated_mode == DisaggregatedMode::Compute && useAutoScaler(config))
+        {
+            LOG_WARNING(Logger::get(), "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
             return;
-
-        if (!config.has(config_prefix))
-            return;
+        }
 
         Poco::Util::AbstractConfiguration::Keys keys;
-        config.keys(config_prefix, keys);
+        config.keys("flash.proxy", keys);
+
+        if (!config.has("raft.pd_addr"))
+        {
+            LOG_WARNING(Logger::get(), "TiFlash Proxy will not start because `raft.pd_addr` is not configured.");
+            if (!keys.empty())
+                LOG_WARNING(Logger::get(), "`flash.proxy.*` is ignored because TiFlash Proxy will not start.");
+
+            return;
+        }
+
         {
             std::unordered_map<std::string, std::string> args_map;
             for (const auto & key : keys)
-            {
-                const auto k = config_prefix + "." + key;
-                args_map[key] = config.getString(k);
-            }
-            args_map[pd_endpoints] = config.getString("raft.pd_addr");
-            args_map[engine_store_version] = TiFlashBuildInfo::getReleaseVersion();
-            args_map[engine_store_git_hash] = TiFlashBuildInfo::getGitHash();
-            if (!args_map.count(engine_store_address))
-                args_map[engine_store_address] = config.getString("flash.service_addr");
-            else
-                args_map[engine_store_advertise_address] = args_map[engine_store_address];
+                args_map[key] = config.getString("flash.proxy." + key);
 
-            args_map[engine_label] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
+            args_map["pd-endpoints"] = config.getString("raft.pd_addr");
+            args_map["engine-version"] = TiFlashBuildInfo::getReleaseVersion();
+            args_map["engine-git-hash"] = TiFlashBuildInfo::getGitHash();
+            if (!args_map.count("engine-addr"))
+                args_map["engine-addr"] = config.getString("flash.service_addr", "0.0.0.0:3930");
+            else
+                args_map["advertise-engine-addr"] = args_map["engine-addr"];
+            args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
             if (disaggregated_mode != DisaggregatedMode::Compute && has_s3_config)
-            {
-                args_map[engine_role_label] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
-            }
+                args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
 
             for (auto && [k, v] : args_map)
-            {
                 val_map.emplace("--" + k, std::move(v));
-            }
         }
 
         args.push_back("TiFlash Proxy");
@@ -318,8 +339,6 @@ struct TiFlashProxyConfig
         is_proxy_runnable = true;
     }
 };
-
-const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
 pingcap::ClusterConfig getClusterConfig(TiFlashSecurityConfigPtr security_config, const TiFlashRaftConfig & raft_config, const int api_version, const LoggerPtr & log)
 {
@@ -1051,6 +1070,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         else
             LOG_INFO(log, "encryption is disabled");
     }
+    else
+    {
+        LOG_WARNING(log, "Skipped initialize TiFlash Proxy");
+    }
 
     SCOPE_EXIT({
         if (!proxy_conf.is_proxy_runnable)
@@ -1394,7 +1417,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]() {
         main_config_reloader->reload();
-        users_config_reloader->reload();
+
+        if (users_config_reloader)
+            users_config_reloader->reload();
     });
 
     /// Limit on total number of concurrently executed queries.
@@ -1596,7 +1621,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         main_config_reloader->addConfigObject(global_context->getSecurityConfig());
         main_config_reloader->start();
-        users_config_reloader->start();
+        if (users_config_reloader)
+            users_config_reloader->start();
 
         {
             // on ARM processors it can show only enabled at current moment cores

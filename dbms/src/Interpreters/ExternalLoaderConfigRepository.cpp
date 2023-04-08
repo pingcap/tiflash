@@ -76,7 +76,6 @@ Poco::AutoPtr<Poco::Util::AbstractConfiguration> ExternalLoaderConfigRepository:
 {
     ConfigProcessor config_processor{config_file};
     ConfigProcessor::LoadedConfig preprocessed = config_processor.loadConfig();
-    config_processor.savePreprocessedConfig(preprocessed);
     return preprocessed.configuration;
 }
 

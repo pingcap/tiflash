@@ -695,6 +695,14 @@ static std::string normalize(const std::string & log_level)
 
 void BaseDaemon::reloadConfiguration()
 {
+    // when config-file is not specified and config.toml does not exist, we do not load config.
+    if (!config().has("config-file"))
+    {
+        Poco::File f("config.toml");
+        if (!f.exists())
+            return;
+    }
+
     /** If the program is not run in daemon mode and 'config-file' is not specified,
       *  then we use config from 'config.toml' file in current directory,
       *  but will log to console (or use parameters --log-file, --errorlog-file from command line)
@@ -749,12 +757,12 @@ void BaseDaemon::wakeup()
 
 void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
 {
-    auto current_logger = config.getString("logger");
+    auto current_logger = config.getString("logger", "(null)");
     if (config_logger == current_logger)
         return;
     config_logger = current_logger;
 
-    bool is_daemon = config.getBool("application.runAsDaemon", true);
+    bool is_daemon = config.getBool("application.runAsDaemon", false);
 
     // Split log, error log and tracing log.
     Poco::AutoPtr<Poco::ReloadableSplitterChannel> split = new Poco::ReloadableSplitterChannel;
@@ -846,14 +854,16 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         syslog_channel->open();
     }
 
-    if (config.getBool("logger.console", false) || (!config.hasProperty("logger.console") && !is_daemon && (isatty(STDIN_FILENO) || isatty(STDERR_FILENO))))
+    bool should_log_to_console = isatty(STDIN_FILENO) || isatty(STDERR_FILENO);
+    bool enable_colors = isatty(STDERR_FILENO);
+
+    if (config.getBool("logger.console", false)
+        || (!config.hasProperty("logger.console") && !is_daemon && should_log_to_console))
     {
         Poco::AutoPtr<ConsoleChannel> file = new ConsoleChannel;
-        Poco::AutoPtr<OwnPatternFormatter> pf = new OwnPatternFormatter(this);
-        pf->setProperty("times", "local");
+        Poco::AutoPtr<DB::UnifiedLogFormatter> pf = new DB::UnifiedLogFormatter(enable_colors);
         Poco::AutoPtr<FormattingChannel> log = new FormattingChannel(pf);
         log->setChannel(file);
-        logger().warning("Logging " + log_level + " to console");
         split->addChannel(log);
     }
 
@@ -1001,8 +1011,6 @@ void BaseDaemon::initialize(Application & self)
 
         umask(umask_num);
     }
-
-    ConfigProcessor(config_path).savePreprocessedConfig(loaded_config);
 
     /// Write core dump on crash.
     {

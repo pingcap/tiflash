@@ -28,11 +28,16 @@ class WriteBuffer;
 class UnifiedLogFormatter : public Poco::Formatter
 {
 public:
-    UnifiedLogFormatter() = default;
+    explicit UnifiedLogFormatter(bool enable_color_ = false)
+        : enable_color(enable_color_)
+    {
+    }
 
     void format(const Poco::Message & msg, std::string & text) override;
 
 private:
+    bool enable_color = false;
+
     enum class JsonEncodeKind
     {
         /**
@@ -52,6 +57,10 @@ private:
     };
 
     static void writePriority(FmtBuffer & buf, const Poco::Message::Priority & priority);
+
+    static void writePriorityColor(FmtBuffer & buf, const Poco::Message::Priority & priority);
+
+    static void writeMessageColor(FmtBuffer & buf, const Poco::Message::Priority & priority);
 
     static void writeTimestamp(FmtBuffer & buf);
 
