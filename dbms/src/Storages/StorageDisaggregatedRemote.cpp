@@ -234,36 +234,29 @@ void StorageDisaggregated::buildDisaggTask(
                 batch_cop_task.store_addr,
                 retry_regions);
 
-            for (const auto & region : req->regions())
-            {
-                if (retry_regions.contains(region.region_id()))
+            auto retry_from_region_infos = [&retry_regions, &cluster](const google::protobuf::RepeatedPtrField<::coprocessor::RegionInfo> & region_infos) {
+                for (const auto & region : region_infos)
                 {
-                    auto region_ver_id = pingcap::kv::RegionVerID(
-                        region.region_id(),
-                        region.region_epoch().conf_ver(),
-                        region.region_epoch().version());
-                    cluster->region_cache->dropRegion(region_ver_id);
-                    retry_regions.erase(region.region_id());
-                    if (retry_regions.empty())
-                        break;
+                    if (retry_regions.contains(region.region_id()))
+                    {
+                        auto region_ver_id = pingcap::kv::RegionVerID(
+                            region.region_id(),
+                            region.region_epoch().conf_ver(),
+                            region.region_epoch().version());
+                        cluster->region_cache->dropRegion(region_ver_id);
+                        retry_regions.erase(region.region_id());
+                        if (retry_regions.empty())
+                            break;
+                    }
                 }
-            }
+            };
+
+            retry_from_region_infos(req->regions());
             for (const auto & table_region : req->table_regions())
             {
                 if (retry_regions.empty())
                     break;
-
-                for (const auto & region : table_region.regions())
-                {
-                    auto region_ver_id = pingcap::kv::RegionVerID(
-                        region.region_id(),
-                        region.region_epoch().conf_ver(),
-                        region.region_epoch().version());
-                    cluster->region_cache->dropRegion(region_ver_id);
-                    retry_regions.erase(region.region_id());
-                    if (retry_regions.empty())
-                        break;
-                }
+                retry_from_region_infos(table_region.regions());
             }
 
             RUNTIME_CHECK_MSG(retry_regions.empty(), "Failed to drop regions {} from the cache", retry_regions);
