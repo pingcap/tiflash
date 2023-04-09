@@ -250,6 +250,9 @@ void StorageDisaggregated::buildDisaggTask(
             }
             for (const auto & table_region : req->table_regions())
             {
+                if (retry_regions.empty())
+                    break;
+
                 for (const auto & region : table_region.regions())
                 {
                     auto region_ver_id = pingcap::kv::RegionVerID(
@@ -261,8 +264,6 @@ void StorageDisaggregated::buildDisaggTask(
                     if (retry_regions.empty())
                         break;
                 }
-                if (retry_regions.empty())
-                    break;
             }
 
             RUNTIME_CHECK_MSG(retry_regions.empty(), "Failed to drop regions {} from the cache", retry_regions);
