@@ -243,8 +243,30 @@ void StorageDisaggregated::buildDisaggTask(
                         region.region_epoch().conf_ver(),
                         region.region_epoch().version());
                     cluster->region_cache->dropRegion(region_ver_id);
+                    retry_regions.erase(region.region_id());
+                    if (retry_regions.empty())
+                        break;
                 }
             }
+            for (const auto & table_region : req->table_regions())
+            {
+                for (const auto & region : table_region.regions())
+                {
+                    auto region_ver_id = pingcap::kv::RegionVerID(
+                        region.region_id(),
+                        region.region_epoch().conf_ver(),
+                        region.region_epoch().version());
+                    cluster->region_cache->dropRegion(region_ver_id);
+                    retry_regions.erase(region.region_id());
+                    if (retry_regions.empty())
+                        break;
+                }
+                if (retry_regions.empty())
+                    break;
+            }
+
+            RUNTIME_CHECK_MSG(retry_regions.empty(), "Failed to drop regions {} from the cache", retry_regions);
+
             throw Exception(
                 error.msg(),
                 ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
