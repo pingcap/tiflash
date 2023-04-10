@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Common/ComputeLabelHolder.h>
+#include <Common/ProcessCollector.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
-#include <Common/ProcessCollector.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>

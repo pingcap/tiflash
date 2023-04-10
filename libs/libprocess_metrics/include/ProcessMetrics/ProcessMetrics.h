@@ -20,7 +20,8 @@
 extern "C" {
 #endif
 
-struct ProcessMetricsInfo {
+struct ProcessMetricsInfo
+{
     uint64_t cpu_total;
     int64_t vsize;
     int64_t rss;

@@ -16,8 +16,8 @@
 
 #include <ProcessMetrics/ProcessMetrics.h>
 #include <prometheus/counter.h>
-#include <prometheus/registry.h>
 #include <prometheus/metric_family.h>
+#include <prometheus/registry.h>
 
 #include <mutex>
 
@@ -39,6 +39,7 @@ public:
     ProcessCollector();
 
     std::vector<prometheus::MetricFamily> Collect() const override;
+
 private:
     mutable std::mutex mu;
     mutable prometheus::Gauge cpu_total;
