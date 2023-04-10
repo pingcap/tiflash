@@ -139,6 +139,7 @@ private:
     size_t non_joined_rows = 0;
     std::list<JoinPtr> parents;
     std::list<std::tuple<size_t, Block>> probe_partition_blocks;
+    Block header;
 };
 
 } // namespace DB
