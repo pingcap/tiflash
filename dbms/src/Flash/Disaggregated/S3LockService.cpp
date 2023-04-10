@@ -248,6 +248,7 @@ bool S3LockService::tryMarkDeleteImpl(const String & data_file_key, disaggregate
 {
     const S3FilenameView key_view = S3FilenameView::fromKey(data_file_key);
     RUNTIME_CHECK(key_view.isDataFile(), data_file_key);
+    GET_METRIC(tiflash_disaggregated_object_lock_request_count, type_delete).Increment();
 
     if (!gc_owner->isOwner())
     {

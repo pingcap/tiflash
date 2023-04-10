@@ -31,11 +31,11 @@
 #include <aws/core/monitoring/HttpClientMetrics.h>
 #include <aws/core/utils/ratelimiter/RateLimiterInterface.h>
 #include <aws/core/utils/xml/XmlSerializer.h>
+#include <boost_wrapper/string.h>
 #include <common/logger_useful.h>
 #include <re2/re2.h>
 
 #include <algorithm>
-#include <boost/algorithm/string.hpp>
 #include <functional>
 #include <utility>
 

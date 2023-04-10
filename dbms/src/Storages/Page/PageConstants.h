@@ -24,10 +24,15 @@ static constexpr UInt64 GB = MB * 1024;
 
 enum class StorageType
 {
+    Unknown = 0,
     Log = 1,
     Data = 2,
     Meta = 3,
     KVStore = 4,
+    RaftEngine = 5,
+    KVEngine = 6,
+
+    _MAX_STORAGE_TYPE_, // NOLINT(bugprone-reserved-identifier)
 };
 
 enum class PageStorageRunMode : UInt8

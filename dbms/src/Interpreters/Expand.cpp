@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnNullable.h>
-#include <DataTypes/DataTypeNullable.h>
+#include <Columns/ColumnUtils.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Expand.h>
@@ -21,16 +20,6 @@
 
 namespace DB
 {
-
-namespace
-{
-void convertColumnToNullable(ColumnWithTypeAndName & column)
-{
-    column.type = makeNullable(column.type);
-    if (column.column)
-        column.column = makeNullable(column.column);
-}
-} // namespace
 
 Expand::Expand(const DB::GroupingSets & gss)
     : group_sets_names(gss)

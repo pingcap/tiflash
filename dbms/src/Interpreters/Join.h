@@ -23,7 +23,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/JoinHashTable.h>
+#include <Interpreters/JoinHashMap.h>
 #include <Interpreters/JoinPartition.h>
 #include <Interpreters/SettingsCommon.h>
 
@@ -330,9 +330,7 @@ private:
     bool has_build_data_in_memory = false;
 
 private:
-    JoinType type = JoinType::EMPTY;
-
-    JoinType chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes) const;
+    JoinMapMethod join_map_method = JoinMapMethod::EMPTY;
 
     Sizes key_sizes;
 
@@ -418,7 +416,5 @@ private:
     void workAfterBuildFinish();
     void workAfterProbeFinish();
 };
-
-void convertColumnToNullable(ColumnWithTypeAndName & column);
 
 } // namespace DB

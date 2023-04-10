@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include <Columns/ColumnString.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataStreams/OneBlockInputStream.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Storages/System/StorageSystemProcesses.h>
-#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -29,42 +29,39 @@ StorageSystemProcesses::StorageSystemProcesses(const std::string & name_)
     : name(name_)
 {
     setColumns(ColumnsDescription({
-        { "is_initial_query",     std::make_shared<DataTypeUInt8>() },
+        {"is_initial_query", std::make_shared<DataTypeUInt8>()},
 
-        { "user",                 std::make_shared<DataTypeString>() },
-        { "query_id",             std::make_shared<DataTypeString>() },
-        { "address",              std::make_shared<DataTypeString>() },
-        { "port",                 std::make_shared<DataTypeUInt16>() },
+        {"user", std::make_shared<DataTypeString>()},
+        {"query_id", std::make_shared<DataTypeString>()},
+        {"address", std::make_shared<DataTypeString>()},
+        {"port", std::make_shared<DataTypeUInt16>()},
 
-        { "initial_user",         std::make_shared<DataTypeString>() },
-        { "initial_query_id",     std::make_shared<DataTypeString>() },
-        { "initial_address",      std::make_shared<DataTypeString>() },
-        { "initial_port",         std::make_shared<DataTypeUInt16>() },
+        {"initial_user", std::make_shared<DataTypeString>()},
+        {"initial_query_id", std::make_shared<DataTypeString>()},
+        {"initial_address", std::make_shared<DataTypeString>()},
+        {"initial_port", std::make_shared<DataTypeUInt16>()},
 
-        { "interface",            std::make_shared<DataTypeUInt8>() },
+        {"interface", std::make_shared<DataTypeUInt8>()},
 
-        { "os_user",              std::make_shared<DataTypeString>() },
-        { "client_hostname",      std::make_shared<DataTypeString>() },
-        { "client_name",          std::make_shared<DataTypeString>() },
-        { "client_version_major", std::make_shared<DataTypeUInt64>() },
-        { "client_version_minor", std::make_shared<DataTypeUInt64>() },
-        { "client_revision",      std::make_shared<DataTypeUInt64>() },
+        {"os_user", std::make_shared<DataTypeString>()},
+        {"client_hostname", std::make_shared<DataTypeString>()},
+        {"client_name", std::make_shared<DataTypeString>()},
+        {"client_version_major", std::make_shared<DataTypeUInt64>()},
+        {"client_version_minor", std::make_shared<DataTypeUInt64>()},
+        {"client_revision", std::make_shared<DataTypeUInt64>()},
 
-        { "http_method",          std::make_shared<DataTypeUInt8>() },
-        { "http_user_agent",      std::make_shared<DataTypeString>() },
+        {"quota_key", std::make_shared<DataTypeString>()},
 
-        { "quota_key",            std::make_shared<DataTypeString>() },
-
-        { "elapsed",              std::make_shared<DataTypeFloat64>() },
-        { "is_cancelled",         std::make_shared<DataTypeUInt8>() },
-        { "read_rows",            std::make_shared<DataTypeUInt64>() },
-        { "read_bytes",           std::make_shared<DataTypeUInt64>() },
-        { "total_rows_approx",    std::make_shared<DataTypeUInt64>() },
-        { "written_rows",         std::make_shared<DataTypeUInt64>() },
-        { "written_bytes",        std::make_shared<DataTypeUInt64>() },
-        { "memory_usage",         std::make_shared<DataTypeInt64>() },
-        { "peak_memory_usage",    std::make_shared<DataTypeInt64>() },
-        { "query",                std::make_shared<DataTypeString>() },
+        {"elapsed", std::make_shared<DataTypeFloat64>()},
+        {"is_cancelled", std::make_shared<DataTypeUInt8>()},
+        {"read_rows", std::make_shared<DataTypeUInt64>()},
+        {"read_bytes", std::make_shared<DataTypeUInt64>()},
+        {"total_rows_approx", std::make_shared<DataTypeUInt64>()},
+        {"written_rows", std::make_shared<DataTypeUInt64>()},
+        {"written_bytes", std::make_shared<DataTypeUInt64>()},
+        {"memory_usage", std::make_shared<DataTypeInt64>()},
+        {"peak_memory_usage", std::make_shared<DataTypeInt64>()},
+        {"query", std::make_shared<DataTypeString>()},
     }));
 }
 
@@ -103,8 +100,6 @@ BlockInputStreams StorageSystemProcesses::read(
         res_columns[i++]->insert(process.client_info.client_version_major);
         res_columns[i++]->insert(process.client_info.client_version_minor);
         res_columns[i++]->insert(UInt64(process.client_info.client_revision));
-        res_columns[i++]->insert(UInt64(process.client_info.http_method));
-        res_columns[i++]->insert(process.client_info.http_user_agent);
         res_columns[i++]->insert(process.client_info.quota_key);
         res_columns[i++]->insert(process.elapsed_seconds);
         res_columns[i++]->insert(UInt64(process.is_cancelled));
@@ -122,4 +117,4 @@ BlockInputStreams StorageSystemProcesses::read(
 }
 
 
-}
+} // namespace DB

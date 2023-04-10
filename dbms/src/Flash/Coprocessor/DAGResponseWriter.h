@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/Block.h>
 #include <common/types.h>
 #include <tipb/select.pb.h>
 
