@@ -63,9 +63,9 @@ void insertRowToList(RowRefList * list, RowRefList * elem, Block * stored_block,
 }
 
 template <typename Maps>
-static void initImpl(Maps & maps, JoinMapMethod type)
+static void initImpl(Maps & maps, JoinMapMethod method)
 {
-    switch (type)
+    switch (method)
     {
     case JoinMapMethod::EMPTY:
         break;
@@ -85,10 +85,10 @@ static void initImpl(Maps & maps, JoinMapMethod type)
 }
 
 template <typename Map, typename Maps>
-static Map & getMapImpl(Maps & maps, JoinMapMethod type)
+static Map & getMapImpl(Maps & maps, JoinMapMethod method)
 {
     void * ret = nullptr;
-    switch (type)
+    switch (method)
     {
     case JoinMapMethod::EMPTY:
     case JoinMapMethod::CROSS:
@@ -108,9 +108,9 @@ static Map & getMapImpl(Maps & maps, JoinMapMethod type)
 }
 
 template <typename Maps>
-static size_t getRowCountImpl(const Maps & maps, JoinMapMethod type)
+static size_t getRowCountImpl(const Maps & maps, JoinMapMethod method)
 {
-    switch (type)
+    switch (method)
     {
     case JoinMapMethod::EMPTY:
         return 0;
@@ -129,9 +129,9 @@ static size_t getRowCountImpl(const Maps & maps, JoinMapMethod type)
 }
 
 template <typename Maps>
-static size_t getByteCountImpl(const Maps & maps, JoinMapMethod type)
+static size_t getByteCountImpl(const Maps & maps, JoinMapMethod method)
 {
-    switch (type)
+    switch (method)
     {
     case JoinMapMethod::EMPTY:
         return 0;
@@ -150,10 +150,10 @@ static size_t getByteCountImpl(const Maps & maps, JoinMapMethod type)
 }
 
 template <typename Maps>
-static size_t clearMaps(Maps & maps, JoinMapMethod type)
+static size_t clearMaps(Maps & maps, JoinMapMethod method)
 {
     size_t ret = 0;
-    switch (type)
+    switch (method)
     {
     case JoinMapMethod::EMPTY:
     case JoinMapMethod::CROSS:
@@ -308,7 +308,7 @@ Blocks JoinPartition::trySpillProbePartition(bool force, size_t max_cached_data_
 namespace
 {
 /// code for hash map insertion
-template <JoinMapMethod type, typename Value, typename Mapped>
+template <JoinMapMethod method, typename Value, typename Mapped>
 struct KeyGetterForTypeImpl;
 
 template <typename Value, typename Mapped>
@@ -368,13 +368,13 @@ struct KeyGetterForTypeImpl<JoinMapMethod::serialized, Value, Mapped>
 };
 
 
-template <JoinMapMethod type, typename Data>
+template <JoinMapMethod method, typename Data>
 struct KeyGetterForType
 {
     using Value = typename Data::value_type;
     using Mapped_t = typename Data::mapped_type;
     using Mapped = std::conditional_t<std::is_const_v<Data>, const Mapped_t, Mapped_t>;
-    using Type = typename KeyGetterForTypeImpl<type, Value, Mapped>::Type;
+    using Type = typename KeyGetterForTypeImpl<method, Value, Mapped>::Type;
 };
 
 /// Inserting an element into a hash table of the form `key -> reference to a string`, which will then be used by JOIN.
