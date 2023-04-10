@@ -29,15 +29,9 @@ public:
         PipelineExecutorStatus & exec_status_,
         const String & req_id,
         const std::shared_ptr<ExchangeReceiver> & exchange_receiver_,
-        size_t stream_id_)
-        : SourceOp(exec_status_, req_id)
-        , exchange_receiver(exchange_receiver_)
-        , stream_id(stream_id_)
-    {
-        connection_profile_infos.resize(exchange_receiver->getSourceNum());
-        setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))));
-        decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(getHeader(), 8192);
-    }
+        DAGContext & dag_context_,
+        const String & executor_id_,
+        size_t stream_id_);
 
     String getName() const override
     {
@@ -45,16 +39,6 @@ public:
     }
 
     void operateSuffix() override;
-
-    RemoteExecutionSummary getRemoteExecutionSummary()
-    {
-        return remote_execution_summary;
-    }
-
-    const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const
-    {
-        return connection_profile_infos;
-    }
 
 protected:
     OperatorStatus readImpl(Block & block) override;
@@ -65,14 +49,17 @@ private:
     Block popFromBlockQueue();
 
 private:
-    std::vector<ConnectionProfileInfo> connection_profile_infos;
-    RemoteExecutionSummary remote_execution_summary;
-
     std::shared_ptr<ExchangeReceiver> exchange_receiver;
     std::unique_ptr<CHBlockChunkDecodeAndSquash> decoder_ptr;
     uint64_t total_rows{};
     std::queue<Block> block_queue;
     std::optional<ReceiveResult> recv_res;
+
+    DAGContext & dag_context;
+    ConnectionProfiles connection_profiles;
+    RemoteExecutionSummary remote_execution_summary;
+
+    String executor_id;
     size_t stream_id;
 };
 } // namespace DB

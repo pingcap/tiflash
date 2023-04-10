@@ -70,8 +70,6 @@ void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline,
 
     auto & dag_context = *context.getDAGContext();
     // todo choose a more reasonable stream number
-    auto & exchange_receiver_io_input_streams = dag_context.getInBoundIOInputStreamsMap()[executor_id];
-
     String extra_info = "squashing after exchange receiver";
     size_t stream_count = max_streams;
     if (fine_grained_shuffle.enable())
@@ -86,8 +84,8 @@ void PhysicalExchangeReceiver::buildBlockInputStreamImpl(DAGPipeline & pipeline,
             mpp_exchange_receiver,
             log->identifier(),
             execId(),
-            /*stream_id=*/fine_grained_shuffle.enable() ? i : 0);
-        exchange_receiver_io_input_streams.push_back(stream);
+            /*stream_id=*/fine_grained_shuffle.enable() ? i : 0,
+            dag_context);
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }
@@ -101,7 +99,6 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
 {
     auto & dag_context = *context.getDAGContext();
     auto & executor_profile = dag_context.getPipelineProfilesMap()[executor_id];
-    auto & exchange_receiver_io_source_ops = dag_context.getIOSourcesMap()[executor_id];
 
     if (fine_grained_shuffle.enable())
         concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
@@ -113,9 +110,10 @@ void PhysicalExchangeReceiver::buildPipelineExecGroup(
             exec_status,
             log->identifier(),
             mpp_exchange_receiver,
+            dag_context,
+            executor_id,
             /*stream_id=*/fine_grained_shuffle.enable() ? partition_id++ : 0);
         builder.setSourceOp(source_op);
-        exchange_receiver_io_source_ops.push_back(source_op);
     });
     executor_profile.emplace_back(group_builder.getOperatorProfiles());
 }

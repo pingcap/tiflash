@@ -39,6 +39,7 @@ class TestMPPExchangeWriter : public testing::Test
 protected:
     void SetUp() override
     {
+        dag_context_ptr.reset();
         dag_context_ptr = std::make_unique<DAGContext>(1024);
         dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
         dag_context_ptr->is_mpp_task = true;

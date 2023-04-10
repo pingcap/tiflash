@@ -19,10 +19,11 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
-#include <Flash/Statistics/ConnectionProfileInfo.h>
+#include <Flash/Statistics/ConnectionProfile.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <common/logger_useful.h>
 
@@ -41,8 +42,6 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     std::shared_ptr<RemoteReader> remote_reader;
     size_t source_num;
-    std::vector<ConnectionProfileInfo> connection_profile_infos;
-
     Block sample_block;
 
     std::queue<Block> block_queue;
@@ -50,6 +49,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     String name;
 
     const LoggerPtr log;
+
+    String executor_id;
 
     RemoteExecutionSummary remote_execution_summary;
 
@@ -59,6 +60,10 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     // ExchangeReceiverBlockInputStream only need to read its own stream, i.e., streams[stream_id].
     // CoprocessorBlockInputStream doesn't take care of this.
     size_t stream_id;
+
+    DAGContext & dag_context;
+
+    ConnectionProfiles connection_profiles;
 
     std::unique_ptr<CHBlockChunkDecodeAndSquash> decoder_ptr;
 
@@ -91,9 +96,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             if constexpr (is_streaming_reader)
                 index = result.call_index;
             const auto & decode_detail = result.decode_detail;
-            auto & connection_profile_info = connection_profile_infos[index];
-            connection_profile_info.packets += decode_detail.packets;
-            connection_profile_info.bytes += decode_detail.packet_bytes;
+            auto & connection_profile = connection_profiles[index];
+            connection_profile.packets += decode_detail.packets;
+            connection_profile.bytes += decode_detail.packet_bytes;
 
             total_rows += decode_detail.rows;
             LOG_TRACE(
@@ -110,15 +115,22 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id, size_t stream_id_)
+    TiRemoteBlockInputStream(
+        std::shared_ptr<RemoteReader> remote_reader_,
+        const String & req_id,
+        const String & executor_id_,
+        size_t stream_id_,
+        DAGContext & dag_context_)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
         , name(fmt::format("TiRemote({})", RemoteReader::name))
-        , log(Logger::get(name, req_id, executor_id))
+        , log(Logger::get(name, req_id, executor_id_))
+        , executor_id(executor_id_)
         , total_rows(0)
         , stream_id(stream_id_)
+        , dag_context(dag_context_)
     {
-        connection_profile_infos.resize(source_num);
+        connection_profiles.resize(source_num);
         sample_block = Block(getColumnWithTypeAndName(toNamesAndTypes(remote_reader->getOutputSchema())));
         static constexpr size_t squash_rows_limit = 8192;
         if constexpr (is_streaming_reader)
@@ -165,11 +177,13 @@ public:
     size_t getTotalRows() const { return total_rows; }
     size_t getSourceNum() const { return source_num; }
     bool isStreamingCall() const { return is_streaming_reader; }
-    const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }
+    const ConnectionProfiles & getConnectionProfiles() const { return connection_profiles; }
 
 protected:
     void readSuffixImpl() override
     {
+        dag_context.addConnectionProfile(executor_id, connection_profiles);
+        dag_context.addRemoteExecutionSummary(executor_id, remote_execution_summary);
         LOG_INFO(log, "finish read {} rows from remote", total_rows);
     }
 

@@ -14,13 +14,13 @@
 
 #pragma once
 
-#include <Flash/Statistics/ConnectionProfileInfo.h>
+#include <Flash/Statistics/ConnectionProfile.h>
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
-struct MPPTunnelDetail : public ConnectionProfileInfo
+struct MPPTunnelDetail : public ConnectionProfile
 {
     String tunnel_id;
     Int64 sender_target_task_id;

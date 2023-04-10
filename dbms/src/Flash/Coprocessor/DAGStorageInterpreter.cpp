@@ -325,10 +325,6 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     if (!remote_requests.empty())
         buildRemoteStreams(remote_requests, pipeline);
 
-    /// record local and remote io input stream
-    auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
-    pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
-
     if (pipeline.streams.empty())
     {
         pipeline.streams.emplace_back(std::move(null_stream_if_empty));
@@ -477,10 +473,10 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
         if (task_end == task_start)
             continue;
         std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
-
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1, tiflash_label_filter);
-        context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
-        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
+        auto & dag_context = *context.getDAGContext();
+        dag_context.addCoprocessorReader(coprocessor_reader);
+        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0, dag_context);
         pipeline.streams.push_back(input);
         task_start = task_end;
     }

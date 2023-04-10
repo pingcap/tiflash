@@ -12,13 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Operators/ExchangeReceiverSourceOp.h>
-
 namespace DB
 {
+
+ExchangeReceiverSourceOp::ExchangeReceiverSourceOp(
+    PipelineExecutorStatus & exec_status_,
+    const String & req_id,
+    const std::shared_ptr<ExchangeReceiver> & exchange_receiver_,
+    DAGContext & dag_context_,
+    const String & executor_id_,
+    size_t stream_id_)
+    : SourceOp(exec_status_, req_id)
+    , exchange_receiver(exchange_receiver_)
+    , dag_context(dag_context_)
+    , executor_id(executor_id_)
+    , stream_id(stream_id_)
+{
+    connection_profiles.resize(exchange_receiver->getSourceNum());
+    setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))));
+    decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(getHeader(), 8192);
+}
+
 void ExchangeReceiverSourceOp::operateSuffix()
 {
-    LOG_INFO(log, "finish read {} rows from exchange", total_rows);
+    dag_context.addConnectionProfile(executor_id, connection_profiles);
+    dag_context.addRemoteExecutionSummary(executor_id, remote_execution_summary);
+    LOG_INFO(log, "finish read {} rows from exchange receiver", total_rows);
 }
 
 Block ExchangeReceiverSourceOp::popFromBlockQueue()
@@ -74,9 +95,9 @@ OperatorStatus ExchangeReceiverSourceOp::readImpl(Block & block)
 
             size_t index = result.call_index;
             const auto & decode_detail = result.decode_detail;
-            auto & connection_profile_info = connection_profile_infos[index];
-            connection_profile_info.packets += decode_detail.packets;
-            connection_profile_info.bytes += decode_detail.packet_bytes;
+            auto & connection_profile = connection_profiles[index];
+            connection_profile.packets += decode_detail.packets;
+            connection_profile.bytes += decode_detail.packet_bytes;
 
             total_rows += decode_detail.rows;
             LOG_TRACE(

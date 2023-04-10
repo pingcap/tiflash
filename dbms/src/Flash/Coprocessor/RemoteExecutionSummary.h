@@ -29,5 +29,9 @@ struct RemoteExecutionSummary
 
     // <executor_id, ExecutionSummary>
     std::unordered_map<String, ExecutionSummary> execution_summaries;
+
+    bool empty() const;
 };
+
+using RemoteExecutionSummarys = std::vector<RemoteExecutionSummary>;
 } // namespace DB

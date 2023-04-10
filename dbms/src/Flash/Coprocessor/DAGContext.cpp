@@ -139,6 +139,11 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, s
     initOutputInfo();
 }
 
+std::unique_lock<std::recursive_mutex> DAGContext::getLock() const
+{
+    return std::unique_lock(mutex);
+}
+
 void DAGContext::initOutputInfo()
 {
     output_field_types = collectOutputFieldTypes(*dag_request);
@@ -181,6 +186,7 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap
 
 std::unordered_map<String, ExecutorProfile> & DAGContext::getPipelineProfilesMap()
 {
+    auto lock = getLock();
     return pipeline_profiles_map;
 }
 
@@ -224,14 +230,34 @@ std::unordered_map<String, JoinExecuteInfo> & DAGContext::getJoinExecuteInfoMap(
     return join_execute_info_map;
 }
 
-std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStreamsMap()
+void DAGContext::addConnectionProfile(const String & executor_id, ConnectionProfiles & connection_profiles)
 {
-    return inbound_io_input_streams_map;
+    auto lock = getLock();
+    auto & connection_profile_for_executor = connection_profiles_for_executor_map[executor_id];
+    std::cout << "ywq test add connection profile" << std::endl;
+    connection_profile_for_executor.emplace_back(connection_profiles);
 }
 
-std::unordered_map<String, SourceOps> & DAGContext::getIOSourcesMap()
+const std::unordered_map<String, std::vector<ConnectionProfiles>> & DAGContext::getConnectionProfilesMap() const
 {
-    return io_source_ops_map;
+    auto lock = getLock();
+    return connection_profiles_for_executor_map;
+}
+
+void DAGContext::addRemoteExecutionSummary(const String & executor_id, RemoteExecutionSummary & remote_execution_summary)
+{
+    auto lock = getLock();
+    if (!remote_execution_summary.empty())
+    {
+        auto & remote_execution_summarys = remote_execution_summarys_map[executor_id];
+        remote_execution_summarys.emplace_back(remote_execution_summary);
+    }
+}
+
+const std::unordered_map<String, RemoteExecutionSummarys> & DAGContext::getRemoteExecutionSummarysMap() const
+{
+    auto lock = getLock();
+    return remote_execution_summarys_map;
 }
 
 void DAGContext::handleTruncateError(const String & msg)

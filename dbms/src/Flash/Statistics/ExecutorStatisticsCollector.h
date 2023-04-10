@@ -48,6 +48,8 @@ public:
 
     const std::unordered_map<String, ExecutorStatisticsPtr> & getProfiles() const { return profiles; }
 
+    std::vector<ExecutorStatisticsPtr> getTableScanProfiles() const;
+
 private:
     void collectRuntimeDetails();
 

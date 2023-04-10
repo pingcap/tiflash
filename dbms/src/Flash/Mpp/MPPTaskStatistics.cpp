@@ -88,11 +88,7 @@ void MPPTaskStatistics::collectRuntimeStatistics()
     const auto & return_statistics = it->second->getBaseRuntimeStatistics();
     // record io bytes
     output_bytes = return_statistics.bytes;
-
-    if (!enable_pipeline)
-        recordInputBytes(*dag_context);
-    else
-        recordInputBytesForPipeline(*dag_context);
+    recordInputBytes(*dag_context);
 }
 
 tipb::SelectResponse MPPTaskStatistics::genExecutionSummaryResponse()
@@ -145,46 +141,41 @@ void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, c
 
 void MPPTaskStatistics::recordInputBytes(DAGContext & dag_context)
 {
-    for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
+    for (const auto & map_entry : dag_context.getConnectionProfilesMap())
     {
-        for (const auto & io_stream : map_entry.second)
+        for (const auto & profiles : map_entry.second)
         {
-            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get()); p_stream)
+            for (const auto & profile : profiles)
             {
-                const auto & profile_info = p_stream->getProfileInfo();
-                if (dynamic_cast<ExchangeReceiverInputStream *>(p_stream) || dynamic_cast<CoprocessorBlockInputStream *>(p_stream))
-                {
-                    remote_input_bytes += profile_info.bytes;
-                }
-                else
-                {
-                    local_input_bytes += profile_info.bytes;
-                }
+                remote_input_bytes += profile.bytes;
             }
         }
     }
+
+    for (const auto & statistic : executor_statistics_collector.getTableScanProfiles())
+        local_input_bytes += statistic->getBaseRuntimeStatistics().bytes;
 }
 
-/// TODO: Fully support remote input bytes for pipeline model
-void MPPTaskStatistics::recordInputBytesForPipeline(DAGContext & dag_context)
-{
-    for (const auto & map_entry : dag_context.getIOSourcesMap())
-    {
-        for (const auto & io_source : map_entry.second)
-        {
-            if (auto * source_ptr = dynamic_cast<SourceOp *>(io_source.get()); source_ptr)
-            {
-                const auto & profile = source_ptr->getProfile();
-                if (dynamic_cast<ExchangeReceiverSourceOp *>(source_ptr))
-                {
-                    remote_input_bytes += profile->bytes;
-                }
-                else
-                {
-                    local_input_bytes += profile->bytes;
-                }
-            }
-        }
-    }
-}
+// /// TODO: Fully support remote input bytes for pipeline model
+// void MPPTaskStatistics::recordInputBytesForPipeline(DAGContext & dag_context)
+// {
+//     for (const auto & map_entry : dag_context.getIOSourcesMap())
+//     {
+//         for (const auto & io_source : map_entry.second)
+//         {
+//             if (auto * source_ptr = dynamic_cast<SourceOp *>(io_source.get()); source_ptr)
+//             {
+//                 const auto & profile = source_ptr->getProfile();
+//                 if (dynamic_cast<ExchangeReceiverSourceOp *>(source_ptr))
+//                 {
+//                     remote_input_bytes += profile->bytes;
+//                 }
+//                 else
+//                 {
+//                     local_input_bytes += profile->bytes;
+//                 }
+//             }
+//         }
+//     }
+// }
 } // namespace DB

@@ -295,6 +295,12 @@ class TestTiRemoteBlockInputStream : public testing::Test
 protected:
     void SetUp() override
     {
+        resetDAGContext();
+    }
+
+    void resetDAGContext()
+    {
+        dag_context_ptr.reset();
         dag_context_ptr = std::make_unique<DAGContext>(1024);
         dag_context_ptr->is_mpp_task = true;
         dag_context_ptr->is_root_mpp_task = true;
@@ -421,25 +427,36 @@ public:
         writer->write(execution_summary_response);
     }
 
-    static void checkChunkInResponse(
+    void checkChunkInResponse(
         std::vector<Block> & source_blocks,
         std::vector<Block> & decoded_blocks,
         std::shared_ptr<MockExchangeReceiverInputStream> & receiver_stream,
         std::shared_ptr<MockWriter> & writer)
     {
-        /// Check Connection Info
-        auto infos = receiver_stream->getConnectionProfileInfos();
-        ASSERT_EQ(infos.size(), 1);
-        ASSERT_EQ(infos[0].packets, writer->total_packets);
-        ASSERT_EQ(infos[0].bytes, writer->total_bytes);
+        /// Check Connection Profile
+        {
+            const auto & profiles = receiver_stream->getConnectionProfiles();
+            ASSERT_EQ(profiles.size(), 1);
+            ASSERT_EQ(profiles[0].packets, writer->total_packets);
+            ASSERT_EQ(profiles[0].bytes, writer->total_bytes);
+
+            const auto & profile_map = dag_context_ptr->getConnectionProfilesMap();
+            const auto & it = profile_map.find("executor_0");
+            ASSERT_EQ(it != profile_map.end(), true);
+            ASSERT_EQ(it->second.size(), 1);
+            ASSERT_EQ(it->second[0].size(), 1);
+            ASSERT_EQ(it->second[0][0].packets, writer->total_packets);
+            ASSERT_EQ(it->second[0][0].bytes, writer->total_bytes);
+        }
 
         Block reference_block = squashBlocks(source_blocks);
         Block decoded_block = squashBlocks(decoded_blocks);
         ASSERT_EQ(receiver_stream->getTotalRows(), reference_block.rows());
         ASSERT_BLOCK_EQ(reference_block, decoded_block);
+        resetDAGContext();
     }
 
-    static void checkNoChunkInResponse(
+    void checkNoChunkInResponse(
         std::vector<Block> & source_blocks,
         std::vector<Block> & decoded_blocks,
         std::shared_ptr<MockExchangeReceiverInputStream> & receiver_stream,
@@ -447,25 +464,47 @@ public:
     {
         assert(receiver_stream);
         /// Check Execution Summary
-        const auto & summary = receiver_stream->getRemoteExecutionSummary();
-        ASSERT_EQ(summary.execution_summaries.size(), 1);
-        ASSERT_EQ(summary.execution_summaries.begin()->first, "Executor_0");
-        ASSERT_TRUE(equalSummaries(writer->mockExecutionSummary(), summary.execution_summaries.begin()->second));
+        {
+            const auto & summary = receiver_stream->getRemoteExecutionSummary();
+            ASSERT_EQ(summary.execution_summaries.size(), 1);
+            ASSERT_EQ(summary.execution_summaries.begin()->first, "Executor_0");
+            ASSERT_TRUE(equalSummaries(writer->mockExecutionSummary(), summary.execution_summaries.begin()->second));
 
+            const auto & remote_execution_summarys_map = dag_context_ptr->getRemoteExecutionSummarysMap();
+            const auto & it = remote_execution_summarys_map.find("executor_0");
+            ASSERT_EQ(it != remote_execution_summarys_map.end(), true);
+            const auto & summarys = it->second;
+            ASSERT_EQ(summarys.size(), 1);
+            const auto & remote_summary = summarys[0];
+            ASSERT_EQ(remote_summary.execution_summaries.size(), 1);
+            ASSERT_EQ(remote_summary.execution_summaries.begin()->first, "Executor_0");
+            ASSERT_TRUE(equalSummaries(writer->mockExecutionSummary(), remote_summary.execution_summaries.begin()->second));
+        }
         /// Check Connection Info
-        auto infos = receiver_stream->getConnectionProfileInfos();
-        ASSERT_EQ(infos.size(), 1);
-        ASSERT_EQ(infos[0].packets, writer->total_packets);
-        ASSERT_EQ(infos[0].bytes, writer->total_bytes);
+        {
+            const auto & profiles = receiver_stream->getConnectionProfiles();
+            ASSERT_EQ(profiles.size(), 1);
+            ASSERT_EQ(profiles[0].packets, writer->total_packets);
+            ASSERT_EQ(profiles[0].bytes, writer->total_bytes);
+
+            const auto & profile_map = dag_context_ptr->getConnectionProfilesMap();
+            const auto & it = profile_map.find("executor_0");
+            ASSERT_EQ(it != profile_map.end(), true);
+            ASSERT_EQ(it->second.size(), 1);
+            ASSERT_EQ(it->second[0].size(), 1);
+            ASSERT_EQ(it->second[0][0].packets, writer->total_packets);
+            ASSERT_EQ(it->second[0][0].bytes, writer->total_bytes);
+        }
 
         Block reference_block = squashBlocks(source_blocks);
         Block decoded_block = squashBlocks(decoded_blocks);
         ASSERT_BLOCK_EQ(reference_block, decoded_block);
         ASSERT_EQ(receiver_stream->getTotalRows(), reference_block.rows());
+        resetDAGContext();
     }
 
-    static std::shared_ptr<MockExchangeReceiverInputStream> makeExchangeReceiverInputStream(
-        PacketQueuePtr queue_ptr)
+    std::shared_ptr<MockExchangeReceiverInputStream> makeExchangeReceiverInputStream(
+        PacketQueuePtr queue_ptr) const
     {
         auto receiver = std::make_shared<MockExchangeReceiver>(
             std::make_shared<MockReceiverContext>(queue_ptr, makeFields()),
@@ -479,11 +518,12 @@ public:
             receiver,
             "mock_req_id",
             "executor_0",
-            0);
+            0,
+            *dag_context_ptr);
         return receiver_stream;
     }
 
-    void doTestNoChunkInResponse(bool empty_last_packet) const
+    void doTestNoChunkInResponse(bool empty_last_packet)
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
@@ -500,7 +540,7 @@ public:
         checkNoChunkInResponse(source_blocks, decoded_blocks, receiver_stream, writer);
     }
 
-    void doTestChunkInResponse(bool empty_last_packet) const
+    void doTestChunkInResponse(bool empty_last_packet)
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;

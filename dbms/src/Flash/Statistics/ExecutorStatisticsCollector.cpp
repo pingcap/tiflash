@@ -30,23 +30,15 @@ namespace DB
 {
 namespace
 {
-RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context, bool enable_pipeline)
+RemoteExecutionSummary getRemoteExecutionSummariesFromExchange(DAGContext & dag_context)
 {
     RemoteExecutionSummary exchange_execution_summary;
-
-    if (enable_pipeline)
+    for (const auto & map_entry : dag_context.getRemoteExecutionSummarysMap())
     {
-        for (const auto & map_entry : dag_context.getIOSourcesMap())
-            for (const auto & source_op_ptr : map_entry.second)
-                if (auto * exchange_receiver_source_op_ptr = dynamic_cast<ExchangeReceiverSourceOp *>(source_op_ptr.get()); exchange_receiver_source_op_ptr)
-                    exchange_execution_summary.merge(exchange_receiver_source_op_ptr->getRemoteExecutionSummary());
-    }
-    else
-    {
-        for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
-            for (const auto & stream_ptr : map_entry.second)
-                if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()); exchange_receiver_stream_ptr)
-                    exchange_execution_summary.merge(exchange_receiver_stream_ptr->getRemoteExecutionSummary());
+        for (const auto & summary : map_entry.second)
+        {
+            exchange_execution_summary.merge(summary);
+        }
     }
     return exchange_execution_summary;
 }
@@ -65,6 +57,15 @@ String ExecutorStatisticsCollector::profilesToJson() const
         ",");
     buffer.append("]");
     return buffer.toString();
+}
+
+std::vector<ExecutorStatisticsPtr> ExecutorStatisticsCollector::getTableScanProfiles() const
+{
+    std::vector<ExecutorStatisticsPtr> res;
+    for (const auto & map_entry : profiles)
+        if (auto * table_scan_statistic = dynamic_cast<TableScanStatistics *>(map_entry.second.get()))
+            res.emplace_back(map_entry.second);
+    return res;
 }
 
 void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
@@ -237,7 +238,7 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
 void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectResponse & response)
 {
     // TODO: support cop remote read and disaggregated mode.
-    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context, enable_pipeline);
+    auto exchange_execution_summary = getRemoteExecutionSummariesFromExchange(*dag_context);
 
     // fill execution_summaries from remote executor received by exchange.
     for (auto & p : exchange_execution_summary.execution_summaries)

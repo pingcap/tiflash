@@ -44,49 +44,46 @@ void ExchangeReceiverStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 /// TODO: collectExtraRuntimeDetail for Pipeline model
 void ExchangeReceiverStatistics::collectExtraRuntimeDetail()
 {
-    const auto & io_stream_map = dag_context.getInBoundIOInputStreamsMap();
-    auto it = io_stream_map.find(executor_id);
-    if (it != io_stream_map.end())
+    const auto & connection_profiles_for_executor = dag_context.getConnectionProfilesMap();
+    auto it = connection_profiles_for_executor.find(executor_id);
+    if (it != connection_profiles_for_executor.end())
     {
-        for (const auto & io_stream : it->second)
+        for (const auto & connection_profiles : it->second)
         {
-            /// InBoundIOInputStream of ExchangeReceiver should be ExchangeReceiverInputStream
-            if (auto * exchange_receiver_stream = dynamic_cast<ExchangeReceiverInputStream *>(io_stream.get()); exchange_receiver_stream)
+            RUNTIME_CHECK(connection_profiles.size() == partition_num);
+            for (size_t i = 0; i < partition_num; ++i)
             {
-                const auto & connection_profile_infos = exchange_receiver_stream->getConnectionProfileInfos();
-                RUNTIME_CHECK(connection_profile_infos.size() == partition_num);
-                for (size_t i = 0; i < partition_num; ++i)
-                {
-                    exchange_receive_details[i].packets += connection_profile_infos[i].packets;
-                    exchange_receive_details[i].bytes += connection_profile_infos[i].bytes;
-                }
+                exchange_receive_details[i].packets += connection_profiles[i].packets;
+                exchange_receive_details[i].bytes += connection_profiles[i].bytes;
             }
         }
     }
 }
 
-void ExchangeReceiverStatistics::collectExtraRuntimeDetailForPipeline()
-{
-    const auto & io_sources_map = dag_context.getIOSourcesMap();
-    auto it = io_sources_map.find(executor_id);
-    if (it != io_sources_map.end())
-    {
-        for (const auto & io_source : it->second)
-        {
-            /// SourceOp of ExchangeReceiver should be ExchangeReceiverSourceOp
-            if (auto * exchange_receiver_source_op_ptr = dynamic_cast<ExchangeReceiverSourceOp *>(io_source.get()); exchange_receiver_source_op_ptr)
-            {
-                const auto & connection_profile_infos = exchange_receiver_source_op_ptr->getConnectionProfileInfos();
-                RUNTIME_CHECK(connection_profile_infos.size() == partition_num);
-                for (size_t i = 0; i < partition_num; ++i)
-                {
-                    exchange_receive_details[i].packets += connection_profile_infos[i].packets;
-                    exchange_receive_details[i].bytes += connection_profile_infos[i].bytes;
-                }
-            }
-        }
-    }
-}
+// // ywq todo fine
+// void ExchangeReceiverStatistics::collectExtraRuntimeDetailForPipeline()
+// {
+//     // ywq todo
+//     const auto & io_sources_map = dag_context.getIOSourcesMap();
+//     auto it = io_sources_map.find(executor_id);
+//     if (it != io_sources_map.end())
+//     {
+//         for (const auto & io_source : it->second)
+//         {
+//             /// SourceOp of ExchangeReceiver should be ExchangeReceiverSourceOp
+//             if (auto * exchange_receiver_source_op_ptr = dynamic_cast<ExchangeReceiverSourceOp *>(io_source.get()); exchange_receiver_source_op_ptr)
+//             {
+//                 const auto & connection_profile_infos = exchange_receiver_source_op_ptr->getConnectionProfileInfos();
+//                 RUNTIME_CHECK(connection_profile_infos.size() == partition_num);
+//                 for (size_t i = 0; i < partition_num; ++i)
+//                 {
+//                     exchange_receive_details[i].packets += connection_profile_infos[i].packets;
+//                     exchange_receive_details[i].bytes += connection_profile_infos[i].bytes;
+//                 }
+//             }
+//         }
+//     }
+// }
 
 ExchangeReceiverStatistics::ExchangeReceiverStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
     : ExchangeReceiverStatisticsBase(executor, dag_context_)

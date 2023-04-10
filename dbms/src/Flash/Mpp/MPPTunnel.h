@@ -26,7 +26,7 @@
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/ReceiverChannelWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
-#include <Flash/Statistics/ConnectionProfileInfo.h>
+#include <Flash/Statistics/ConnectionProfile.h>
 #include <common/StringRef.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
@@ -511,7 +511,7 @@ public:
     // wait until all the data has been transferred.
     void waitForFinish();
 
-    const ConnectionProfileInfo & getConnectionProfileInfo() const { return connection_profile_info; }
+    const ConnectionProfile & getConnectionProfile() const { return connection_profile; }
 
     bool isLocal() const { return mode == TunnelSenderMode::LOCAL; }
     bool isAsync() const { return mode == TunnelSenderMode::ASYNC_GRPC; }
@@ -547,11 +547,11 @@ private:
         return mem_tracker ? mem_tracker.get() : nullptr;
     }
 
-    void updateConnProfileInfo(size_t pushed_data_size)
+    void updateConnProfile(size_t pushed_data_size)
     {
         std::lock_guard lock(mu);
-        connection_profile_info.bytes += pushed_data_size;
-        connection_profile_info.packets += 1;
+        connection_profile.bytes += pushed_data_size;
+        connection_profile.packets += 1;
     }
 
 private:
@@ -569,7 +569,7 @@ private:
 
     std::shared_ptr<MemoryTracker> mem_tracker;
     const size_t queue_size;
-    ConnectionProfileInfo connection_profile_info;
+    ConnectionProfile connection_profile;
     const LoggerPtr log;
     TunnelSenderMode mode; // Tunnel transfer data mode
     TunnelSenderPtr tunnel_sender; // Used to refer to one of sync/async/local_tunnel_sender which is not nullptr, just for coding convenience

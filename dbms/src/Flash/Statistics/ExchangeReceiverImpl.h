@@ -14,13 +14,13 @@
 
 #pragma once
 
-#include <Flash/Statistics/ConnectionProfileInfo.h>
+#include <Flash/Statistics/ConnectionProfile.h>
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
-struct ExchangeReceiveDetail : public ConnectionProfileInfo
+struct ExchangeReceiveDetail : public ConnectionProfile
 {
     Int64 receiver_source_task_id;
 
@@ -59,6 +59,6 @@ private:
 protected:
     void appendExtraJson(FmtBuffer &) const override;
     void collectExtraRuntimeDetail() override;
-    void collectExtraRuntimeDetailForPipeline() override;
+    // void collectExtraRuntimeDetailForPipeline() override;
 };
 } // namespace DB

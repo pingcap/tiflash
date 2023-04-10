@@ -56,4 +56,9 @@ void RemoteExecutionSummary::add(tipb::SelectResponse & resp)
         }
     }
 }
+
+bool RemoteExecutionSummary::empty() const
+{
+    return execution_summaries.empty();
+}
 } // namespace DB

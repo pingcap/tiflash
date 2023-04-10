@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>
 #include <Operators/UnorderedSourceOp.h>
@@ -37,61 +36,20 @@ void TableScanStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 
 void TableScanStatistics::collectExtraRuntimeDetail()
 {
-    const auto & io_stream_map = dag_context.getInBoundIOInputStreamsMap();
-    auto it = io_stream_map.find(executor_id);
-    if (it != io_stream_map.end())
+    const auto & connection_profiles_for_executor = dag_context.getConnectionProfilesMap();
+    auto it = connection_profiles_for_executor.find(executor_id);
+    if (it != connection_profiles_for_executor.end())
     {
-        for (const auto & io_stream : it->second)
+        for (const auto & connection_profiles : it->second)
         {
-            auto * cop_stream = dynamic_cast<CoprocessorBlockInputStream *>(io_stream.get());
-            /// In tiflash_compute node, TableScan will be converted to ExchangeReceiver.
-            auto * exchange_stream = dynamic_cast<ExchangeReceiverInputStream *>(io_stream.get());
-            if (cop_stream || exchange_stream)
+            for (const auto & profile : connection_profiles)
             {
-                const std::vector<ConnectionProfileInfo> * connection_profile_infos = nullptr;
-                if (cop_stream)
-                    connection_profile_infos = &cop_stream->getConnectionProfileInfos();
-                else if (exchange_stream)
-                    connection_profile_infos = &exchange_stream->getConnectionProfileInfos();
-
-                for (const auto & connection_profile_info : *connection_profile_infos)
-                {
-                    remote_table_scan_detail.packets += connection_profile_info.packets;
-                    remote_table_scan_detail.bytes += connection_profile_info.bytes;
-                }
-            }
-            else if (auto * local_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get()); local_stream)
-            {
-                /// local read input stream also is IProfilingBlockInputStream
-                local_table_scan_detail.bytes += local_stream->getProfileInfo().bytes;
-            }
-            else
-            {
-                /// Streams like: NullBlockInputStream.
+                remote_table_scan_detail.packets += profile.packets;
+                remote_table_scan_detail.bytes += profile.bytes;
             }
         }
     }
-}
-
-void TableScanStatistics::collectExtraRuntimeDetailForPipeline()
-{
-    const auto & io_sources_map = dag_context.getIOSourcesMap();
-    auto it = io_sources_map.find(executor_id);
-    if (it != io_sources_map.end())
-    {
-        for (const auto & io_source : it->second)
-        {
-            /// TODO: Support remote table scan detail for pipeline model
-            if (auto * source_ptr = dynamic_cast<SourceOp *>(io_source.get()); source_ptr)
-            {
-                local_table_scan_detail.bytes += source_ptr->getProfile()->bytes;
-            }
-            else
-            {
-                /// Sources like: NullSourceOp
-            }
-        }
-    }
+    local_table_scan_detail.bytes = base.bytes;
 }
 
 TableScanStatistics::TableScanStatistics(const tipb::Executor * executor, DAGContext & dag_context_)

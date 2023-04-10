@@ -18,9 +18,13 @@
 
 namespace DB
 {
-struct ConnectionProfileInfo
+struct ConnectionProfile
 {
     Int64 packets = 0;
     Int64 bytes = 0;
+
+    bool is_local = false;
 };
+
+using ConnectionProfiles = std::vector<ConnectionProfile>;
 } // namespace DB

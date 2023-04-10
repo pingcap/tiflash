@@ -28,8 +28,10 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
+#include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Statistics/ConnectionProfile.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Operators/OperatorProfile.h>
 #include <Parsers/makeDummyQuery.h>
@@ -153,14 +155,21 @@ public:
     // for tests need to run query tasks.
     DAGContext(tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency);
 
+    std::unique_lock<std::recursive_mutex> getLock() const;
+
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
     std::unordered_map<String, ExecutorProfile> & getPipelineProfilesMap();
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
-    std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
-    std::unordered_map<String, SourceOps> & getIOSourcesMap();
+
+    void addConnectionProfile(const String & executor_id, ConnectionProfiles & connection_profiles);
+    const std::unordered_map<String, std::vector<ConnectionProfiles>> & getConnectionProfilesMap() const;
+
+    void addRemoteExecutionSummary(const String & executor_id, RemoteExecutionSummary & remote_execution_summary);
+    const std::unordered_map<String, RemoteExecutionSummarys> & getRemoteExecutionSummarysMap() const;
+
     void handleTruncateError(const String & msg);
     void handleOverflowError(const String & msg, const TiFlashError & error);
     void handleDivisionByZero();
@@ -350,12 +359,11 @@ private:
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
     /// DAGResponseWriter / JoinStatistics gets JoinExecuteInfo through it.
     std::unordered_map<std::string, JoinExecuteInfo> join_execute_info_map;
-    /// inbound_io_input_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
-    /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
-    std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;
 
-    /// io_source_ops_map is a map that maps from executor_id (table_scan / exchange_receiver) to SourceOps.
-    std::unordered_map<String, SourceOps> io_source_ops_map;
+    /// connection_profiles_for_executor_map is a map that maps from executor_id (table_scan / exchange_receiver) to connection profiles
+    std::unordered_map<String, std::vector<ConnectionProfiles>> connection_profiles_for_executor_map;
+
+    std::unordered_map<String, RemoteExecutionSummarys> remote_execution_summarys_map;
 
     UInt64 flags;
     UInt64 sql_mode;
@@ -380,6 +388,9 @@ private:
 
     // The keyspace that the DAG request from
     const KeyspaceID keyspace_id = NullspaceID;
+
+    // Protect objects that may changed in query processing time.
+    mutable std::recursive_mutex mutex;
 };
 
 } // namespace DB

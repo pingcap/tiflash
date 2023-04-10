@@ -169,7 +169,7 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
     if (tunnel_sender->push(std::move(data)))
     {
         updateMetric(data_size_in_queue, pushed_data_size, mode);
-        updateConnProfileInfo(pushed_data_size);
+        updateConnProfile(pushed_data_size);
         return;
     }
     throw Exception(fmt::format("write to tunnel {} which is already closed, {}", tunnel_id, tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
@@ -185,7 +185,7 @@ void MPPTunnel::nonBlockingWrite(TrackedMppDataPacketPtr && data)
     if (tunnel_sender->nonBlockingPush(std::move(data)))
     {
         updateMetric(data_size_in_queue, pushed_data_size, mode);
-        updateConnProfileInfo(pushed_data_size);
+        updateConnProfile(pushed_data_size);
         return;
     }
     throw Exception(fmt::format("write to tunnel {} which is already closed, {}", tunnel_id, tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));

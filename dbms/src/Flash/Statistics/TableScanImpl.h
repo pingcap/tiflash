@@ -14,20 +14,14 @@
 
 #pragma once
 
-#include <Flash/Statistics/ConnectionProfileInfo.h>
+#include <Flash/Statistics/ConnectionProfile.h>
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
-struct TableScanDetail : public ConnectionProfileInfo
+struct TableScanDetail : public ConnectionProfile
 {
-    bool is_local;
-
-    explicit TableScanDetail(bool is_local_)
-        : is_local(is_local_)
-    {}
-
     String toJson() const;
 };
 
@@ -56,6 +50,6 @@ private:
 protected:
     void appendExtraJson(FmtBuffer &) const override;
     void collectExtraRuntimeDetail() override;
-    void collectExtraRuntimeDetailForPipeline() override;
+    // void collectExtraRuntimeDetailForPipeline() override;
 };
 } // namespace DB

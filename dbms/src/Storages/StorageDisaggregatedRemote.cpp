@@ -479,10 +479,8 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     }
 
     auto * dag_context = db_context.getDAGContext();
-    auto & table_scan_io_input_streams = dag_context->getInBoundIOInputStreamsMap()[executor_id];
     auto & profile_streams = dag_context->getProfileStreamsMap()[executor_id];
     pipeline.transform([&](auto & stream) {
-        table_scan_io_input_streams.push_back(stream);
         profile_streams.push_back(stream);
     });
 }

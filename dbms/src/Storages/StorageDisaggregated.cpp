@@ -274,15 +274,13 @@ void StorageDisaggregated::buildReceiverStreams(const std::vector<RequestAndRegi
             exchange_receiver,
             log->identifier(),
             executor_id,
-            /*stream_id=*/0);
+            /*stream_id=*/0,
+            *context.getDAGContext());
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }
-
-    auto & table_scan_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[executor_id];
     auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[executor_id];
     pipeline.transform([&](auto & stream) {
-        table_scan_io_input_streams.push_back(stream);
         profile_streams.push_back(stream);
     });
 }
