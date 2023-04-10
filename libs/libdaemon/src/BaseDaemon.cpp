@@ -775,7 +775,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         std::cerr << "Logging " << log_level << " to " << log_path << std::endl;
 
         // Set up two channel chains.
-        Poco::AutoPtr<DB::UnifiedLogFormatter> pf = new DB::UnifiedLogFormatter();
+        Poco::AutoPtr<Poco::Formatter> pf = new DB::UnifiedLogFormatter<false>();
         Poco::AutoPtr<FormattingChannel> log = new FormattingChannel(pf);
         log_file = new Poco::TiFlashLogFileChannel;
         log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(log_path).absolute().toString());
@@ -798,7 +798,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         std::cerr << "Logging errors to " << errorlog_path << std::endl;
         Poco::AutoPtr<Poco::LevelFilterChannel> level = new Poco::LevelFilterChannel;
         level->setLevel(Message::PRIO_NOTICE);
-        Poco::AutoPtr<DB::UnifiedLogFormatter> pf = new DB::UnifiedLogFormatter();
+        Poco::AutoPtr<Poco::Formatter> pf = new DB::UnifiedLogFormatter<false>();
         Poco::AutoPtr<FormattingChannel> errorlog = new FormattingChannel(pf);
         error_log_file = new Poco::TiFlashLogFileChannel;
         error_log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(errorlog_path).absolute().toString());
@@ -823,7 +823,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         /// to filter the tracing log.
         Poco::AutoPtr<Poco::SourceFilterChannel> source = new Poco::SourceFilterChannel;
         source->setSource(DB::tracing_log_source);
-        Poco::AutoPtr<DB::UnifiedLogFormatter> pf = new DB::UnifiedLogFormatter();
+        Poco::AutoPtr<Poco::Formatter> pf = new DB::UnifiedLogFormatter<false>();
         Poco::AutoPtr<FormattingChannel> tracing_log = new FormattingChannel(pf);
         tracing_log_file = new Poco::TiFlashLogFileChannel;
         tracing_log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(tracing_log_path).absolute().toString());
@@ -861,7 +861,11 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         || (!config.hasProperty("logger.console") && !is_daemon && should_log_to_console))
     {
         Poco::AutoPtr<ConsoleChannel> file = new ConsoleChannel;
-        Poco::AutoPtr<DB::UnifiedLogFormatter> pf = new DB::UnifiedLogFormatter(enable_colors);
+        Poco::AutoPtr<Poco::Formatter> pf;
+        if (enable_colors)
+            pf = new DB::UnifiedLogFormatter<true>();
+        else
+            pf = new DB::UnifiedLogFormatter<false>();
         Poco::AutoPtr<FormattingChannel> log = new FormattingChannel(pf);
         log->setChannel(file);
         split->addChannel(log);

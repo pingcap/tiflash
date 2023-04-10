@@ -44,90 +44,26 @@
 
 namespace DB
 {
-void UnifiedLogFormatter::format(const Poco::Message & msg, std::string & text)
+
+enum class JsonEncodeKind
 {
-    FmtBuffer buf;
+    /**
+     * No need to encode, just copy the text
+     */
+    DirectCopy,
 
-    // Timestamp
-    {
-        if (enable_color)
-            buf.append(BRIGHT_GREEN);
+    /**
+     * Add double quotes around the text is sufficient
+     */
+    AddQuoteAndCopy,
 
-        buf.append('[');
-        writeTimestamp(buf);
-        buf.append("] ");
+    /**
+     * Need full JSON string encode
+     */
+    Encode,
+};
 
-        if (enable_color)
-            buf.append(RESET_FONT);
-    }
-
-    // Priority
-    {
-        if (enable_color)
-        {
-            buf.append(BOLD_FONT);
-            writePriorityColor(buf, msg.getPriority());
-        }
-
-        buf.append('[');
-        writePriority(buf, msg.getPriority());
-        buf.append("] ");
-
-        if (enable_color)
-            buf.append(RESET_FONT);
-    }
-
-    // Source File
-    {
-        if (enable_color)
-            buf.append(MAGENTA);
-
-        if (unlikely(!msg.getSourceFile()))
-            buf.append("[<unknown>] ");
-        else
-            buf.fmtAppend(FMT_COMPILE("[{}:{}] "), msg.getSourceFile(), msg.getSourceLine());
-
-        if (enable_color)
-            buf.append(RESET_FONT);
-    }
-    // Message
-    {
-        if (enable_color)
-            writeMessageColor(buf, msg.getPriority());
-
-        buf.append('[');
-        writeEscapedString(buf, msg.getText());
-        buf.append("] ");
-
-        if (enable_color)
-            buf.append(RESET_FONT);
-    }
-
-    // Source and Identifiers
-    if (enable_color)
-        buf.append(BRIGHT_BLACK);
-
-    {
-        const std::string & source = msg.getSource();
-        if (!source.empty())
-        {
-            buf.append("[source=");
-            writeEscapedString(buf, source);
-            buf.append("] ");
-        }
-    }
-    // Thread ID
-    {
-        buf.fmtAppend(FMT_COMPILE("[thread_id={}]"), Poco::ThreadNumber::get());
-    }
-
-    if (enable_color)
-        buf.append(RESET_FONT);
-
-    text = buf.toString();
-}
-
-void UnifiedLogFormatter::writePriorityColor(FmtBuffer & buf, const Poco::Message::Priority & priority)
+void writePriorityColor(FmtBuffer & buf, const Poco::Message::Priority & priority)
 {
     switch (priority)
     {
@@ -159,7 +95,7 @@ void UnifiedLogFormatter::writePriorityColor(FmtBuffer & buf, const Poco::Messag
     }
 }
 
-void UnifiedLogFormatter::writeMessageColor(FmtBuffer & buf, const Poco::Message::Priority & priority)
+void writeMessageColor(FmtBuffer & buf, const Poco::Message::Priority & priority)
 {
     switch (priority)
     {
@@ -180,7 +116,7 @@ void UnifiedLogFormatter::writeMessageColor(FmtBuffer & buf, const Poco::Message
     }
 }
 
-void UnifiedLogFormatter::writePriority(FmtBuffer & buf, const Poco::Message::Priority & priority)
+void writePriority(FmtBuffer & buf, const Poco::Message::Priority & priority)
 {
     switch (priority)
     {
@@ -214,7 +150,7 @@ void UnifiedLogFormatter::writePriority(FmtBuffer & buf, const Poco::Message::Pr
     }
 }
 
-void UnifiedLogFormatter::writeTimestamp(FmtBuffer & buf)
+void writeTimestamp(FmtBuffer & buf)
 {
     // The format is "yyyy/MM/dd HH:mm:ss.SSS ZZZZZ"
     auto time_point = std::chrono::system_clock::now();
@@ -260,26 +196,7 @@ void UnifiedLogFormatter::writeTimestamp(FmtBuffer & buf)
     buf.fmtAppend(FMT_COMPILE("{0:02d}:{1:02d}"), offset_tm->tm_hour, offset_tm->tm_min);
 }
 
-void UnifiedLogFormatter::writeEscapedString(FmtBuffer & buf, const std::string & str)
-{
-    auto encode_kind = needJsonEncode(str);
-    switch (encode_kind)
-    {
-    case JsonEncodeKind::DirectCopy:
-        buf.append(str);
-        break;
-    case JsonEncodeKind::AddQuoteAndCopy:
-        buf.append('"');
-        buf.append(str);
-        buf.append('"');
-        break;
-    case JsonEncodeKind::Encode:
-        writeJSONString(buf, str);
-        break;
-    }
-}
-
-UnifiedLogFormatter::JsonEncodeKind UnifiedLogFormatter::needJsonEncode(const std::string & src)
+JsonEncodeKind needJsonEncode(const std::string & src)
 {
     bool needs_quote = false;
     bool json_encode_cannot_copy = false;
@@ -301,7 +218,7 @@ UnifiedLogFormatter::JsonEncodeKind UnifiedLogFormatter::needJsonEncode(const st
         return JsonEncodeKind::DirectCopy;
 }
 
-void UnifiedLogFormatter::writeJSONString(FmtBuffer & buf, const std::string & str)
+void writeJSONString(FmtBuffer & buf, const std::string & str)
 {
     buf.append('"');
 
@@ -334,5 +251,111 @@ void UnifiedLogFormatter::writeJSONString(FmtBuffer & buf, const std::string & s
 
     buf.append('"');
 }
+
+void writeEscapedString(FmtBuffer & buf, const std::string & str)
+{
+    auto encode_kind = needJsonEncode(str);
+    switch (encode_kind)
+    {
+    case JsonEncodeKind::DirectCopy:
+        buf.append(str);
+        break;
+    case JsonEncodeKind::AddQuoteAndCopy:
+        buf.append('"');
+        buf.append(str);
+        buf.append('"');
+        break;
+    case JsonEncodeKind::Encode:
+        writeJSONString(buf, str);
+        break;
+    }
+}
+
+template <bool enable_color>
+void UnifiedLogFormatter<enable_color>::format(const Poco::Message & msg, std::string & text)
+{
+    FmtBuffer buf;
+
+    // Timestamp
+    {
+        if constexpr (enable_color)
+            buf.append(BRIGHT_GREEN);
+
+        buf.append('[');
+        writeTimestamp(buf);
+        buf.append("] ");
+
+        if constexpr (enable_color)
+            buf.append(RESET_FONT);
+    }
+
+    // Priority
+    {
+        if constexpr (enable_color)
+        {
+            buf.append(BOLD_FONT);
+            writePriorityColor(buf, msg.getPriority());
+        }
+
+        buf.append('[');
+        writePriority(buf, msg.getPriority());
+        buf.append("] ");
+
+        if constexpr (enable_color)
+            buf.append(RESET_FONT);
+    }
+
+    // Source File
+    {
+        if constexpr (enable_color)
+            buf.append(MAGENTA);
+
+        if (unlikely(!msg.getSourceFile()))
+            buf.append("[<unknown>] ");
+        else
+            buf.fmtAppend(FMT_COMPILE("[{}:{}] "), msg.getSourceFile(), msg.getSourceLine());
+
+        if constexpr (enable_color)
+            buf.append(RESET_FONT);
+    }
+    // Message
+    {
+        if constexpr (enable_color)
+            writeMessageColor(buf, msg.getPriority());
+
+        buf.append('[');
+        writeEscapedString(buf, msg.getText());
+        buf.append("] ");
+
+        if constexpr (enable_color)
+            buf.append(RESET_FONT);
+    }
+
+    // Source and Identifiers
+    if constexpr (enable_color)
+        buf.append(BRIGHT_BLACK);
+
+    {
+        const std::string & source = msg.getSource();
+        if (!source.empty())
+        {
+            buf.append("[source=");
+            writeEscapedString(buf, source);
+            buf.append("] ");
+        }
+    }
+    // Thread ID
+    {
+        buf.fmtAppend(FMT_COMPILE("[thread_id={}]"), Poco::ThreadNumber::get());
+    }
+
+    if constexpr (enable_color)
+        buf.append(RESET_FONT);
+
+    text = buf.toString();
+}
+
+template class UnifiedLogFormatter<true>;
+template class UnifiedLogFormatter<false>;
 
 } // namespace DB
