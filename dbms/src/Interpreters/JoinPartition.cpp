@@ -674,9 +674,9 @@ Map & JoinPartition::getHashMap()
     if (isReverseJoin(kind))
     {
         if (has_other_condition)
-            return getMapImpl<Map>(maps_all_full_with_row_flag, join_type);
+            return getMapImpl<Map>(maps_all_full_with_row_flag, join_map_method);
         else
-            return getMapImpl<Map>(maps_all_full, join_type);
+            return getMapImpl<Map>(maps_all_full, join_map_method);
     }
     else if (getFullness(kind))
     {
