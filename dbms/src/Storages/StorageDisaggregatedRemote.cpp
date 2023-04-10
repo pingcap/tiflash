@@ -251,7 +251,9 @@ void StorageDisaggregated::buildDisaggTask(
                 }
             };
 
+            // non-partition table
             retry_from_region_infos(req->regions());
+            // partition table
             for (const auto & table_region : req->table_regions())
             {
                 if (retry_regions.empty())
