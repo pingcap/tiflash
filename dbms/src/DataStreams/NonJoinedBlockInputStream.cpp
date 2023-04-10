@@ -78,7 +78,6 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
     , index(index_)
     , step(step_)
     , max_block_size(max_block_size_)
-    , add_not_mapped_rows(true)
 {
     size_t build_concurrency = parent.getBuildConcurrency();
     if (unlikely(step > build_concurrency || index >= build_concurrency))
@@ -123,7 +122,7 @@ NonJoinedBlockInputStream::NonJoinedBlockInputStream(const Join & parent_, const
 
     columns_left.resize(num_columns_left);
     columns_right.resize(num_columns_right);
-    next_index = index;
+    current_partition_index = index;
 }
 
 Block NonJoinedBlockInputStream::readImpl()
@@ -142,64 +141,33 @@ Block NonJoinedBlockInputStream::readImpl()
         /// no build data in memory, the non joined result must be empty
         return {};
 
-    /// todo read data based on JoinPartition
-    if (add_not_mapped_rows)
-    {
-        setNextCurrentNotMappedRow();
-        add_not_mapped_rows = false;
-    }
-
-    if (parent.strictness == ASTTableJoin::Strictness::Any)
-        return createBlock<ASTTableJoin::Strictness::Any>(parent.maps_any_full);
-    else if (parent.strictness == ASTTableJoin::Strictness::All)
-        return createBlock<ASTTableJoin::Strictness::All>(parent.maps_all_full);
-    else
-        throw Exception("Logical error: unknown JOIN strictness (must be ANY or ALL)", ErrorCodes::LOGICAL_ERROR);
-}
-
-void NonJoinedBlockInputStream::setNextCurrentNotMappedRow()
-{
-    while (current_not_mapped_row == nullptr && next_index < parent.rows_not_inserted_to_map.size())
-    {
-        current_not_mapped_row = parent.rows_not_inserted_to_map[next_index].head.next;
-        next_index += step;
-    }
-}
-
-template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
-Block NonJoinedBlockInputStream::createBlock(const Maps & maps)
-{
     size_t num_columns_left = column_indices_left.size();
     size_t num_columns_right = column_indices_right.size();
+    IColumn * row_counter_column = nullptr;
 
     for (size_t i = 0; i < num_columns_left; ++i)
     {
         const auto & src_col = result_sample_block.safeGetByPosition(column_indices_left[i]);
         columns_left[i] = src_col.type->createColumn();
+        if (row_counter_column == nullptr)
+            row_counter_column = columns_left[i].get();
     }
 
     for (size_t i = 0; i < num_columns_right; ++i)
     {
         const auto & src_col = result_sample_block.safeGetByPosition(column_indices_right[i]);
         columns_right[i] = src_col.type->createColumn();
+        if (row_counter_column == nullptr)
+            row_counter_column = columns_right[i].get();
     }
+    assert(row_counter_column != nullptr);
 
-    size_t rows_added = 0;
-
-    switch (parent.type)
+    while (current_partition_index < parent.getBuildConcurrency() && row_counter_column->size() < max_block_size)
     {
-#define M(TYPE)                                                                                                             \
-    case Join::Type::TYPE:                                                                                                  \
-        rows_added = fillColumns<STRICTNESS>(*maps.TYPE, num_columns_left, columns_left, num_columns_right, columns_right); \
-        break;
-        APPLY_FOR_JOIN_VARIANTS(M)
-#undef M
-
-    default:
-        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+        fillColumnsUsingCurrentPartition(num_columns_left, columns_left, num_columns_right, columns_right, row_counter_column);
     }
 
-    if (!rows_added)
+    if (row_counter_column->empty())
         return {};
 
     Block res = result_sample_block.cloneEmpty();
@@ -211,28 +179,115 @@ Block NonJoinedBlockInputStream::createBlock(const Maps & maps)
     return res;
 }
 
+void NonJoinedBlockInputStream::fillColumnsUsingCurrentPartition(
+    size_t num_columns_left,
+    MutableColumns & mutable_columns_left,
+    size_t num_columns_right,
+    MutableColumns & mutable_columns_right,
+    IColumn * row_counter_column)
+{
+    const auto & partition = parent.partitions[current_partition_index];
+    if (parent.isSpilled() && partition->isSpill())
+    {
+        /// if the partition is spilled, just skip it
+        advancedToNextPartition();
+        return;
+    }
+    if (!not_mapped_row_pos_inited)
+    {
+        not_mapped_row_pos = partition->getRowsNotInsertedToMap()->head.next;
+        not_mapped_row_pos_inited = true;
+    }
+    if (parent.strictness == ASTTableJoin::Strictness::Any)
+    {
+        switch (parent.type)
+        {
+#define M(TYPE)                                     \
+    case JoinType::TYPE:                            \
+        fillColumns<ASTTableJoin::Strictness::Any>( \
+            *partition->maps_any_full.TYPE,         \
+            num_columns_left,                       \
+            mutable_columns_left,                   \
+            num_columns_right,                      \
+            mutable_columns_right,                  \
+            row_counter_column);                    \
+        break;
+            APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+
+        default:
+            throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+        }
+    }
+    else if (parent.strictness == ASTTableJoin::Strictness::All)
+    {
+        switch (parent.type)
+        {
+#define M(TYPE)                                     \
+    case JoinType::TYPE:                            \
+        fillColumns<ASTTableJoin::Strictness::All>( \
+            *partition->maps_all_full.TYPE,         \
+            num_columns_left,                       \
+            mutable_columns_left,                   \
+            num_columns_right,                      \
+            mutable_columns_right,                  \
+            row_counter_column);                    \
+        break;
+            APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+
+        default:
+            throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+        }
+    }
+    else
+        throw Exception("Logical error: unknown JOIN strictness (must be ANY or ALL)", ErrorCodes::LOGICAL_ERROR);
+}
+
+struct RowCountInfo
+{
+    RowCountInfo(size_t current_rows_, size_t max_rows_)
+        : current_rows(current_rows_)
+        , added_rows(0)
+        , max_rows(max_rows_)
+    {}
+    inline size_t getAddedRows() const { return added_rows; }
+    inline size_t getCurrentRows() const { return current_rows; }
+    inline bool reachMaxRows() const { return current_rows == max_rows; }
+    inline void inc(size_t rows)
+    {
+        added_rows += rows;
+        current_rows += rows;
+    }
+    inline size_t availableRowCount() const { return max_rows - current_rows; }
+
+private:
+    size_t current_rows;
+    size_t added_rows;
+    size_t max_rows;
+};
 
 template <ASTTableJoin::Strictness STRICTNESS, typename Map>
-size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
-                                              size_t num_columns_left,
-                                              MutableColumns & mutable_columns_left,
-                                              size_t num_columns_right,
-                                              MutableColumns & mutable_columns_right)
+void NonJoinedBlockInputStream::fillColumns(const Map & map,
+                                            size_t num_columns_left,
+                                            MutableColumns & mutable_columns_left,
+                                            size_t num_columns_right,
+                                            MutableColumns & mutable_columns_right,
+                                            IColumn * row_counter_column)
 {
-    size_t rows_added = 0;
     size_t key_num = parent.key_names_right.size();
     /// first add rows that is not in the hash table
-    while (current_not_mapped_row != nullptr)
+    RowCountInfo row_count_info(row_counter_column->size(), max_block_size);
+    while (not_mapped_row_pos != nullptr)
     {
-        ++rows_added;
+        row_count_info.inc(1);
         /// handle left columns later to utilize insertManyDefaults
         for (size_t j = 0; j < num_columns_right; ++j)
-            mutable_columns_right[j]->insertFrom(*current_not_mapped_row->block->getByPosition(key_num + j).column.get(),
-                                                 current_not_mapped_row->row_num);
+            mutable_columns_right[j]->insertFrom(*not_mapped_row_pos->block->getByPosition(key_num + j).column.get(),
+                                                 not_mapped_row_pos->row_num);
 
-        current_not_mapped_row = current_not_mapped_row->next;
-        setNextCurrentNotMappedRow();
-        if (rows_added == max_block_size)
+        not_mapped_row_pos = not_mapped_row_pos->next;
+        if (row_count_info.reachMaxRows())
             break;
     }
     /// Fill left columns with defaults
@@ -241,68 +296,42 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
         /// but we don't care about the key column now so just insert a default value is ok.
         /// refer to https://github.com/pingcap/tiflash/blob/v6.5.0/dbms/src/Flash/Coprocessor/DAGExpressionAnalyzer.cpp#L953
         /// for detailed explanation
-        mutable_columns_left[j]->insertManyDefaults(rows_added);
+        mutable_columns_left[j]->insertManyDefaults(row_count_info.getAddedRows());
 
-    if (rows_added == max_block_size)
-        return rows_added;
+    if (row_count_info.reachMaxRows())
+        return;
 
     /// then add rows that in hash table, but not joined
-    if (!position)
+    if (!pos_in_hashmap_inited)
     {
-        current_segment = index;
-
-        while (parent.partitions[current_segment]->isSpill())
-        {
-            current_segment += step;
-            if (current_segment >= map.getSegmentSize())
-            {
-                return rows_added;
-            }
-        }
-
-        position = decltype(position)(
-            static_cast<void *>(new typename Map::SegmentType::HashTable::const_iterator(map.getSegmentTable(current_segment).begin())),
-            [](void * ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
+        pos_in_hashmap = decltype(pos_in_hashmap)(
+            static_cast<void *>(new typename Map::const_iterator(map.begin())),
+            [](void * ptr) { delete reinterpret_cast<typename Map::const_iterator *>(ptr); });
+        pos_in_hashmap_inited = true;
     }
 
-    if (current_segment >= map.getSegmentSize())
-    {
-        return rows_added;
-    }
     /// use pointer instead of reference because `it` need to be re-assigned latter
-    auto it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
-    auto end = map.getSegmentTable(current_segment).end();
+    auto it = reinterpret_cast<typename Map::const_iterator *>(pos_in_hashmap.get());
+    auto end = map.end();
 
-    for (; *it != end || current_segment + step < map.getSegmentSize();)
+    for (; *it != end;)
     {
-        if (*it == end || parent.partitions[current_segment]->isSpill())
-        {
-            current_segment += step;
-            while (parent.partitions[current_segment]->isSpill())
-            {
-                current_segment += step;
-                if (current_segment >= map.getSegmentSize())
-                {
-                    return rows_added;
-                }
-            }
-            position = decltype(position)(
-                static_cast<void *>(new typename Map::SegmentType::HashTable::const_iterator(
-                    map.getSegmentTable(current_segment).begin())),
-                [](void * ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
-            it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
-            end = map.getSegmentTable(current_segment).end();
-            continue;
-        }
-
         if ((*it)->getMapped().getUsed())
         {
             ++(*it);
             continue;
         }
 
-        rows_added += AdderNonJoined<STRICTNESS, typename Map::mapped_type>::add((*it)->getMapped(), key_num, num_columns_left, mutable_columns_left, num_columns_right, mutable_columns_right, next_element_in_row_list, max_block_size - rows_added);
-        assert(rows_added <= max_block_size);
+        row_count_info.inc(AdderNonJoined<STRICTNESS, typename Map::mapped_type>::add(
+            (*it)->getMapped(),
+            key_num,
+            num_columns_left,
+            mutable_columns_left,
+            num_columns_right,
+            mutable_columns_right,
+            next_element_in_row_list,
+            row_count_info.availableRowCount()));
+        assert(row_count_info.getCurrentRows() <= max_block_size);
         if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
         {
             ++(*it);
@@ -313,9 +342,11 @@ size_t NonJoinedBlockInputStream::fillColumns(const Map & map,
             ++(*it);
         }
 
-        if (rows_added == max_block_size)
+        if (row_count_info.reachMaxRows())
             break;
     }
-    return rows_added;
+
+    if (*it == end)
+        advancedToNextPartition();
 }
 } // namespace DB

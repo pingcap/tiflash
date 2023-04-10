@@ -55,11 +55,6 @@ void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision)
         writeVarUInt(client_version_minor, out);
         writeVarUInt(client_revision, out);
     }
-    else if (interface == Interface::HTTP)
-    {
-        writeBinary(UInt8(http_method), out);
-        writeBinary(http_user_agent, out);
-    }
 
     if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO)
         writeBinary(quota_key, out);
@@ -96,14 +91,6 @@ void ClientInfo::read(ReadBuffer & in, const UInt64 client_protocol_revision)
         readVarUInt(client_version_major, in);
         readVarUInt(client_version_minor, in);
         readVarUInt(client_revision, in);
-    }
-    else if (interface == Interface::HTTP)
-    {
-        UInt8 read_http_method = 0;
-        readBinary(read_http_method, in);
-        http_method = HTTPMethod(read_http_method);
-
-        readBinary(http_user_agent, in);
     }
 
     if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO)
