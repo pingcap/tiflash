@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1681103648464,
+  "iteration": 1681106846245,
   "links": [],
   "panels": [
     {
@@ -11338,7 +11338,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "PageStorage Checkpoint Duration",
+          "title": "Checkpoint Upload Duration",
           "tooltip": {
             "shared": true,
             "sort": 2,
@@ -11457,7 +11457,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Checkpoint flow",
+          "title": "Checkpoint Upload flow",
           "tooltip": {
             "shared": true,
             "sort": 2,
@@ -11501,7 +11501,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
-          "description": "The flow of checkpoint operations",
+          "description": "The keys of checkpoint operations. All keys are uploaded in the checkpoint. Grouped by key types.",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
@@ -11567,7 +11567,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Checkpoint keys by type",
+          "title": "Checkpoint Upload keys by type (all)",
           "tooltip": {
             "shared": true,
             "sort": 2,
@@ -11611,7 +11611,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
-          "description": "The flow of checkpoint operations",
+          "description": "The flow of checkpoint operations. Group by key types",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
@@ -11677,7 +11677,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Checkpoint bytes by type",
+          "title": "Checkpoint Upload flow by type (incremental+compaction)",
           "tooltip": {
             "shared": true,
             "sort": 2,
@@ -12420,7 +12420,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 12
+            "y": 52
           },
           "hiddenSeries": false,
           "id": 178,
@@ -12530,7 +12530,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 12
+            "y": 52
           },
           "hiddenSeries": false,
           "id": 179,
@@ -12696,7 +12696,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 20
+            "y": 60
           },
           "hiddenSeries": false,
           "id": 182,
@@ -12806,7 +12806,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 20
+            "y": 60
           },
           "hiddenSeries": false,
           "id": 180,
@@ -12933,7 +12933,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 28
+            "y": 68
           },
           "hiddenSeries": false,
           "id": 185,
