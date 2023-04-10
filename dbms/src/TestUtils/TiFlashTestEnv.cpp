@@ -210,7 +210,7 @@ void TiFlashTestEnv::shutdown()
 void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
 {
     Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(os);
-    Poco::AutoPtr<UnifiedLogFormatter> formatter(new UnifiedLogFormatter());
+    Poco::AutoPtr<Poco::Formatter> formatter(new UnifiedLogFormatter<true>());
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel(level);

@@ -156,7 +156,11 @@ DMFilePtr DMFile::restore(
     auto is_s3_file = S3::S3FilenameView::fromKeyWithPrefix(parent_path).isDataFile();
     if (!is_s3_file)
     {
-        RUNTIME_CHECK(Poco::Path(parent_path).isAbsolute(), parent_path);
+        // Unrecognized xx:// protocol.
+        RUNTIME_CHECK_MSG(
+            parent_path.find("://") == std::string::npos,
+            "Unsupported protocol in path {}",
+            parent_path);
         String path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
         // The path may be dropped by another thread in some cases
         auto poco_file = Poco::File(path);
