@@ -81,8 +81,7 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, 
         }
         else if (mode == DupCheck::AllowSame)
         {
-            auto v1 = getTiKVValue(it->second);
-            if (prev_value != getTiKVValue(kv_pair.second))
+            if (prev_value != getTiKVValue(it->second))
             {
                 throw Exception("Found existing key in hex and val differs: "
                                     + getTiKVKey(it->second).toDebugString()
