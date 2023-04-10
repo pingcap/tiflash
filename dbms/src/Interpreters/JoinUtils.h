@@ -14,15 +14,21 @@
 
 #pragma once
 
+#include <Columns/ColumnVector.h>
 #include <Core/Block.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
 {
-/// Do I need to use the hash table maps_*_full, in which we remember whether the row was joined.
+/// Do I need to use the hash table maps_*_full, in which we remember whether the row was joined and fill left columns if not joined
 inline bool getFullness(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Full;
+}
+inline bool isReverseJoin(ASTTableJoin::Kind kind)
+{
+    return kind == ASTTableJoin::Kind::RightSemi || kind == ASTTableJoin::Kind::RightAnti;
 }
 inline bool isLeftJoin(ASTTableJoin::Kind kind)
 {
@@ -58,6 +64,15 @@ inline bool isNullAwareSemiFamily(ASTTableJoin::Kind kind)
     return kind == ASTTableJoin::Kind::NullAware_Anti || kind == ASTTableJoin::Kind::NullAware_LeftAnti
         || kind == ASTTableJoin::Kind::NullAware_LeftSemi;
 }
+inline bool needRecordNotInsertRows(ASTTableJoin::Kind kind)
+{
+    return getFullness(kind) || (kind == ASTTableJoin::Kind::RightAnti) || isNullAwareSemiFamily(kind);
+}
+inline bool needReturnNonJoinedData(ASTTableJoin::Kind kind)
+{
+    return getFullness(kind) || isReverseJoin(kind);
+}
+
 struct ProbeProcessInfo
 {
     Block block;
@@ -93,4 +108,24 @@ void computeDispatchHash(size_t rows,
                          std::vector<String> & partition_key_containers,
                          size_t join_restore_round,
                          WeakHash32 & hash);
+
+template <int>
+struct PointerTypeColumnHelper;
+
+template <>
+struct PointerTypeColumnHelper<4>
+{
+    using DataType = DataTypeInt32;
+    using ColumnType = ColumnVector<Int32>;
+    using ArrayType = PaddedPODArray<Int32>;
+};
+
+template <>
+struct PointerTypeColumnHelper<8>
+{
+    using DataType = DataTypeInt64;
+    using ColumnType = ColumnVector<Int64>;
+    using ArrayType = PaddedPODArray<Int64>;
+};
+
 } // namespace DB

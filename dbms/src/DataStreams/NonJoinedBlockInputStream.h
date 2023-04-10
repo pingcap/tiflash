@@ -73,7 +73,7 @@ private:
         not_mapped_row_pos = nullptr;
     }
 
-    template <ASTTableJoin::Strictness STRICTNESS, typename Map>
+    template <ASTTableJoin::Strictness STRICTNESS, bool row_flagged, bool output_joined_rows, typename Map>
     void fillColumns(const Map & map,
                      size_t num_columns_left,
                      MutableColumns & mutable_columns_left,
@@ -81,6 +81,7 @@ private:
                      MutableColumns & mutable_columns_right,
                      IColumn * row_counter_column);
 
+    template <bool row_flagged, bool output_joined_rows>
     void fillColumnsUsingCurrentPartition(
         size_t num_columns_left,
         MutableColumns & mutable_columns_left,

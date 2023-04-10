@@ -107,7 +107,8 @@ public:
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const JoinNonEqualConditions & non_equal_conditions_ = {},
          size_t max_block_size = 0,
-         const String & match_helper_name = "",
+         const String & match_helper_name_ = "",
+         const String & flag_mapped_entry_helper_name_ = "",
          size_t restore_round = 0,
          bool is_test = true);
 
@@ -128,8 +129,6 @@ public:
     Block joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run = false) const;
 
     void checkTypes(const Block & block) const;
-
-    bool needReturnNonJoinedData() const;
 
     /** For RIGHT and FULL JOINs.
       * A stream that will contain default values from left table, joined with rows from right table, that was not joined before.
@@ -214,9 +213,13 @@ public:
 
     static const String match_helper_prefix;
     static const DataTypePtr match_helper_type;
+    static const String flag_mapped_entry_helper_prefix;
+    static const DataTypePtr flag_mapped_entry_helper_type;
 
     // only use for left semi joins.
     const String match_helper_name;
+    // only use for right semi, right anti joins with other conditions.
+    const String flag_mapped_entry_helper_name;
 
     SpillerPtr build_spiller;
     SpillerPtr probe_spiller;
@@ -226,6 +229,7 @@ private:
 
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
+    bool has_other_condition;
 
     /// Names of key columns (columns for equi-JOIN) in "left" table (in the order they appear in USING clause).
     const Names key_names_left;

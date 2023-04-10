@@ -27,7 +27,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     : log(Logger::get(req_id))
     , original_join(join_)
     , join(original_join)
-    , need_output_non_joined_data(join->needReturnNonJoinedData())
+    , need_output_non_joined_data(needReturnNonJoinedData(join->getKind()))
     , current_non_joined_stream_index(non_joined_stream_index)
     , max_block_size(max_block_size_)
     , probe_process_info(max_block_size_)
@@ -262,6 +262,8 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
                 }
                 auto ret = join->joinBlock(probe_process_info);
                 joined_rows += ret.rows();
+                if (isReverseJoin(join->getKind()))
+                    continue;
                 return ret;
             }
             case ProbeStatus::WAIT_PROBE_FINISH:

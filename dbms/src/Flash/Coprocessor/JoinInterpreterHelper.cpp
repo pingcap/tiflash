@@ -108,6 +108,14 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
     {
         switch (kind)
         {
+        case ASTTableJoin::Kind::Inner:
+            if (join.join_type() == tipb::JoinType::TypeSemiJoin)
+                kind = ASTTableJoin::Kind::RightSemi;
+            break;
+        case ASTTableJoin::Kind::Anti:
+            if (join.join_type() == tipb::JoinType::TypeAntiSemiJoin)
+                kind = ASTTableJoin::Kind::RightAnti;
+            break;
         case ASTTableJoin::Kind::Left:
             kind = ASTTableJoin::Kind::Right;
             break;
@@ -116,6 +124,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
             break;
         case ASTTableJoin::Kind::Cross_Right:
             kind = ASTTableJoin::Kind::Cross_Left;
+            break;
         default:; // just `default`, for other kinds, don't need to change kind.
         }
     }
@@ -197,7 +206,7 @@ TiFlashJoin::TiFlashJoin(const tipb::Join & join_, bool is_test) // NOLINT(cppco
     , join_key_collators(getJoinKeyCollators(join_, join_key_types, is_test))
 {
     std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
-    strictness = isSemiJoin() ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
+    strictness = (isSemiJoin() && !isReverseJoin(kind)) ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
 }
 
 String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & header2) const
@@ -214,6 +223,22 @@ String TiFlashJoin::genMatchHelperName(const Block & header1, const Block & head
         match_helper_name = fmt::format("{}{}", Join::match_helper_prefix, ++i);
     }
     return match_helper_name;
+}
+
+String TiFlashJoin::genFlagMappedEntryHelperName(const Block & header1, bool has_other_condition) const
+{
+    if (!isReverseJoin(kind) || !has_other_condition)
+    {
+        return "";
+    }
+
+    size_t i = 0;
+    String helper_name = fmt::format("{}{}", Join::flag_mapped_entry_helper_prefix, i);
+    while (header1.has(helper_name))
+    {
+        helper_name = fmt::format("{}{}", Join::flag_mapped_entry_helper_prefix, ++i);
+    }
+    return helper_name;
 }
 
 NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
