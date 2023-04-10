@@ -671,7 +671,14 @@ template <typename Map>
 Map & JoinPartition::getHashMap()
 {
     assert(!spill);
-    if (getFullness(kind))
+    if (isReverseJoin(kind))
+    {
+        if (has_other_condition)
+            return getMapImpl<Map>(maps_all_full_with_row_flag, join_type);
+        else
+            return getMapImpl<Map>(maps_all_full, join_type);
+    }
+    else if (getFullness(kind))
     {
         if (strictness == ASTTableJoin::Strictness::Any)
             return getMapImpl<Map>(maps_any_full, join_map_method);
@@ -848,7 +855,7 @@ struct Adder<ASTTableJoin::Kind::LeftSemi, ASTTableJoin::Strictness::All, Map>
 template <typename Map>
 struct Adder<ASTTableJoin::Kind::RightSemi, ASTTableJoin::Strictness::All, Map>
 {
-    static bool addFound(const typename Map::SegmentType::HashTable::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * /*filter*/, IColumn::Offset & current_offset, IColumn::Offsets * offsets, const std::vector<size_t> & right_indexes, ProbeProcessInfo & probe_process_info, MutableColumnPtr & ptr_col)
+    static bool addFound(const typename Map::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * /*filter*/, IColumn::Offset & current_offset, IColumn::Offsets * offsets, const std::vector<size_t> & right_indexes, ProbeProcessInfo & probe_process_info, MutableColumnPtr & ptr_col)
     {
         size_t rows_joined = 0;
         // If there are too many rows in the column to split, record the number of rows that have been expanded for next read.
@@ -887,7 +894,7 @@ struct Adder<ASTTableJoin::Kind::RightSemi, ASTTableJoin::Strictness::All, Map>
 template <typename Map>
 struct Adder<ASTTableJoin::Kind::RightAnti, ASTTableJoin::Strictness::All, Map>
 {
-    static bool addFound(const typename Map::SegmentType::HashTable::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets, const std::vector<size_t> & right_indexes, ProbeProcessInfo & probe_process_info, MutableColumnPtr & ptr_col)
+    static bool addFound(const typename Map::ConstLookupResult & it, size_t num_columns_to_add, MutableColumns & added_columns, size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets, const std::vector<size_t> & right_indexes, ProbeProcessInfo & probe_process_info, MutableColumnPtr & ptr_col)
     {
         return Adder<ASTTableJoin::Kind::RightSemi, ASTTableJoin::Strictness::All, Map>::addFound(it, num_columns_to_add, added_columns, i, filter, current_offset, offsets, right_indexes, probe_process_info, ptr_col);
     }
@@ -1474,6 +1481,14 @@ void JoinPartition::probeBlock(
         CALL(LeftSemi, Any, MapsAny)
     else if (kind == LeftAnti && strictness == All)
         CALL(LeftSemi, All, MapsAll)
+    else if (kind == RightSemi && record_mapped_entry_column)
+        CALL(RightSemi, All, MapsAllFullWithRowFlag)
+    else if (kind == RightSemi && !record_mapped_entry_column)
+        CALL(RightSemi, All, MapsAllFull)
+    else if (kind == RightAnti && record_mapped_entry_column)
+        CALL(RightAnti, All, MapsAllFullWithRowFlag)
+    else if (kind == RightAnti && !record_mapped_entry_column)
+        CALL(RightAnti, All, MapsAllFull)
     else
         throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
 #undef CALL
