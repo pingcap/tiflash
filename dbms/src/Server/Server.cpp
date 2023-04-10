@@ -318,7 +318,7 @@ struct TiFlashProxyConfig
             args_map["pd-endpoints"] = config.getString("raft.pd_addr");
             args_map["engine-version"] = TiFlashBuildInfo::getReleaseVersion();
             args_map["engine-git-hash"] = TiFlashBuildInfo::getGitHash();
-            if (!args_map.count("engine-addr"))
+            if (!args_map.contains("engine-addr"))
                 args_map["engine-addr"] = config.getString("flash.service_addr", "0.0.0.0:3930");
             else
                 args_map["advertise-engine-addr"] = args_map["engine-addr"];

@@ -49,7 +49,7 @@ ExternalLoaderConfigRepository::Files ExternalLoaderConfigRepository::list(
         Poco::Glob::glob(pattern, files, 0);
     }
 
-    for (Files::iterator it = files.begin(); it != files.end();)
+    for (auto it = files.begin(); it != files.end();)
     {
         if (ConfigProcessor::isPreprocessedFile(*it))
             files.erase(it++);
