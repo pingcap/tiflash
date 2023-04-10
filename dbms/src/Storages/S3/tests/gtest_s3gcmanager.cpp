@@ -223,7 +223,7 @@ try
 
         // delmark expired
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3601 * 1000);
-        gc_mgr->removeDataFileIfDelmarkExpired(df_key, delmark_key, timepoint, delmark_mtime);
+        gc_mgr->removeDataFileIfDelmarkExpired(df_key, delmark_key, timepoint, delmark_mtime, log);
 
         // removed
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, df_key));
@@ -238,7 +238,7 @@ try
 
         // delmark not expired
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3599 * 1000);
-        gc_mgr->removeDataFileIfDelmarkExpired(df_key, delmark_key, timepoint, delmark_mtime);
+        gc_mgr->removeDataFileIfDelmarkExpired(df_key, delmark_key, timepoint, delmark_mtime, log);
 
         // not removed
         ASSERT_TRUE(S3::objectExists(*mock_s3_client, df_key));
@@ -269,7 +269,7 @@ try
 
         // delmark expired
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3601 * 1000);
-        gc_mgr->removeDataFileIfDelmarkExpired(df2_key, delmark_key, timepoint, delmark_mtime);
+        gc_mgr->removeDataFileIfDelmarkExpired(df2_key, delmark_key, timepoint, delmark_mtime, log);
 
         // removed
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, df2_key + "/meta"));
@@ -290,7 +290,7 @@ try
 
         // delmark not expired
         auto delmark_mtime = timepoint - std::chrono::milliseconds(3599 * 1000);
-        gc_mgr->removeDataFileIfDelmarkExpired(df2_key, delmark_key, timepoint, delmark_mtime);
+        gc_mgr->removeDataFileIfDelmarkExpired(df2_key, delmark_key, timepoint, delmark_mtime, log);
 
         // not removed
         ASSERT_TRUE(S3::objectExists(*mock_s3_client, df2_key + "/meta"));
