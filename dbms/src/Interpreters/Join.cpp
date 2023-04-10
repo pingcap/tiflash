@@ -105,8 +105,11 @@ ColumnRawPtrs extractAndMaterializeKeyColumns(const Block & block, Columns & mat
 }
 } // namespace
 
+using PointerHelper = PointerTypeColumnHelper<sizeof(void *)>;
 const std::string Join::match_helper_prefix = "__left-semi-join-match-helper";
 const DataTypePtr Join::match_helper_type = makeNullable(std::make_shared<DataTypeInt8>());
+const String Join::flag_mapped_entry_helper_prefix = "__flag-mapped-entry-match-helper";
+const DataTypePtr Join::flag_mapped_entry_helper_type = std::make_shared<PointerHelper::DataType>();
 
 Join::Join(
     const Names & key_names_left_,
@@ -123,11 +126,13 @@ Join::Join(
     const TiDB::TiDBCollators & collators_,
     const JoinNonEqualConditions & non_equal_conditions_,
     size_t max_block_size_,
-    const String & match_helper_name,
+    const String & match_helper_name_,
+    const String & flag_mapped_entry_helper_name_,
     size_t restore_round_,
     bool is_test_)
     : restore_round(restore_round_)
-    , match_helper_name(match_helper_name)
+    , match_helper_name(match_helper_name_)
+    , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
     , kind(kind_)
     , strictness(strictness_)
     , key_names_left(key_names_left_)
@@ -156,6 +161,11 @@ Join::Join(
         {
             strictness = ASTTableJoin::Strictness::All;
         }
+        has_other_condition = true;
+    }
+    else
+    {
+        has_other_condition = false;
     }
 
     String err = non_equal_conditions.validate(kind);
@@ -217,6 +227,7 @@ size_t Join::getTotalByteCount()
         {
             for (const auto & block : original_blocks)
                 res += block.bytes();
+
             for (const auto & partition : partitions)
             {
                 /// note the return value might not be accurate since it does not use lock, but should be enough for current usage
@@ -248,7 +259,7 @@ void Join::setBuildConcurrencyAndInitJoinPartition(size_t build_concurrency_)
     partitions.reserve(build_concurrency);
     for (size_t i = 0; i < getBuildConcurrency(); ++i)
     {
-        partitions.push_back(std::make_unique<JoinPartition>(join_map_method, kind, strictness, max_block_size, log));
+        partitions.push_back(std::make_unique<JoinPartition>(join_map_method, kind, strictness, max_block_size, log, has_other_condition));
     }
 }
 
@@ -306,6 +317,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         non_equal_conditions,
         max_block_size,
         match_helper_name,
+        flag_mapped_entry_helper_name,
         restore_round + 1,
         is_test);
 }
@@ -546,7 +558,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
     /// match the join filter will not insert to the maps
     recordFilteredRows(block, non_equal_conditions.right_filter_column, null_map_holder, null_map);
 
-    if (getFullness(kind))
+    if (needReturnNonJoinedData(kind))
     {
         /** Move the key columns to the beginning of the block.
           * This is where NonJoinedBlockInputStream will expect.
@@ -594,10 +606,9 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
         if (enable_join_spill)
             assert(partitions[stream_index]->getPartitionPool() != nullptr);
         /// Fill the hash table.
-        JoinPartition::insertBlockIntoMaps(partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, getBuildConcurrency(), enable_fine_grained_shuffle, enable_join_spill);
+        JoinPartition::insertBlockIntoMaps(partitions, rows, key_columns, key_sizes, collators, stored_block, null_map, stream_index, getBuildConcurrency(), enable_fine_grained_shuffle, enable_join_spill, has_other_condition);
     }
 }
-
 
 void mergeNullAndFilterResult(Block & block, ColumnVector<UInt8>::Container & filter_column, const String & filter_column_name, bool null_as_true)
 {
@@ -744,9 +755,9 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
     }
 
-    if (isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All)
+    if ((isInnerJoin(kind) && original_strictness == ASTTableJoin::Strictness::All) || isReverseJoin(kind))
     {
-        /// inner join, just use other_filter_column to filter result
+        /// inner | rightSemi | rightAnti join,  just use other_filter_column to filter result
         for (size_t i = 0; i < block.columns(); ++i)
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, -1);
         return;
@@ -861,11 +872,11 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
     }
 
     /** For LEFT/INNER JOIN, the saved blocks do not contain keys.
-      * For FULL/RIGHT JOIN, the saved blocks contain keys;
+      * For FULL/RIGHT/RIGHT_SEMI/RIGHT_ANTI_SEMI JOIN, the saved blocks contain keys;
       *  but they will not be used at this stage of joining (and will be in `AdderNonJoined`), and they need to be skipped.
       */
     size_t num_columns_to_skip = 0;
-    if (getFullness(kind))
+    if (needReturnNonJoinedData(kind))
         num_columns_to_skip = keys_size;
 
     /// Add new columns to the block.
@@ -885,17 +896,23 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
     std::vector<size_t> right_indexes;
     right_indexes.reserve(num_columns_to_add);
 
+    size_t rows = block.rows();
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
         const ColumnWithTypeAndName & src_column = sample_block_with_columns_to_add.getByPosition(i);
         RUNTIME_CHECK_MSG(!block.has(src_column.name), "block from probe side has a column with the same name: {} as a column in sample_block_with_columns_to_add", src_column.name);
 
         added_columns.push_back(src_column.column->cloneEmpty());
-        added_columns.back()->reserve(src_column.column->size());
+        added_columns.back()->reserve(rows);
         right_indexes.push_back(num_columns_to_skip + i);
     }
 
-    size_t rows = block.rows();
+    MutableColumnPtr flag_mapped_entry_helper_column = nullptr;
+    if (isReverseJoin(kind) && non_equal_conditions.other_cond_expr != nullptr)
+    {
+        flag_mapped_entry_helper_column = flag_mapped_entry_helper_type->createColumn();
+        flag_mapped_entry_helper_column->reserve(rows);
+    }
 
     /// Used with ANY INNER JOIN
     std::unique_ptr<IColumn::Filter> filter;
@@ -913,13 +930,21 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
 
     bool enable_spill_join = isEnableSpill();
     JoinBuildInfo join_build_info{enable_fine_grained_shuffle, fine_grained_shuffle_count, enable_spill_join, is_spilled, build_concurrency, restore_round};
-    JoinPartition::probeBlock(partitions, rows, key_columns, key_sizes, added_columns, null_map, filter, current_offset, offsets_to_replicate, right_indexes, collators, join_build_info, probe_process_info);
+    JoinPartition::probeBlock(partitions, rows, key_columns, key_sizes, added_columns, null_map, filter, current_offset, offsets_to_replicate, right_indexes, collators, join_build_info, probe_process_info, flag_mapped_entry_helper_column);
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
+    /// For RIGHT_SEMI/RIGHT_ANTI join without other conditions, hash table has been marked already, just return empty build table header
+    if (isReverseJoin(kind) && !flag_mapped_entry_helper_column)
+    {
+        return sample_block_with_columns_to_add;
+    }
+
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
         const ColumnWithTypeAndName & sample_col = sample_block_with_columns_to_add.getByPosition(i);
         block.insert(ColumnWithTypeAndName(std::move(added_columns[i]), sample_col.type, sample_col.name));
     }
+    if (flag_mapped_entry_helper_column)
+        block.insert(ColumnWithTypeAndName(std::move(flag_mapped_entry_helper_column), flag_mapped_entry_helper_type, flag_mapped_entry_helper_name));
 
     size_t process_rows = probe_process_info.end_row - probe_process_info.start_row;
 
@@ -961,6 +986,23 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         if (!offsets_to_replicate)
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
+
+        if (isReverseJoin(kind))
+        {
+            // set hash table used flag using SemiMapped column
+            auto & mapped_column = block.getByName(flag_mapped_entry_helper_name).column;
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                const auto & ptr_col = static_cast<const PointerHelper::ColumnType &>(*mapped_column);
+                const auto & container = static_cast<const PointerHelper::ArrayType &>(ptr_col.getData());
+                auto ptr_value = container[i];
+                auto * current = reinterpret_cast<RowRefListWithUsedFlag *>(ptr_value);
+                current->setUsed();
+            }
+
+            // Return build table header for right semi/anti join
+            block = sample_block_with_columns_to_add;
+        }
     }
 
     return block;
@@ -1526,7 +1568,7 @@ void Join::workAfterProbeFinish()
         {
             spillAllProbePartitions();
             probe_spiller->finishSpill();
-            if (!needReturnNonJoinedData())
+            if (!needReturnNonJoinedData(kind))
             {
                 releaseAllPartitions();
             }
@@ -1606,7 +1648,6 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
 
     using enum ASTTableJoin::Strictness;
     using enum ASTTableJoin::Kind;
-
     if (isCrossJoin(kind))
         block = joinBlockCross(probe_process_info);
     else if (isNullAwareSemiFamily(kind))
@@ -1635,11 +1676,6 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info, bool dry_run) const
     }
 
     return block;
-}
-
-bool Join::needReturnNonJoinedData() const
-{
-    return getFullness(kind);
 }
 
 BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size_) const
@@ -1851,7 +1887,7 @@ std::optional<RestoreInfo> Join::getOneRestoreStream(size_t max_block_size_)
         {
             spilled_partition_indexes.pop_front();
         }
-        if (needReturnNonJoinedData())
+        if (needReturnNonJoinedData(kind))
         {
             for (Int64 i = 0; i < restore_join_build_concurrency; i++)
                 restore_non_joined_data_streams[i] = restore_join->createStreamWithNonJoinedRows(probe_stream->getHeader(), i, restore_join_build_concurrency, max_block_size_);

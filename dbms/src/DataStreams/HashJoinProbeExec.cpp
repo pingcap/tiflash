@@ -24,7 +24,7 @@ HashJoinProbeExecPtr HashJoinProbeExec::build(
     size_t non_joined_stream_index,
     size_t max_block_size)
 {
-    bool need_output_non_joined_data = join->needReturnNonJoinedData();
+    bool need_output_non_joined_data = needReturnNonJoinedData(join->getKind());
     BlockInputStreamPtr non_joined_stream = nullptr;
     if (need_output_non_joined_data)
         non_joined_stream = join->createStreamWithNonJoinedRows(probe_stream->getHeader(), non_joined_stream_index, join->getProbeConcurrency(), max_block_size);

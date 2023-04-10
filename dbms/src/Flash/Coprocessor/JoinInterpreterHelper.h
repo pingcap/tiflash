@@ -164,6 +164,10 @@ struct TiFlashJoin
     /// return "" for everything else.
     String genMatchHelperName(const Block & header1, const Block & header2) const;
 
+    /// return a name that is unique in header1 for right semi/anti joins that has_other_condition,
+    /// return "" for everything else.
+    String genFlagMappedEntryHelperName(const Block & header1, bool has_other_condition) const;
+
     /// The columns output by join will be:
     /// {columns of left_input, columns of right_input, match_helper_name}
     NamesAndTypes genJoinOutputColumns(
