@@ -245,7 +245,7 @@ MetricsPrometheus::MetricsPrometheus(
             const auto & labels = prometheus::Gateway::GetInstanceLabel(getInstanceValue(conf));
             gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, labels);
             gateway->RegisterCollectable(tiflash_metrics.registry);
-            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
             {
                 gateway->RegisterCollectable(tiflash_metrics.cn_process_collector);
             }
@@ -268,7 +268,7 @@ MetricsPrometheus::MetricsPrometheus(
         if (context.getSecurityConfig()->hasTlsConfig())
         {
             std::vector<std::weak_ptr<prometheus::Collectable>> collectables{tiflash_metrics.registry};
-            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
             {
                 collectables.push_back(tiflash_metrics.cn_process_collector);
             }
@@ -280,7 +280,7 @@ MetricsPrometheus::MetricsPrometheus(
         {
             exposer = std::make_shared<prometheus::Exposer>(addr);
             exposer->RegisterCollectable(tiflash_metrics.registry);
-            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+            if (context.getSharedContextDisagg()->isDisaggregatedComputeMode() && context.getSharedContextDisagg()->use_autoscaler)
             {
                 exposer->RegisterCollectable(tiflash_metrics.cn_process_collector);
             }
