@@ -247,7 +247,6 @@ MetricsPrometheus::MetricsPrometheus(
             gateway->RegisterCollectable(tiflash_metrics.registry);
             if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
             {
-                LOG_INFO(log, "gjt debug reg cn_process_collector");
                 gateway->RegisterCollectable(tiflash_metrics.cn_process_collector);
             }
 
@@ -271,7 +270,6 @@ MetricsPrometheus::MetricsPrometheus(
             std::vector<std::weak_ptr<prometheus::Collectable>> collectables{tiflash_metrics.registry};
             if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
             {
-                LOG_INFO(log, "gjt debug reg cn_process_collector");
                 collectables.push_back(tiflash_metrics.cn_process_collector);
             }
             server = getHTTPServer(context, collectables, addr);
@@ -284,7 +282,6 @@ MetricsPrometheus::MetricsPrometheus(
             exposer->RegisterCollectable(tiflash_metrics.registry);
             if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
             {
-                LOG_INFO(log, "gjt debug reg cn_process_collector");
                 exposer->RegisterCollectable(tiflash_metrics.cn_process_collector);
             }
             LOG_INFO(log, "Enable prometheus pull mode; Listen Host = {}, Metrics Port = {}", listen_host, metrics_port);
