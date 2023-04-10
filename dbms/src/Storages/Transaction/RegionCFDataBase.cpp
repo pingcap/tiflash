@@ -64,6 +64,11 @@ template <typename Trait>
 RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, DupCheck mode)
 {
     auto & map = data;
+    TiKVValue prev_value;
+    if (mode == DupCheck::AllowSame)
+    {
+        prev_value = TiKVValue::copyFrom(getTiKVValue(kv_pair.second));
+    }
     auto [it, ok] = map.emplace(std::move(kv_pair));
     // We support duplicated kv pairs if they are the same in snapshot.
     // This is because kvs in raftstore v2's snapshot may be overlapped.
@@ -76,12 +81,13 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, 
         }
         else if (mode == DupCheck::AllowSame)
         {
-            if (getTiKVValue(it->second) != getTiKVValue(kv_pair.second))
+            auto v1 = getTiKVValue(it->second);
+            if (prev_value != getTiKVValue(kv_pair.second))
             {
                 throw Exception("Found existing key in hex and val differs: "
                                     + getTiKVKey(it->second).toDebugString()
                                     + " prev_val: " + getTiKVValue(it->second).toDebugString()
-                                    + " new_val: " + getTiKVValue(kv_pair.second).toDebugString(),
+                                    + " new_val: " + prev_value.toDebugString(),
                                 ErrorCodes::LOGICAL_ERROR);
             }
         }
