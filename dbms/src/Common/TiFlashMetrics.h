@@ -17,6 +17,7 @@
 #include <Common/ComputeLabelHolder.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
+#include <Common/ProcessCollector.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
@@ -468,6 +469,10 @@ private:
     static constexpr auto async_metrics_prefix = "tiflash_system_asynchronous_metric_";
 
     std::shared_ptr<prometheus::Registry> registry = std::make_shared<prometheus::Registry>();
+    // Here we add a ProcessCollector to collect cpu/rss/vsize/start_time information.
+    // Normally, these metrics will be collected by tiflash-proxy,
+    // but in disaggregated compute mode with AutoScaler, tiflash-proxy will not start, so tiflash will collect these metrics by itself.
+    std::shared_ptr<ProcessCollector> cn_process_collector = std::make_shared<ProcessCollector>();
 
     std::vector<prometheus::Gauge *> registered_profile_events;
     std::vector<prometheus::Gauge *> registered_current_metrics;
