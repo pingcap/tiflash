@@ -50,7 +50,7 @@ public:
 
     void waitUntilAllProbeFinished();
 
-    std::optional<HashJoinProbeExecPtr> tryGetRestoreExec();
+    HashJoinProbeExecPtr tryGetRestoreExec();
 
     void cancel();
 
@@ -80,7 +80,7 @@ public:
 private:
     PartitionBlock getProbeBlock();
 
-    std::optional<HashJoinProbeExecPtr> doTryGetRestoreExec();
+    HashJoinProbeExecPtr doTryGetRestoreExec();
 
 private:
     const JoinPtr join;
@@ -102,7 +102,7 @@ private:
     ProbeProcessInfo probe_process_info;
     PartitionBlocks probe_partition_blocks;
 
-    std::optional<HashJoinProbeExecPtr> parent;
+    HashJoinProbeExecPtr parent;
 };
 
 using HashJoinProbeExecHolder = PtrHolder<HashJoinProbeExecPtr>;

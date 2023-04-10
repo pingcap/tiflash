@@ -82,10 +82,9 @@ void HashJoinProbeBlockInputStream::onCurrentReadNonJoinedDataDone()
 
 void HashJoinProbeBlockInputStream::tryGetRestoreJoin()
 {
-    auto restore_probe_exec = probe_exec->tryGetRestoreExec();
-    if (restore_probe_exec.has_value() && !isCancelledOrThrowIfKilled())
+    if (auto restore_probe_exec = probe_exec->tryGetRestoreExec(); restore_probe_exec && unlikely(!isCancelledOrThrowIfKilled()))
     {
-        probe_exec.set(std::move(*restore_probe_exec));
+        probe_exec.set(std::move(restore_probe_exec));
         switchStatus(ProbeStatus::RESTORE_BUILD);
     }
     else

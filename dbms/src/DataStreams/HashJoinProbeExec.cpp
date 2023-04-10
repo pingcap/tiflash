@@ -131,27 +131,20 @@ Block HashJoinProbeExec::probe()
     return join->joinBlock(probe_process_info);
 }
 
-std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::tryGetRestoreExec()
+HashJoinProbeExecPtr HashJoinProbeExec::tryGetRestoreExec()
 {
     if unlikely (is_cancelled())
         return {};
 
     /// find restore exec in DFS way
-    if (auto ret = doTryGetRestoreExec(); ret.has_value())
+    if (auto ret = doTryGetRestoreExec(); ret)
         return ret;
 
     /// current join has no more partition to restore, so check if previous join still has partition to restore
-    if (parent.has_value())
-    {
-        return (*parent)->tryGetRestoreExec();
-    }
-    else
-    {
-        return {};
-    }
+    return parent ? parent->tryGetRestoreExec() : HashJoinProbeExecPtr{};
 }
 
-std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::doTryGetRestoreExec()
+HashJoinProbeExecPtr HashJoinProbeExec::doTryGetRestoreExec()
 {
     assert(join->isEnableSpill());
     /// first check if current join has a partition to restore
@@ -178,7 +171,7 @@ std::optional<HashJoinProbeExecPtr> HashJoinProbeExec::doTryGetRestoreExec()
                 max_block_size);
             restore_probe_exec->parent = shared_from_this();
             restore_probe_exec->setCancellationHook(is_cancelled);
-            return {std::move(restore_probe_exec)};
+            return restore_probe_exec;
         }
         assert(join->hasPartitionSpilledWithLock() == false);
     }
