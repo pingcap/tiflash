@@ -21,25 +21,6 @@
 
 namespace DB
 {
-/**
- *                    SPILL
- *                      ▲
- *                      │
- *                      ▼
- * MERGE/RESTORE◄────PARTIAL
- */
-enum class LocalSortStatus
-{
-    // Accept the block and execute partial sort
-    PARTIAL,
-    // spill the blocks from partial sort to disk
-    SPILL,
-    // merge the blocks from partial sort in memory
-    MERGE,
-    // merge the blocks from partial sort in disk
-    RESTORE,
-};
-
 /// Only do partial and merge sort at the current operator, no sharing of objects with other operators.
 class LocalSortTransformOp : public TransformOp
 {
@@ -95,6 +76,24 @@ private:
     size_t limit;
     size_t max_block_size;
 
+    /**
+     *                    SPILL
+     *                      ▲
+     *                      │
+     *                      ▼
+     * MERGE/RESTORE◄────PARTIAL
+     */
+    enum class LocalSortStatus
+    {
+        // Accept the block and execute partial sort
+        PARTIAL,
+        // spill the blocks from partial sort to disk
+        SPILL,
+        // merge the blocks from partial sort in memory
+        MERGE,
+        // merge the blocks from partial sort in disk
+        RESTORE,
+    };
     LocalSortStatus status{LocalSortStatus::PARTIAL};
 
     /// Before operation, will remove constant columns from blocks. And after, place constant columns back.
