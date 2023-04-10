@@ -1,15 +1,25 @@
+// Copyright 2023 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/ProcessCollector.h>
 #include <ProcessMetrics/ProcessMetrics.h>
-#include <common/logger_useful.h>
-#include <Common/Logger.h>
 
 namespace DB
 {
 
 ProcessCollector::ProcessCollector()
 {
-    LoggerPtr log(Logger::get(""));
-    LOG_INFO(log, "gjt debug in ProcessCollector::ProcessCollector()");
     auto info = get_process_metrics();
     start_time.Set(info.start_time);
 }
@@ -19,12 +29,9 @@ std::vector<prometheus::MetricFamily> ProcessCollector::Collect() const
     auto new_info = get_process_metrics();
 
     {
-        // todo: need lock?
         std::lock_guard<std::mutex> lock(mu);
         auto past_cpu_total = cpu_total.Value();
         cpu_total.Increment(new_info.cpu_total - past_cpu_total);
-        LoggerPtr log(Logger::get(""));
-        LOG_INFO(log, "gjt debug in ProcessCollector::Collect() {} {}", std::to_string(past_cpu_total), std::to_string(cpu_total.Value()));
         vsize.Set(new_info.vsize);
         rss.Set(new_info.rss);
     }
